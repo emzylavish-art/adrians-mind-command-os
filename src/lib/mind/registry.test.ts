@@ -23,7 +23,7 @@ describe("capability labels", () => {
   it("does not call an unhealthy REA install or in-memory database ready", () => {
     assert.equal(CAPABILITIES.find((item) => item.id === "rea")?.status, "blocked");
     assert.equal(CAPABILITIES.find((item) => item.id === "supabase")?.status, "blocked");
-    assert.match(CAPABILITIES.find((item) => item.id === "supabase")?.why ?? "", /in-memory/);
+    assert.match(CAPABILITIES.find((item) => item.id === "supabase")?.why ?? "", /not cloud backup/);
     assert.equal(CAPABILITIES.find((item) => item.id === "research")?.status, "unconfigured");
   });
 });

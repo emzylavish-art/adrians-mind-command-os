@@ -9,7 +9,7 @@ describe("persistence", () => {
       assert.equal(described.backend, "memory");
       assert.equal(described.cloudBackup, false);
       assert.equal(described.restartChecked, false);
-      assert.match(described.note, /in-memory/);
+      assert.match(described.note, /\.data\/pglite/);
       assert.match(described.note, /not cloud backup/);
     }
   });

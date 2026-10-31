@@ -2066,7 +2066,7 @@ export function CommandApp() {
                   <li>Workspace lookup is three local reads. The bounded planner can ask Grok to use those same reads. It is not a general agent, and Stop this run is not Emergency stop.</li>
                   <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
                   <li>Stop this reply cancels only the current answer. It is not Emergency stop. The unfinished answer is not saved. The provider may still charge for text it generated before it saw the cancel.</li>
-                  <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart on this machine. It is not durable on a serverless disk. The embedded database resets when the process restarts unless a dedicated database URL is set. That is not cloud backup.</li>
+                  <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart on this machine. It is not durable on a serverless disk. Without a database URL the server copy is a file on this machine, not cloud backup. Your phone keeps its own copy.</li>
                   <li>Replies appear as Grok writes them. A stopped, empty, or broken reply is not saved.</li>
                   <li>If this browser and the server both already have a copy, this page keeps the browser copy until you choose to replace the server copy.</li>
                   <li>Grok, voice, REA, and saving a server copy require a signed-in owner. A refused sign-in does not spend the model.</li>

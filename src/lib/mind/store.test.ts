@@ -12,7 +12,7 @@ function memorySql() {
   };
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join(" ").replace(/\s+/g, " ");
-    const table = text.match(/mind_[a-z]+/)?.[0] ?? "";
+    const table = text.match(/\b(mind_[a-z_]+)\b/)?.[1] ?? "";
     if (text.startsWith("delete from")) {
       for (const [key, row] of bucket(table)) {
         if ((row as { user_id: string }).user_id === values[0]) bucket(table).delete(key);
@@ -79,9 +79,86 @@ describe("mind store", () => {
     assert.equal([...(tables.get("mind_chat")?.keys() ?? [])].some((key) => String(key).startsWith("owner-b:")), false);
   });
 
+  it("stores agents and runs for one owner and removes them on the next save", async () => {
+    const { sql, tables } = memorySql();
+    const ws = emptyWorkspace();
+    ws.agents.push({
+      id: "agent-1",
+      name: "Documents",
+      description: "",
+      role: "documents",
+      instructions: "",
+      version: 1,
+      tools: ["search_notes"],
+      projectId: null,
+      memory: "off",
+      maxSteps: 2,
+      approval: "automatic",
+      archived: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    ws.runs.push({
+      id: "run-1",
+      agentId: "agent-1",
+      parentId: null,
+      depth: 0,
+      goal: "Read notes",
+      state: "queued",
+      step: 0,
+      maxSteps: 2,
+      workerId: null,
+      leaseUntil: null,
+      approvedActions: [],
+      plan: [],
+      result: "",
+      error: "",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    await writeSnapshot(sql, "owner", ws);
+    assert.equal(tables.get("mind_agent")?.has("owner:agent-1"), true);
+    assert.equal(tables.get("mind_agent_run")?.has("owner:run-1"), true);
+    await writeSnapshot(sql, "owner", emptyWorkspace());
+    assert.equal(tables.get("mind_agent")?.has("owner:agent-1"), false);
+    assert.equal(tables.get("mind_agent_run")?.has("owner:run-1"), false);
+  });
+
   it("rejects a snapshot that is too large", () => {
     const ws = emptyWorkspace();
     ws.files.push({ id: "f", name: "big.txt", text: "x".repeat(1_500_000), bytes: 1_500_000, projectId: null, createdAt: "2026-01-01T00:00:00.000Z" });
     assert.equal(snapshotTooLarge(ws), true);
+  });
+
+  it("reloads a project after the file database is closed and opened again", async () => {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const { mkdtempSync, readdirSync, readFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "mind-pglite-"));
+    const files = readdirSync("migrations").filter((name) => name.endsWith(".sql")).sort();
+    const asSql = (pg: InstanceType<typeof PGlite>): Sql => {
+      const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        let text = strings[0] ?? "";
+        for (let i = 0; i < values.length; i += 1) text += `$${i + 1}${strings[i + 1] ?? ""}`;
+        const result = await pg.query(text, values);
+        return result.rows;
+      }) as Sql;
+      sql.query = async (text, params = []) => (await pg.query(text, params)).rows as never;
+      return sql;
+    };
+    const first = new PGlite(dir);
+    await first.waitReady;
+    for (const name of files) await first.exec(readFileSync(join("migrations", name), "utf8"));
+    const saved = emptyWorkspace();
+    saved.projects.push({ id: "p1", name: "Lake", description: "", createdAt: "2026-01-01T00:00:00.000Z" });
+    await writeSnapshot(asSql(first), "owner", saved);
+    await first.close();
+    const second = new PGlite(dir);
+    await second.waitReady;
+    const loaded = normalizeWorkspace(await readSnapshot(asSql(second), "owner"));
+    assert.equal(loaded?.projects[0]?.name, "Lake");
+    assert.equal(await readSnapshot(asSql(second), "other"), null);
+    await second.close();
   });
 });

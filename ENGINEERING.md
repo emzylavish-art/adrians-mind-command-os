@@ -80,5 +80,10 @@ A live model call was not spent. Gmail, search, and the hosted worker stay unava
 
 Ask, Research, Agent, and Build sit on the command box. An ordinary question still goes to Grok only when you press Send. Notion, Gmail, web search, image, video, and computer requests are answered locally and do not call a model. “Show my projects” reads this browser. “Ask my Documents bot” queues that saved bot and does not start a background process. Build explains that no repository edit or terminal command ran. Recent chats are listed in the sidebar.
 
+## File database after 2b21281
+
+Saving a workspace now also writes agents, runs, events, connections, mailboxes, schedules, and deployments into their own tables, still scoped by owner. With no DATABASE_URL, the preview server uses a PGLite file at `.data/pglite` instead of memory only. A test closed that kind of database and opened it again. The project was still there. This is not cloud backup. Notion, Gmail, and a hosted database are still not connected.
+
+
 
 

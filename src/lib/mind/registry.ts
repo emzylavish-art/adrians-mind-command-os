@@ -72,7 +72,7 @@ export const CAPABILITIES: Capability[] = [
     id: "supabase",
     name: "Dedicated database",
     status: "blocked",
-    why: "DATABASE_URL is not set. The server uses in-memory PGLite, which resets when the process restarts. That is not cloud backup. Oak Bridge and BridgePoint are not used.",
+    why: "DATABASE_URL is not set. The server uses a PGLite file on this machine. That is not cloud backup. Oak Bridge and BridgePoint are not used.",
   },
   {
     id: "rea",

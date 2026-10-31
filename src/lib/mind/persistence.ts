@@ -20,7 +20,7 @@ export function describePersistence(databaseUrl: string | undefined): {
       backend: "memory",
       cloudBackup: false,
       restartChecked: false,
-      note: "The browser keeps its own copy. The server database is in-memory and resets when the process restarts. That is not cloud backup. The emergency-stop file is local disk and is not durable on a serverless instance.",
+      note: "The browser keeps its own copy. Without DATABASE_URL the server uses a PGLite file on this machine (.data/pglite). That file can survive a process restart here. It is not cloud backup, and a serverless host does not keep it.",
     };
   }
   return {

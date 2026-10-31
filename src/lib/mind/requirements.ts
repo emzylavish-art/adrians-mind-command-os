@@ -292,6 +292,12 @@ export const REQUIREMENTS: Requirement[] = [
     status: "blocked",
     note: "The Build page explains the limit. No files are changed and no terminal runs.",
   },
+  {
+    id: "R-LOCAL-DB",
+    text: "A file database on this machine that keeps a project after the process closes.",
+    status: "implemented",
+    note: "A temporary PGLite directory was closed and reopened. The saved project was still there, and another owner was not returned. The preview file is .data/pglite. It is not a hosted database and not the copy on your phone.",
+  },
 ];
 
 export function requirementCounts() {
