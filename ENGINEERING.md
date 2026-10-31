@@ -76,4 +76,9 @@ The sidebar is grouped and can collapse. On a phone the full list is a menu, wit
 
 A live model call was not spent. Gmail, search, and the hosted worker stay unavailable.
 
+## Chat routing after 1becc98
+
+Ask, Research, Agent, and Build sit on the command box. An ordinary question still goes to Grok only when you press Send. Notion, Gmail, web search, image, video, and computer requests are answered locally and do not call a model. “Show my projects” reads this browser. “Ask my Documents bot” queues that saved bot and does not start a background process. Build explains that no repository edit or terminal command ran. Recent chats are listed in the sidebar.
+
+
 

@@ -28,6 +28,7 @@ import {
   Menu,
   PanelLeft,
   Pin,
+  Terminal,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -40,7 +41,8 @@ import { mindStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/s
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
-import { haltFleet, togglePin } from "@/lib/mind/fleet";
+import { haltFleet, enqueueRun, togglePin } from "@/lib/mind/fleet";
+import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { chosenProvider, providerChoices } from "@/lib/mind/providers";
@@ -72,6 +74,7 @@ type View =
   | "files"
   | "connected"
   | "tools"
+  | "build"
   | "scheduled"
   | "integrations"
   | "activity"
@@ -114,6 +117,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
       { id: "projects", label: "Projects", icon: Folder },
       { id: "research", label: "Research", icon: Search },
       { id: "files", label: "Library", icon: FileText },
+      { id: "build", label: "Build", icon: Terminal },
     ],
   },
   {
@@ -145,6 +149,7 @@ const TITLES: Record<View, string> = {
   runs: "Agent runs",
   research: "Research",
   files: "Library",
+  build: "Build",
   connected: "Connected apps",
   tools: "Tools",
   scheduled: "Scheduled tasks",
@@ -221,6 +226,7 @@ export function CommandApp() {
   const [navOpen, setNavOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
+  const [commandMode, setCommandMode] = useState<CommandMode>("ask");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -413,6 +419,52 @@ export function CommandApp() {
     }
     pending.run();
     setPending(null);
+  }
+
+  function recordToolTurn(chat: Chat, text: string, reply: string, mutate?: (prev: Workspace) => Workspace) {
+    const title = chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
+    const at = new Date().toISOString();
+    const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at };
+    const assistant = { id: crypto.randomUUID(), role: "assistant" as const, content: reply, at, model: "local-tool" };
+    setActiveId(chat.id);
+    setView("chat");
+    setError(null);
+    setWs((prev) => {
+      const base = mutate ? mutate(prev) : prev;
+      const exists = base.chats.some((item) => item.id === chat.id);
+      const chats = exists
+        ? base.chats.map((item) => (item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg, assistant] } : item))
+        : [{ ...chat, title, messages: [userMsg, assistant] }, ...base.chats];
+      return pushAudit({ ...base, chats }, "tool_turn", chat.id, "no model");
+    });
+  }
+
+  function settleIntent(chat: Chat, text: string, source: Workspace): boolean {
+    const intent = interpretCommand(text, source.agents, commandMode);
+    if (intent.kind === "chat") return false;
+    if (intent.kind === "local") {
+      const result = runLocalPlan(source, [{ id: intent.tool, tool: intent.tool, query: text }], {
+        autonomy: "automatic",
+        halted: source.halted,
+        tokens: {},
+      });
+      recordToolTurn(chat, text, result.lines.join("\n") || "No result.");
+      return true;
+    }
+    if (intent.kind === "bot") {
+      const queued = enqueueRun(source, intent.agentId, intent.goal);
+      recordToolTurn(
+        chat,
+        text,
+        queued.ok
+          ? `Queued ${intent.agentName}. It is not running in the background. Open Runs and press Run worker once. Nothing was sent to a model.`
+          : queued.error,
+        queued.ok ? () => queued.ws : undefined,
+      );
+      return true;
+    }
+    recordToolTurn(chat, text, intent.reply);
+    return true;
   }
 
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
@@ -617,6 +669,11 @@ export function CommandApp() {
     const full = `${text}${attached}`.slice(0, 8000);
     setDraft("");
     setStaged(null);
+    const source = { ...ws, chats: [made.chat, ...ws.chats] };
+    if (settleIntent(made.chat, full, source)) {
+      if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: projectChoice || null }));
+      return;
+    }
     setActiveId(made.chat.id);
     setView("chat");
     setWs((prev) => {
@@ -695,6 +752,11 @@ export function CommandApp() {
     const full = `${text || "Read the attached file."}${attached}`.slice(0, 8000);
     setDraft("");
     setStaged(null);
+    const source = ws;
+    if (settleIntent(active, full, source)) {
+      if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
+      return;
+    }
     if (file) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
@@ -997,6 +1059,25 @@ export function CommandApp() {
               })}
             </div>
           )}
+          {ws.chats.length > 0 && !railCollapsed && (
+            <div className="mb-3">
+              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT</p>
+              {ws.chats.slice(0, 5).map((chat) => (
+                <button
+                  key={chat.id}
+                  type="button"
+                  className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm text-muted"
+                  onClick={() => {
+                    setActiveId(chat.id);
+                    setView("chat");
+                    setNavOpen(false);
+                  }}
+                >
+                  <span className="truncate">{chat.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
         {!railCollapsed && (
           <div className="border-t border-line p-4">
@@ -1194,6 +1275,23 @@ export function CommandApp() {
                     void sendCommand();
                   }}
                 >
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {([
+                      ["ask", "Ask"],
+                      ["research", "Research"],
+                      ["agent", "Agent"],
+                      ["build", "Build"],
+                    ] as const).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}
+                        onClick={() => setCommandMode(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
@@ -1752,6 +1850,17 @@ export function CommandApp() {
           {view === "connected" && <FleetPanel mode="connected" ws={ws} setWs={setWs} />}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
+          {view === "build" && (
+            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
+              <h2 className="font-display text-3xl font-bold">Build</h2>
+              <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
+              <ul className="space-y-2 text-sm">
+                <li className="rounded-panel border border-line bg-surface p-3">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
+                <li className="rounded-panel border border-line bg-surface p-3">Edit files, run tests, and use git. Not available. No files were changed.</li>
+                <li className="rounded-panel border border-line bg-surface p-3">HP EliteBook and iPhone control. Not paired.</li>
+              </ul>
+            </section>
+          )}
           {view === "research" && (
             <section className="p-4 md:p-6">
               <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">

@@ -159,6 +159,24 @@ export const CAPABILITIES: Capability[] = [
     why: "Pins stay in the browser workspace snapshot. They are not cloud backup.",
   },
   {
+    id: "chat.router",
+    name: "Chat tool routing",
+    status: "ready",
+    why: "Notion, Gmail, web search, media, and computer requests are refused before a model call. A direct local read runs here. An ordinary question still uses Grok only when you press Send.",
+  },
+  {
+    id: "notion",
+    name: "Notion",
+    status: "unconfigured",
+    why: "No Notion connection. Chat does not invent a page update.",
+  },
+  {
+    id: "build.workspace",
+    name: "Adrian Build",
+    status: "blocked",
+    why: "This page cannot edit a repository, run a terminal, or commit. No computer is paired.",
+  },
+  {
     id: "zapia",
     name: "Zapia / WhatsApp",
     status: "planned",

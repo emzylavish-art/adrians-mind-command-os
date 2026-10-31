@@ -275,10 +275,22 @@ export const REQUIREMENTS: Requirement[] = [
     note: "paletteHits is covered by a test. The palette does not call a model.",
   },
   {
-    id: "R-CUSTOM-AGENT",
-    text: "A custom agent with a name and selected tools.",
+    id: "R-CHAT-ROUTE",
+    text: "Chat can run a local read or queue a saved bot without calling a model.",
     status: "verified",
-    note: "addCustomAgent refuses a blank name. Gmail stays unavailable even if the tool is selected.",
+    note: "interpretCommand. Notion, Gmail, web search, media, and computer requests are refused before a model call. Ordinary questions still go to Grok only when you press Send.",
+  },
+  {
+    id: "R-NOTION",
+    text: "Notion search and updates from chat.",
+    status: "blocked",
+    note: "No Notion connection. The chat says nothing was searched or updated.",
+  },
+  {
+    id: "R-BUILD",
+    text: "A coding workspace that edits a repository and runs commands.",
+    status: "blocked",
+    note: "The Build page explains the limit. No files are changed and no terminal runs.",
   },
 ];
 

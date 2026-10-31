@@ -6,6 +6,7 @@ export const PALETTE_DESTINATIONS = [
   { id: "projects", label: "Projects" },
   { id: "research", label: "Research" },
   { id: "files", label: "Library" },
+  { id: "build", label: "Build" },
   { id: "connected", label: "Connected" },
   { id: "tools", label: "Tools" },
   { id: "scheduled", label: "Scheduled" },
