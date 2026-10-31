@@ -19,6 +19,7 @@ const SERVICES: Service[] = [
   { name: "Web search", state: "Not configured", detail: "No search endpoint. No citations are created." },
   { name: "Image and video", state: "Not called", detail: "Paid generation is not run from this app." },
   { name: "Voice", state: "One-shot only", detail: "Speak can read a finished reply. There is no live call." },
+  { name: "MCP", state: "Not connected", detail: "No MCP server has answered a handshake. Nothing is called." },
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
 ];
 
@@ -26,11 +27,13 @@ export function ServiceBoard({
   grokConfigured,
   onSetup,
   notion,
+  mcp,
   onDisconnect,
 }: {
   grokConfigured: boolean;
   onSetup: (message: string) => void;
   notion?: { state: string; detail: string } | null;
+  mcp?: { state: string; detail: string } | null;
   onDisconnect?: () => void;
 }) {
   const grok: Service = grokConfigured
@@ -39,7 +42,9 @@ export function ServiceBoard({
   const services = SERVICES.map((service) =>
     service.name === "Notion" && notion
       ? { name: "Notion", state: notion.state === "connected" ? "Connected" : notion.state === "disconnected" ? "Disconnected" : "Not connected", detail: notion.detail }
-      : service,
+      : service.name === "MCP" && mcp
+        ? { name: "MCP", state: mcp.state, detail: mcp.detail }
+        : service,
   );
 
   return (

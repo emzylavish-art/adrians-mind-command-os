@@ -4,6 +4,7 @@ export type CommandIntent =
   | { kind: "chat" }
   | { kind: "blocked"; area: "gmail" | "search" | "media" | "build" | "device"; reply: string }
   | { kind: "notion" }
+  | { kind: "mcp" }
   | { kind: "local"; tool: "list_projects" | "list_chats" | "search_notes" }
   | { kind: "bot"; agentId: string; agentName: string; goal: string }
   | { kind: "bot_missing"; reply: string };
@@ -49,6 +50,7 @@ export function interpretCommand(
   }
 
   if (/\bnotion\b/.test(lower)) return { kind: "notion" };
+  if (/\bmcp\b/.test(lower)) return { kind: "mcp" };
 
   if (mode === "agent") {
     const found = agents.find((agent) => !agent.archived);

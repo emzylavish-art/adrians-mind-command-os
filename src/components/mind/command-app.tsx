@@ -38,7 +38,7 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { mindStatus, notionCommand, notionDisconnect, notionStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -290,6 +290,10 @@ export function CommandApp() {
   const [notionQuery, setNotionQuery] = useState("");
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
+  const [mcpServers, setMcpServers] = useState<{ id: string; label: string; host: string; state: "unchecked" | "connected" | "failed"; tools: { name: string; description: string }[]; error: string }[]>([]);
+  const [mcpLabel, setMcpLabel] = useState("");
+  const [mcpUrl, setMcpUrl] = useState("");
+  const [mcpToken, setMcpToken] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectNext = useRef<View | null>(null);
@@ -317,6 +321,9 @@ export function CommandApp() {
     notionStatus()
       .then((status) => setNotion(status))
       .catch(() => setNotion({ state: "unconfigured", detail: "Notion status could not be read. Nothing was searched or updated." }));
+    mcpList()
+      .then((result) => setMcpServers(result.servers))
+      .catch(() => setMcpServers([]));
   }, [ready, setWs]);
 
   useEffect(() => {
@@ -475,6 +482,10 @@ export function CommandApp() {
       void askNotion(chat, text);
       return true;
     }
+    if (intent.kind === "mcp") {
+      void askMcp(chat, text);
+      return true;
+    }
     recordToolTurn(chat, text, intent.reply);
     return true;
   }
@@ -505,6 +516,33 @@ export function CommandApp() {
     } catch {
       setBusy(false);
       setError("Notion could not be reached. Nothing was changed.");
+    }
+  }
+
+  async function askMcp(chat: Chat, text: string, confirmed = false) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await mcpCommand({ data: { text, confirmed } });
+      setBusy(false);
+      setMcpServers(result.servers);
+      if (result.needsConfirmation) {
+        setPending({
+          id: "mcp-call",
+          kind: "mcp-call",
+          label: "Call MCP tool",
+          detail: result.error,
+          confirm: "Call",
+          run: () => {
+            void askMcp(chat, text, true);
+          },
+        });
+        return;
+      }
+      recordToolTurn(chat, text, [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.");
+    } catch {
+      setBusy(false);
+      setError("The MCP server could not be reached. Nothing was called.");
     }
   }
 
@@ -1436,6 +1474,9 @@ export function CommandApp() {
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
+                mcp={mcpServers.some((server) => server.state === "connected")
+                  ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
+                  : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
                 onSetup={(message) => setNotice(message)}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
@@ -1913,6 +1954,9 @@ export function CommandApp() {
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
+                mcp={mcpServers.some((server) => server.state === "connected")
+                  ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
+                  : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
                 onSetup={(message) => setNotice(message)}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
@@ -1942,6 +1986,50 @@ export function CommandApp() {
                   {notionPages.map((page) => (
                     <li key={page.id}>
                       <a className="text-sm text-accent" href={page.url} target="_blank" rel="noreferrer">{page.title}</a>
+                    </li>
+                  ))}
+                </ul>
+              </form>
+              <form
+                className="rounded-panel border border-line bg-surface p-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (ws.halted || !mcpUrl.trim()) return;
+                  void mcpSave({ data: { label: mcpLabel, url: mcpUrl, token: mcpToken } }).then((result) => {
+                    setMcpToken("");
+                    if (!result.ok) {
+                      setNotice(result.error);
+                      return;
+                    }
+                    setMcpServers(result.servers);
+                    setMcpLabel("");
+                    setMcpUrl("");
+                    const connected = result.servers.some((server) => server.state === "connected");
+                    setNotice(connected ? "The MCP server answered. It is connected." : result.servers.at(-1)?.error || "The MCP server did not answer. It is not connected.");
+                  }).catch(() => setNotice("The MCP server could not be reached. Nothing was called."));
+                }}
+              >
+                <h3 className="font-semibold">MCP server</h3>
+                <p className="mt-1 text-sm text-muted">The token stays on the server. Connected means the server answered initialize and tools/list.</p>
+                <input value={mcpLabel} onChange={(event) => setMcpLabel(event.target.value)} placeholder="Label" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+                <input value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://mcp.example/tools" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+                <input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" placeholder="Token, optional" autoComplete="off" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+                <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || !mcpUrl.trim()}>Test and save</button>
+                <ul className="mt-3 space-y-2">
+                  {mcpServers.map((server) => (
+                    <li key={server.id} className="rounded-panel border border-line px-3 py-2 text-sm">
+                      <span className="font-semibold">{server.label}</span>
+                      <span className="ml-2 text-muted">{server.host} · {server.state}</span>
+                      <p className="text-muted">{server.error || server.tools.map((tool) => tool.name).join(", ") || "No tools returned."}</p>
+                      <button
+                        type="button"
+                        className="mt-2 min-h-11 rounded-panel border border-line px-3"
+                        onClick={() => {
+                          void mcpRemove({ data: { id: server.id } }).then((result) => setMcpServers(result.servers));
+                        }}
+                      >
+                        Remove
+                      </button>
                     </li>
                   ))}
                 </ul>

@@ -161,6 +161,52 @@ export const notionCommand = createServerFn({ method: "POST" })
     return result;
   });
 
+export const mcpList = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { listMcp } = await import("./mcp");
+    return { servers: listMcp(context.userId) };
+  });
+
+export const mcpSave = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { label?: string; url?: string; token?: string }) => ({
+    label: typeof input.label === "string" ? input.label.slice(0, 80) : "",
+    url: typeof input.url === "string" ? input.url.slice(0, 300) : "",
+    token: typeof input.token === "string" ? input.token.slice(0, 500) : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { saveMcp } = await import("./mcp");
+    const saved = saveMcp(context.userId, data);
+    if (!saved.ok) return saved;
+    const { probeMcp, listMcp } = await import("./mcp");
+    await probeMcp(context.userId, saved.server.id, globalThis.fetch);
+    return { ok: true as const, servers: listMcp(context.userId) };
+  });
+
+export const mcpRemove = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string }) => ({ id: typeof input.id === "string" ? input.id.slice(0, 80) : "" }))
+  .handler(async ({ data, context }) => {
+    const { removeMcp } = await import("./mcp");
+    return { servers: removeMcp(context.userId, data.id) };
+  });
+
+export const mcpCommand = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { text?: string; confirmed?: boolean }) => ({
+    text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
+    confirmed: input.confirmed === true,
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false, needsConfirmation: false, servers: [], text: "", error: "Emergency stop is on. No MCP server was called." };
+    }
+    const { runMcpTurn } = await import("./mcp");
+    return runMcpTurn({ userId: context.userId, text: data.text, confirmed: data.confirmed, fetch: globalThis.fetch });
+  });
+
 export const inspectWebPage = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { url: string }) => ({ url: typeof input.url === "string" ? input.url.slice(0, 300) : "" }))

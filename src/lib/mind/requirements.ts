@@ -298,6 +298,12 @@ export const REQUIREMENTS: Requirement[] = [
     status: "implemented",
     note: "A temporary PGLite directory was closed and reopened. The saved project was still there, and another owner was not returned. The preview file is .data/pglite. It is not a hosted database and not the copy on your phone.",
   },
+  {
+    id: "R-MCP",
+    text: "MCP servers can be saved and used only after a real handshake.",
+    status: "implemented",
+    note: "A fake server was initialized and its tool list was read. A tool call waits for confirmation. No MCP URL is configured here, so nothing is connected.",
+  },
 ];
 
 export function requirementCounts() {

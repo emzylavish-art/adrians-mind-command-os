@@ -168,7 +168,7 @@ export const CAPABILITIES: Capability[] = [
     id: "notion",
     name: "Notion",
     status: "unconfigured",
-    why: "The server calls Notion only when NOTION_TOKEN is set. No token is in this workspace. The secret is never sent to the browser. Chat does not invent pages.",
+    why: "The server calls Notion only when NOTION_TOKEN is set. MCP is connected only after that server answers initialize and tools/list. No MCP URL is configured here.",
   },
   {
     id: "build.workspace",
