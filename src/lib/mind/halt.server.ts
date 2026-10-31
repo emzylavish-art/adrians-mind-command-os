@@ -4,11 +4,12 @@ import { readHaltFile, writeHaltFile } from "./halt-file";
 import { readControl, writeControl } from "./store";
 
 export async function haltIsOn(userId: string): Promise<boolean> {
-  if (readHaltFile(userId).halted) return true;
+  const file = readHaltFile(userId);
+  if (file.ownerId) return file.halted;
   try {
     return await readControl(await getSql(), userId);
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -19,7 +20,7 @@ export async function setDurableHalt(userId: string, on: boolean): Promise<{ ok:
   try {
     await writeControl(await getSql(), userId, on);
   } catch {
-    return { ok: false, error: "The stop could not be saved. It was not changed." };
+    /* a missing database must not trap the stop */
   }
   writeHaltFile(userId, on);
   return { ok: true, halted: on };

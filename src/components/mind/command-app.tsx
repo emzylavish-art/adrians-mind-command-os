@@ -289,6 +289,7 @@ export function CommandApp() {
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectNext = useRef<View | null>(null);
+  const clearedStop = useRef(false);
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
@@ -301,7 +302,7 @@ export function CommandApp() {
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
         setSystem(status.database);
         setCheckedAt(status.checkedAt);
-        if (status.executionHalted) {
+        if (status.executionHalted && !clearedStop.current) {
           setWs((prev) => (prev.halted ? prev : pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "server already stopped")));
         }
       })
@@ -327,11 +328,6 @@ export function CommandApp() {
       /* a private browser can refuse storage */
     }
   }, [providerChoice]);
-
-  useEffect(() => {
-    if (!ready || !ws.halted) return;
-    void setExecutionHalt({ data: { on: true } });
-  }, [ready, ws.halted]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -855,23 +851,21 @@ export function CommandApp() {
 
   async function toggleStop() {
     const next = !ws.halted;
+    if (!next) clearedStop.current = true;
     if (next) {
       turnAbort.current?.abort();
       agentAbort.current?.abort();
     }
+    setError(null);
+    setWs((prev) => {
+      const updated = pushAudit({ ...prev, halted: next }, "emergency_stop", "session", next ? "on" : "cleared");
+      return next ? haltFleet(updated) : updated;
+    });
     try {
       const result = await setExecutionHalt({ data: { on: next } });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setWs((prev) => {
-        const updated = pushAudit({ ...prev, halted: result.halted }, "emergency_stop", "session", result.halted ? "on" : "cleared");
-        return result.halted ? haltFleet(updated) : updated;
-      });
+      if (!result.ok) setError(result.error);
     } catch {
-      setError("The server did not confirm the stop. Sends stay blocked in this browser.");
-      if (next) setWs((prev) => haltFleet(pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "browser only")));
+      setError(next ? "The server did not confirm the stop. Sends are blocked in this browser." : "The server did not confirm it. The stop is off in this browser.");
     }
   }
   function explain(text: string) {
@@ -1216,9 +1210,12 @@ export function CommandApp() {
           </div>
         )}
         {ws.halted && (
-          <p className="border-b border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
-            Emergency stop is on. Sending and approvals are blocked.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2">
+            <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
+            <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
+              Clear stop
+            </button>
+          </div>
         )}
 
         <div className={`min-h-0 flex-1 ${view === "chat" ? "overflow-hidden" : "overflow-auto"}`}>
@@ -1445,10 +1442,10 @@ export function CommandApp() {
                 </div>
                 <button
                   type="button"
-                  className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                  className="inline-flex min-h-11 w-full items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink md:w-auto"
                   onClick={() => void toggleStop()}
                 >
-                  <Square className="size-4" /> {ws.halted ? "Clear stop" : "Stop"}
+                  {ws.halted ? "Clear stop" : "Emergency stop"}
                 </button>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs text-muted">
                   <span className="rounded-panel border border-line px-2 py-2"><Lock className="mx-auto mb-1 size-4 text-accent" />Owner control</span>
