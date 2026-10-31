@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   addMemory,
+  canonical,
   createChat,
   emptyWorkspace,
   memoriesForChat,
   mergeWorkspace,
+  normalizeWorkspace,
   packWorkspace,
   unpackWorkspace,
 } from "./workspace.ts";
@@ -89,5 +91,26 @@ describe("workspace memory", () => {
     });
     const merged = mergeWorkspace(left.ws, right.ws);
     assert.equal(merged.chats.length, 2);
+  });
+
+  it("normalizes a realistic workspace inside the startup budget", () => {
+    let ws = emptyWorkspace();
+    for (let index = 0; index < 40; index += 1) {
+      const made = createChat(ws, { memory: "off", autonomy: "ask", temporary: false, projectId: null });
+      made.chat.messages = Array.from({ length: 8 }, (_, message) => ({
+        id: `m-${index}-${message}`,
+        role: message % 2 === 0 ? "user" : "assistant",
+        content: "Lake note ".repeat(20),
+        at: "2026-01-01T00:00:00.000Z",
+      }));
+      ws = made.ws;
+    }
+    const started = performance.now();
+    const normalized = normalizeWorkspace(ws);
+    const packed = canonical(normalized);
+    const elapsed = performance.now() - started;
+    assert.equal(normalized.chats.length, 40);
+    assert.ok(packed.length > 10_000);
+    assert.ok(elapsed < 200, `normalize and canonical took ${elapsed.toFixed(1)}ms`);
   });
 });

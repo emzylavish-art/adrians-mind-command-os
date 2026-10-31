@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
+import { getBearerToken } from "@/lib/auth/client";
+import { SignedOut, UserButton } from "@/lib/auth/gates";
 import {
   Activity,
   Bell,
@@ -27,9 +30,11 @@ import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { mindStatus, sendTurn, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { consumeMindTurn } from "@/lib/mind/live-turn";
+import { mindStatus, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
   addLocalFile,
   addMemory,
@@ -161,12 +166,14 @@ function formatBytes(bytes: number) {
 }
 
 export function CommandApp() {
-  const { ws, setWs, ready } = useMindWorkspace();
+  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [liveText, setLiveText] = useState("");
+  const turnAbort = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [grok, setGrok] = useState("Checking");
@@ -338,18 +345,34 @@ export function CommandApp() {
       ),
     }));
     setBusy(true);
+    setLiveText("");
     setError(null);
+    const controller = new AbortController();
+    turnAbort.current = controller;
+    const timeout = AbortSignal.timeout(30_000);
+    const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     try {
-      const result = await sendTurn({
-        data: {
+      const result = await consumeMindTurn({
+        url: `${prefix}/api/mind/turn`,
+        signal,
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: {
           text,
           memory: chat.memory,
           halted: source.halted,
           history: chat.messages.slice(-12).map((msg) => ({ role: msg.role, content: msg.content })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
         },
+        onDelta: (chunk) => setLiveText((current) => current + chunk),
       });
       setBusy(false);
+      setLiveText("");
+      turnAbort.current = null;
       if (!result.ok) {
         setError(result.error);
         return;
@@ -393,7 +416,9 @@ export function CommandApp() {
       });
     } catch (caught) {
       setBusy(false);
-      setError(caught instanceof Error ? caught.message : "Grok could not be reached.");
+      setLiveText("");
+      turnAbort.current = null;
+      setError(caught instanceof Error && caught.message === "Unauthorized" ? "Sign in is required." : caught instanceof Error ? caught.message : "Grok could not be reached.");
     }
   }
 
@@ -543,8 +568,13 @@ export function CommandApp() {
 
   async function toggleStop() {
     const next = !ws.halted;
+    if (next) turnAbort.current?.abort();
     try {
       const result = await setExecutionHalt({ data: { on: next } });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       setWs((prev) => pushAudit({ ...prev, halted: result.halted }, "emergency_stop", "session", result.halted ? "on" : "cleared"));
     } catch {
       setError("The server did not confirm the stop. Sends stay blocked in this browser.");
@@ -779,6 +809,12 @@ export function CommandApp() {
         {accountOpen && (
           <div className="border-b border-line bg-surface px-4 py-3 text-sm">
             <p className="font-semibold">Adrian (Personal)</p>
+            <UserButton />
+            <SignedOut>
+              <Link to="/login" className="mt-2 inline-flex min-h-11 items-center text-accent">
+                Sign in
+              </Link>
+            </SignedOut>
             <p className="text-muted">This menu is not an account switcher. No second workspace exists.</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("settings")}>
@@ -1022,6 +1058,7 @@ export function CommandApp() {
               projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
               onClearProject={() => setChatProjectId(null)}
               busy={busy}
+              liveText={liveText}
               halted={ws.halted}
               draft={draft}
               error={error}
@@ -1480,7 +1517,20 @@ export function CommandApp() {
           {view === "settings" && (
             <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
               <h2 className="font-display text-3xl font-bold">Settings</h2>
-              <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. This browser only. It is not a cloud backup and it is not a 10 GB plan.</p>
+              <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
+              {serverHeld && (
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() =>
+                    void publishServerCopy().then((result) => {
+                      if (!result.ok) setError(result.error);
+                    })
+                  }
+                >
+                  Save this browser copy over the server copy
+                </button>
+              )}
               <div className="rounded-panel border border-line bg-surface p-4 text-sm">
                 <p className="font-semibold">How to use this</p>
                 <ul className="mt-2 space-y-2 text-muted">
@@ -1490,7 +1540,10 @@ export function CommandApp() {
                   <li>Research asks Grok. It does not search the web and it must not invent citations.</li>
                   <li>Agents can run REA doctor. They are not a running task runner. Nothing is marked Running unless it is.</li>
                   <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
-                  <li>Stop blocks new sends on this page and on the server process that received the stop. Restarting that process clears the server stop until you press it again.</li>
+                  <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart. The embedded database does not, unless a dedicated database URL is set. That is not cloud backup.</li>
+                  <li>Replies appear as Grok writes them. A stopped, empty, or broken reply is not saved.</li>
+                  <li>If this browser and the server both already have a copy, this page keeps the browser copy until you choose to replace the server copy.</li>
+                  <li>Grok, voice, REA, and saving a server copy require a signed-in owner. A refused sign-in does not spend the model.</li>
                   <li>Oak Bridge and BridgePoint are external labels. This app does not open them.</li>
                   <li>A dedicated database needs a new Supabase organization. The current free organization is already full.</li>
                 </ul>
@@ -1717,6 +1770,7 @@ function ChatPane({
   projectName,
   onClearProject,
   busy,
+  liveText,
   halted,
   draft,
   error,
@@ -1745,6 +1799,7 @@ function ChatPane({
   projectName: string | null;
   onClearProject: () => void;
   busy: boolean;
+  liveText: string;
   halted: boolean;
   draft: string;
   error: string | null;
@@ -1843,7 +1898,13 @@ function ChatPane({
               </div>
             </article>
           ))}
-          {busy && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {busy && liveText && (
+            <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
+              <p className="mb-1 text-xs text-muted">Grok 4.5 · writing</p>
+              <p className="whitespace-pre-wrap">{liveText}</p>
+            </article>
+          )}
+          {busy && !liveText && <p className="text-sm text-muted">Waiting for Grok.</p>}
           {error && <p className="text-sm text-danger">{error}</p>}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session.</p>}
         </div>
