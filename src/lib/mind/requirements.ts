@@ -90,7 +90,7 @@ export const REQUIREMENTS: Requirement[] = [
     id: "R-REA",
     text: "REA reverse-engineering tool.",
     status: "implemented",
-    note: "rea-agents from github.com/morluto/rea. Doctor and inspect-artifact are callable. Doctor is not healthy: Node needs a newer patch, and Hopper, Ghidra, IDA, JADX, and Kuna are not installed.",
+    note: "Pinned rea-agents 6.8.0. Doctor is not healthy. inspect-artifact rejects TypeScript. analyze-javascript-application failed here because ps is not on PATH. Native engines are not installed.",
   },
   {
     id: "R-PC",

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { serverHalted, setServerHalt } from "./execution-gate";
 import { guardMindEnv } from "./isolation";
 import { assembleTurn } from "./prompt";
 
@@ -22,6 +23,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       model: MODEL,
       database: gate.error,
       isolation: "failed" as const,
+      executionHalted: serverHalted(),
       checkedAt,
     };
   }
@@ -34,6 +36,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       ? "A Mind project URL is set and is not a forbidden project."
       : "No dedicated project yet. The free organization already holds two active projects.",
     isolation: "clear" as const,
+    executionHalted: serverHalted(),
     checkedAt,
   };
 });
@@ -47,7 +50,7 @@ export const sendTurn = createServerFn({ method: "POST" })
     memoryContext: { id: string; text: string }[];
   }) => input)
   .handler(async ({ data }) => {
-    if (data.halted) return { ok: false as const, error: "Emergency stop is on. No new action can run." };
+    if (serverHalted() || data.halted) return { ok: false as const, error: "Emergency stop is on. No new action can run." };
     const text = data.text.trim();
     if (!text) return { ok: false as const, error: "Write a message first." };
     if (text.length > 8000) return { ok: false as const, error: "That message is too long." };
@@ -104,9 +107,14 @@ export const sendTurn = createServerFn({ method: "POST" })
     };
   });
 
+export const setExecutionHalt = createServerFn({ method: "POST" })
+  .validator((input: { on: boolean }) => ({ on: input.on === true }))
+  .handler(async ({ data }) => ({ halted: setServerHalt(data.on) }));
+
 export const speakText = createServerFn({ method: "POST" })
   .validator((input: { text: string }) => input)
   .handler(async ({ data }) => {
+    if (serverHalted()) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
     const text = data.text.trim().slice(0, 500);
     if (!text) return { ok: false as const, error: "Nothing to read." };
     const apiKey = process.env.XAI_API_KEY;

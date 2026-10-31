@@ -27,7 +27,7 @@ import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { mindStatus, sendTurn, speakText } from "@/lib/mind/server";
+import { mindStatus, sendTurn, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import {
@@ -161,7 +161,7 @@ function formatBytes(bytes: number) {
 }
 
 export function CommandApp() {
-  const { ws, setWs } = useMindWorkspace();
+  const { ws, setWs, ready } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -182,6 +182,9 @@ export function CommandApp() {
   const [memoryQuery, setMemoryQuery] = useState("");
   const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
   const [researchText, setResearchText] = useState("");
+  const [chatProjectId, setChatProjectId] = useState<string | null>(null);
+  const [activityQuery, setActivityQuery] = useState("");
+  const [openFileId, setOpenFileId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -211,17 +214,26 @@ export function CommandApp() {
   const search = query.trim().toLowerCase();
 
   useEffect(() => {
+    if (!ready) return;
     mindStatus()
       .then((status) => {
         setGrok(status.grok === "configured" ? "Ready" : status.grok === "down" ? "Refused" : "Unavailable");
         setSystem(status.database);
         setCheckedAt(status.checkedAt);
+        if (status.executionHalted) {
+          setWs((prev) => (prev.halted ? prev : pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "server already stopped")));
+        }
       })
       .catch(() => {
         setGrok("Unavailable");
         setSystem("The status check did not finish.");
       });
-  }, []);
+  }, [ready, setWs]);
+
+  useEffect(() => {
+    if (!ready || !ws.halted) return;
+    void setExecutionHalt({ data: { on: true } });
+  }, [ready, ws.halted]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -529,6 +541,16 @@ export function CommandApp() {
     });
   }
 
+  async function toggleStop() {
+    const next = !ws.halted;
+    try {
+      const result = await setExecutionHalt({ data: { on: next } });
+      setWs((prev) => pushAudit({ ...prev, halted: result.halted }, "emergency_stop", "session", result.halted ? "on" : "cleared"));
+    } catch {
+      setError("The server did not confirm the stop. Sends stay blocked in this browser.");
+      if (next) setWs((prev) => pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "browser only"));
+    }
+  }
   function explain(text: string) {
     setNotice(text);
     setError(null);
@@ -539,7 +561,7 @@ export function CommandApp() {
       memory: memoryChoice,
       autonomy,
       temporary,
-      projectId: projectChoice || null,
+      projectId: chatProjectId || projectChoice || null,
     });
     setWs((prev) =>
       pushAudit(
@@ -605,7 +627,7 @@ export function CommandApp() {
     }
     const gaps = result.gaps.map((gap) => `${gap.name}: ${gap.detail}`).join("\n");
     setReaReport(
-      `REA ${result.version} from github.com/morluto/rea.\nHealthy: ${result.healthy ? "yes" : "no"}.\n${gaps || "No gaps reported."}`,
+      `REA ${result.version} (${result.package}). Exit ${result.exitCode}. Healthy: ${result.healthy ? "yes" : "no"}.\n${gaps || "No gaps reported."}`,
     );
     setWs((prev) => pushAudit(prev, "rea_doctor", "rea", result.healthy ? "healthy" : "not healthy"));
   }
@@ -765,11 +787,7 @@ export function CommandApp() {
               <button
                 type="button"
                 className="min-h-11 rounded-panel border border-line px-3"
-                onClick={() =>
-                  setWs((prev) =>
-                    pushAudit({ ...prev, halted: !prev.halted }, "emergency_stop", "session", prev.halted ? "cleared" : "on"),
-                  )
-                }
+                onClick={() => void toggleStop()}
               >
                 {ws.halted ? "Clear stop" : "Emergency stop"}
               </button>
@@ -983,11 +1001,7 @@ export function CommandApp() {
                 <button
                   type="button"
                   className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                  onClick={() =>
-                    setWs((prev) =>
-                      pushAudit({ ...prev, halted: !prev.halted }, "emergency_stop", "session", prev.halted ? "cleared" : "on"),
-                    )
-                  }
+                  onClick={() => void toggleStop()}
                 >
                   <Square className="size-4" /> {ws.halted ? "Clear stop" : "Stop"}
                 </button>
@@ -1004,6 +1018,9 @@ export function CommandApp() {
             <ChatPane
               active={active}
               chats={ws.chats}
+              projectId={chatProjectId}
+              projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
+              onClearProject={() => setChatProjectId(null)}
               busy={busy}
               halted={ws.halted}
               draft={draft}
@@ -1136,14 +1153,14 @@ export function CommandApp() {
                       </div>
                       <p className="mt-3 text-xs text-muted">Updated {stamp(project.createdAt)} · {chats} chats · {notes} notes · {files} files</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm text-white" onClick={() => { setProjectChoice(project.id); setView("chat"); }}>Open chats</button>
+                        <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm text-white" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setMemoryScope("project"); setView("memory"); }}>Notes</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("files")}>Files</button>
                         <button
                           type="button"
                           className="min-h-11 rounded-panel border border-line px-3 text-sm"
                           onClick={() =>
-                            requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats and files stay. They are unlinked from this project. Notes stay in Memory.", "Approve delete", () => {
+                            requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats and files stay in the workspace and are unlinked. Notes stay in Memory and are labeled if this project is gone. Nothing is erased except the project record.", "Approve delete", () => {
                               setWs((prev) =>
                                 pushAudit(
                                   {
@@ -1285,7 +1302,7 @@ export function CommandApp() {
                     ) : (
                       <p className="whitespace-pre-wrap">{item.text}</p>
                     )}
-                    <p className="mt-1 text-xs text-muted">{item.scope} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
+                    <p className="mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {editId === item.id ? (
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button>
@@ -1367,29 +1384,36 @@ export function CommandApp() {
                 </div>
                 <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
               </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-[14rem_1fr]">
+              <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
                 <aside className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
-                  <p className="font-semibold">On this device</p>
-                  <p className="mt-2 text-muted">All files · {ws.files.length}</p>
-                  <p className="text-muted">Projects · {ws.projects.length}</p>
-                  <p className="mt-3 text-xs text-muted">Folders in the reference are not a cloud drive. Files here are the text copies you added.</p>
+                  <p className="font-semibold">Text copies</p>
+                  <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
+                  <ul className="mt-3 space-y-1">
+                    {ws.files.length === 0 && <li className="text-muted">No files yet.</li>}
+                    {ws.files.map((file) => (
+                      <li key={file.id}>
+                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`min-h-11 w-full rounded-panel px-2 text-left ${openFileId === file.id ? "bg-accent text-white" : ""}`}>
+                          {file.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </aside>
-                <ul className="space-y-2">
-                  {ws.files.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No files yet. Use Upload text or Attach on Command.</li>}
-                  {ws.files.map((file) => (
-                    <li key={file.id} className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold">{file.name}</p>
-                        <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)}</p>
-                      </div>
-                      <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-muted">{file.text}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect with REA</button>
+                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
+                  {!ws.files.find((file) => file.id === openFileId) && <p className="text-muted">Select a file to read the text copy. Upload text from the button above, or attach a file on Command.</p>}
+                  {ws.files.filter((file) => file.id === openFileId).map((file) => (
+                    <div key={file.id}>
+                      <p className="font-semibold">{file.name}</p>
+                      <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · text copy in this browser</p>
+                      <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect text with REA</button>
                         <button
                           type="button"
                           className="min-h-11 rounded-panel border border-line px-3"
                           onClick={() =>
                             requestProtected("delete", `delete-file:${file.id}`, `Delete “${file.name}”`, "The text copy in this browser is removed.", "Approve delete", () => {
+                              setOpenFileId(null);
                               setWs((prev) => pushAudit({ ...prev, files: prev.files.filter((item) => item.id !== file.id) }, "delete_file", file.id, "approved"));
                             })
                           }
@@ -1397,9 +1421,10 @@ export function CommandApp() {
                           Delete
                         </button>
                       </div>
-                    </li>
+                      <p className="mt-3 text-xs text-muted">REA inspect-artifact often rejects plain text. A failure stays a failure. It is not marked inspected.</p>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             </section>
           )}
@@ -1434,9 +1459,13 @@ export function CommandApp() {
                 <h2 className="font-display text-3xl font-bold">Activity</h2>
                 <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
               </div>
+              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="mt-4 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" aria-label="Filter activity" />
               <ul className="mt-4 space-y-2">
                 {ws.audit.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No events yet.</li>}
-                {ws.audit.map((entry) => (
+                {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).length === 0 && ws.audit.length > 0 && (
+                  <li className="text-sm text-muted">No events match that filter.</li>
+                )}
+                {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).map((entry) => (
                   <li key={entry.id} className="glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface p-3 text-sm">
                     <div>
                       <p className="font-semibold">{humanAction(entry.action)}</p>
@@ -1451,13 +1480,25 @@ export function CommandApp() {
           {view === "settings" && (
             <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
               <h2 className="font-display text-3xl font-bold">Settings</h2>
-              <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. No 10 GB cloud quota is connected.</p>
+              <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. This browser only. It is not a cloud backup and it is not a 10 GB plan.</p>
+              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+                <p className="font-semibold">How to use this</p>
+                <ul className="mt-2 space-y-2 text-muted">
+                  <li>Command is home. Ask is the default. Automatic still asks before a delete or a replace.</li>
+                  <li>Memory is off until you confirm it. A memory-off chat cannot read or save notes.</li>
+                  <li>Open chats on a project shows only that project’s chats. Show all chats clears the filter.</li>
+                  <li>Research asks Grok. It does not search the web and it must not invent citations.</li>
+                  <li>Agents can run REA doctor. They are not a running task runner. Nothing is marked Running unless it is.</li>
+                  <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
+                  <li>Stop blocks new sends on this page and on the server process that received the stop.</li>
+                  <li>Oak Bridge and BridgePoint are external labels. This app does not open them.</li>
+                  <li>A dedicated database needs a new Supabase organization. The current free organization is already full.</li>
+                </ul>
+              </div>
               <button
                 type="button"
                 className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                onClick={() =>
-                  setWs((prev) => pushAudit({ ...prev, halted: !prev.halted }, "emergency_stop", "session", prev.halted ? "cleared" : "on"))
-                }
+                onClick={() => void toggleStop()}
               >
                 <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
               </button>
@@ -1672,6 +1713,9 @@ function ReaPanel({
 function ChatPane({
   active,
   chats,
+  projectId,
+  projectName,
+  onClearProject,
   busy,
   halted,
   draft,
@@ -1697,6 +1741,9 @@ function ChatPane({
 }: {
   active: Chat | null;
   chats: Chat[];
+  projectId: string | null;
+  projectName: string | null;
+  onClearProject: () => void;
   busy: boolean;
   halted: boolean;
   draft: string;
@@ -1724,7 +1771,8 @@ function ChatPane({
   const [tools, setTools] = useState(false);
   const [context, setContext] = useState(false);
   const needle = filter.trim().toLowerCase();
-  const visible = needle ? chats.filter((chat) => chat.title.toLowerCase().includes(needle)) : chats;
+  const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
+  const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
   const groups = ["Today", "Yesterday", "This week", "Earlier"]
     .map((label) => ({ label, items: visible.filter((chat) => chatBucket(chat) === label) }))
     .filter((group) => group.items.length > 0);
@@ -1738,10 +1786,16 @@ function ChatPane({
           </button>
         </div>
         <div className="px-3 pb-2">
+          {projectName && (
+            <p className="mb-2 text-xs text-muted">
+              Showing chats for {projectName}.{" "}
+              <button type="button" className="text-accent" onClick={onClearProject}>Show all chats</button>
+            </p>
+          )}
           <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search conversations" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Search conversations" />
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto px-3 pb-3">
-          {groups.length === 0 && <p className="text-sm text-muted">{chats.length === 0 ? "No conversations yet." : "No conversations match."}</p>}
+          {groups.length === 0 && <p className="text-sm text-muted">{scoped.length === 0 ? (projectName ? `No chats for ${projectName} yet.` : "No conversations yet.") : "No conversations match."}</p>}
           {groups.map((group) => (
             <div key={group.label}>
               <p className="px-1 text-xs text-muted">{group.label}</p>

@@ -73,7 +73,7 @@ export const CAPABILITIES: Capability[] = [
     id: "rea",
     name: "REA",
     status: "local_required",
-    why: "Official CLI rea-agents 6.8.0 from github.com/morluto/rea runs. Doctor is not healthy: Node is 22.23.3 and needs 22.23.4 or newer, and Hopper, Ghidra, IDA, JADX, and Kuna are not installed.",
+    why: "Pinned CLI rea-agents 6.8.0. Doctor runs and is not healthy on this machine. inspect-artifact does not accept TypeScript. Hopper, Ghidra, IDA, JADX, and Kuna are not installed.",
   },
   {
     id: "pc",
