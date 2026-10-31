@@ -1,7 +1,7 @@
 export const PALETTE_DESTINATIONS = [
-  { id: "command", label: "Command" },
-  { id: "chat", label: "Chat" },
-  { id: "agents", label: "Agents" },
+  { id: "command", label: "Chat" },
+  { id: "chat", label: "Thread" },
+  { id: "agents", label: "Bots" },
   { id: "runs", label: "Runs" },
   { id: "projects", label: "Projects" },
   { id: "research", label: "Research" },
@@ -12,6 +12,7 @@ export const PALETTE_DESTINATIONS = [
   { id: "scheduled", label: "Scheduled" },
   { id: "memory", label: "Memory" },
   { id: "activity", label: "Activity" },
+  { id: "help", label: "Help" },
   { id: "settings", label: "Settings" },
 ] as const;
 

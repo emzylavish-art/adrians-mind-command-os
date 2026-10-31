@@ -23,6 +23,7 @@ import {
   Square,
   Video,
   CalendarClock,
+  CircleHelp,
   Link2,
   ListTree,
   Menu,
@@ -39,6 +40,7 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { mindStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
+import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
 import { haltFleet, enqueueRun, togglePin } from "@/lib/mind/fleet";
@@ -78,6 +80,7 @@ type View =
   | "scheduled"
   | "integrations"
   | "activity"
+  | "help"
   | "settings";
 
 type Pending = {
@@ -110,14 +113,14 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
   {
     label: "Workspace",
     items: [
-      { id: "command", label: "Command", icon: Home },
-      { id: "chat", label: "Chat", icon: MessageSquare },
-      { id: "agents", label: "Agents", icon: Bot },
-      { id: "runs", label: "Runs", icon: ListTree },
+      { id: "command", label: "Chat", icon: MessageSquare },
+      { id: "agents", label: "Bots & Agents", icon: Bot },
+      { id: "build", label: "Build", icon: Terminal },
       { id: "projects", label: "Projects", icon: Folder },
       { id: "research", label: "Research", icon: Search },
       { id: "files", label: "Library", icon: FileText },
-      { id: "build", label: "Build", icon: Terminal },
+      { id: "chat", label: "Thread", icon: MessageSquare },
+      { id: "runs", label: "Runs", icon: ListTree },
     ],
   },
   {
@@ -126,14 +129,15 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
       { id: "connected", label: "Connected", icon: Link2 },
       { id: "tools", label: "Tools", icon: Wrench },
       { id: "scheduled", label: "Scheduled", icon: CalendarClock },
+      { id: "memory", label: "Memory", icon: Database },
+      { id: "activity", label: "Activity", icon: Activity },
     ],
   },
   {
     label: "Personal",
     items: [
-      { id: "memory", label: "Memory", icon: Database },
-      { id: "activity", label: "Activity", icon: Activity },
       { id: "settings", label: "Settings", icon: Settings },
+      { id: "help", label: "Help", icon: CircleHelp },
     ],
   },
 ];
@@ -141,20 +145,21 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
 const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
 const TITLES: Record<View, string> = {
-  command: "Command",
-  chat: "Chat",
+  command: "Chat",
+  chat: "Thread",
   projects: "Projects",
   memory: "Memory",
-  agents: "Agents",
-  runs: "Agent runs",
+  agents: "Bots & Agents",
+  runs: "Runs",
   research: "Research",
   files: "Library",
   build: "Build",
-  connected: "Connected apps",
+  connected: "Connected",
   tools: "Tools",
-  scheduled: "Scheduled tasks",
+  scheduled: "Scheduled",
   integrations: "Integrations",
   activity: "Activity",
+  help: "Help",
   settings: "Settings",
 };
 
@@ -1326,6 +1331,12 @@ export function CommandApp() {
                     >
                       <Wrench className="size-4" /> Tools
                     </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setView("agents")}>
+                      <Bot className="size-4" /> Agents
+                    </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
+                      <Folder className="size-4" /> Projects
+                    </button>
                     <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
                       <Mic className="size-4" />
                     </button>
@@ -1385,6 +1396,7 @@ export function CommandApp() {
               </div>
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="text-sm text-danger">{error}</p>}
+              <ServiceBoard grokConfigured={grokConfigured === true} onSetup={(message) => setNotice(message)} />
 
               <div className="grid gap-3 xl:grid-cols-3">
                 <Panel title="Active Projects" action="View all" onAction={() => setView("projects")}>
@@ -1847,7 +1859,15 @@ export function CommandApp() {
             </>
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
-          {view === "connected" && <FleetPanel mode="connected" ws={ws} setWs={setWs} />}
+          {view === "connected" && (
+            <section className="space-y-4 p-4 md:p-6">
+              <h2 className="font-display text-3xl font-bold">Connected</h2>
+              <p className="text-sm text-muted">Setup explains what is missing. It does not mark a service connected.</p>
+              <ServiceBoard grokConfigured={grokConfigured === true} onSetup={(message) => setNotice(message)} />
+              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+              <FleetPanel mode="connected" ws={ws} setWs={setWs} />
+            </section>
+          )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
           {view === "build" && (
@@ -1992,6 +2012,18 @@ export function CommandApp() {
                     <p className="text-xs text-muted">{stamp(entry.at)}</p>
                   </li>
                 ))}
+              </ul>
+            </section>
+          )}
+          {view === "help" && (
+            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
+              <h2 className="font-display text-3xl font-bold">Help</h2>
+              <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
+              <ul className="space-y-2 text-sm">
+                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion, Gmail, search, image, video, and the computer are refused.</li>
+                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
+                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
+                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
               </ul>
             </section>
           )}
@@ -2156,7 +2188,7 @@ export function CommandApp() {
         </Overlay>
       )}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Primary">
-        {NAV.filter((item) => item.id === "command" || item.id === "chat" || item.id === "agents" || item.id === "runs").map((item) => {
+        {NAV.filter((item) => item.id === "command" || item.id === "agents" || item.id === "build" || item.id === "projects").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
           return (
