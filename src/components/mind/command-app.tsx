@@ -33,6 +33,11 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn } from "@/lib/mind/live-turn";
 import { mindStatus, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
+import { MessageBody } from "@/components/mind/message-body";
+import { runLocalPlan } from "@/lib/mind/local-tools";
+import { PROVIDERS, resolveProvider } from "@/lib/mind/providers";
+import { runResearch } from "@/lib/mind/research";
+import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
@@ -130,6 +135,10 @@ function humanAction(action: string) {
     save_memory: "Note saved",
     delete_chat: "Chat deleted",
     export: "Archive exported",
+    export_chat: "Chat exported",
+    rename_chat: "Chat renamed",
+    workspace_lookup: "Workspace lookup",
+    research_refused: "Research refused",
     emergency_stop: "Emergency stop changed",
     import_merge: "Archive merged",
     import_replace: "Archive replaced",
@@ -189,6 +198,8 @@ export function CommandApp() {
   const [memoryQuery, setMemoryQuery] = useState("");
   const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
   const [researchText, setResearchText] = useState("");
+  const [researchNote, setResearchNote] = useState<string | null>(null);
+  const [lookupQuery, setLookupQuery] = useState("");
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [activityQuery, setActivityQuery] = useState("");
   const [openFileId, setOpenFileId] = useState<string | null>(null);
@@ -335,15 +346,23 @@ export function CommandApp() {
     setPending(null);
   }
 
-  async function deliver(chat: Chat, text: string, source: Workspace) {
-    const title = chat.messages.length === 0 ? text.replace(/\s+/g, " ").slice(0, 48) : chat.title;
-    const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
-    setWs((prev) => ({
-      ...prev,
-      chats: prev.chats.map((item) =>
-        item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
-      ),
-    }));
+  async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
+    const routed = resolveProvider("grok", false);
+    if (!routed.ok) {
+      setError(routed.error);
+      return;
+    }
+    const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
+    const history = (resume ? chat.messages.slice(0, -1) : chat.messages).slice(-12);
+    if (!resume) {
+      const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
+        ),
+      }));
+    }
     setBusy(true);
     setLiveText("");
     setError(null);
@@ -365,8 +384,9 @@ export function CommandApp() {
           text,
           memory: chat.memory,
           halted: source.halted,
-          history: chat.messages.slice(-12).map((msg) => ({ role: msg.role, content: msg.content })),
+          history,
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
+          provider: routed.id,
         },
         onDelta: (chunk) => setLiveText((current) => current + chunk),
       });
@@ -422,6 +442,87 @@ export function CommandApp() {
     }
   }
 
+  function stopReply() {
+    turnAbort.current?.abort();
+  }
+
+  function renameActive(title: string) {
+    if (!active) return;
+    const next = renameChat(ws, active.id, title);
+    if (!next) {
+      setError("Name the chat.");
+      return;
+    }
+    setWs(pushAudit(next, "rename_chat", active.id, title.trim()));
+    setError(null);
+  }
+
+  function editMessage(messageId: string, text: string) {
+    if (!active || busy || ws.halted) return;
+    const revised = reviseUserTurn(ws, active.id, messageId, text);
+    if ("error" in revised) {
+      setError(revised.error);
+      return;
+    }
+    setWs(revised.ws);
+    void deliver(revised.chat, revised.text, revised.ws, true);
+  }
+
+  function regenerate() {
+    if (!active || busy || ws.halted) return;
+    const prepared = prepareRegenerate(ws, active.id);
+    if ("error" in prepared) {
+      setError(prepared.error);
+      return;
+    }
+    setWs(prepared.ws);
+    void deliver(prepared.chat, prepared.text, prepared.ws, true);
+  }
+
+  function retryLast() {
+    if (!active || busy || ws.halted) return;
+    const prepared = prepareRetry(ws, active.id);
+    if ("error" in prepared) {
+      setError(prepared.error);
+      return;
+    }
+    setError(null);
+    void deliver(prepared.chat, prepared.text, ws, true);
+  }
+
+  function exportActive() {
+    if (!active) return;
+    const packed = exportChat(ws, active.id);
+    if ("error" in packed) {
+      setError(packed.error);
+      return;
+    }
+    const blob = new Blob([packed.json], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = packed.filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
+  }
+
+  function runLookup(query: string) {
+    const steps = [
+      { id: "projects", tool: "list_projects" as const },
+      { id: "chats", tool: "list_chats" as const },
+      { id: "notes", tool: "search_notes" as const, query },
+    ];
+    requestProtected("lookup", "workspace-lookup", "Look through this workspace", "Lists projects and chats, then searches notes. It does not call a model or the web.", "Approve lookup", () => {
+      const result = runLocalPlan(ws, steps, {
+        autonomy: active?.autonomy ?? autonomy,
+        halted: ws.halted,
+        tokens: Object.fromEntries(steps.map((step) => [step.id, `approve:${step.id}`])),
+      });
+      setNotice(result.lines.join("\n"));
+      setWs((prev) => pushAudit(prev, "workspace_lookup", "local", result.ok ? "finished" : "stopped"));
+    });
+  }
+
   async function sendCommand() {
     if (busy || ws.halted) return;
     const text = draft.trim();
@@ -450,20 +551,15 @@ export function CommandApp() {
     await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] });
   }
 
-  async function startResearch() {
-    if (busy || ws.halted) return;
-    const text = researchText.trim();
-    if (!text) {
-      setError("Write what you want researched.");
+  function startResearch() {
+    if (ws.halted) {
+      setError("Emergency stop is on. No new action can run.");
       return;
     }
-    const made = createChat(ws, { memory: "off", autonomy: "ask", temporary: false, projectId: projectChoice || null });
-    const full = `Research request. Do not invent citations, sources, or a web search. Say what you cannot verify.\n\n${text}`.slice(0, 8000);
-    setResearchText("");
-    setActiveId(made.chat.id);
-    setView("chat");
-    setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "research; memory off"));
-    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] });
+    const result = runResearch(researchText);
+    setError(null);
+    setResearchNote(result.error);
+    setWs((prev) => pushAudit(prev, "research_refused", "search", "no provider"));
   }
 
   async function sendInChat() {
@@ -1065,6 +1161,12 @@ export function CommandApp() {
               setDraft={setDraft}
               onPick={(id) => setActiveId(id)}
               onSend={() => void sendInChat()}
+              onStop={stopReply}
+              onRename={renameActive}
+              onEdit={editMessage}
+              onRegenerate={regenerate}
+              onRetry={retryLast}
+              onExport={exportActive}
               onDelete={() => {
                 if (!active) return;
                 requestProtected("delete", `delete-chat:${active.id}`, `Delete “${active.title}”`, "The transcript is removed. Saved notes stay until you delete them.", "Approve delete", () => {
@@ -1381,24 +1483,39 @@ export function CommandApp() {
           )}
 
           {view === "agents" && (
+            <>
             <ReaPanel
               title="Agents"
-              lead="Agent analysis runs through the official REA CLI. There is no separate task runner, and nothing is marked done unless REA returns it."
+              lead="REA checks a file. Workspace lookup lists projects and chats, then searches notes. It does not call a model, browse the web, or mark itself running."
               report={reaReport}
               busy={reaBusy}
               onCheck={() => void checkRea()}
               onInspect={staged ? () => void inspectWithRea(staged, "agents") : null}
             />
+            <form
+              className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                runLookup(lookupQuery);
+              }}
+            >
+              <p className="font-semibold">Workspace lookup</p>
+              <p className="mt-1 text-sm text-muted">Three local steps, in order. You approve them before they run. Stop blocks them.</p>
+              <input value={lookupQuery} onChange={(event) => setLookupQuery(event.target.value)} placeholder="Word to find in notes" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+              <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || !lookupQuery.trim()}>Run lookup</button>
+            </form>
+            </>
           )}
           {view === "research" && (
             <section className="p-4 md:p-6">
               <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
                 <h2 className="font-display text-3xl font-bold">Research</h2>
-                <p className="text-sm text-muted">Asks Grok 4.5. It does not search the live web, and it is told not to invent citations.</p>
+                <p className="text-sm text-muted">No search provider is configured. Checking research does not call Grok, fetch a page, or create a citation.</p>
                 <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || ws.halted} onClick={() => void startResearch()}>
-                  {busy ? "Asking Grok" : "Start research"}
+                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
+                  Check research
                 </button>
+                {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
               </div>
               <div className="mt-4">
                 <ReaPanel
@@ -1537,7 +1654,7 @@ export function CommandApp() {
                   <li>Command is home. Ask is the default. Automatic still asks before a delete or a replace.</li>
                   <li>Memory is off until you confirm it. A memory-off chat cannot read or save notes.</li>
                   <li>Open chats on a project shows only that project’s chats. Show all chats clears the filter.</li>
-                  <li>Research asks Grok. It does not search the web and it must not invent citations.</li>
+                  <li>Research has no search provider. The check refuses, does not call Grok, and creates no citations.</li>
                   <li>Agents can run REA doctor. They are not a running task runner. Nothing is marked Running unless it is.</li>
                   <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
                   <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart. The embedded database does not, unless a dedicated database URL is set. That is not cloud backup.</li>
@@ -1777,6 +1894,12 @@ function ChatPane({
   setDraft,
   onPick,
   onSend,
+  onStop,
+  onRename,
+  onEdit,
+  onRegenerate,
+  onRetry,
+  onExport,
   onDelete,
   onMemory,
   onSave,
@@ -1806,6 +1929,12 @@ function ChatPane({
   setDraft: (value: string) => void;
   onPick: (id: string) => void;
   onSend: () => void;
+  onStop: () => void;
+  onRename: (title: string) => void;
+  onEdit: (messageId: string, text: string) => void;
+  onRegenerate: () => void;
+  onRetry: () => void;
+  onExport: () => void;
   onDelete: () => void;
   onMemory: () => void;
   onSave: (content: string) => void;
@@ -1825,6 +1954,11 @@ function ChatPane({
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
   const [context, setContext] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
@@ -1866,8 +2000,29 @@ function ChatPane({
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="masthead px-4 pt-4">
-          <h2 className="font-display text-3xl font-bold">AI Chat</h2>
-          <p className="text-sm text-muted">Grok 4.5 is the only live model. Other providers stay unavailable.</p>
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
+            {active && !renaming && (
+              <div className="flex gap-3">
+                <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Export chat</button>
+                <button type="button" className="min-h-11 text-sm text-accent" onClick={() => { setTitleDraft(active.title); setRenaming(true); }}>Rename</button>
+              </div>
+            )}
+          </div>
+          {renaming && (
+            <form
+              className="mt-2 flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onRename(titleDraft);
+                setRenaming(false);
+              }}
+            >
+              <input value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} className="min-h-11 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Chat name" />
+              <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save</button>
+            </form>
+          )}
+          <p className="text-sm text-muted">Grok 4.5 is the only live model. Other providers stay unavailable and are not substituted.</p>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
           {(!active || active.messages.length === 0) && !busy && (
@@ -1882,14 +2037,60 @@ function ChatPane({
               </div>
             </div>
           )}
-          {active?.messages.map((msg) => (
+          {active?.messages.map((msg) => {
+            const last = active.messages.at(-1);
+            return (
             <article key={msg.id} className={`max-w-3xl rounded-panel border border-line px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-surface-2" : "bg-surface"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
-              <p className="whitespace-pre-wrap">{msg.content}</p>
-              <div className="mt-2 flex gap-3">
+              {editingId === msg.id ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    onEdit(msg.id, editDraft);
+                    setEditingId(null);
+                  }}
+                >
+                  <textarea value={editDraft} onChange={(event) => setEditDraft(event.target.value)} rows={3} className="w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+                  <p className="mt-1 text-xs text-muted">Saving replaces this message and removes every reply after it, then sends it again.</p>
+                  <div className="mt-2 flex gap-2">
+                    <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save and send</button>
+                    <button type="button" className="min-h-11 px-3 text-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <MessageBody text={msg.content} />
+              )}
+              <div className="mt-2 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="min-h-11 text-xs text-accent"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(msg.content).then(() => {
+                      setCopiedId(msg.id);
+                    }).catch(() => setCopiedId(null));
+                  }}
+                >
+                  {copiedId === msg.id ? "Copied" : "Copy"}
+                </button>
                 {msg.role === "assistant" && (
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content)} disabled={speaking}>
                     {speaking ? "Speaking" : "Speak"}
+                  </button>
+                )}
+                {msg.role === "assistant" && last?.id === msg.id && (
+                  <button type="button" className="min-h-11 text-xs text-accent" onClick={onRegenerate} disabled={busy || halted}>Regenerate</button>
+                )}
+                {msg.role === "user" && (
+                  <button
+                    type="button"
+                    className="min-h-11 text-xs text-accent"
+                    disabled={busy || halted}
+                    onClick={() => {
+                      setEditingId(msg.id);
+                      setEditDraft(msg.content);
+                    }}
+                  >
+                    Edit
                   </button>
                 )}
                 {msg.role === "user" && active.memory === "on" && (
@@ -1897,7 +2098,8 @@ function ChatPane({
                 )}
               </div>
             </article>
-          ))}
+            );
+          })}
           {busy && liveText && (
             <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">Grok 4.5 · writing</p>
@@ -1905,7 +2107,13 @@ function ChatPane({
             </article>
           )}
           {busy && !liveText && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {busy && (
+            <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
+          )}
           {error && <p className="text-sm text-danger">{error}</p>}
+          {error && active?.messages.at(-1)?.role === "user" && (
+            <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
+          )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session.</p>}
         </div>
         <form
@@ -1951,7 +2159,11 @@ function ChatPane({
         <section className="rounded-panel border border-line bg-surface p-3">
           <p className="text-sm font-semibold">Model and mode</p>
           <p className="mt-3 rounded-panel border border-ok/40 px-3 py-2 text-sm">Grok 4.5 <span className="text-ok">Active</span></p>
-          <p className="mt-2 text-xs text-muted">GPT, Claude, Gemini, and OpenRouter have no keys. They cannot be selected.</p>
+          <ul className="mt-2 space-y-1 text-xs text-muted">
+            {PROVIDERS.filter((item) => item.id !== "grok").map((item) => (
+              <li key={item.id}>{item.label} — {item.reason} Not substituted.</li>
+            ))}
+          </ul>
         </section>
         <section className="rounded-panel border border-line bg-surface p-3">
           <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>

@@ -2,6 +2,7 @@ import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
+import { assertLiveProvider } from "./providers";
 import { decideFetchSite } from "./request-guard";
 import { createSseFeed, pushSse, readModelPayload, type ModelUsage } from "./stream";
 
@@ -17,6 +18,7 @@ export type TurnBody = {
   halted?: unknown;
   history?: unknown;
   memoryContext?: unknown;
+  provider?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryItem {
@@ -55,6 +57,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
   if (!memory) return { ok: false as const, error: "Memory setting is invalid." };
+  const routed = assertLiveProvider(data.provider);
+  if (!routed.ok) return routed;
   const gate = envCheck();
   if (!gate.ok) return { ok: false as const, error: gate.error };
   const assembled = assembleTurn({
@@ -64,12 +68,12 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     memoryContext,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
-  return { ok: true as const, assembled, memory };
+  return { ok: true as const, assembled, memory, model: routed.model };
 }
 
-function modelBody(messages: { role: string; content: string }[]) {
+function modelBody(model: string, messages: { role: string; content: string }[]) {
   return {
-    model: MIND_MODEL,
+    model,
     messages,
     max_tokens: 500,
     temperature: 0.4,
@@ -78,7 +82,8 @@ function modelBody(messages: { role: string; content: string }[]) {
   };
 }
 
-export async function completeModelReply(prepared: { assembled: { messages: { role: "system" | "user" | "assistant"; content: string }[]; usedIds: string[] }; memory: "off" | "on" }) {
+export async function completeModelReply(prepared: { assembled: { messages: { role: "system" | "user" | "assistant"; content: string }[]; usedIds: string[] }; memory: "off" | "on"; model: "grok-4.5" }) {
+  if (prepared.model !== MIND_MODEL) return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return { ok: false as const, error: "Grok is not configured on the server." };
   let res: Response;
@@ -87,7 +92,7 @@ export async function completeModelReply(prepared: { assembled: { messages: { ro
       method: "POST",
       signal: AbortSignal.timeout(25_000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(modelBody(prepared.assembled.messages)),
+      body: JSON.stringify(modelBody(prepared.model, prepared.assembled.messages)),
     });
   } catch {
     return { ok: false as const, error: "Grok did not answer in time. Nothing was saved as a success." };
@@ -98,7 +103,7 @@ export async function completeModelReply(prepared: { assembled: { messages: { ro
   return {
     ok: true as const,
     text: parsed.text,
-    model: MIND_MODEL,
+    model: prepared.model,
     requestId: res.headers.get("x-request-id"),
     usage: parsed.usage,
     memory: prepared.memory,
@@ -159,6 +164,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const prepared = await prepareMindTurn(userId, body);
   if (!prepared.ok) return json(prepared);
+  if (prepared.model !== MIND_MODEL) return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
 
@@ -173,7 +179,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
           method: "POST",
           signal: AbortSignal.timeout(25_000),
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(modelBody(prepared.assembled.messages)),
+          body: JSON.stringify(modelBody(prepared.model, prepared.assembled.messages)),
         });
         if (!res.ok || !res.body) {
           send("error", { error: `Grok returned ${res.status}. Nothing was saved as a success.` });
@@ -203,7 +209,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
         const usage: ModelUsage | null = feed.usage;
         send("done", {
           text: feed.text.trim(),
-          model: MIND_MODEL,
+          model: prepared.model,
           usage,
           usedIds: prepared.assembled.usedIds,
           requestId: res.headers.get("x-request-id"),

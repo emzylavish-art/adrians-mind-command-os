@@ -84,14 +84,14 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "research",
     name: "Research",
-    status: "planned",
-    why: "Source files are inspected with the official REA CLI. Web pages are not fetched, and citations are not invented.",
+    status: "unconfigured",
+    why: "No search provider is configured. The research check refuses, does not call Grok, and creates no citations.",
   },
   {
     id: "agents",
     name: "Agent runtime",
-    status: "planned",
-    why: "Analysis actions call the REA CLI from github.com/morluto/rea. A multi-step task runner is not built. Deletes still ask you.",
+    status: "ready",
+    why: "Workspace lookup runs list and search steps on this device after approval. It does not call a model, browse the web, or control a computer.",
   },
   {
     id: "image",
