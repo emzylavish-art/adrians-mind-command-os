@@ -38,7 +38,7 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { analyzeImageFile, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { analyzeImageFile, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -244,6 +244,7 @@ export function CommandApp() {
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
+  const voiceNext = useRef(false);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -451,7 +452,7 @@ export function CommandApp() {
     setPending(null);
   }
 
-  function recordToolTurn(chat: Chat, text: string, reply: string, mutate?: (prev: Workspace) => Workspace) {
+  function recordToolTurn(chat: Chat, text: string, reply: string, mutate?: (prev: Workspace) => Workspace, meta?: { tool: string; ok: boolean; action: "chat" | "voice" }) {
     const title = chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const at = new Date().toISOString();
     const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at };
@@ -459,13 +460,14 @@ export function CommandApp() {
     setActiveId(chat.id);
     setView("chat");
     setError(null);
+    if (meta) void recordAgentExecution({ data: { id: assistant.id, tool: meta.tool, action: meta.action, ok: meta.ok, detail: reply } }).catch(() => undefined);
     setWs((prev) => {
       const base = mutate ? mutate(prev) : prev;
       const exists = base.chats.some((item) => item.id === chat.id);
       const chats = exists
         ? base.chats.map((item) => (item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg, assistant] } : item))
         : [{ ...chat, title, messages: [userMsg, assistant] }, ...base.chats];
-      return pushAudit({ ...base, chats }, "tool_turn", chat.id, "no model");
+      return pushAudit({ ...base, chats }, "tool_turn", meta?.tool ?? chat.id, meta ? `${meta.action} ${meta.ok ? "completed" : "failed"}` : "no model");
     });
   }
 
@@ -530,7 +532,7 @@ export function CommandApp() {
     ];
   }
 
-  function settleIntent(chat: Chat, text: string, source: Workspace): boolean {
+  function settleIntent(chat: Chat, text: string, source: Workspace, action: "chat" | "voice" = "chat"): boolean {
     const intent = interpretCommand(text, source.agents, commandMode);
     if (intent.kind === "chat") return false;
     if (intent.kind === "local" || intent.kind === "skill") {
@@ -563,13 +565,13 @@ export function CommandApp() {
               confirm: grantNow,
               nowMs: Date.now(),
             });
-            recordToolTurn(chat, text, again.text, toolId === "run_due_schedules" && again.status === "completed" ? (prev) => runDueSchedules(prev, new Date().toISOString()) : undefined);
+            recordToolTurn(chat, text, again.text, toolId === "run_due_schedules" && again.status === "completed" ? (prev) => runDueSchedules(prev, new Date().toISOString()) : undefined, { tool: toolId, ok: again.status === "completed", action });
             setNotice("The confirmed action finished on this device. Hosted realtime is not connected.");
           },
         });
         return true;
       }
-      recordToolTurn(chat, text, turn.text);
+      recordToolTurn(chat, text, turn.text, undefined, { tool: toolId, ok: turn.status === "completed", action });
       setNotice(turn.status === "completed" ? "The agent finished on this device. Hosted realtime is not connected." : turn.text);
       return true;
     }
@@ -939,7 +941,9 @@ export function CommandApp() {
     setDraft("");
     setStaged(null);
     const source = ws;
-    if (settleIntent(active, full, source)) {
+    const action = voiceNext.current ? "voice" as const : "chat" as const;
+    voiceNext.current = false;
+    if (settleIntent(active, full, source, action)) {
       if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
       return;
     }
@@ -1136,6 +1140,7 @@ export function CommandApp() {
     rec.onresult = (event) => {
       const transcript = event.results[0]?.[0]?.transcript ?? "";
       setDraft(transcript);
+      voiceNext.current = Boolean(transcript);
       setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
     };
     rec.start();

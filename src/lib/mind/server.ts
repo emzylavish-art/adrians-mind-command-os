@@ -96,6 +96,23 @@ export const searchWeb = createServerFn({ method: "POST" })
     });
   });
 
+export const recordAgentExecution = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; tool?: string; action?: string; ok?: boolean; detail?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
+    tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
+    action: input.action === "voice" ? "voice" : "chat",
+    ok: input.ok === true,
+    detail: typeof input.detail === "string" ? input.detail.slice(0, 500) : "",
+  }))
+  .handler(async ({ data, context }) => {
+    if (!data.id || !data.tool) return { ok: false as const, error: "The execution was not recorded." };
+    const { writeToolRun } = await import("./notion-record");
+    const { getSql } = await import("../db");
+    await writeToolRun(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
 export const notionStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
