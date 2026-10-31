@@ -12,10 +12,9 @@ describe("command intent", () => {
     assert.equal(interpretCommand("What is a pier?", agents).kind, "chat");
   });
 
-  it("refuses Notion, Gmail, search, media, and a computer without calling them", () => {
+  it("refuses Gmail, search, media, and a computer without calling them", () => {
     const notion = interpretCommand("Update my Notion page", agents);
-    assert.equal(notion.kind, "blocked");
-    if (notion.kind === "blocked") assert.match(notion.reply, /Nothing was searched or updated/);
+    assert.equal(notion.kind, "notion");
     const gmail = interpretCommand("Summarize my emails", agents);
     assert.equal(gmail.kind, "blocked");
     if (gmail.kind === "blocked") assert.match(gmail.reply, /Nothing was read or sent/);
@@ -42,7 +41,7 @@ describe("command intent", () => {
     assert.equal(found.kind, "bot");
     if (found.kind === "bot") assert.equal(found.agentId, "a1");
     const missing = interpretCommand("Ask my Notion bot to update the page", agents);
-    assert.equal(missing.kind, "blocked");
+    assert.equal(missing.kind, "bot_missing");
     const none = interpretCommand("Ask the Harbor agent to look", agents);
     assert.equal(none.kind, "bot_missing");
   });

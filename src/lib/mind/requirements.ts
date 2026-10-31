@@ -278,13 +278,13 @@ export const REQUIREMENTS: Requirement[] = [
     id: "R-CHAT-ROUTE",
     text: "Chat can run a local read or queue a saved bot without calling a model.",
     status: "verified",
-    note: "interpretCommand. Notion, Gmail, web search, media, and computer requests are refused before a model call. Ordinary questions still go to Grok only when you press Send.",
+    note: "interpretCommand. Gmail, web search, media, and computer requests are refused before a model call. Notion is sent to the server, which refuses when no token is set. Ordinary questions still go to Grok only when you press Send.",
   },
   {
     id: "R-NOTION",
     text: "Notion search and updates from chat.",
-    status: "blocked",
-    note: "No Notion connection. The chat says nothing was searched or updated.",
+    status: "implemented",
+    note: "The server can search, read, and append through the Notion API, and an append waits for confirmation. Tests use a fake API. No NOTION_TOKEN is set here, so a live search was not run.",
   },
   {
     id: "R-BUILD",

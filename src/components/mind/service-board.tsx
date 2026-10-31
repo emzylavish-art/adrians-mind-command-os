@@ -22,23 +22,44 @@ const SERVICES: Service[] = [
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
 ];
 
-export function ServiceBoard({ grokConfigured, onSetup }: { grokConfigured: boolean; onSetup: (message: string) => void }) {
+export function ServiceBoard({
+  grokConfigured,
+  onSetup,
+  notion,
+  onDisconnect,
+}: {
+  grokConfigured: boolean;
+  onSetup: (message: string) => void;
+  notion?: { state: string; detail: string } | null;
+  onDisconnect?: () => void;
+}) {
   const grok: Service = grokConfigured
     ? { name: "Grok", state: "Key present", detail: "Grok 4.5 can answer when you press Send. That is not a live-verified integration." }
     : { name: "Grok", state: "Not configured", detail: "No server key is visible to this page." };
+  const services = SERVICES.map((service) =>
+    service.name === "Notion" && notion
+      ? { name: "Notion", state: notion.state === "connected" ? "Connected" : notion.state === "disconnected" ? "Disconnected" : "Not connected", detail: notion.detail }
+      : service,
+  );
 
   return (
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-      {[grok, ...SERVICES].map((service) => (
+      {[grok, ...services].map((service) => (
         <article key={service.name} className="rounded-panel border border-line bg-surface p-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-semibold">{service.name}</h3>
             <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
           </div>
           <p className="mt-2 text-sm text-muted">{service.detail}</p>
-          <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
-            {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
-          </button>
+          {service.name === "Notion" && notion?.state === "connected" && onDisconnect ? (
+            <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
+              Disconnect
+            </button>
+          ) : (
+            <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
+              {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
+            </button>
+          )}
         </article>
       ))}
     </div>

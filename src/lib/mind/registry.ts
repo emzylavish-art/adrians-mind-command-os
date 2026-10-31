@@ -168,7 +168,7 @@ export const CAPABILITIES: Capability[] = [
     id: "notion",
     name: "Notion",
     status: "unconfigured",
-    why: "No Notion connection. Chat does not invent a page update.",
+    why: "The server calls Notion only when NOTION_TOKEN is set. No token is in this workspace. The secret is never sent to the browser. Chat does not invent pages.",
   },
   {
     id: "build.workspace",

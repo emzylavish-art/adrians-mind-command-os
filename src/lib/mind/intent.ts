@@ -2,13 +2,13 @@ export type CommandMode = "ask" | "research" | "agent" | "build";
 
 export type CommandIntent =
   | { kind: "chat" }
-  | { kind: "blocked"; area: "notion" | "gmail" | "search" | "media" | "build" | "device"; reply: string }
+  | { kind: "blocked"; area: "gmail" | "search" | "media" | "build" | "device"; reply: string }
+  | { kind: "notion" }
   | { kind: "local"; tool: "list_projects" | "list_chats" | "search_notes" }
   | { kind: "bot"; agentId: string; agentName: string; goal: string }
   | { kind: "bot_missing"; reply: string };
 
 const REPLIES = {
-  notion: "Notion is not connected. Nothing was searched or updated.",
   gmail: "No Gmail account is connected. Nothing was read or sent.",
   search: "No search provider is configured. Nothing was searched and no citations were created.",
   media: "Image and video generation are not called. Nothing was created.",
@@ -25,7 +25,6 @@ export function interpretCommand(
   const lower = raw.toLowerCase();
   if (!raw) return { kind: "chat" };
 
-  if (/\bnotion\b/.test(lower)) return { kind: "blocked", area: "notion", reply: REPLIES.notion };
   if (/\b(gmail|inbox|my emails|send an email|draft an email|check email)\b/.test(lower)) {
     return { kind: "blocked", area: "gmail", reply: REPLIES.gmail };
   }
@@ -48,6 +47,8 @@ export function interpretCommand(
     if (!found) return { kind: "bot_missing", reply: `No saved bot matches “${wanted.slice(0, 80)}”. Nothing was queued.` };
     return { kind: "bot", agentId: found.id, agentName: found.name, goal: raw.slice(0, 2000) };
   }
+
+  if (/\bnotion\b/.test(lower)) return { kind: "notion" };
 
   if (mode === "agent") {
     const found = agents.find((agent) => !agent.archived);

@@ -81,6 +81,86 @@ export const searchWeb = createServerFn({ method: "POST" })
     });
   });
 
+export const notionStatus = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { notionConnection, readNotionPref } = await import("./notion");
+    const pref = readNotionPref(context.userId);
+    return notionConnection(process.env.NOTION_TOKEN, pref.disabled);
+  });
+
+export const notionDisconnect = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { notionConnection, writeNotionPref } = await import("./notion");
+    writeNotionPref(context.userId, true);
+    return notionConnection(process.env.NOTION_TOKEN, true);
+  });
+
+export const notionCommand = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null }) => ({
+    text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
+    confirmed: input.confirmed === true,
+    pageId: typeof input.pageId === "string" ? input.pageId.slice(0, 80) : null,
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return {
+        ok: false as const,
+        state: "connected" as const,
+        action: "none",
+        needsConfirmation: false,
+        ambiguous: false,
+        pages: [] as { id: string; title: string; url: string; kind: "page" | "database" }[],
+        content: "",
+        error: "Emergency stop is on. Notion was not called.",
+        wrote: false,
+        verified: false,
+      };
+    }
+    if (!allowMindRequest("notion", context.userId, 8)) {
+      return {
+        ok: false as const,
+        state: "connected" as const,
+        action: "none",
+        needsConfirmation: false,
+        ambiguous: false,
+        pages: [] as { id: string; title: string; url: string; kind: "page" | "database" }[],
+        content: "",
+        error: "Too many Notion requests. Wait a minute. Nothing was changed.",
+        wrote: false,
+        verified: false,
+      };
+    }
+    const { readNotionPref, runNotionTurn } = await import("./notion");
+    const pref = readNotionPref(context.userId);
+    const result = await runNotionTurn({
+      token: process.env.NOTION_TOKEN,
+      disabled: pref.disabled,
+      text: data.text,
+      confirmed: data.confirmed,
+      pageId: data.pageId,
+      fetch: globalThis.fetch,
+    });
+    try {
+      const { randomUUID } = await import("node:crypto");
+      const { writeToolRun } = await import("./notion-record");
+      const { getSql } = await import("../db");
+      await writeToolRun(await getSql(), context.userId, {
+        id: randomUUID(),
+        tool: "notion",
+        action: result.action,
+        ok: result.ok,
+        detail: result.error || result.pages.map((page) => page.title).join(", ") || result.content.slice(0, 180) || "no result",
+      });
+    } catch {
+      /* the reply still reports the API result when the record cannot be saved */
+    }
+    return result;
+  });
+
 export const inspectWebPage = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { url: string }) => ({ url: typeof input.url === "string" ? input.url.slice(0, 300) : "" }))

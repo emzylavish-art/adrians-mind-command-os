@@ -38,7 +38,7 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { mindStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { mindStatus, notionCommand, notionDisconnect, notionStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -286,6 +286,10 @@ export function CommandApp() {
   const [speaking, setSpeaking] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
   const [reaReport, setReaReport] = useState<string | null>(null);
+  const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
+  const [notionQuery, setNotionQuery] = useState("");
+  const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
+  const [notionNote, setNotionNote] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectNext = useRef<View | null>(null);
@@ -310,6 +314,9 @@ export function CommandApp() {
         setGrok("Unavailable");
         setSystem("The status check did not finish.");
       });
+    notionStatus()
+      .then((status) => setNotion(status))
+      .catch(() => setNotion({ state: "unconfigured", detail: "Notion status could not be read. Nothing was searched or updated." }));
   }, [ready, setWs]);
 
   useEffect(() => {
@@ -464,8 +471,41 @@ export function CommandApp() {
       );
       return true;
     }
+    if (intent.kind === "notion") {
+      void askNotion(chat, text);
+      return true;
+    }
     recordToolTurn(chat, text, intent.reply);
     return true;
+  }
+
+  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await notionCommand({ data: { text, confirmed, pageId } });
+      setBusy(false);
+      setNotion((current) => current ?? { state: result.state, detail: result.error || "Notion answered from the server." });
+      if (result.needsConfirmation && result.pages[0]) {
+        const target = result.pages[0];
+        setPending({
+          id: target.id,
+          kind: "notion-append",
+          label: "Append to Notion",
+          detail: result.error,
+          confirm: "Append",
+          run: () => {
+            void askNotion(chat, text, true, target.id);
+          },
+        });
+        return;
+      }
+      const lines = [result.error, ...result.pages.map((page) => `${page.title} — ${page.url}`), result.content].filter(Boolean);
+      recordToolTurn(chat, text, lines.join("\n") || "Notion returned nothing.");
+    } catch {
+      setBusy(false);
+      setError("Notion could not be reached. Nothing was changed.");
+    }
   }
 
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
@@ -1393,7 +1433,17 @@ export function CommandApp() {
               </div>
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="text-sm text-danger">{error}</p>}
-              <ServiceBoard grokConfigured={grokConfigured === true} onSetup={(message) => setNotice(message)} />
+              <ServiceBoard
+                grokConfigured={grokConfigured === true}
+                notion={notion}
+                onSetup={(message) => setNotice(message)}
+                onDisconnect={() => {
+                  void notionDisconnect().then((status) => {
+                    setNotion(status);
+                    setNotice(status.detail);
+                  });
+                }}
+              />
 
               <div className="grid gap-3 xl:grid-cols-3">
                 <Panel title="Active Projects" action="View all" onAction={() => setView("projects")}>
@@ -1859,8 +1909,43 @@ export function CommandApp() {
           {view === "connected" && (
             <section className="space-y-4 p-4 md:p-6">
               <h2 className="font-display text-3xl font-bold">Connected</h2>
-              <p className="text-sm text-muted">Setup explains what is missing. It does not mark a service connected.</p>
-              <ServiceBoard grokConfigured={grokConfigured === true} onSetup={(message) => setNotice(message)} />
+              <p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p>
+              <ServiceBoard
+                grokConfigured={grokConfigured === true}
+                notion={notion}
+                onSetup={(message) => setNotice(message)}
+                onDisconnect={() => {
+                  void notionDisconnect().then((status) => {
+                    setNotion(status);
+                    setNotice(status.detail);
+                  });
+                }}
+              />
+              <form
+                className="rounded-panel border border-line bg-surface p-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const query = notionQuery.trim();
+                  if (!query || ws.halted) return;
+                  void notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } }).then((result) => {
+                    setNotionPages(result.pages);
+                    setNotionNote(result.error || (result.pages.length ? "" : "Notion returned no pages."));
+                  }).catch(() => setNotionNote("Notion could not be reached. Nothing was searched."));
+                }}
+              >
+                <h3 className="font-semibold">Search Notion</h3>
+                <p className="mt-1 text-sm text-muted">This calls the server. It does not invent pages. A page change still asks before it writes.</p>
+                <input value={notionQuery} onChange={(event) => setNotionQuery(event.target.value)} placeholder="Page or database name" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+                <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || !notionQuery.trim()}>Search</button>
+                {notionNote && <p className="mt-3 text-sm text-muted">{notionNote}</p>}
+                <ul className="mt-2 space-y-2">
+                  {notionPages.map((page) => (
+                    <li key={page.id}>
+                      <a className="text-sm text-accent" href={page.url} target="_blank" rel="noreferrer">{page.title}</a>
+                    </li>
+                  ))}
+                </ul>
+              </form>
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               <FleetPanel mode="connected" ws={ws} setWs={setWs} />
             </section>
@@ -2017,7 +2102,7 @@ export function CommandApp() {
               <h2 className="font-display text-3xl font-bold">Help</h2>
               <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
               <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion, Gmail, search, image, video, and the computer are refused.</li>
+                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
                 <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
                 <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
                 <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
