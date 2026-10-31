@@ -48,6 +48,7 @@ import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { describeFile } from "@/lib/mind/files-read";
+import { extractPdfText } from "@/lib/mind/pdf-text";
 import { chosenProvider, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
@@ -903,6 +904,21 @@ export function CommandApp() {
   async function onPicked(file: File) {
     if (file.size > 400_000) {
       setError("That file is too large to keep in this browser.");
+      return;
+    }
+    if (/\.(png|jpe?g|gif|webp|heic)$/i.test(file.name)) {
+      setError("No vision key is configured. The image was not analyzed.");
+      return;
+    }
+    if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
+      const extracted = await extractPdfText(new Uint8Array(await file.arrayBuffer()));
+      if (!extracted.ok) {
+        setError(extracted.error);
+        return;
+      }
+      const stagedFile = { name: file.name, text: extracted.text };
+      setStaged(stagedFile);
+      setNotice(`Extracted ${extracted.text.length} characters from “${file.name}”. ${extracted.pages || "No"} page marker${extracted.pages === 1 ? "" : "s"} were found. This is the file text, not a model summary.`);
       return;
     }
     const text = await file.text();
@@ -2388,7 +2404,7 @@ export function CommandApp() {
       <input
         ref={fileRef}
         type="file"
-        accept=".txt,.md,.json,.csv,.js,.ts,.mjs,text/plain"
+        accept=".txt,.md,.json,.csv,.pdf,.png,.jpg,.jpeg,.js,.ts,.mjs,text/plain,application/pdf"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];

@@ -3,6 +3,7 @@ import { guardMindEnv } from "./isolation";
 import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
 import { assertLiveProvider } from "./providers";
+import { callConfiguredProvider, selectProvider } from "./provider-call";
 import { relayModelStream } from "./relay";
 import { decideFetchSite } from "./request-guard";
 import { readModelPayload } from "./stream";
@@ -162,6 +163,15 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     body = JSON.parse(limited.text) as TurnBody;
   } catch {
     return json({ ok: false, error: "That request could not be read." }, 400);
+  }
+  const selected = selectProvider(body.provider, process.env);
+  if (!selected.ok) return json(selected);
+  if (selected.id !== "grok") {
+    const { haltIsOn } = await import("./halt.server");
+    if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." });
+    const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
+    const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: globalThis.fetch });
+    return json({ ...called, provider: selected.id });
   }
   const prepared = await prepareMindTurn(userId, body);
   if (!prepared.ok) return json(prepared);

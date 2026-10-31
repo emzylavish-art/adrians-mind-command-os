@@ -310,6 +310,12 @@ export const REQUIREMENTS: Requirement[] = [
     status: "implemented",
     note: "Project list runs on this device when it is on. Notion, Gmail, voice, and a cloud browser stay not installed.",
   },
+  {
+    id: "R-PDF",
+    text: "PDF text is extracted from the file.",
+    status: "implemented",
+    note: "A sample PDF and a compressed stream were read. An empty PDF returned no text. No vision model was called.",
+  },
 ];
 
 export function requirementCounts() {

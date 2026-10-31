@@ -229,7 +229,7 @@ export function FleetPanel({
     return (
       <section className="p-4 md:p-6">
         <h2 className="font-display text-3xl font-bold">Scheduled tasks</h2>
-        <p className="text-sm text-muted">Run due schedules queues work on this device. A browser timer is not the scheduler. The hosted worker does nothing until a dedicated database and process exist.</p>
+        <p className="text-sm text-muted">Run due schedules queues work on this device. A hosted worker is not running. The tick script does not execute jobs until a database process is started.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={jobZone} onChange={(event) => setJobZone(event.target.value)} placeholder="America/Chicago" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />

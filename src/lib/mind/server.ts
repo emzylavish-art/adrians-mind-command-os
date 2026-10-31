@@ -3,6 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
+import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 
 const MODEL = "grok-4.5";
@@ -43,6 +44,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       signedIn,
       persistence,
       databaseBackend,
+      providers: configuredProviders(process.env),
       checkedAt,
     };
   }
@@ -59,6 +61,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     signedIn,
     persistence,
     databaseBackend,
+    providers: configuredProviders(process.env),
     checkedAt,
   };
 });

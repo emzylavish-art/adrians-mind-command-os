@@ -9,7 +9,9 @@ describe("file reading", () => {
     assert.match(csv.summary, /3 text rows/);
     const pdf = describeFile("plan.pdf", "%PDF-1.7");
     assert.equal(pdf.analyzed, false);
-    assert.match(pdf.summary, /not decoded/);
+    const extracted = describeFile("plan.pdf", "Lake house");
+    assert.equal(extracted.analyzed, true);
+    assert.match(extracted.summary, /extracted/);
     const image = describeFile("dock.jpg", "");
     assert.equal(image.analyzed, false);
     assert.match(image.summary, /not analyzed/);

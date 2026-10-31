@@ -11,7 +11,8 @@ export function describeFile(name: string, text: string): FileRead {
     return { format: "image", analyzed: false, summary: "This image was not analyzed. No description was created." };
   }
   if (lower.endsWith(".pdf") || body.startsWith("%PDF")) {
-    return { format: "pdf", analyzed: false, summary: "This PDF was not decoded. No text was extracted." };
+    if (body.startsWith("%PDF") || !body) return { format: "pdf", analyzed: false, summary: "This PDF was not decoded. No text was extracted." };
+    return { format: "pdf", analyzed: true, summary: `${body.length} characters were extracted from the PDF. This is the file text, not a model summary.` };
   }
   if (lower.endsWith(".csv")) {
     const rows = body ? body.split(/\r?\n/).filter((line) => line.trim()).length : 0;
