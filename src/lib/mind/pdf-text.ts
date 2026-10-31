@@ -75,6 +75,6 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
     parts.push(...stringsFrom(content));
   }
   const text = parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 40000);
-  if (!text) return { ok: false, text: "", pages, error: "No text was found in this PDF. Nothing was invented." };
+  if (!text) return { ok: false, text: "", pages, error: pages ? "No text operators were found. OCR is not configured, so a scanned page was not read. Nothing was invented." : "No text was found in this PDF. Nothing was invented." };
   return { ok: true, text, pages, error: "" };
 }

@@ -239,6 +239,24 @@ export const inspectWebPage = createServerFn({ method: "POST" })
     }
   });
 
+export const analyzeImageFile = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { name?: string; bytes?: number; imageBase64?: string }) => ({
+    name: typeof input.name === "string" ? input.name.slice(0, 120) : "",
+    bytes: typeof input.bytes === "number" ? input.bytes : 0,
+    imageBase64: typeof input.imageBase64 === "string" ? input.imageBase64.slice(0, 200_000) : "",
+  }))
+  .handler(async ({ data }) => {
+    const { analyzeImage } = await import("./image-analyze");
+    return analyzeImage({
+      name: data.name,
+      bytes: data.bytes,
+      imageBase64: data.imageBase64,
+      visionKey: process.env.VISION_API_KEY,
+      fetch: globalThis.fetch,
+    });
+  });
+
 export const sendTurn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: {
