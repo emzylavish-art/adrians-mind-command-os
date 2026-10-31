@@ -1,5 +1,6 @@
 import { decide } from "./policy.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
+import { nextClock } from "./schedule-clock.ts";
 import type { Workspace } from "./types.ts";
 
 export const FLEET_TOOLS = [
@@ -105,6 +106,9 @@ export type ScheduleJob = {
   lastRunAt: string | null;
   enabled: boolean;
   lastError: string;
+  timeZone: string;
+  clockHour: number | null;
+  clockMinute: number | null;
 };
 
 export type PlanNeed = "none" | "search" | "browser" | "gmail" | "model";
@@ -373,6 +377,9 @@ export function readFleet(input: unknown): FleetShape {
         lastRunAt: typeof row.lastRunAt === "string" ? row.lastRunAt : null,
         enabled: row.enabled !== false,
         lastError: typeof row.lastError === "string" ? row.lastError.slice(0, 300) : "",
+        timeZone: typeof row.timeZone === "string" && row.timeZone ? row.timeZone.slice(0, 80) : "UTC",
+        clockHour: typeof row.clockHour === "number" ? Math.min(23, Math.max(0, Math.floor(row.clockHour))) : null,
+        clockMinute: typeof row.clockMinute === "number" ? Math.min(59, Math.max(0, Math.floor(row.clockMinute))) : null,
       });
     }
   }
@@ -502,20 +509,26 @@ export function gmailConnectAttempt(): { ok: false; error: string } {
   return { ok: false, error: "Google OAuth is not configured. No mailbox was connected and no message was read or sent." };
 }
 
-export function addSchedule(ws: Workspace, name: string, agentId: string | null, intervalMinutes: number, now?: string): { ok: true; ws: Workspace } | { ok: false; error: string } {
+export function addSchedule(ws: Workspace, name: string, agentId: string | null, intervalMinutes: number, now?: string, timeZone = "UTC", clockHour: number | null = null, clockMinute = 0): { ok: true; ws: Workspace } | { ok: false; error: string } {
   const title = name.trim().slice(0, 80);
   if (!title) return { ok: false, error: "Name the schedule." };
   const at = stamp(now);
   const minutes = Math.min(10_080, Math.max(5, intervalMinutes || 1440));
+  const hour = clockHour == null ? null : Math.min(23, Math.max(0, Math.floor(clockHour)));
+  const minute = Math.min(59, Math.max(0, Math.floor(clockMinute)));
+  const clock = hour == null ? null : nextClock(at, timeZone, hour, minute);
   const job: ScheduleJob = {
     id: nid("job"),
     name: title,
     agentId,
     intervalMinutes: minutes,
-    nextRunAt: at,
+    nextRunAt: clock?.at ?? at,
     lastRunAt: null,
     enabled: true,
-    lastError: "",
+    lastError: clock ? "" : "",
+    timeZone: clock?.zone ?? "UTC",
+    clockHour: hour,
+    clockMinute: hour == null ? null : minute,
   };
   return { ok: true, ws: { ...ws, schedules: [job, ...ws.schedules] } };
 }
@@ -764,7 +777,8 @@ export function runDueSchedules(ws: Workspace, now: string): Workspace {
     const queued = enqueueRun(next, agent.id, job.name, now);
     if (!queued.ok) return { ...job, lastRunAt: now, lastError: queued.error };
     next = queued.ws;
-    return { ...job, lastRunAt: now, lastError: "", nextRunAt: new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
+    const clock = job.clockHour == null ? null : nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0);
+    return { ...job, lastRunAt: now, lastError: "", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
   });
   return { ...next, schedules: jobs };
 }

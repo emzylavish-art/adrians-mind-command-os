@@ -41,6 +41,8 @@ export function FleetPanel({
   const [connectionLabel, setConnectionLabel] = useState("");
   const [provider, setProvider] = useState<ProviderConnection["provider"]>("openai");
   const [jobName, setJobName] = useState("");
+  const [jobZone, setJobZone] = useState("America/Chicago");
+  const [jobHour, setJobHour] = useState("");
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
@@ -230,7 +232,18 @@ export function FleetPanel({
         <p className="text-sm text-muted">Run due schedules queues work on this device. A browser timer is not the scheduler. The hosted worker does nothing until a dedicated database and process exist.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
-          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => apply(addSchedule(ws, jobName, active?.id ?? null, 1440))}>Add daily job</button>
+          <input value={jobZone} onChange={(event) => setJobZone(event.target.value)} placeholder="America/Chicago" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
+          <input value={jobHour} onChange={(event) => setJobHour(event.target.value)} placeholder="Hour 0-23, optional" className="min-h-11 w-28 rounded-panel border border-line bg-surface px-3 text-sm" />
+          <button
+            type="button"
+            className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+            onClick={() => {
+              const hour = jobHour.trim() === "" ? null : Number(jobHour);
+              apply(addSchedule(ws, jobName, active?.id ?? null, 1440, undefined, jobZone || "UTC", hour != null && Number.isFinite(hour) ? hour : null, 0));
+            }}
+          >
+            Add daily job
+          </button>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
         </div>
         <ul className="mt-4 space-y-2">
@@ -238,7 +251,7 @@ export function FleetPanel({
           {ws.schedules.map((job) => (
             <li key={job.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
-              <p className="text-xs text-muted">Every {job.intervalMinutes} minutes · next {job.nextRunAt} · {job.lastError || "No error"}</p>
+              <p className="text-xs text-muted">{job.timeZone || "UTC"}{job.clockHour == null ? ` · every ${job.intervalMinutes} minutes` : ` · ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")}`} · next {job.nextRunAt} · {job.lastError || "No error. A hosted worker is not running."}</p>
             </li>
           ))}
         </ul>

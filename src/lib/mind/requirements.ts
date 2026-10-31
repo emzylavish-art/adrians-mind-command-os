@@ -304,6 +304,12 @@ export const REQUIREMENTS: Requirement[] = [
     status: "implemented",
     note: "A fake server was initialized and its tool list was read. A tool call waits for confirmation. No MCP URL is configured here, so nothing is connected.",
   },
+  {
+    id: "R-SKILLS",
+    text: "A skills list with built-in reads and uninstalled outside skills.",
+    status: "implemented",
+    note: "Project list runs on this device when it is on. Notion, Gmail, voice, and a cloud browser stay not installed.",
+  },
 ];
 
 export function requirementCounts() {

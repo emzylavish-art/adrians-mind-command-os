@@ -47,7 +47,9 @@ import { haltFleet, enqueueRun, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
+import { describeFile } from "@/lib/mind/files-read";
 import { chosenProvider, providerChoices } from "@/lib/mind/providers";
+import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
@@ -81,6 +83,7 @@ type View =
   | "integrations"
   | "activity"
   | "help"
+  | "skills"
   | "settings";
 
 type Pending = {
@@ -128,6 +131,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     items: [
       { id: "connected", label: "Connected", icon: Link2 },
       { id: "tools", label: "Tools", icon: Wrench },
+      { id: "skills", label: "Skills", icon: Zap },
       { id: "scheduled", label: "Scheduled", icon: CalendarClock },
       { id: "memory", label: "Memory", icon: Database },
       { id: "activity", label: "Activity", icon: Activity },
@@ -156,6 +160,7 @@ const TITLES: Record<View, string> = {
   build: "Build",
   connected: "Connected",
   tools: "Tools",
+  skills: "Skills",
   scheduled: "Scheduled",
   integrations: "Integrations",
   activity: "Activity",
@@ -294,6 +299,8 @@ export function CommandApp() {
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
+  const [skillQuery, setSkillQuery] = useState("");
+  const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectNext = useRef<View | null>(null);
@@ -324,6 +331,12 @@ export function CommandApp() {
     mcpList()
       .then((result) => setMcpServers(result.servers))
       .catch(() => setMcpServers([]));
+    try {
+      const saved = localStorage.getItem("amcos.skills.v1");
+      if (saved) setEnabledSkills(JSON.parse(saved) as Record<string, boolean>);
+    } catch {
+      /* a private browser can refuse storage */
+    }
   }, [ready, setWs]);
 
   useEffect(() => {
@@ -484,6 +497,16 @@ export function CommandApp() {
     }
     if (intent.kind === "mcp") {
       void askMcp(chat, text);
+      return true;
+    }
+    if (intent.kind === "skill") {
+      const matches = searchSkills(text.replace(/\bskills?\b/gi, " "));
+      const usable = matches.filter((skill) => skill.kind === "built-in");
+      const one = usable.length === 1 ? usable[0] : null;
+      const reply = one
+        ? runSkill(source, one, enabledSkills[one.id] !== false).text
+        : matches.map((skill) => `${skill.name} — ${skill.kind === "built-in" ? "Built-in" : "Not installed"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
+      recordToolTurn(chat, text, reply);
       return true;
     }
     recordToolTurn(chat, text, intent.reply);
@@ -2083,12 +2106,61 @@ export function CommandApp() {
               </div>
             </section>
           )}
+          {view === "skills" && (
+            <section className="space-y-4 p-4 md:p-6">
+              <h2 className="font-display text-3xl font-bold">Skills</h2>
+              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p>
+              <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+              <div className="grid gap-3 md:grid-cols-2">
+                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
+                  const on = skill.kind === "built-in" && enabledSkills[skill.id] !== false;
+                  return (
+                    <article key={skill.id} className="rounded-panel border border-line bg-surface p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold">{skill.name}</h3>
+                        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "built-in" ? (on ? "On" : "Off") : "Not installed"}</span>
+                      </div>
+                      <p className="mt-2 text-sm">{skill.description}</p>
+                      <p className="mt-1 text-sm text-muted">{skill.needs}</p>
+                      <div className="mt-3 flex gap-2">
+                        {skill.kind === "built-in" ? (
+                          <button
+                            type="button"
+                            className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                            onClick={() => {
+                              const next = { ...enabledSkills, [skill.id]: !on };
+                              setEnabledSkills(next);
+                              try {
+                                localStorage.setItem("amcos.skills.v1", JSON.stringify(next));
+                              } catch {
+                                /* storage can refuse */
+                              }
+                            }}
+                          >
+                            {on ? "Turn off" : "Turn on"}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink"
+                          onClick={() => setNotice(runSkill(ws, skill, enabledSkills[skill.id] !== false).text)}
+                        >
+                          Run
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+            </section>
+          )}
           {view === "files" && (
             <section className="p-4 md:p-6">
               <div className="masthead flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-3xl font-bold">Library</h2>
-                  <p className="text-sm text-muted">Text you attach stays in this browser. Inspect sends that text to REA. Nothing is uploaded to a file host.</p>
+                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
                 </div>
                 <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
               </div>
@@ -2112,7 +2184,7 @@ export function CommandApp() {
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold">{file.name}</p>
-                      <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · text copy in this browser</p>
+                      <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · {describeFile(file.name, file.text).summary}</p>
                       <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect text with REA</button>

@@ -9,6 +9,7 @@ export const PALETTE_DESTINATIONS = [
   { id: "build", label: "Build" },
   { id: "connected", label: "Connected" },
   { id: "tools", label: "Tools" },
+  { id: "skills", label: "Skills" },
   { id: "scheduled", label: "Scheduled" },
   { id: "memory", label: "Memory" },
   { id: "activity", label: "Activity" },
