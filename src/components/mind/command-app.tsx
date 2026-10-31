@@ -47,6 +47,7 @@ import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fl
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
+import { relevantMemories } from "@/lib/mind/memory";
 import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
@@ -571,7 +572,9 @@ export function CommandApp() {
         });
         return true;
       }
-      recordToolTurn(chat, text, turn.text, undefined, { tool: toolId, ok: turn.status === "completed", action });
+      const notes = chat.memory === "on" ? relevantMemories(source.memories, text) : [];
+      const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
+      recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
       setNotice(turn.status === "completed" ? "The agent finished on this device. Hosted realtime is not connected." : turn.text);
       return true;
     }

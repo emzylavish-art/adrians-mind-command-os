@@ -1,3 +1,4 @@
+import { relevantMemories } from "./memory.ts";
 import { runAgentTurn, type AgentTool } from "./orchestrator.ts";
 import type { Workspace } from "./types.ts";
 
@@ -8,6 +9,7 @@ export function applyAgentTurn(ws: Workspace, input: {
   tools: AgentTool[];
   toolId?: string;
   now: string;
+  memories?: { id: string; text: string; archived?: boolean }[];
   complete?: (prompt: string) => { ok: boolean; text: string; toolId?: string };
 }): {
   ws: Workspace;
@@ -15,6 +17,10 @@ export function applyAgentTurn(ws: Workspace, input: {
   finalText: string;
   run: { id: string; tool: string; action: string; ok: boolean; detail: string } | null;
 } {
+  const remembered = relevantMemories(input.memories ?? [], input.text);
+  const complete = input.complete
+    ? (prompt: string) => input.complete!(remembered.length ? `Remembered:\n${remembered.map((item) => item.text).join("\n")}\n\n${prompt}` : prompt)
+    : undefined;
   const turn = runAgentTurn({
     userId: input.chatId ? "session" : "",
     sessionId: input.chatId,
@@ -23,10 +29,13 @@ export function applyAgentTurn(ws: Workspace, input: {
     tools: input.tools,
     toolId: input.toolId,
     nowMs: Date.parse(input.now),
-    complete: input.complete,
+    complete,
   });
   if (!input.chatId || turn.status === "awaiting_confirmation" || turn.status === "cancelled") {
-    return { ws, status: turn.status, finalText: turn.text, run: null };
+    const audit = input.chatId
+      ? [{ id: `audit-${input.chatId}-${input.now}`, at: input.now, action: turn.status === "cancelled" ? "agent_cancelled" : "awaiting_confirmation", target: input.toolId ?? "none", result: turn.text.slice(0, 300) }, ...ws.audit].slice(0, 200)
+      : ws.audit;
+    return { ws: { ...ws, audit }, status: turn.status, finalText: turn.text, run: null };
   }
   const existing = ws.chats.find((chat) => chat.id === input.chatId);
   const chat = existing ?? {
