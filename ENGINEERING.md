@@ -70,4 +70,10 @@ The navigation now includes Runs, Library, Connected, Tools, and Scheduled. Agen
 
 REA doctor was run again: package 6.8.0, healthy false, Node 22.23.3, native engines missing, Grok Build registration missing. No target site was inspected on port 9222. Chromium opened one local HTML document through `scripts/mind-browser.mjs`. The product Open page button was not clicked. No model, search, image, or video credit was spent.
 
+## Workspace shell after 49269f6
+
+The sidebar is grouped and can collapse. On a phone the full list is a menu, with Command, Chat, Agents, and Runs on a bottom bar. The command palette searches destinations, agents, runs, chats, projects, notes, and files. Pins live in the browser snapshot. A custom agent stores only the tools you select. `buildTaskPlan` records ordered steps. Delegation stays at two children and one level. Failover defaults to none, so an unconfigured provider is not replaced. Appearance can be dark, light, or system in this browser.
+
+A live model call was not spent. Gmail, search, and the hosted worker stay unavailable.
+
 

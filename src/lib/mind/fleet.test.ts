@@ -3,9 +3,13 @@ import { describe, it } from "node:test";
 import {
   addAgentFromTemplate,
   addConnection,
+  addCustomAgent,
   addMailbox,
   addSchedule,
   approveRunAction,
+  buildTaskPlan,
+  canTransition,
+  delegationGoals,
   deployAgent,
   enqueueRun,
   gmailConnectAttempt,
@@ -13,7 +17,10 @@ import {
   pauseRun,
   runDueSchedules,
   tickFleet,
+  togglePin,
+  toolCatalog,
 } from "./fleet.ts";
+import { paletteHits } from "./palette.ts";
 import { emptyWorkspace, normalizeWorkspace } from "./workspace.ts";
 
 const NOW = "2026-04-01T12:00:00.000Z";
@@ -166,5 +173,75 @@ describe("local agent worker", () => {
     if (!queued.ok) return;
     const ws = tick(queued.ws);
     assert.match(ws.runs[0]?.error ?? "", /does not call a model/);
+  });
+
+  it("builds an ordered plan and refuses a finished run going back to running", () => {
+    const plan = buildTaskPlan("pier", ["list_projects", "search_notes", "delegate"]);
+    assert.deepEqual(plan.map((step) => step.tool), ["list_projects", "search_notes"]);
+    assert.deepEqual(plan[1]?.dependsOn, ["step-1"]);
+    assert.equal(plan.every((step) => step.need === "none"), true);
+    assert.equal(canTransition("completed", "running"), false);
+    assert.equal(canTransition("paused", "queued"), true);
+    let ws = started();
+    ws = tick(ws);
+    ws = tick(ws, "2026-04-01T12:01:00.000Z");
+    ws = tick(ws, "2026-04-01T12:02:00.000Z");
+    ws = tick(ws, "2026-04-01T12:03:00.000Z");
+    const done = ws.runs.find((item) => !item.parentId);
+    assert.equal(done?.state, "completed");
+    assert.equal(done?.plan.length, 3);
+    const paused = pauseRun(ws, done!.id);
+    assert.equal(paused.runs.find((item) => item.id === done!.id)?.state, "completed");
+  });
+
+  it("caps delegation at two children and records the plan", () => {
+    assert.equal(delegationGoals("Lake and Dock and Pier").length, 2);
+    let ws = started("Project manager", "Lake and Dock and Pier");
+    ws = tick(ws);
+    ws = tick(ws, "2026-04-01T12:01:00.000Z");
+    const parent = ws.runs.find((item) => !item.parentId);
+    assert.equal(ws.runs.filter((item) => item.parentId).length, 2);
+    assert.equal(ws.runEvents.some((item) => item.kind === "plan_generated" && item.runId === parent?.id), true);
+    assert.equal(JSON.stringify(ws).includes("https://"), false);
+  });
+
+  it("pins a chat in the workspace snapshot and removes it on the second toggle", () => {
+    let ws = emptyWorkspace();
+    ws.chats.push({ id: "c1", title: "Pier", memory: "off", temporary: false, autonomy: "ask", projectId: null, messages: [], retrievalLog: [] });
+    ws = togglePin(ws, "chat", "c1");
+    assert.equal(ws.pins[0]?.ref, "c1");
+    const saved = normalizeWorkspace(ws);
+    assert.equal(saved.pins[0]?.kind, "chat");
+    const cleared = togglePin(saved, "chat", "c1");
+    assert.equal(cleared.pins.length, 0);
+  });
+
+  it("saves a custom agent only with a name and a real tool", () => {
+    const blank = addCustomAgent(emptyWorkspace(), { name: " ", instructions: "x", tools: ["list_projects"] }, NOW);
+    assert.equal(blank.ok, false);
+    const made = addCustomAgent(emptyWorkspace(), { name: "Pier notes", instructions: "Read notes only.", tools: ["search_notes", "gmail_send"] }, NOW);
+    assert.equal(made.ok, true);
+    if (!made.ok) return;
+    assert.equal(made.agent.approval, "ask");
+    assert.equal(made.agent.tools.includes("gmail_send"), true);
+    assert.equal(toolCatalog().find((tool) => tool.id === "gmail_send")?.available, false);
+    assert.equal(toolCatalog().find((tool) => tool.id === "list_projects")?.available, true);
+  });
+
+  it("finds an agent from the command palette without calling a model", () => {
+    const made = addAgentFromTemplate(emptyWorkspace(), "Documents", NOW);
+    assert.equal(made.ok, true);
+    if (!made.ok) return;
+    const hits = paletteHits({
+      query: "doc",
+      projects: [],
+      chats: [],
+      memories: [],
+      files: [],
+      agents: made.ws.agents,
+      runs: [],
+    });
+    assert.equal(hits.some((hit) => hit.meta === "Agent" && hit.label === "Documents"), true);
+    assert.equal(JSON.stringify(hits).includes("sk-"), false);
   });
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { assertLiveProvider, chosenProvider, providerChoices, resolveProvider } from "./providers.ts";
+import { assertLiveProvider, chosenProvider, failover, providerChoices, resolveProvider } from "./providers.ts";
 
 describe("provider routing", () => {
   it("keeps Grok when it is the explicit choice", () => {
@@ -30,5 +30,16 @@ describe("provider routing", () => {
     assert.equal(chosenProvider("openai", true).ok, false);
     assert.equal(chosenProvider("grok", true).ok, true);
     assert.equal(chosenProvider("grok", false).ok, false);
+  });
+
+  it("does not switch providers unless the owner allowed that switch", () => {
+    const refused = failover("openai", true, "none");
+    assert.equal(refused.provider, null);
+    assert.equal(refused.switched, false);
+    const allowed = failover("openai", true, "grok");
+    assert.equal(allowed.provider, "grok");
+    assert.equal(allowed.switched, true);
+    assert.match(allowed.note, /switch to Grok/);
+    assert.equal(failover("grok", true, "none").switched, false);
   });
 });

@@ -66,6 +66,7 @@ export type AgentRun = {
   workerId: string | null;
   leaseUntil: string | null;
   approvedActions: string[];
+  plan: PlanStep[];
   result: string;
   error: string;
   createdAt: string;
@@ -106,7 +107,17 @@ export type ScheduleJob = {
   lastError: string;
 };
 
-export type FleetPin = { id: string; kind: "project" | "agent" | "chat"; ref: string };
+export type PlanNeed = "none" | "search" | "browser" | "gmail" | "model";
+
+export type PlanStep = {
+  id: string;
+  title: string;
+  tool: FleetTool;
+  dependsOn: string[];
+  need: PlanNeed;
+};
+
+export type FleetPin = { id: string; kind: "project" | "agent" | "chat" | "file"; ref: string };
 
 export type BrowserSessionRecord = {
   id: string;
@@ -135,6 +146,66 @@ const LOCAL = new Set<FleetTool>(["list_projects", "list_chats", "search_notes"]
 const TERMINAL = new Set<RunState>(["completed", "failed", "canceled"]);
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HTTP = /^https?:\/\/\S+$/i;
+const PIN_KINDS = new Set(["project", "agent", "chat", "file"]);
+export const PLAN_MAX_CHILDREN = 2;
+
+function needOf(tool: FleetTool): PlanNeed {
+  if (tool === "web_search") return "search";
+  if (tool === "browser") return "browser";
+  if (tool === "gmail_read" || tool === "gmail_send") return "gmail";
+  if (tool === "model") return "model";
+  return "none";
+}
+
+export function buildTaskPlan(goal: string, tools: FleetTool[]): PlanStep[] {
+  const title = goal.trim().slice(0, 160);
+  return tools
+    .filter((tool) => tool !== "delegate")
+    .slice(0, 8)
+    .map((tool, index) => ({
+      id: `step-${index + 1}`,
+      title,
+      tool,
+      dependsOn: index === 0 ? [] : [`step-${index}`],
+      need: needOf(tool),
+    }));
+}
+
+/** Independent pieces of one goal. Capped so delegation cannot fan out. */
+export function delegationGoals(goal: string): string[] {
+  const parts = goal.split(/\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
+  const goals = (parts.length > 0 ? parts : [goal.trim()]).slice(0, PLAN_MAX_CHILDREN);
+  return goals.length > 0 ? goals : [goal.trim().slice(0, 2000)];
+}
+
+const NEXT_STATE: Record<RunState, readonly RunState[]> = {
+  queued: ["running", "paused", "canceled", "failed"],
+  running: ["queued", "waiting_approval", "waiting_external", "paused", "completed", "failed", "canceled"],
+  waiting_approval: ["queued", "paused", "canceled", "failed"],
+  waiting_external: ["queued", "paused", "canceled", "failed"],
+  paused: ["queued", "canceled"],
+  completed: [],
+  failed: [],
+  canceled: [],
+};
+
+export function canTransition(from: RunState, to: RunState): boolean {
+  return NEXT_STATE[from].includes(to);
+}
+
+export function toolCatalog(): { id: FleetTool; name: string; available: boolean; reason: string }[] {
+  return [
+    { id: "list_projects", name: "List projects", available: true, reason: "Reads projects already stored in this browser." },
+    { id: "list_chats", name: "List chats", available: true, reason: "Reads chats already stored in this browser." },
+    { id: "search_notes", name: "Search notes", available: true, reason: "Reads notes already stored in this browser." },
+    { id: "web_search", name: "Web search", available: false, reason: "No search provider is configured. Nothing is searched." },
+    { id: "browser", name: "Browser", available: false, reason: "The worker does not open a page unless a driver is attached and the action is approved." },
+    { id: "gmail_read", name: "Gmail read", available: false, reason: "No Gmail account is connected." },
+    { id: "gmail_send", name: "Gmail send", available: false, reason: "No Gmail account is connected. A send still asks first." },
+    { id: "model", name: "Model", available: false, reason: "This worker does not call a model." },
+    { id: "delegate", name: "Delegate", available: true, reason: "Splits one goal into at most two child runs, one level deep. It does not call a model." },
+  ];
+}
 
 export const AGENT_TEMPLATES: Omit<AgentDefinition, "id" | "createdAt" | "updatedAt" | "version" | "archived" | "projectId">[] = [
   { name: "Personal assistant", description: "Reads projects, chats, and notes on this device.", role: "assistant", instructions: "Use only the granted local reads.", tools: ["list_projects", "list_chats", "search_notes"], memory: "off", maxSteps: 6, approval: "automatic" },
@@ -245,6 +316,7 @@ export function readFleet(input: unknown): FleetShape {
         workerId: typeof row.workerId === "string" ? row.workerId : null,
         leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
         approvedActions: Array.isArray(row.approvedActions) ? row.approvedActions.filter((item): item is string => typeof item === "string").slice(0, 12) : [],
+        plan: readPlan(row.plan),
         result: typeof row.result === "string" ? row.result.slice(0, 4000) : "",
         error: typeof row.error === "string" ? row.error.slice(0, 500) : "",
         createdAt: typeof row.createdAt === "string" ? row.createdAt : stamp(),
@@ -307,7 +379,8 @@ export function readFleet(input: unknown): FleetShape {
   if (Array.isArray(input.pins)) {
     for (const row of input.pins) {
       if (!isRecord(row) || typeof row.id !== "string" || typeof row.ref !== "string") continue;
-      if (row.kind !== "project" && row.kind !== "agent" && row.kind !== "chat") continue;
+      if (row.kind !== "project" && row.kind !== "agent" && row.kind !== "chat" && row.kind !== "file") continue;
+      if (!PIN_KINDS.has(row.kind)) continue;
       fleet.pins.push({ id: row.id, kind: row.kind, ref: row.ref });
     }
   }
@@ -331,6 +404,24 @@ export function readFleet(input: unknown): FleetShape {
   return fleet;
 }
 
+function readPlan(value: unknown): PlanStep[] {
+  if (!Array.isArray(value)) return [];
+  const steps: PlanStep[] = [];
+  for (const row of value) {
+    if (!isRecord(row) || typeof row.id !== "string" || typeof row.tool !== "string") continue;
+    if (!(FLEET_TOOLS as readonly string[]).includes(row.tool)) continue;
+    const dependsOn = Array.isArray(row.dependsOn) ? row.dependsOn.filter((item): item is string => typeof item === "string").slice(0, 8) : [];
+    steps.push({
+      id: row.id.slice(0, 40),
+      title: typeof row.title === "string" ? row.title.slice(0, 160) : "",
+      tool: row.tool as FleetTool,
+      dependsOn,
+      need: row.need === "search" || row.need === "browser" || row.need === "gmail" || row.need === "model" ? row.need : "none",
+    });
+  }
+  return steps.slice(0, 8);
+}
+
 function withFleet(ws: Workspace, fleet: FleetShape): Workspace {
   return { ...ws, ...fleet };
 }
@@ -346,6 +437,44 @@ export function addAgentFromTemplate(ws: Workspace, templateName: string, now?: 
   const at = stamp(now);
   const agent: AgentDefinition = { ...template, tools: [...template.tools], id: nid("agent"), version: 1, archived: false, projectId: null, createdAt: at, updatedAt: at };
   return { ok: true, agent, ws: { ...ws, agents: [agent, ...ws.agents] } };
+}
+
+export function addCustomAgent(
+  ws: Workspace,
+  input: { name: string; instructions: string; tools: FleetTool[] },
+  now?: string,
+): { ok: true; ws: Workspace; agent: AgentDefinition } | { ok: false; error: string } {
+  const name = input.name.trim().slice(0, 80);
+  if (!name) return { ok: false, error: "Name the agent." };
+  const tools = toolList(input.tools);
+  if (tools.length === 0) return { ok: false, error: "Choose at least one tool." };
+  const at = stamp(now);
+  const agent: AgentDefinition = {
+    id: nid("agent"),
+    name,
+    description: "Custom agent. It only runs the tools you selected. Unavailable tools wait instead of pretending to finish.",
+    role: "custom",
+    instructions: input.instructions.trim().slice(0, 2000),
+    version: 1,
+    tools,
+    projectId: null,
+    memory: "off",
+    maxSteps: Math.min(8, Math.max(1, tools.length)),
+    approval: tools.some((tool) => tool === "browser" || tool === "gmail_send") ? "ask" : "automatic",
+    archived: false,
+    createdAt: at,
+    updatedAt: at,
+  };
+  return { ok: true, agent, ws: { ...ws, agents: [agent, ...ws.agents] } };
+}
+
+export function togglePin(ws: Workspace, kind: FleetPin["kind"], ref: string): Workspace {
+  const id = ref.trim();
+  if (!id || !PIN_KINDS.has(kind)) return ws;
+  const existing = ws.pins.find((pin) => pin.kind === kind && pin.ref === id);
+  if (existing) return { ...ws, pins: ws.pins.filter((pin) => pin.id !== existing.id) };
+  if (ws.pins.length >= 24) return ws;
+  return { ...ws, pins: [{ id: nid("pin"), kind, ref: id }, ...ws.pins] };
 }
 
 export function addConnection(ws: Workspace, provider: ProviderConnection["provider"], label: string, serverGrok = false): { ok: true; ws: Workspace } | { ok: false; error: string } {
@@ -421,6 +550,7 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
     workerId: null,
     leaseUntil: null,
     approvedActions: [],
+    plan: buildTaskPlan(text, agent.tools),
     result: "",
     error: "",
     createdAt: at,
@@ -439,19 +569,19 @@ export function approveRunAction(ws: Workspace, runId: string, action: string): 
 }
 
 export function pauseRun(ws: Workspace, runId: string): Workspace {
-  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && !TERMINAL.has(run.state) ? { ...run, state: "paused", updatedAt: stamp() } : run)) };
+  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && canTransition(run.state, "paused") ? { ...run, state: "paused", updatedAt: stamp() } : run)) };
 }
 
 export function resumeRun(ws: Workspace, runId: string): Workspace {
   if (ws.halted) return ws;
-  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && run.state === "paused" ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
+  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && run.state === "paused" && canTransition(run.state, "queued") ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
 }
 
 export function cancelRun(ws: Workspace, runId: string, now?: string): Workspace {
   const at = stamp(now);
   const fleet = readFleet(ws);
   const runs = fleet.runs.map((run) => {
-    if (run.id !== runId || TERMINAL.has(run.state)) return run;
+    if (run.id !== runId || !canTransition(run.state, "canceled")) return run;
     event(fleet, run.id, at, "canceled", "Stopped. Unfinished work was not marked complete.");
     return { ...run, state: "canceled" as const, error: "Stopped.", updatedAt: at, leaseUntil: null };
   });
@@ -514,15 +644,38 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       const kids = [...fleet.runs, ...extra].filter((item) => item.parentId === claimed.id);
       const open = kids.filter((item) => !TERMINAL.has(item.state));
       if (kids.length === 0) {
-        const parts = claimed.goal.split(/\s+and\s+/i).map((part) => part.trim()).filter(Boolean).slice(0, 2);
-        const goals = parts.length ? parts : [claimed.goal];
+        const goals = delegationGoals(claimed.goal);
+        const plan = goals.map((part, index) => ({
+          id: `child-${index + 1}`,
+          title: part.slice(0, 160),
+          tool: "delegate" as const,
+          dependsOn: [] as string[],
+          need: "none" as const,
+        }));
+        event(fleet, claimed.id, at, "plan_generated", JSON.stringify(plan));
         for (const part of goals) {
-          const child: AgentRun = { ...claimed, id: nid("run"), parentId: claimed.id, depth: 1, goal: part, state: "queued", step: 0, workerId: null, leaseUntil: null, result: "", error: "", createdAt: at, updatedAt: at, approvedActions: [] };
+          const child: AgentRun = {
+            ...claimed,
+            id: nid("run"),
+            parentId: claimed.id,
+            depth: 1,
+            goal: part,
+            state: "queued",
+            step: 0,
+            workerId: null,
+            leaseUntil: null,
+            result: "",
+            error: "",
+            createdAt: at,
+            updatedAt: at,
+            approvedActions: [],
+            plan: buildTaskPlan(part, agent.tools),
+          };
           extra.push(child);
           event(fleet, child.id, at, "task_created", "Delegated from the parent run.");
         }
         event(fleet, claimed.id, at, "delegated", `Delegated ${goals.length} child run${goals.length === 1 ? "" : "s"}.`);
-        return claimed;
+        return { ...claimed, plan };
       }
       if (open.length) return claimed;
       const detail = kids.map((item) => item.result || item.error || item.state).join(" | ").slice(0, 500);

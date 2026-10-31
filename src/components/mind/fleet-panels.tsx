@@ -2,8 +2,10 @@ import { useState } from "react";
 import { inspectWebPage } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
+  FLEET_TOOLS,
   addAgentFromTemplate,
   addConnection,
+  addCustomAgent,
   addMailbox,
   addSchedule,
   approveRunAction,
@@ -15,6 +17,9 @@ import {
   resumeRun,
   runDueSchedules,
   tickFleet,
+  togglePin,
+  toolCatalog,
+  type FleetTool,
   type ProviderConnection,
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
@@ -38,6 +43,9 @@ export function FleetPanel({
   const [jobName, setJobName] = useState("");
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
+  const [customName, setCustomName] = useState("");
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
   const active = ws.agents.find((agent) => agent.id === agentId && !agent.archived) ?? ws.agents.find((agent) => !agent.archived) ?? null;
 
   function apply(result: { ok: true; ws: Workspace } | { ok: false; error: string }) {
@@ -61,6 +69,34 @@ export function FleetPanel({
             </button>
           ))}
         </div>
+        <div className="mt-4 rounded-panel border border-line p-3">
+          <p className="font-semibold">Custom agent</p>
+          <p className="mt-1 text-sm text-muted">Selected tools that are not configured wait. They do not report success.</p>
+          <input value={customName} onChange={(event) => setCustomName(event.target.value)} placeholder="Agent name" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+          <textarea value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} placeholder="Instructions" rows={3} className="mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {FLEET_TOOLS.map((tool) => {
+              const on = customTools.includes(tool);
+              return (
+                <button
+                  key={tool}
+                  type="button"
+                  className={`min-h-11 rounded-panel border px-3 text-sm ${on ? "border-accent bg-accent text-accent-ink" : "border-line"}`}
+                  onClick={() => setCustomTools((current) => (current.includes(tool) ? current.filter((item) => item !== tool) : [...current, tool]))}
+                >
+                  {tool}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+            onClick={() => apply(addCustomAgent(ws, { name: customName, instructions: customInstructions, tools: customTools }))}
+          >
+            Save agent
+          </button>
+        </div>
         <ul className="mt-4 space-y-3">
           {ws.agents.length === 0 && <li className="text-sm text-muted">No agents yet.</li>}
           {ws.agents.filter((agent) => !agent.archived).map((agent) => {
@@ -74,6 +110,7 @@ export function FleetPanel({
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "local-worker"))}>Arm local worker</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "hosted-worker"))}>Record hosted target</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => togglePin(prev, "agent", agent.id))}>Pin</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => ({ ...prev, agents: prev.agents.map((item) => (item.id === agent.id ? { ...item, archived: true } : item)) }))}>Archive</button>
                 </div>
               </li>
@@ -126,6 +163,7 @@ export function FleetPanel({
             <li key={run.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
               <p className="font-semibold">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state}</p>
               <p className="text-muted">{run.goal}</p>
+              {run.plan.length > 0 && <p className="mt-1 text-xs text-muted">Plan: {run.plan.map((step) => step.tool).join(" → ")}. Missing tools wait. They are not marked done.</p>}
               {run.result ? <p className="mt-1 whitespace-pre-wrap">{run.result}</p> : null}
               {run.error ? <p className="mt-1 text-danger">{run.error}</p> : null}
               <ul className="mt-2 space-y-1 text-xs text-muted">
@@ -230,6 +268,14 @@ export function FleetPanel({
         </button>
       </div>
       {pageNote ? <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{pageNote}</p> : null}
+      <ul className="mt-4 space-y-2 text-sm">
+        {toolCatalog().map((tool) => (
+          <li key={tool.id} className="rounded-panel border border-line bg-surface p-3">
+            <p className="font-semibold">{tool.name} · {tool.available ? "Available" : "Not available"}</p>
+            <p className="text-xs text-muted">{tool.reason}</p>
+          </li>
+        ))}
+      </ul>
       <ul className="mt-4 space-y-2 text-sm">
         {ws.browserSessions.map((session) => (
           <li key={session.id} className="rounded-panel border border-line bg-surface p-3">

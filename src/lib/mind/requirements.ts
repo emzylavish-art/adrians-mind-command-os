@@ -256,6 +256,30 @@ export const REQUIREMENTS: Requirement[] = [
     status: "deferred",
     note: "Out of the first core by owner decision.",
   },
+  {
+    id: "R-PLAN-GRAPH",
+    text: "A local task plan with ordered steps and a delegation cap.",
+    status: "verified",
+    note: "buildTaskPlan records dependencies. delegationGoals keeps at most two children. The plan does not call a model.",
+  },
+  {
+    id: "R-PINS",
+    text: "Pins for chats, agents, projects, and files.",
+    status: "verified",
+    note: "togglePin writes the browser workspace snapshot. It is not cloud backup.",
+  },
+  {
+    id: "R-PALETTE",
+    text: "A command palette that opens destinations, agents, and runs.",
+    status: "verified",
+    note: "paletteHits is covered by a test. The palette does not call a model.",
+  },
+  {
+    id: "R-CUSTOM-AGENT",
+    text: "A custom agent with a name and selected tools.",
+    status: "verified",
+    note: "addCustomAgent refuses a blank name. Gmail stays unavailable even if the tool is selected.",
+  },
 ];
 
 export function requirementCounts() {

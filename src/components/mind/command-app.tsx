@@ -25,6 +25,9 @@ import {
   CalendarClock,
   Link2,
   ListTree,
+  Menu,
+  PanelLeft,
+  Pin,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -37,7 +40,8 @@ import { mindStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/s
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
-import { haltFleet } from "@/lib/mind/fleet";
+import { haltFleet, togglePin } from "@/lib/mind/fleet";
+import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { chosenProvider, providerChoices } from "@/lib/mind/providers";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
@@ -99,21 +103,38 @@ const EXTERNAL = [
 
 type Staged = { name: string; text: string };
 
-const NAV: { id: View; label: string; icon: typeof Home }[] = [
-  { id: "command", label: "Command", icon: Home },
-  { id: "chat", label: "Chat", icon: MessageSquare },
-  { id: "agents", label: "Agents", icon: Bot },
-  { id: "runs", label: "Runs", icon: ListTree },
-  { id: "projects", label: "Projects", icon: Folder },
-  { id: "research", label: "Research", icon: Search },
-  { id: "files", label: "Library", icon: FileText },
-  { id: "connected", label: "Connected", icon: Link2 },
-  { id: "tools", label: "Tools", icon: Wrench },
-  { id: "scheduled", label: "Scheduled", icon: CalendarClock },
-  { id: "memory", label: "Memory", icon: Database },
-  { id: "activity", label: "Activity", icon: Activity },
-  { id: "settings", label: "Settings", icon: Settings },
+const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
+  {
+    label: "Workspace",
+    items: [
+      { id: "command", label: "Command", icon: Home },
+      { id: "chat", label: "Chat", icon: MessageSquare },
+      { id: "agents", label: "Agents", icon: Bot },
+      { id: "runs", label: "Runs", icon: ListTree },
+      { id: "projects", label: "Projects", icon: Folder },
+      { id: "research", label: "Research", icon: Search },
+      { id: "files", label: "Library", icon: FileText },
+    ],
+  },
+  {
+    label: "Systems",
+    items: [
+      { id: "connected", label: "Connected", icon: Link2 },
+      { id: "tools", label: "Tools", icon: Wrench },
+      { id: "scheduled", label: "Scheduled", icon: CalendarClock },
+    ],
+  },
+  {
+    label: "Personal",
+    items: [
+      { id: "memory", label: "Memory", icon: Database },
+      { id: "activity", label: "Activity", icon: Activity },
+      { id: "settings", label: "Settings", icon: Settings },
+    ],
+  },
 ];
+
+const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
 const TITLES: Record<View, string> = {
   command: "Command",
@@ -196,6 +217,10 @@ export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -256,7 +281,6 @@ export function CommandApp() {
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
-  const search = query.trim().toLowerCase();
 
   useEffect(() => {
     if (!ready) return;
@@ -309,47 +333,47 @@ export function CommandApp() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        setPaletteOpen(true);
         searchRef.current?.focus();
       }
+      if (event.key === "Escape") setPaletteOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const hits = useMemo(() => {
-    if (!search) return [];
-    const rows: { key: string; label: string; meta: string; open: () => void }[] = [];
-    for (const project of ws.projects) {
-      if (`${project.name} ${project.description}`.toLowerCase().includes(search)) {
-        rows.push({ key: project.id, label: project.name, meta: "Project", open: () => setView("projects") });
-      }
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("amcos.theme.v1");
+      if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
+    } catch {
+      /* a private browser can refuse storage */
     }
-    for (const chat of ws.chats) {
-      const blob = `${chat.title} ${chat.messages.map((msg) => msg.content).join(" ")}`.toLowerCase();
-      if (blob.includes(search)) {
-        rows.push({
-          key: chat.id,
-          label: chat.title,
-          meta: "Chat",
-          open: () => {
-            setActiveId(chat.id);
-            setView("chat");
-          },
-        });
-      }
+  }, []);
+
+  useEffect(() => {
+    const dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    try {
+      localStorage.setItem("amcos.theme.v1", theme);
+    } catch {
+      /* a private browser can refuse storage */
     }
-    for (const note of ws.memories) {
-      if (!note.archived && note.text.toLowerCase().includes(search)) {
-        rows.push({ key: note.id, label: note.text.slice(0, 80), meta: "Note", open: () => setView("memory") });
-      }
-    }
-    for (const file of ws.files) {
-      if (`${file.name} ${file.text}`.toLowerCase().includes(search)) {
-        rows.push({ key: file.id, label: file.name, meta: "File", open: () => setView("files") });
-      }
-    }
-    return rows.slice(0, 12);
-  }, [search, ws]);
+  }, [theme]);
+
+  const hits = useMemo(
+    () =>
+      paletteHits({
+        query,
+        projects: ws.projects,
+        chats: ws.chats,
+        memories: ws.memories,
+        files: ws.files,
+        agents: ws.agents,
+        runs: ws.runs,
+      }),
+    [query, ws],
+  );
 
   function closeMenus() {
     setBellOpen(false);
@@ -894,78 +918,151 @@ export function CommandApp() {
 
   return (
     <div className="flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className="flex shrink-0 flex-col border-b border-line bg-surface md:h-dvh md:w-60 md:border-r md:border-b-0">
+      <aside className={`${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col bg-surface md:static md:flex md:h-dvh ${railCollapsed ? "md:w-16" : "md:w-64"} md:shrink-0 md:border-r md:border-line`}>
         <div className="flex items-center gap-3 px-4 py-4">
-          <span className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
+          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
             A
           </span>
-          <div>
-            <p className="text-sm font-bold tracking-wide">ADRIAN'S MIND</p>
-            <p className="text-[10px] tracking-[0.22em] text-muted">COMMAND OS</p>
-          </div>
+          {!railCollapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold tracking-wide">ADRIAN'S MIND</p>
+              <p className="text-[10px] tracking-[0.22em] text-muted">COMMAND OS</p>
+            </div>
+          )}
+          <button type="button" className="grid size-11 place-items-center rounded-panel border border-line md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
+            <span className="text-lg">×</span>
+          </button>
+          <button type="button" className="hidden size-11 place-items-center rounded-panel border border-line md:grid" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setRailCollapsed((value) => !value)}>
+            <PanelLeft className="size-4" />
+          </button>
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-auto">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const on = view === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setView(item.id);
-                  closeMenus();
-                }}
-                className={`flex min-h-11 shrink-0 items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "bg-accent text-white shadow-[0_0_18px_rgb(124_92_255/0.45)]" : "text-muted"}`}
-              >
-                <Icon className="size-4" />
-                {item.label}
-              </button>
-            );
-          })}
+        <nav className="flex-1 overflow-auto px-3 pb-3">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="mb-3">
+              {!railCollapsed && <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">{group.label.toUpperCase()}</p>}
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const on = view === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    title={item.label}
+                    onClick={() => {
+                      setView(item.id);
+                      setNavOpen(false);
+                      closeMenus();
+                    }}
+                    className={`flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "bg-accent text-white shadow-[0_0_18px_rgb(124_92_255/0.45)]" : "text-muted"}`}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    {!railCollapsed && item.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          {ws.pins.length > 0 && !railCollapsed && (
+            <div className="mb-3">
+              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</p>
+              {ws.pins.map((pin) => {
+                const label =
+                  pin.kind === "agent"
+                    ? ws.agents.find((agent) => agent.id === pin.ref)?.name
+                    : pin.kind === "chat"
+                      ? ws.chats.find((chat) => chat.id === pin.ref)?.title
+                      : pin.kind === "project"
+                        ? ws.projects.find((project) => project.id === pin.ref)?.name
+                        : ws.files.find((file) => file.id === pin.ref)?.name;
+                if (!label) return null;
+                return (
+                  <button
+                    key={pin.id}
+                    type="button"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-2xl px-3 text-left text-sm text-muted"
+                    onClick={() => {
+                      if (pin.kind === "chat") {
+                        setActiveId(pin.ref);
+                        setView("chat");
+                      } else if (pin.kind === "agent") setView("agents");
+                      else if (pin.kind === "project") setView("projects");
+                      else setView("files");
+                      setNavOpen(false);
+                    }}
+                  >
+                    <Pin className="size-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </nav>
-        <div className="hidden border-t border-line p-4 md:block">
-          <p className="text-sm font-semibold">Adrian (Personal)</p>
-          <p className="text-xs text-muted">Only workspace on this device.</p>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, Math.min(100, (storedBytes / 5_000_000) * 100))}%` }} />
+        {!railCollapsed && (
+          <div className="border-t border-line p-4">
+            <p className="text-sm font-semibold">Adrian (Personal)</p>
+            <p className="text-xs text-muted">Only workspace on this device.</p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, Math.min(100, (storedBytes / 5_000_000) * 100))}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
+            <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
           </div>
-          <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
-          <p className="text-xs text-muted">Not a cloud quota. Nothing is stored in Oak Bridge or BridgePoint.</p>
-        </div>
+        )}
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
         <header className="flex items-center gap-2 border-b border-line px-3 py-3 md:gap-3 md:px-5">
+          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
+            <Menu className="size-4" />
+          </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
               ref={searchRef}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search projects, chats, files…"
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPaletteOpen(true);
+              }}
+              onFocus={() => setPaletteOpen(true)}
+              placeholder="Search or jump…"
               className="h-11 w-full rounded-panel border border-line bg-surface pr-14 pl-10 text-sm"
               aria-label="Search"
+              aria-expanded={paletteOpen}
+              aria-controls="command-palette"
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
-            {search && (
-              <div className="absolute z-30 mt-2 w-full rounded-panel border border-line bg-surface p-2 shadow-panel">
-                {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches in projects, chats, notes, or files.</p>}
-                {hits.map((hit) => (
-                  <button
-                    key={hit.key}
-                    type="button"
-                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-panel px-2 text-left text-sm"
-                    onClick={() => {
-                      hit.open();
-                      setQuery("");
-                    }}
-                  >
-                    <span className="truncate">{hit.label}</span>
-                    <span className="text-xs text-muted">{hit.meta}</span>
-                  </button>
-                ))}
+            {paletteOpen && (
+              <div id="command-palette" className="absolute z-30 mt-2 max-h-80 w-full overflow-auto rounded-panel border border-line bg-surface p-2 shadow-panel">
+                {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
+                {hits.map((hit) => {
+                  const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
+                  return (
+                    <div key={hit.key} className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-panel px-2 text-left text-sm"
+                        onClick={() => {
+                          if (hit.view === "chat" && hit.ref) setActiveId(hit.ref);
+                          setView(hit.view);
+                          setQuery("");
+                          setPaletteOpen(false);
+                          setNavOpen(false);
+                        }}
+                      >
+                        <span className="truncate">{hit.label}</span>
+                        <span className="text-xs text-muted">{hit.meta}</span>
+                      </button>
+                      {kind && hit.ref && (
+                        <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel text-muted" aria-label={`Pin ${hit.label}`} onClick={() => setWs((prev) => togglePin(prev, kind, hit.ref))}>
+                          <Pin className="size-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1792,6 +1889,21 @@ export function CommandApp() {
           {view === "settings" && (
             <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
               <h2 className="font-display text-3xl font-bold">Settings</h2>
+              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+                <p className="font-semibold">Appearance</p>
+                <p className="mt-1 text-muted">The theme is saved in this browser. It does not change a server setting.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(["dark", "light", "system"] as const).map((choice) => (
+                    <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink" : "border-line"}`} onClick={() => setTheme(choice)}>
+                      {choice}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+                <p className="font-semibold">Provider failover</p>
+                <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
+              </div>
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
                 <button
@@ -1934,6 +2046,22 @@ export function CommandApp() {
           </div>
         </Overlay>
       )}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Primary">
+        {NAV.filter((item) => item.id === "command" || item.id === "chat" || item.id === "agents" || item.id === "runs").map((item) => {
+          const Icon = item.icon;
+          const on = view === item.id;
+          return (
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-accent" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+              <Icon className="size-4" />
+              {item.label}
+            </button>
+          );
+        })}
+        <button type="button" className="flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] text-muted" onClick={() => setNavOpen(true)}>
+          <Menu className="size-4" />
+          More
+        </button>
+      </nav>
     </div>
   );
 }

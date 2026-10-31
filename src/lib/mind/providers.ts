@@ -48,7 +48,22 @@ export function chosenProvider(choice: string, grokConfigured: boolean | null): 
   return assertLiveProvider(match.id);
 }
 
-/** Accept an omitted provider as Grok. Any other value fails and is not rewritten. */
+/** Failover is explicit. The default policy does not switch providers. */
+export function failover(
+  requested: string,
+  grokConfigured: boolean,
+  policy: "none" | "grok",
+): { provider: "grok" | null; switched: boolean; note: string } {
+  if (requested === "grok" || requested === "") {
+    return grokConfigured
+      ? { provider: "grok", switched: false, note: "Grok remains the selected provider." }
+      : { provider: null, switched: false, note: "Grok is not configured. Nothing was substituted." };
+  }
+  if (policy === "grok" && grokConfigured) {
+    return { provider: "grok", switched: true, note: `${requested} was not used. A switch to Grok was allowed and is recorded.` };
+  }
+  return { provider: null, switched: false, note: `${requested} is not configured. Another provider is not substituted.` };
+}
 export function assertLiveProvider(id: unknown): { ok: true; id: "grok"; model: "grok-4.5" } | { ok: false; error: string } {
   if (id == null || id === "") return resolveProvider("grok", false);
   if (typeof id !== "string") return { ok: false, error: "That provider is not known." };

@@ -147,6 +147,18 @@ export const CAPABILITIES: Capability[] = [
     why: "One-shot Speak exists. It is not a live full-duplex conversation. A live Speak call was not verified in the last test.",
   },
   {
+    id: "shell.palette",
+    name: "Command palette",
+    status: "ready",
+    why: "Search jumps to chats, agents, runs, projects, files, and sections. It does not call a model.",
+  },
+  {
+    id: "shell.pins",
+    name: "Pins",
+    status: "ready",
+    why: "Pins stay in the browser workspace snapshot. They are not cloud backup.",
+  },
+  {
     id: "zapia",
     name: "Zapia / WhatsApp",
     status: "planned",
