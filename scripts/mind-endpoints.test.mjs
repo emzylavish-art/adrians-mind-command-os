@@ -13,10 +13,10 @@ test("protected mind operations require the owner on the server", () => {
   const server = readFileSync(new URL("../src/lib/mind/server.ts", import.meta.url), "utf8");
   const rea = readFileSync(new URL("../src/lib/mind/rea.ts", import.meta.url), "utf8");
   const turn = readFileSync(new URL("../src/lib/mind/turn.server.ts", import.meta.url), "utf8");
-  for (const name of ["sendTurn", "setExecutionHalt", "saveMindCopy", "loadMindCopy", "speakText"]) {
+  for (const name of ["sendTurn", "setExecutionHalt", "saveMindCopy", "loadMindCopy", "speakText", "searchWeb"]) {
     assert.match(sliceExport(server, name), /\.middleware\(\[authMiddleware\]\)/);
   }
-  assert.doesNotMatch(sliceExport(server, "mindStatus", "sendTurn"), /authMiddleware/);
+  assert.doesNotMatch(sliceExport(server, "mindStatus", "searchWeb"), /authMiddleware/);
   for (const name of ["reaDoctor", "reaInspect"]) {
     assert.match(sliceExport(rea, name), /\.middleware\(\[authMiddleware\]\)/);
   }
@@ -27,4 +27,8 @@ test("protected mind operations require the owner on the server", () => {
   assert.match(turn, /relayModelStream/);
   const relay = readFileSync(new URL("../src/lib/mind/relay.ts", import.meta.url), "utf8");
   assert.match(relay, /signal: linked\.signal/);
+  const agent = readFileSync(new URL("../src/lib/mind/agent-run.server.ts", import.meta.url), "utf8");
+  assert.match(agent, /requireUserId/);
+  assert.match(agent, /request\.signal/);
+  assert.match(agent, /XAI_API_KEY/);
 });

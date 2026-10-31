@@ -3,6 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
+import { performSearch } from "./research";
 
 const MODEL = "grok-4.5";
 
@@ -28,7 +29,9 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   } catch {
     signedIn = false;
   }
-  const persistence = describePersistence(process.env.DATABASE_URL).note;
+  const described = describePersistence(process.env.DATABASE_URL);
+  const persistence = described.note;
+  const databaseBackend = described.backend;
   if (!gate.ok) {
     return {
       ok: false as const,
@@ -39,6 +42,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       executionHalted,
       signedIn,
       persistence,
+      databaseBackend,
       checkedAt,
     };
   }
@@ -54,9 +58,28 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     executionHalted,
     signedIn,
     persistence,
+    databaseBackend,
     checkedAt,
   };
 });
+
+export const searchWeb = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { query: string }) => ({ query: typeof input.query === "string" ? input.query.slice(0, 300) : "" }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Emergency stop is on. No new action can run." };
+    }
+    if (!allowMindRequest("search", context.userId, 6)) {
+      return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Too many searches. Wait a minute and try again." };
+    }
+    return performSearch({
+      query: data.query,
+      endpoint: process.env.MIND_SEARCH_ENDPOINT,
+      key: process.env.MIND_SEARCH_KEY,
+    });
+  });
 
 export const sendTurn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])

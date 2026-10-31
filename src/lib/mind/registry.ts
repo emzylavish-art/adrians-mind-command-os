@@ -90,7 +90,7 @@ export const CAPABILITIES: Capability[] = [
     id: "research",
     name: "Research",
     status: "unconfigured",
-    why: "No search provider is configured. The research check refuses, does not call Grok, and creates no citations.",
+    why: "No search endpoint or key is configured, so a check refuses and does not call Grok. Citation normalization is tested with a mock provider and drops non-http URLs. Live search was not run.",
   },
   {
     id: "agents",
@@ -101,8 +101,8 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "agents.planner",
     name: "AI agent planner",
-    status: "planned",
-    why: "Not implemented. No model plans a sequence of tools.",
+    status: "configured",
+    why: "Bounded to three local reads: projects, chats, and notes. Fake-model tests cover success, bad arguments, denial, timeout, cancellation, tool failure, and the step limit. A live Grok tool call was not verified. It cannot use a shell, the network, or files.",
   },
   {
     id: "image",

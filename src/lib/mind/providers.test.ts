@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { assertLiveProvider, resolveProvider } from "./providers.ts";
+import { assertLiveProvider, chosenProvider, providerChoices, resolveProvider } from "./providers.ts";
 
 describe("provider routing", () => {
   it("keeps Grok when it is the explicit choice", () => {
@@ -22,5 +22,13 @@ describe("provider routing", () => {
     assert.equal(refused.ok, false);
     if (!refused.ok) assert.match(refused.error, /not substituted/);
     assert.equal(assertLiveProvider(4).ok, false);
+  });
+
+  it("lets the owner choose only a configured provider", () => {
+    assert.equal(providerChoices(true).filter((item) => item.enabled).map((item) => item.id).join(), "grok");
+    assert.equal(providerChoices(false).some((item) => item.enabled), false);
+    assert.equal(chosenProvider("openai", true).ok, false);
+    assert.equal(chosenProvider("grok", true).ok, true);
+    assert.equal(chosenProvider("grok", false).ok, false);
   });
 });

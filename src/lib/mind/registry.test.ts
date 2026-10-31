@@ -13,10 +13,11 @@ describe("capability labels", () => {
     assert.equal(isVerifiedCapability("live_verified"), true);
   });
 
-  it("separates local lookup from an unimplemented planner", () => {
+  it("keeps the planner configured until a live tool call is verified", () => {
     assert.equal(CAPABILITIES.find((item) => item.id === "agents")?.name, "Local workspace lookup");
     assert.equal(CAPABILITIES.find((item) => item.id === "agents")?.status, "ready");
-    assert.equal(CAPABILITIES.find((item) => item.id === "agents.planner")?.status, "planned");
+    assert.equal(CAPABILITIES.find((item) => item.id === "agents.planner")?.status, "configured");
+    assert.equal(isVerifiedCapability("configured"), false);
   });
 
   it("does not call an unhealthy REA install or in-memory database ready", () => {

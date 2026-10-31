@@ -170,13 +170,25 @@ export const REQUIREMENTS: Requirement[] = [
     id: "R-RESEARCH-GATE",
     text: "Research without a search provider creates no citations and does not call a model.",
     status: "verified",
-    note: "runResearch.",
+    note: "runResearch refuses when no provider is set. performSearch is the configured path.",
   },
   {
     id: "R-RESEARCH",
     text: "Web research with citations.",
     status: "blocked",
-    note: "No search provider or key is configured. The research screen refuses instead of asking Grok.",
+    note: "No search endpoint or key is configured. A check refuses instead of asking Grok. Mocked citation normalization is a separate row.",
+  },
+  {
+    id: "R-RESEARCH-NORMALIZE",
+    text: "Search hits are kept only when they have a title and an http(s) URL.",
+    status: "verified",
+    note: "normalizeCitations and performSearch with a mock fetch. Live search was not called.",
+  },
+  {
+    id: "R-PROVIDER-SELECT",
+    text: "Only a configured provider can be selected, and another provider is not substituted.",
+    status: "verified",
+    note: "providerChoices and chosenProvider. The chat radios follow that list. A stored choice other than grok is ignored.",
   },
   {
     id: "R-VOICE-LIVE",
@@ -199,8 +211,8 @@ export const REQUIREMENTS: Requirement[] = [
   {
     id: "R-AGENT-PLAN",
     text: "A model that plans multi-step work.",
-    status: "planned",
-    note: "Not implemented. The integrations list names this separately from local workspace lookup. No model plans a sequence of tools.",
+    status: "implemented",
+    note: "runBoundedAgent with a fake model. Tools are list_projects, list_chats, and search_notes. A live Grok tool call was not spent.",
   },
   {
     id: "R-ZAPIA",

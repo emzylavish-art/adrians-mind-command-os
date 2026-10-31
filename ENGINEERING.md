@@ -44,6 +44,17 @@ Aborting the HTTP request does not guarantee that xAI will bill nothing. Tokens 
 
 The integrations list no longer treats a configured key as Ready. Grok and one-shot Speak are Configured. Local workspace lookup is Ready. The AI agent planner is Not implemented. REA doctor remains blocked because the environment is unhealthy. With `DATABASE_URL` unset, the server database is in-memory PGLite and is not cloud backup. A restart test against a real database was not run.
 
+## Completion sprint after 7a0cdb6
+
+The bounded planner can ask Grok to call only `list_projects`, `list_chats`, and `search_notes`. Arguments are validated. The run stops after four tool steps or twenty seconds, and Stop this run aborts it. Emergency stop also aborts an in-flight planner. It is not a general agent. Tests use a fake model. A live tool call was not sent.
+
+Research still refuses when `MIND_SEARCH_ENDPOINT` or `MIND_SEARCH_KEY` is missing. When both are set, `performSearch` keeps at most eight hits that have a title and an http(s) URL. The screen renders only those links. Mock tests do not call a search API.
+
+The chat model list enables Grok only when the server key is present, and labels it Configured, not live verified. GPT, Claude, Gemini, and OpenRouter stay disabled. A stored choice other than grok is ignored. Nothing is substituted.
+
+`scripts/verify-grok.mjs` sends one short Grok request only when `MIND_LIVE_GROK=1`. The test suite runs it without that flag and expects a skip. It was not run with the flag.
+
+`npm run db:migrate` still prints that `DATABASE_URL` is not set and skips. That is not cloud backup.
 
 ## Chat, provider, and research gate
 

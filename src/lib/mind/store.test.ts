@@ -55,6 +55,30 @@ describe("mind store", () => {
     assert.equal(await readControl(sql, "other"), false);
   });
 
+  it("keeps two owners' snapshots apart", async () => {
+    const { sql, tables } = memorySql();
+    const first = emptyWorkspace();
+    first.projects.push({ id: "p1", name: "Lake", description: "", createdAt: "2026-01-01T00:00:00.000Z" });
+    first.chats.push({
+      id: "c1",
+      title: "Dock",
+      memory: "off",
+      temporary: false,
+      autonomy: "ask",
+      projectId: null,
+      retrievalLog: [],
+      messages: [],
+    });
+    const second = emptyWorkspace();
+    second.projects.push({ id: "p2", name: "Other", description: "", createdAt: "2026-01-01T00:00:00.000Z" });
+    await writeSnapshot(sql, "owner-a", first);
+    await writeSnapshot(sql, "owner-b", second);
+    assert.equal(normalizeWorkspace(await readSnapshot(sql, "owner-a"))?.projects[0]?.name, "Lake");
+    assert.equal(normalizeWorkspace(await readSnapshot(sql, "owner-b"))?.projects[0]?.name, "Other");
+    assert.equal(tables.get("mind_chat")?.has("owner-a:c1"), true);
+    assert.equal([...(tables.get("mind_chat")?.keys() ?? [])].some((key) => String(key).startsWith("owner-b:")), false);
+  });
+
   it("rejects a snapshot that is too large", () => {
     const ws = emptyWorkspace();
     ws.files.push({ id: "f", name: "big.txt", text: "x".repeat(1_500_000), bytes: 1_500_000, projectId: null, createdAt: "2026-01-01T00:00:00.000Z" });

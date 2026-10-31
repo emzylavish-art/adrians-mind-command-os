@@ -31,12 +31,11 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { mindStatus, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { mindStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { MessageBody } from "@/components/mind/message-body";
 import { runLocalPlan } from "@/lib/mind/local-tools";
-import { PROVIDERS, resolveProvider } from "@/lib/mind/providers";
-import { runResearch } from "@/lib/mind/research";
+import { chosenProvider, providerChoices } from "@/lib/mind/providers";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
@@ -141,6 +140,8 @@ function humanAction(action: string) {
     rename_chat: "Chat renamed",
     workspace_lookup: "Workspace lookup",
     research_refused: "Research refused",
+    research_result: "Research returned sources",
+    agent_plan: "Bounded agent finished",
     emergency_stop: "Emergency stop changed",
     import_merge: "Archive merged",
     import_replace: "Archive replaced",
@@ -189,6 +190,14 @@ export function CommandApp() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [grok, setGrok] = useState("Checking");
+  const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
+  const [providerChoice, setProviderChoice] = useState("grok");
+  const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
+  const [agentGoal, setAgentGoal] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentNote, setAgentNote] = useState<string | null>(null);
+  const [agentLog, setAgentLog] = useState<{ step: number; tool: string; ok: boolean; detail: string }[]>([]);
+  const agentAbort = useRef<AbortController | null>(null);
   const [system, setSystem] = useState("Checking isolation.");
   const [checkedAt, setCheckedAt] = useState("");
   const [memoryChoice, setMemoryChoice] = useState<"off" | "on">("off");
@@ -238,7 +247,8 @@ export function CommandApp() {
     if (!ready) return;
     mindStatus()
       .then((status) => {
-        setGrok(status.grok === "configured" ? "Ready" : status.grok === "down" ? "Refused" : "Unavailable");
+        setGrokConfigured(status.grok === "configured");
+        setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
         setSystem(status.database);
         setCheckedAt(status.checkedAt);
         if (status.executionHalted) {
@@ -250,6 +260,23 @@ export function CommandApp() {
         setSystem("The status check did not finish.");
       });
   }, [ready, setWs]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("amcos.provider.v1") === "grok") setProviderChoice("grok");
+    } catch {
+      /* a private browser can refuse storage */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (providerChoice !== "grok") return;
+    try {
+      localStorage.setItem("amcos.provider.v1", "grok");
+    } catch {
+      /* a private browser can refuse storage */
+    }
+  }, [providerChoice]);
 
   useEffect(() => {
     if (!ready || !ws.halted) return;
@@ -350,7 +377,7 @@ export function CommandApp() {
   }
 
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
-    const routed = resolveProvider("grok", false);
+    const routed = chosenProvider(providerChoice, grokConfigured);
     if (!routed.ok) {
       setError(routed.error);
       return;
@@ -561,15 +588,63 @@ export function CommandApp() {
     await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] });
   }
 
-  function startResearch() {
+  async function startResearch() {
     if (ws.halted) {
       setError("Emergency stop is on. No new action can run.");
       return;
     }
-    const result = runResearch(researchText);
-    setError(null);
-    setResearchNote(result.error);
-    setWs((prev) => pushAudit(prev, "research_refused", "search", "no provider"));
+    setResearchCitations([]);
+    try {
+      const result = await searchWeb({ data: { query: researchText } });
+      setError(null);
+      setResearchCitations(result.citations);
+      setResearchNote(result.ok ? "" : result.error);
+      setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
+    } catch (caught) {
+      setResearchCitations([]);
+      setResearchNote(caught instanceof Error ? caught.message : "The search did not run. No citations were created.");
+    }
+  }
+
+  async function runPlanner() {
+    if (ws.halted || agentBusy) return;
+    const goal = agentGoal.trim();
+    if (!goal) {
+      setAgentNote("Write what the agent should do.");
+      return;
+    }
+    agentAbort.current?.abort();
+    const controller = new AbortController();
+    agentAbort.current = controller;
+    setAgentBusy(true);
+    setAgentNote(null);
+    setAgentLog([]);
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    const token = getBearerToken();
+    try {
+      const response = await fetch(`${prefix}/api/mind/agent`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          goal,
+          projects: ws.projects.map((project) => project.name),
+          chats: ws.chats.map((chat) => chat.title),
+          notes: ws.memories.filter((note) => !note.archived).map((note) => note.text),
+        }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; text?: string; error?: string; log?: { step: number; tool: string; ok: boolean; detail: string }[] };
+      if (controller.signal.aborted) return;
+      setAgentLog(payload.log ?? []);
+      setAgentNote(payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.");
+      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? "finished" : "stopped"));
+    } catch {
+      if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
+      else setAgentNote("The planner did not finish. Nothing was marked finished.");
+    } finally {
+      if (agentAbort.current === controller) agentAbort.current = null;
+      setAgentBusy(false);
+    }
   }
 
   async function sendInChat() {
@@ -674,7 +749,10 @@ export function CommandApp() {
 
   async function toggleStop() {
     const next = !ws.halted;
-    if (next) turnAbort.current?.abort();
+    if (next) {
+      turnAbort.current?.abort();
+      agentAbort.current?.abort();
+    }
     try {
       const result = await setExecutionHalt({ data: { on: next } });
       if (!result.ok) {
@@ -785,8 +863,8 @@ export function CommandApp() {
     setWs((prev) => pushAudit(prev, "rea_inspect", file.name, result.evidenceId ?? "no evidence id"));
   }
 
-  const headerState = ws.halted ? "Stopped" : grok === "Ready" ? "Grok ready" : grok;
-  const headerTone = ws.halted || grok === "Refused" || grok === "Unavailable" ? "text-danger border-danger/40" : grok === "Ready" ? "text-ok border-ok/40" : "text-muted border-line";
+  const headerState = ws.halted ? "Stopped" : grok === "Configured" ? "Grok configured" : grok;
+  const headerTone = ws.halted || grok === "Refused" || grok === "Unavailable" ? "text-danger border-danger/40" : "text-muted border-line";
   const memories = ws.memories.filter((item) => {
     if (!showArchived && item.archived) return false;
     if (memoryTab === "mine" && item.scope !== "global") return false;
@@ -1072,7 +1150,7 @@ export function CommandApp() {
                     <li>Grok 4.5 — available when you press Send. Speak reads a reply only when you press Speak.</li>
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
-                    <li className="text-muted">Web research — no search provider. Pages are not fetched.</li>
+                    <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
                     <li className="text-muted">Image and video — paid APIs, not called. HP — not paired.</li>
                     <li>
                       <button type="button" className="min-h-11 text-accent" onClick={() => { setView("agents"); void checkRea(); }}>
@@ -1255,6 +1333,11 @@ export function CommandApp() {
               onDoctor={() => {
                 setView("agents");
                 void checkRea();
+              }}
+              providerChoices={providerChoices(grokConfigured)}
+              providerChoice={providerChoice}
+              onProvider={(id) => {
+                if (id === "grok") setProviderChoice("grok");
               }}
             />
           )}
@@ -1514,18 +1597,60 @@ export function CommandApp() {
               <input value={lookupQuery} onChange={(event) => setLookupQuery(event.target.value)} placeholder="Word to find in notes" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
               <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || !lookupQuery.trim()}>Run lookup</button>
             </form>
+            <form
+              className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runPlanner();
+              }}
+            >
+              <p className="font-semibold">Bounded planner</p>
+              <p className="mt-1 text-sm text-muted">Grok may call only three local reads: projects, chats, and notes. It stops after four steps or twenty seconds. It cannot use a shell, the network, or files. A live tool call was not verified in the last test. Run spends a model request.</p>
+              <textarea value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} placeholder="What should the planner look up?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || agentBusy}>Run planner</button>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-4 text-sm disabled:opacity-50"
+                  disabled={!agentBusy}
+                  onClick={() => {
+                    agentAbort.current?.abort();
+                    setAgentNote("Stopped. The unfinished reply was not saved.");
+                  }}
+                >
+                  Stop this run
+                </button>
+              </div>
+              {agentNote ? <p className="mt-3 text-sm text-muted">{agentNote}</p> : null}
+              {agentLog.length > 0 && (
+                <ol className="mt-3 space-y-1 text-sm">
+                  {agentLog.map((entry) => (
+                    <li key={`${entry.step}-${entry.tool}`}>{entry.step}. {entry.tool} — {entry.ok ? "ok" : "failed"} — {entry.detail}</li>
+                  ))}
+                </ol>
+              )}
+            </form>
             </>
           )}
           {view === "research" && (
             <section className="p-4 md:p-6">
               <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
                 <h2 className="font-display text-3xl font-bold">Research</h2>
-                <p className="text-sm text-muted">No search provider is configured. Checking research does not call Grok, fetch a page, or create a citation.</p>
+                <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
                 <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
                   Check research
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
+                {researchCitations.length > 0 && (
+                  <ul className="mt-3 space-y-2 text-sm">
+                    {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
+                      <li key={item.url}>
+                        <a className="text-accent underline" href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="mt-4">
                 <ReaPanel
@@ -1664,8 +1789,8 @@ export function CommandApp() {
                   <li>Command is home. Ask is the default. Automatic still asks before a delete or a replace.</li>
                   <li>Memory is off until you confirm it. A memory-off chat cannot read or save notes.</li>
                   <li>Open chats on a project shows only that project’s chats. Show all chats clears the filter.</li>
-                  <li>Research has no search provider. The check refuses, does not call Grok, and creates no citations.</li>
-                  <li>Agents can run REA doctor. They are not a running task runner. Nothing is marked Running unless it is.</li>
+                  <li>Research runs only when a search endpoint and key are set. A missing provider refuses and creates no citations. Links are only URLs the provider returned.</li>
+                  <li>Workspace lookup is three local reads. The bounded planner can ask Grok to use those same reads. It is not a general agent, and Stop this run is not Emergency stop.</li>
                   <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
                   <li>Stop this reply cancels only the current answer. It is not Emergency stop. The unfinished answer is not saved. The provider may still charge for text it generated before it saw the cancel.</li>
                   <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart on this machine. It is not durable on a serverless disk. The embedded database resets when the process restarts unless a dedicated database URL is set. That is not cloud backup.</li>
@@ -1872,7 +1997,7 @@ function ReaPanel({
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA doctor</span><span className="text-xs text-muted">Live check</span></li>
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA file inspect</span><span className="text-xs text-muted">Staged text only</span></li>
-            <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>Research, coding, automation agents</span><span className="text-xs text-danger">Not running</span></li>
+            <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>Bounded planner</span><span className="text-xs text-muted">Not running</span></li>
           </ul>
           <div className="mt-4 flex flex-wrap gap-2">
             <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy} onClick={onCheck}>
@@ -1926,6 +2051,9 @@ function ChatPane({
   onAttach,
   onAnalyze,
   onDoctor,
+  providerChoices: choices,
+  providerChoice,
+  onProvider,
 }: {
   active: Chat | null;
   chats: Chat[];
@@ -1961,6 +2089,9 @@ function ChatPane({
   onAttach: () => void;
   onAnalyze: () => void;
   onDoctor: () => void;
+  providerChoices: { id: string; label: string; enabled: boolean; reason: string }[];
+  providerChoice: string;
+  onProvider: (id: string) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -2037,7 +2168,10 @@ function ChatPane({
               <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save</button>
             </form>
           )}
-          <p className="text-sm text-muted">Grok 4.5 is the only live model. Other providers stay unavailable and are not substituted.</p>
+          <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
+          <div className="mt-3 xl:hidden">
+            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
+          </div>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
           {(!active || active.messages.length === 0) && !busy && (
@@ -2172,13 +2306,7 @@ function ChatPane({
       </section>
       <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
         <section className="rounded-panel border border-line bg-surface p-3">
-          <p className="text-sm font-semibold">Model and mode</p>
-          <p className="mt-3 rounded-panel border border-ok/40 px-3 py-2 text-sm">Grok 4.5 <span className="text-ok">Active</span></p>
-          <ul className="mt-2 space-y-1 text-xs text-muted">
-            {PROVIDERS.filter((item) => item.id !== "grok").map((item) => (
-              <li key={item.id}>{item.label} — {item.reason} Not substituted.</li>
-            ))}
-          </ul>
+          <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
         </section>
         <section className="rounded-panel border border-line bg-surface p-3">
           <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>
@@ -2197,6 +2325,43 @@ function ChatPane({
         </section>
       </aside>
     </div>
+  );
+}
+
+function ProviderPicker({
+  name,
+  choices,
+  choice,
+  onChoose,
+}: {
+  name: string;
+  choices: { id: string; label: string; enabled: boolean; reason: string }[];
+  choice: string;
+  onChoose: (id: string) => void;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-semibold">Model</legend>
+      {choices.map((item) => (
+        <label key={item.id} className="flex items-start gap-2 text-sm">
+          <input
+            type="radio"
+            name={name}
+            className="mt-1"
+            checked={choice === item.id}
+            disabled={!item.enabled}
+            onChange={() => {
+              if (item.enabled) onChoose(item.id);
+            }}
+          />
+          <span>
+            {item.label}
+            {item.id === "grok" && item.enabled ? <span className="text-muted"> · Configured, not live verified</span> : null}
+            <span className="block text-xs text-muted">{item.reason}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
   );
 }
 
