@@ -1490,7 +1490,7 @@ export function CommandApp() {
                   <li>Research asks Grok. It does not search the web and it must not invent citations.</li>
                   <li>Agents can run REA doctor. They are not a running task runner. Nothing is marked Running unless it is.</li>
                   <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
-                  <li>Stop blocks new sends on this page and on the server process that received the stop.</li>
+                  <li>Stop blocks new sends on this page and on the server process that received the stop. Restarting that process clears the server stop until you press it again.</li>
                   <li>Oak Bridge and BridgePoint are external labels. This app does not open them.</li>
                   <li>A dedicated database needs a new Supabase organization. The current free organization is already full.</li>
                 </ul>
