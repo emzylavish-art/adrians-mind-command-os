@@ -3,8 +3,9 @@ import { guardMindEnv } from "./isolation";
 import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
 import { assertLiveProvider } from "./providers";
+import { relayModelStream } from "./relay";
 import { decideFetchSite } from "./request-guard";
-import { createSseFeed, pushSse, readModelPayload, type ModelUsage } from "./stream";
+import { readModelPayload } from "./stream";
 
 export const MIND_MODEL = "grok-4.5";
 const MAX_BODY = 200_000;
@@ -167,64 +168,11 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (prepared.model !== MIND_MODEL) return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-      };
-      try {
-        const res = await fetch("https://api.x.ai/v1/chat/completions", {
-          method: "POST",
-          signal: AbortSignal.timeout(25_000),
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(modelBody(prepared.model, prepared.assembled.messages)),
-        });
-        if (!res.ok || !res.body) {
-          send("error", { error: `Grok returned ${res.status}. Nothing was saved as a success.` });
-          controller.close();
-          return;
-        }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        const feed = createSseFeed();
-        while (true) {
-          const step = await reader.read();
-          if (step.done) break;
-          const pushed = pushSse(feed, decoder.decode(step.value, { stream: true }));
-          if (pushed.bad) {
-            send("error", { error: "Grok returned a broken stream. Nothing was saved as a success." });
-            controller.close();
-            return;
-          }
-          for (const text of pushed.deltas) send("delta", { text });
-        }
-        const tail = pushSse(feed, "\n");
-        if (tail.bad || !feed.text.trim()) {
-          send("error", { error: tail.bad ? "Grok returned a broken stream. Nothing was saved as a success." : "Grok returned an empty reply." });
-          controller.close();
-          return;
-        }
-        const usage: ModelUsage | null = feed.usage;
-        send("done", {
-          text: feed.text.trim(),
-          model: prepared.model,
-          usage,
-          usedIds: prepared.assembled.usedIds,
-          requestId: res.headers.get("x-request-id"),
-        });
-        controller.close();
-      } catch {
-        send("error", { error: "Grok did not answer in time. Nothing was saved as a success." });
-        controller.close();
-      }
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "content-type": "text/event-stream",
-      "cache-control": "no-store",
-    },
+  return relayModelStream({
+    apiKey,
+    model: prepared.model,
+    messages: prepared.assembled.messages,
+    usedIds: prepared.assembled.usedIds,
+    requestSignal: request.signal,
   });
 }

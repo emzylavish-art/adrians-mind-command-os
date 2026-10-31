@@ -1,8 +1,42 @@
 import { pullMindEvents, type ModelUsage } from "./stream.ts";
 
+export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
+
 export type LiveTurnResult =
   | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null }
   | { ok: false; error: string };
+
+export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
+  return result.ok && result.text.trim().length > 0;
+}
+
+function readOrAbort(reader: ReadableStreamDefaultReader<Uint8Array>, signal: AbortSignal) {
+  if (signal.aborted) return Promise.reject(new DOMException("The operation was aborted", "AbortError"));
+  return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      reject(new DOMException("The operation was aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    reader.read().then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
 
 export async function consumeMindTurn(input: {
   url: string;
@@ -25,9 +59,7 @@ export async function consumeMindTurn(input: {
   } catch {
     return {
       ok: false,
-      error: input.signal.aborted
-        ? "Stopped. The unfinished reply was not saved."
-        : "Grok did not answer in time. Nothing was saved as a success.",
+      error: input.signal.aborted ? STOPPED_REPLY : "Grok did not answer in time. Nothing was saved as a success.",
     };
   }
   const type = response.headers.get("content-type") ?? "";
@@ -46,20 +78,31 @@ export async function consumeMindTurn(input: {
   const decoder = new TextDecoder();
   let carry = "";
   let finished: LiveTurnResult | null = null;
+  const stop = async (): Promise<LiveTurnResult> => {
+    await reader.cancel().catch(() => undefined);
+    return { ok: false, error: STOPPED_REPLY };
+  };
   while (true) {
+    if (input.signal.aborted) return stop();
     let step: ReadableStreamReadResult<Uint8Array>;
     try {
-      step = await reader.read();
+      step = await readOrAbort(reader, input.signal);
     } catch {
-      return { ok: false, error: input.signal.aborted ? "Stopped. The unfinished reply was not saved." : "Grok did not answer in time. Nothing was saved as a success." };
+      await reader.cancel().catch(() => undefined);
+      return { ok: false, error: input.signal.aborted ? STOPPED_REPLY : "Grok did not answer in time. Nothing was saved as a success." };
     }
+    if (input.signal.aborted) return stop();
     if (step.done) break;
     carry += decoder.decode(step.value, { stream: true });
     const pulled = pullMindEvents(carry);
     carry = pulled.rest;
     for (const event of pulled.events) {
+      if (input.signal.aborted) return stop();
       if (event.event === "delta") input.onDelta(event.text);
-      if (event.event === "error") return { ok: false, error: event.error };
+      if (event.event === "error" || event.event === "canceled") {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false, error: event.error };
+      }
       if (event.event === "done") {
         finished = {
           ok: true,
@@ -72,8 +115,8 @@ export async function consumeMindTurn(input: {
       }
     }
   }
-  if (!finished || !finished.ok || !finished.text.trim()) {
-    return { ok: false, error: "Grok closed the reply before it finished. Nothing was saved as a success." };
+  if (input.signal.aborted || !finished || !finished.ok || !finished.text.trim()) {
+    return { ok: false, error: input.signal.aborted ? STOPPED_REPLY : "Grok closed the reply before it finished. Nothing was saved as a success." };
   }
   return finished;
 }

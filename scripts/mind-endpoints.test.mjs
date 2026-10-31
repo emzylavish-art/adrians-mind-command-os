@@ -23,4 +23,8 @@ test("protected mind operations require the owner on the server", () => {
   assert.match(turn, /requireUserId/);
   assert.match(turn, /decideFetchSite/);
   assert.match(turn, /Forbidden: cross-site request blocked/);
+  assert.match(turn, /request\.signal/);
+  assert.match(turn, /relayModelStream/);
+  const relay = readFileSync(new URL("../src/lib/mind/relay.ts", import.meta.url), "utf8");
+  assert.match(relay, /signal: linked\.signal/);
 });

@@ -34,7 +34,16 @@ Agents can run a three-step workspace lookup after approval: list projects, list
 
 REA doctor was run again. It is not healthy: Node 22.23.3 is below 22.23.4, and Hopper, Ghidra, IDA, and the other native engines are missing. They were not installed.
 
-The original master blueprint files are not in this repository. The list in `src/lib/mind/requirements.ts` is the inventory the app shows.
+The original master blueprint files are not in this repository. The list in `src/lib/mind/requirements.ts` is the inventory the app shows. It is not a certified copy of a missing blueprint.
+
+## Stop reply after 78cf2a3
+
+Stop this reply aborts the browser read and the server's outgoing xAI request. The provider response reader is canceled. The server emits `canceled` and does not emit `done`. The unfinished answer is not saved. Retry resends the same user message. Emergency stop is a separate control and still blocks new work.
+
+Aborting the HTTP request does not guarantee that xAI will bill nothing. Tokens generated before the provider processes the abort can still be charged. The tests use a mocked fetch and do not call xAI.
+
+The integrations list no longer treats a configured key as Ready. Grok and one-shot Speak are Configured. Local workspace lookup is Ready. The AI agent planner is Not implemented. REA doctor remains blocked because the environment is unhealthy. With `DATABASE_URL` unset, the server database is in-memory PGLite and is not cloud backup. A restart test against a real database was not run.
+
 
 ## Chat, provider, and research gate
 

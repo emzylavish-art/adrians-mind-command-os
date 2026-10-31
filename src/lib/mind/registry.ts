@@ -1,11 +1,16 @@
 export type CapabilityStatus =
   | "ready"
   | "configured"
+  | "live_verified"
   | "unconfigured"
   | "blocked"
   | "local_required"
   | "planned"
   | "paid_required";
+
+export function isVerifiedCapability(status: CapabilityStatus): boolean {
+  return status === "ready" || status === "live_verified";
+}
 
 export type Capability = {
   id: string;
@@ -19,7 +24,7 @@ export const CAPABILITIES: Capability[] = [
     id: "chat.grok",
     name: "Grok chat",
     status: "configured",
-    why: "A server key is present. A reply is sent only when you press Send. The model is grok-4.5.",
+    why: "A server key is present. A live reply was not verified in the last test. A send still uses grok-4.5 only when you press Send.",
   },
   {
     id: "chat.openai",
@@ -67,19 +72,19 @@ export const CAPABILITIES: Capability[] = [
     id: "supabase",
     name: "Dedicated database",
     status: "blocked",
-    why: "The free organization already has two active projects. Oak Bridge and BridgePoint are not used.",
+    why: "DATABASE_URL is not set. The server uses in-memory PGLite, which resets when the process restarts. That is not cloud backup. Oak Bridge and BridgePoint are not used.",
   },
   {
     id: "rea",
     name: "REA",
-    status: "local_required",
-    why: "Pinned CLI rea-agents 6.8.0. Doctor runs and is not healthy on this machine. inspect-artifact does not accept TypeScript. Hopper, Ghidra, IDA, JADX, and Kuna are not installed.",
+    status: "blocked",
+    why: "Pinned CLI rea-agents 6.8.0 runs, and doctor is not a healthy environment. inspect-artifact does not accept TypeScript. Hopper, Ghidra, IDA, JADX, and Kuna are not installed.",
   },
   {
     id: "pc",
     name: "PC control",
-    status: "planned",
-    why: "The HP EliteBook is not paired. No commands are sent to it.",
+    status: "blocked",
+    why: "Not implemented. The HP EliteBook is not paired. No commands are sent to it.",
   },
   {
     id: "research",
@@ -89,9 +94,15 @@ export const CAPABILITIES: Capability[] = [
   },
   {
     id: "agents",
-    name: "Agent runtime",
+    name: "Local workspace lookup",
     status: "ready",
-    why: "Workspace lookup runs list and search steps on this device after approval. It does not call a model, browse the web, or control a computer.",
+    why: "Three approved reads run on this device: projects, chats, and notes. Tests cover order and emergency stop. This does not plan with a model.",
+  },
+  {
+    id: "agents.planner",
+    name: "AI agent planner",
+    status: "planned",
+    why: "Not implemented. No model plans a sequence of tools.",
   },
   {
     id: "image",
@@ -109,7 +120,7 @@ export const CAPABILITIES: Capability[] = [
     id: "voice",
     name: "Voice",
     status: "configured",
-    why: "Speak reads up to 500 characters through the server voice API when you press Speak. It does not run by itself.",
+    why: "One-shot Speak exists. It is not a live full-duplex conversation. A live Speak call was not verified in the last test.",
   },
   {
     id: "zapia",

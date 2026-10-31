@@ -46,4 +46,10 @@ describe("client reply events", () => {
     assert.equal(done.events[0]?.event, "delta");
     if (done.events[0]?.event === "delta") assert.equal(done.events[0].text, "Hi");
   });
+
+  it("reads a canceled event and does not turn it into done", () => {
+    const pulled = pullMindEvents('event: canceled\ndata: {"error":"Stopped. The unfinished reply was not saved."}\n\n');
+    assert.equal(pulled.events[0]?.event, "canceled");
+    assert.equal(pulled.events.some((event) => event.event === "done"), false);
+  });
 });

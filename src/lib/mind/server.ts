@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
+import { describePersistence } from "./persistence";
 
 const MODEL = "grok-4.5";
 
@@ -27,7 +28,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   } catch {
     signedIn = false;
   }
-  const persistence = "Browser copy plus a local server database. Not cloud backup. The stop file survives a process restart; the embedded database does not unless a dedicated DATABASE_URL is set.";
+  const persistence = describePersistence(process.env.DATABASE_URL).note;
   if (!gate.ok) {
     return {
       ok: false as const,

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { consumeMindTurn } from "./live-turn.ts";
+import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
+import { prepareRetry } from "./transcript.ts";
+import { emptyWorkspace } from "./workspace.ts";
 
 describe("live turn", () => {
   it("shows deltas and commits only the finished reply", async () => {
@@ -36,5 +38,98 @@ describe("live turn", () => {
       fetchImpl: async () => new Response(JSON.stringify({ error: "Sign in is required." }), { status: 401, headers: { "content-type": "application/json" } }),
     });
     assert.deepEqual(result, { ok: false, error: "Sign in is required." });
+    assert.equal(shouldStoreReply(result), false);
+  });
+
+  it("does not store a canceled reply, and retry does not duplicate the user message", async () => {
+    const seen: string[] = [];
+    const result = await consumeMindTurn({
+      url: "/api/mind/turn",
+      body: {},
+      headers: {},
+      signal: new AbortController().signal,
+      onDelta: (text) => seen.push(text),
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              controller.enqueue(encoder.encode('event: delta\ndata: {"text":"Part"}\n\nevent: canceled\ndata: {"error":"Stopped. The unfinished reply was not saved."}\n\n'));
+              controller.close();
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+    });
+    assert.deepEqual(seen, ["Part"]);
+    assert.equal(shouldStoreReply(result), false);
+    if (!result.ok) assert.equal(result.error, STOPPED_REPLY);
+    const ws = emptyWorkspace();
+    ws.chats.push({
+      id: "c1",
+      title: "Question",
+      memory: "off",
+      temporary: false,
+      autonomy: "ask",
+      projectId: null,
+      retrievalLog: [],
+      messages: [{ id: "u1", role: "user", content: "Question", at: "2026-01-01T00:00:00.000Z" }],
+    });
+    const retry = prepareRetry(ws, "c1");
+    assert.equal("error" in retry, false);
+    if ("error" in retry) return;
+    assert.equal(retry.text, "Question");
+    assert.equal(retry.chat.messages.length, 1);
+  });
+
+  it("keeps a failed provider reply retryable and does not store it", async () => {
+    const result = await consumeMindTurn({
+      url: "/api/mind/turn",
+      body: {},
+      headers: {},
+      signal: new AbortController().signal,
+      onDelta: () => undefined,
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('event: error\ndata: {"error":"Grok returned 503. Nothing was saved as a success."}\n\n'));
+              controller.close();
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+    });
+    assert.equal(shouldStoreReply(result), false);
+    if (!result.ok) assert.match(result.error, /503/);
+  });
+
+  it("stops a hanging stream when the browser aborts and does not store it", async () => {
+    const controller = new AbortController();
+    const seen: string[] = [];
+    const pending = consumeMindTurn({
+      url: "/api/mind/turn",
+      body: {},
+      headers: {},
+      signal: controller.signal,
+      onDelta: (text) => {
+        seen.push(text);
+        controller.abort();
+      },
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(streamController) {
+              streamController.enqueue(new TextEncoder().encode('event: delta\ndata: {"text":"Part"}\n\n'));
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+    });
+    const result = await pending;
+    assert.deepEqual(seen, ["Part"]);
+    assert.equal(result.ok, false);
+    assert.equal(shouldStoreReply(result), false);
+    if (!result.ok) assert.equal(result.error, STOPPED_REPLY);
   });
 });

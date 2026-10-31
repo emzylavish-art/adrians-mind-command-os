@@ -1,5 +1,7 @@
 export type ReqStatus = "verified" | "implemented" | "blocked" | "planned" | "deferred";
 
+/** Inventory of this repository. The original blueprint files are not here, so this list is not a certified copy of that blueprint. */
+
 export type Requirement = {
   id: string;
   text: string;
@@ -147,6 +149,12 @@ export const REQUIREMENTS: Requirement[] = [
     note: "prepareRetry resends the last user message only.",
   },
   {
+    id: "R-CHAT-STOP",
+    text: "Stop this reply aborts the provider request and does not save the unfinished answer.",
+    status: "verified",
+    note: "Mocked relay and client tests. Stopping one reply is not Emergency stop. A real provider may still charge for tokens generated before it sees the abort.",
+  },
+  {
     id: "R-CHAT-EXPORT",
     text: "One conversation can be exported as JSON.",
     status: "verified",
@@ -191,8 +199,8 @@ export const REQUIREMENTS: Requirement[] = [
   {
     id: "R-AGENT-PLAN",
     text: "A model that plans multi-step work.",
-    status: "blocked",
-    note: "Only the approved local lookup runs. It does not ask a model to plan.",
+    status: "planned",
+    note: "Not implemented. The integrations list names this separately from local workspace lookup. No model plans a sequence of tools.",
   },
   {
     id: "R-ZAPIA",

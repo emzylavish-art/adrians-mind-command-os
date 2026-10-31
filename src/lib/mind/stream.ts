@@ -61,7 +61,8 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 export type MindClientEvent =
   | { event: "delta"; text: string }
   | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null }
-  | { event: "error"; error: string };
+  | { event: "error"; error: string }
+  | { event: "canceled"; error: string };
 
 export function pullMindEvents(buffer: string): { events: MindClientEvent[]; rest: string } {
   const complete = buffer.endsWith("\n\n");
@@ -88,6 +89,7 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
     const record = parsed as Record<string, unknown>;
     if (name === "delta" && typeof record.text === "string") events.push({ event: "delta", text: record.text });
     else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error });
+    else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error });
     else if (name === "done" && typeof record.text === "string") {
       events.push({
         event: "done",

@@ -28,9 +28,9 @@ import {
 } from "lucide-react";
 import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
-import { CAPABILITIES, type CapabilityStatus } from "@/lib/mind/registry";
+import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { consumeMindTurn } from "@/lib/mind/live-turn";
+import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { mindStatus, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { MessageBody } from "@/components/mind/message-body";
@@ -119,12 +119,14 @@ const TITLES: Record<View, string> = {
 };
 
 function statusWord(status: CapabilityStatus) {
-  if (status === "ready" || status === "configured") return "Ready";
+  if (status === "live_verified") return "Live verified";
+  if (status === "ready") return "Ready";
+  if (status === "configured") return "Configured";
   if (status === "blocked") return "Blocked";
   if (status === "unconfigured") return "Not configured";
-  if (status === "local_required") return "Needs this computer";
+  if (status === "local_required") return "Local only";
   if (status === "paid_required") return "Paid, not called";
-  return "Planned";
+  return "Not implemented";
 }
 
 function humanAction(action: string) {
@@ -183,6 +185,7 @@ export function CommandApp() {
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
+  const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [grok, setGrok] = useState("Checking");
@@ -366,6 +369,8 @@ export function CommandApp() {
     setBusy(true);
     setLiveText("");
     setError(null);
+    turnAbort.current?.abort();
+    const generation = ++turnGen.current;
     const controller = new AbortController();
     turnAbort.current = controller;
     const timeout = AbortSignal.timeout(30_000);
@@ -388,13 +393,17 @@ export function CommandApp() {
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
         },
-        onDelta: (chunk) => setLiveText((current) => current + chunk),
+        onDelta: (chunk) => {
+          if (generation !== turnGen.current) return;
+          setLiveText((current) => current + chunk);
+        },
       });
+      if (generation !== turnGen.current) return;
       setBusy(false);
       setLiveText("");
-      turnAbort.current = null;
-      if (!result.ok) {
-        setError(result.error);
+      if (turnAbort.current === controller) turnAbort.current = null;
+      if (!shouldStoreReply(result)) {
+        setError(result.ok ? "Grok returned an empty reply." : result.error);
         return;
       }
       setWs((prev) => {
@@ -435,9 +444,10 @@ export function CommandApp() {
         );
       });
     } catch (caught) {
+      if (generation !== turnGen.current) return;
       setBusy(false);
       setLiveText("");
-      turnAbort.current = null;
+      if (turnAbort.current === controller) turnAbort.current = null;
       setError(caught instanceof Error && caught.message === "Unauthorized" ? "Sign in is required." : caught instanceof Error ? caught.message : "Grok could not be reached.");
     }
   }
@@ -1587,11 +1597,11 @@ export function CommandApp() {
               <div className="masthead">
                 <h2 className="font-display text-3xl font-bold">Integrations</h2>
                 <p className="text-sm text-muted">{system}</p>
-                <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. A green label means it was actually verified. Others stay unavailable.</p>
+                <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {CAPABILITIES.map((item) => {
-                  const live = item.status === "configured" || item.status === "ready";
+                  const live = isVerifiedCapability(item.status);
                   return (
                     <article key={item.id} className="glow-card rounded-panel border border-line bg-surface p-4">
                       <div className="flex items-center justify-between gap-3">
@@ -1657,7 +1667,8 @@ export function CommandApp() {
                   <li>Research has no search provider. The check refuses, does not call Grok, and creates no citations.</li>
                   <li>Agents can run REA doctor. They are not a running task runner. Nothing is marked Running unless it is.</li>
                   <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
-                  <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart. The embedded database does not, unless a dedicated database URL is set. That is not cloud backup.</li>
+                  <li>Stop this reply cancels only the current answer. It is not Emergency stop. The unfinished answer is not saved. The provider may still charge for text it generated before it saw the cancel.</li>
+                  <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart on this machine. It is not durable on a serverless disk. The embedded database resets when the process restarts unless a dedicated database URL is set. That is not cloud backup.</li>
                   <li>Replies appear as Grok writes them. A stopped, empty, or broken reply is not saved.</li>
                   <li>If this browser and the server both already have a copy, this page keeps the browser copy until you choose to replace the server copy.</li>
                   <li>Grok, voice, REA, and saving a server copy require a signed-in owner. A refused sign-in does not spend the model.</li>
@@ -1959,6 +1970,10 @@ function ChatPane({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  useEffect(() => {
+    setRenaming(false);
+    setEditingId(null);
+  }, [active?.id]);
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
