@@ -41,7 +41,7 @@ try {
   }
   const result = await runWorkerPass(toSql(pg), now, `worker-${process.pid}`, new Map());
   await pg.close();
-  const report = { at: now, ...result, hosted: false, note: "One pass against the file database on this machine. This process then exits. It is not a hosted always-on worker." };
+  const report = { at: now, heartbeatAt: now, running: false, mode: "one-shot", ...result, hosted: false, localOnly: true, note: "One pass against the file database on this machine. This process then exits. It is not a hosted always-on worker." };
   mkdirSync(join(root, ".data"), { recursive: true });
   writeFileSync(join(root, ".data", "worker-status.json"), JSON.stringify(report));
   console.log(`Worker pass finished. Owners ${result.owners}. Ran ${result.ran}. Skipped ${result.skipped}. Failed ${result.failed}. This process exits after one pass. It is not a hosted always-on worker.`);

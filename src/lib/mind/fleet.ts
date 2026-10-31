@@ -109,6 +109,9 @@ export type ScheduleJob = {
   timeZone: string;
   clockHour: number | null;
   clockMinute: number | null;
+  leaseWorker: string | null;
+  leaseUntil: string | null;
+  lastStatus: "" | "ran" | "failed";
 };
 
 export type PlanNeed = "none" | "search" | "browser" | "gmail" | "model";
@@ -380,6 +383,9 @@ export function readFleet(input: unknown): FleetShape {
         timeZone: typeof row.timeZone === "string" && row.timeZone ? row.timeZone.slice(0, 80) : "UTC",
         clockHour: typeof row.clockHour === "number" ? Math.min(23, Math.max(0, Math.floor(row.clockHour))) : null,
         clockMinute: typeof row.clockMinute === "number" ? Math.min(59, Math.max(0, Math.floor(row.clockMinute))) : null,
+        leaseWorker: typeof row.leaseWorker === "string" ? row.leaseWorker.slice(0, 80) : null,
+        leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
+        lastStatus: row.lastStatus === "ran" || row.lastStatus === "failed" ? row.lastStatus : "",
       });
     }
   }
@@ -529,8 +535,15 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
     timeZone: clock?.zone ?? "UTC",
     clockHour: hour,
     clockMinute: hour == null ? null : minute,
+    leaseWorker: null,
+    leaseUntil: null,
+    lastStatus: "",
   };
   return { ok: true, ws: { ...ws, schedules: [job, ...ws.schedules] } };
+}
+
+export function setScheduleEnabled(ws: Workspace, id: string, enabled: boolean): Workspace {
+  return { ...ws, schedules: ws.schedules.map((job) => (job.id === id ? { ...job, enabled } : job)) };
 }
 
 export function deployAgent(ws: Workspace, agentId: string, target: "local-worker" | "hosted-worker", now?: string): { ok: true; ws: Workspace } | { ok: false; error: string } {

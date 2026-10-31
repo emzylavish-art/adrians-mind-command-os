@@ -5,6 +5,7 @@ import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
+import { interpretWorkerHealth } from "./worker-health";
 
 const MODEL = "grok-4.5";
 
@@ -64,6 +65,17 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     providers: configuredProviders(process.env),
     checkedAt,
   };
+});
+
+export const workerHealth = createServerFn({ method: "GET" }).handler(async () => {
+  const { readFileSync } = await import("node:fs");
+  let file = null;
+  try {
+    file = JSON.parse(readFileSync(".data/worker-status.json", "utf8")) as { running?: boolean; heartbeatAt?: string };
+  } catch {
+    file = null;
+  }
+  return interpretWorkerHealth(file, Date.now(), 90_000);
 });
 
 export const searchWeb = createServerFn({ method: "POST" })

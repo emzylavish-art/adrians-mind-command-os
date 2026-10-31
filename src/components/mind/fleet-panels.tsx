@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { inspectWebPage } from "@/lib/mind/server";
+import { useEffect, useState } from "react";
+import { inspectWebPage, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -8,6 +8,7 @@ import {
   addCustomAgent,
   addMailbox,
   addSchedule,
+  setScheduleEnabled,
   approveRunAction,
   cancelRun,
   deployAgent,
@@ -43,12 +44,20 @@ export function FleetPanel({
   const [jobName, setJobName] = useState("");
   const [jobZone, setJobZone] = useState("America/Chicago");
   const [jobHour, setJobHour] = useState("");
+  const [workerNote, setWorkerNote] = useState("Checking the worker.");
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
   const active = ws.agents.find((agent) => agent.id === agentId && !agent.archived) ?? ws.agents.find((agent) => !agent.archived) ?? null;
+
+  useEffect(() => {
+    if (mode !== "scheduled") return;
+    void workerHealth()
+      .then((health) => setWorkerNote(health.detail))
+      .catch(() => setWorkerNote("Worker status could not be read. Nothing is reported as online."));
+  }, [mode]);
 
   function apply(result: { ok: true; ws: Workspace } | { ok: false; error: string }) {
     if (!result.ok) {
@@ -229,7 +238,8 @@ export function FleetPanel({
     return (
       <section className="p-4 md:p-6">
         <h2 className="font-display text-3xl font-bold">Scheduled tasks</h2>
-        <p className="text-sm text-muted">Run due schedules queues work on this device. A worker pass reads the database, then the process exits. No hosted worker is left running.</p>
+        <p className="text-sm text-muted">{workerNote} This database is local. It is not hosted scheduling.</p>
+        <p className="mt-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={jobZone} onChange={(event) => setJobZone(event.target.value)} placeholder="America/Chicago" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
@@ -251,7 +261,8 @@ export function FleetPanel({
           {ws.schedules.map((job) => (
             <li key={job.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
-              <p className="text-xs text-muted">{job.timeZone || "UTC"}{job.clockHour == null ? ` · every ${job.intervalMinutes} minutes` : ` · ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")}`} · next {job.nextRunAt} · {job.lastError || "No error. A hosted worker is not running."}</p>
+              <p className="text-xs text-muted">{job.enabled ? "On" : "Off"} · {job.timeZone || "UTC"}{job.clockHour == null ? ` · every ${job.intervalMinutes} minutes` : ` · ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")}`} · next {job.nextRunAt} · last {job.lastRunAt ?? "never"} · {job.lastStatus || "no run"} · {job.lastError || "No error"}</p>
+              <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
             </li>
           ))}
         </ul>
