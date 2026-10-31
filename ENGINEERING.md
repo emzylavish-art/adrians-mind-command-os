@@ -64,3 +64,10 @@ A turn body may name a provider. An omitted name stays Grok 4.5. GPT, Claude, Ge
 
 Spawned agents were not used for these edits so they would not write the same files at once. REA doctor remains unhealthy and was not treated as a passing inspection.
 
+## Workspace shell and local worker after 3d38813
+
+The navigation now includes Runs, Library, Connected, Tools, and Scheduled. Agent templates, a local `tickFleet` worker, schedule queueing, secret-free connection records, and not-connected mailbox records are in the browser snapshot. Hosted deploy only records `external-required`. `scripts/mind-worker.mjs` exits 2 when `DATABASE_URL` is unset.
+
+REA doctor was run again: package 6.8.0, healthy false, Node 22.23.3, native engines missing, Grok Build registration missing. No target site was inspected on port 9222. Chromium opened one local HTML document through `scripts/mind-browser.mjs`. The product Open page button was not clicked. No model, search, image, or video credit was spent.
+
+

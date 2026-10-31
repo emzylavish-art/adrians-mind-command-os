@@ -215,6 +215,42 @@ export const REQUIREMENTS: Requirement[] = [
     note: "runBoundedAgent with a fake model. Tools are list_projects, list_chats, and search_notes. A live Grok tool call was not spent.",
   },
   {
+    id: "R-FLEET-WORKER",
+    text: "A local worker executes queued agent steps and records events.",
+    status: "verified",
+    note: "tickFleet tests cover local reads, cancellation, pause, leases, and delegation. The worker does not call a model.",
+  },
+  {
+    id: "R-FLEET-HOSTED",
+    text: "A hosted worker process runs agent tasks.",
+    status: "blocked",
+    note: "scripts/mind-worker.mjs exits without polling when DATABASE_URL is unset. A hosted record is not a running worker.",
+  },
+  {
+    id: "R-GMAIL-ACCOUNTS",
+    text: "Multiple Gmail accounts can be connected and used.",
+    status: "blocked",
+    note: "Records can be stored and stay not_connected. OAuth is not configured. Sends require approval and still do not send.",
+  },
+  {
+    id: "R-BROWSER-DRIVER",
+    text: "An agent can open a real page in a browser driver.",
+    status: "implemented",
+    note: "mind-browser.mjs opened a local HTML document in headless Chromium. The product button was not used on a public site.",
+  },
+  {
+    id: "R-SCHEDULES",
+    text: "Due schedules queue a run.",
+    status: "verified",
+    note: "runDueSchedules. There is no hosted cron process.",
+  },
+  {
+    id: "R-CONNECTIONS",
+    text: "Provider connections can be recorded without storing secrets.",
+    status: "verified",
+    note: "addConnection keeps secretStored false. Unconfigured providers are not selected for chat.",
+  },
+  {
     id: "R-ZAPIA",
     text: "Zapia / WhatsApp.",
     status: "deferred",

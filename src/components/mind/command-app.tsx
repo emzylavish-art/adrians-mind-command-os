@@ -15,7 +15,6 @@ import {
   MessageSquare,
   Mic,
   Paperclip,
-  Plug,
   Plus,
   Search,
   Send,
@@ -23,6 +22,9 @@ import {
   Shield,
   Square,
   Video,
+  CalendarClock,
+  Link2,
+  ListTree,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -33,7 +35,9 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { mindStatus, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
+import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
+import { haltFleet } from "@/lib/mind/fleet";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { chosenProvider, providerChoices } from "@/lib/mind/providers";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
@@ -59,8 +63,12 @@ type View =
   | "projects"
   | "memory"
   | "agents"
+  | "runs"
   | "research"
   | "files"
+  | "connected"
+  | "tools"
+  | "scheduled"
   | "integrations"
   | "activity"
   | "settings";
@@ -93,25 +101,32 @@ type Staged = { name: string; text: string };
 
 const NAV: { id: View; label: string; icon: typeof Home }[] = [
   { id: "command", label: "Command", icon: Home },
-  { id: "chat", label: "AI Chat", icon: MessageSquare },
-  { id: "projects", label: "Projects", icon: Folder },
-  { id: "memory", label: "Memory", icon: Database },
+  { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "agents", label: "Agents", icon: Bot },
+  { id: "runs", label: "Runs", icon: ListTree },
+  { id: "projects", label: "Projects", icon: Folder },
   { id: "research", label: "Research", icon: Search },
-  { id: "files", label: "Files", icon: FileText },
-  { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "files", label: "Library", icon: FileText },
+  { id: "connected", label: "Connected", icon: Link2 },
+  { id: "tools", label: "Tools", icon: Wrench },
+  { id: "scheduled", label: "Scheduled", icon: CalendarClock },
+  { id: "memory", label: "Memory", icon: Database },
   { id: "activity", label: "Activity", icon: Activity },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
 const TITLES: Record<View, string> = {
   command: "Command",
-  chat: "AI Chat",
+  chat: "Chat",
   projects: "Projects",
   memory: "Memory",
   agents: "Agents",
+  runs: "Agent runs",
   research: "Research",
-  files: "Files",
+  files: "Library",
+  connected: "Connected apps",
+  tools: "Tools",
+  scheduled: "Scheduled tasks",
   integrations: "Integrations",
   activity: "Activity",
   settings: "Settings",
@@ -759,10 +774,13 @@ export function CommandApp() {
         setError(result.error);
         return;
       }
-      setWs((prev) => pushAudit({ ...prev, halted: result.halted }, "emergency_stop", "session", result.halted ? "on" : "cleared"));
+      setWs((prev) => {
+        const updated = pushAudit({ ...prev, halted: result.halted }, "emergency_stop", "session", result.halted ? "on" : "cleared");
+        return result.halted ? haltFleet(updated) : updated;
+      });
     } catch {
       setError("The server did not confirm the stop. Sends stay blocked in this browser.");
-      if (next) setWs((prev) => pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "browser only"));
+      if (next) setWs((prev) => haltFleet(pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "browser only")));
     }
   }
   function explain(text: string) {
@@ -1630,8 +1648,13 @@ export function CommandApp() {
                 </ol>
               )}
             </form>
+            <FleetPanel mode="agents" ws={ws} setWs={setWs} />
             </>
           )}
+          {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
+          {view === "connected" && <FleetPanel mode="connected" ws={ws} setWs={setWs} />}
+          {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
+          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
           {view === "research" && (
             <section className="p-4 md:p-6">
               <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
@@ -1668,7 +1691,7 @@ export function CommandApp() {
             <section className="p-4 md:p-6">
               <div className="masthead flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-3xl font-bold">Files</h2>
+                  <h2 className="font-display text-3xl font-bold">Library</h2>
                   <p className="text-sm text-muted">Text you attach stays in this browser. Inspect sends that text to REA. Nothing is uploaded to a file host.</p>
                 </div>
                 <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>

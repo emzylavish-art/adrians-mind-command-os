@@ -1,3 +1,4 @@
+import { emptyFleet, readFleet } from "./fleet.ts";
 import type {
   AuditEntry,
   Autonomy,
@@ -15,7 +16,7 @@ export const WORKSPACE_KEY = "amcos.workspace.v1";
 const LEGACY_KEY = "amcos.chats.v1";
 
 export function emptyWorkspace(): Workspace {
-  return { version: 1, halted: false, chats: [], memories: [], projects: [], files: [], usage: [], audit: [] };
+  return { version: 1, halted: false, chats: [], memories: [], projects: [], files: [], usage: [], audit: [], ...emptyFleet() };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -115,7 +116,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
       });
     }
   }
-  return base;
+  return { ...base, ...readFleet(input) };
 }
 
 function normalizeChat(row: unknown): Chat | null {
@@ -325,6 +326,15 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
     files: merge(current.files, incoming.files),
     usage: merge(current.usage, incoming.usage),
     audit: merge(current.audit, incoming.audit),
+    agents: merge(current.agents, incoming.agents),
+    deployments: merge(current.deployments, incoming.deployments),
+    runs: merge(current.runs, incoming.runs),
+    runEvents: merge(current.runEvents, incoming.runEvents),
+    connections: merge(current.connections, incoming.connections),
+    mailboxes: merge(current.mailboxes, incoming.mailboxes),
+    schedules: merge(current.schedules, incoming.schedules),
+    pins: merge(current.pins, incoming.pins),
+    browserSessions: merge(current.browserSessions, incoming.browserSessions),
   };
 }
 

@@ -105,6 +105,30 @@ export const CAPABILITIES: Capability[] = [
     why: "Bounded to three local reads: projects, chats, and notes. Fake-model tests cover success, bad arguments, denial, timeout, cancellation, tool failure, and the step limit. A live Grok tool call was not verified. It cannot use a shell, the network, or files.",
   },
   {
+    id: "agents.worker",
+    name: "Local agent worker",
+    status: "ready",
+    why: "Run worker once executes queued local reads and records events. It does not call a model. Tests cover approval, cancellation, leases, and one-level delegation.",
+  },
+  {
+    id: "agents.hosted",
+    name: "Hosted agent worker",
+    status: "blocked",
+    why: "No hosted worker is provisioned. Recording a hosted target does not start a remote process.",
+  },
+  {
+    id: "browser.inspect",
+    name: "Page inspect",
+    status: "configured",
+    why: "Open page can launch the local headless browser for an http(s) URL. The automated driver check used a local HTML document, not a public website, and the product button was not clicked.",
+  },
+  {
+    id: "gmail",
+    name: "Gmail",
+    status: "unconfigured",
+    why: "Mailbox records stay not connected. Google OAuth is not configured. Nothing is read or sent.",
+  },
+  {
     id: "image",
     name: "Image studio",
     status: "paid_required",

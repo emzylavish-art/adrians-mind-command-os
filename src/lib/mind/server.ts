@@ -81,6 +81,35 @@ export const searchWeb = createServerFn({ method: "POST" })
     });
   });
 
+export const inspectWebPage = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { url: string }) => ({ url: typeof input.url === "string" ? input.url.slice(0, 300) : "" }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, title: "", excerpt: "", error: "Emergency stop is on. No page was opened." };
+    }
+    if (!allowMindRequest("browser", context.userId, 6)) {
+      return { ok: false as const, title: "", excerpt: "", error: "Too many page opens. Wait a minute." };
+    }
+    if (!/^https?:\/\/\S+$/i.test(data.url) || data.url.includes("@")) {
+      return { ok: false as const, title: "", excerpt: "", error: "Only an http(s) page without credentials can be opened. No page was opened." };
+    }
+    const { spawnSync } = await import("node:child_process");
+    const result = spawnSync(process.execPath, ["scripts/mind-browser.mjs", data.url], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 20_000,
+    });
+    try {
+      const payload = JSON.parse(result.stdout || "") as { ok?: boolean; title?: string; excerpt?: string; error?: string };
+      if (!payload.ok) return { ok: false as const, title: "", excerpt: "", error: payload.error || "The page did not open." };
+      return { ok: true as const, title: payload.title ?? "", excerpt: (payload.excerpt ?? "").slice(0, 500), error: "" };
+    } catch {
+      return { ok: false as const, title: "", excerpt: "", error: "The browser driver did not return a page. No screenshot was invented." };
+    }
+  });
+
 export const sendTurn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: {

@@ -1,3 +1,17 @@
+import type {
+  AgentDefinition,
+  AgentRun,
+  BrowserSessionRecord,
+  DeploymentRecord,
+  FleetPin,
+  MailboxAccount,
+  ProviderConnection,
+  RunEvent,
+  ScheduleJob,
+} from "./fleet";
+
+export type { AgentDefinition, AgentRun, BrowserSessionRecord, DeploymentRecord, FleetPin, MailboxAccount, ProviderConnection, RunEvent, ScheduleJob };
+
 export type Autonomy = "ask" | "automatic";
 
 export type Msg = {
@@ -82,6 +96,15 @@ export type Workspace = {
   files: LocalFile[];
   usage: UsageEntry[];
   audit: AuditEntry[];
+  agents: AgentDefinition[];
+  deployments: DeploymentRecord[];
+  runs: AgentRun[];
+  runEvents: RunEvent[];
+  connections: ProviderConnection[];
+  mailboxes: MailboxAccount[];
+  schedules: ScheduleJob[];
+  pins: FleetPin[];
+  browserSessions: BrowserSessionRecord[];
 };
 
 export type MemoryNote = { id: string; text: string };

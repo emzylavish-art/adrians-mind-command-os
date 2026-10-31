@@ -13,7 +13,7 @@ test("protected mind operations require the owner on the server", () => {
   const server = readFileSync(new URL("../src/lib/mind/server.ts", import.meta.url), "utf8");
   const rea = readFileSync(new URL("../src/lib/mind/rea.ts", import.meta.url), "utf8");
   const turn = readFileSync(new URL("../src/lib/mind/turn.server.ts", import.meta.url), "utf8");
-  for (const name of ["sendTurn", "setExecutionHalt", "saveMindCopy", "loadMindCopy", "speakText", "searchWeb"]) {
+  for (const name of ["sendTurn", "setExecutionHalt", "saveMindCopy", "loadMindCopy", "speakText", "searchWeb", "inspectWebPage"]) {
     assert.match(sliceExport(server, name), /\.middleware\(\[authMiddleware\]\)/);
   }
   assert.doesNotMatch(sliceExport(server, "mindStatus", "searchWeb"), /authMiddleware/);
