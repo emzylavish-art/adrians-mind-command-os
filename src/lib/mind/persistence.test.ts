@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { describePersistence } from "./persistence.ts";
+import { databaseMode, describePersistence, hostedDatabaseSetup } from "./persistence.ts";
 
 describe("persistence", () => {
   it("does not treat a missing database as durable or cloud backup", () => {
@@ -26,5 +26,16 @@ describe("persistence", () => {
     const described = describePersistence("postgres://ybxowvzicirinpdcfyqe");
     assert.equal(described.backend, "refused");
     assert.equal(described.cloudBackup, false);
+  });
+
+  it("names the local file mode and the variables a future host needs", () => {
+    assert.equal(databaseMode("memory").pill, "Local file");
+    assert.match(databaseMode("postgres").detail, /No restart test/);
+    assert.equal(databaseMode("refused").pill, "Refused");
+    const setup = hostedDatabaseSetup();
+    assert.deepEqual(setup.variables, ["DATABASE_URL"]);
+    assert.equal(setup.migrate, "npm run db:migrate");
+    assert.equal(setup.forbidden.includes("ybxowvzicirinpdcfyqe"), true);
+    assert.equal(setup.forbidden.includes("espmxiitzucooxblmnpr"), true);
   });
 });

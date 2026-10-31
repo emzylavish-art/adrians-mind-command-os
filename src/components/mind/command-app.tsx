@@ -48,6 +48,7 @@ import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { relevantMemories } from "@/lib/mind/memory";
+import { databaseMode } from "@/lib/mind/persistence";
 import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
@@ -250,6 +251,8 @@ export function CommandApp() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [grok, setGrok] = useState("Checking");
+  const [databasePill, setDatabasePill] = useState("Checking");
+  const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
@@ -319,6 +322,9 @@ export function CommandApp() {
       .then((status) => {
         setGrokConfigured(status.grok === "configured");
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
+        const mode = databaseMode(status.databaseBackend === "postgres" || status.databaseBackend === "refused" ? status.databaseBackend : "memory");
+        setDatabasePill(mode.pill);
+        setDatabaseDetail(mode.detail);
         setSystem(status.database);
         setCheckedAt(status.checkedAt);
         if (status.executionHalted && !clearedStop.current) {
@@ -327,6 +333,8 @@ export function CommandApp() {
       })
       .catch(() => {
         setGrok("Unavailable");
+        setDatabasePill("Unknown");
+        setDatabaseDetail("The status check did not finish.");
         setSystem("The status check did not finish.");
       });
     notionStatus()
@@ -1110,7 +1118,25 @@ export function CommandApp() {
     const result = await speakText({ data: { text } });
     setSpeaking(false);
     if (!result.ok) {
-      setError(result.error);
+      if (!result.error.includes("No speech key")) {
+        setError(result.error);
+        return;
+      }
+      const synth = window.speechSynthesis;
+      if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
+        setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
+        return;
+      }
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.onend = () => setSpeaking(false);
+      utter.onerror = () => {
+        setSpeaking(false);
+        setError("Browser speech failed. Nothing was spoken.");
+      };
+      setSpeaking(true);
+      synth.cancel();
+      synth.speak(utter);
+      setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
       return;
     }
     const binary = Uint8Array.from(atob(result.audio), (char) => char.charCodeAt(0));
@@ -1648,7 +1674,8 @@ export function CommandApp() {
                 </Panel>
                 <Panel title="System Status" action="Details" onAction={() => setView("integrations")}>
                   <StatusRow icon={Database} name="Memory" detail={memoryChoice === "on" ? "On for the next command" : "Off for the next command"} pill={memoryChoice === "on" ? "On" : "Off"} tone={memoryChoice === "on" ? "ok" : "muted"} />
-                  <StatusRow icon={Database} name="Database" detail="Dedicated database required" pill="Not connected" tone="danger" />
+                  <StatusRow icon={Database} name="Database" detail={databaseDetail} pill={databasePill} tone={databasePill === "Refused" ? "danger" : "muted"} />
+                  <StatusRow icon={Bot} name="Voice" detail="Browser speech when this browser has it. Not a realtime voice session. Nothing is spoken until you press speak." pill="Not realtime" tone="muted" />
                   <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
                   <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>

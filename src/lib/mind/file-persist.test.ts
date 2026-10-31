@@ -95,7 +95,45 @@ describe("file database", () => {
         audit: [{ id: "done", at: "2026-04-01T12:02:00.000Z", action: "agent_turn", target: "run_due_schedules", result: "chat completed" }, ...loaded.audit],
       };
       assert.equal(safeToResume(done.audit, "run_due_schedules", "2026-04-01T12:01:00.000Z"), false);
+      const noteBefore = loaded.memories.map((item) => item.text).join("\n");
+      const later = applyAgentTurn(loaded, {
+        chatId: "chat-2",
+        text: "What is the pier depth?",
+        modality: "voice",
+        tools: [projects],
+        toolId: "list_projects",
+        now: "2026-04-01T13:00:00.000Z",
+        memories: loaded.memories,
+        complete: (prompt) => {
+          assert.match(prompt, /14 feet/);
+          assert.doesNotMatch(prompt, /12 feet/);
+          return { ok: true, text: "The saved note says the pier depth is 14 feet." };
+        },
+      });
+      assert.equal(later.ws.memories.map((item) => item.text).join("\n"), noteBefore);
+      const forgotten = { ...later.ws, memories: later.ws.memories.map((item) => ({ ...item, archived: true })) };
+      const afterDelete = applyAgentTurn(forgotten, {
+        chatId: "chat-3",
+        text: "What is the pier depth?",
+        modality: "chat",
+        tools: [projects],
+        toolId: "list_projects",
+        now: "2026-04-01T13:05:00.000Z",
+        memories: forgotten.memories,
+        complete: (prompt) => {
+          assert.doesNotMatch(prompt, /Remembered/);
+          return { ok: true, text: "No saved note was used." };
+        },
+      });
+      assert.equal(afterDelete.ws.memories[0]?.archived, true);
+      await writeSnapshot(toSql(second), "owner-a", afterDelete.ws);
       await second.close();
+      const third = await openDatabase(dir);
+      const again = normalizeWorkspace(await readSnapshot(toSql(third), "owner-a"));
+      assert.equal(again.chats.find((chat) => chat.id === "chat-2")?.messages.at(-1)?.content, "The saved note says the pier depth is 14 feet.");
+      assert.equal(again.memories[0]?.archived, true);
+      assert.equal(await readSnapshot(toSql(third), "owner-b"), null);
+      await third.close();
       assert.equal(voiceProviderStatus(undefined).realtime, false);
       assert.match(voiceProviderStatus(undefined).output, /Nothing is spoken/);
     } finally {
