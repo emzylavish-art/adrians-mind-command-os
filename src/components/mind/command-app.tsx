@@ -1,0 +1,1879 @@
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Activity,
+  Bell,
+  Bot,
+  Database,
+  FileText,
+  Folder,
+  Home,
+  Image,
+  Lock,
+  MessageSquare,
+  Mic,
+  Paperclip,
+  Plug,
+  Plus,
+  Search,
+  Send,
+  Settings,
+  Shield,
+  Square,
+  Video,
+  Wrench,
+  Zap,
+} from "lucide-react";
+import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
+import { reaDoctor, reaInspect } from "@/lib/mind/rea";
+import { CAPABILITIES, type CapabilityStatus } from "@/lib/mind/registry";
+import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
+import { mindStatus, sendTurn, speakText } from "@/lib/mind/server";
+import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
+import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import {
+  addLocalFile,
+  addMemory,
+  addProject,
+  createChat,
+  memoriesForChat,
+  mergeWorkspace,
+  packWorkspace,
+  pushAudit,
+  pushUsage,
+  reviseMemory,
+  unpackWorkspace,
+} from "@/lib/mind/workspace";
+
+type View =
+  | "command"
+  | "chat"
+  | "projects"
+  | "memory"
+  | "agents"
+  | "research"
+  | "files"
+  | "integrations"
+  | "activity"
+  | "settings";
+
+type Pending = {
+  id: string;
+  kind: string;
+  label: string;
+  detail: string;
+  confirm: string;
+  run: () => void;
+};
+
+const EXTERNAL = [
+  {
+    name: "Oak Bridge Capital",
+    detail: "Separate product. This app does not open, edit, or store it.",
+    tone: "bg-warn/15 text-warn",
+    mark: "OB",
+  },
+  {
+    name: "BridgePoint",
+    detail: "Separate product. This app does not open, edit, or store it.",
+    tone: "bg-info/15 text-info",
+    mark: "BP",
+  },
+];
+
+type Staged = { name: string; text: string };
+
+const NAV: { id: View; label: string; icon: typeof Home }[] = [
+  { id: "command", label: "Command", icon: Home },
+  { id: "chat", label: "AI Chat", icon: MessageSquare },
+  { id: "projects", label: "Projects", icon: Folder },
+  { id: "memory", label: "Memory", icon: Database },
+  { id: "agents", label: "Agents", icon: Bot },
+  { id: "research", label: "Research", icon: Search },
+  { id: "files", label: "Files", icon: FileText },
+  { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "activity", label: "Activity", icon: Activity },
+  { id: "settings", label: "Settings", icon: Settings },
+];
+
+const TITLES: Record<View, string> = {
+  command: "Command",
+  chat: "AI Chat",
+  projects: "Projects",
+  memory: "Memory",
+  agents: "Agents",
+  research: "Research",
+  files: "Files",
+  integrations: "Integrations",
+  activity: "Activity",
+  settings: "Settings",
+};
+
+function statusWord(status: CapabilityStatus) {
+  if (status === "ready" || status === "configured") return "Ready";
+  if (status === "blocked") return "Blocked";
+  if (status === "unconfigured") return "Not configured";
+  if (status === "local_required") return "Needs this computer";
+  if (status === "paid_required") return "Paid, not called";
+  return "Planned";
+}
+
+function humanAction(action: string) {
+  const map: Record<string, string> = {
+    create_chat: "New session started",
+    memory_off: "Memory turned off",
+    memory_on: "Memory turned on",
+    save_memory: "Note saved",
+    delete_chat: "Chat deleted",
+    export: "Archive exported",
+    emergency_stop: "Emergency stop changed",
+    import_merge: "Archive merged",
+    import_replace: "Archive replaced",
+    delete_project: "Project deleted",
+    delete_memory: "Note deleted",
+    delete_file: "File deleted",
+    create_project: "Project created",
+    archive_memory: "Note archived",
+    message_sent: "Grok replied",
+    rea_doctor: "REA doctor ran",
+    rea_inspect: "REA inspected a file",
+  };
+  return map[action] ?? action;
+}
+
+function greeting(date: Date) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function stamp(iso: string) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function CommandApp() {
+  const { ws, setWs } = useMindWorkspace();
+  const [view, setView] = useState<View>("command");
+  const [query, setQuery] = useState("");
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [grok, setGrok] = useState("Checking");
+  const [system, setSystem] = useState("Checking isolation.");
+  const [checkedAt, setCheckedAt] = useState("");
+  const [memoryChoice, setMemoryChoice] = useState<"off" | "on">("off");
+  const [autonomy, setAutonomy] = useState<Autonomy>("ask");
+  const [temporary, setTemporary] = useState(false);
+  const [projectChoice, setProjectChoice] = useState("");
+  const [memoryText, setMemoryText] = useState("");
+  const [memoryScope, setMemoryScope] = useState<MemoryScope>("global");
+  const [memoryProject, setMemoryProject] = useState("");
+  const [memoryQuery, setMemoryQuery] = useState("");
+  const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
+  const [researchText, setResearchText] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [armMemory, setArmMemory] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [projectAbout, setProjectAbout] = useState("");
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [includeTemporary, setIncludeTemporary] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; chats: number; memories: number; projects: number } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [staged, setStaged] = useState<Staged | null>(null);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+  const [reaBusy, setReaBusy] = useState(false);
+  const [reaReport, setReaReport] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const inspectNext = useRef<View | null>(null);
+  const counts = requirementCounts();
+  const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
+  const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
+  const search = query.trim().toLowerCase();
+
+  useEffect(() => {
+    mindStatus()
+      .then((status) => {
+        setGrok(status.grok === "configured" ? "Ready" : status.grok === "down" ? "Refused" : "Unavailable");
+        setSystem(status.database);
+        setCheckedAt(status.checkedAt);
+      })
+      .catch(() => {
+        setGrok("Unavailable");
+        setSystem("The status check did not finish.");
+      });
+  }, []);
+
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const id = window.setInterval(tick, 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const hits = useMemo(() => {
+    if (!search) return [];
+    const rows: { key: string; label: string; meta: string; open: () => void }[] = [];
+    for (const project of ws.projects) {
+      if (`${project.name} ${project.description}`.toLowerCase().includes(search)) {
+        rows.push({ key: project.id, label: project.name, meta: "Project", open: () => setView("projects") });
+      }
+    }
+    for (const chat of ws.chats) {
+      const blob = `${chat.title} ${chat.messages.map((msg) => msg.content).join(" ")}`.toLowerCase();
+      if (blob.includes(search)) {
+        rows.push({
+          key: chat.id,
+          label: chat.title,
+          meta: "Chat",
+          open: () => {
+            setActiveId(chat.id);
+            setView("chat");
+          },
+        });
+      }
+    }
+    for (const note of ws.memories) {
+      if (!note.archived && note.text.toLowerCase().includes(search)) {
+        rows.push({ key: note.id, label: note.text.slice(0, 80), meta: "Note", open: () => setView("memory") });
+      }
+    }
+    for (const file of ws.files) {
+      if (`${file.name} ${file.text}`.toLowerCase().includes(search)) {
+        rows.push({ key: file.id, label: file.name, meta: "File", open: () => setView("files") });
+      }
+    }
+    return rows.slice(0, 12);
+  }, [search, ws]);
+
+  function closeMenus() {
+    setBellOpen(false);
+    setAccountOpen(false);
+    setContextOpen(false);
+    setToolsOpen(false);
+  }
+
+  function requestProtected(kind: string, id: string, label: string, detail: string, confirm: string, run: () => void) {
+    const decision = decide({
+      autonomy: active?.autonomy ?? autonomy,
+      kind,
+      halted: ws.halted,
+      approvalToken: null,
+      expectedToken: approvalTokenFor(id),
+    });
+    if (decision.decision === "deny") {
+      setError(decision.reason);
+      return;
+    }
+    setPending({ id, kind, label, detail, confirm, run });
+  }
+
+  function confirmPending() {
+    if (!pending) return;
+    const decision = decide({
+      autonomy: active?.autonomy ?? autonomy,
+      kind: pending.kind,
+      halted: ws.halted,
+      approvalToken: approvalTokenFor(pending.id),
+      expectedToken: approvalTokenFor(pending.id),
+    });
+    if (decision.decision !== "allow") {
+      setError(decision.reason);
+      setPending(null);
+      return;
+    }
+    pending.run();
+    setPending(null);
+  }
+
+  async function deliver(chat: Chat, text: string, source: Workspace) {
+    const title = chat.messages.length === 0 ? text.replace(/\s+/g, " ").slice(0, 48) : chat.title;
+    const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
+    setWs((prev) => ({
+      ...prev,
+      chats: prev.chats.map((item) =>
+        item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
+      ),
+    }));
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await sendTurn({
+        data: {
+          text,
+          memory: chat.memory,
+          halted: source.halted,
+          history: chat.messages.slice(-12).map((msg) => ({ role: msg.role, content: msg.content })),
+          memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
+        },
+      });
+      setBusy(false);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setWs((prev) => {
+        const next = {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chat.id
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: result.text,
+                      at: new Date().toISOString(),
+                      model: result.model,
+                    },
+                  ],
+                  retrievalLog: [{ at: new Date().toISOString(), ids: result.usedIds }, ...item.retrievalLog].slice(0, 20),
+                }
+              : item,
+          ),
+        };
+        return pushAudit(
+          pushUsage(next, {
+            id: crypto.randomUUID(),
+            chatId: chat.id,
+            at: new Date().toISOString(),
+            model: result.model,
+            requestId: result.requestId,
+            promptTokens: result.usage?.prompt_tokens ?? null,
+            completionTokens: result.usage?.completion_tokens ?? null,
+          }),
+          "message_sent",
+          chat.id,
+          result.model,
+        );
+      });
+    } catch (caught) {
+      setBusy(false);
+      setError(caught instanceof Error ? caught.message : "Grok could not be reached.");
+    }
+  }
+
+  async function sendCommand() {
+    if (busy || ws.halted) return;
+    const text = draft.trim();
+    if (!text) {
+      setError("Write what you want to work on.");
+      return;
+    }
+    const made = createChat(ws, {
+      memory: memoryChoice,
+      autonomy,
+      temporary,
+      projectId: projectChoice || null,
+    });
+    const file = staged;
+    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
+    const full = `${text}${attached}`.slice(0, 8000);
+    setDraft("");
+    setStaged(null);
+    setActiveId(made.chat.id);
+    setView("chat");
+    setWs((prev) => {
+      let next = { ...prev, chats: [made.chat, ...prev.chats] };
+      if (file) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
+      return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
+    });
+    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] });
+  }
+
+  async function startResearch() {
+    if (busy || ws.halted) return;
+    const text = researchText.trim();
+    if (!text) {
+      setError("Write what you want researched.");
+      return;
+    }
+    const made = createChat(ws, { memory: "off", autonomy: "ask", temporary: false, projectId: projectChoice || null });
+    const full = `Research request. Do not invent citations, sources, or a web search. Say what you cannot verify.\n\n${text}`.slice(0, 8000);
+    setResearchText("");
+    setActiveId(made.chat.id);
+    setView("chat");
+    setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "research; memory off"));
+    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] });
+  }
+
+  async function sendInChat() {
+    if (!active || busy || ws.halted) return;
+    const text = draft.trim();
+    if (!text && !staged) return;
+    const file = staged;
+    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
+    const full = `${text || "Read the attached file."}${attached}`.slice(0, 8000);
+    setDraft("");
+    setStaged(null);
+    if (file) {
+      setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
+    }
+    await deliver(active, full, ws);
+  }
+
+  function enableMemory() {
+    if (armMemory === "composer") {
+      setMemoryChoice("on");
+      setArmMemory(null);
+      return;
+    }
+    if (!armMemory) return;
+    const id = armMemory;
+    setWs((prev) =>
+      pushAudit(
+        { ...prev, chats: prev.chats.map((chat) => (chat.id === id ? { ...chat, memory: "on" } : chat)) },
+        "memory_on",
+        id,
+        "owner enabled retrieval",
+      ),
+    );
+    setArmMemory(null);
+  }
+
+  function saveProject() {
+    const name = projectName.trim();
+    if (!name) {
+      setError("Name the project.");
+      return;
+    }
+    setWs((prev) => {
+      const made = addProject(prev, name, projectAbout);
+      return pushAudit(made.ws, "create_project", made.project.id, made.project.name);
+    });
+    setProjectName("");
+    setProjectAbout("");
+    setProjectOpen(false);
+    setError(null);
+  }
+
+  async function onPicked(file: File) {
+    if (file.size > 400_000) {
+      setError("That file is too large to keep in this browser.");
+      return;
+    }
+    const text = await file.text();
+    if (!text.trim() || text.includes("\u0000")) {
+      setError("Only text files can be read here. Nothing was uploaded.");
+      return;
+    }
+    const stagedFile = { name: file.name, text: text.slice(0, 40000) };
+    setStaged(stagedFile);
+    setError(null);
+    if (inspectNext.current) {
+      const destination = inspectNext.current;
+      inspectNext.current = null;
+      await inspectWithRea(stagedFile, destination);
+      return;
+    }
+    setNotice(`“${file.name}” is staged on this device. Press Send to include it, or Analyze File to run REA.`);
+  }
+
+  async function downloadArchive() {
+    const pack = await packWorkspace(ws, includeTemporary);
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "adrians-mind-archive.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    setWs((prev) => pushAudit(prev, "export", "workspace", pack.sha256.slice(0, 12)));
+  }
+
+  async function onImportFile(file: File) {
+    setImportError(null);
+    const opened = await unpackWorkspace(await file.text());
+    if (!opened.ok) {
+      setImportPreview(null);
+      setImportError(opened.error);
+      return;
+    }
+    setImportPreview({
+      workspace: opened.workspace,
+      chats: opened.counts.chats,
+      memories: opened.counts.memories,
+      projects: opened.counts.projects,
+    });
+  }
+
+  function explain(text: string) {
+    setNotice(text);
+    setError(null);
+  }
+
+  function openChat() {
+    const made = createChat(ws, {
+      memory: memoryChoice,
+      autonomy,
+      temporary,
+      projectId: projectChoice || null,
+    });
+    setWs((prev) =>
+      pushAudit(
+        { ...prev, chats: [made.chat, ...prev.chats] },
+        "create_chat",
+        made.chat.id,
+        `memory ${made.chat.memory}; ${made.chat.autonomy}`,
+      ),
+    );
+    setActiveId(made.chat.id);
+    setView("chat");
+  }
+
+  async function speak(text: string) {
+    setSpeaking(true);
+    setError(null);
+    const result = await speakText({ data: { text } });
+    setSpeaking(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    const binary = Uint8Array.from(atob(result.audio), (char) => char.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([binary], { type: result.mime }));
+    const audio = new Audio(url);
+    audio.onended = () => URL.revokeObjectURL(url);
+    await audio.play().catch(() => setError("The browser blocked playback."));
+  }
+
+  function listen() {
+    const host = window as Window & {
+      SpeechRecognition?: new () => {
+        lang: string;
+        start: () => void;
+        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+      };
+      webkitSpeechRecognition?: new () => {
+        lang: string;
+        start: () => void;
+        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+      };
+    };
+    const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
+    if (!Ctor) {
+      setNotice("This browser cannot take dictation. Press Speak on a reply to hear it.");
+      return;
+    }
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.onresult = (event) => setDraft(event.results[0]?.[0]?.transcript ?? "");
+    rec.start();
+  }
+
+  async function checkRea() {
+    setReaBusy(true);
+    setError(null);
+    const result = await reaDoctor();
+    setReaBusy(false);
+    if (!result.ok) {
+      setReaReport(result.error);
+      setWs((prev) => pushAudit(prev, "rea_doctor", "rea", "failed"));
+      return;
+    }
+    const gaps = result.gaps.map((gap) => `${gap.name}: ${gap.detail}`).join("\n");
+    setReaReport(
+      `REA ${result.version} from github.com/morluto/rea.\nHealthy: ${result.healthy ? "yes" : "no"}.\n${gaps || "No gaps reported."}`,
+    );
+    setWs((prev) => pushAudit(prev, "rea_doctor", "rea", result.healthy ? "healthy" : "not healthy"));
+  }
+
+  async function inspectWithRea(file: { name: string; text: string }, destination: View = "research") {
+    setReaBusy(true);
+    setView(destination);
+    setError(null);
+    const result = await reaInspect({ data: file });
+    setReaBusy(false);
+    if (!result.ok) {
+      setReaReport(result.error);
+      setWs((prev) => pushAudit(prev, "rea_inspect", file.name, "failed"));
+      return;
+    }
+    setReaReport(
+      `${result.provider} ran ${result.operation} on a ${result.format}.\nEvidence ${result.evidenceId ?? "not returned"}.\nSHA-256 ${result.sha256 ?? "not returned"}.\nSource ${result.source}.`,
+    );
+    setWs((prev) => pushAudit(prev, "rea_inspect", file.name, result.evidenceId ?? "no evidence id"));
+  }
+
+  const headerState = ws.halted ? "Stopped" : grok === "Ready" ? "Grok ready" : grok;
+  const headerTone = ws.halted || grok === "Refused" || grok === "Unavailable" ? "text-danger border-danger/40" : grok === "Ready" ? "text-ok border-ok/40" : "text-muted border-line";
+  const memories = ws.memories.filter((item) => {
+    if (!showArchived && item.archived) return false;
+    if (memoryTab === "mine" && item.scope !== "global") return false;
+    if (memoryTab === "project" && item.scope !== "project") return false;
+    if (memoryTab === "project" && memoryProject && item.projectId !== memoryProject) return false;
+    return item.text.toLowerCase().includes(memoryQuery.trim().toLowerCase());
+  });
+  const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
+
+  return (
+    <div className="flex h-dvh flex-col bg-bg text-fg md:flex-row">
+      <aside className="flex shrink-0 flex-col border-b border-line bg-surface md:h-dvh md:w-60 md:border-r md:border-b-0">
+        <div className="flex items-center gap-3 px-4 py-4">
+          <span className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
+            A
+          </span>
+          <div>
+            <p className="text-sm font-bold tracking-wide">ADRIAN'S MIND</p>
+            <p className="text-[10px] tracking-[0.22em] text-muted">COMMAND OS</p>
+          </div>
+        </div>
+        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-auto">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const on = view === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setView(item.id);
+                  closeMenus();
+                }}
+                className={`flex min-h-11 shrink-0 items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "bg-accent text-white shadow-[0_0_18px_rgb(124_92_255/0.45)]" : "text-muted"}`}
+              >
+                <Icon className="size-4" />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="hidden border-t border-line p-4 md:block">
+          <p className="text-sm font-semibold">Adrian (Personal)</p>
+          <p className="text-xs text-muted">Only workspace on this device.</p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+            <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, Math.min(100, (storedBytes / 5_000_000) * 100))}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
+          <p className="text-xs text-muted">Not a cloud quota. Nothing is stored in Oak Bridge or BridgePoint.</p>
+        </div>
+      </aside>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex items-center gap-2 border-b border-line px-3 py-3 md:gap-3 md:px-5">
+          <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search projects, chats, files…"
+              className="h-11 w-full rounded-panel border border-line bg-surface pr-14 pl-10 text-sm"
+              aria-label="Search"
+            />
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
+            {search && (
+              <div className="absolute z-30 mt-2 w-full rounded-panel border border-line bg-surface p-2 shadow-panel">
+                {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches in projects, chats, notes, or files.</p>}
+                {hits.map((hit) => (
+                  <button
+                    key={hit.key}
+                    type="button"
+                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-panel px-2 text-left text-sm"
+                    onClick={() => {
+                      hit.open();
+                      setQuery("");
+                    }}
+                  >
+                    <span className="truncate">{hit.label}</span>
+                    <span className="text-xs text-muted">{hit.meta}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex ${headerTone}`}>
+            <span className="size-2 rounded-full bg-current" />
+            {headerState}
+          </span>
+          <button
+            type="button"
+            className="grid size-11 place-items-center rounded-full border border-line"
+            aria-label="Alerts"
+            onClick={() => {
+              setBellOpen((open) => !open);
+              setAccountOpen(false);
+            }}
+          >
+            <Bell className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="flex h-11 items-center gap-2 rounded-full border border-line px-2"
+            onClick={() => {
+              setAccountOpen((open) => !open);
+              setBellOpen(false);
+            }}
+          >
+            <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-bold text-accent-ink">A</span>
+            <span className="hidden text-sm md:inline">Adrian</span>
+          </button>
+        </header>
+        {bellOpen && (
+          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+            <p className="font-semibold">Alerts</p>
+            {ws.halted && <p className="mt-1 text-danger">Emergency stop is on. Sending and approvals are blocked.</p>}
+            {ws.audit.length === 0 && !ws.halted && <p className="mt-1 text-muted">No alerts.</p>}
+            {ws.audit.slice(0, 4).map((entry) => (
+              <p key={entry.id} className="mt-1 text-muted">
+                {humanAction(entry.action)} · {stamp(entry.at)}
+              </p>
+            ))}
+          </div>
+        )}
+        {accountOpen && (
+          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+            <p className="font-semibold">Adrian (Personal)</p>
+            <p className="text-muted">This menu is not an account switcher. No second workspace exists.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("settings")}>
+                Settings
+              </button>
+              <button
+                type="button"
+                className="min-h-11 rounded-panel border border-line px-3"
+                onClick={() =>
+                  setWs((prev) =>
+                    pushAudit({ ...prev, halted: !prev.halted }, "emergency_stop", "session", prev.halted ? "cleared" : "on"),
+                  )
+                }
+              >
+                {ws.halted ? "Clear stop" : "Emergency stop"}
+              </button>
+            </div>
+          </div>
+        )}
+        {ws.halted && (
+          <p className="border-b border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
+            Emergency stop is on. Sending and approvals are blocked.
+          </p>
+        )}
+
+        <div className={`min-h-0 flex-1 ${view === "chat" ? "overflow-hidden" : "overflow-auto"}`}>
+          {view === "command" && (
+            <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
+              <div className="masthead flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h1 className="font-display text-3xl font-bold md:text-4xl">
+                    {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
+                  </h1>
+                  <p className="text-sm text-muted">Your workspace, under your control.</p>
+                </div>
+                <p className="text-right text-sm text-muted">
+                  {now
+                    ? now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+                    : "—"}
+                  <span className="mt-1 block font-display text-2xl text-fg">
+                    {now ? now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}
+                  </span>
+                </p>
+              </div>
+
+              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                    <span className="block text-sm font-bold">ASK</span>
+                    <span className="block text-xs">Review and approve before action</span>
+                  </button>
+                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                    <span className="block text-sm font-bold">AUTOMATIC</span>
+                    <span className="block text-xs">Deletes and replacements still ask you</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={memoryChoice === "on"}
+                    onClick={() => {
+                      if (memoryChoice === "on") {
+                        setMemoryChoice("off");
+                        return;
+                      }
+                      setArmMemory("composer");
+                    }}
+                    className="flex min-h-16 items-center justify-between gap-4 rounded-panel bg-surface-2 px-4 text-left"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold">Memory: {memoryChoice === "on" ? "ON" : "OFF"}</span>
+                      <span className="block text-xs text-muted">Opt in before this command can read notes.</span>
+                    </span>
+                    <span className={`relative h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`}>
+                      <span className={`absolute top-0.5 size-5 rounded-full bg-fg ${memoryChoice === "on" ? "right-0.5" : "left-0.5"}`} />
+                    </span>
+                  </button>
+                </div>
+                <form
+                  className="mt-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void sendCommand();
+                  }}
+                >
+                  <textarea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    placeholder="What would you like to work on?"
+                    rows={3}
+                    className="w-full resize-none rounded-panel border border-line bg-bg px-3 py-3 text-sm"
+                  />
+                  {staged && (
+                    <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
+                      <Paperclip className="size-4" /> Attach
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      onClick={() => {
+                        setContextOpen((open) => !open);
+                        setToolsOpen(false);
+                      }}
+                    >
+                      <Database className="size-4" /> Add Context
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      onClick={() => {
+                        setToolsOpen((open) => !open);
+                        setContextOpen(false);
+                      }}
+                    >
+                      <Wrench className="size-4" /> Tools
+                    </button>
+                    <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
+                      <Mic className="size-4" />
+                    </button>
+                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                      <Send className="size-4" /> {busy ? "Sending" : "Send"}
+                    </button>
+                  </div>
+                </form>
+                {contextOpen && (
+                  <div className="mt-3 rounded-panel border border-line bg-bg p-3 text-sm">
+                    <label className="flex items-center justify-between gap-3">
+                      Project
+                      <select value={projectChoice} onChange={(event) => setProjectChoice(event.target.value)} className="max-w-[60%] bg-transparent">
+                        <option value="">None</option>
+                        {ws.projects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="mt-3 flex items-start gap-2">
+                      <input type="checkbox" checked={temporary} onChange={(event) => setTemporary(event.target.checked)} />
+                      Temporary chat. Export skips it unless you include temporary chats. This is not the same as memory off.
+                    </label>
+                    <p className="mt-2 text-xs text-muted">
+                      {memoryChoice === "off"
+                        ? "Memory is off, so saved notes are not added to this command."
+                        : "Memory is on. The next chat can read global notes and notes for the selected project. Older chats are not copied in."}
+                    </p>
+                  </div>
+                )}
+                {toolsOpen && (
+                  <ul className="mt-3 space-y-2 rounded-panel border border-line bg-bg p-3 text-sm">
+                    <li>Grok 4.5 — available when you press Send. Speak reads a reply only when you press Speak.</li>
+                    <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
+                    <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
+                    <li className="text-muted">Web research — no search provider. Pages are not fetched.</li>
+                    <li className="text-muted">Image and video — paid APIs, not called. HP — not paired.</li>
+                    <li>
+                      <button type="button" className="min-h-11 text-accent" onClick={() => { setView("agents"); void checkRea(); }}>
+                        Run REA doctor
+                      </button>
+                    </li>
+                  </ul>
+                )}
+              </section>
+
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
+                <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
+                <Quick label="Research" icon={Search} tone="text-ok" onClick={() => { setView("research"); if (staged) void inspectWithRea(staged, "research"); else void checkRea(); }} />
+                <Quick label="Generate Image" icon={Image} tone="text-warn" onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
+                <Quick label="Generate Video" icon={Video} tone="text-accent" onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
+                <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
+                <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
+              </div>
+              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+              {error && <p className="text-sm text-danger">{error}</p>}
+
+              <div className="grid gap-3 xl:grid-cols-3">
+                <Panel title="Active Projects" action="View all" onAction={() => setView("projects")}>
+                  {ws.projects.length === 0 && <p className="text-sm text-muted">No projects yet. Create one and it stays on this device until you export it.</p>}
+                  {ws.projects.slice(0, 3).map((project) => {
+                    const chats = ws.chats.filter((chat) => chat.projectId === project.id).length;
+                    const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
+                    return (
+                      <button key={project.id} type="button" onClick={() => setView("projects")} className="mt-3 w-full rounded-panel bg-bg p-3 text-left">
+                        <span className="flex items-start gap-3">
+                          <span className="grid size-10 place-items-center rounded-panel bg-accent/15 text-accent"><Folder className="size-4" /></span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-semibold">{project.name}</span>
+                            <span className="block text-sm text-muted">{project.description || "No description yet."}</span>
+                          </span>
+                          <span className="rounded-full bg-surface-2 px-2 py-1 text-xs text-muted">On device</span>
+                        </span>
+                        <span className="mt-3 block text-xs text-muted">{chats} chats · {notes} notes · no cloud copy</span>
+                      </button>
+                    );
+                  })}
+                </Panel>
+                <Panel title="System Status" action="Details" onAction={() => setView("integrations")}>
+                  <StatusRow icon={Database} name="Memory" detail={memoryChoice === "on" ? "On for the next command" : "Off for the next command"} pill={memoryChoice === "on" ? "On" : "Off"} tone={memoryChoice === "on" ? "ok" : "muted"} />
+                  <StatusRow icon={Database} name="Database" detail="Dedicated database required" pill="Not connected" tone="danger" />
+                  <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
+                  <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
+                  <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>
+                </Panel>
+                <Panel title="Recent Activity" action="View all" onAction={() => setView("activity")}>
+                  {ws.audit.length === 0 && <p className="text-sm text-muted">No activity yet. Actions you take show up here. Nothing is invented.</p>}
+                  {ws.audit.slice(0, 5).map((entry) => (
+                    <button key={entry.id} type="button" onClick={() => setView("activity")} className="mt-2 flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm">
+                      <span className="truncate">{humanAction(entry.action)}</span>
+                      <span className="shrink-0 text-xs text-muted">{stamp(entry.at)}</span>
+                    </button>
+                  ))}
+                </Panel>
+              </div>
+
+              <section className="flex flex-col gap-3 rounded-panel border border-accent/40 bg-surface p-4 md:flex-row md:items-center">
+                <Shield className="size-8 shrink-0 text-accent" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Protected actions require your approval.</p>
+                  <p className="text-sm text-muted">Deletes, replacements, and governance changes ask even in Automatic mode. Stop blocks them.</p>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                  onClick={() =>
+                    setWs((prev) =>
+                      pushAudit({ ...prev, halted: !prev.halted }, "emergency_stop", "session", prev.halted ? "cleared" : "on"),
+                    )
+                  }
+                >
+                  <Square className="size-4" /> {ws.halted ? "Clear stop" : "Stop"}
+                </button>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs text-muted">
+                  <span className="rounded-panel border border-line px-2 py-2"><Lock className="mx-auto mb-1 size-4 text-accent" />Owner control</span>
+                  <span className="rounded-panel border border-line px-2 py-2"><Database className="mx-auto mb-1 size-4 text-info" />Data isolation</span>
+                  <span className="rounded-panel border border-line px-2 py-2"><Shield className="mx-auto mb-1 size-4 text-ok" />Safe by default</span>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {view === "chat" && (
+            <ChatPane
+              active={active}
+              chats={ws.chats}
+              busy={busy}
+              halted={ws.halted}
+              draft={draft}
+              error={error}
+              setDraft={setDraft}
+              onPick={(id) => setActiveId(id)}
+              onSend={() => void sendInChat()}
+              onDelete={() => {
+                if (!active) return;
+                requestProtected("delete", `delete-chat:${active.id}`, `Delete “${active.title}”`, "The transcript is removed. Saved notes stay until you delete them.", "Approve delete", () => {
+                  setWs((prev) => pushAudit({ ...prev, chats: prev.chats.filter((chat) => chat.id !== active.id) }, "delete_chat", active.id, "approved"));
+                  setActiveId(null);
+                });
+              }}
+              onMemory={() => {
+                if (!active) return;
+                if (active.memory === "off") {
+                  setArmMemory(active.id);
+                  return;
+                }
+                setWs((prev) =>
+                  pushAudit(
+                    { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
+                    "memory_off",
+                    active.id,
+                    "retrieval stopped",
+                  ),
+                );
+              }}
+              onSave={(content) => {
+                if (!active || active.memory !== "on") {
+                  setError("Memory is off for this chat, so the note was not saved.");
+                  return;
+                }
+                setWs((prev) =>
+                  pushAudit(
+                    addMemory(prev, { scope: "chat", text: content, source: active.title, projectId: active.projectId, chatId: active.id }),
+                    "save_memory",
+                    active.id,
+                    "owner saved a note",
+                  ),
+                );
+              }}
+              onNew={openChat}
+              onSpeak={(text) => void speak(text)}
+              onListen={listen}
+              speaking={speaking}
+              memoryChoice={active?.memory ?? memoryChoice}
+              mode={active?.autonomy ?? autonomy}
+              onComposerMemory={() => {
+                if ((active?.memory ?? memoryChoice) === "on") {
+                  if (active) {
+                    setWs((prev) =>
+                      pushAudit(
+                        { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
+                        "memory_off",
+                        active.id,
+                        "retrieval stopped",
+                      ),
+                    );
+                  } else setMemoryChoice("off");
+                  return;
+                }
+                setArmMemory(active?.id ?? "composer");
+              }}
+              onComposerMode={(next) => {
+                setAutonomy(next);
+                if (!active) return;
+                setWs((prev) => ({
+                  ...prev,
+                  chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, autonomy: next } : chat)),
+                }));
+              }}
+              stagedName={staged?.name ?? null}
+              onAttach={() => fileRef.current?.click()}
+              onAnalyze={() => {
+                if (staged) void inspectWithRea(staged, "research");
+                else {
+                  inspectNext.current = "research";
+                  fileRef.current?.click();
+                }
+              }}
+              onDoctor={() => {
+                setView("agents");
+                void checkRea();
+              }}
+            />
+          )}
+
+          {view === "projects" && (
+            <section className="p-4 md:p-6">
+              <div className="masthead glow-card flex flex-wrap items-center justify-between gap-3 rounded-panel border border-line bg-surface px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-12 place-items-center rounded-2xl bg-accent/20 text-accent"><Folder className="size-5" /></span>
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Projects</h2>
+                    <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
+                  </div>
+                </div>
+                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => setProjectOpen(true)}>
+                  <Plus className="size-4" /> New Project
+                </button>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-panel bg-accent px-3 py-2 text-sm text-white">On this device ({ws.projects.length})</span>
+                <span className="rounded-panel border border-line px-3 py-2 text-sm text-muted">External (2) · unchanged</span>
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {ws.projects.length === 0 && (
+                  <article className="glow-card rounded-panel border border-line bg-surface p-4 lg:col-span-2">
+                    <p className="font-semibold">No projects on this device yet.</p>
+                    <p className="mt-1 text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
+                  </article>
+                )}
+                {ws.projects.map((project) => {
+                  const chats = ws.chats.filter((chat) => chat.projectId === project.id).length;
+                  const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
+                  const files = ws.files.filter((file) => file.projectId === project.id).length;
+                  return (
+                    <article key={project.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="grid size-11 place-items-center rounded-2xl bg-accent/15 text-accent"><Folder className="size-5" /></span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="font-semibold">{project.name}</h3>
+                            <span className="rounded-full border border-ok/40 px-2 py-0.5 text-xs text-ok">On device</span>
+                          </div>
+                          <p className="text-sm text-muted">{project.description || "No description yet."}</p>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-xs text-muted">Updated {stamp(project.createdAt)} · {chats} chats · {notes} notes · {files} files</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm text-white" onClick={() => { setProjectChoice(project.id); setView("chat"); }}>Open chats</button>
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setMemoryScope("project"); setView("memory"); }}>Notes</button>
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("files")}>Files</button>
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                          onClick={() =>
+                            requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats and files stay. They are unlinked from this project. Notes stay in Memory.", "Approve delete", () => {
+                              setWs((prev) =>
+                                pushAudit(
+                                  {
+                                    ...prev,
+                                    projects: prev.projects.filter((item) => item.id !== project.id),
+                                    chats: prev.chats.map((chat) => (chat.projectId === project.id ? { ...chat, projectId: null } : chat)),
+                                    files: prev.files.map((file) => (file.projectId === project.id ? { ...file, projectId: null } : file)),
+                                  },
+                                  "delete_project",
+                                  project.id,
+                                  "approved",
+                                ),
+                              );
+                            })
+                          }
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+                {EXTERNAL.map((item) => (
+                  <article key={item.name} className="rounded-panel border border-line bg-surface p-4">
+                    <div className="flex items-start gap-3">
+                      <span className={`grid size-11 place-items-center rounded-2xl ${item.tone}`}>{item.mark}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold">{item.name}</h3>
+                          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">External</span>
+                        </div>
+                        <p className="text-sm text-muted">{item.detail}</p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs text-muted">No tasks, files, or progress are read from that product.</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {view === "memory" && (
+            <section className="p-4 md:p-6">
+              <div className="masthead">
+                <h2 className="font-display text-3xl font-bold">Memory</h2>
+                <p className="text-sm text-muted">Your context, notes, and knowledge. Kept in this browser, not a remote database.</p>
+              </div>
+              <div className={`glow-card mt-4 grid gap-4 rounded-panel border p-4 md:grid-cols-2 ${memoryChoice === "on" ? "border-ok/40" : "border-danger/40"}`}>
+                <div className="flex items-center gap-3">
+                  <span className="grid size-12 place-items-center rounded-2xl bg-accent/15 text-accent"><Database className="size-5" /></span>
+                  <div>
+                    <p className="font-semibold">Memory: <span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
+                    <p className="text-sm text-muted">{memoryChoice === "on" ? "The next command can read notes in its scope. Existing chats stay off until you enable them there." : "A memory-off chat cannot read or save notes."}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted">Enable it only when you want notes used in a later command. This does not copy old chats into memory.</p>
+                  <button type="button" className="min-h-11 shrink-0 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => memoryChoice === "on" ? setMemoryChoice("off") : setArmMemory("composer")}>
+                    {memoryChoice === "on" ? "Turn off" : "Enable Memory"}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2 overflow-x-auto">
+                {([
+                  ["mine", "My Memory"],
+                  ["project", "Project Memory"],
+                  ["transfer", "Imports & Exports"],
+                ] as const).map(([id, label]) => (
+                  <button key={id} type="button" onClick={() => { setMemoryTab(id); if (id === "project") setMemoryScope("project"); if (id === "mine") setMemoryScope("global"); }} className={`min-h-11 shrink-0 rounded-panel px-4 text-sm ${memoryTab === id ? "bg-accent text-white" : "border border-line text-muted"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-4 text-sm text-muted">{memoryTab === "project" ? "Project notes stay inside the project you pick." : memoryTab === "transfer" ? "Export is a JSON file with a hash. Import refuses a file whose hash does not match." : "Personal notes are global on this device. They are not used while memory is off."}</p>
+              {memoryTab === "transfer" && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => void downloadArchive()}>Export archive</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setView("settings")}>Import on Settings</button>
+                </div>
+              )}
+              <div className="mt-4 grid gap-3 md:grid-cols-[16rem_1fr]">
+                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
+                  <p className="font-semibold">Memory overview</p>
+                  <p className="mt-3 flex justify-between"><span className="text-muted">Status</span><span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
+                  <p className="mt-2 flex justify-between"><span className="text-muted">Stored items</span><span>{ws.memories.filter((item) => !item.archived).length}</span></p>
+                  <p className="mt-2 flex justify-between"><span className="text-muted">Text size</span><span>{formatBytes(memoryBytes)}</span></p>
+                  <p className="mt-3 text-xs text-muted">This size is the note text on this device. It is not a cloud quota.</p>
+                </div>
+                <div className="grid gap-2">
+                <textarea value={memoryText} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={3} className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
+                <div className="flex flex-wrap gap-2">
+                  <select value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                    <option value="global">Global</option>
+                    <option value="project">Project</option>
+                  </select>
+                  {memoryScope === "project" && (
+                    <select value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                      <option value="">Choose project</option>
+                      {ws.projects.map((project) => (
+                        <option key={project.id} value={project.id}>{project.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+                    onClick={() => {
+                      if (memoryScope === "project" && !memoryProject) {
+                        setError("Pick a project for a project note.");
+                        return;
+                      }
+                      setWs((prev) =>
+                        pushAudit(
+                          addMemory(prev, { scope: memoryScope, text: memoryText, source: "owner", projectId: memoryProject || null, chatId: null }),
+                          "save_memory",
+                          "memory",
+                          memoryScope,
+                        ),
+                      );
+                      setMemoryText("");
+                      setError(null);
+                    }}
+                  >
+                    Save note
+                  </button>
+                </div>
+                <input value={memoryQuery} onChange={(event) => setMemoryQuery(event.target.value)} placeholder="Search notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
+                <label className="flex items-center gap-2 text-sm text-muted">
+                  <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> Show archived
+                </label>
+                </div>
+              </div>
+              <ul className="mt-4 space-y-2">
+                {memories.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-center text-sm text-muted">No saved memory in this view. Nothing is stored while you leave memory off.</li>}
+                {memories.map((item) => (
+                  <li key={item.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
+                    {editId === item.id ? (
+                      <textarea value={editText} onChange={(event) => setEditText(event.target.value)} className="min-h-20 w-full bg-transparent" />
+                    ) : (
+                      <p className="whitespace-pre-wrap">{item.text}</p>
+                    )}
+                    <p className="mt-1 text-xs text-muted">{item.scope} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {editId === item.id ? (
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button>
+                      ) : (
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setEditId(item.id); setEditText(item.text); }}>Edit</button>
+                      )}
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-panel border border-line px-3"
+                        onClick={() =>
+                          setWs((prev) =>
+                            pushAudit(
+                              { ...prev, memories: prev.memories.map((note) => (note.id === item.id ? { ...note, archived: !note.archived, updatedAt: new Date().toISOString() } : note)) },
+                              "archive_memory",
+                              item.id,
+                              "toggled",
+                            ),
+                          )
+                        }
+                      >
+                        {item.archived ? "Restore" : "Archive"}
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-panel border border-line px-3"
+                        onClick={() =>
+                          requestProtected("delete", `delete-memory:${item.id}`, "Delete this note", "The current text and its versions are removed from this browser.", "Approve delete", () => {
+                            setWs((prev) => pushAudit({ ...prev, memories: prev.memories.filter((note) => note.id !== item.id) }, "delete_memory", item.id, "approved"));
+                          })
+                        }
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {view === "agents" && (
+            <ReaPanel
+              title="Agents"
+              lead="Agent analysis runs through the official REA CLI. There is no separate task runner, and nothing is marked done unless REA returns it."
+              report={reaReport}
+              busy={reaBusy}
+              onCheck={() => void checkRea()}
+              onInspect={staged ? () => void inspectWithRea(staged, "agents") : null}
+            />
+          )}
+          {view === "research" && (
+            <section className="p-4 md:p-6">
+              <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
+                <h2 className="font-display text-3xl font-bold">Research</h2>
+                <p className="text-sm text-muted">Asks Grok 4.5. It does not search the live web, and it is told not to invent citations.</p>
+                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || ws.halted} onClick={() => void startResearch()}>
+                  {busy ? "Asking Grok" : "Start research"}
+                </button>
+              </div>
+              <div className="mt-4">
+                <ReaPanel
+                  title="File inspection"
+                  lead="REA inspect-artifact runs on text you stage. Web pages are not fetched."
+                  report={reaReport}
+                  busy={reaBusy}
+                  onCheck={() => void checkRea()}
+                  onInspect={staged ? () => void inspectWithRea(staged, "research") : null}
+                />
+              </div>
+            </section>
+          )}
+          {view === "files" && (
+            <section className="p-4 md:p-6">
+              <div className="masthead flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-display text-3xl font-bold">Files</h2>
+                  <p className="text-sm text-muted">Text you attach stays in this browser. Inspect sends that text to REA. Nothing is uploaded to a file host.</p>
+                </div>
+                <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-[14rem_1fr]">
+                <aside className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
+                  <p className="font-semibold">On this device</p>
+                  <p className="mt-2 text-muted">All files · {ws.files.length}</p>
+                  <p className="text-muted">Projects · {ws.projects.length}</p>
+                  <p className="mt-3 text-xs text-muted">Folders in the reference are not a cloud drive. Files here are the text copies you added.</p>
+                </aside>
+                <ul className="space-y-2">
+                  {ws.files.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No files yet. Use Upload text or Attach on Command.</li>}
+                  {ws.files.map((file) => (
+                    <li key={file.id} className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold">{file.name}</p>
+                        <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)}</p>
+                      </div>
+                      <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-muted">{file.text}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect with REA</button>
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-panel border border-line px-3"
+                          onClick={() =>
+                            requestProtected("delete", `delete-file:${file.id}`, `Delete “${file.name}”`, "The text copy in this browser is removed.", "Approve delete", () => {
+                              setWs((prev) => pushAudit({ ...prev, files: prev.files.filter((item) => item.id !== file.id) }, "delete_file", file.id, "approved"));
+                            })
+                          }
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+          {view === "integrations" && (
+            <section className="p-4 md:p-6">
+              <div className="masthead">
+                <h2 className="font-display text-3xl font-bold">Integrations</h2>
+                <p className="text-sm text-muted">{system}</p>
+                <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. A green label means it was actually verified. Others stay unavailable.</p>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {CAPABILITIES.map((item) => {
+                  const live = item.status === "configured" || item.status === "ready";
+                  return (
+                    <article key={item.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold">{item.name}</h3>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
+                          {statusWord(item.status)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-muted">{item.why}</p>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+          {view === "activity" && (
+            <section className="p-4 md:p-6">
+              <div className="masthead">
+                <h2 className="font-display text-3xl font-bold">Activity</h2>
+                <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+              </div>
+              <ul className="mt-4 space-y-2">
+                {ws.audit.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No events yet.</li>}
+                {ws.audit.map((entry) => (
+                  <li key={entry.id} className="glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface p-3 text-sm">
+                    <div>
+                      <p className="font-semibold">{humanAction(entry.action)}</p>
+                      <p className="text-muted">{entry.result}</p>
+                    </div>
+                    <p className="text-xs text-muted">{stamp(entry.at)}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {view === "settings" && (
+            <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+              <h2 className="font-display text-3xl font-bold">Settings</h2>
+              <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. No 10 GB cloud quota is connected.</p>
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                onClick={() =>
+                  setWs((prev) => pushAudit({ ...prev, halted: !prev.halted }, "emergency_stop", "session", prev.halted ? "cleared" : "on"))
+                }
+              >
+                <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
+              </button>
+              <div className="rounded-panel border border-line bg-surface p-4">
+                <p className="font-semibold">Archive</p>
+                <label className="mt-2 flex items-start gap-2 text-sm">
+                  <input type="checkbox" checked={includeTemporary} onChange={(event) => setIncludeTemporary(event.target.checked)} />
+                  Include temporary chats
+                </label>
+                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void downloadArchive()}>
+                  Export archive
+                </button>
+                <label className="mt-3 block text-sm">
+                  Import archive
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="mt-1 block w-full text-sm"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void onImportFile(file);
+                    }}
+                  />
+                </label>
+                {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
+                {importPreview && (
+                  <div className="mt-3 text-sm">
+                    <p>{importPreview.chats} chats · {importPreview.memories} notes · {importPreview.projects} projects. Hash matched.</p>
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); }}>
+                        Merge
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-panel border border-line px-3"
+                        onClick={() =>
+                          requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
+                            setWs(() => pushAudit(importPreview.workspace, "import_replace", "archive", "replaced"));
+                            setImportPreview(null);
+                          })
+                        }
+                      >
+                        Replace
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+                <p className="font-semibold">Requirement record</p>
+                <p className="mt-1 text-muted">Verified {counts.verified} · In the app {counts.implemented} · Blocked {counts.blocked} · Planned {counts.planned} · Deferred {counts.deferred}</p>
+                <ul className="mt-2 space-y-1 text-muted">
+                  {REQUIREMENTS.filter((row) => row.status === "blocked" || row.status === "deferred").map((row) => (
+                    <li key={row.id}>{row.text} — {row.note}</li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".txt,.md,.json,.csv,.js,.ts,.mjs,text/plain"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void onPicked(file);
+        }}
+      />
+
+      {projectOpen && (
+        <Overlay>
+          <h3 className="font-display text-2xl font-bold">Create project</h3>
+          <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Name" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+          <textarea value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="Description" rows={3} className="mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setProjectOpen(false)}>Cancel</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={saveProject}>Create</button>
+          </div>
+        </Overlay>
+      )}
+      {armMemory && (
+        <Overlay>
+          <h3 className="font-display text-2xl font-bold">Enable saved memory?</h3>
+          <p className="mt-2 text-sm text-muted">Retrieval starts for this command or chat. Earlier messages are not copied into global memory. Other projects stay out. You can turn it off again.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setArmMemory(null)}>Cancel</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={enableMemory}>Enable</button>
+          </div>
+        </Overlay>
+      )}
+      {pending && (
+        <Overlay>
+          <h3 className="font-display text-2xl font-bold">Approval required</h3>
+          <p className="mt-2 text-sm font-semibold">{pending.label}</p>
+          <p className="mt-1 text-sm text-muted">{pending.detail} Automatic mode does not approve this.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setPending(null)}>Deny</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
+          </div>
+        </Overlay>
+      )}
+    </div>
+  );
+}
+
+function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm">
+      <Icon className={`size-4 ${tone}`} />
+      {label}
+    </button>
+  );
+}
+
+function Panel({ title, action, onAction, children }: { title: string; action: string; onAction: () => void; children: ReactNode }) {
+  return (
+    <section className="rounded-panel border border-line bg-surface p-4 shadow-panel">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-semibold">{title}</h2>
+        <button type="button" className="text-sm text-info" onClick={onAction}>{action}</button>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StatusRow({
+  icon: Icon,
+  name,
+  detail,
+  pill,
+  tone,
+}: {
+  icon: typeof Database;
+  name: string;
+  detail: string;
+  pill: string;
+  tone: "ok" | "danger" | "muted";
+}) {
+  const color = tone === "ok" ? "text-ok" : tone === "danger" ? "text-danger" : "text-muted";
+  return (
+    <div className="mt-3 flex items-center gap-3">
+      <Icon className="size-4 text-muted" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">{name}</p>
+        <p className="text-xs text-muted">{detail}</p>
+      </div>
+      <span className={`rounded-full border border-line px-2 py-1 text-xs ${color}`}>{pill}</span>
+    </div>
+  );
+}
+
+function Overlay({ children }: { children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-end bg-bg/80 p-4 md:place-items-center">
+      <div className="w-full max-w-md rounded-panel border border-line bg-surface p-4 shadow-panel">{children}</div>
+    </div>
+  );
+}
+
+function ReaPanel({
+  title,
+  lead,
+  report,
+  busy,
+  onCheck,
+  onInspect,
+}: {
+  title: string;
+  lead: string;
+  report: string | null;
+  busy: boolean;
+  onCheck: () => void;
+  onInspect: (() => void) | null;
+}) {
+  return (
+    <section className="p-4 md:p-6">
+      <div className="masthead">
+        <h2 className="font-display text-3xl font-bold">{title}</h2>
+        <p className="mt-2 max-w-2xl text-sm text-muted">{lead}</p>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_18rem]">
+        <div className="glow-card rounded-panel border border-line bg-surface p-4">
+          <p className="text-sm font-semibold">What can run</p>
+          <ul className="mt-3 space-y-2 text-sm">
+            <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA doctor</span><span className="text-xs text-muted">Live check</span></li>
+            <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA file inspect</span><span className="text-xs text-muted">Staged text only</span></li>
+            <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>Research, coding, automation agents</span><span className="text-xs text-danger">Not running</span></li>
+          </ul>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy} onClick={onCheck}>
+              {busy ? "Running REA" : "Run REA doctor"}
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm disabled:opacity-50" disabled={!onInspect || busy} onClick={() => onInspect?.()}>
+              Inspect staged file
+            </button>
+          </div>
+        </div>
+        <p className="glow-card whitespace-pre-wrap rounded-panel border border-line bg-surface p-4 text-sm text-muted">
+          {report ?? "No REA report yet. A report appears only after you run doctor or inspect."}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function ChatPane({
+  active,
+  chats,
+  busy,
+  halted,
+  draft,
+  error,
+  setDraft,
+  onPick,
+  onSend,
+  onDelete,
+  onMemory,
+  onSave,
+  onNew,
+  onSpeak,
+  onListen,
+  speaking,
+  memoryChoice,
+  mode,
+  onComposerMemory,
+  onComposerMode,
+  stagedName,
+  onAttach,
+  onAnalyze,
+  onDoctor,
+}: {
+  active: Chat | null;
+  chats: Chat[];
+  busy: boolean;
+  halted: boolean;
+  draft: string;
+  error: string | null;
+  setDraft: (value: string) => void;
+  onPick: (id: string) => void;
+  onSend: () => void;
+  onDelete: () => void;
+  onMemory: () => void;
+  onSave: (content: string) => void;
+  onNew: () => void;
+  onSpeak: (text: string) => void;
+  onListen: () => void;
+  speaking: boolean;
+  memoryChoice: "off" | "on";
+  mode: Autonomy;
+  onComposerMemory: () => void;
+  onComposerMode: (mode: Autonomy) => void;
+  stagedName: string | null;
+  onAttach: () => void;
+  onAnalyze: () => void;
+  onDoctor: () => void;
+}) {
+  const [filter, setFilter] = useState("");
+  const [tools, setTools] = useState(false);
+  const [context, setContext] = useState(false);
+  const needle = filter.trim().toLowerCase();
+  const visible = needle ? chats.filter((chat) => chat.title.toLowerCase().includes(needle)) : chats;
+  const groups = ["Today", "Yesterday", "This week", "Earlier"]
+    .map((label) => ({ label, items: visible.filter((chat) => chatBucket(chat) === label) }))
+    .filter((group) => group.items.length > 0);
+  const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
+  return (
+    <div className="flex h-full min-h-0 flex-col xl:flex-row">
+      <aside className="flex max-h-72 shrink-0 flex-col border-b border-line xl:max-h-none xl:w-64 xl:border-r xl:border-b-0">
+        <div className="p-3">
+          <button type="button" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-panel bg-accent text-sm font-semibold text-accent-ink">
+            <Plus className="size-4" /> New Chat
+          </button>
+        </div>
+        <div className="px-3 pb-2">
+          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search conversations" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Search conversations" />
+        </div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-auto px-3 pb-3">
+          {groups.length === 0 && <p className="text-sm text-muted">{chats.length === 0 ? "No conversations yet." : "No conversations match."}</p>}
+          {groups.map((group) => (
+            <div key={group.label}>
+              <p className="px-1 text-xs text-muted">{group.label}</p>
+              {group.items.map((chat) => (
+                <button key={chat.id} type="button" onClick={() => onPick(chat.id)} className={`mt-1 flex min-h-11 w-full items-center justify-between rounded-panel px-3 text-left text-sm ${active?.id === chat.id ? "bg-accent text-accent-ink" : ""}`}>
+                  <span className="truncate">{chat.title}</span>
+                  <span className="ml-2 shrink-0 text-xs opacity-70">{chatStamp(chat)}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </aside>
+      <section className="flex min-w-0 flex-1 flex-col">
+        <div className="masthead px-4 pt-4">
+          <h2 className="font-display text-3xl font-bold">AI Chat</h2>
+          <p className="text-sm text-muted">Grok 4.5 is the only live model. Other providers stay unavailable.</p>
+        </div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
+          {(!active || active.messages.length === 0) && !busy && (
+            <div className="grid min-h-64 place-items-center text-center">
+              <div>
+                <span className="mx-auto grid size-16 place-items-center rounded-full bg-accent/20 text-accent shadow-[0_0_28px_rgb(124_92_255/0.45)]">
+                  <Zap className="size-7" />
+                </span>
+                <p className="mt-4 text-2xl font-bold">Grok 4.5</p>
+                <p className="text-sm text-muted">How can I help you today?</p>
+                <p className="mt-1 text-xs text-muted">Nothing is sent until you press Send.</p>
+              </div>
+            </div>
+          )}
+          {active?.messages.map((msg) => (
+            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-surface-2" : "bg-surface"}`}>
+              <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <div className="mt-2 flex gap-3">
+                {msg.role === "assistant" && (
+                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content)} disabled={speaking}>
+                    {speaking ? "Speaking" : "Speak"}
+                  </button>
+                )}
+                {msg.role === "user" && active.memory === "on" && (
+                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSave(msg.content)}>Save as chat memory</button>
+                )}
+              </div>
+            </article>
+          ))}
+          {busy && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session.</p>}
+        </div>
+        <form
+          className="command-card m-3 rounded-panel bg-surface p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSend();
+          }}
+        >
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="min-h-11 w-full bg-transparent text-sm outline-none" />
+          {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
+          {context && (
+            <p className="mt-2 text-xs text-muted">
+              Memory is {memoryChoice}. {memoryChoice === "off" ? "This chat cannot read or save notes." : "This chat can read notes in its scope."} Mode is {mode === "ask" ? "Ask" : "Automatic"}. Deletes still ask you.
+            </p>
+          )}
+          {tools && (
+            <div className="mt-2 space-y-1 rounded-panel border border-line bg-bg p-3 text-sm">
+              <button type="button" className="block min-h-11 text-left text-accent" onClick={onDoctor}>Run REA doctor</button>
+              <button type="button" className="block min-h-11 text-left text-accent" onClick={onAnalyze}>Inspect a file with REA</button>
+              <p className="text-xs text-muted">Chat stays on Grok 4.5. Image, video, and web search are not called.</p>
+            </div>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttach}>
+              <Paperclip className="size-4" /> Attach
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line" onClick={onListen} aria-label="Dictate">
+              <Mic className="size-4" />
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
+              {speaking ? "Speaking" : "Speak"}
+            </button>
+            <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+          </div>
+        </form>
+      </section>
+      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
+        <section className="rounded-panel border border-line bg-surface p-3">
+          <p className="text-sm font-semibold">Model and mode</p>
+          <p className="mt-3 rounded-panel border border-ok/40 px-3 py-2 text-sm">Grok 4.5 <span className="text-ok">Active</span></p>
+          <p className="mt-2 text-xs text-muted">GPT, Claude, Gemini, and OpenRouter have no keys. They cannot be selected.</p>
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3">
+          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>
+          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Automatic</button>
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3">
+          <button type="button" role="switch" aria-checked={memoryChoice === "on"} onClick={onComposerMemory} className="flex min-h-11 w-full items-center justify-between text-sm">
+            Memory: {memoryChoice === "on" ? "ON" : "OFF"}
+            <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
+          </button>
+          <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3 text-sm">
+          <p className="font-semibold">{active?.title ?? "New session"}</p>
+          <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
+        </section>
+      </aside>
+    </div>
+  );
+}
+
+function chatBucket(chat: Chat) {
+  const iso = chat.messages[0]?.at;
+  if (!iso) return "Today";
+  const day = new Date(iso);
+  day.setHours(0, 0, 0, 0);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const diff = (start.getTime() - day.getTime()) / 86_400_000;
+  if (diff < 1) return "Today";
+  if (diff < 2) return "Yesterday";
+  if (diff < 7) return "This week";
+  return "Earlier";
+}
+
+function chatStamp(chat: Chat) {
+  const iso = chat.messages.at(-1)?.at ?? chat.messages[0]?.at;
+  if (!iso) return "New";
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}

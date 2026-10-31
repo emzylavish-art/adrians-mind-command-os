@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #070b16;
+  --color-surface: #101628;
+  --color-surface-2: #171e36;
+  --color-fg: #f3f5ff;
+  --color-muted: #93a0c2;
+  --color-line: #2a3354;
+  --color-accent: #7c5cff;
+  --color-accent-ink: #f7f5ff;
+  --color-info: #49c2ff;
+  --color-ok: #3dd68c;
+  --color-warn: #e879f9;
+  --color-danger: #ff6b8a;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --radius-panel: 1rem;
+  --shadow-panel: 0 12px 32px rgb(4 8 20 / 0.35);
+}
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+.masthead {
+  background:
+    radial-gradient(ellipse 42% 120% at 78% -20%, rgb(124 92 255 / 0.28), transparent 70%),
+    radial-gradient(ellipse 28% 80% at 92% 40%, rgb(73 194 255 / 0.12), transparent 70%);
+}
+
+.glow-card {
+  box-shadow: inset 0 0 0 1px rgb(124 92 255 / 0.28), 0 10px 28px rgb(4 6 18 / 0.35);
+}
+
+.command-card {
+  box-shadow: 0 0 0 1px rgb(124 92 255 / 0.5), 0 0 32px rgb(124 92 255 / 0.18);
+}
