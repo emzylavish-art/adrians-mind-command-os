@@ -43,10 +43,11 @@ import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
-import { haltFleet, enqueueRun, togglePin } from "@/lib/mind/fleet";
+import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
+import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { chosenProvider, providerChoices } from "@/lib/mind/providers";
@@ -468,16 +469,108 @@ export function CommandApp() {
     });
   }
 
+  function agentTools(source: Workspace): AgentTool[] {
+    const local = (id: "list_projects" | "list_chats" | "search_notes"): AgentTool => ({
+      id,
+      confirm: false,
+      available: true,
+      unavailableReason: "",
+      run: (text) => {
+        const result = runLocalPlan(source, [{ id, tool: id, query: text }], { autonomy: "automatic", halted: source.halted, tokens: {} });
+        return { ok: true, text: result.lines.join("\n") || "No result." };
+      },
+    });
+    return [
+      local("list_projects"),
+      local("list_chats"),
+      local("search_notes"),
+      {
+        id: "search_skills",
+        confirm: false,
+        available: true,
+        unavailableReason: "",
+        run: (text) => {
+          const matches = searchSkills(text.replace(/\bskills?\b/gi, " "));
+          const usable = matches.filter((skill) => skill.kind === "built-in");
+          const one = usable.length === 1 ? usable[0] : null;
+          const reply = one
+            ? runSkill(source, one, enabledSkills[one.id] !== false).text
+            : matches.map((skill) => `${skill.name} — ${skill.kind === "built-in" ? "Built-in" : "Not installed"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
+          return { ok: true, text: reply };
+        },
+      },
+      {
+        id: "list_schedules",
+        confirm: false,
+        available: true,
+        unavailableReason: "",
+        run: () => ({ ok: true, text: source.schedules.map((job) => `${job.name} · ${job.enabled ? "on" : "off"} · next ${job.nextRunAt}`).join("\n") || "No schedules." }),
+      },
+      {
+        id: "run_due_schedules",
+        confirm: true,
+        available: true,
+        unavailableReason: "",
+        run: () => ({ ok: true, text: "Due schedules were queued on this device. No model was called." }),
+      },
+      {
+        id: "notion",
+        confirm: true,
+        available: notion?.state === "connected",
+        unavailableReason: "Notion is not connected. Nothing was searched.",
+        run: () => ({ ok: false, text: "Notion was not called from this path." }),
+      },
+      {
+        id: "realtime_voice",
+        confirm: false,
+        available: false,
+        unavailableReason: "No realtime voice provider is configured. Nothing was spoken.",
+        run: () => ({ ok: false, text: "" }),
+      },
+    ];
+  }
+
   function settleIntent(chat: Chat, text: string, source: Workspace): boolean {
     const intent = interpretCommand(text, source.agents, commandMode);
     if (intent.kind === "chat") return false;
-    if (intent.kind === "local") {
-      const result = runLocalPlan(source, [{ id: intent.tool, tool: intent.tool, query: text }], {
-        autonomy: "automatic",
-        halted: source.halted,
-        tokens: {},
+    if (intent.kind === "local" || intent.kind === "skill") {
+      const toolId = intent.kind === "skill" ? "search_skills" : intent.tool;
+      const turn = runAgentTurn({
+        userId: "local-owner",
+        sessionId: chat.id,
+        text,
+        modality: "chat",
+        tools: agentTools(source),
+        toolId,
+        nowMs: Date.now(),
       });
-      recordToolTurn(chat, text, result.lines.join("\n") || "No result.");
+      if (turn.status === "awaiting_confirmation" && turn.confirm) {
+        const grantNow = turn.confirm;
+        setPending({
+          id: grantNow.toolId,
+          kind: "tool",
+          label: "Confirm this action",
+          detail: turn.text,
+          confirm: "This runs only the action you just asked for.",
+          run: () => {
+            const again = runAgentTurn({
+              userId: "local-owner",
+              sessionId: chat.id,
+              text,
+              modality: "chat",
+              tools: agentTools(source),
+              toolId,
+              confirm: grantNow,
+              nowMs: Date.now(),
+            });
+            recordToolTurn(chat, text, again.text, toolId === "run_due_schedules" && again.status === "completed" ? (prev) => runDueSchedules(prev, new Date().toISOString()) : undefined);
+            setNotice("The confirmed action finished on this device. Hosted realtime is not connected.");
+          },
+        });
+        return true;
+      }
+      recordToolTurn(chat, text, turn.text);
+      setNotice(turn.status === "completed" ? "The agent finished on this device. Hosted realtime is not connected." : turn.text);
       return true;
     }
     if (intent.kind === "bot") {
@@ -498,16 +591,6 @@ export function CommandApp() {
     }
     if (intent.kind === "mcp") {
       void askMcp(chat, text);
-      return true;
-    }
-    if (intent.kind === "skill") {
-      const matches = searchSkills(text.replace(/\bskills?\b/gi, " "));
-      const usable = matches.filter((skill) => skill.kind === "built-in");
-      const one = usable.length === 1 ? usable[0] : null;
-      const reply = one
-        ? runSkill(source, one, enabledSkills[one.id] !== false).text
-        : matches.map((skill) => `${skill.name} — ${skill.kind === "built-in" ? "Built-in" : "Not installed"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
-      recordToolTurn(chat, text, reply);
       return true;
     }
     recordToolTurn(chat, text, intent.reply);
@@ -1045,12 +1128,16 @@ export function CommandApp() {
     };
     const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
     if (!Ctor) {
-      setNotice("This browser cannot take dictation. Press Speak on a reply to hear it.");
+      setNotice("This browser has no speech recognition. Nothing was transcribed. This is not a realtime voice provider.");
       return;
     }
     const rec = new Ctor();
     rec.lang = "en-US";
-    rec.onresult = (event) => setDraft(event.results[0]?.[0]?.transcript ?? "");
+    rec.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript ?? "";
+      setDraft(transcript);
+      setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
+    };
     rec.start();
   }
 
@@ -2818,7 +2905,7 @@ function ChatPane({
           {error && active?.messages.at(-1)?.role === "user" && (
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
-          {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session.</p>}
+          {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
         </div>
         <form
           className="command-card m-3 rounded-panel bg-surface p-3"

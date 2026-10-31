@@ -6,7 +6,7 @@ export type CommandIntent =
   | { kind: "notion" }
   | { kind: "mcp" }
   | { kind: "skill" }
-  | { kind: "local"; tool: "list_projects" | "list_chats" | "search_notes" }
+  | { kind: "local"; tool: "list_projects" | "list_chats" | "search_notes" | "list_schedules" | "run_due_schedules" }
   | { kind: "bot"; agentId: string; agentName: string; goal: string }
   | { kind: "bot_missing"; reply: string };
 
@@ -60,6 +60,8 @@ export function interpretCommand(
     return { kind: "bot", agentId: found.id, agentName: found.name, goal: raw.slice(0, 2000) };
   }
 
+  if (/\brun due schedules\b/.test(lower)) return { kind: "local", tool: "run_due_schedules" };
+  if (/\b(list|show)\s+(my\s+)?schedules\b/.test(lower)) return { kind: "local", tool: "list_schedules" };
   if (/\b(list|show)\s+(my\s+)?projects\b/.test(lower)) return { kind: "local", tool: "list_projects" };
   if (/\b(list|show)\s+(my\s+)?(chats|conversations)\b/.test(lower)) return { kind: "local", tool: "list_chats" };
   if (/\bsearch\s+(my\s+)?notes\b/.test(lower)) return { kind: "local", tool: "search_notes" };

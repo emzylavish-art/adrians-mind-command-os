@@ -334,8 +334,8 @@ export const speakText = createServerFn({ method: "POST" })
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = data.text.trim().slice(0, 500);
     if (!text) return { ok: false as const, error: "Nothing to read." };
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false as const, error: "Voice is not configured on the server." };
+    const apiKey = process.env.VOICE_API_KEY;
+    if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
     let res: Response;
     try {
       res = await fetch("https://api.x.ai/v1/tts", {
