@@ -1,10 +1,32 @@
 /** Bounded timeouts for chat stream and agent Run. Honest fail — never hang. */
 
-export const CHAT_TURN_TIMEOUT_MS = 30_000;
-export const AGENT_RUN_TIMEOUT_MS = 45_000;
+/** Default chat SSE / turn budget (ms). Override with MIND_CHAT_TIMEOUT_MS (≥1000). */
+export const DEFAULT_CHAT_TURN_TIMEOUT_MS = 30_000;
+/** Default bounded-agent Run budget (ms). Override with MIND_AGENT_TIMEOUT_MS (≥1000). */
+export const DEFAULT_AGENT_RUN_TIMEOUT_MS = 45_000;
+
+/** @deprecated Prefer chatTurnTimeoutMs() — kept as the documented default. */
+export const CHAT_TURN_TIMEOUT_MS = DEFAULT_CHAT_TURN_TIMEOUT_MS;
+/** @deprecated Prefer agentRunTimeoutMs() — kept as the documented default. */
+export const AGENT_RUN_TIMEOUT_MS = DEFAULT_AGENT_RUN_TIMEOUT_MS;
 
 export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
 export const AGENT_TIMEOUT_REPLY = "Timed out waiting for the planner. Nothing was marked finished.";
+
+function readBudgetMs(raw: string | undefined, fallback: number): number {
+  if (!raw?.trim()) return fallback;
+  const n = Number(raw.trim());
+  if (!Number.isFinite(n) || n < 1_000) return fallback;
+  return Math.floor(n);
+}
+
+export function chatTurnTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  return readBudgetMs(env.MIND_CHAT_TIMEOUT_MS, DEFAULT_CHAT_TURN_TIMEOUT_MS);
+}
+
+export function agentRunTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  return readBudgetMs(env.MIND_AGENT_TIMEOUT_MS, DEFAULT_AGENT_RUN_TIMEOUT_MS);
+}
 
 export function isTimeoutAbort(signal: AbortSignal | null | undefined, reason: unknown): boolean {
   if (reason instanceof DOMException && reason.name === "TimeoutError") return true;
@@ -13,21 +35,27 @@ export function isTimeoutAbort(signal: AbortSignal | null | undefined, reason: u
   return /timed out|TimeoutError/i.test(msg);
 }
 
-/** Prefer AbortSignal.timeout; fall back to a manual timer abort. */
-export function boundAbortSignal(parent: AbortSignal, timeoutMs: number): {
+/**
+ * Bound a parent signal with a timeout via setTimeout (fake-timer friendly).
+ * Abort reason is TimeoutError so callers can map to CHAT_/AGENT_TIMEOUT_REPLY.
+ */
+export function boundAbortSignal(
+  parent: AbortSignal,
+  timeoutMs: number,
+): {
   signal: AbortSignal;
   cleanup: () => void;
 } {
-  if (typeof AbortSignal.any === "function" && typeof AbortSignal.timeout === "function") {
-    const timed = AbortSignal.timeout(timeoutMs);
-    return { signal: AbortSignal.any([parent, timed]), cleanup: () => undefined };
-  }
   const controller = new AbortController();
-  const onParent = () => controller.abort(parent.reason);
+  const onParent = () => {
+    if (!controller.signal.aborted) controller.abort(parent.reason);
+  };
   if (parent.aborted) onParent();
   else parent.addEventListener("abort", onParent, { once: true });
   const timer = setTimeout(() => {
-    controller.abort(new DOMException("The operation timed out", "TimeoutError"));
+    if (!controller.signal.aborted) {
+      controller.abort(new DOMException("The operation timed out", "TimeoutError"));
+    }
   }, timeoutMs);
   return {
     signal: controller.signal,

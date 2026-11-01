@@ -1,7 +1,7 @@
 import { requireUserId } from "../auth/verify.server";
 import { buildAgentModelBody, readAgentMessage, runBoundedAgent, type AgentModel } from "./agent";
 import { resolveModelTier } from "./model-tiers";
-import { AGENT_RUN_TIMEOUT_MS, AGENT_TIMEOUT_REPLY, boundAbortSignal, isTimeoutAbort } from "./turn-timeouts";
+import { AGENT_TIMEOUT_REPLY, agentRunTimeoutMs, boundAbortSignal, isTimeoutAbort } from "./turn-timeouts";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { decideFetchSite } from "./request-guard";
@@ -120,7 +120,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const goal = typeof body.goal === "string" ? body.goal : "";
   const tier = resolveModelTier(body.modelTier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
-  const bound = boundAbortSignal(request.signal, AGENT_RUN_TIMEOUT_MS);
+  const bound = boundAbortSignal(request.signal, agentRunTimeoutMs());
   try {
     const result = await runBoundedAgent({
       ws,
