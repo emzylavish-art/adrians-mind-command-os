@@ -10,6 +10,7 @@ import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layo
 import { createHealthSound, type SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
 import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
 import { TimeScrubber } from "./time-scrubber";
+import { FeedPanel } from "./feed-panel";
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
@@ -287,6 +288,10 @@ export function DashboardApp() {
           projects={state.data.projects}
           onClose={() => sendFly({ type: "ZOOM_OUT" })}
         />
+      ) : null}
+
+      {state.status === "ready" && sceneData ? (
+        <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
       ) : null}
 
       <NodeDetailPanel

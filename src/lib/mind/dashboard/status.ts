@@ -2,6 +2,7 @@ import { DASHBOARD_BOTS, matchBotForLock } from "./bots.ts";
 import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFromLocks } from "./feeds.ts";
 import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
 import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
+import { buildSkyFeed } from "./sky-feed.ts";
 import { readFileSync } from "node:fs";
 import { locksDirFromEnvSafe, repoDirFromEnvSafe } from "./safe-paths.ts";
 import { classifyHealth } from "./health.ts";
@@ -145,9 +146,22 @@ export async function buildDashboardStatus(
     timeline,
   };
 
+  const fleetPlan = buildFleetPlan(bots, env);
+  const skyFeed = buildSkyFeed({
+    conductor,
+    gapDispatcher,
+    locks,
+    lockTransitionText: transitionText,
+    commits: fleetCommits.length ? fleetCommits : commits,
+    fleetPlan,
+    notionGraph,
+    nowMs: now,
+  });
+
   return {
     ...base,
     projects: buildProjectsDashboard(base),
-    fleetPlan: buildFleetPlan(bots, env),
+    fleetPlan,
+    skyFeed,
   };
 }

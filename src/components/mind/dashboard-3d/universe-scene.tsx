@@ -47,6 +47,7 @@ import {
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
+import { createFeedGlyphs } from "./feed-glyphs";
 import { createCityLayer } from "./city/city-layer";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
 import {
@@ -668,6 +669,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const dust = createDustField(scene, { count: 480, seed: 42 });
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
 
@@ -1086,6 +1088,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city.tick(wallT, reducedMotion);
       dust.update(wallT, reducedMotion);
       comets.update(wallT, reducedMotion);
+      feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
       const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
       const healthy = botsNow.filter((b) => b.health === "healthy").length;
@@ -1121,6 +1124,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+        feedGlyphs.dispose();
+        feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };
     tick(performance.now());
@@ -1152,12 +1157,35 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       );
       cbs.current.onSkyView();
     };
+
+    const onFocusBot = (ev: Event) => {
+      const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
+      if (!botId) return;
+      const bot = dataRef.current.bots.find((b) => b.id === botId);
+      if (!bot) return;
+      const pos =
+        bot.id === "grok-build"
+          ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
+          : botWorldPosition(bot.id);
+      const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
+      if (!acceptPointerPick(rig)) return;
+      rig = flyTo(
+        rig,
+        target,
+        [camera.position.x, camera.position.y, camera.position.z],
+        [lookAt.x, lookAt.y, lookAt.z],
+      );
+      cbs.current.onSelectBot(bot);
+    };
+    document.addEventListener("dash3d-focus-bot", onFocusBot);
+
     document.addEventListener("dash3d-sky", onSkyEvent);
 
     window.addEventListener("resize", onResize);
 
     return () => {
       window.removeEventListener("resize", onResize);
+      document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);
@@ -1171,6 +1199,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       cancelAnimationFrame(raf);
       dust.dispose();
       comets.dispose();
+      feedGlyphs.dispose();
       sphereGeo.dispose();
       pageGeo.dispose();
       travelerGeo.dispose();

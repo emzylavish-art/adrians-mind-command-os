@@ -78,6 +78,23 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
       droppedInvalid: 0,
       truncated: false,
     },
+    skyFeed: {
+      events: [],
+      list: [],
+      sources: {
+        conductor: "no source yet",
+        gap: "no source yet",
+        lock: "no source yet",
+        landing: "no source yet",
+        commit: "no source yet",
+        merge_gate: "no source yet",
+        notion_stop: "no source yet",
+      },
+      droppedFlood: 0,
+      droppedStale: 0,
+      droppedDupes: 0,
+      generatedAtMs: 0,
+    },
     ...partial,
   };
 }

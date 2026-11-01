@@ -100,4 +100,6 @@ export type DashboardStatus = {
   fleetPlan: import("./fleet-plan.ts").FleetPlan;
   /** Queue #5 — real git+lock timeline for the TIME scrubber. */
   timeline: import("./time-scrub.ts").Timeline;
+  /** Queue #6 — drifting sky feed + glass list (real sources only). */
+  skyFeed: import("./sky-feed.ts").SkyFeed;
 };
