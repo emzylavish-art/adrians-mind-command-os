@@ -8,6 +8,7 @@ import type { QueueItem } from "./queue-parse.ts";
 import type { NotionGraph, NotionSnapPage } from "./notion-graph-core.ts";
 import type { BotNode, DashboardBotId, GitCommit, Health } from "./types.ts";
 import type { Timeline, TimelineEvent } from "./time-scrub.ts";
+import { branchNamesEqual, branchesForBot } from "./bot-branches.ts";
 
 export const NO_SOURCE = "no source yet";
 
@@ -102,7 +103,7 @@ export function botIdFromBranch(branch: string): string {
   return b.slice(0, 24) || "unknown";
 }
 
-/** Filter global git commits that belong to this bot's branch (exact, origin/, or branch→bot map). */
+/** Filter global git commits that belong to this bot's branch(es) — exact match only (no substring false positives). */
 export function commitsForBranch(
   commits: readonly GitCommit[],
   branch: string | null,
@@ -110,7 +111,11 @@ export function commitsForBranch(
   botId?: string | null,
 ): GitCommit[] {
   if (!commits.length) return [];
-  const want = branch ? branch.replace(/^origin\//, "") : "";
+  const wants = new Set(
+    (botId ? branchesForBot(botId, branch) : branch ? [branch.replace(/^origin\//, "")] : [])
+      .map((b) => b.replace(/^origin\//, ""))
+      .filter(Boolean),
+  );
   const out: GitCommit[] = [];
   const seen = new Set<string>();
   const push = (c: GitCommit) => {
@@ -121,23 +126,51 @@ export function commitsForBranch(
   for (const c of commits) {
     const b = (c.branch ?? "").replace(/^origin\//, "");
     const mapped = botIdFromBranch(b);
-    const branchHit = want && (b === want || b.endsWith(`/${want}`) || b.includes(want));
+    const branchHit = [...wants].some((w) => branchNamesEqual(b, w));
     const botHit = botId && mapped === botId;
     if (branchHit || botHit) {
       push(c);
       if (out.length >= limit) break;
     }
   }
-  // Hub bots (e.g. grok-build) with empty branch match: still show recent integration commits.
-  if (!out.length && botId === "grok-build") {
-    for (const c of commits) {
-      if (botIdFromBranch(c.branch ?? "") === "grok-build") {
-        push(c);
-        if (out.length >= limit) break;
-      }
-    }
+  return out;
+}
+
+/** Lock commit lines — sanitize control chars; keep honest empty. */
+export function sanitizeLockCommitLines(lines: readonly string[] | null | undefined, limit = 12): string[] {
+  if (!lines?.length) return [];
+  const out: string[] = [];
+  for (const raw of lines) {
+    if (typeof raw !== "string") continue;
+    const cleaned = raw.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 200);
+    if (!cleaned) continue;
+    out.push(cleaned);
+    if (out.length >= limit) break;
   }
   return out;
+}
+
+/** Notes = lock notes + Notion stop-point / mapped page titles (real text only). */
+export function composeBotNotes(opts: {
+  lockNotes?: string | null;
+  botNotes?: string | null;
+  notionTitles?: readonly string[] | null;
+  maxLen?: number;
+}): string {
+  const parts: string[] = [];
+  const push = (s: unknown) => {
+    if (typeof s !== "string") return;
+    const t = s.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+    if (!t) return;
+    if (parts.some((p) => p === t || p.includes(t) || t.includes(p))) return;
+    parts.push(t);
+  };
+  push(opts.lockNotes);
+  push(opts.botNotes);
+  for (const title of opts.notionTitles ?? []) push(title);
+  const joined = parts.join("\n\n");
+  const max = opts.maxLen ?? 1200;
+  return joined.length > max ? joined.slice(0, max).trimEnd() + "…" : joined;
 }
 
 
@@ -279,6 +312,10 @@ export function buildBotDetailView(input: {
   fleetPlan: FleetPlan | null | undefined;
   timeline?: Timeline | null;
   gapFeedTitles?: readonly string[] | null;
+  /** Extra queue-like rows from lane INTEGRATION.md / README (optional). */
+  laneQueueItems?: readonly QueueItem[] | null;
+  /** Notion stop-point titles that mention this bot (optional). */
+  notionStopTitles?: readonly string[] | null;
 }): BotDetailView {
   const { bot } = input;
   const lane = input.constellations.find((c) => c.botIds.includes(bot.id)) ?? null;
@@ -303,13 +340,22 @@ export function buildBotDetailView(input: {
     task: lockTask(bot.lock),
     branch: bot.branch,
     worktree: bot.lock?.worktree ?? null, // already public-label when API-publicized
-    lockCommits: bot.commits ?? [],
+    lockCommits: sanitizeLockCommitLines(
+      [
+        ...(bot.commits ?? []),
+        ...((bot.lock?.commits as string[] | undefined) ?? []),
+      ],
+      12,
+    ),
     lockHistory: lockHistoryFromTimeline(input.timeline, bot.id, 12),
     branchCommits: commitsForBranch(input.commits, bot.branch, 8, bot.id),
     queueItems: (() => {
-      const fromQueue = queueItemsForBot(input.fleetPlan?.queue ?? [], bot, laneName);
-      if (fromQueue.length || !(input.gapFeedTitles?.length)) return fromQueue;
-      // Promote gap-feed titles that mention this bot into honest queue-like rows (index -1).
+      const merged = [
+        ...(input.fleetPlan?.queue ?? []),
+        ...((input.laneQueueItems as import("./queue-parse.ts").QueueItem[] | undefined) ?? []),
+      ];
+      const fromQueue = queueItemsForBot(merged, bot, laneName);
+      if (fromQueue.length || !(input.gapFeedTitles?.length)) return fromQueue.slice(0, 12);
       const extra = input.gapFeedTitles
         .filter((title) => {
           const hay = title.toLowerCase();
@@ -320,14 +366,21 @@ export function buildBotDetailView(input: {
         .map((title, i) => ({
           index: -(i + 1),
           title,
-          status: "feed",
+          status: "unknown" as const,
           detail: "from gap-feed.md",
         }));
       return extra as import("./queue-parse.ts").QueueItem[];
     })(),
     notionPages: notionPagesForBot(input.notionGraph, bot.id),
     connections: connectionsForBot(bot, input.constellationEdges, input.bots, input.notionGraph),
-    notes: bot.notes || "",
+    notes: composeBotNotes({
+      lockNotes: bot.lock?.notes,
+      botNotes: bot.notes,
+      notionTitles: [
+        ...notionPagesForBot(input.notionGraph, bot.id).map((p) => p.title).filter(Boolean),
+        ...((input.notionStopTitles as string[] | undefined) ?? []),
+      ],
+    }),
   };
 }
 

@@ -85,6 +85,7 @@ import {
   createTravelerEaseState,
   createTravelerEaseSample,
   stepTravelerEase,
+  stepTravelerTrails,
   pauseTraveler,
   resumeTraveler,
   type TravelerEaseState,
@@ -1718,12 +1719,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             mat.uniforms["uPulse"].value = Math.min(1, base + 0.55 * edgePulseSample.highlight);
           }
         }
+        // Motion c21: batch traveler step + honest wrap count (no teleport on resume)
+        const travelerHold = fly.level !== "universe" || Boolean(rig.subjectId);
+        const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, { hold: travelerHold });
+        if (wraps > 0) dust.impulseGust(0.55, 0.12, -0.35, 0.45);
         for (const tr of landingTrails) {
-          stepTravelerEase(tr.ease, tr.sample, tr.points, t, dt, reducedMotion);
-          // Motion c13: gust dust when a landing traveler wraps a hop loop (real event)
-          if (!reducedMotion && tr.sample.progress + 0.5 < tr.lastProgress) {
-            dust.impulseGust(0.55, 0.12, -0.35, 0.45);
-          }
           tr.lastProgress = tr.sample.progress;
           tr.mesh.position.set(tr.sample.x, tr.sample.y + 0.35, tr.sample.z);
           (tr.mesh.material as THREE.MeshStandardMaterial).opacity = tr.sample.opacity;

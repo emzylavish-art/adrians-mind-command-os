@@ -175,6 +175,14 @@ export {
   type TravelerXyz,
 } from "./traveler-ease.ts";
 export {
+  TRAVELER_TRAILS_MAX,
+  TRAVELER_WRAP_MAX_STEP,
+  isTravelerWrap,
+  stepTravelerTrails,
+  type TravelerTrail,
+  type TravelerTrailsOpts,
+} from "./traveler-trails.ts";
+export {
   GUST_MAX_SPEED,
   GUST_DECAY_LAMBDA,
   GUST_IMPULSE,
