@@ -70,3 +70,15 @@ Appended section **mcp-integration stop-point** to Notion mirror page
 `notion-update-page` `insert_content` at end succeeded (returned page id).
 Status recorded as `complete` (typecheck, 226/226 src tests, build passed;
 e2e `pglite_query` SELECT 1 verified). Primary page `40b1aa27…` remains 404.
+
+## Gap: OAuth connectors (2026-11-01, Africa/Lagos)
+
+Shipped Notion OAuth Connect on ServiceBoard (authorization code + state + PKCE).
+Routes: `/api/mind/oauth/notion/{start,callback,status,disconnect}`.
+Tokens encrypted server-side (`CONNECTOR_TOKEN_SECRET`); never returned to client.
+Disconnect clears store (+ revoke when `NOTION_OAUTH_REVOKE_URL` set).
+MCP Notion tools use OAuth token when present.
+E2E mock flow logged at `/workspace/audit/mcp-integration/oauth-e2e.log`.
+Live provider connect **unverified** — no `NOTION_OAUTH_CLIENT_*` on box env
+(did not read other apps/browsers/connectors).
+Avoided `command-app.tsx` / `server.ts` / `styles.css` / voice / media / research.
