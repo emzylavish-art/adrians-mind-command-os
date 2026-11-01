@@ -12,3 +12,17 @@ const atm = createHealthAtmosphere(scene, { attachFog: false, tone: "idle" });
 // each rebuild/frame with real weather or derived tone:
 atm.update(status.weather?.tone ?? deriveFleetTone(status.bots.map(b => b.health)));
 ```
+
+## Focus key + rim light (`createFocusLight`)
+Near-white 3/4 key spot (camera-side, upper-left) + health-tinted rim point light behind the focused node, eased 350ms (reduced motion snaps). Unknown health → idle rim (neutral). No focus / NaN → off.
+
+```ts
+const focusLight = createFocusLight(scene);
+// per frame:
+focusLight.setFocus(
+  focused ? { position: focusedMesh.position, camera: camera.position, health: focusedBot.health } : null,
+  { reducedMotion },
+);
+focusLight.tick(dtMs);
+// unmount: focusLight.dispose();
+```
