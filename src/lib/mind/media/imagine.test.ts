@@ -176,3 +176,11 @@ describe("multi-image editImagineImage", () => {
     assert.equal(result.ok, true);
   });
 });
+
+describe("resolveImagineModel", () => {
+  it("accepts the quality model id from the live catalog", async () => {
+    const { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, resolveImagineModel } = await import("./imagine-shared.ts");
+    assert.equal(resolveImagineModel(GROK_IMAGINE_QUALITY_MODEL), GROK_IMAGINE_QUALITY_MODEL);
+    assert.equal(resolveImagineModel("nope"), GROK_IMAGINE_MODEL);
+  });
+});

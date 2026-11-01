@@ -1,6 +1,6 @@
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
-import { editImagineImage, generateImagineImages, GROK_IMAGINE_MODEL, normalizeImaginePrompt } from "./imagine.ts";
+import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolveImagineModel } from "./imagine.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -51,7 +51,7 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   if (!normalized.ok) return json({ ok: false, error: normalized.error }, 400);
 
   const n = typeof record.n === "number" ? record.n : typeof record.count === "number" ? record.count : 1;
-  const model = typeof record.model === "string" ? record.model : GROK_IMAGINE_MODEL;
+  const model = resolveImagineModel(record.model);
   const imageDataUrl = typeof record.image === "string" ? record.image : typeof record.imageDataUrl === "string" ? record.imageDataUrl : "";
   const imageDataUrls = Array.isArray(record.images)
     ? record.images.filter((item): item is string => typeof item === "string" && item.startsWith("data:image/"))

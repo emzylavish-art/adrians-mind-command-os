@@ -9,6 +9,9 @@ import {
 
 export {
   GROK_IMAGINE_MODEL,
+  GROK_IMAGINE_QUALITY_MODEL,
+  GROK_IMAGINE_MODELS,
+  resolveImagineModel,
   normalizeImaginePrompt,
   parseImagineCommand,
   XAI_IMAGES_EDITS_URL,
@@ -16,6 +19,7 @@ export {
   XAI_IMAGE_VARIATIONS_SUPPORTED,
   XAI_MULTI_IMAGE_EDITS_SUPPORTED,
 } from "./imagine-shared.ts";
+export type { GrokImagineModel } from "./imagine-shared.ts";
 
 export type ImagineRequest = {
   prompt: string;

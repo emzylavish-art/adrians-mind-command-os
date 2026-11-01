@@ -49,7 +49,7 @@ import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { historyTextForImages, parseImagineCommand, toImageAttachments, type ImageAttachment } from "@/lib/mind/media";
+import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, historyTextForImages, parseImagineCommand, resolveImagineModel, toImageAttachments, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -296,6 +296,7 @@ export function CommandApp() {
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [imagineModel, setImagineModel] = useState<GrokImagineModel>(GROK_IMAGINE_MODEL);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1144,7 +1145,7 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, n: 1 }),
+        body: JSON.stringify({ prompt, n: 1, model: resolveImagineModel(imagineModel) }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -1267,8 +1268,8 @@ export function CommandApp() {
         },
         body: JSON.stringify(
           inputImages.length === 1
-            ? { prompt, image: inputImages[0], mode: "edit", n: 1 }
-            : { prompt, images: inputImages, mode: "edit", n: 1 },
+            ? { prompt, image: inputImages[0], mode: "edit", n: 1, model: resolveImagineModel(imagineModel) }
+            : { prompt, images: inputImages, mode: "edit", n: 1, model: resolveImagineModel(imagineModel) },
         ),
       });
       const payload = (await response.json()) as {
@@ -1966,6 +1967,18 @@ export function CommandApp() {
                     >
                       Imagine
                     </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL}
+                      onClick={() =>
+                        setImagineModel((current) =>
+                          current === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_MODEL : GROK_IMAGINE_QUALITY_MODEL,
+                        )
+                      }
+                    >
+                      {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
+                    </button>
                     {pendingImages.length > 1 && (
                       <button
                         type="button"
@@ -2246,6 +2259,12 @@ export function CommandApp() {
                 void runImagine(prompt || undefined, active);
               }}
               onEditImagine={(src) => void runImagineEdit(src)}
+              imagineModel={imagineModel}
+              onToggleImagineQuality={() =>
+                setImagineModel((current) =>
+                  current === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_MODEL : GROK_IMAGINE_QUALITY_MODEL,
+                )
+              }
               onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
               onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
               onAddImageFile={(file) => void addImageAttachment(file)}
@@ -3230,6 +3249,8 @@ function ChatPane({
   onOpenCamera,
   onOpenCloud,
   onImagine,
+  imagineModel,
+  onToggleImagineQuality,
   onEditImagine,
   onSaveImage,
   onDownloadImage,
@@ -3280,6 +3301,8 @@ function ChatPane({
   onOpenCamera: () => void;
   onOpenCloud: () => void;
   onImagine: () => void;
+  imagineModel: GrokImagineModel;
+  onToggleImagineQuality: () => void;
   onEditImagine: (src: string) => void;
   onSaveImage: (src: string, alt: string) => void;
   onDownloadImage: (src: string, alt: string) => void;
@@ -3527,6 +3550,9 @@ function ChatPane({
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
               Imagine
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL} onClick={onToggleImagineQuality}>
+              {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
