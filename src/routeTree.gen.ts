@@ -14,6 +14,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/builtin'
+import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
+import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
+import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +44,26 @@ const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   path: '/api/mind/turn',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindMcpBuiltinRoute = ApiMindMcpBuiltinRouteImport.update({
+  id: '/api/mind/mcp/builtin',
+  path: '/api/mind/mcp/builtin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindMcpCallRoute = ApiMindMcpCallRouteImport.update({
+  id: '/api/mind/mcp/call',
+  path: '/api/mind/mcp/call',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindMcpServersRoute = ApiMindMcpServersRouteImport.update({
+  id: '/api/mind/mcp/servers',
+  path: '/api/mind/mcp/servers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindMcpToolsRoute = ApiMindMcpToolsRouteImport.update({
+  id: '/api/mind/mcp/tools',
+  path: '/api/mind/mcp/tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +71,10 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
+  '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
+  '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
+  '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +82,10 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
+  '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
+  '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
+  '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +94,34 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
+  '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
+  '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
+  '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/login' | '/api/auth/$' | '/api/mind/agent' | '/api/mind/turn'
+    | '/'
+    | '/login'
+    | '/api/auth/$'
+    | '/api/mind/agent'
+    | '/api/mind/turn'
+    | '/api/mind/mcp/builtin'
+    | '/api/mind/mcp/call'
+    | '/api/mind/mcp/servers'
+    | '/api/mind/mcp/tools'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/api/auth/$' | '/api/mind/agent' | '/api/mind/turn'
+  to:
+    | '/'
+    | '/login'
+    | '/api/auth/$'
+    | '/api/mind/agent'
+    | '/api/mind/turn'
+    | '/api/mind/mcp/builtin'
+    | '/api/mind/mcp/call'
+    | '/api/mind/mcp/servers'
+    | '/api/mind/mcp/tools'
   id:
     | '__root__'
     | '/'
@@ -76,6 +129,10 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/mcp/builtin'
+    | '/api/mind/mcp/call'
+    | '/api/mind/mcp/servers'
+    | '/api/mind/mcp/tools'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -84,6 +141,10 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  ApiMindMcpBuiltinRoute: typeof ApiMindMcpBuiltinRoute
+  ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
+  ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
+  ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -123,6 +184,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindTurnRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/mcp/builtin': {
+      id: '/api/mind/mcp/builtin'
+      path: '/api/mind/mcp/builtin'
+      fullPath: '/api/mind/mcp/builtin'
+      preLoaderRoute: typeof ApiMindMcpBuiltinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/mcp/call': {
+      id: '/api/mind/mcp/call'
+      path: '/api/mind/mcp/call'
+      fullPath: '/api/mind/mcp/call'
+      preLoaderRoute: typeof ApiMindMcpCallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/mcp/servers': {
+      id: '/api/mind/mcp/servers'
+      path: '/api/mind/mcp/servers'
+      fullPath: '/api/mind/mcp/servers'
+      preLoaderRoute: typeof ApiMindMcpServersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/mcp/tools': {
+      id: '/api/mind/mcp/tools'
+      path: '/api/mind/mcp/tools'
+      fullPath: '/api/mind/mcp/tools'
+      preLoaderRoute: typeof ApiMindMcpToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -132,6 +221,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  ApiMindMcpBuiltinRoute: ApiMindMcpBuiltinRoute,
+  ApiMindMcpCallRoute: ApiMindMcpCallRoute,
+  ApiMindMcpServersRoute: ApiMindMcpServersRoute,
+  ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
