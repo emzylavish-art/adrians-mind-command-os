@@ -85,17 +85,13 @@ describe("integration persona directory survives merge", () => {
 });
 
 describe("integration search timeout merge status", () => {
-  it("documents skip while logic-wiring.lock is claimed (d507e30+6bb0b7b not on tip)", () => {
+  it("asserts search timeout markers survived after d507e30+6bb0b7b landed", () => {
     const present =
       /export const SEARCH_TIMEOUT_REPLY/.test(research) &&
       /MIND_SEARCH_TIMEOUT_MS/.test(research) &&
       /MIND_SEARCH_DEEP_TIMEOUT/.test(research);
-    // Intentionally asserting absence until those commits are allowed to merge.
-    // Re-run this ticket after logic-wiring.lock is released to flip this to present===true.
-    assert.equal(
-      present,
-      false,
-      "search timeout markers unexpectedly present — update this test to assert survival instead of skip",
-    );
+    assert.equal(present, true);
+    assert.match(research, /boundAbortSignal/);
+    assert.match(research, /Search timed out\. No citations were created\./);
   });
 });
