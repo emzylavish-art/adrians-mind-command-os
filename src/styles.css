@@ -4712,3 +4712,64 @@ html[data-theme="light"] .composer-bar__card {
     max-height: none !important;
   }
 }
+
+/* —— Evolution c48: dash3d charts + node-detail cards (mono, CSS-only) —— */
+.dash3d-charts-panel,
+.dash3d-charts-panel.dash3d-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/chart-grid-mono.jpg"),
+    rgb(10 10 12 / 0.72) !important;
+  background-size: auto, cover, auto !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1.15rem !important;
+  padding: 1rem !important;
+  backdrop-filter: blur(20px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.15) !important;
+}
+.dash3d-chart-card,
+.dash3d-node-detail,
+.dash3d-node-card,
+[data-dash3d-node],
+.dash3d-side .dash3d-glass {
+  background-color: rgb(12 12 14 / 0.62) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1rem !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.dash3d-node-detail:empty,
+.dash3d-node-card:empty,
+[data-dash3d-node]:empty {
+  min-height: 7rem !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #a1a1aa !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, cover !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"]::before,
+.dash3d-node-detail:empty::before,
+.dash3d-node-card:empty::before {
+  content: "No data yet" !important;
+  font-size: 0.78rem !important;
+  letter-spacing: 0.02em;
+  color: #a1a1aa !important;
+}
+.dash3d-chart-card svg rect,
+.dash3d-chart-card svg path {
+  fill: #d4d4d8 !important;
+  stroke: #a1a1aa !important;
+}
+.dash3d-chart-card svg line {
+  stroke: rgb(255 255 255 / 0.14) !important;
+}
+html[data-theme="light"] .dash3d-charts-panel,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .dash3d-node-detail {
+  background-color: rgb(255 255 255 / 0.82) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  color: #18181b !important;
+}
