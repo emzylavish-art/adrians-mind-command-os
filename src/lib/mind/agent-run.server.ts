@@ -1,6 +1,7 @@
 import { requireUserId } from "../auth/verify.server";
 import { buildAgentModelBody, readAgentMessage, runBoundedAgent, type AgentModel } from "./agent";
 import { resolveModelTier } from "./model-tiers";
+import { AGENT_RUN_TIMEOUT_MS, AGENT_TIMEOUT_REPLY, boundAbortSignal, isTimeoutAbort } from "./turn-timeouts";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { decideFetchSite } from "./request-guard";
@@ -119,29 +120,60 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const goal = typeof body.goal === "string" ? body.goal : "";
   const tier = resolveModelTier(body.modelTier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
-  const result = await runBoundedAgent({
-    ws,
-    goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
-    model: grokModel(apiKey, request.signal, {
+  const bound = boundAbortSignal(request.signal, AGENT_RUN_TIMEOUT_MS);
+  try {
+    const result = await runBoundedAgent({
+      ws,
+      goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
+      model: grokModel(apiKey, bound.signal, {
+        model: tier.model,
+        temperature: tier.params.temperature,
+        max_tokens: tier.params.max_tokens,
+        reasoning_effort: tier.params.reasoning_effort,
+      }),
+      signal: bound.signal,
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      images,
+    });
+    if (!result.ok && isTimeoutAbort(bound.signal, bound.signal.reason)) {
+      return json({
+        ok: false,
+        text: "",
+        log: result.log,
+        error: AGENT_TIMEOUT_REPLY,
+        model: tier.model,
+        modelTier: tier.selected,
+        resolvedTier: tier.resolved,
+        tierReason: tier.reason,
+      });
+    }
+    return json({
+      ok: result.ok,
+      text: result.text,
+      log: result.log,
+      error: result.error ?? "",
       model: tier.model,
-      temperature: tier.params.temperature,
-      max_tokens: tier.params.max_tokens,
-      reasoning_effort: tier.params.reasoning_effort,
-    }),
-    signal: request.signal,
-    autonomy: "ask",
-    halted: false,
-    approved: true,
-    images,
-  });
-  return json({
-    ok: result.ok,
-    text: result.text,
-    log: result.log,
-    error: result.error ?? "",
-    model: tier.model,
-    modelTier: tier.selected,
-    resolvedTier: tier.resolved,
-    tierReason: tier.reason,
-  });
+      modelTier: tier.selected,
+      resolvedTier: tier.resolved,
+      tierReason: tier.reason,
+    });
+  } catch (caught) {
+    if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {
+      return json({
+        ok: false,
+        text: "",
+        log: [],
+        error: AGENT_TIMEOUT_REPLY,
+        model: tier.model,
+        modelTier: tier.selected,
+        resolvedTier: tier.resolved,
+        tierReason: tier.reason,
+      });
+    }
+    throw caught;
+  } finally {
+    bound.cleanup();
+  }
 }
