@@ -24,6 +24,7 @@ export {
   GodRayShader,
   createGodRayPass,
   godRayIntensity,
+  linearDepthOf,
   sunScreenUv,
   type GodRayHandle,
   type GodRayInputs,

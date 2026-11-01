@@ -6,8 +6,8 @@ import { KEY_RGB, normalizeHealthTone, type HealthTone } from "../atmosphere/hea
  * Depth-aware god-ray shafts (light lane, queue #11).
  *
  * Screen-space radial light scattering (GPU Gems 3 ch.13) from the orchestrator
- * "sun". Only bright, *far* pixels emit: when a depth texture is attached,
- * anything nearer than `depthCutoff` (stars, buildings, labels' meshes) occludes
+ * "sun". Only bright pixels at or behind the sun's own depth emit: when a depth
+ * texture is attached, anything nearer than the sun (stars, buildings) occludes
  * the shafts instead of smearing them. Without depth it falls back to a
  * luminance mask so the pass is still honest on renderers with no depth target.
  *
@@ -32,7 +32,22 @@ export function godRayIntensity({ healthy, total, reducedMotion }: GodRayInputs)
   return 0.25 + 0.55 * ratio;
 }
 
-export type SunScreen = { uv: [number, number]; visible: boolean; edgeFade: number };
+export type SunScreen = {
+  uv: [number, number];
+  visible: boolean;
+  edgeFade: number;
+  /** Sun linear depth 0..1 between camera near/far (perspective cameras), else 1. */
+  depth: number;
+};
+
+/** Linear 0..1 depth of a world point for a perspective camera (1 if not perspective). */
+export function linearDepthOf(world: THREE.Vector3, camera: THREE.Camera): number {
+  const cam = camera as THREE.PerspectiveCamera;
+  if (!cam.isPerspectiveCamera) return 1;
+  const viewZ = -world.clone().applyMatrix4(camera.matrixWorldInverse).z;
+  const d = (viewZ - cam.near) / (cam.far - cam.near);
+  return Number.isFinite(d) ? Math.min(1, Math.max(0, d)) : 1;
+}
 
 /**
  * Project the sun to screen UV. Behind the camera → invisible. Off-screen suns
@@ -42,11 +57,11 @@ export function sunScreenUv(sunWorld: THREE.Vector3, camera: THREE.Camera): SunS
   const v = sunWorld.clone().project(camera);
   const uv: [number, number] = [v.x * 0.5 + 0.5, v.y * 0.5 + 0.5];
   if (!Number.isFinite(v.x) || !Number.isFinite(v.y) || !Number.isFinite(v.z) || v.z > 1 || v.z < -1) {
-    return { uv: [0.5, 0.5], visible: false, edgeFade: 0 };
+    return { uv: [0.5, 0.5], visible: false, edgeFade: 0, depth: 1 };
   }
   const over = Math.max(0, Math.abs(v.x) - 1, Math.abs(v.y) - 1);
   const edgeFade = Math.max(0, 1 - over / 1.0);
-  return { uv, visible: edgeFade > 0, edgeFade };
+  return { uv, visible: edgeFade > 0, edgeFade, depth: linearDepthOf(sunWorld, camera) };
 }
 
 export const GodRayShader = {
@@ -56,7 +71,9 @@ export const GodRayShader = {
     useDepth: { value: 0 },
     cameraNear: { value: 0.1 },
     cameraFar: { value: 1000 },
-    depthCutoff: { value: 0.92 },
+    /** Sun linear depth; pixels nearer than (sunDepth - depthBias) occlude. */
+    sunDepth: { value: 1 },
+    depthBias: { value: 0.02 },
     sunUv: { value: new THREE.Vector2(0.5, 0.5) },
     intensity: { value: 0 },
     decay: { value: 0.955 },
@@ -80,7 +97,8 @@ export const GodRayShader = {
     uniform float useDepth;
     uniform float cameraNear;
     uniform float cameraFar;
-    uniform float depthCutoff;
+    uniform float sunDepth;
+    uniform float depthBias;
     uniform vec2 sunUv;
     uniform float intensity;
     uniform float decay;
@@ -101,7 +119,7 @@ export const GodRayShader = {
       col = texture2D(tDiffuse, uv).rgb;
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
       float bright = smoothstep(lumThreshold, lumThreshold + 0.25, l);
-      float far = useDepth > 0.5 ? step(depthCutoff, linDepth(uv)) : 1.0;
+      float far = useDepth > 0.5 ? step(sunDepth - depthBias, linDepth(uv)) : 1.0;
       return bright * far;
     }
 
@@ -109,7 +127,9 @@ export const GodRayShader = {
       vec4 base = texture2D(tDiffuse, vUv);
       if (intensity <= 0.0) { gl_FragColor = base; return; }
       vec2 delta = (vUv - sunUv) * (density / float(SAMPLES));
-      vec2 uv = vUv;
+      // Interleaved-gradient jitter hides the 48-step banding.
+      float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      vec2 uv = vUv - delta * jitter;
       float illum = 1.0;
       vec3 acc = vec3(0.0);
       for (int i = 0; i < SAMPLES; i++) {
@@ -122,6 +142,9 @@ export const GodRayShader = {
       acc /= float(SAMPLES) * 0.25;
       // Shafts never lighten occluders' cores harshly: soft screen blend.
       vec3 rays = acc * tint * intensity;
+      // Near occluders keep their silhouette: only a thin veil of scatter on top.
+      float selfFar = useDepth > 0.5 ? step(sunDepth - depthBias, linDepth(vUv)) : 1.0;
+      rays *= mix(0.3, 1.0, selfFar);
       gl_FragColor = vec4(base.rgb + rays * (1.0 - base.rgb * 0.5), base.a);
     }
   `,
@@ -133,7 +156,11 @@ export type GodRayHandle = {
   readonly intensity: number;
   update: (inputs: GodRayInputs & { tone?: HealthTone }) => void;
   setSun: (sunWorld: THREE.Vector3, camera: THREE.Camera) => void;
-  /** Attach the scene depth texture (e.g. renderTarget.depthTexture) or null for luminance-only. */
+  /**
+   * Attach the scene depth texture or null for luminance-only. With EffectComposer
+   * built on a target that has a DepthTexture, pass `composer.readBuffer.depthTexture`
+   * (RenderPass draws into readBuffer and does not swap).
+   */
   setDepthTexture: (tex: THREE.Texture | null, camera?: THREE.PerspectiveCamera) => void;
   dispose: () => void;
 };
@@ -173,6 +200,12 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
       const s = sunScreenUv(sunWorld, camera);
       u.sunUv.value.set(s.uv[0], s.uv[1]);
       fade = s.visible ? s.edgeFade : 0;
+      u.sunDepth.value = s.depth;
+      const cam = camera as THREE.PerspectiveCamera;
+      if (cam.isPerspectiveCamera) {
+        u.cameraNear.value = cam.near;
+        u.cameraFar.value = cam.far;
+      }
       apply();
     },
     setDepthTexture(tex, camera) {

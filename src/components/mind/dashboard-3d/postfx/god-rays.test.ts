@@ -22,6 +22,10 @@ describe("god-rays", () => {
     assert.equal(front.visible, true);
     assert.ok(Math.abs(front.uv[0] - 0.5) < 1e-6 && Math.abs(front.uv[1] - 0.5) < 1e-6);
     assert.equal(sunScreenUv(new THREE.Vector3(0, 0, 30), cam).visible, false);
+    // Depth-aware: a far sun sits deeper than a near occluder.
+    const far = sunScreenUv(new THREE.Vector3(0, 0, -200), cam).depth;
+    const near = sunScreenUv(new THREE.Vector3(0, 0, 5), cam).depth;
+    assert.ok(far > near && far <= 1 && near >= 0);
   });
 
   it("pass is disabled when off, enabled when healthy, and disposes idempotently", () => {
