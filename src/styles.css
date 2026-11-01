@@ -6490,3 +6490,88 @@ aside nav button:disabled,
     max-width: 48rem !important;
   }
 }
+
+/* —— Evolution c87: long-content stress — ellipsis + wrap —— */
+/* Thread / chat titles */
+aside .truncate,
+.main-stage .truncate,
+.rail .truncate,
+[data-testid*="chat"] .truncate,
+aside button span.truncate,
+.main-stage span.truncate,
+.main-stage .min-w-0.truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+/* Bot / agent names in lists */
+.main-stage .dense-card .font-semibold,
+.main-stage .dense-row .font-semibold,
+.main-stage article.dense-card h3,
+.main-stage [class*="bot"] .font-semibold {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+/* Long messages — wrap, don't blow horizontal scroll */
+.main-stage article.max-w-3xl,
+.main-stage .chat-stream article,
+.main-stage [data-testid="message-body"],
+.main-stage .message-body,
+.chat-stream {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+}
+.main-stage article.max-w-3xl pre,
+.main-stage .chat-stream pre,
+.main-stage article.max-w-3xl code {
+  white-space: pre-wrap !important;
+  overflow-x: auto !important;
+  max-width: 100% !important;
+}
+/* Masthead titles with long AI Chat / thread names */
+.masthead h2.font-display,
+.main-stage h2.font-display {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+/* Provider labels */
+.main-stage fieldset label,
+.model-option-active,
+.composer-bar__model-option-title {
+  min-width: 0 !important;
+}
+.composer-bar__model-option-title {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 14rem !important;
+}
+/* Prevent shell horizontal CLS from long content */
+.shell,
+.main-stage,
+.page-shell {
+  overflow-x: clip !important;
+  max-width: 100vw !important;
+}
+
+/* Final guards — 29c2f9b nav stack */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+
+/* fa50cf6: keep alerts toggle ≥44px */
+[data-testid="alerts-toggle"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
