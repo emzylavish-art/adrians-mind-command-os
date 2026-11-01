@@ -11,6 +11,7 @@ import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
 import { readModelPayload } from "./stream";
+import { parseModelTierField, readJsonObjectBody } from "./request-body";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
@@ -61,6 +62,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if (!allowMindRequest("chat", userId, 12)) {
     return { ok: false as const, error: "Too many messages. Wait a minute and try again." };
   }
+  const tierField = parseModelTierField(data.modelTier);
+  if (!tierField.ok) return { ok: false as const, error: tierField.error };
   const images = sanitizeAttachments(data.images);
   const text = typeof data.text === "string" ? data.text.trim() : "";
   if (!text && images.length === 0) return { ok: false as const, error: "Write a message first." };
@@ -82,7 +85,7 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     images,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
-  const tier = resolveModelTier(data.modelTier, text || "image", process.env);
+  const tier = resolveModelTier(tierField.tier, text || "image", process.env);
   return {
     ok: true as const,
     assembled,
@@ -146,21 +149,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function readLimited(request: Request): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
-  if (!request.body) return { ok: true, text: "" };
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  while (true) {
-    const step = await reader.read();
-    if (step.done) break;
-    received += step.value.byteLength;
-    if (received > MAX_BODY) return { ok: false, error: "That request is too large." };
-    chunks.push(step.value);
-  }
-  return { ok: true, text: Buffer.concat(chunks).toString("utf8") };
-}
-
 export async function handleMindTurn(request: Request): Promise<Response> {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
   if (
@@ -182,14 +170,11 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
   }
-  const limited = await readLimited(request);
-  if (!limited.ok) return json({ ok: false, error: limited.error }, 413);
-  let body: TurnBody;
-  try {
-    body = JSON.parse(limited.text) as TurnBody;
-  } catch {
-    return json({ ok: false, error: "That request could not be read." }, 400);
-  }
+  const read = await readJsonObjectBody(request, MAX_BODY);
+  if (!read.ok) return json({ ok: false, error: read.error }, read.status);
+  const body = read.body as TurnBody;
+  const tierField = parseModelTierField(body.modelTier);
+  if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
   const selected = selectProvider(body.provider, process.env);
   if (!selected.ok) return json(selected);
   if (selected.id !== "grok") {
