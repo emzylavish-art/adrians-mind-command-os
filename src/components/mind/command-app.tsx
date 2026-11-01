@@ -47,7 +47,7 @@ import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
-import { ComposerLiveVoice } from "@/components/mind/composer-live-voice";
+import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
@@ -2570,7 +2570,7 @@ export function CommandApp() {
         </div>
       </aside>
 
-      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
+      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36">
         <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
@@ -2936,21 +2936,6 @@ export function CommandApp() {
                     <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
-                    <ComposerLiveVoice
-                      isOverlayMicOpen={() =>
-                        Boolean(
-                          voiceListening ||
-                            voiceSession.current?.isOpen ||
-                            voiceSession.current?.isCapturing ||
-                            listenMintAbortRef.current,
-                        )
-                      }
-                      stopOverlayMic={() => void listen({ mode: "stop" })}
-                      onUserTranscript={(text) => appendLiveVoiceUser(text)}
-                      onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
-                      onError={(message) => setError(message)}
-                      onNotice={(message) => setNotice(message)}
-                    />
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
@@ -4212,6 +4197,38 @@ export function CommandApp() {
           More
         </button>
       </nav>
+
+      <LiveVoiceBar
+        isOverlayMicOpen={() =>
+          Boolean(
+            voiceListening ||
+              voiceSession.current?.isOpen ||
+              voiceSession.current?.isCapturing ||
+              listenMintAbortRef.current,
+          )
+        }
+        stopOverlayMic={() => void listen({ mode: "stop" })}
+        onUserTranscript={(text) => appendLiveVoiceUser(text)}
+        onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+        onError={(message) => setError(message)}
+        onNotice={(message) => setNotice(message)}
+        onChatSend={(text) => {
+          const clipped = text.trim().slice(0, 8000);
+          if (!clipped) return;
+          if (active) {
+            void deliver(active, clipped, ws);
+            return;
+          }
+          setDraft(clipped);
+          window.setTimeout(() => {
+            void sendCommand();
+          }, 0);
+        }}
+        onChatAttachText={(text, name) => {
+          setDraft((prev) => (prev ? `${prev}\n\n${text}` : text));
+          setNotice(`Attached ${name} into the composer (live was off).`);
+        }}
+      />
     </div>
   );
 }
@@ -4748,17 +4765,6 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
               {speaking ? "Speaking" : "Speak"}
             </button>
-            <ComposerLiveVoice
-              isOverlayMicOpen={() => Boolean(voiceListening)}
-              stopOverlayMic={() => {
-                if (onListenStop) onListenStop();
-                else onListen();
-              }}
-              onUserTranscript={(text) => onLiveUserTranscript?.(text)}
-              onAssistantTranscript={(text) => onLiveAssistantTranscript?.(text)}
-              onError={(message) => onLiveVoiceError?.(message)}
-              onNotice={(message) => onLiveVoiceNotice?.(message)}
-            />
             <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
         </form>

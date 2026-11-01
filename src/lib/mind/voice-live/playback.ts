@@ -1,33 +1,38 @@
 /**
- * Gapless scheduled playback of pcm16 deltas via SharedAudioOutput.
- * Live voice and message Speak share one speaker path / cutoff.
+ * Gapless live playback via LiveSpeakerGain (GainNode mute/volume).
+ * Barge-in also interrupts SharedAudioOutput so message Speak shares cutoff.
  */
 
-import { SharedAudioOutput, sharedAudioOutput } from "../voice/audio-output.ts";
-import { REALTIME_SAMPLE_RATE } from "../voice/realtime-session.ts";
+import { LiveSpeakerGain, readStoredVolume } from "./speaker-gain.ts";
 
 export type LivePlayback = {
   playDeltaBase64: (b64: string) => Promise<void>;
   interrupt: () => void;
   get isPlaying(): boolean;
-  /** Bound scheduled source count proxy via SharedAudioOutput. */
   reset: () => void;
+  speaker: LiveSpeakerGain;
 };
 
-export function createLivePlayback(output: SharedAudioOutput = sharedAudioOutput): LivePlayback {
+export function createLivePlayback(speaker?: LiveSpeakerGain): LivePlayback {
+  const sp =
+    speaker ??
+    new LiveSpeakerGain(
+      readStoredVolume(typeof localStorage === "undefined" ? null : localStorage),
+    );
   return {
+    speaker: sp,
     async playDeltaBase64(b64: string) {
       if (!b64) return;
-      await output.playPcm16Base64(b64, { sampleRate: REALTIME_SAMPLE_RATE });
+      await sp.playPcm16Base64(b64);
     },
     interrupt() {
-      output.interrupt();
+      sp.interrupt();
     },
     get isPlaying() {
-      return output.isPlaying;
+      return sp.isPlaying;
     },
     reset() {
-      output.interrupt();
+      sp.interrupt();
     },
   };
 }
