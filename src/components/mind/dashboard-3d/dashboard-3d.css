@@ -1113,3 +1113,31 @@
 [data-testid="money-panel"] {
   min-height: 5.5rem;
 }
+
+
+/* Gap #45 — mirror must not steal Time clicks; zoomout pills must not stretch into scene slabs */
+.dash3d-skybar {
+  z-index: 7;
+  align-items: flex-start;
+}
+.dash3d-time-scrub {
+  position: relative;
+  z-index: 8;
+  pointer-events: auto;
+}
+.dash3d-mirror-panel {
+  z-index: 4; /* under skybar (7) so Time / Live remain clickable */
+  max-height: min(28vh, 240px);
+}
+button.dash3d-zoomout.dash3d-glass,
+.dash3d-skybar > button.dash3d-zoomout {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  height: auto;
+  max-height: 2.75rem;
+  min-height: 44px;
+  min-width: 44px;
+  width: auto;
+  padding: 0.45rem 0.85rem;
+  line-height: 1.2;
+}

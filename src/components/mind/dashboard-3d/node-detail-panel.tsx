@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { PORTRAIT_FALLBACK_URL, markPortraitMissing } from "@/lib/mind/dashboard/portrait-resolve";
 import { sanitizeNotionPlainText } from "@/lib/mind/dashboard/notion-plain";
 import type { BotNode } from "@/lib/mind/dashboard/types";
@@ -28,7 +29,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; spend?: SpendView | null; portraitSrc?: string | null }) {
   return (
     <>
-      <h2>Star detail</h2>
+      <h2 id="dash3d-node-detail-title">Star detail</h2>
       {portraitSrc ? (
         <img
           className="dash3d-portrait"
@@ -168,6 +169,14 @@ export function NodeDetailPanel({
   notionNeighbors?: NotionSnapPage[];
   portraitSrc?: string | null;
 }) {
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const openPanel = Boolean(open && (bot || notionPage));
+  useEffect(() => {
+    if (!openPanel) return;
+    // Gap#46: move focus into the dialog when it opens (close is always present).
+    closeBtnRef.current?.focus();
+  }, [openPanel, bot?.id, notionPage?.id]);
+
   const detail =
     bot && status
       ? buildBotDetailView({
@@ -182,9 +191,23 @@ export function NodeDetailPanel({
       : null;
 
   return (
-    <aside className={`dash3d-side dash3d-node-detail ${open && (bot || notionPage) ? "is-open" : ""}`} aria-hidden={!open} data-testid="node-detail" data-dash3d-node={bot?.id ?? notionPage?.id ?? undefined}>
+    <aside
+      className={`dash3d-side dash3d-node-detail ${open && (bot || notionPage) ? "is-open" : ""}`}
+      aria-hidden={!open}
+      role={open && (bot || notionPage) ? "dialog" : undefined}
+      aria-modal={open && (bot || notionPage) ? true : undefined}
+      aria-labelledby={open ? "dash3d-node-detail-title" : undefined}
+      data-testid="node-detail"
+      data-dash3d-node={bot?.id ?? notionPage?.id ?? undefined}
+    >
       <div className="dash3d-glass dash3d-node-card">
-        <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
+        <button
+          type="button"
+          ref={closeBtnRef}
+          className="dash3d-side-close"
+          onClick={onClose}
+          aria-label="Close details"
+        >
           ×
         </button>
         {detail ? <BotDetailBody detail={detail} spend={spend} portraitSrc={portraitSrc} /> : null}
@@ -194,7 +217,7 @@ export function NodeDetailPanel({
 
         {notionPage ? (
           <>
-            <h2 style={{ marginTop: bot ? "1.25rem" : 0 }}>Notion page</h2>
+            <h2 id={bot ? undefined : "dash3d-node-detail-title"} style={{ marginTop: bot ? "1.25rem" : 0 }}>Notion page</h2>
             <p className="dash3d-title">{sanitizeNotionPlainText(notionPage.title, 160) || NO_SOURCE}</p>
             <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>
               {sanitizeNotionPlainText(notionPage.excerpt, 400) || NO_SOURCE}
