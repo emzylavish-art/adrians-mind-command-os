@@ -25,6 +25,27 @@ export function sanitizePaperGrainSize(size: number, fallback = 256): number {
   return n;
 }
 
+
+/**
+ * Clamp procedural texture edge to both our hard cap and GL MAX_TEXTURE_SIZE.
+ * If maxTextureSize is omitted/invalid, use a conservative mobile-safe default (1024)
+ * rather than silently allocating PAPER_GRAIN_MAX_SIZE that some GPUs reject.
+ */
+export const GPU_SAFE_TEXTURE_DEFAULT = 1024;
+
+export function clampTextureSizeToGpu(
+  size: number,
+  maxTextureSize?: number,
+  fallback = 256,
+): number {
+  const base = sanitizePaperGrainSize(size, fallback);
+  let gpuMax = GPU_SAFE_TEXTURE_DEFAULT;
+  if (maxTextureSize != null && Number.isFinite(maxTextureSize) && maxTextureSize >= PAPER_GRAIN_MIN_SIZE) {
+    gpuMax = Math.min(PAPER_GRAIN_MAX_SIZE, Math.floor(maxTextureSize));
+  }
+  return Math.min(base, gpuMax);
+}
+
 export function sanitizeFinite(value: number, fallback: number, min?: number, max?: number): number {
   let v = Number.isFinite(value) ? value : fallback;
   if (min != null && v < min) v = min;
@@ -33,6 +54,21 @@ export function sanitizeFinite(value: number, fallback: number, min?: number, ma
 }
 
 /** Pure RGBA buffer of paper grain (procedural, no external image). */
+/**
+ * HACKER FIX (c3): shader time must stay bounded. Fragment shaders fall back to
+ * mediump (fp16, max 65504, ~10-bit mantissa) on weak GPUs; an always-on wall
+ * dashboard passes that in ~18h (and uTime*2.0 overflows at ~9h) -> Inf -> sin(Inf)
+ * = NaN -> black/sparkling materials. Wrap into a short period instead.
+ */
+export const PAINTER_TIME_PERIOD = 600;
+
+export function sanitizeShaderTime(timeSeconds: number, period = PAINTER_TIME_PERIOD): number {
+  if (!Number.isFinite(timeSeconds)) return 0;
+  const p = Number.isFinite(period) && period > 0 ? period : PAINTER_TIME_PERIOD;
+  const w = ((timeSeconds % p) + p) % p;
+  return w >= p ? 0 : w;
+}
+
 export function makePaperGrainRGBA(
   size: number,
   seed = 1,
@@ -57,17 +93,19 @@ export function makePaperGrainRGBA(
   return data;
 }
 
+/** CanvasTexture paper grain for Three.js materials. */
 export type PaperGrainTextureOptions = {
   size?: number;
   seed?: number;
   strength?: number;
+  /** From gl.getParameter(gl.MAX_TEXTURE_SIZE); omit → mobile-safe 1024 cap */
+  maxTextureSize?: number;
 };
 
-/** CanvasTexture paper grain for Three.js materials. */
 export function createPaperGrainTexture(
   opts: PaperGrainTextureOptions = {},
 ): THREE.DataTexture {
-  const size = sanitizePaperGrainSize(opts.size ?? 256);
+  const size = clampTextureSizeToGpu(opts.size ?? 256, opts.maxTextureSize);
   const data = makePaperGrainRGBA(size, opts.seed ?? 1, opts.strength ?? 18);
   // CRITICAL: DataTexture dims must match buffer edge (sanitized), never raw opts.size
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
