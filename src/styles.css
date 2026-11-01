@@ -4293,3 +4293,43 @@ aside.rail nav button:not(.bg-accent) svg * {
     max-width: 100vw !important;
   }
 }
+
+/* —— Evolution c55: prove glass — override Pass-8 backdrop-filter:none on tool/service cards —— */
+.tool-card,
+.service-card,
+.main-stage .grid > article.dense-card.card-texture,
+.dense-card.card-texture,
+.command-card,
+.glow-card,
+.dense-card,
+.composer-dock,
+.floating-composer,
+.composer-bar__card,
+.masthead,
+.dash3d-chart-card,
+.dash3d-glass {
+  backdrop-filter: blur(22px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+  background-color: rgb(12 12 14 / 0.58) !important;
+}
+html[data-theme="light"] .tool-card,
+html[data-theme="light"] .service-card,
+html[data-theme="light"] .dense-card.card-texture,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+}
+/* Kill purple focus leftovers (mono shell) */
+.dense-card:focus-within,
+.settings-row:focus-within,
+.glow-card:focus-within,
+.floating-composer:focus-within,
+main:focus-visible {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2), 0 18px 48px rgb(0 0 0 / 0.45) !important;
+}
+html[data-theme="light"] :focus-visible {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(9 9 11 / 0.55) !important;
+}
