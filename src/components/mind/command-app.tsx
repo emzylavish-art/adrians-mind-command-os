@@ -44,6 +44,7 @@ import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
+import { DICTATE_MINT_TIMEOUT_MS, withDictateTimeout } from "@/components/mind/live-voice-bar/dictate-timeout";
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
@@ -1651,6 +1652,34 @@ export function CommandApp() {
     void listen(opts);
   };
 
+  /** Dictation with hard mint/mic timeout — never leave "Minting…" forever. */
+  async function dictateWithTimeout() {
+    const already =
+      voiceListening ||
+      Boolean(voiceSession.current?.isOpen || voiceSession.current?.isCapturing || listenMintAbortRef.current);
+    if (already) {
+      void listen({ mode: "stop" });
+      return;
+    }
+    try {
+      await withDictateTimeout(
+        listen({ mode: "start" }),
+        DICTATE_MINT_TIMEOUT_MS,
+        "Dictation timed out waiting for the microphone or voice mint. Check permissions, then try again.",
+      );
+    } catch (caught) {
+      void listen({ mode: "stop" });
+      setVoiceListening(false);
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : "Dictation timed out. Check mic permission, then try again.";
+      setError(message);
+      setNotice(null);
+    }
+  }
+
+
   async function checkRea() {
     setReaBusy(true);
     setError(null);
@@ -2026,53 +2055,24 @@ export function CommandApp() {
                       </button>
                     ))}
                   </div>
+                  {/* Replaced by LiveVoiceBar Ask Anything — keep draft binding via bar */}
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
                     rows={3}
-                    className="w-full resize-none rounded-panel border border-line bg-bg px-3 py-3 text-sm"
+                    className="hidden"
+                    aria-hidden="true"
+                    tabIndex={-1}
                   />
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
-                      <Paperclip className="size-4" /> Attach
+                  <div className="mt-2 hidden flex-wrap items-center gap-2" aria-hidden="true">
+                    <button type="button" tabIndex={-1} onClick={() => fileRef.current?.click()}>
+                      Attach
                     </button>
-                    <button
-                      type="button"
-                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                      onClick={() => {
-                        setContextOpen((open) => !open);
-                        setToolsOpen(false);
-                      }}
-                    >
-                      <Database className="size-4" /> Add Context
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                      onClick={() => {
-                        setToolsOpen((open) => !open);
-                        setContextOpen(false);
-                      }}
-                    >
-                      <Wrench className="size-4" /> Tools
-                    </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setView("agents")}>
-                      <Bot className="size-4" /> Agents
-                    </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
-                      <Folder className="size-4" /> Projects
-                    </button>
-                    <VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" />
-                    <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
-                      {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
-                    </button>
-                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
-                      <Send className="size-4" /> {busy ? "Sending" : "Send"}
-                    </button>
+                    <button type="submit" tabIndex={-1} disabled={busy || ws.halted}>Send</button>
                   </div>
                 </form>
                 {contextOpen && (
@@ -3113,7 +3113,8 @@ export function CommandApp() {
         askValue={draft}
         onAskChange={setDraft}
         dictating={voiceListening}
-        onDictateToggle={() => void listen()}
+        onDictateToggle={() => void dictateWithTimeout()}
+        onAttachFileClick={() => fileRef.current?.click()}
         modelPickerSlot={
           <>
             <span className="composer-bar__model-ico" aria-hidden="true" />
@@ -3531,7 +3532,7 @@ function ChatPane({
           <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
         </div>
         <form
-          className="command-card m-3 rounded-panel bg-surface p-3"
+          className="command-card m-3 hidden rounded-panel bg-surface p-3"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();

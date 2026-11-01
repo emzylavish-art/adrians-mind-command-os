@@ -133,6 +133,8 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (!sessionRef.current?.isActive && !isLiveVoiceOccupied()) return;
+      // Settings / any modal open → do not end the call (popover owns Esc).
+      if (document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest?.('[role="dialog"], [aria-modal="true"], dialog')) return;
       event.preventDefault();
