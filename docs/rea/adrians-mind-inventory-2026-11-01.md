@@ -1,7 +1,7 @@
 # Adrian's Mind Command OS — feature inventory (2026-11-01)
 
 **Repo:** `/workspace/mind-command-os` (git)  
-**Branch at inventory time:** `visual/polish-pass-1` @ `b7a57c1` (working tree may move; see gap commit on `rea-features`)  
+**Branch at inventory time:** `visual/polish-pass-2 (shared HEAD b7a57c1 with polish-pass-1)` @ `b7a57c1` (working tree may move; see gap commit on `rea-features`)  
 **Sources:** `README.md`, `ENGINEERING.md`, `docs/FEATURE_COMPLETION_MATRIX.md`, `docs/PLATFORM_CAPABILITY_RESEARCH.md`, `docs/EXTERNAL_BLOCKERS.md`, `src/components/mind/*`, `src/lib/mind/{types,registry,fleet,requirements}.ts`, prior `/workspace/audit/mind-os/gap-report.md`
 
 ## Product shape

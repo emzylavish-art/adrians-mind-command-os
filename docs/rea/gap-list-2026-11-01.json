@@ -46,7 +46,8 @@
         "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
         "/workspace/rea-captures/gemini/gemini-features-2026-11-01.md",
         "/workspace/audit/signed-in/findings-chatgpt-claude.md",
-        "/workspace/audit/signed-in/findings-gemini.md"
+        "/workspace/audit/signed-in/findings-gemini.md",
+        "/workspace/rea-captures/poe/poe-explore-retry-features-2026-11-01.md"
       ],
       "adrians_today": "Presentational Auto/Fast/Expert/Heavy/Build menu; provider radios mostly disabled; no effort API.",
       "effort": "M",
@@ -260,7 +261,8 @@
       "evidence": [
         "/workspace/audit/signed-in/findings-chatgpt-claude.md",
         "/workspace/audit/signed-in/findings-manus.md",
-        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md"
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/claude/claude-claude-com-retry-features-2026-11-01.md"
       ],
       "adrians_today": "Build view cards report Not available / computer not paired.",
       "effort": "L",
@@ -279,7 +281,8 @@
       "evidence": [
         "/workspace/rea-captures/characterai/characterai-features-2026-11-01.md",
         "/workspace/rea-captures/poe/poe-features-2026-11-01.md",
-        "/workspace/rea-captures/manus/manus-features-2026-11-01.md"
+        "/workspace/rea-captures/manus/manus-features-2026-11-01.md",
+        "/workspace/rea-captures/poe/poe-chatgpt-bot-retry-features-2026-11-01.md"
       ],
       "adrians_today": "Bots & Agents + templates exist but not a discoverable persona marketplace UI.",
       "effort": "M",
@@ -296,7 +299,8 @@
       "evidence": [
         "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
         "/workspace/rea-captures/poe/poe-features-2026-11-01.md",
-        "/workspace/rea-captures/youcom/youcom-features-2026-11-01.md"
+        "/workspace/rea-captures/youcom/youcom-features-2026-11-01.md",
+        "/workspace/rea-captures/poe/poe-explore-retry-features-2026-11-01.md"
       ],
       "adrians_today": "chat.router capability marked ready locally; no multi-model auto router to external catalogs.",
       "effort": "L",
@@ -470,5 +474,13 @@
       "effort": "L",
       "why": "Unique Command OS capability vs chat apps; ranks last among UI gaps because env/install, not competitor parity."
     }
-  ]
+  ],
+  "retry_walled": {
+    "date": "2026-11-01",
+    "timezone": "Africa/Lagos",
+    "claude": "app_blocked_marketing_captured",
+    "phind": "still_404",
+    "poe": "explore_and_bot_pages_captured",
+    "summary": "/workspace/rea-captures/capture-retry-walled-summary-2026-11-01.json"
+  }
 }
