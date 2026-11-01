@@ -35,9 +35,9 @@ describe("Gap#50 lock claims vs releases", () => {
     const now = Date.parse("2026-11-01T18:30:00+01:00");
     const tl = {
       events: [
-        { atMs: Date.parse("2026-11-01T15:10:00+01:00"), atIso: "", kind: "lock_claim" as const, label: "c" },
-        { atMs: Date.parse("2026-11-01T15:20:00+01:00"), atIso: "", kind: "lock_release" as const, label: "r" },
-        { atMs: Date.parse("2026-11-01T17:05:00+01:00"), atIso: "", kind: "lock_claim" as const, label: "c2" },
+        { atMs: Date.parse("2026-11-01T15:10:00+01:00"), atIso: "", kind: "lock_claim" as const, label: "c", botId: "logic" },
+        { atMs: Date.parse("2026-11-01T15:20:00+01:00"), atIso: "", kind: "lock_release" as const, label: "r", botId: "logic" },
+        { atMs: Date.parse("2026-11-01T17:05:00+01:00"), atIso: "", kind: "lock_claim" as const, label: "c2", botId: "logic" },
       ],
       earliestMs: Date.parse("2026-11-01T15:10:00+01:00"),
       latestMs: now,

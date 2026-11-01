@@ -29,3 +29,20 @@ export {
   type FocusRigPlacement,
   type Vec3Like,
 } from "./focus-light.ts";
+export {
+  BOUNCE_CHROMA,
+  BOUNCE_EASE_MS,
+  BOUNCE_INTENSITY,
+  NEUTRAL_BOUNCE_RGB,
+  averageLinearRgb,
+  bouncePlacement,
+  bounceRgbFromAverage,
+  createPortraitBounce,
+  domPixelReader,
+  portraitTextureOf,
+  readyImageSize,
+  sampleTextureAverage,
+  type PixelReader,
+  type PortraitBounceHandle,
+  type PortraitBounceInput,
+} from "./portrait-bounce.ts";

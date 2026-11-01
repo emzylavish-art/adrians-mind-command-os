@@ -25,8 +25,8 @@ import {
   releasePainterlyMaterial,
   type PainterlyKit,
 } from "./materials";
-import { createHealthAtmosphere, createFocusLight, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, projectedRadiusUv } from "./postfx";
+import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, projectedRadiusUv } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -390,7 +390,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const fleetLineGroup = new THREE.Group();
     scene.add(fleetLineGroup);
 
-    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void };
+    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; cardPlane?: THREE.Mesh; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void };
     const botVis: BotVis[] = [];
     const botMeshes: THREE.Mesh[] = [];
     const pageIdByIndex: string[] = [];
@@ -554,7 +554,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         label.position.set(pos.x, pos.y + 0.75, pos.z);
         botGroup.add(label);
 
-        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone(), setColor: star.setColor });
+        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone(), cardPlane, setColor: star.setColor });
       }
     }
 
@@ -900,8 +900,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let raysHandle: ReturnType<typeof createGodRayPass> | null = null;
     let focusDepthHandle: ReturnType<typeof createFocusDepthPass> | null = null;
     let focusBloomGuardHandle: ReturnType<typeof createFocusBloomGuard> | null = null;
+    let detailDimHandle: ReturnType<typeof createDetailBackdropDimPass> | null = null;
     // Light lane focus readability: key/rim follow focused star (dispose on unmount / context loss).
     let focusLight = createFocusLight(scene);
+    // Light #67 / #60: Imagine portrait colour bounce (neutral when texture unloaded).
+    let portraitBounce = createPortraitBounce(scene);
     // Light lane #12: idle until real weather arrives (not healthy-green before data)
     let exposureRide = createExposureRide({ tone: "idle", reducedMotion });
     exposureRide.apply(renderer);
@@ -909,7 +912,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const rebuildPostfxBundle = () => {
       // Light #13: rebuild passes into the live composer after WebGL restore
       if (!composer || reducedMotion) {
-        return { bloom: null, grade: null, godRays: null, exposure: exposureRide, focusDepth: null, focusBloomGuard: null };
+        return { bloom: null, grade: null, godRays: null, exposure: exposureRide, focusDepth: null, focusBloomGuard: null, detailDim: null };
       }
       const w = Math.max(1, mount.clientWidth || width);
       const h = Math.max(1, mount.clientHeight || height);
@@ -950,6 +953,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } catch {
         nextGrade = null;
       }
+      // Light #67: dim nebula behind detail/charts (after grade, before painterly).
+      let nextDetailDim: typeof detailDimHandle = null;
+      try {
+        nextDetailDim = createDetailBackdropDimPass();
+        composer.addPass(nextDetailDim.pass);
+      } catch {
+        nextDetailDim = null;
+      }
       composer.addPass(kit.painterlyPass);
       let nextGuard: typeof focusBloomGuardHandle = null;
       if (nextBloom) {
@@ -964,6 +975,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       raysHandle = nextRays;
       focusDepthHandle = nextFocusDepth;
       focusBloomGuardHandle = nextGuard;
+      detailDimHandle = nextDetailDim;
       exposureRide = createExposureRide({ tone: "idle", reducedMotion });
       exposureRide.apply(renderer);
       return {
@@ -973,6 +985,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         exposure: exposureRide,
         focusDepth: nextFocusDepth,
         focusBloomGuard: nextGuard,
+        detailDim: nextDetailDim,
       };
     };
 
@@ -994,7 +1007,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const postfxRecovery = createContextLossRecovery({
       canvas: renderer.domElement,
-      initial: { bloom: bloomHandle, grade: gradeHandle, godRays: raysHandle, exposure: exposureRide, focusDepth: focusDepthHandle, focusBloomGuard: focusBloomGuardHandle },
+      initial: { bloom: bloomHandle, grade: gradeHandle, godRays: raysHandle, exposure: exposureRide, focusDepth: focusDepthHandle, focusBloomGuard: focusBloomGuardHandle, detailDim: detailDimHandle },
       factory: rebuildPostfxBundle,
     });
 
@@ -1400,10 +1413,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } catch {
         /* already gone */
       }
+      try {
+        portraitBounce.dispose();
+      } catch {
+        /* already gone */
+      }
     };
     const onCtxRestoredFocusLight = () => {
       try {
         focusLight = createFocusLight(scene);
+      } catch {
+        /* restore race */
+      }
+      try {
+        portraitBounce = createPortraitBounce(scene);
       } catch {
         /* restore race */
       }
@@ -1647,6 +1670,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const focusedBot = focusId ? botsNow.find((b) => b.id === focusId) : null;
         const liveFocusDepth = postfxRecovery.bundle.focusDepth ?? focusDepthHandle;
         const liveBloomGuard = postfxRecovery.bundle.focusBloomGuard ?? focusBloomGuardHandle;
+        const liveDetailDim = postfxRecovery.bundle.detailDim ?? detailDimHandle;
+        const cardRadiusWorld = 1.2;
         if (focusedVis && focusedBot) {
           focusLight.setFocus(
             {
@@ -1657,15 +1682,29 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             { reducedMotion },
           );
           liveFocusDepth?.setFocus(focusedVis.mesh.position, camera, { reducedMotion });
-          const rad = projectedRadiusUv(focusedVis.mesh.position, 1.2, camera);
+          const rad = projectedRadiusUv(focusedVis.mesh.position, cardRadiusWorld, camera);
           liveBloomGuard?.setFocus(focusedVis.mesh.position, camera, {
             reducedMotion,
             radiusUv: rad ?? undefined,
           });
+          const tex = focusedVis.cardPlane
+            ? portraitTextureOf(focusedVis.cardPlane.material)
+            : null;
+          portraitBounce.setFocus(
+            {
+              position: focusedVis.mesh.position,
+              camera: camera.position,
+              texture: tex,
+            },
+            { reducedMotion },
+          );
+          liveDetailDim?.setHole(focusedVis.mesh.position, camera, rad);
         } else {
           focusLight.setFocus(null, { reducedMotion });
           liveFocusDepth?.setFocus(null, camera, { reducedMotion });
           liveBloomGuard?.setFocus(null, camera, { reducedMotion });
+          portraitBounce.setFocus(null, { reducedMotion });
+          liveDetailDim?.setHole(null, camera, null);
         }
         const fog = scene.fog as THREE.FogExp2 | null;
         if (fog && "color" in fog) {
@@ -1674,9 +1713,21 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (composer?.readBuffer?.depthTexture) {
           liveBloomGuard?.setDepthTexture(composer.readBuffer.depthTexture);
         }
+        // Gap#67: dim nebula behind open detail / charts (CSS px → DPR-safe); hole keeps portrait undimmed.
+        if (liveDetailDim) {
+          const vp = renderer.domElement.getBoundingClientRect();
+          const detailEl = document.querySelector<HTMLElement>(".dash3d-node-detail.is-open");
+          const chartEl = document.querySelector<HTMLElement>("[data-testid=charts-panel]");
+          const rects = [detailEl?.getBoundingClientRect(), chartEl?.getBoundingClientRect()].filter(
+            Boolean,
+          ) as DOMRect[];
+          liveDetailDim.setRects(rects, vp, { reducedMotion });
+        }
         focusLight.tick(dt * 1000);
         liveFocusDepth?.tick(dt * 1000);
         liveBloomGuard?.tick(dt * 1000);
+        portraitBounce.tick(dt * 1000);
+        liveDetailDim?.tick(dt * 1000);
       }
 
       if (composer) composer.render();
@@ -1870,9 +1921,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       fallbackPortraitTex?.dispose();
       fallbackPortraitTex = null;
       focusLight.dispose();
+      try { portraitBounce.dispose(); } catch { /* */ }
       focusBloomGuardHandle?.dispose();
+      detailDimHandle?.dispose();
       focusDepthHandle?.dispose();
-      postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth/bloomGuard
+      postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth/bloomGuard/detailDim
       renderer.dispose();
       composer?.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);

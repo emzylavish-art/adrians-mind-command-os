@@ -121,7 +121,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 64 | **Gap#49 Chart labels/tooltips still truncated (Gap#15 re-check)** | **done** | c47 — hour tick through ·c/r; role=tooltip text; lane legend |
 | 65 | **Gap#50 Lock claims vs releases chart drops empty hours / claims-only bars** | **done** | c47 — zero-fill hours; cyan claims + amber releases altValue |
 | 66 | **Gap#51 Compass minimap overlaps Charts at 1280×800** | **done** | c47 — charts bottom above minimap (calc +158px) |
-| 67 | **Light — Imagine portrait colour bounce + detail-card backdrop dim (#60)** | queued | Light lane next after #57; real average colour from texture; never invent |
+| 67 | **Light — Imagine portrait colour bounce + detail-card backdrop dim (#60)** | **done** | c47 — land e65a052 atmosphere/postfx; wire createPortraitBounce + createDetailBackdropDimPass; ctx-loss harden+scene retry co-exist |
+| 68 | **Light — measured-luminance backdrop dim** | queued | Light lane next after e65a052; builds on #67 dim |
 
 
 

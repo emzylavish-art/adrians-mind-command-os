@@ -26,3 +26,6 @@ focusLight.setFocus(
 focusLight.tick(dtMs);
 // unmount: focusLight.dispose();
 ```
+
+## #60 Imagine portrait colour bounce (`portrait-bounce.ts`)
+Low-intensity camera-side fill under the focused node, tinted from the focused Imagine portrait's real average colour (`portraitTextureOf(material)` → `createPortraitBounce(scene).setFocus({ position, camera, texture })`). Neutral when not loaded / tainted; never invented. Full wiring in `postfx/README.md` (#60 section).
