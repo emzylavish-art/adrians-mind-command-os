@@ -44,7 +44,9 @@ import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { DictationPill, type DictationUiState } from "@/components/mind/dictation-pill";
-import { runOllamaConductor, DEFAULT_OLLAMA_BASE } from "@/lib/mind/voice/ollama-conductor";
+import { runOllamaConductor, DEFAULT_OLLAMA_BASE, ollamaUnreachableMessage } from "@/lib/mind/voice/ollama-conductor";
+import { DICTATION_SILENCE_PEAK } from "@/lib/mind/voice/dictation-machine";
+import { probeOllama } from "@/lib/mind/voice/ollama-probe";
 import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
@@ -312,7 +314,12 @@ export function CommandApp() {
   const [dictationState, setDictationState] = useState<DictationUiState>("idle");
   const [dictationLevel, setDictationLevel] = useState(0);
   const [dictationElapsed, setDictationElapsed] = useState(0);
+  const [dictationStatus, setDictationStatus] = useState<string | null>(null);
+  const [voiceOverlayNotice, setVoiceOverlayNotice] = useState<string | null>(null);
+  const [orchestratorHint, setOrchestratorHint] = useState<string | null>(null);
   const dictationRef = useRef<DictationRecorder | null>(null);
+  const dictationStateRef = useRef<DictationUiState>("idle");
+  const dictationPeakRef = useRef(0);
   const dictationLevelTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const dictationClockTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -326,6 +333,10 @@ export function CommandApp() {
     voiceModeRef.current = voiceMode;
     writeStoredVoiceMode(voiceMode, typeof localStorage === "undefined" ? null : localStorage);
   }, [voiceMode]);
+
+  useEffect(() => {
+    dictationStateRef.current = dictationState;
+  }, [dictationState]);
 
   useEffect(() => {
     return () => {
@@ -1216,75 +1227,144 @@ export function CommandApp() {
     }
   }
 
-  function resetDictationUi() {
+  function resetDictationUi(options?: { clearStatus?: boolean }) {
     clearDictationTimers();
     dictationRef.current = null;
+    dictationPeakRef.current = 0;
+    dictationStateRef.current = "idle";
     setDictationState("idle");
     setDictationLevel(0);
     setDictationElapsed(0);
+    if (options?.clearStatus) setDictationStatus(null);
+  }
+
+  function ollamaBaseFromStorage() {
+    return (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || DEFAULT_OLLAMA_BASE;
+  }
+
+  async function applyOrchestratorProbe() {
+    const base = ollamaBaseFromStorage();
+    const probe = await probeOllama({ baseUrl: base });
+    if (!probe.ok) {
+      setOrchestratorHint(probe.hint);
+      setError(probe.error);
+      return false;
+    }
+    setOrchestratorHint(null);
+    return true;
+  }
+
+  async function handleVoiceModeToggle() {
+    const next = toggleVoiceMode(voiceModeRef.current);
+    setVoiceMode(next);
+    if (next === "orchestrator") {
+      await applyOrchestratorProbe();
+    } else {
+      setOrchestratorHint(null);
+      setError(null);
+      setNotice("Voice mode: Direct.");
+    }
   }
 
   async function startDictation() {
-    if (dictationState !== "idle") return;
+    if (dictationStateRef.current !== "idle") return;
     if (voiceListening || voiceOverlayOpen) {
       setVoiceOverlayOpen(false);
       stopVoiceSession();
+      setVoiceOverlayNotice(null);
     }
     setError(null);
-    setNotice("Dictation recording… Stop to insert text into the composer (nothing is sent).");
+    // Show Stop/Cancel immediately — do not wait for getUserMedia.
+    dictationStateRef.current = "recording";
+    setDictationState("recording");
+    setDictationElapsed(0);
+    setDictationLevel(0);
+    dictationPeakRef.current = 0;
+    setDictationStatus("Dictation recording… Stop to insert text into the composer (nothing is sent).");
+    const startedAt = Date.now();
+    dictationClockTimer.current = setInterval(() => {
+      setDictationElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 250);
     try {
       const recorder = await createDictationRecorder();
+      if (dictationStateRef.current !== "recording") {
+        recorder.cancel();
+        return;
+      }
       dictationRef.current = recorder;
       await recorder.start();
-      setDictationState("recording");
-      setDictationElapsed(0);
-      const startedAt = Date.now();
       dictationLevelTimer.current = setInterval(() => {
-        setDictationLevel(dictationRef.current?.getLevel() ?? 0);
+        const level = dictationRef.current?.getLevel() ?? 0;
+        dictationPeakRef.current = Math.max(dictationPeakRef.current, level);
+        setDictationLevel(level);
       }, 80);
-      dictationClockTimer.current = setInterval(() => {
-        setDictationElapsed(Math.floor((Date.now() - startedAt) / 1000));
-      }, 250);
     } catch (caught) {
-      resetDictationUi();
+      resetDictationUi({ clearStatus: true });
       setError(caught instanceof Error ? caught.message : "Microphone dictation could not start.");
+      setDictationStatus(null);
     }
   }
 
   async function stopDictation() {
-    const recorder = dictationRef.current;
-    if (!recorder || dictationState !== "recording") return;
+    if (dictationStateRef.current !== "recording") return;
     clearDictationTimers();
+    dictationStateRef.current = "transcribing";
     setDictationState("transcribing");
     setDictationLevel(0);
+    setDictationStatus("Transcribing dictation…");
+    const recorder = dictationRef.current;
+    const peak = dictationPeakRef.current;
     try {
-      const { blob, mime } = await recorder.stop();
+      let blob: Blob = new Blob([], { type: "audio/webm" });
+      let mime = "audio/webm";
+      if (recorder) {
+        const stopped = await recorder.stop();
+        blob = stopped.blob;
+        mime = stopped.mime;
+      }
       dictationRef.current = null;
-      if (blob.size < 64) {
+      if (blob.size < 64 || peak < DICTATION_SILENCE_PEAK) {
         resetDictationUi();
-        setNotice("Dictation was too short. Nothing was inserted.");
+        setDictationStatus("No speech detected. Nothing was inserted.");
         return;
       }
       const audioBase64 = await blobToBase64(blob);
       const result = await transcribeAudio({ data: { audioBase64, mime } });
       if (!result.ok) {
         resetDictationUi();
-        setError(result.error);
+        const silent = /no words|empty|nothing was transcribed/i.test(result.error);
+        setDictationStatus(silent ? "No speech detected. Nothing was inserted." : result.error);
+        if (!silent) setError(result.error);
+        return;
+      }
+      if (!result.text.trim()) {
+        resetDictationUi();
+        setDictationStatus("No speech detected. Nothing was inserted.");
         return;
       }
       setDraft((prev) => appendDictationText(prev, result.text));
       resetDictationUi();
-      setNotice("Dictation inserted into the composer. Nothing was sent.");
+      setDictationStatus("Dictation inserted into the composer. Nothing was sent.");
     } catch (caught) {
       resetDictationUi();
       setError(caught instanceof Error ? caught.message : "Dictation could not be transcribed.");
+      setDictationStatus(null);
     }
   }
 
   function cancelDictation() {
     dictationRef.current?.cancel();
     resetDictationUi();
-    setNotice("Dictation cancelled. Nothing was inserted.");
+    setDictationStatus("Dictation cancelled. Nothing was inserted.");
+  }
+
+  function onDictationMicClick() {
+    if (dictationStateRef.current === "recording") {
+      void stopDictation();
+      return;
+    }
+    if (dictationStateRef.current === "transcribing") return;
+    void startDictation();
   }
 
   async function openVoiceOverlay() {
@@ -1292,18 +1372,29 @@ export function CommandApp() {
       closeVoiceOverlay();
       return;
     }
-    if (dictationState !== "idle") {
+    // Cancel dictation cleanly even if still starting (state already recording).
+    if (dictationStateRef.current !== "idle") {
       dictationRef.current?.cancel();
-      resetDictationUi();
+      resetDictationUi({ clearStatus: true });
+    } else {
+      setDictationStatus(null);
     }
     setVoiceOverlayOpen(true);
     setVoiceTranscript("");
+    setVoiceOverlayNotice(null);
+    if (voiceModeRef.current === "orchestrator") {
+      const ok = await applyOrchestratorProbe();
+      if (!ok) {
+        setVoiceOverlayNotice(ollamaUnreachableMessage(ollamaBaseFromStorage()));
+      }
+    }
     if (!voiceListening) await listen({ openOverlay: true });
   }
 
   function closeVoiceOverlay() {
     setVoiceOverlayOpen(false);
     stopVoiceSession();
+    setVoiceOverlayNotice("Voice mode closed.");
     setNotice("Voice mode closed.");
   }
 
@@ -1390,9 +1481,9 @@ export function CommandApp() {
       setError("Emergency stop is on. Voice was not started.");
       return;
     }
-    if (dictationState !== "idle") {
+    if (dictationStateRef.current !== "idle") {
       dictationRef.current?.cancel();
-      resetDictationUi();
+      resetDictationUi({ clearStatus: true });
     }
     setError(null);
     if (options?.openOverlay) setVoiceOverlayOpen(true);
@@ -1410,7 +1501,10 @@ export function CommandApp() {
       },
       onSpeechStarted: () => {
         sharedAudioOutput.interrupt();
-        session.interruptPlayback();
+        session.interruptPlayback({ reason: "speech" });
+        setSpeaking(false);
+        setVoicePhase("interrupted");
+        setVoiceOverlayNotice("Interrupted — listening");
       },
       onError: (message) => setError(message),
       onLevel: (level) => setVoiceLevel(level),
@@ -1424,7 +1518,8 @@ export function CommandApp() {
           setVoicePhase("processing");
         } else if (status === "listening" || status === "connecting") {
           setSpeaking(false);
-          setVoicePhase("listening");
+          // Keep "Interrupted — listening" label until the next speak/process cycle.
+          setVoicePhase((prev) => (prev === "interrupted" ? "interrupted" : "listening"));
         } else {
           setSpeaking(false);
           setVoicePhase("idle");
@@ -1439,7 +1534,9 @@ export function CommandApp() {
       await session.startCapture();
       setVoiceListening(true);
       setVoicePhase("listening");
-      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Close the overlay or press End to stop.`);
+      const listeningMsg = `Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Close the overlay or press End to stop.`;
+      setVoiceOverlayNotice(listeningMsg);
+      setNotice(listeningMsg);
     } catch (caught) {
       stopVoiceSession();
       setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
@@ -1615,10 +1712,11 @@ export function CommandApp() {
             <VoiceModeBadge
               mode={voiceMode}
               listening={voiceListening}
-              onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+              hint={orchestratorHint}
+              onToggle={() => void handleVoiceModeToggle()}
             />
             <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
-              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} label={voiceListening || speaking ? "Voice level" : "Voice idle"} />
               <button
                 type="button"
                 className="grid size-9 place-items-center rounded-panel border border-line text-muted"
@@ -1873,12 +1971,17 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+                    <VoiceWaveform
+                      level={dictationState !== "idle" ? dictationLevel : voiceLevel}
+                      active={dictationState === "recording" || voiceListening || speaking}
+                      label={dictationState === "recording" ? "Recording" : dictationState === "transcribing" ? "Transcribing" : voiceListening || speaking ? "Voice level" : "Voice idle"}
+                      className="ml-auto"
+                    />
                     <DictationPill
                       state={dictationState}
                       level={dictationLevel}
                       elapsedSec={dictationElapsed}
-                      onStart={() => void startDictation()}
+                      onMicClick={onDictationMicClick}
                       onStop={() => void stopDictation()}
                       onCancel={cancelDictation}
                       disabled={busy || ws.halted}
@@ -1950,10 +2053,11 @@ export function CommandApp() {
               <VoiceModeBadge
                 mode={voiceMode}
                 listening={voiceListening}
-                onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+                hint={orchestratorHint}
+                onToggle={() => void handleVoiceModeToggle()}
               />
             <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
-              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} label={voiceListening || speaking ? "Voice level" : "Voice idle"} />
               <button
                 type="button"
                 className="grid size-9 place-items-center rounded-panel border border-line text-muted"
@@ -1967,8 +2071,9 @@ export function CommandApp() {
               </button>
             </div>
 
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
-              {error && <p className="text-sm text-danger">{error}</p>}
+              {dictationStatus && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted" data-testid="dictation-status">{dictationStatus}</p>}
+              {notice && !voiceOverlayOpen && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+              {error && <p className="text-sm text-danger" data-testid="voice-error">{error}</p>}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -2111,16 +2216,18 @@ export function CommandApp() {
               dictationState={dictationState}
               dictationLevel={dictationLevel}
               dictationElapsed={dictationElapsed}
-              onStartDictation={() => void startDictation()}
+              onDictationMicClick={onDictationMicClick}
               onStopDictation={() => void stopDictation()}
               onCancelDictation={cancelDictation}
+              dictationStatus={dictationStatus}
               speaking={speaking}
               voiceMode={voiceMode}
               voiceListening={voiceListening}
               voiceMuted={voiceMuted}
               voiceLevel={voiceLevel}
               onToggleMute={toggleVoiceMute}
-              onToggleVoiceMode={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+              onToggleVoiceMode={() => void handleVoiceModeToggle()}
+              orchestratorHint={orchestratorHint}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
@@ -2894,10 +3001,16 @@ export function CommandApp() {
         muted={voiceMuted}
         mode={voiceMode}
         transcript={voiceTranscript}
-        notice={notice}
+        notice={voiceOverlayNotice}
         error={error}
         onMute={toggleVoiceMute}
         onClose={closeVoiceOverlay}
+        onInterrupt={() => {
+          voiceSession.current?.interruptFromUser();
+          setVoicePhase("interrupted");
+          setSpeaking(false);
+          setVoiceOverlayNotice("Interrupted — listening");
+        }}
       />
 
       {projectOpen && (
@@ -3091,9 +3204,11 @@ function ChatPane({
   dictationState,
   dictationLevel,
   dictationElapsed,
-  onStartDictation,
+  onDictationMicClick,
   onStopDictation,
   onCancelDictation,
+  dictationStatus,
+  orchestratorHint,
   memoryChoice,
   mode,
   onComposerMemory,
@@ -3143,9 +3258,11 @@ function ChatPane({
   dictationState: DictationUiState;
   dictationLevel: number;
   dictationElapsed: number;
-  onStartDictation: () => void;
+  onDictationMicClick: () => void;
   onStopDictation: () => void;
   onCancelDictation: () => void;
+  dictationStatus: string | null;
+  orchestratorHint: string | null;
   memoryChoice: "off" | "on";
   mode: Autonomy;
   onComposerMemory: () => void;
@@ -3329,7 +3446,7 @@ function ChatPane({
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
-          <VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} />
+          <VoiceModeBadge mode={voiceMode} listening={voiceListening} hint={orchestratorHint} onToggle={onToggleVoiceMode} />
         </div>
         <form
           className="command-card m-3 rounded-panel bg-surface p-3"
@@ -3360,12 +3477,17 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+            <VoiceWaveform
+              level={dictationState !== "idle" ? dictationLevel : voiceLevel}
+              active={dictationState === "recording" || voiceListening || speaking}
+              label={dictationState === "recording" ? "Recording" : dictationState === "transcribing" ? "Transcribing" : voiceListening || speaking ? "Voice level" : "Voice idle"}
+              className="ml-auto"
+            />
             <DictationPill
               state={dictationState}
               level={dictationLevel}
               elapsedSec={dictationElapsed}
-              onStart={onStartDictation}
+              onMicClick={onDictationMicClick}
               onStop={onStopDictation}
               onCancel={onCancelDictation}
               disabled={busy || halted}
@@ -3388,6 +3510,7 @@ function ChatPane({
             </button>
             <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
+          {dictationStatus ? <p className="mt-2 text-xs text-muted" data-testid="dictation-status">{dictationStatus}</p> : null}
         </form>
       </section>
       <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
