@@ -303,6 +303,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     skyMat.depthWrite = false;
     const sky = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), skyMat);
     scene.add(sky);
+    // Painted backdrop (Grok Imagine) — honest fallback keeps procedural sky if missing
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      "/dashboard-3d/art/backdrop-nebula.webp",
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const painted = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false });
+        sky.material = painted;
+        skyMat.dispose();
+      },
+      undefined,
+      () => { /* keep procedural sky — no source */ },
+    );
 
 
 
@@ -372,14 +385,30 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botGroup.add(mesh);
         botMeshes.push(mesh);
 
-        const glow = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: starTex,
-            color,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          }),
+        const glowMat = new THREE.SpriteMaterial({
+          map: starTex,
+          color,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const glow = new THREE.Sprite(glowMat);
+        // Portrait sprite (additive halo still uses starTex); portrait sits as small card sprite if asset exists
+        const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
+        loader.load(
+          portraitUrl,
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const card = new THREE.Sprite(
+              new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.92 }),
+            );
+            card.scale.set(1.15, 1.15, 1.15);
+            card.position.copy(pos).add(new THREE.Vector3(0, 0.95, 0));
+            card.userData.botId = bot.id;
+            botGroup.add(card);
+          },
+          undefined,
+          () => { /* no portrait asset yet */ },
         );
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
