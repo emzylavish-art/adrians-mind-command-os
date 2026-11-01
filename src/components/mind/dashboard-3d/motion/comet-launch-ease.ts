@@ -201,6 +201,13 @@ export function stepCometLaunchEase(
 /** Max chars of a key compared per slot (hostile mega-sha must not burn a frame). */
 export const COMET_LAUNCH_KEY_MAX = 128;
 
+let scratchAmount = new Float64Array(COMET_LAUNCH_MAX_BURST);
+let scratchDelay = new Float64Array(COMET_LAUNCH_MAX_BURST);
+let scratchLive = new Uint8Array(COMET_LAUNCH_MAX_BURST);
+let scratchClaimed = new Uint8Array(COMET_LAUNCH_MAX_BURST);
+let scratchKeys: (string | null)[] = new Array(COMET_LAUNCH_MAX_BURST).fill(null);
+let scratchSrc = new Int32Array(COMET_LAUNCH_MAX_BURST);
+
 function normKey(k: unknown): string | null {
   if (typeof k !== "string" || k.length === 0) return null;
   return k.length > COMET_LAUNCH_KEY_MAX ? k.slice(0, COMET_LAUNCH_KEY_MAX) : k;
@@ -216,6 +223,7 @@ function normKey(k: unknown): string | null {
  *  - same key → slot untouched (parked comets stay at amount=1, in-flight keep easing);
  *  - new/changed key → staggered launch (respecting maxConcurrent; overflow parks visible
  *    at amount=1 — never left hidden forever);
+ *  - c23: key found at another old index (commit prepended) → carries that slot's state;
  *  - slot past keys.length (or empty key) → cleared hidden.
  * Reduced-motion → changed slots snap to amount=1. Returns how many slots animate a launch.
  * Zero allocation in steady state.
@@ -243,18 +251,60 @@ export function reconcileCometLaunch(
   const cur = state.keys;
   const list = Array.isArray(keys) ? keys : null;
   const n = list ? Math.min(list.length, slots.length) : 0;
+  const m = slots.length;
 
+  // c23: snapshot old slot state so a key that moved index (new commit prepended → every
+  // sha shifts one slot) carries its landed/in-flight state instead of relaunching.
+  // Module scratch — zero allocation in steady state.
+  if (scratchAmount.length < m) {
+    scratchAmount = new Float64Array(m);
+    scratchDelay = new Float64Array(m);
+    scratchLive = new Uint8Array(m);
+    scratchClaimed = new Uint8Array(m);
+    scratchKeys = new Array(m).fill(null);
+    scratchSrc = new Int32Array(m);
+  }
+  for (let j = 0; j < m; j++) {
+    const s = slots[j]!;
+    scratchAmount[j] = finiteOr(s.amount, 0);
+    scratchDelay[j] = finiteOr(s.delay, 0);
+    scratchLive[j] = s.live ? 1 : 0;
+    scratchClaimed[j] = 0;
+    scratchKeys[j] = cur[j] ?? null;
+  }
+
+  // Pass 1: resolve each new key to an old slot (same index first, else first unclaimed
+  // match). -1 = new key. Count live among carried slots for the concurrency budget.
   let live = 0;
-  for (let i = 0; i < slots.length; i++) {
+  for (let i = 0; i < m; i++) {
     const k = i < n ? normKey(list![i]) : null;
-    if (k !== null && k === cur[i]) {
-      if (slots[i]!.live) live++;
+    scratchSrc[i] = -1;
+    if (k === null) continue;
+    if (scratchKeys[i] === k && !scratchClaimed[i]) {
+      scratchSrc[i] = i;
+      scratchClaimed[i] = 1;
     }
+  }
+  // Moved-key search is O(m²); hand-built states past the burst cap skip it (relaunch as before).
+  for (let i = 0; m <= COMET_LAUNCH_MAX_BURST && i < m; i++) {
+    const k = i < n ? normKey(list![i]) : null;
+    if (k === null || scratchSrc[i] !== -1) continue;
+    for (let j = 0; j < m; j++) {
+      if (!scratchClaimed[j] && scratchKeys[j] === k) {
+        scratchSrc[i] = j;
+        scratchClaimed[j] = 1;
+        break;
+      }
+    }
+  }
+  for (let i = 0; i < m; i++) {
+    const j = scratchSrc[i]!;
+    if (j >= 0 && scratchLive[j]) live++;
   }
 
   let launched = 0;
   let delayCursor = 0;
-  for (let i = 0; i < slots.length; i++) {
+  for (let i = 0; i < m; i++) {
     const s = slots[i]!;
     const k = i < n ? normKey(list![i]) : null;
     if (k === null) {
@@ -264,8 +314,16 @@ export function reconcileCometLaunch(
       cur[i] = null;
       continue;
     }
-    if (k === cur[i]) continue;
+    const j = scratchSrc[i]!;
     cur[i] = k;
+    if (j >= 0) {
+      if (j !== i) {
+        s.amount = scratchAmount[j]!;
+        s.delay = scratchDelay[j]!;
+        s.live = scratchLive[j] === 1;
+      }
+      continue;
+    }
     if (reducedMotion || live >= maxConc) {
       // Static mark (reduced) or over concurrency budget: show landed, never hidden forever.
       s.amount = 1;
