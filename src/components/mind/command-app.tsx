@@ -2671,19 +2671,14 @@ export function CommandApp() {
                 <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
               </div>
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
-              {serverHeld && (
-                <button
-                  type="button"
-                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
-                  onClick={() =>
-                    void publishServerCopy().then((result) => {
-                      if (!result.ok) setError(result.error || "The server copy could not be saved. The browser copy was kept.");
-                    })
-                  }
-                >
-                  Save this browser copy over the server copy
-                </button>
-              )}
+              <button
+                type="button"
+                className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                data-testid="save-server-copy"
+                onClick={() => void publishServerCopy()}
+              >
+                Save this browser copy over the server copy
+              </button>
               <div className="rounded-panel border border-line bg-surface p-4 text-sm">
                 <p className="font-semibold">How to use this</p>
                 <ul className="mt-2 space-y-2 text-muted">

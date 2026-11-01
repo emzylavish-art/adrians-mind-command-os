@@ -105,32 +105,28 @@ export function useMindWorkspace() {
 
   async function publishServerCopy() {
     const current = latest.current;
-    const result = await saveMindCopy({ data: { workspace: current } });
-    if (result.ok) {
-      followServer.current = true;
-      savedJson.current = JSON.stringify(current);
-      setServerHeld(false);
-      setSaveError(null);
-      setSyncNote("This browser copy replaced the server copy. It is still not cloud backup.");
-    } else {
-      setSaveError(result.error || SAVE_FAIL);
+    try {
+      const result = await saveMindCopy({ data: { workspace: current } });
+      if (result.ok) {
+        followServer.current = true;
+        savedJson.current = JSON.stringify(current);
+        setServerHeld(false);
+        setSaveError(null);
+        setSyncNote("This browser copy replaced the server copy. It is still not cloud backup.");
+        return result;
+      }
+      const message = result.error || SAVE_FAIL;
+      setSaveError(message);
+      return { ok: false as const, error: message };
+    } catch {
+      setSaveError(SAVE_FAIL);
+      return { ok: false as const, error: SAVE_FAIL };
     }
-    return result;
   }
 
   /** Retries ONLY the persistence write. Does not call a model. Preserves current workspace content. */
   async function retrySave() {
-    const current = latest.current;
-    const result = await saveMindCopy({ data: { workspace: current } });
-    if (result.ok) {
-      followServer.current = true;
-      savedJson.current = JSON.stringify(current);
-      setSaveError(null);
-      setSyncNote("This browser copy replaced the server copy. It is still not cloud backup.");
-    } else {
-      setSaveError(result.error || SAVE_FAIL);
-    }
-    return result;
+    return publishServerCopy();
   }
 
   function clearSaveError() {
