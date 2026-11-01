@@ -110,6 +110,7 @@ describe("sky-feed (hacker + queue #6)", () => {
         ],
         queue: [],
         queueHead: null,
+        queueSource: ".handoff/DASHBOARD_QUEUE.md",
         mergeGateNote: "Merge Gate watches dashboard-3d",
       },
       notionGraph: {

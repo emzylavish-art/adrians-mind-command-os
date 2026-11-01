@@ -3,6 +3,7 @@ import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFrom
 import { loadMoneyView } from "./spend.ts";
 import { buildDashboardCharts } from "./chart-series.ts";
 import { buildNotionMirrorView } from "./notion-mirror.ts";
+import { buildForeverContractGuard } from "./forever-contract.ts";
 import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
 import { loadCommitsSnapshot } from "./commits-snapshot.ts";
 import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
@@ -203,6 +204,18 @@ export async function buildDashboardStatus(
     notionMirror = buildNotionMirrorView({ bots: [], graph: null, nowMs: now });
   }
 
+  let foreverContract;
+  try {
+    foreverContract = buildForeverContractGuard({
+      queue: fleetPlan.queue,
+      bots,
+      nowMs: now,
+      queueSource: fleetPlan.queueSource,
+    });
+  } catch {
+    foreverContract = buildForeverContractGuard({ queue: [], bots: [], nowMs: now, queueSource: "unavailable" });
+  }
+
   return {
     ...base,
     projects: buildProjectsDashboard(base),
@@ -210,5 +223,6 @@ export async function buildDashboardStatus(
     skyFeed,
     charts,
     notionMirror,
+    foreverContract,
   };
 }

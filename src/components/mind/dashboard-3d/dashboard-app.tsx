@@ -20,6 +20,7 @@ import {
   useOperatorHotkey,
 } from "./operator-console";
 import { NotionMirrorPanel } from "./notion-mirror-panel";
+import { ForeverContractPanel } from "./forever-contract-panel";
 import type { OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import "./dashboard-3d.css";
 
@@ -273,12 +274,15 @@ export function DashboardApp() {
             <p className="dash3d-title">
               {state.data.fleetPlan?.queueHead
                 ? `#${state.data.fleetPlan.queueHead.index} ${state.data.fleetPlan.queueHead.title}`
-                : "Queue"}
+                : state.data.fleetPlan?.queueSource === "unavailable"
+                  ? "Queue unavailable"
+                  : "Queue empty"}
             </p>
             <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
               {(state.data.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
             </p>
           </div>
+          {state.data.foreverContract ? <ForeverContractPanel guard={state.data.foreverContract} /> : null}
           {operatorPrefs.layers.time ? (
           <TimeScrubber
             timeline={state.data.timeline ?? {

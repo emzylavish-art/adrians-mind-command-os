@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c16 — Operator (#8) + Notion mirror (#9). Next: #10 Forever-contract guard.
+Last release: Dashboard c20 — Forever-contract guard (#10, from c17 WIP) + queue-parse hardening. Next: #14 Operator last-node breadcrumb.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -26,10 +26,15 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 7 | **Money** — API spend burn/daily/per-lane warning from real source only; honest empty element | **done** | c14 — `spend.ts` adapter (filesystem JSON/JSONL); UI Money panel; **no spend source yet** on box; hacker NaN/neg/overflow/stale; warnings only on real thresholds |
 | 8 | **Operator layer** — in-dashboard camera/focus/last-node in localStorage only (no geolocation) | **done** | c16 — Cmd/Ctrl-K palette; fly bot/building/notion; health filter; layer toggles; copy lock/branch; XSS/hotkey/cap hacker |
 | 9 | **Notion mirror** — render handoff `40b1aa27…` stop-point + next task in-world (snapshot/MCP; live if token) | **done** | c16 — per-bot snapshot stop/mapped pages, freshness + stale (6h); panel; fallback empty no source yet |
-| 10 | **Forever-contract guard** — keep this queue non-empty; append next researched upgrade after each ship; show queue head in-world | queued | |
+| 10 | **Forever-contract guard** — keep this queue non-empty; append next researched upgrade after each ship; show queue head in-world | **done** | c20 (c17 WIP landed) — skybar panel: queue tone green≥3/amber1–2/red0, unknown when queue file unreadable (Vercel); next 4 queued listed; lane-idle needs-next@30m; unit test fails if 0 queued; REA-grounded #14–16 appended |
 | 11 | **Light — depth-aware god-ray shafts** | **done** | Landed+wired c9: `createGodRayPass` before bloom; depth RT; intensity ↔ healthy/total; off under reduced-motion |
 | 12 | **Light — health-reactive exposure ride** | **done** | Landed+wired c9: `createExposureRide` eases ACES+bloom threshold ~400ms; idle until data; reduced-motion snaps |
 | 13 | **Light — WebGL context-loss recovery** | **done** | Landed+wired c10: `createContextLossRecovery` owns bloom/grade/rays/exposure across lost/restored; atm post-dispose fog guard |
+| 14 | **Operator last-node breadcrumb** — show last palette target in Flyover HUD from localStorage only | queued | researched c16; prefs already store lastNodeId/Kind |
+| 15 | **Mobile / touch pass** — larger skybar hit targets, touch-friendly operator open, safe-area padding | queued | REA gap #20 Mobile/PWA (`gap-list-2026-11-01.md`); dashboard touch vs ChatGPT/Gemini public install polish |
+| 16 | **Accessibility pass** — focus rings, aria on forever/operator, skip-link to skybar | queued | REA keyboard shortcut sheet gaps (c2–c4 open); a11y for glass HUD |
+| 17 | **Perf budget at 18+ bots** — frame/draw hint when bot count ≥18; pause nonessential CSS2D under budget miss | queued | REA + Motion LOD precedent; 18-bot constellation stress |
+| 18 | **City night-shift windows** — per-floor window glow only for floors whose lock changed in last 30 min (real claimed_at/released_at); steady under reduced-motion | queued | promoted from tail c20; shows where work is happening now |
 
 ## After each upgrade
 1. Commit + push `origin/dashboard-3d` (never main, no force).
@@ -38,7 +43,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
-- **Operator last-node breadcrumb** (researched c16) — show last palette target in Flyover HUD from localStorage only.
+- ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
 - ~~**Real-data charts panel**~~ — **done c15**: SVG sparks for commits/bot, lock claims/hour, landings/lane, spend (honest empty).
 - **Spend JSONL writer in xAI adapter** (researched c14) — when live usage returns cost/USD, append allowlisted `/workspace/audit/dashboard-3d/spend.jsonl` so Money panel lights up without inventing numbers.
 - **Feed severity tint** (researched c13) — glyph accent by kind already; next: pulse faster when Merge Gate notes mention blocked/main, still real-text only.
@@ -77,3 +82,7 @@ Filled: detail branch commits (bot/branch map), bot-health + commits/day charts,
 ## c19 content pass (2026-11-01 Africa/Lagos)
 - Mirror lock fallback for cosmos lanes; interior bot fallback; 3 new Imagine scene webps; chart labels; commits snapshot refresh.
 - Spend still no source yet. Zoom+feed verified.
+
+## c20 hacker + guard (2026-11-01 Africa/Lagos)
+- Hacker: old single-regex queue parser silently dropped any row without " — detail" or with an em dash inside the bold title (rows 11–13 vanished; a `| 18 | **X** | queued |` row was invisible → forever guard/sky road under-reported). Now cell-based, 512 KB / 200-row caps, index dedupe; queue file missing (Vercel) ⇒ "Queue source unavailable" (tone unknown), never a false red breach; no absolute path leaked to client. Log: `/workspace/audit/dashboard-3d/c20-hacker.md`.
+- Shipped #10 Forever-contract panel in skybar (c17 WIP), next-4 queued list, lanes needing next task.

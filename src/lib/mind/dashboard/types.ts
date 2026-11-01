@@ -111,4 +111,6 @@ export type DashboardStatus = {
   charts: import("./chart-series.ts").DashboardCharts;
   /** Queue #9 — per-bot Notion stop-point freshness from snapshot. */
   notionMirror: import("./notion-mirror.ts").NotionMirrorView;
+  /** Queue #10 — forever-contract queue health + lane-idle needs-next. */
+  foreverContract: import("./forever-contract.ts").ForeverContractGuard;
 };
