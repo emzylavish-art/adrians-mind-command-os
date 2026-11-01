@@ -162,3 +162,10 @@ See `/workspace/locks/media-integration.lock`.
 - Guard: `client-barrel.test.ts` fails if barrel export lines pull Node-only modules.
 - Playwright: Attach/Camera visible, camera dialog opens, no pageErrors (`v2-barrel-fix-result.json`).
 
+
+## Fold-in: honesty / export / size cap — 2026-11-01T13:40 Africa/Lagos
+
+- Non-Grok + images returns “cannot see images” **before** missing-key errors.
+- `exportChat` keeps `images` (data URLs + names) in the JSON export.
+- `MAX_TURN_IMAGE_CHARS` aligned to **2_700_000** (history cap).
+

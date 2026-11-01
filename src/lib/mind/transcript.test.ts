@@ -68,14 +68,23 @@ describe("transcript edits", () => {
     assert.equal("error" in prepared && prepared.error, "Use regenerate for the last reply.");
   });
 
-  it("exports one chat as JSON without inventing sources", () => {
-    const packed = exportChat(sample(), "c1");
+  it("exports one chat as JSON without inventing sources and keeps images", () => {
+    const ws = sample();
+    ws.chats[0]!.messages[0] = {
+      ...ws.chats[0]!.messages[0]!,
+      images: [{ dataUrl: "data:image/png;base64,aa", name: "kept.png" }],
+    };
+    const packed = exportChat(ws, "c1");
     assert.equal("error" in packed, false);
     if ("error" in packed) return;
     assert.equal(packed.filename, "chat-c1.json");
-    const parsed = JSON.parse(packed.json) as { chat: { messages: { content: string }[] } };
+    const parsed = JSON.parse(packed.json) as {
+      chat: { messages: { content: string; images?: { dataUrl: string; name?: string | null }[] }[] };
+    };
     assert.equal(parsed.chat.messages.length, 3);
     assert.equal(packed.json.includes("http"), false);
+    assert.equal(parsed.chat.messages[0]?.images?.[0]?.name, "kept.png");
+    assert.match(parsed.chat.messages[0]?.images?.[0]?.dataUrl ?? "", /^data:image\/png;base64,/);
   });
 
 

@@ -197,9 +197,26 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   } catch {
     return json({ ok: false, error: "That request could not be read." }, 400);
   }
+  const pendingImages = sanitizeAttachments(body.images);
+  const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
+  // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.
+  if (
+    pendingImages.length > 0 &&
+    typeof requestedProvider === "string" &&
+    requestedProvider !== "grok" &&
+    (requestedProvider === "openai" ||
+      requestedProvider === "anthropic" ||
+      requestedProvider === "gemini" ||
+      requestedProvider === "openrouter")
+  ) {
+    return json({
+      ok: false,
+      error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+      provider: requestedProvider,
+    });
+  }
   const selected = selectProvider(body.provider, process.env);
   if (!selected.ok) return json(selected);
-  const pendingImages = sanitizeAttachments(body.images);
   if (selected.id !== "grok") {
     if (pendingImages.length > 0) {
       return json({
