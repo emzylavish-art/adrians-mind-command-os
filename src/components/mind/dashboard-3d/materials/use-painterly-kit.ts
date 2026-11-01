@@ -9,14 +9,19 @@
  * 5. Imagine cards/sprites: kit.createImagineNodeMaterial({ map }); setImagineNodeMap when load completes
  * 6. Sky: kit.createSkyMaterial();
  * 7. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
- * 8. Each frame: tickPainterlyKit(kit, t); on unmount: disposePainterlyKit(kit).
+ * 8. Each frame: tickPainterlyKit(kit, t); kit.setPassHealth({ healthy, total }) from real status.
+ * 9. On resize: kit.resizePass(cssW, cssH, dpr); on unmount: disposePainterlyKit(kit).
  */
 import * as THREE from "three";
 import type { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import {
   createPainterlyPass,
   tickPainterlyPass,
+  disposePainterlyPass,
+  resizePainterlyPass,
+  setPainterlyPassHealth,
   type PainterlyPassOptions,
+  type PainterlyHealthInputs,
 } from "../shaders/painterly-pass.ts";
 import {
   createStarWatercolorMaterial,
@@ -98,6 +103,10 @@ export type PainterlyKit = {
     slot: PainterlyTextureSlot,
     target?: string,
   ) => void;
+  /** Drive painterly post-pass amount from real healthy/total counts (no allocations). */
+  setPassHealth: (input: PainterlyHealthInputs) => number;
+  /** Sanitize CSS×DPR resize; skips RT thrash when drawing size unchanged. */
+  resizePass: (width: number, height: number, dpr?: number) => void;
 };
 
 export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit {
@@ -156,6 +165,14 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       }
       textureBindings.push({ material, slot, target });
       applyTextureBinding(kit, { material, slot, target });
+    },
+    setPassHealth(input) {
+      if (kit.disposed) return 0;
+      return setPainterlyPassHealth(kit.painterlyPass, input);
+    },
+    resizePass(width, height, dpr = 1) {
+      if (kit.disposed) return;
+      resizePainterlyPass(kit.painterlyPass, width, height, dpr);
     },
   };
   return kit;
@@ -259,6 +276,7 @@ export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
 export function disposePainterlyKit(kit: PainterlyKit): void {
   if (kit.disposed) return;
   kit.disposed = true;
+  disposePainterlyPass(kit.painterlyPass);
   kit.starSpriteTexture.dispose();
   kit.paperGrainTexture.dispose();
   for (const m of kit.tracked) {

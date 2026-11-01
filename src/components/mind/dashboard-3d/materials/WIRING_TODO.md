@@ -61,6 +61,19 @@ edgeGroup.add(mesh);
 - Lore: `const atlas = createLoreTextAtlas(lockNotes); setLorePlaqueTextAtlas(mat, atlas, { owned: true });`
 - Release/dispose plaque via `releasePainterlyMaterial` so owned atlas is freed.
 
+## c6 — painterly post-pass health + resize harden
+
+```ts
+// each frame from real status (same healthy/total god-rays already use):
+kit.setPassHealth({ healthy, total, reducedMotion });
+// on window resize / DPR change:
+kit.resizePass(cssWidth, cssHeight, window.devicePixelRatio);
+```
+
+- `painterlyAmountFromHealth` maps healthy/total → amount in [0.08, 0.85]; junk/empty/reduced-motion → min.
+- `resizePainterlyPass` clamps 0/NaN/huge×DPR and skips identical drawing sizes (RT thrash).
+- Shader construct failure → identity fallback + `userData.painterPassMeta.compileError` (not silent black).
+
 ## Next painter candidate
-- Wire lore text atlas + Imagine sanitize in universe-scene (Dashboard Bot).
-- Painterly post-pass amount tied to constellation health (optional).
+- Dashboard Bot: call `kit.setPassHealth` + `kit.resizePass` from universe-scene (alongside god-rays).
+- Optional: brush building window glow sync with night-shift (out of painter lane unless materials-only).

@@ -15,9 +15,24 @@ export {
 } from "./glsl-noise.ts";
 export {
   PainterlyPassShader,
+  PainterlyPassFallbackShader,
   createPainterlyPass,
   tickPainterlyPass,
+  disposePainterlyPass,
+  resizePainterlyPass,
+  safePainterlyPassSize,
+  painterlyAmountFromHealth,
+  setPainterlyPassHealth,
+  setPainterlyPassAmount,
+  painterlyPassResizeStats,
+  PAINTER_PASS_MAX_EDGE,
+  PAINTER_PASS_MAX_DPR,
+  PAINTER_AMOUNT_MIN,
+  PAINTER_AMOUNT_MAX,
+  PAINTER_AMOUNT_DEFAULT,
   type PainterlyPassOptions,
+  type PainterlyPassSize,
+  type PainterlyHealthInputs,
 } from "./painterly-pass.ts";
 export { WatercolorStarShader } from "./watercolor-star.ts";
 export { BrushBuildingShader } from "./brush-building.ts";
