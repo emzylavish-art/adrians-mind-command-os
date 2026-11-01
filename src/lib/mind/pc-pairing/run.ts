@@ -20,10 +20,13 @@ function sleep(ms: number) {
 /**
  * Enqueue a shell job for an online paired agent and wait for completion.
  * Does not execute commands on this box.
+ * `confirm` must mean server-authorized (allowlist or human UI approval) —
+ * never pass through a model/client tool-arg confirm.
  */
 export async function runOnPairedAgent(input: {
   ownerId: string;
   command: string;
+  /** Server-authorized only (allowlist or consumed human approval). */
   confirm: boolean;
   timeoutMs?: number;
   pollMs?: number;

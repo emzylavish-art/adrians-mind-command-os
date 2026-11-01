@@ -222,3 +222,51 @@ to the legacy `MIND_PC_AGENT_URL` agent (if one is set).
 - HTTP MCP registry `rpc()` has no fetch timeout, no response-size cap, and follows redirects. A hostile https MCP server can hang the Tools list (servers are listed one after another), use up memory, or redirect to internal hosts (blind SSRF / port probe through the status code).
 - https registration accepts private/link-local IP literals. http is allowed on localhost by design.
 - `pglite_query` guard: functions with side effects like `set_config()`/`nextval()` are not write verbs, so they pass the guard (only matters inside PGLite).
+
+
+## Security fix: remote (http) MCP server hang / memory / SSRF (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed.
+
+### Weakness (confirmed in code)
+`registry.ts` `rpc()` had no timeout, read the whole body with no size cap, and
+followed redirects (forwarding the Bearer token). Registration accepted https to
+private/link-local IP literals (e.g. `169.254.169.254`) and URLs with
+`user:pass@`. A hostile or broken server could hang the Tools list (servers are
+listed one after another), exhaust memory, or bounce requests to internal hosts.
+
+### Fix
+- 15s per-request deadline (AbortController + race); list rows and calls report `timeout` honestly.
+- 1 MB response cap (content-length precheck + streamed read that cancels on overflow).
+- `redirect: "manual"`; any 3xx is an error, never followed.
+- `httpServerUrlProblem()`: refuses embedded credentials and private/loopback/link-local/CGNAT/multicast/IPv4-mapped IPv6 literals; http only on localhost. Re-checked at call time for stores saved before this guard.
+
+### Checks
+- New `src/lib/mind/mcp/registry-http.test.ts` (6 tests, real local http servers): hang → timeout, 307 redirect target never hit, 12.8 MB stream dropped at 100 KB cap, private/credentialed URLs refused, legacy stored metadata URL never fetched, well-behaved server still lists + calls. Test file fails against the pre-fix registry.
+- typecheck pass; mind/src tests 290/290; build pass; `npm run mcp:e2e` pass.
+
+### Open
+- DNS rebinding / hostnames that resolve to private IPs are not checked (no DNS resolution at save or call time).
+- `pglite_query` guard: side-effect functions (`set_config()`, `nextval()`) still pass (PGLite-only impact).
+
+## Gap: H9 pc_run_shell confirm bypass (2026-11-01, Africa/Lagos)
+
+**Status:** complete (2026-11-01T14:52:06+01:00)  
+**Lock:** `mcp-integration-gap-pc-shell-confirm-bypass.lock` (released after push)
+
+### Fix
+- `pc_run_shell` **ignores** tool-arg `confirm` / `approved` / `approvalId`.
+- Non-allowlisted commands create a **server-issued** pending approval (command hash, agent id, owner, TTL 3 min) and return `needsApproval` + approval id (token **not** in MCP result).
+- Only authenticated human POST `/api/mind/pc/approve` (session cookie) can consume the one-time token (timing-safe compare); `/api/mind/pc/deny` rejects; list via GET `/api/mind/pc/approvals`.
+- Approvals are single-use, expire, reject forged/mismatched/reused tokens; emergency stop blocks create + approve.
+- Tools UI: minimal Approve/Deny under **PC shell approvals** (`fleet-panels.tsx`; not `service-board.tsx`).
+
+### Verification
+- `tsc --noEmit`: pass
+- mind/src tests: **296/296** pass (incl. `pc-pairing/approvals.test.ts` H9 regressions)
+- `npm run build`: pass
+
+### Commits (this gap)
+- (pending push) Harden pc_run_shell with human UI approvals; ignore client confirm.
+
+
