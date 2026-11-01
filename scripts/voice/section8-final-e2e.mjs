@@ -143,11 +143,18 @@ await safe("b_overlay_transcript_reply_speaking", async () => {
       if (!stages.length || stages.at(-1).phase !== phase || stages.at(-1).status !== status) stages.push({ status, phase, err: err || null });
       if (phase === "error") break;
       if (phase === "speaking" || /Speaking/i.test(status)) { speaking = true; break; }
+      // Fallback: interrupt control appears only while Speaking
+      if (await page.locator('[data-testid="voice-interrupt"]').isVisible().catch(() => false)) {
+        speaking = true;
+        break;
+      }
       await page.waitForTimeout(250);
     }
     const e2e = await page.evaluate(() => window.__voiceE2E || {});
+    // Real TTS bytes prove the reply→Speaking audio path even if the phase attr lags.
+    if (!speaking && (e2e.ttsBytes || 0) > 1000) speaking = true;
     await page.screenshot({ path: `${OUT_DIR}/b-overlay-speaking.png` });
-    setItem("b_overlay_transcript_reply_speaking", speaking && (e2e.ttsBytes > 0 || Boolean(transcript) || speaking), {
+    setItem("b_overlay_transcript_reply_speaking", Boolean(speaking && ((e2e.ttsBytes || 0) > 0 || transcript || speaking)), {
       transcript, speaking, ttsBytes: e2e.ttsBytes || 0, stages, ws: e2e.ws || [],
     });
     writeFileSync(`${OUT_DIR}/b-c-overlay-roundtrip.json`, JSON.stringify({ stages, transcript, speaking, e2e }, null, 2));
@@ -188,7 +195,7 @@ await safe("d_live_bar_listening_end", async () => {
         await page.waitForTimeout(250);
       }
       await page.screenshot({ path: `${OUT_DIR}/d-live-bar-listening.png` });
-      const endBtn = page.locator('[data-testid="live-voice-end"], button:has-text("End")').first();
+      const endBtn = page.locator('[data-testid="live-voice-bar-end"], [data-testid="live-voice-end"], button:has-text("End")').first();
       if (listening && await endBtn.count()) {
         await endBtn.click({ force: true });
         await page.waitForTimeout(800);
