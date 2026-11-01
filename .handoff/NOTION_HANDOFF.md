@@ -134,3 +134,18 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Google: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_*_REDIRECT_URI` (or `GOOGLE_OAUTH_REDIRECT_URI`)
 - Slack: `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`, `SLACK_OAUTH_REDIRECT_URI`
 - GitHub: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`
+
+
+## Gap done: OAuth callback XSS / state traversal (2026-11-01 Africa/Lagos)
+
+**Status:** done (typecheck + oauth/security/stdio/pairing tests + build passed; one flaky workspace normalize timing under load unrelated)
+
+### Fixed
+- H1: shared `oauth-callback-html` escape + CSP + nosniff; fixed provider error messages; postMessage to `window.location.origin`
+- H2: strict state regex + pending path containment; atomic rename claim
+- H3: 10m TTL, single-use, prune, connector+owner bind
+- Attacker pass: redirect_uri https/localhost; Origin CSRF on start/disconnect; no upstream error_description leak; CONNECTOR_TOKEN_SECRET required ≥16; revokeOk honesty; pairing id path validation; ServiceBoard settles status errors
+
+### Commits
+- `2595ba7` Harden OAuth connectors…
+- (routes/ServiceBoard/pairing + tests follow)
