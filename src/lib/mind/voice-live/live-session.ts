@@ -47,6 +47,15 @@ import {
   setLiveVoiceOccupied,
 } from "./occupancy.ts";
 import { probeMicrophone } from "./mic-probe.ts";
+import {
+  ConnectTimeoutError,
+  isAbortError,
+  MIC_PROBE_TIMEOUT_MS,
+  MIC_START_TIMEOUT_MS,
+  MINT_TIMEOUT_MS,
+  WS_OPEN_TIMEOUT_MS,
+  withTimeout,
+} from "./connect-timeout.ts";
 
 export type MintSecretResult =
   | { ok: true; value: string; expiresAt: number }
@@ -89,7 +98,6 @@ function defaultSocketFactory(url: string, protocols: string[]): WsLike {
 }
 
 const INTERRUPTED_FLASH_MS = 350;
-const WS_CONNECT_TIMEOUT_MS = 15_000;
 
 export class LiveVoiceSession {
   private handlers: LiveSessionHandlers;
@@ -113,6 +121,7 @@ export class LiveVoiceSession {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private interruptTimer: ReturnType<typeof setTimeout> | null = null;
   private mintAbort: AbortController | null = null;
+  private connectAbort: AbortController | null = null;
   private assistantPlaying = false;
   private speakingStartedAtMs: number | null = null;
   private pendingAssistantText = "";
@@ -201,20 +210,52 @@ export class LiveVoiceSession {
       this.error = null;
       this.reconnectAttempt = 0;
       this.generation = ticket.generation;
+      this.connectAbort?.abort();
+      const connectAbort = new AbortController();
+      this.connectAbort = connectAbort;
       this.setPhase("connecting");
-      const probe = await (this.deps.probeMic ?? probeMicrophone)();
+      let probe;
+      try {
+        probe = await withTimeout(
+          (this.deps.probeMic ?? probeMicrophone)(),
+          MIC_PROBE_TIMEOUT_MS,
+          "mic",
+          "Microphone did not respond in time. Check permissions or connect a mic, then try again.",
+          connectAbort.signal,
+        );
+      } catch (caught) {
+        if (this.intentionalClose || isAbortError(caught) || connectAbort.signal.aborted) return;
+        if (caught instanceof ConnectTimeoutError) {
+          this.fail(caught.message);
+          return;
+        }
+        this.fail(formatMicCaptureError(caught) || formatVoiceClientError(caught));
+        return;
+      }
+      if (this.intentionalClose || connectAbort.signal.aborted) return;
       if (!probe.ok) {
         this.fail(probe.error);
         return;
       }
-      await this.connectAndCapture(ticket.generation);
+      await this.connectAndCapture(ticket.generation, connectAbort.signal);
+    } catch (caught) {
+      if (this.intentionalClose || isAbortError(caught)) return;
+      if (caught instanceof ConnectTimeoutError) {
+        this.fail(caught.message);
+        return;
+      }
+      this.fail(formatVoiceClientError(caught));
     } finally {
       endFlight(this.flight, ticket.generation);
     }
   }
 
-  /** Mic button: first tap starts continuous session; later taps toggle input mute. */
+  /** Mic button: first tap starts; while connecting cancels; later taps toggle mute. */
   async pressMic() {
+    if (this.phase === "connecting" || this.phase === "reconnecting") {
+      this.end("Live voice start canceled.");
+      return;
+    }
     if (this.phase === "off" || this.phase === "error") {
       await this.start();
       return;
@@ -272,14 +313,22 @@ export class LiveVoiceSession {
 
   end(notice?: string) {
     this.intentionalClose = true;
+    this.generation += 1;
     this.clearReconnect();
+    this.connectAbort?.abort();
+    this.connectAbort = null;
     this.mintAbort?.abort();
     this.mintAbort = null;
     this.teardownMedia(true);
-    this.playback.speaker.dispose();
+    try {
+      this.playback.speaker.dispose();
+    } catch {
+      /* ignore */
+    }
     this.muted = false;
     this.error = null;
     this.level = 0;
+    this.open = false;
     this.setPhase("off");
     if (notice) this.handlers.onNotice?.(notice);
   }
@@ -328,21 +377,39 @@ export class LiveVoiceSession {
     this.ws.send(JSON.stringify(payload));
   }
 
-  private async connectAndCapture(generation: number) {
+  private async connectAndCapture(generation: number, outerSignal?: AbortSignal) {
     this.mintAbort?.abort();
     const mintAbort = new AbortController();
     this.mintAbort = mintAbort;
+    const onOuter = () => mintAbort.abort();
+    outerSignal?.addEventListener("abort", onOuter, { once: true });
+    if (outerSignal?.aborted || this.intentionalClose) {
+      outerSignal?.removeEventListener("abort", onOuter);
+      return;
+    }
     let secret: MintSecretResult;
     try {
-      secret = await this.deps.mintSecret(mintAbort.signal);
+      secret = await withTimeout(
+        this.deps.mintSecret(mintAbort.signal),
+        MINT_TIMEOUT_MS,
+        "mint",
+        "Voice secret mint timed out. Check the network, then try again.",
+        mintAbort.signal,
+      );
     } catch (caught) {
-      if (mintAbort.signal.aborted || !isCurrentFlight(this.flight, generation) && this.intentionalClose) {
+      outerSignal?.removeEventListener("abort", onOuter);
+      if (mintAbort.signal.aborted || this.intentionalClose || isAbortError(caught)) {
+        return;
+      }
+      if (caught instanceof ConnectTimeoutError) {
+        this.fail(caught.message);
         return;
       }
       this.fail(formatVoiceClientError(caught));
       return;
     }
-    if (mintAbort.signal.aborted || this.intentionalClose) return;
+    outerSignal?.removeEventListener("abort", onOuter);
+    if (mintAbort.signal.aborted || this.intentionalClose || outerSignal?.aborted) return;
     if (!secret.ok) {
       this.fail(secret.error || "Voice secret could not be minted.");
       return;
@@ -352,26 +419,44 @@ export class LiveVoiceSession {
     const ws = factory(REALTIME_ENDPOINT, [`xai-client-secret.${secret.value}`]);
     this.ws = ws;
 
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Live voice did not connect in time.")), WS_CONNECT_TIMEOUT_MS);
-      const onOpen = () => {
-        clearTimeout(timer);
-        this.open = true;
-        resolve();
-      };
-      const onError = () => {
-        clearTimeout(timer);
-        reject(new Error("Live voice connection failed."));
-      };
-      ws.addEventListener("open", onOpen);
-      ws.addEventListener("error", onError);
-      ws.addEventListener("message", (event) => this.onMessage(event as MessageEvent));
-      ws.addEventListener("close", () => this.onSocketClose());
-    }).catch((err) => {
-      throw err;
-    });
+    try {
+      await withTimeout(
+        new Promise<void>((resolve, reject) => {
+          const onOpen = () => {
+            this.open = true;
+            resolve();
+          };
+          const onError = () => reject(new Error("Live voice connection failed."));
+          const onAbort = () => reject(Object.assign(new Error("Live voice start was canceled."), { name: "AbortError" }));
+          ws.addEventListener("open", onOpen);
+          ws.addEventListener("error", onError);
+          ws.addEventListener("message", (event) => this.onMessage(event as MessageEvent));
+          ws.addEventListener("close", () => this.onSocketClose());
+          if (outerSignal?.aborted || mintAbort.signal.aborted) onAbort();
+          else {
+            outerSignal?.addEventListener("abort", onAbort, { once: true });
+            mintAbort.signal.addEventListener("abort", onAbort, { once: true });
+          }
+        }),
+        WS_OPEN_TIMEOUT_MS,
+        "ws",
+        "Live voice did not connect in time. Check the network, then try again.",
+        outerSignal ?? mintAbort.signal,
+      );
+    } catch (caught) {
+      if (this.intentionalClose || isAbortError(caught) || mintAbort.signal.aborted || outerSignal?.aborted) {
+        this.teardownMedia(true);
+        return;
+      }
+      if (caught instanceof ConnectTimeoutError) {
+        this.fail(caught.message);
+        return;
+      }
+      this.fail(formatVoiceClientError(caught));
+      return;
+    }
 
-    if (this.intentionalClose || mintAbort.signal.aborted) {
+    if (this.intentionalClose || mintAbort.signal.aborted || outerSignal?.aborted) {
       this.teardownMedia(true);
       return;
     }
@@ -422,8 +507,22 @@ export class LiveVoiceSession {
       );
 
       try {
-        await this.mic.start();
+        await withTimeout(
+          this.mic.start(),
+          MIC_START_TIMEOUT_MS,
+          "mic-start",
+          "Microphone start timed out. Check permissions or connect a mic, then try again.",
+          outerSignal ?? this.connectAbort?.signal ?? null,
+        );
       } catch (err) {
+        if (this.intentionalClose || isAbortError(err) || outerSignal?.aborted) {
+          this.teardownMedia(true);
+          return;
+        }
+        if (err instanceof ConnectTimeoutError) {
+          this.fail(err.message);
+          return;
+        }
         const mic = formatMicCaptureError(err);
         this.fail(mic || formatVoiceClientError(err));
         return;
@@ -465,9 +564,13 @@ export class LiveVoiceSession {
     const ticket = beginFlight(this.flight);
     if (!ticket) return;
     try {
+      this.connectAbort?.abort();
+      const connectAbort = new AbortController();
+      this.connectAbort = connectAbort;
       this.setPhase("connecting");
-      await this.connectAndCapture(ticket.generation);
+      await this.connectAndCapture(ticket.generation, connectAbort.signal);
     } catch (caught) {
+      if (this.intentionalClose || isAbortError(caught)) return;
       if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
         this.fail(formatVoiceClientError(caught));
       } else {

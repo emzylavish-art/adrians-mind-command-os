@@ -3110,17 +3110,48 @@ export function CommandApp() {
         onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
         onError={(message) => setError(message)}
         onNotice={(message) => setNotice(message)}
+        askValue={draft}
+        onAskChange={setDraft}
+        dictating={voiceListening}
+        onDictateToggle={() => void listen()}
+        modelPickerSlot={
+          <span
+            className="inline-flex max-w-[9rem] items-center gap-1 truncate rounded-full border border-white/10 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-100"
+            data-testid="composer-model-chip"
+            title="Model picker is owned by Logic Bot"
+          >
+            {providerChoices(grokConfigured).find((item) => item.id === providerChoice)?.label ?? "Model"}
+          </span>
+        }
         onChatSend={(text) => {
           const clipped = text.trim().slice(0, 8000);
           if (!clipped) return;
+          if (ws.halted) {
+            setError("Emergency stop is on. No new action can run.");
+            return;
+          }
           if (active) {
+            setView("chat");
             void deliver(active, clipped, ws);
             return;
           }
-          setDraft(clipped);
-          window.setTimeout(() => {
-            void sendCommand();
-          }, 0);
+          const made = createChat(ws, {
+            memory: memoryChoice,
+            autonomy,
+            temporary,
+            projectId: projectChoice || chatProjectId || null,
+          });
+          setActiveId(made.chat.id);
+          setView("chat");
+          setWs((prev) =>
+            pushAudit(
+              { ...prev, chats: [made.chat, ...prev.chats] },
+              "create_chat",
+              made.chat.id,
+              `ask-anything; memory ${made.chat.memory}`,
+            ),
+          );
+          void deliver(made.chat, clipped, { ...ws, chats: [made.chat, ...ws.chats] });
         }}
         onChatAttachText={(text, name) => {
           setDraft((prev) => (prev ? `${prev}\n\n${text}` : text));
