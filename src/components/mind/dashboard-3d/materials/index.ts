@@ -6,6 +6,7 @@ export const PAINTER_MATERIALS = {
   inkWashEdge: "InkWashEdgeMaterial",
   imagineNode: "ImagineNodeMaterial",
   botStar: "PainterlyBotStarBundle",
+  inkWashEdgesBatched: "PainterlyInkEdgesHandle",
   paperGrain: "PaperGrainTexture",
   parchment: "ParchmentTexture",
   nebulaSky: "NebulaSkyMaterial",
@@ -68,13 +69,24 @@ export {
   tickInkWashEdgeMaterial,
   setInkWashEdgeHealth,
   buildInkWashRibbon,
+  measureInkEdgeLength,
+  isDegenerateInkEdge,
   INK_RIBBON_MAX_SEGMENTS,
+  INK_EDGE_DEGENERATE_EPS,
+  INK_EDGES_MAX,
   type InkWashRibbonOptions,
   sanitizeHealthToneArray,
   HEALTH_RGB,
   type InkWashEdgeOptions,
   type HealthTone,
 } from "./ink-wash-edge.ts";
+export {
+  createPainterlyInkEdges,
+  buildMergedInkWashGeometry,
+  type PainterlyInkEdgeInput,
+  type PainterlyInkEdgesOptions,
+  type PainterlyInkEdgesHandle,
+} from "./painterly-ink-edges.ts";
 export {
   createImagineNodeMaterial,
   setImagineNodeMap,

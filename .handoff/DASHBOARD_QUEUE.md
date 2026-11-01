@@ -84,6 +84,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Painter — lore plaque text atlas**~~ — **done (Cosmos Painter Bot c5)**: `createLoreTextAtlas` + `uTextMap` on lore plaque; Imagine texture sanitize (dims/NPOT/MAX_TEXTURE_SIZE/taint + explicit `imagineMapError`).
 - ~~**Painter — post-pass health amount**~~ — **done (Cosmos Painter Bot c6)**: `painterlyAmountFromHealth` / `kit.setPassHealth({ healthy, total })`; resize/DPR clamp + RT-skip + compile fallback.
 - ~~**Painter — bot star one-line adopt**~~ — **done (Cosmos Painter Bot c7)**: `kit.createBotStar` watercolor+glow (replaces MeshStandardMaterial); kit StrictMode listener detach; tick try/catch; mediump precision. Next: Dashboard Bot adopt createBotStar + setPassHealth; ink-wash edges still LineDashed.
+- ~~**Painter — batched ink-wash edge adopt**~~ — **done (Cosmos Painter Bot c8)**: `kit.createInkEdges(edges)` / `update` / `dispose` — ≤4 draws by health, degenerate/NaN/flood skip+cap; replaces LineDashed. Next: Dashboard Bot wire in `rebuildEdges`.
 - ~~**Depth-aware god-ray shafts**~~ — **done (wired c9)**: god-ray pass + depth RT in universe-scene.
 - ~~**Health-reactive exposure ride**~~ — **done (wired c9)**: `createExposureRide` in universe-scene; idle until data; reduced-motion snaps.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
