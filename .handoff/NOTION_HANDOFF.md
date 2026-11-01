@@ -368,5 +368,6 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - preview/integration still @ 7f3e641.
 - Fix: mcp-call-action.ts under src/lib/mind; snapshot serverId/tool/sql; onceRetry; onFailure→reportFailure.
 - Checks: typecheck pass; TS 815/817 (2 pre-existing); lint our files 0e; build pass.
-- Notion: (pending)
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e428113ad87df9f6beaf908
+- Pushed origin/error-banners → 109c2f9d4e965c1a1197dd9253947765e99c68b7
 - Lock releasing.
