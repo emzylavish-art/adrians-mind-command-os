@@ -34,18 +34,18 @@ describe("voice toggle shortcut", () => {
 
   it("ignores editable targets", () => {
     assert.equal(isEditableKeyboardTarget(null), false);
-    assert.equal(isEditableKeyboardTarget({ tagName: "DIV" } as EventTarget), false);
-    assert.equal(isEditableKeyboardTarget({ tagName: "INPUT" } as EventTarget), true);
-    assert.equal(isEditableKeyboardTarget({ tagName: "TEXTAREA" } as EventTarget), true);
+    assert.equal(isEditableKeyboardTarget({ tagName: "DIV" } as unknown as EventTarget), false);
+    assert.equal(isEditableKeyboardTarget({ tagName: "INPUT" } as unknown as EventTarget), true);
+    assert.equal(isEditableKeyboardTarget({ tagName: "TEXTAREA" } as unknown as EventTarget), true);
     assert.equal(
-      isEditableKeyboardTarget({ tagName: "DIV", isContentEditable: true } as EventTarget),
+      isEditableKeyboardTarget({ tagName: "DIV", isContentEditable: true } as unknown as EventTarget),
       true,
     );
     assert.equal(
       isEditableKeyboardTarget({
         tagName: "DIV",
         closest: (sel: string) => (sel.includes("input") ? {} : null),
-      } as EventTarget),
+      } as unknown as EventTarget),
       true,
     );
     assert.equal(typeof VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts, "string");
