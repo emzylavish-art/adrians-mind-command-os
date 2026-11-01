@@ -12,6 +12,7 @@ import {
   type MeterBackoff,
   type RegionReader,
 } from "./backdrop-meter.ts";
+import { CARD_SURROUND_SCALE, splitProbeBlock } from "./card-edge.ts";
 import { WCAG_GRAPHIC_AA, WCAG_TEXT_AA, dimForContrast, linearToSrgb, type ContrastPlan, type Rgb } from "./wcag-contrast.ts";
 
 /**
@@ -79,7 +80,17 @@ export function cardProbeRect(
 const insideUv = (p: readonly [number, number], r: UvRect) => p[0] >= r[0] && p[0] <= r[2] && p[1] >= r[1] && p[1] <= r[3];
 
 /** #84: real luminance of the focused card's own projected rect. */
-export type CardMeasurement = { stats: LuminanceStats; rect: UvRect; atMs: number };
+export type CardMeasurement = {
+  stats: LuminanceStats;
+  rect: UvRect;
+  atMs: number;
+  /**
+   * #93: surround ring of the same probe block (setCardSurround(true) and the
+   * probe not clamped at the canvas edge). `stats` is then the card CORE only.
+   * Null when the split is off / unavailable — never estimated.
+   */
+  surround?: LuminanceStats | null;
+};
 /** #68: measured mode may dim harder than the static window when WCAG needs it. */
 export const DIM_MEASURED_MAX = 0.7;
 /** Time constant for easing between static / measured strengths. */
@@ -307,6 +318,12 @@ export type DetailBackdropDimHandle = {
    * cost stays under the back-off guard. Off by default.
    */
   setCardProbe: (on: boolean) => void;
+  /**
+   * #93: read the card probe at CARD_SURROUND_SCALE× radius and split its
+   * block into card core + surround ring (contrast.card.surround) for the
+   * card-edge pass. Same slot, same readback cost. Off by default.
+   */
+  setCardSurround: (on: boolean) => void;
   dispose: () => void;
 };
 
@@ -351,8 +368,40 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
   let probeCenter: [number, number] | null = null;
   let probeCandidate: UvRect | null = null;
   let probeRect: UvRect | null = null;
+  /** #93: surround split on; candidate / sticky probe read at full surround scale (splittable). */
+  let surroundOn = false;
+  let probeCandidateSplit = false;
+  let probeRectSplit = false;
+  let probeRealR: number | null = null;
+  let probeAspect = 1;
+  const refreshProbe = () => {
+    probeCandidate = null;
+    probeCandidateSplit = false;
+    if (!probeCenter || probeRealR === null) return;
+    if (surroundOn) {
+      const wide = cardProbeRect(probeCenter, probeRealR, probeAspect, CARD_SURROUND_SCALE);
+      const hv = probeRealR * CARD_SURROUND_SCALE;
+      const full = !!wide && Math.abs(wide[3] - wide[1] - 2 * hv) < 1e-9 && Math.abs(wide[2] - wide[0] - (2 * hv) / probeAspect) < 1e-9;
+      if (full) {
+        probeCandidate = wide;
+        probeCandidateSplit = true;
+        return;
+      }
+      // Clamped at the canvas edge: the block no longer maps to card radii, so
+      // fall back to the plain #84 rect (no surround reading).
+    }
+    probeCandidate = cardProbeRect(probeCenter, probeRealR, probeAspect);
+  };
   let lastBeginMs = -Infinity;
-  type Layout = { key: string; panelKey: string; panelCount: number; probe: UvRect | null };
+  type Layout = {
+    key: string;
+    panelKey: string;
+    panelCount: number;
+    probe: UvRect | null;
+    /** #93: probe slot read at surround scale → split into core + ring. */
+    split: boolean;
+    surround: LuminanceStats | null;
+  };
   /** Layout of the latest resolved measurement (slot meaning of perRect). */
   let measuredLayout: Layout | null = null;
   let level = 0;
@@ -430,7 +479,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     const cardStats = layout && layout.probe && lm ? lm.perRect[layout.panelCount] ?? null : null;
     const card: CardMeasurement | null =
       probeOn && !disposed && cardStats && layout!.probe && probeCenter && insideUv(probeCenter, layout!.probe)
-        ? { stats: cardStats, rect: layout!.probe, atMs: lm!.atMs }
+        ? { stats: cardStats, rect: layout!.probe, atMs: lm!.atMs, surround: surroundOn && layout!.split ? layout!.surround : null }
         : null;
     const plans: (ContrastPlan | null)[] = [];
     const strengths: number[] = [];
@@ -514,8 +563,14 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       // current (#80 back-off aware) interval, or at once on a focus change.
       if (probeMeasuring()) {
         const stale = !Number.isFinite(lastBeginMs) || t0 < lastBeginMs || t0 - lastBeginMs >= meter.backoff.intervalMs;
-        if (!probeRect || stale || !probeCenter || !insideUv(probeCenter, probeRect)) probeRect = probeCandidate;
-      } else probeRect = null;
+        if (!probeRect || stale || !probeCenter || !insideUv(probeCenter, probeRect) || probeRectSplit !== probeCandidateSplit) {
+          probeRect = probeCandidate;
+          probeRectSplit = probeCandidateSplit;
+        }
+      } else {
+        probeRect = null;
+        probeRectSplit = false;
+      }
       const panels = panelMeasuring() ? uvRects : [];
       const list = probeRect ? [...panels, probeRect] : panels;
       const panelKey = panels.length ? rectsKey(panels) : "";
@@ -523,7 +578,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       if (list.length && meter.due(t0, key, { hidden, reducedMotion: reduced })) {
         const token = meter.begin(t0, key);
         lastBeginMs = t0;
-        const layout: Layout = { key, panelKey, panelCount: panels.length, probe: probeRect };
+        const layout: Layout = { key, panelKey, panelCount: panels.length, probe: probeRect, split: !!probeRect && probeRectSplit, surround: null };
         try {
           reader ??= createRegionReader(METER_SLOTS);
           reader
@@ -533,7 +588,14 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
               // call setHidden(true), so a read that lands while the tab is
               // hidden must be excused here, not billed as slow-readback.
               if (hidden || documentHidden()) meter.suspend();
-              meter.resolve(token, bufs.map((b) => measureLuminance(b, METER_EDGE, METER_EDGE)), now());
+              const stats = bufs.map((b) => measureLuminance(b, METER_EDGE, METER_EDGE));
+              if (layout.split) {
+                // #93: probe slot = card core; ring kept as the surround reading.
+                const sp = splitProbeBlock(bufs[layout.panelCount], METER_EDGE, CARD_SURROUND_SCALE);
+                stats[layout.panelCount] = sp ? sp.core : null; // unsplittable → empty-readback, surfaced
+                layout.surround = sp ? sp.ring : null;
+              }
+              meter.resolve(token, stats, now());
               const lm = meter.latestFresh(now());
               if (lm && lm.key === key) measuredLayout = layout;
             })
@@ -593,6 +655,8 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       const clearProbe = () => {
         probeCenter = null;
         probeCandidate = null;
+        probeCandidateSplit = false;
+        probeRealR = null;
       };
       if (!world || !camera || ![world.x, world.y, world.z].every(Number.isFinite)) {
         u.holeRadius.value = 0;
@@ -617,9 +681,16 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       // radius only. The hole radius above is guard-clamped (0.16 default when
       // projectedRadiusUv() returned null, ≥0.04 for tiny cards), which made
       // the probe meter a guessed region and report it as the card's reading.
-      const realR = typeof radiusUv === "number" && Number.isFinite(radiusUv) && radiusUv > 0 ? radiusUv : null;
-      probeCandidate = realR === null ? null : cardProbeRect(probeCenter, realR, u.aspect.value);
+      probeRealR = typeof radiusUv === "number" && Number.isFinite(radiusUv) && radiusUv > 0 ? radiusUv : null;
+      probeAspect = u.aspect.value;
+      refreshProbe();
       if (!probeCandidate) probeCenter = null;
+      apply();
+    },
+    setCardSurround(on) {
+      if (disposed) return;
+      surroundOn = !!on;
+      refreshProbe();
       apply();
     },
     setCardProbe(on) {
@@ -685,6 +756,10 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       probeRect = null;
       probeCandidate = null;
       probeCenter = null;
+      probeRealR = null;
+      surroundOn = false;
+      probeCandidateSplit = false;
+      probeRectSplit = false;
       measuredLayout = null;
       u.rectCount.value = 0;
       contrastTarget = null;
