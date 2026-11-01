@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c21 — Operator last-node breadcrumb (#14) + lastNodeId sanitize hacker. Next: #15 Mobile / touch pass.
+Last release: Dashboard c22 — Mobile/touch pass (#15). Next: #16 Accessibility pass.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -31,12 +31,13 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 12 | **Light — health-reactive exposure ride** | **done** | Landed+wired c9: `createExposureRide` eases ACES+bloom threshold ~400ms; idle until data; reduced-motion snaps |
 | 13 | **Light — WebGL context-loss recovery** | **done** | Landed+wired c10: `createContextLossRecovery` owns bloom/grade/rays/exposure across lost/restored; atm post-dispose fog guard |
 | 14 | **Operator last-node breadcrumb** — show last palette target in Flyover HUD from localStorage only | **done** | c21 — Flyover HUD last palette target + Revisit; prefs lastNodeId sanitized; missing-target mark; hacker XSS tests |
-| 15 | **Mobile / touch pass** — larger skybar hit targets, touch-friendly operator open, safe-area padding | queued | REA gap #20 Mobile/PWA (`gap-list-2026-11-01.md`); dashboard touch vs ChatGPT/Gemini public install polish |
+| 15 | **Mobile / touch pass** — larger skybar hit targets, touch-friendly operator open, safe-area padding | **done** | c22 — 44px hit targets + safe-area on skybar/flyhud; Operator open aria; hotkey 300ms debounce hacker |
 | 16 | **Accessibility pass** — focus rings, aria on forever/operator, skip-link to skybar | queued | REA keyboard shortcut sheet gaps (c2–c4 open); a11y for glass HUD |
 | 17 | **Perf budget at 18+ bots** — frame/draw hint when bot count ≥18; pause nonessential CSS2D under budget miss | queued | REA + Motion LOD precedent; 18-bot constellation stress |
 | 18 | **City night-shift windows** — per-floor window glow only for floors whose lock changed in last 30 min (real claimed_at/released_at); steady under reduced-motion | queued | promoted from tail c20; shows where work is happening now |
 | 19 | **Feed severity pulse** — pulse sky-feed glyphs faster when Merge Gate / lock notes mention blocked/main (real text only) | queued | researched c13; no invented severity |
 | 20 | **Imagine zone densify** — add 1–2 more character/scene billboards for under-art constellations (GenerateImage→webp≤300KB) | queued | content priority; reuse public/dashboard-3d/art when present |
+| 21 | **Star focus breadcrumb twin** — when a star is focused, mirror name+lane health beside last-palette crumb with Back to sky | queued | researched c9; complements #14 |
 
 ## After each upgrade
 1. Commit + push `origin/dashboard-3d` (never main, no force).

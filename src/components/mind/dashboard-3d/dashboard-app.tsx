@@ -304,9 +304,12 @@ export function DashboardApp() {
             type="button"
             className="dash3d-glass dash3d-zoomout"
             data-testid="operator-open"
+            aria-haspopup="dialog"
+            aria-keyshortcuts="Meta+K Control+K"
+            aria-label="Open operator console"
             onClick={() => setOperatorOpen(true)}
           >
-            Operator (⌘K)
+            Operator
           </button>
           <button
             type="button"

@@ -215,11 +215,16 @@ export function OperatorConsole({
 
 export function useOperatorHotkey(onToggle: () => void) {
   useEffect(() => {
+    let lastToggleMs = 0;
     const onKey = (e: KeyboardEvent) => {
       if (shouldIgnoreOperatorHotkey(e.target)) return;
       const meta = e.metaKey || e.ctrlKey;
       if (meta && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
+        // Hacker: ignore repeat / double-fire within 300ms (OS key-repeat + some Bluetooth boards).
+        const now = Date.now();
+        if (now - lastToggleMs < 300) return;
+        lastToggleMs = now;
         onToggle();
       }
     };

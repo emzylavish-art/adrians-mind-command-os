@@ -738,3 +738,54 @@
   max-height: 11rem;
   overflow: auto;
 }
+
+/* --- Queue #15: mobile / touch pass (dashboard-3d only; never styles.css) --- */
+.dash3d-skybar {
+  top: max(0.85rem, env(safe-area-inset-top, 0px));
+  left: max(0.85rem, env(safe-area-inset-left, 0px));
+  right: max(0.85rem, env(safe-area-inset-right, 0px));
+}
+.dash3d-flyhud {
+  left: max(1rem, env(safe-area-inset-left, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+.dash3d-zoomout,
+.dash3d-pill,
+.dash3d-side-close,
+.dash3d-operator-row,
+.dash3d-operator-layer,
+[data-testid="operator-open"],
+[data-testid="sound-mute"],
+[data-testid="fly-dive"],
+[data-testid="fly-out"],
+[data-testid="fly-sky"],
+[data-testid="fly-revisit-last"] {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}
+.dash3d-operator-input {
+  min-height: 44px;
+  font-size: 16px; /* iOS: avoid focus zoom */
+  touch-action: manipulation;
+}
+@media (max-width: 720px) {
+  .dash3d-skybar {
+    gap: 0.5rem;
+  }
+  .dash3d-skybar-card {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .dash3d-flyhud {
+    max-width: min(100vw - 1.5rem, 340px);
+    max-height: 42vh;
+  }
+  .dash3d-operator-panel {
+    width: min(100vw - 1rem, 420px);
+    max-height: min(88vh, 640px);
+  }
+  [data-testid="operator-open"] {
+    font-weight: 600;
+  }
+}
