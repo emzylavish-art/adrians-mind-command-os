@@ -30,5 +30,7 @@ test("protected mind operations require the owner on the server", () => {
   const agent = readFileSync(new URL("../src/lib/mind/agent-run.server.ts", import.meta.url), "utf8");
   assert.match(agent, /requireUserId/);
   assert.match(agent, /request\.signal/);
-  assert.match(agent, /XAI_API_KEY/);
+  assert.match(agent, /resolveXaiInferenceApiKey/);
+  assert.match(agent, /keyed\.ok/);
+  assert.doesNotMatch(agent, /process\.env\.XAI_API_KEY\b/);
 });

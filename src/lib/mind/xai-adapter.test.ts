@@ -11,6 +11,9 @@ import {
   resolveXaiInferenceApiKey,
 } from "./xai-adapter.ts";
 
+/** Well-formed fake inference key (shape only; never a real secret). */
+const FAKE_INFERENCE = "xai-testinvalidkey00000000000001";
+
 describe("xai adapter", () => {
   it("returns unavailable missing_key with no fabricated reply when XAI_API_KEY is unset", async () => {
     const keyed = readXaiApiKey({});
@@ -38,10 +41,10 @@ describe("xai adapter", () => {
     assert.equal(result.text, "");
   });
 
-  it("reports api_error without inventing text when xAI rejects the key", async () => {
+  it("reports invalid_key without inventing text when xAI rejects the key", async () => {
     const result = await callXaiChat({
       prompt: "Reply with exactly: VERIFY-OK",
-      env: { XAI_API_KEY: "xai-test-invalid" },
+      env: { XAI_API_KEY: FAKE_INFERENCE },
       skipSecretsFile: true,
       fetchImpl: async () =>
         new Response(JSON.stringify({ code: "invalid-argument", error: "Incorrect API key provided." }), {
@@ -51,15 +54,16 @@ describe("xai adapter", () => {
     });
     assert.equal(result.ok, false);
     assert.equal(result.state, "unavailable");
-    if (!result.ok) assert.equal(result.reason, "api_error");
+    if (!result.ok) assert.equal(result.reason, "invalid_key");
     assert.equal(result.text, "");
     assert.equal(result.status, 400);
+    assert.doesNotMatch(result.error, /xai-testinvalidkey/);
   });
 
   it("refuses process env that holds the management key when no secrets file is present", () => {
     const env: Record<string, string | undefined> = {
-      XAI_API_KEY: "xai-management-same",
-      XAI_MANAGEMENT_KEY: "xai-management-same",
+      XAI_API_KEY: "xai-management-same-key-000001",
+      XAI_MANAGEMENT_KEY: "xai-management-same-key-000001",
     };
     const missingPath = join(tmpdir(), `xai-absent-${Date.now()}.env`);
     const resolved = resolveXaiInferenceApiKey(env, missingPath);
@@ -75,16 +79,16 @@ describe("xai adapter", () => {
     const dir = mkdtempSync(join(tmpdir(), "xai-sec-"));
     const path = join(dir, "xai_inference.env");
     try {
-      writeFileSync(path, "export XAI_API_KEY=xai-inference-from-file\n");
+      writeFileSync(path, `export XAI_API_KEY=${FAKE_INFERENCE}\n`);
       const env: Record<string, string | undefined> = {
-        XAI_API_KEY: "xai-management-same",
-        XAI_MANAGEMENT_KEY: "xai-management-same",
+        XAI_API_KEY: "xai-management-same-key-000001",
+        XAI_MANAGEMENT_KEY: "xai-management-same-key-000001",
       };
       const resolved = resolveXaiInferenceApiKey(env, path);
       assert.equal(resolved.ok, true);
       if (!resolved.ok) return;
-      assert.equal(resolved.key, "xai-inference-from-file");
-      assert.equal(env.XAI_API_KEY, "xai-inference-from-file");
+      assert.equal(resolved.key, FAKE_INFERENCE);
+      assert.equal(env.XAI_API_KEY, FAKE_INFERENCE);
       assert.notEqual(resolved.key, env.XAI_MANAGEMENT_KEY);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -97,11 +101,11 @@ describe("xai secrets file", () => {
     const dir = mkdtempSync(join(tmpdir(), "xai-sec-"));
     const path = join(dir, "xai_inference.env");
     try {
-      writeFileSync(path, "export XAI_API_KEY=xai-test-from-file\n");
+      writeFileSync(path, `export XAI_API_KEY=${FAKE_INFERENCE}\n`);
       const env: Record<string, string | undefined> = {};
       assert.equal(applyXaiInferenceSecrets(env, path), true);
-      assert.equal(env.XAI_API_KEY, "xai-test-from-file");
-      assert.equal(readXaiInferenceSecretsFile(path), "xai-test-from-file");
+      assert.equal(env.XAI_API_KEY, FAKE_INFERENCE);
+      assert.equal(readXaiInferenceSecretsFile(path), FAKE_INFERENCE);
       assert.equal(readXaiApiKey(env).ok, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
