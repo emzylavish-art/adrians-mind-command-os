@@ -57,6 +57,22 @@ import { chosenProvider, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import {
+  COMPOSER_MODES,
+  loadComposerEffort,
+  resolveSendPath,
+  saveComposerEffort,
+  type ComposerModeId,
+} from "@/lib/mind/composer-modes";
+import { canSend } from "@/lib/mind/send-gate";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  liveVoiceMissingNotice,
+  loadVoiceSettings,
+  saveVoiceSettings,
+  unusedUntilLiveNotice,
+  type VoiceSettings,
+} from "@/lib/mind/voice/settings";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
   addLocalFile,
@@ -227,7 +243,7 @@ function formatBytes(bytes: number) {
 }
 
 export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
+  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -235,6 +251,11 @@ export function CommandApp() {
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
+  const [effort, setEffort] = useState<ComposerModeId>("auto");
+  const [effortOpen, setEffortOpen] = useState(false);
+  const [effortNotice, setEffortNotice] = useState<string | null>(null);
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
+  const [micDevices, setMicDevices] = useState<{ deviceId: string; label: string }[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -386,6 +407,8 @@ export function CommandApp() {
     try {
       const stored = localStorage.getItem("amcos.theme.v1");
       if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
+      setEffort(loadComposerEffort(localStorage));
+      setVoiceSettings(loadVoiceSettings(localStorage));
     } catch {
       /* a private browser can refuse storage */
     }
@@ -400,6 +423,14 @@ export function CommandApp() {
       /* a private browser can refuse storage */
     }
   }, [theme]);
+
+  useEffect(() => {
+    saveComposerEffort(typeof localStorage === "undefined" ? null : localStorage, effort);
+  }, [effort]);
+
+  useEffect(() => {
+    saveVoiceSettings(typeof localStorage === "undefined" ? null : localStorage, voiceSettings);
+  }, [voiceSettings]);
 
   const hits = useMemo(
     () =>
@@ -845,7 +876,13 @@ export function CommandApp() {
   }
 
   async function sendCommand() {
-    if (busy || ws.halted) return;
+    const gate = canSend({ halted: ws.halted, busy });
+    if (!gate.ok) {
+      setError(gate.reason);
+      return;
+    }
+    const path = resolveSendPath(effort);
+    if (path.notice) setEffortNotice(path.notice);
     const text = draft.trim();
     if (!text) {
       setError("Write what you want to work on.");
@@ -937,7 +974,14 @@ export function CommandApp() {
   }
 
   async function sendInChat() {
-    if (!active || busy || ws.halted) return;
+    const gate = canSend({ halted: ws.halted, busy });
+    if (!gate.ok) {
+      setError(gate.reason);
+      return;
+    }
+    if (!active) return;
+    const path = resolveSendPath(effort);
+    if (path.notice) setEffortNotice(path.notice);
     const text = draft.trim();
     if (!text && !staged) return;
     const file = staged;
@@ -1155,7 +1199,7 @@ export function CommandApp() {
     };
     const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
     if (!Ctor) {
-      setNotice("This browser has no speech recognition. Nothing was transcribed. This is not a realtime voice provider.");
+      setNotice("This browser has no speech recognition. Nothing was transcribed. Voice note (browser fallback) is unavailable. Live voice was not started.");
       return;
     }
     const rec = new Ctor();
@@ -1163,8 +1207,12 @@ export function CommandApp() {
     rec.onresult = (event) => {
       const transcript = event.results[0]?.[0]?.transcript ?? "";
       setDraft(transcript);
-      voiceNext.current = Boolean(transcript);
-      setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
+      voiceNext.current = false;
+      setNotice(
+        transcript
+          ? "Voice note (browser fallback): the transcript is in the composer. Nothing was auto-sent. This is not live voice."
+          : "No words were recognized. Nothing was sent. This is browser speech recognition, not live voice.",
+      );
     };
     rec.start();
   }
@@ -1218,7 +1266,7 @@ export function CommandApp() {
     <div className="flex h-dvh flex-col bg-bg text-fg md:flex-row">
       <aside className={`${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col bg-surface md:static md:flex md:h-dvh ${railCollapsed ? "md:w-16" : "md:w-64"} md:shrink-0 md:border-r md:border-line`}>
         <div className="flex items-center gap-3 px-4 py-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
+          <span className="logo-mark grid size-11 shrink-0 place-items-center rounded-2xl text-lg font-bold text-white">
             A
           </span>
           {!railCollapsed && (
@@ -1448,11 +1496,28 @@ export function CommandApp() {
           </div>
         )}
         {ws.halted && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2" role="alert" data-testid="emergency-stop-banner">
             <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
               Clear stop
             </button>
+          </div>
+        )}
+        {saveError && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2" role="alert" data-testid="retry-save-banner">
+            <p className="text-sm text-danger">{saveError}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+                onClick={() => void retrySave()}
+              >
+                Retry save
+              </button>
+              <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm" onClick={() => clearSaveError()}>
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
@@ -1542,7 +1607,41 @@ export function CommandApp() {
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="relative mt-2">
+                    {effortOpen && (
+                      <div className="floating-menu absolute bottom-full left-0 z-20 mb-2 w-72 rounded-panel p-2" role="menu" data-testid="effort-menu">
+                        {COMPOSER_MODES.map((mode) => (
+                          <button
+                            key={mode.id}
+                            type="button"
+                            role="menuitem"
+                            className={`flex w-full flex-col rounded-panel px-3 py-2 text-left text-sm ${effort === mode.id ? "bg-accent text-accent-ink" : "hover:bg-surface-2"}`}
+                            onClick={() => {
+                              setEffort(mode.id);
+                              setEffortOpen(false);
+                              const resolved = resolveSendPath(mode.id);
+                              setEffortNotice(resolved.notice);
+                              if (mode.id === "build") setView("build");
+                            }}
+                          >
+                            <span className="font-semibold">{mode.label}</span>
+                            <span className={`text-xs ${effort === mode.id ? "text-accent-ink/80" : "text-muted"}`}>{mode.detail}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setEffortOpen((open) => !open)} data-testid="effort-toggle" aria-expanded={effortOpen}>
+                        Effort: {COMPOSER_MODES.find((mode) => mode.id === effort)?.label ?? "Auto"}
+                      </button>
+                      <span className="rounded-full border border-line px-2 py-1 text-xs text-muted" data-testid="send-path-badge">
+                        {resolveSendPath(effort).badge}
+                      </span>
+                    </div>
+                    {(effortNotice || resolveSendPath(effort).notice) && (
+                      <p className="mb-2 text-xs text-muted" data-testid="effort-notice">{effortNotice ?? resolveSendPath(effort).notice}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
                       <Paperclip className="size-4" /> Attach
                     </button>
@@ -1572,12 +1671,23 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
-                      <Mic className="size-4" />
+                    <button type="button" className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => listen()} aria-label="Voice note" title="Voice note (browser fallback)" data-testid="voice-note">
+                      <Mic className="size-4" /> Voice note
                     </button>
-                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      data-testid="live-voice"
+                      onClick={() => {
+                        setNotice(liveVoiceMissingNotice(grokConfigured === true));
+                      }}
+                    >
+                      Live voice
+                    </button>
+                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" data-testid="command-send">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
+                    </div>
                   </div>
                 </form>
                 {contextOpen && (
@@ -2202,9 +2312,59 @@ export function CommandApp() {
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
           {view === "build" && (
-            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Build</h2>
-              <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
+            <section className="mx-auto flex max-w-3xl flex-col items-stretch gap-4 p-4 md:p-6" data-testid="build-surface">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-3xl font-bold">Let&apos;s build</h2>
+                <div className="flex flex-wrap gap-2 text-xs text-muted">
+                  <span className="rounded-full border border-line px-2 py-1">Local</span>
+                  <span className="rounded-full border border-line px-2 py-1">Worktree</span>
+                  <span className="rounded-full border border-line px-2 py-1">adrians-mind-command-os</span>
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-3 rounded-panel border border-line bg-surface px-4 py-10 text-center">
+                <span className="logo-mark grid size-14 place-items-center rounded-2xl text-2xl font-bold text-white">A</span>
+                <p className="text-sm text-muted">Empty build surface. File edit and terminal stay unavailable. A paired computer is required before any of that can run.</p>
+                <label className="mt-2 flex w-full max-w-md flex-col gap-1 text-left text-sm">
+                  Project
+                  <select
+                    value={projectChoice}
+                    onChange={(event) => setProjectChoice(event.target.value)}
+                    className="min-h-11 rounded-panel border border-line bg-bg px-3"
+                    data-testid="build-project-select"
+                  >
+                    <option value="">Select a project on this device</option>
+                    {ws.projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {ws.projects.length === 0 && <p className="text-xs text-muted">No projects yet. Create one from Command; this dropdown only lists real local projects.</p>}
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {[
+                  "Scaffold a settings panel",
+                  "Add a smoke test for send",
+                  "Document the Local / Worktree labels",
+                  "List open Build TODOs",
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className="rounded-panel border border-line bg-surface p-3 text-left text-sm"
+                    data-testid="build-suggestion"
+                    onClick={() => {
+                      setDraft(suggestion);
+                      setView("command");
+                      setNotice("Build suggestion filled the composer only. Nothing was executed. File edit and terminal stay unavailable.");
+                    }}
+                  >
+                    {suggestion}
+                    <span className="mt-1 block text-xs text-muted">Fills the composer only. Does not run.</span>
+                  </button>
+                ))}
+              </div>
               <ul className="space-y-2 text-sm">
                 <li className="rounded-panel border border-line bg-surface p-3">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
                 <li className="rounded-panel border border-line bg-surface p-3">Edit files, run tests, and use git. Not available. No files were changed.</li>
@@ -2421,6 +2581,91 @@ export function CommandApp() {
                   ))}
                 </div>
               </div>
+              <div className="rounded-panel border border-line bg-surface p-4 text-sm" data-testid="settings-voice">
+                <p className="font-semibold">Voice</p>
+                <p className="mt-1 text-muted">{unusedUntilLiveNotice()}</p>
+                <div className="mt-3 space-y-3">
+                  <label className="block">
+                    Personality
+                    <select
+                      className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3"
+                      value={voiceSettings.personality}
+                      onChange={(event) => setVoiceSettings((prev) => ({ ...prev, personality: event.target.value as VoiceSettings["personality"] }))}
+                    >
+                      <option value="new">New</option>
+                      <option value="adrian">Adrian</option>
+                      <option value="assistant">Assistant</option>
+                      <option value="therapist">Therapist</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    Activation
+                    <select
+                      className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3"
+                      value={voiceSettings.activation}
+                      onChange={(event) => setVoiceSettings((prev) => ({ ...prev, activation: event.target.value as VoiceSettings["activation"] }))}
+                    >
+                      <option value="default">Default</option>
+                      <option value="isolation">Voice Isolation</option>
+                      <option value="push_to_talk">Push to Talk</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    Speed
+                    <select
+                      className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3"
+                      value={voiceSettings.speed}
+                      onChange={(event) => setVoiceSettings((prev) => ({ ...prev, speed: event.target.value as VoiceSettings["speed"] }))}
+                    >
+                      <option value="slow">Slow</option>
+                      <option value="normal">Normal</option>
+                      <option value="fast">Fast</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span>Open App in Voice Mode</span>
+                    <input
+                      type="checkbox"
+                      checked={voiceSettings.openInVoiceMode}
+                      onChange={(event) => setVoiceSettings((prev) => ({ ...prev, openInVoiceMode: event.target.checked }))}
+                    />
+                  </label>
+                  <label className="block">
+                    Microphone
+                    <select
+                      className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3"
+                      value={voiceSettings.microphoneId}
+                      onChange={(event) => setVoiceSettings((prev) => ({ ...prev, microphoneId: event.target.value }))}
+                      onFocus={() => {
+                        void (async () => {
+                          if (!navigator.mediaDevices?.enumerateDevices) {
+                            setNotice("This browser cannot list microphones. " + unusedUntilLiveNotice());
+                            return;
+                          }
+                          try {
+                            const devices = await navigator.mediaDevices.enumerateDevices();
+                            setMicDevices(
+                              devices
+                                .filter((device) => device.kind === "audioinput")
+                                .map((device, index) => ({ deviceId: device.deviceId, label: device.label || `Microphone ${index + 1}` })),
+                            );
+                          } catch {
+                            setNotice("Microphone list was refused. " + unusedUntilLiveNotice());
+                          }
+                        })();
+                      }}
+                    >
+                      <option value="">Default input</option>
+                      {micDevices.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="text-xs text-muted">Personality, activation, speed, open-in-voice, and mic id are saved locally. {unusedUntilLiveNotice()}</p>
+                </div>
+              </div>
               <div className="rounded-panel border border-line bg-surface p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>
                 <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
@@ -2432,7 +2677,7 @@ export function CommandApp() {
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() =>
                     void publishServerCopy().then((result) => {
-                      if (!result.ok) setError(result.error);
+                      if (!result.ok) setError(result.error || "The server copy could not be saved. The browser copy was kept.");
                     })
                   }
                 >
