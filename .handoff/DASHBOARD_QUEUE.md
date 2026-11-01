@@ -133,6 +133,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **queued** | gap-feed captures-20261101-172519 |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **queued** | gap-feed |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **queued** | gap-feed |
+| 79 | **Light — per-rect measured dim (card vs chart) + chart-line 3:1 target** | built in light lane @df51c5b, needs Dashboard Bot wiring | #68 drove one strength from the worst rect, so bright nebula behind Charts over-dimmed the Imagine scene behind the detail card. Now per-rect strength (`rectWeight[]` uniform, ≤2). Wire: `liveDetailDim.setRects([detail, chart], vp)` + `setContrastTarget([{ textRgb, cardRgb, cardAlpha }, { textRgb: tickText, lines: { rgb: lineRgb } }])` (single target still works = #68). Lines → `WCAG_GRAPHIC_AA` 3:1, tick text 4.5:1. Register tests: postfx/{detail-dim-per-rect,meter-sample-age}.test.ts. Same-cycle hacker fix (live, no wiring): meter freshness counted from the sampled frame (stale-readback), reset clears lastError. See postfx/README #69 |
+| 80 | **Light — meter readback cost guard at high DPR** — time each backdrop readback (begin→resolve) and widen METER_INTERVAL_MS when readbacks run long or frames drop, surfacing the back-off on `contrast`; real timings only | queued | Light lane next; builds on #68/#79 meter |
 
 
 
