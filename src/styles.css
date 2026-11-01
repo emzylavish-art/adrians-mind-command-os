@@ -4795,3 +4795,36 @@ html[data-theme="light"] .dash3d-node-detail {
     min-width: 0 !important;
   }
 }
+
+/* —— Evolution c50: chip/tab hit targets + focus outline-style solid —— */
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage button.rounded-full,
+.composer-dock button.rounded-full,
+aside.rail nav button {
+  min-height: 44px !important;
+  min-width: 44px !important;
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline-style: solid !important;
+  outline-width: 2px !important;
+  outline-color: #f4f4f5 !important;
+  outline-offset: 2px !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] textarea:focus-visible {
+  outline-color: #09090b !important;
+}
+/* Masthead / suggestion contrast */
+.main-stage a.underline,
+.main-stage button.underline,
+.main-stage .text-accent.underline {
+  color: #f4f4f5 !important;
+  text-underline-offset: 0.2em;
+  opacity: 1 !important;
+}
