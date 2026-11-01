@@ -1,0 +1,198 @@
+{
+  "date": "2026-11-01",
+  "cycle": 4,
+  "closed_since_c3": [
+    {
+      "feature": "Tool timeline merge",
+      "status": "closed",
+      "branch": "preview/integration + milestone",
+      "note": "code on :8100; idle UI hides card"
+    },
+    {
+      "feature": "Imagine / image generation",
+      "status": "closed",
+      "branch": "media-integration\u2192integration/milestone",
+      "note": "live Imagine affordance on :8100"
+    },
+    {
+      "feature": "OAuth beyond Notion (Google/Slack/GitHub ServiceBoard)",
+      "status": "closed",
+      "branch": "mcp-integration",
+      "note": "merged; Connected UI on :8100"
+    },
+    {
+      "feature": "Shortcut sheet components",
+      "status": "closed_unmounted",
+      "branch": "visual/polish-pass-6",
+      "note": "components shipped; mount deferred"
+    },
+    {
+      "feature": "Web search / Mode / Grok / voice / banners / attach / MCP / Drive / Notion OAuth",
+      "status": "closed",
+      "branch": "various",
+      "note": "verified on :8100 where visible"
+    }
+  ],
+  "gaps": [
+    {
+      "rank": 1,
+      "feature": "Guest / logged-out usable chat (progressive auth)",
+      "status": "open",
+      "branch": null,
+      "effort": "M",
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "HuggingChat",
+        "Pi"
+      ],
+      "why": "Competitors allow start-before-login; Adrian still 401s protected ops. Highest remaining activation gap."
+    },
+    {
+      "rank": 2,
+      "feature": "Keyboard shortcut sheet + Cmd+K mount into live chrome",
+      "status": "in_progress",
+      "branch": "visual/polish-pass-6..8",
+      "effort": "S",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Perplexity"
+      ],
+      "why": "Components done (e5c4c87) but unmounted; pass-8 claimed to mount when free."
+    },
+    {
+      "rank": 3,
+      "feature": "Projects dashboard with progress / agent stats",
+      "status": "in_progress",
+      "branch": "dashboard-3d",
+      "effort": "M",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Copilot"
+      ],
+      "why": "Dashboard Bot claimed; cosmos visual lanes active on :8110/:8112 \u2014 not yet the product Projects depth users expect."
+    },
+    {
+      "rank": 4,
+      "feature": "Failure-banner Retry fidelity under live multimodal/history",
+      "status": "in_progress",
+      "branch": "error-banners",
+      "effort": "S",
+      "platforms": [
+        "ChatGPT",
+        "Claude"
+      ],
+      "why": "Re-dispatch lock claimed; Retry must keep images/history/halt (18809f7 lineage)."
+    },
+    {
+      "rank": 5,
+      "feature": "Unattended scheduled automations (DATABASE_URL + hosted worker)",
+      "status": "open",
+      "branch": null,
+      "effort": "L",
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "why": "Local queue only; competitors ship cloud schedules."
+    },
+    {
+      "rank": 6,
+      "feature": "Artifacts / Canvas / Build with paired computer",
+      "status": "in_progress",
+      "branch": "hp-pairing",
+      "effort": "L",
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "why": "HP pairing code landed (d7335d2); device still may be offline \u2014 Build remains blocked without machine."
+    },
+    {
+      "rank": 7,
+      "feature": "Multi-bot / Explore persona directory (mounted)",
+      "status": "in_progress",
+      "branch": "preview/persona-directory",
+      "effort": "M",
+      "platforms": [
+        "Poe",
+        "Character.AI",
+        "Manus"
+      ],
+      "why": "ae338c7 explore from fleet; Poe Explore still public competitor bar."
+    },
+    {
+      "rank": 8,
+      "feature": "Memory UX depth (editable prefs, import, attach toggles)",
+      "status": "open",
+      "branch": null,
+      "effort": "M",
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "ChatGPT",
+        "Poe"
+      ],
+      "why": "Scopes exist; competitor settings depth missing."
+    },
+    {
+      "rank": 9,
+      "feature": "Live search provider key (MIND_SEARCH_*) + timeout polish",
+      "status": "in_progress",
+      "branch": "logic-wiring",
+      "effort": "S",
+      "platforms": [
+        "Perplexity",
+        "ChatGPT",
+        "You.com"
+      ],
+      "why": "Wiring closed; product still refuses without env; search-timeout gap lock present."
+    },
+    {
+      "rank": 10,
+      "feature": "Durable cloud DB / multi-device sync",
+      "status": "open",
+      "branch": null,
+      "effort": "L",
+      "platforms": [
+        "All SaaS"
+      ],
+      "why": "Foundation still PGLite/browser."
+    },
+    {
+      "rank": 11,
+      "feature": "Tool-timeline visible during a live tool turn (idle false negative)",
+      "status": "open",
+      "branch": "preview/integration",
+      "effort": "S",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Manus"
+      ],
+      "why": "Code merged; needs a signed-in tool-run demo/screenshot on :8100 to close UX proof."
+    },
+    {
+      "rank": 12,
+      "feature": "MCP stdio / remote hardening remaining (XSS/callback/state)",
+      "status": "in_progress",
+      "branch": "mcp-integration",
+      "effort": "M",
+      "platforms": [
+        "Claude",
+        "ChatGPT"
+      ],
+      "why": "Hardening locks claimed (callback XSS, stdio servers)."
+    }
+  ],
+  "capture": "/workspace/rea-captures/capture-cycle4-summary-2026-11-01.json",
+  "verifier": "/workspace/rea-captures/verifier-2026-11-01-c4.json"
+}

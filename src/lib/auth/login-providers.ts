@@ -1,0 +1,61 @@
+/**
+ * Decide how each login button should behave on the unified /login surface.
+ * Supabase owns email + Google/GitHub/Apple when configured; Better Auth (broker)
+ * keeps Google/X working when Supabase env is missing. X always uses Better Auth.
+ */
+export type LoginProviderId = "google" | "github" | "apple" | "x";
+
+export type LoginProviderAction =
+  | { kind: "supabase_oauth"; provider: "google" | "github" | "apple" }
+  | { kind: "better_auth"; providerId: string; label: string }
+  | { kind: "not_configured"; message: string };
+
+export function resolveLoginProviderAction(
+  provider: LoginProviderId,
+  input: { supabaseConfigured: boolean; betterAuthEnabled: boolean },
+): LoginProviderAction {
+  if (provider === "x") {
+    if (!input.betterAuthEnabled) {
+      return {
+        kind: "not_configured",
+        message:
+          "Continue with X isn’t configured yet (needs VITE_AUTH_ENABLED and GROK_AUTH_CLIENT_ID / GROK_AUTH_CLIENT_SECRET).",
+      };
+    }
+    return { kind: "better_auth", providerId: "grok-x", label: "X" };
+  }
+
+  if (input.supabaseConfigured) {
+    return {
+      kind: "supabase_oauth",
+      provider: provider as "google" | "github" | "apple",
+    };
+  }
+
+  if (provider === "google" && input.betterAuthEnabled) {
+    return { kind: "better_auth", providerId: "grok-google", label: "Google" };
+  }
+
+  const needs =
+    provider === "github"
+      ? "Supabase Auth GitHub provider (and SUPABASE_URL + SUPABASE_ANON_KEY)"
+      : provider === "apple"
+        ? "Supabase Auth Apple provider (and SUPABASE_URL + SUPABASE_ANON_KEY)"
+        : "Supabase Auth Google provider, or GROK_AUTH_CLIENT_ID / GROK_AUTH_CLIENT_SECRET for broker Google";
+
+  return {
+    kind: "not_configured",
+    message: `Continue with ${provider[0]!.toUpperCase()}${provider.slice(1)} isn’t configured yet (needs ${needs}).`,
+  };
+}
+
+export function emailPasswordGate(supabaseConfigured: boolean): {
+  ok: true
+} | { ok: false; message: string } {
+  if (supabaseConfigured) return { ok: true };
+  return {
+    ok: false,
+    message:
+      "Email sign-in isn’t configured yet (needs SUPABASE_URL and SUPABASE_ANON_KEY on the server).",
+  };
+}

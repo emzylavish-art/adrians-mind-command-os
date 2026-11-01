@@ -1,9 +1,12 @@
 import { createSseFeed, pushSse, type ModelUsage } from "./stream.ts";
+import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
+export { CHAT_DISCONNECT_REPLY };
+import type { ChatContent } from "./media/types.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 const PROVIDER_URL = "https://api.x.ai/v1/chat/completions";
 
-export type RelayMessage = { role: string; content: string };
+export type RelayMessage = { role: string; content: ChatContent };
 
 export function combineAbort(incoming: AbortSignal, timeoutMs: number): {
   signal: AbortSignal;
@@ -33,15 +36,24 @@ export function combineAbort(incoming: AbortSignal, timeoutMs: number): {
   };
 }
 
-function modelBody(model: string, messages: RelayMessage[]) {
-  return {
+export type RelayModelParams = {
+  temperature?: number;
+  max_tokens?: number;
+  reasoning_effort?: "low" | "medium" | "high" | "xhigh";
+};
+
+/** Exposed for unit tests that assert the outgoing provider JSON. */
+export function buildRelayModelBody(model: string, messages: RelayMessage[], params: RelayModelParams = {}) {
+  const body: Record<string, unknown> = {
     model,
     messages,
-    max_tokens: 500,
-    temperature: 0.4,
+    max_tokens: params.max_tokens ?? 500,
+    temperature: params.temperature ?? 0.4,
     stream: true,
     stream_options: { include_usage: true },
   };
+  if (params.reasoning_effort) body.reasoning_effort = params.reasoning_effort;
+  return body;
 }
 
 export function relayModelStream(input: {
@@ -53,8 +65,11 @@ export function relayModelStream(input: {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   url?: string;
+  params?: RelayModelParams;
+  /** Optional metadata echoed on the done event (e.g. selected/resolved tier). */
+  meta?: Record<string, unknown>;
 }): Response {
-  const linked = combineAbort(input.requestSignal, input.timeoutMs ?? 25_000);
+  const linked = combineAbort(input.requestSignal, input.timeoutMs ?? chatTurnTimeoutMs());
   const encoder = new TextEncoder();
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let closed = false;
@@ -91,7 +106,7 @@ export function relayModelStream(input: {
           } catch {
             /* the provider reader is already closed */
           }
-          send("error", { error: "Grok did not answer in time. Nothing was saved as a success." });
+          send("error", { error: CHAT_TIMEOUT_REPLY });
           finish();
           return;
         }
@@ -111,7 +126,7 @@ export function relayModelStream(input: {
           method: "POST",
           signal: linked.signal,
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.apiKey}` },
-          body: JSON.stringify(modelBody(input.model, input.messages)),
+          body: JSON.stringify(buildRelayModelBody(input.model, input.messages, input.params ?? {})),
         });
         if (linked.signal.aborted) {
           await res.body?.cancel().catch(() => undefined);
@@ -120,7 +135,11 @@ export function relayModelStream(input: {
         }
         if (!res.ok || !res.body) {
           await res.body?.cancel().catch(() => undefined);
-          send("error", { error: `Grok returned ${res.status}. Nothing was saved as a success.` });
+          const error =
+            res.status === 404
+              ? "That model is not available. Nothing was saved as a success."
+              : `Grok returned ${res.status}. Nothing was saved as a success.`;
+          send("error", { error });
           finish();
           return;
         }
@@ -163,12 +182,16 @@ export function relayModelStream(input: {
           usage,
           usedIds: input.usedIds,
           requestId: res.headers.get("x-request-id"),
+          ...(input.meta ?? {}),
         });
         finish();
-      } catch {
+      } catch (caught) {
         if (linked.signal.aborted) await stopped();
         else {
-          send("error", { error: "Grok did not answer in time. Nothing was saved as a success." });
+          // Network / mid-stream drop — never mislabel as a turn timeout.
+          const msg = caught instanceof Error ? caught.message : "";
+          void msg;
+          send("error", { error: CHAT_DISCONNECT_REPLY });
           finish();
         }
       } finally {

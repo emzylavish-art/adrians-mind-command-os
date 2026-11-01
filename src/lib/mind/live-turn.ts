@@ -1,9 +1,13 @@
 import { pullMindEvents, type ModelUsage } from "./stream.ts";
 
+import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
+import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, isTimeoutAbort } from "./turn-timeouts.ts";
+
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
+export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
-  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null }
+  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null }
   | { ok: false; error: string };
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
@@ -18,7 +22,9 @@ function readOrAbort(reader: ReadableStreamDefaultReader<Uint8Array>, signal: Ab
       if (settled) return;
       settled = true;
       signal.removeEventListener("abort", onAbort);
-      reject(new DOMException("The operation was aborted", "AbortError"));
+      const reason = signal.reason;
+      if (reason instanceof DOMException) reject(reason);
+      else reject(new DOMException("The operation was aborted", "AbortError"));
     };
     signal.addEventListener("abort", onAbort, { once: true });
     reader.read().then(
@@ -56,18 +62,26 @@ export async function consumeMindTurn(input: {
       signal: input.signal,
       credentials: "same-origin",
     });
-  } catch {
+  } catch (caught) {
+    if (isTimeoutAbort(input.signal, caught) || (input.signal.aborted && isTimeoutAbort(input.signal, input.signal.reason))) {
+      return { ok: false, error: CHAT_TIMEOUT_REPLY };
+    }
     return {
       ok: false,
-      error: input.signal.aborted ? STOPPED_REPLY : "Grok did not answer in time. Nothing was saved as a success.",
+      error: input.signal.aborted ? STOPPED_REPLY : CHAT_DISCONNECT_REPLY,
     };
   }
   const type = response.headers.get("content-type") ?? "";
   if (!response.ok || !type.includes("text/event-stream")) {
-    let message = response.status === 401 ? "Sign in is required." : "Grok could not be reached.";
+    let message =
+      response.status === 401
+        ? "Sign in is required."
+        : response.status === 429
+          ? "Too many messages. Wait a minute and try again."
+          : "Grok could not be reached.";
     try {
       const payload = (await response.json()) as { error?: string };
-      if (payload.error) message = payload.error;
+      if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
     } catch {
       /* the status message stands */
     }
@@ -87,9 +101,15 @@ export async function consumeMindTurn(input: {
     let step: ReadableStreamReadResult<Uint8Array>;
     try {
       step = await readOrAbort(reader, input.signal);
-    } catch {
+    } catch (caught) {
       await reader.cancel().catch(() => undefined);
-      return { ok: false, error: input.signal.aborted ? STOPPED_REPLY : "Grok did not answer in time. Nothing was saved as a success." };
+      if (isTimeoutAbort(input.signal, caught) || isTimeoutAbort(input.signal, input.signal.reason)) {
+        return { ok: false, error: CHAT_TIMEOUT_REPLY };
+      }
+      return {
+        ok: false,
+        error: input.signal.aborted ? STOPPED_REPLY : CHAT_DISCONNECT_REPLY,
+      };
     }
     if (input.signal.aborted) return stop();
     if (step.done) break;
@@ -111,7 +131,14 @@ export async function consumeMindTurn(input: {
           usage: event.usage,
           usedIds: event.usedIds,
           requestId: event.requestId,
+          modelTier: event.modelTier,
+          resolvedTier: event.resolvedTier,
+          tierReason: event.tierReason,
+          memorySaved: event.memorySaved === true,
+          savedMemoryId: event.savedMemoryId ?? null,
         };
+        const outcome = outcomeFromDoneEvent(event);
+        if (outcome) rememberTierOutcome(outcome);
       }
     }
   }

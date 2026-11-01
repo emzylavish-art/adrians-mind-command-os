@@ -1,0 +1,29 @@
+owner: HP Pairing Bot
+branch: hp-pairing
+worktree: /workspace/mind-command-os-hp-pairing
+base: origin/main
+status: done, released
+claimed_at: 2026-11-01T13:58:59+01:00
+released_at: 2026-11-01T15:01:16+01:00
+commits:
+  - d7335d2
+  - c34e2dd
+  - 9f156cd (server-signed agent manifest)
+  - aa14867 (action outcome reports)
+  - b1515cd (dry-run + pair-elitebook + docs)
+paths_claimed:
+  - src/lib/mind/pairing/
+  - src/components/mind/pairing/
+  - src/routes/api/mind/pairing/
+  - scripts/pairing/
+  - agent/windows/
+  - docs/hp-pairing/
+  - src/lib/mind/registry.ts (pc capability helper only)
+  - src/components/mind/service-board.tsx (Local computer prop only)
+  - package.json (pairing test entries only)
+  - src/routeTree.gen.ts (pairing routes only)
+  - /workspace/audit/hp-pairing/
+notes: |
+  Cycle 2 done. Pushed origin/hp-pairing @ b1515cd.
+  Dry-run evidence /workspace/audit/hp-pairing/ (lib+HTTP); preview :8191 stopped; store cleaned.
+  Typecheck pass; mind 240/240; build pass. Management key never logged.

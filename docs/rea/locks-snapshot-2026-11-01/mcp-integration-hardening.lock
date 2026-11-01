@@ -1,0 +1,25 @@
+owner: MCP Integration Bot
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+status: done, released
+claimed_at: 2026-11-01T12:54:03+01:00
+released_at: 2026-11-01T13:31:26+01:00
+paths_claimed:
+  - src/lib/mind/mcp/
+  - src/lib/mind/pc-pairing/
+  - src/routes/api/mind/pc/
+  - src/components/mind/fleet-panels.tsx
+  - scripts/mcp/
+  - package.json
+  - .handoff/NOTION_HANDOFF.md
+  - .env.example
+  - src/routeTree.gen.ts
+commits:
+  - 8749cbd (pc pairing + pc_run_shell)
+  - befbaa6 (pglite harden)
+  - 823ee77 (Tools UI)
+  - b6e2714 (live verify)
+notes: |
+  All 4 hardening steps done + Notion mirror stop-points appended.
+  Preview was http://127.0.0.1:8083 from this worktree.
+  Auth UI routes 401 without session; builtin MCP live tools/call verified.

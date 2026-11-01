@@ -1,0 +1,42 @@
+feature: Memory UX depth (view / edit / delete / scope saved memories, "memory updated" chip in thread, per-chat memory off toggle)
+lane: grok-build
+owner_bot: Grok Build
+source_platforms: Claude, Gemini, Poe, Perplexity, ChatGPT
+gap_rank: 10 (gap-list-2026-11-01-c3), effort M
+status: done, released
+claimed_by: Grok Build
+claimed_at: 2026-11-01T14:37:17+01:00
+released_at: 2026-11-01T14:48:55+01:00
+branch: preview/memory-ux
+worktree: /workspace/mind-command-os-memory
+base: origin/preview/integration @ 7c73ba3
+commits:
+  - 5d3da7c9f19830f0c4c585452741900212417448 (5d3da7c) feat(memory): manager UX, owner CRUD, turn save signal, per-chat skip
+push: origin/preview/memory-ux @ 5d3da7c (PUSH_EXIT 0)
+paths_claimed:
+  - src/routes/memory.tsx
+  - src/components/mind/memory-manager.tsx
+  - src/components/mind/memory-saved-indicator.tsx
+  - src/components/mind/memory-chat-toggle.tsx
+  - src/lib/mind/memory/ (list/edit/delete/skip extensions only)
+  - src/lib/mind/memory*.test.ts
+  - src/routes/api/mind/memory/ (if added)
+  - package.json (test list entry only)
+  - /workspace/audit/mind-os/memory-ux/
+  - /workspace/locks/grok-build-gap-memory-ux-depth.lock
+notes: |
+  Extending existing memory store minimally. Will NOT edit command-app.tsx regions
+  claimed by voice/media/error-banners/visual; styles.css (visual-polish); dashboard-3d paths.
+  Mount manager via own route; record pending mount for in-thread indicator / per-chat toggle
+  if command-app regions remain claimed.
+evidence:
+  - /workspace/rea-captures/gap-list-2026-11-01-c3.md (item 10)
+  - /workspace/audit/signed-in/findings-chatgpt-claude.md
+acceptance_criteria:
+  - Memory manager surface listing real stored memories with scope, edit and delete; honest empty state
+  - In-thread indicator when a turn saves memory; per-chat "don't use memory" toggle actually skips memory
+  - Delete is real (persisted), no fake rows; handle empty/huge/unicode/script-injection text safely (escape, length cap)
+  - Regression tests; typecheck + npm test + build pass; push own branch (base preview/integration); done on Notion mirror; lock done, released
+notes: Avoid command-app.tsx regions claimed by voice/media/error-banners/visual; mount via own route + minimal link if needed.
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:34:34+01:00

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
+import { CHAT_DISCONNECT_REPLY, consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
+import { CHAT_TIMEOUT_REPLY } from "./turn-timeouts.ts";
 import { prepareRetry } from "./transcript.ts";
 import { emptyWorkspace } from "./workspace.ts";
 
@@ -131,5 +132,49 @@ describe("live turn", () => {
     assert.equal(result.ok, false);
     assert.equal(shouldStoreReply(result), false);
     if (!result.ok) assert.equal(result.error, STOPPED_REPLY);
+  });
+});
+
+
+describe("live-turn disconnect honesty", () => {
+  it("a fetch network failure is not labeled as a timeout", async () => {
+    const result = await consumeMindTurn({
+      url: "http://local.test/api/mind/turn",
+      body: {},
+      headers: {},
+      signal: new AbortController().signal,
+      onDelta: () => undefined,
+      fetchImpl: (async () => {
+        throw new TypeError("fetch failed");
+      }) as typeof fetch,
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.error, CHAT_DISCONNECT_REPLY);
+      assert.equal(result.error.includes(CHAT_TIMEOUT_REPLY), false);
+    }
+  });
+});
+
+
+describe("live-turn HTTP 429 rate limit", () => {
+  it("surfaces the server error message when status is 429 (res.ok false)", async () => {
+    const result = await consumeMindTurn({
+      url: "http://local.test/api/mind/turn",
+      body: { text: "hi" },
+      headers: {},
+      signal: new AbortController().signal,
+      onDelta: () => undefined,
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ ok: false, error: "Too many messages. Wait a minute and try again." }), {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": "60" },
+        })) as typeof fetch,
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /Too many messages/);
+      assert.equal(result.error.includes("could not be reached"), false);
+    }
   });
 });

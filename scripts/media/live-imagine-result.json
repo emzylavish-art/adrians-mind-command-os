@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "model": "grok-imagine-image",
+  "endpoint": "POST https://api.x.ai/v1/images/generations",
+  "mime": "image/jpeg",
+  "bytes": 110849,
+  "saved": "/workspace/audit/media-integration/imagine-live.jpg",
+  "at": "2026-11-01T12:12:56.331Z"
+}

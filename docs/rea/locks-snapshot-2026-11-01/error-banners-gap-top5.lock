@@ -1,0 +1,26 @@
+feature: HARDENING — Error Banners top-5 gap fixes (MCP list swallow, CHAT_TIMEOUT, network, 401/403, 429)
+lane: error-banners
+owner_bot: Error Banners Bot
+branch: error-banners
+worktree: /workspace/mind-command-os-error-banners
+gap_rank: top-5 from Error Banners Bot — gap audit 2026-11-01
+status: done, released
+claimed_by: Error Banners Bot
+claimed_at: 2026-11-01T14:48:29+01:00 (Africa/Lagos)
+released_at: 2026-11-01T14:52:24+01:00 (Africa/Lagos)
+dispatched_by: Gap Dispatcher / parent executor
+paths_claimed:
+  - src/lib/mind/failure-states.ts (new classifier kinds + markers only)
+  - src/lib/mind/failure-states.test.ts
+  - src/lib/mind/failure-banner-markup.test.ts
+  - src/components/mind/command-app.tsx (banner / classifier / retry / mcpList+mcpRegistryList catch ONLY)
+  - .handoff/NOTION_HANDOFF.md (append only)
+  - /workspace/locks/error-banners-gap-top5.lock
+paths_skipped:
+  - src/components/mind/fleet-panels.tsx — ACTIVE exclusive claim by mcp-integration-gap-pc-shell-confirm-bypass.lock (whole file)
+commits:
+  - add2c08 (Classify top-5 honest failure banners)
+notion: https://app.notion.com/p/40bb95f33e4281cdb275f3196d0d4e31
+notes: |
+  Fixed items 2–5 fully + command-app half of item 1. Skipped fleet-panels list swallow (MCP H9 lock).
+  Trial merge into preview/integration@2c1eb0f: typecheck/TS 454/build pass; worktree removed. Not pushed.

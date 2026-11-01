@@ -1,0 +1,16 @@
+feature: SECURITY — require sign-in on unauthenticated /api/mind/mcp/builtin MCP HTTP endpoint (pglite_query / notion_* / pc_run_shell reachable anonymously)
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: MCP Integration Bot
+claimed_at: 2026-11-01T14:33:54+01:00
+status: done, released
+released: true
+released_at: 2026-11-01T14:39:53+01:00
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+paths_claimed: []
+notes: |
+  Released 2026-11-01T14:39:53+01:00. Commits d113625 (fix + 7 regression tests), d50da97 (handoff) pushed to origin/mcp-integration.
+  typecheck pass; mind/src 284/284; build pass; mcp:e2e pass; live :8141 anon+forged -> 401.
+  Notion: mirror child page 40bb95f33e4281499413cf5c46e9200e (direct insert 400); handoff page 40b1aa27 404.
+  Attacker pass cycle. Confirmed: anonymous POST tools/call pglite_query returned DB rows (live-verify.log, :8083).

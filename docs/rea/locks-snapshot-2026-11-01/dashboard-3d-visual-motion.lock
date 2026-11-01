@@ -1,0 +1,14 @@
+owner: Cosmos Motion Bot
+lane: motion
+branch: dashboard-3d-visual-motion
+worktree: /workspace/mind-command-os-dashboard-motion
+base: origin/dashboard-3d
+status: claimed
+claimed_at: 2026-11-01T14:50:59+01:00
+released_at:
+paths_claimed:
+  - src/components/mind/dashboard-3d/motion/
+  - src/components/mind/dashboard-3d/particles/
+notes: |
+  Cycle 4: committed 988f763 (comet tail fade + MotionClock anchors); waiting for dashboard-3d.lock (Dashboard Bot c9).
+  Lane dirs only. Preview :8112. Never touch Dashboard Bot WT. No force-push, never main, never deploy.

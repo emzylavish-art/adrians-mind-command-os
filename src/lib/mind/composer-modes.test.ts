@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { loadComposerEffort, resolveSendPath, saveComposerEffort } from "./composer-modes.ts";
+
+describe("composer modes", () => {
+  it("keeps Orchestrator selection honest when fan-out is not wired", () => {
+    const resolved = resolveSendPath("orchestrator");
+    assert.equal(resolved.path, "blocked-orchestrator");
+    assert.equal(resolved.badge, "Direct");
+    assert.match(resolved.notice ?? "", /not wired/i);
+  });
+
+  it("maps Auto to Direct", () => {
+    const resolved = resolveSendPath("auto");
+    assert.equal(resolved.path, "direct");
+    assert.equal(resolved.badge, "Direct");
+    assert.equal(resolved.notice, null);
+  });
+
+  it("maps Build to Direct with no second model path", () => {
+    const resolved = resolveSendPath("build");
+    assert.equal(resolved.path, "direct");
+    assert.equal(resolved.badge, "Direct");
+  });
+
+  it("round-trips effort selection in storage", () => {
+    const mem = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => mem.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        mem.set(key, value);
+      },
+    };
+    saveComposerEffort(storage, "expert");
+    assert.equal(loadComposerEffort(storage), "expert");
+    assert.equal(loadComposerEffort(null), "auto");
+  });
+});

@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-01",
+  "cycle": 3,
+  "preview_8080": false,
+  "lane_ports": {
+    "8091": "voice-integration intermittent",
+    "8092": "logic intermittent",
+    "8096": "media down"
+  },
+  "checks": [
+    {
+      "gap": "Live Grok replies",
+      "claimed": "closed",
+      "branch": "xai-verification",
+      "result": "pass",
+      "live_preview": "unverifiable",
+      "evidence": "/workspace/mind-command-os-xai/src/lib/mind/xai-adapter.ts (applyXaiInferenceSecrets); secrets file present historically; canonical :8080 down"
+    },
+    {
+      "gap": "Mode\u2192model picker",
+      "claimed": "closed",
+      "branch": "logic-wiring",
+      "result": "pass",
+      "live_preview": "unverifiable",
+      "evidence": "/workspace/mind-command-os-logic/src/lib/mind/model-tiers.ts resolveModelTier; ModelTierChip in command-app; :8092 intermittent"
+    },
+    {
+      "gap": "Live voice",
+      "claimed": "closed",
+      "branch": "voice-integration",
+      "result": "pass",
+      "live_preview": "partial",
+      "evidence": "realtime-session.ts present; :8091 HTTP 200 but headless screenshot crashed; further hardening claimed"
+    },
+    {
+      "gap": "Error banners",
+      "claimed": "closed",
+      "branch": "error-banners",
+      "result": "pass",
+      "live_preview": "unverifiable",
+      "evidence": "failure-states.ts + data-testid=failure-banner in command-app.tsx; markup tests b6ce68b"
+    },
+    {
+      "gap": "Image attach/vision",
+      "claimed": "closed",
+      "branch": "media-integration",
+      "result": "pass",
+      "live_preview": "unverifiable",
+      "evidence": "src/lib/mind/media/* + MEDIA_HANDOFF live red vision call; :8096 down during verifier"
+    },
+    {
+      "gap": "MCP builtins",
+      "claimed": "closed",
+      "branch": "mcp-integration",
+      "result": "pass",
+      "live_preview": "unverifiable",
+      "evidence": "mcp/tools.ts pglite_query + notion_*; e2e log historically"
+    },
+    {
+      "gap": "Tool timeline",
+      "claimed": "in_progress",
+      "branch": "preview/tools-timeline",
+      "result": "pass",
+      "live_preview": "unverifiable",
+      "evidence": "command-app.tsx line with Executing tools ({counts.done}/{counts.total}) on preview/tools-timeline; not verified on :8080"
+    },
+    {
+      "gap": "Web search wiring (new since c2)",
+      "claimed": "closed",
+      "branch": "logic-wiring",
+      "result": "pass",
+      "live_preview": "unverifiable",
+      "evidence": "research.ts performSearch + env refusal strings; MIND_SEARCH_* unset \u2192 product still refuses live"
+    }
+  ]
+}

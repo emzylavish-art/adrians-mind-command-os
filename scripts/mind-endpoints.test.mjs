@@ -30,5 +30,11 @@ test("protected mind operations require the owner on the server", () => {
   const agent = readFileSync(new URL("../src/lib/mind/agent-run.server.ts", import.meta.url), "utf8");
   assert.match(agent, /requireUserId/);
   assert.match(agent, /request\.signal/);
-  assert.match(agent, /XAI_API_KEY/);
+  // Union: HEAD allowed resolveXaiInferenceApiKey|XAI_API_KEY; 8fd3dc5 requires resolver + keyed.ok and forbids direct env reads.
+  assert.match(agent, /resolveXaiInferenceApiKey/);
+  assert.match(agent, /keyed\.ok/);
+  assert.doesNotMatch(agent, /process\.env\.XAI_API_KEY\b/);
+  // turn path also resolves via resolveXaiInferenceApiKey (c17 wiring + xai pin)
+  assert.match(turn, /resolveXaiInferenceApiKey/);
+  assert.doesNotMatch(turn, /process\.env\.XAI_API_KEY\b/);
 });

@@ -73,13 +73,20 @@ test("vite loadEnv resolves the wrapped value", () => {
   assert.equal(merged.VITE_AUTH_ENABLED, "false");
 });
 
-test("the wrapped command runs with the app env applied", async () => {
-  const { stdout } = await execFileAsync(process.execPath, [
-    WRAPPER,
+test("the wrapped command runs with the app env applied", async (t) => {
+  // This workspace must not ship app-env that forces auth off.
+  if (readAppEnv(projectRoot()).VITE_AUTH_ENABLED === "false") {
+    t.skip("skipping: workspace .grok/app-env.json forces VITE_AUTH_ENABLED=false");
+    return;
+  }
+  // Isolate ambient shell pollution (parent VITE_AUTH_ENABLED=false would win over the file).
+  const env = { ...process.env };
+  delete env.VITE_AUTH_ENABLED;
+  const { stdout } = await execFileAsync(
     process.execPath,
-    "-e",
-    PRINT_FLAG,
-  ]);
+    [WRAPPER, process.execPath, "-e", PRINT_FLAG],
+    { env },
+  );
   assert.notEqual(stdout, "false");
 });
 
@@ -113,16 +120,21 @@ test("a signal-killed command is never reported as success", async () => {
   );
 });
 
-test("the CLI still runs when invoked through a symlinked path", async () => {
+test("the CLI still runs when invoked through a symlinked path", async (t) => {
   // node realpaths import.meta.url but not process.argv[1], so a raw comparison
   // turns the wrapper into a no-op that exits 0 without starting anything.
+  if (readAppEnv(projectRoot()).VITE_AUTH_ENABLED === "false") {
+    t.skip("skipping: workspace .grok/app-env.json forces VITE_AUTH_ENABLED=false");
+    return;
+  }
   const link = join(mkdtempSync(join(tmpdir(), "app-env-link-")), "scripts");
   symlinkSync(join(projectRoot(), "scripts"), link);
-  const { stdout } = await execFileAsync(process.execPath, [
-    join(link, "with-app-env.mjs"),
+  const env = { ...process.env };
+  delete env.VITE_AUTH_ENABLED;
+  const { stdout } = await execFileAsync(
     process.execPath,
-    "-e",
-    PRINT_FLAG,
-  ]);
+    [join(link, "with-app-env.mjs"), process.execPath, "-e", PRINT_FLAG],
+    { env },
+  );
   assert.notEqual(stdout, "false");
 });

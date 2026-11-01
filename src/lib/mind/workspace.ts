@@ -250,6 +250,11 @@ export function addMemory(
   return { ...ws, memories: [item, ...ws.memories] };
 }
 
+export function deleteMemory(ws: Workspace, id: string): Workspace {
+  if (!id) return ws;
+  return { ...ws, memories: ws.memories.filter((item) => item.id !== id) };
+}
+
 export function reviseMemory(ws: Workspace, id: string, text: string): Workspace {
   const next = text.trim().slice(0, 2000);
   if (!next) return ws;
@@ -338,7 +343,7 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
   };
 }
 
-export function pushAudit(ws: Workspace, action: string, target: string, result: string): Workspace {
+export function recordAudit(ws: Workspace, action: string, target: string, result: string): { ws: Workspace; entry: AuditEntry } {
   const entry: AuditEntry = {
     id: crypto.randomUUID(),
     at: new Date().toISOString(),
@@ -346,7 +351,11 @@ export function pushAudit(ws: Workspace, action: string, target: string, result:
     target,
     result,
   };
-  return { ...ws, audit: [entry, ...ws.audit].slice(0, 200) };
+  return { ws: { ...ws, audit: [entry, ...ws.audit].slice(0, 200) }, entry };
+}
+
+export function pushAudit(ws: Workspace, action: string, target: string, result: string): Workspace {
+  return recordAudit(ws, action, target, result).ws;
 }
 
 export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Workspace {

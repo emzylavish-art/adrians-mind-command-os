@@ -1,0 +1,3 @@
+Round 5 findings (Africa/Lagos)
+1) Audio duration: PCM bytes / 24kHz tracked via onReplyAudioDuration. Canned reply "It is about noon." typically ~0.8s — Speaking lasting ~0.8s MATCHES short reply audio (PASS when equal). Session keeps Speaking until playback end; no Listening gap between Thinking and Speaking (processing before onTranscript; replyInFlight suppresses Listening).
+2) Chat turns: test-audio Direct path now persists user+assistant via buildVoiceChatTurn; ensures chat exists; setView("chat"). Live Direct still uses deliver(); depends on merging xai-verification 2fa69f4 for typed-chat key fix (not committed here).

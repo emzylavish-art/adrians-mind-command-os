@@ -1,0 +1,21 @@
+owner: Error Banners Bot
+branch: error-banners
+worktree: /workspace/mind-command-os-error-banners
+base: f2b88fd25d83e32f7556a270d6469f2edb98ad5b
+status: done, released
+claimed_at: 2026-11-01T13:10:39+01:00
+released_at: 2026-11-01T13:28:22+01:00
+paths_claimed:
+  - /workspace/mind-command-os-error-banners (branch error-banners only)
+  - /workspace/eb-verify-7f40ca8 (temp, removed)
+  - /workspace/eb-trial-aa54d1a (temp trial merge, removed)
+  - src/lib/mind/failure-states.ts, failure-states.test.ts, failure-banner-markup.test.ts
+  - .handoff/NOTION_HANDOFF.md
+commits:
+  - aa54d1a (banner 5: MCP tool-call failure state + tests)
+notes: |
+  Verified 7f40ca8: typecheck pass; TS list 263/263; banner tests 6/6; scripts 198/202 (pre-existing brand-check);
+  lint 6 errors/7 warnings in other lanes. DB-write + emergency-stop banners pass; model-unavailable Retry drops
+  images in 3 closures after merge (command-app.tsx, locked by media/voice/voice-wiring) — reported, not fixed.
+  Banner 4 blocked (no Imagine failure state in merged/pushed code). Banner 5 lib+tests only; askMcp wiring blocked by
+  command-app.tsx locks. Trial merge clean. Not pushed. Temp worktrees removed; no servers started.

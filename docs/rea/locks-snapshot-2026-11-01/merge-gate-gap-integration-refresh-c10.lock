@@ -1,0 +1,23 @@
+feature: Refresh preview/integration with released lane tips so Grok Imagine (gap #2) and OAuth beyond Notion (gap #3) can be verified on the integration preview
+lane: merge-gate
+owner_bot: Merge Gate Bot
+gap_rank: 2 + 3 (gap-list-2026-11-01-c3) — verification blocked until merged
+status: done, released
+claimed_by: Merge Gate Bot
+claimed_at: 2026-11-01T13:42:24+01:00
+released_at: 2026-11-01T13:50:37+01:00
+merge_commits:
+  - 5544d2b Merge mcp-integration (5dd31ef)
+  - a7a6799 Merge media-integration (ef8f6b8)
+  - d1a541c chore routeTree.gen.ts regen
+  - 27d2985 Merge logic-wiring (beebc80)
+tip: 27d298557fa187ddb22da1049e7aacd7a6e4493e
+screenshots:
+  - /workspace/audit/integration-c10-image-button.png
+  - /workspace/audit/integration-c10-serviceboard.png
+notes: |
+  Finished after interrupt. Verifier lock was released/pass → merged beebc80.
+  routeTree.gen.ts working-tree drift was TanStack regen reorder; committed as d1a541c.
+  Pushed origin/preview/integration @ 27d2985. Notion mirror appended; handoff page still 404.
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T13:43:00+01:00

@@ -3,9 +3,11 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
+import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
 
 const MODEL = "grok-4.5";
 
@@ -39,6 +41,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       ok: false as const,
       grok: "down" as const,
       model: MODEL,
+      modelTiers: modelTierCatalog(process.env),
       database: gate.error,
       isolation: "failed" as const,
       executionHalted,
@@ -52,8 +55,9 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const mindUrl = process.env.MIND_SUPABASE_URL;
   return {
     ok: true as const,
-    grok: process.env.XAI_API_KEY ? ("configured" as const) : ("unconfigured" as const),
+    grok: resolveXaiInferenceApiKey(process.env).ok ? ("configured" as const) : ("unconfigured" as const),
     model: MODEL,
+    modelTiers: modelTierCatalog(process.env),
     database: mindUrl
       ? "A Mind project URL is set and is not a forbidden project."
       : "No dedicated project yet. The free organization already holds two active projects.",
@@ -99,6 +103,7 @@ export const searchWeb = createServerFn({ method: "POST" })
 export const recordAgentExecution = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { id?: string; tool?: string; action?: string; ok?: boolean; detail?: string }) => ({
+    // Only a server-issued id is honored. tool/ok/detail from the client are ignored.
     id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
     tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
     action: input.action === "voice" ? "voice" : "chat",
@@ -106,11 +111,20 @@ export const recordAgentExecution = createServerFn({ method: "POST" })
     detail: typeof input.detail === "string" ? input.detail.slice(0, 500) : "",
   }))
   .handler(async ({ data, context }) => {
-    if (!data.id || !data.tool) return { ok: false as const, error: "The execution was not recorded." };
+    const { recordIssuedExecution } = await import("./execution-ledger");
     const { writeToolRun } = await import("./notion-record");
     const { getSql } = await import("../db");
-    await writeToolRun(await getSql(), context.userId, data);
-    return { ok: true as const };
+    const sql = await getSql();
+    const result = await recordIssuedExecution({
+      userId: context.userId,
+      id: data.id,
+      clientOk: data.ok,
+      clientDetail: data.detail,
+      write: async (run) => {
+        await writeToolRun(sql, context.userId, run);
+      },
+    });
+    return result;
   });
 
 export const notionStatus = createServerFn({ method: "GET" })
@@ -294,6 +308,8 @@ export const sendTurn = createServerFn({ method: "POST" })
     halted: boolean;
     history: { role: "user" | "assistant"; content: string }[];
     memoryContext: { id: string; text: string }[];
+    modelTier?: string;
+    images?: { dataUrl: string; name?: string }[];
   }) => input)
   .handler(async ({ data, context }) => {
     const { completeModelReply, prepareMindTurn } = await import("./turn.server");
@@ -344,35 +360,55 @@ export const loadMindCopy = createServerFn({ method: "POST" })
 
 export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text: string }) => input)
+  .validator((input: { text: string; voiceId?: string }) => input)
   .handler(async ({ data, context }) => {
+    const { validateSpeakTextInput } = await import("./voice/voice-input");
+    const parsed = validateSpeakTextInput((data as { text?: unknown } | null)?.text);
+    if (!parsed.ok) return { ok: false as const, error: parsed.error };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
-    const text = data.text.trim().slice(0, 500);
-    if (!text) return { ok: false as const, error: "Nothing to read." };
-    const apiKey = process.env.VOICE_API_KEY;
+    const text = parsed.text;
+    const { resolveVoiceApiKey } = await import("./voice/keys");
+    const { resolveXaiVoiceId } = await import("./voice/voices");
+    const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
+    const voice_id = resolveXaiVoiceId(data.voiceId);
     let res: Response;
     try {
       res = await fetch("https://api.x.ai/v1/tts", {
         method: "POST",
         signal: AbortSignal.timeout(20_000),
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ text, voice_id: "eve" }),
+        body: JSON.stringify({ text, voice_id, language: "en", output_format: { codec: "mp3" } }),
       });
     } catch {
       return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
     }
     if (!res.ok) return { ok: false as const, error: `Voice returned ${res.status}. Nothing was played.` };
+    const contentLength = Number(res.headers.get("content-length") || 0);
+    if (contentLength > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     const bytes = Buffer.from(await res.arrayBuffer());
     if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };
   });
 
+export const createVoiceClientSecret = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Voice was not started." };
+    if (!allowMindRequest("voice_secret", context.userId, 20)) {
+      return { ok: false as const, error: "Too many voice requests. Wait a minute." };
+    }
+    const { mintRealtimeClientSecret } = await import("./voice/client-secret");
+    return mintRealtimeClientSecret({});
+  });
 /**
- * Soft-auth MCP list: same session resolution as authMiddleware, but returns
- * typed `unauthenticated` instead of throwing (quiet Tools empty state).
+ * MCP server list for Tools. Soft-auth: same session resolution as authMiddleware
+ * (getSessionUser + bearer), but returns a typed `unauthenticated` payload instead
+ * of throwing — so the Tools panel can show a quiet sign-in empty state (not a banner).
+ * Grok Build owns accepting Supabase HttpOnly cookies inside getSessionUser.
  */
 export const mcpRegistryList = createServerFn({ method: "GET" })
   .middleware([
@@ -392,6 +428,7 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
     const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
     let userId: string | null = null;
     if (!authConfigured && !gateIdentityEnabled()) {
+      // Match requireUserId: auth-off + no DATABASE_URL → shared dev user.
       if (!process.env.DATABASE_URL?.trim()) userId = DEV_USER_ID;
     } else {
       const user = await getSessionUser(context.bearerToken);
@@ -452,3 +489,80 @@ export const mcpRegistryCall = createServerFn({ method: "POST" })
     };
   });
 
+export const listMindMemories = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Memories were not listed.", memories: [] as const };
+    }
+    const { getSql } = await import("../db");
+    const { listOwnerMemories } = await import("./memory/owner-ops");
+    const listed = await listOwnerMemories(await getSql(), context.userId, { includeArchived: false });
+    return { ok: true as const, memories: listed.memories };
+  });
+
+export const createMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { scope?: string; text?: string; projectId?: string | null; chatId?: string | null; source?: string }) => {
+    const scope = input.scope === "project" || input.scope === "chat" ? input.scope : ("global" as const);
+    return {
+      scope: scope as "global" | "project" | "chat",
+      text: typeof input.text === "string" ? input.text : "",
+      projectId: typeof input.projectId === "string" ? input.projectId : null,
+      chatId: typeof input.chatId === "string" ? input.chatId : null,
+      source: typeof input.source === "string" ? input.source.slice(0, 160) : "owner",
+    };
+  })
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was saved.", memorySaved: false as const, savedMemoryId: null };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute.", memorySaved: false as const, savedMemoryId: null };
+    }
+    const { getSql } = await import("../db");
+    const { createOwnerMemory } = await import("./memory/owner-ops");
+    const { memorySignalFromSave } = await import("./memory/signal");
+    const saved = await createOwnerMemory(await getSql(), context.userId, data);
+    if (!saved.ok) return { ok: false as const, error: saved.error, ...memorySignalFromSave(saved) };
+    return { ok: true as const, item: saved.item, ...memorySignalFromSave({ ok: true, id: saved.item.id }) };
+  });
+
+export const editMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; text?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+    text: typeof input.text === "string" ? input.text : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was edited." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { editOwnerMemory } = await import("./memory/owner-ops");
+    return editOwnerMemory(await getSql(), context.userId, data.id, data.text);
+  });
+
+export const deleteMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was deleted." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { deleteOwnerMemory } = await import("./memory/owner-ops");
+    return deleteOwnerMemory(await getSql(), context.userId, data.id);
+  });

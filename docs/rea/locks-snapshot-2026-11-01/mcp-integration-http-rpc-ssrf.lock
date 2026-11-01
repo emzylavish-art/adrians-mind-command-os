@@ -1,0 +1,19 @@
+feature: SECURITY — HTTP MCP registry rpc(): no timeout, no response-size cap, follows redirects, private-IP https registration (hang / memory / SSRF)
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: MCP Integration Bot
+claimed_at: 2026-11-01T14:44:30+01:00
+status: done, released
+released: true
+released_at: 2026-11-01T14:48:05+01:00
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+paths_claimed: []
+previous_paths:
+  - src/lib/mind/mcp/registry.ts
+  - src/lib/mind/mcp/registry.test.ts
+  - src/lib/mind/mcp-registry.ts
+  - .handoff/NOTION_HANDOFF.md
+notes: |
+  Commits bbb75f0 (fix + 6 regression tests), c233372 (handoff) pushed to origin/mcp-integration.
+  typecheck pass; mind/src 290/290; build pass; mcp:e2e pass. Notion stop-point: 40bb95f33e42814c9d23c31b730adf90

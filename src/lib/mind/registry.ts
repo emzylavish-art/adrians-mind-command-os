@@ -84,7 +84,7 @@ export const CAPABILITIES: Capability[] = [
     id: "pc",
     name: "PC control",
     status: "blocked",
-    why: "Not implemented. The HP EliteBook is not paired. No commands are sent to it.",
+    why: "The HP EliteBook is not paired. No commands are sent to it. Pairing lives under /api/mind/pairing and src/lib/mind/pairing/.",
   },
   {
     id: "research",
@@ -185,3 +185,8 @@ export const CAPABILITIES: Capability[] = [
 ];
 
 export const FORBIDDEN_REFS = ["ybxowvzicirinpdcfyqe", "espmxiitzucooxblmnpr"] as const;
+
+/** @deprecated Prefer pcCapabilityFromPairing(userId) from "@/lib/mind/pairing" for live state. */
+export function pcCapabilityPlaceholder(): Capability {
+  return CAPABILITIES.find((item) => item.id === "pc")!;
+}

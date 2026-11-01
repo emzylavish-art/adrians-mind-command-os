@@ -1,0 +1,17 @@
+feature: HARDENING (MED) — H11 voice server fns input validation
+lane: voice-integration
+owner_bot: Voice Integration Bot
+status: done
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:57:00+01:00
+claimed_at: 2026-11-01T14:57:36+01:00
+claimed_by: Voice Integration Bot
+released_at: 2026-11-01T15:08:13+01:00
+cycle: 19
+base: voice-integration @ f4ff6e1
+done_commits:
+  - 5fed9bc
+  - 05d24e0
+evidence: /workspace/rea-captures/hardening-log.md (H11)
+notes: |
+  H11 done + Speaking/Interrupt/transcript polish. Notion child page updated.
