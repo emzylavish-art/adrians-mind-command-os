@@ -4,6 +4,17 @@
  * Keep VP class names for post-merge CSS override.
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import {
+  AudioLines,
+  Mic,
+  MicOff,
+  Phone,
+  Plus,
+  ScreenShare,
+  Settings,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { analyzeImageFile } from "@/lib/mind/server";
 import { useLiveVoiceSession } from "@/lib/mind/voice-live/use-live-voice-session";
 import { isLiveVoiceOccupied } from "@/lib/mind/voice-live/occupancy";
@@ -534,9 +545,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                         setAttachMsg(null);
                       }}
                     >
-                      <span className="composer-bar__plus-glyph" aria-hidden="true">
-                        +
-                      </span>
+                      <Plus className="composer-bar__plus-glyph size-5" strokeWidth={2} aria-hidden="true" />
                     </button>
                     {plusMenu(false)}
                   </div>
@@ -571,9 +580,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                     aria-pressed={dictationState === "recording"}
                     onClick={onDictate}
                   >
-                    <span className="composer-mic-dictation__glyph text-sm" aria-hidden="true">
-                      mic
-                    </span>
+                    <Mic className="composer-mic-dictation__glyph size-5" strokeWidth={2} aria-hidden="true" />
                     <span
                       className={`composer-mic-dictation__dot absolute top-1 right-1 size-2 rounded-full ${
                         dictationState === "recording" ? "bg-red-400" : "bg-transparent"
@@ -591,12 +598,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                     aria-pressed={false}
                     onClick={startSpeak}
                   >
-                    <span className="composer-speak-live__bars inline-flex h-3 items-end gap-0.5" aria-hidden="true">
-                      <i className="inline-block w-0.5 rounded-sm bg-black" style={{ height: "40%" }} />
-                      <i className="inline-block w-0.5 rounded-sm bg-black" style={{ height: "80%" }} />
-                      <i className="inline-block w-0.5 rounded-sm bg-black" style={{ height: "100%" }} />
-                      <i className="inline-block w-0.5 rounded-sm bg-black" style={{ height: "55%" }} />
-                    </span>
+                    <AudioLines className="composer-speak-live__bars size-4" strokeWidth={2.25} aria-hidden="true" />
                     <span className="composer-speak-live__label">Speak</span>
                   </button>
                 </div>
@@ -627,9 +629,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
         </p>
         <div className="live-voice-bar__controls live-call-grid mb-3 grid grid-cols-4 gap-2" role="group" aria-label="Live voice tools">
           <button type="button" className={PILL} data-testid="live-voice-bar-screen" aria-label="Screen share" aria-pressed={screenOn} onClick={onScreenClick}>
-            <span className="lvb-ico lvb-ico--screen text-xs" aria-hidden="true">
-              share
-            </span>
+            <ScreenShare className="lvb-ico lvb-ico--screen size-6" strokeWidth={1.75} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -639,9 +639,11 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
             aria-pressed={live.speakerMuted}
             onClick={live.toggleSpeaker}
           >
-            <span className="lvb-ico lvb-ico--speaker text-xs" aria-hidden="true">
-              {live.speakerMuted ? "muted" : "spk"}
-            </span>
+            {live.speakerMuted ? (
+              <VolumeX className="lvb-ico lvb-ico--speaker size-6" strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+              <Volume2 className="lvb-ico lvb-ico--speaker size-6" strokeWidth={1.75} aria-hidden="true" />
+            )}
           </button>
           <button
             type="button"
@@ -652,11 +654,14 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
             onClick={() => live.toggleMute()}
           >
             <span className="live-voice-bar__mic-ring" aria-hidden="true" />
-            <span className={`lvb-ico lvb-ico--mic text-xs${muted ? " is-slashed" : ""}`} aria-hidden="true">
-              mic
-            </span>
+            {muted ? (
+              <MicOff className="lvb-ico lvb-ico--mic is-slashed size-6" strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+              <Mic className="lvb-ico lvb-ico--mic size-6" strokeWidth={1.75} aria-hidden="true" />
+            )}
             <span className="live-voice-bar__mic-dot" aria-hidden="true" />
-            <span className="live-voice-bar__mic-dots flex gap-0.5" aria-hidden="true">
+            <span className="live-voice-bar__mic-dots mt-0.5 flex gap-0.5" aria-hidden="true">
+              <i className="size-1 rounded-full bg-current opacity-80" />
               <i className="size-1 rounded-full bg-current opacity-80" />
               <i className="size-1 rounded-full bg-current opacity-80" />
               <i className="size-1 rounded-full bg-current opacity-80" />
@@ -675,9 +680,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                 setAttachOpen(false);
               }}
             >
-              <span className="lvb-ico lvb-ico--settings text-xs" aria-hidden="true">
-                gear
-              </span>
+              <Settings className="lvb-ico lvb-ico--settings size-6" strokeWidth={1.75} aria-hidden="true" />
             </button>
             {settingsPopover}
           </div>
@@ -697,9 +700,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                 setAttachMsg(null);
               }}
             >
-              <span className="lvb-ico lvb-ico--plus" aria-hidden="true">
-                +
-              </span>
+              <Plus className="lvb-ico lvb-ico--plus size-5" strokeWidth={2} aria-hidden="true" />
             </button>
             {plusMenu(true)}
           </div>
@@ -714,14 +715,12 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           </form>
           <button
             type="button"
-            className="live-voice-bar__end live-call-end grid h-12 w-14 shrink-0 place-items-center rounded-full bg-[#f26b6b] text-white shadow-[0_0_18px_rgb(242_107_107/0.45)]"
+            className="live-voice-bar__end live-call-end grid h-12 w-24 shrink-0 place-items-center rounded-full bg-[#f26b6b] text-white shadow-[0_0_18px_rgb(242_107_107/0.45)]"
             data-testid="live-voice-bar-end"
             aria-label="End call"
             onClick={endEverything}
           >
-            <span className="lvb-ico lvb-ico--hangup inline-block rotate-[135deg] text-lg" aria-hidden="true">
-              ☎
-            </span>
+            <Phone className="lvb-ico lvb-ico--hangup size-6 rotate-[135deg]" strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
         {statusLine}

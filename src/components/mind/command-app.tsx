@@ -1839,7 +1839,7 @@ export function CommandApp() {
         )}
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-44 md:pb-48">
         <header className="flex items-center gap-2 border-b border-line px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
