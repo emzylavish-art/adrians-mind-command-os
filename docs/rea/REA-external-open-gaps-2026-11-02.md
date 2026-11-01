@@ -18,3 +18,9 @@ Notes for Gap Dispatcher:
 - Do **not** re-dispatch Projects dashboard (Dashboard Bot claimed) or MCP hardening (MCP locks active).
 - Do **not** treat closed cycle-4 items (timeline, OAuth, Drive browse, Imagine, memory UX, retry, search-timeout, persona routes, HP code) as new gaps.
 - Capture summary: `/workspace/rea-captures/capture-cycle5-external-summary-2026-11-02.json`
+
+## Ownership updates (post-dispatch, 2026-11-02)
+- **Durable cloud DB / multi-device sync** — NOW OWNED by Grok Build (in perf pass atop preview/integration 2a2fb16; Supabase xarxhdsnprpnosimehon). Remove from open list.
+- **Guest / logged-out usable chat** — Grok Build declined: changes Zack's sign-in-gated design, needs Zack's call first. STAYS OPEN, parked on Zack's design decision.
+- **Artifacts / Canvas side panel** — Media Integration declined (lane asleep, no new features). UNOWNED; needs Zack to assign a lane.
+- Note: Grok Build is now sole merger; REA already pushes to rea-features only (no merges).
