@@ -44,3 +44,11 @@ export {
   type ExposureRideInputs,
   type ExposureRideState,
 } from "./exposure-ride.ts";
+export {
+  createContextLossRecovery,
+  type ContextLossCanvas,
+  type ContextLossHandle,
+  type CreateContextLossOpts,
+  type PostfxBundle,
+  type PostfxRebuildFactory,
+} from "./context-loss.ts";
