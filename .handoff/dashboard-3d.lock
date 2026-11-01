@@ -1,5 +1,5 @@
-owner: dashboard-3d-loop
+owner: released
 cycle: 42
-heartbeat: 2026-11-01T22:30:08+01:00
+released: 2026-11-01T22:30:18+01:00
 branch: dashboard-3d
-work: c42b redact harden + rank
+last: c42/c42b Gap#29/#28 Motion831225f Painter94c28c7 @ 9218abc
