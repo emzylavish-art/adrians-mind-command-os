@@ -1,3 +1,6 @@
+/** Honest label when a done event did not confirm which model answered. */
+export const UNKNOWN_MODEL_LABEL = "model unknown";
+
 export type ModelUsage = { prompt_tokens?: number; completion_tokens?: number };
 
 export function readModelPayload(raw: string): { text: string; streamed: boolean; usage: ModelUsage | null } {
@@ -91,10 +94,11 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
     else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error });
     else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error });
     else if (name === "done" && typeof record.text === "string") {
+      const modelRaw = typeof record.model === "string" ? record.model.trim() : "";
       events.push({
         event: "done",
         text: record.text,
-        model: typeof record.model === "string" ? record.model : "grok-4.5",
+        model: modelRaw || UNKNOWN_MODEL_LABEL,
         usage: record.usage && typeof record.usage === "object" ? (record.usage as ModelUsage) : null,
         usedIds: Array.isArray(record.usedIds) ? record.usedIds.filter((id) => typeof id === "string") : [],
         requestId: typeof record.requestId === "string" ? record.requestId : null,
