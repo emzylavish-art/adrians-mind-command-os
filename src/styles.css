@@ -873,3 +873,120 @@ html[data-theme="light"] .min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl
   letter-spacing: -0.03em;
   font-weight: 700;
 }
+
+/* —— Cycle 10: Attach/Tools/Context panels + mode picker + command palette (mono) —— */
+
+/* Mode picker (Ask / Research / Agent / Build) as floating segment */
+form .rounded-full.px-3.text-sm,
+.rounded-full.px-3.text-sm.bg-accent,
+.rounded-full.px-3.text-sm.border.border-line {
+  backdrop-filter: blur(8px);
+}
+/* Wrap adjacent mode pills visually when parent is a flex row of modes */
+form > .flex.items-center.gap-2:has(> .rounded-full),
+.flex.items-center.gap-2:has(> button.rounded-full.px-3) {
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.4);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 28px rgb(0 0 0 / 0.35);
+  width: fit-content;
+}
+button.rounded-full.px-3.text-sm.bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.4);
+}
+button.rounded-full.px-3.text-sm.border.border-line {
+  border-color: transparent !important;
+  color: #d4d4d8 !important;
+}
+button.rounded-full.px-3.text-sm.border.border-line:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: #fff !important;
+}
+html[data-theme="light"] form > .flex.items-center.gap-2:has(> .rounded-full),
+html[data-theme="light"] .flex.items-center.gap-2:has(> button.rounded-full.px-3) {
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.1);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.08);
+}
+html[data-theme="light"] button.rounded-full.px-3.text-sm.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* Composer action row (Attach / Add Context / Tools / …) */
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.border.border-line {
+  background: rgb(255 255 255 / 0.03);
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.border.border-line:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.22) !important;
+}
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.bg-accent {
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.4);
+}
+
+/* Expand panels: Add Context + Tools list */
+form ~ .mt-3.rounded-panel.border.border-line.bg-bg,
+.mt-3.rounded-panel.border.border-line.bg-bg.p-3,
+ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg {
+  background: rgb(10 10 12 / 0.92) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    0 18px 40px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+}
+ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg > li {
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 0.05);
+  background: rgb(255 255 255 / 0.02);
+}
+html[data-theme="light"] .mt-3.rounded-panel.border.border-line.bg-bg.p-3,
+html[data-theme="light"] ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 16px 36px rgb(0 0 0 / 0.12);
+}
+
+/* Command palette floating depth */
+#command-palette {
+  background: rgb(12 12 14 / 0.94) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 24px 56px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+}
+#command-palette button:hover,
+#command-palette [role="option"]:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-radius: 0.65rem;
+}
+html[data-theme="light"] #command-palette {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 20px 48px rgb(0 0 0 / 0.14) !important;
+}
+
+/* Quick tool chips */
+.flex.gap-2.overflow-x-auto.pb-1 > button,
+.flex.gap-2.overflow-x-auto.pb-1 > .rounded-panel {
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  backdrop-filter: blur(8px);
+}
+.flex.gap-2.overflow-x-auto.pb-1 > button:hover {
+  background: rgb(255 255 255 / 0.09);
+  border-color: rgb(255 255 255 / 0.2);
+}
