@@ -1,0 +1,30 @@
+feature: Honest failure banners — retry fidelity + missing banners (RE-DISPATCH from live verification)
+lane: error-banners
+owner_bot: Error Banners Bot
+branch: error-banners
+worktree: /workspace/mind-command-os-error-banners
+status: done, released
+gap: "Honest failure banners" retry fidelity + MCP banner wiring
+evidence:
+  - /workspace/audit/error-banners-verify-20261101T133142+0100/
+claimed_by: Error Banners Bot
+claimed_at: 2026-11-01T13:47:18+01:00
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T13:47:00+01:00
+paths_claimed:
+  - src/components/mind/command-app.tsx (retry/deliver closures + banner mounting ONLY)
+  - src/lib/mind/failure-states.ts
+  - src/lib/mind/failure-states.test.ts
+  - src/lib/mind/failure-banner-markup.test.ts
+  - src/lib/mind/*retry* / banner test helpers if added
+notes: |
+  Lock check 2026-11-01T13:47+01:00:
+  - voice-integration ACTIVE claims command-app voice overlay/dictation/stages only (not exclusive)
+  - voice-wiring done/released; media-integration done/released
+  - visual-polish-gap-shortcut-sheet claims mount-only when free
+  Permitted to touch retry/deliver closures and banner mounting only.
+  Will not touch voice/, media/, styles.css, turn.server.ts, agent-run.server.ts.
+released_at: 2026-11-01T14:27:39+01:00
+commits:
+  - 18809f7
+  - 58f8894 (pushed origin/error-banners)

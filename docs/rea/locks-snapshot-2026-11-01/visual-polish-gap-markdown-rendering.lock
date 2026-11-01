@@ -1,0 +1,27 @@
+feature: Rich, safe Markdown rendering in assistant replies + Copy-code hardening
+lane: visual-polish
+owner_bot: Visual Polish Bot
+status: claimed / in progress
+claimed_by: Visual Polish Bot
+claimed_at: 2026-11-01T14:50:47+01:00
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:52:00+01:00
+cycle: 17
+gap_rank: feature (sub-flow diff: message rendering)
+evidence: |
+  src/components/mind/message-body.tsx + src/lib/mind/blocks.ts: splitBlocks() splits on ``` only; other text as whitespace-pre-wrap.
+paths_claimed:
+  - src/lib/mind/markdown-safe.ts (new renderer)
+  - src/lib/mind/markdown-safe.test.ts
+  - src/components/mind/markdown-prose.tsx (new presentational)
+  - src/components/mind/message-body.tsx (mount when free)
+  - src/lib/mind/blocks.ts (display helpers only if needed)
+  - src/styles.css (prose styles)
+  - /workspace/locks/visual-polish-gap-markdown-rendering.lock
+acceptance_criteria:
+  - Markdown rendered WITHOUT dangerouslySetInnerHTML / raw HTML; script/img onerror/javascript:/data: inert
+  - links rel="noopener noreferrer" target=_blank; tables scroll on 375px; unclosed fences and large replies safe
+  - Copy code: visible + aria-live Copy failed / Copied resets ~2s
+  - typecheck + npm test + build pass; push; Notion child note; lock done released
+notes: |
+  Prefer new files; mount into message-body when free. Media Integration previously claimed message-body — check before edit.

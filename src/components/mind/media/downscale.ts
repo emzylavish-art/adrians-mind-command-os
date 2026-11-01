@@ -1,4 +1,4 @@
-import { fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE } from "@/lib/mind/media";
+import { dimensionsLookLikeBomb, fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE, sanitizeMediaLabel } from "@/lib/mind/media";
 
 export type DownscaleResult = {
   dataUrl: string;
@@ -21,8 +21,18 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
+async function loadImageBitmap(dataUrl: string): Promise<ImageBitmap | HTMLImageElement> {
+  // Prefer createImageBitmap so EXIF orientation is applied before we strip metadata via canvas.
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    if (typeof createImageBitmap === "function") {
+      return await createImageBitmap(blob, { imageOrientation: "from-image" } as ImageBitmapOptions);
+    }
+  } catch {
+    /* fall through */
+  }
+  return await new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("That image could not be decoded."));
@@ -30,13 +40,31 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
+function bitmapSize(image: ImageBitmap | HTMLImageElement): { width: number; height: number } {
+  if ("naturalWidth" in image) {
+    return { width: image.naturalWidth || image.width, height: image.naturalHeight || image.height };
+  }
+  return { width: image.width, height: image.height };
+}
+
 /** Downscale a File or data-URL to max edge (default 2048) as JPEG/PNG data-URL. */
 export async function fileToDownscaledDataUrl(
   file: File,
   maxEdge = MAX_IMAGE_EDGE,
 ): Promise<DownscaleResult> {
+  if (!file || file.size === 0) {
+    throw new Error("That file is empty.");
+  }
+  // HEIC/AVIF and other unsupported types fail honestly before canvas work.
+  const type = (file.type || "").toLowerCase();
+  if (type && !type.startsWith("image/")) {
+    throw new Error("That file is not an image.");
+  }
+  if (type.includes("heic") || type.includes("heif") || type.includes("avif") || /\.heic$|\.heif$|\.avif$/i.test(file.name)) {
+    throw new Error("HEIC/AVIF is not supported here. Convert to JPEG or PNG first.");
+  }
   const source = await readFileAsDataUrl(file);
-  return dataUrlToDownscaled(source, file.name || "image.jpg", maxEdge);
+  return dataUrlToDownscaled(source, sanitizeMediaLabel(file.name) || "image.jpg", maxEdge);
 }
 
 export async function dataUrlToDownscaled(
@@ -44,8 +72,14 @@ export async function dataUrlToDownscaled(
   name = "image.jpg",
   maxEdge = MAX_IMAGE_EDGE,
 ): Promise<DownscaleResult> {
-  const image = await loadImage(dataUrl);
-  let fitted = fitWithinBox(image.naturalWidth || image.width, image.naturalHeight || image.height, maxEdge);
+  const image = await loadImageBitmap(dataUrl);
+  const { width: naturalW, height: naturalH } = bitmapSize(image);
+  if (dimensionsLookLikeBomb(naturalW, naturalH)) {
+    throw new Error("That image is too large to decode safely (possible decompression bomb).");
+  }
+  // Canvas redraw strips EXIF GPS/metadata after orientation was applied via createImageBitmap.
+  // Animated GIF/APNG: drawImage paints the first frame only (intentional).
+  let fitted = fitWithinBox(naturalW, naturalH, maxEdge);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas is not available in this browser.");
@@ -85,7 +119,7 @@ export async function dataUrlToDownscaled(
   let edge = Math.min(fitted.width, fitted.height, maxEdge);
   while (out.length > MAX_DATA_URL_CHARS && edge > 256) {
     edge = Math.floor(edge * 0.75);
-    fitted = fitWithinBox(image.naturalWidth || image.width, image.naturalHeight || image.height, edge);
+    fitted = fitWithinBox(naturalW, naturalH, edge);
     paint(fitted.width, fitted.height);
     scaled = true;
     out = canvas.toDataURL("image/jpeg", 0.7);
@@ -96,9 +130,17 @@ export async function dataUrlToDownscaled(
     throw new Error("That image is still too large after compression. Try a smaller photo.");
   }
 
+  if ("close" in image && typeof image.close === "function") {
+    try {
+      image.close();
+    } catch {
+      /* ignore */
+    }
+  }
+
   return {
     dataUrl: out,
-    name,
+    name: sanitizeMediaLabel(name) || name,
     mime,
     width: fitted.width,
     height: fitted.height,

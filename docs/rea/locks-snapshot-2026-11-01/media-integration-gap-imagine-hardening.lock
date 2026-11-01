@@ -1,0 +1,20 @@
+feature: HARDENING — Grok Imagine generate/edit route (H4–H7)
+lane: media-integration
+owner_bot: Media Integration Bot
+branch: media-integration
+gap_rank: hardening (MED) — fold into current hardening round 2 if paths allow, else take next
+status: done, released
+found_on: preview/integration @ 27d2985 (media ef8f6b8)
+evidence: /workspace/rea-captures/hardening-log.md (H4–H7)
+items:
+  - H4 MED client chooses any model on server xAI key, no rate limit: imagine-http.ts:54 -> imagine.ts:118. Repro POST {"prompt":"x","model":"<any>","n":4}
+  - H5 MED no body/edit-image size cap: imagine-http.ts:44, imagine.ts:225, imagine.ts:89. Repro 200MB image data URL
+  - H6 LOW client errors return 502 and pass xAI error text raw: imagine-http.ts:56,:74, imagine.ts:156-163. Repro {"prompt":"x","mode":"edit"} -> 502 (should be 400)
+  - H7 LOW resolveXaiInferenceApiKey overwrites process.env.XAI_API_KEY server-wide: xai-key.ts:33
+acceptance_criteria:
+  - model allowlist + n clamp + per-owner rate limit; body and image byte caps with 413; 4xx for client errors and sanitized provider errors; no process.env mutation
+  - regression tests for each; typecheck + npm test + build pass; push media-integration; done on Notion mirror; lock done, released
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:25:00+01:00
+completed_at: 2026-11-01T14:36:58+01:00
+completed_commit: ffc677b

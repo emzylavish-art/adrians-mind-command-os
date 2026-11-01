@@ -88,12 +88,14 @@ export function ServiceBoard({
   onSetup,
   notion,
   mcp,
+  localComputer,
   onDisconnect,
 }: {
   grokConfigured: boolean;
   onSetup: (message: string) => void;
   notion?: { state: string; detail: string } | null;
   mcp?: { state: string; detail: string } | null;
+  localComputer?: { state: string; detail: string } | null;
   onDisconnect?: () => void;
 }) {
   const [oauthByName, setOauthByName] = useState<Record<string, OauthStatus | null | undefined>>({});

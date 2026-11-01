@@ -1,0 +1,296 @@
+{
+  "date": "2026-11-01",
+  "cycle": 3,
+  "timezone": "Africa/Lagos",
+  "closed_since_c2": [
+    {
+      "feature": "Working live Grok replies",
+      "status": "closed",
+      "branch": "xai-verification",
+      "commit": "7fb9839",
+      "verifier": "pass_code"
+    },
+    {
+      "feature": "Mode\u2192model picker wired",
+      "status": "closed",
+      "branch": "logic-wiring",
+      "commit": "62e4948",
+      "verifier": "pass_code"
+    },
+    {
+      "feature": "Live voice path",
+      "status": "closed",
+      "branch": "voice-integration",
+      "commit": "574ae49+",
+      "verifier": "pass_code_preview_flaky",
+      "note": "Further hardening claimed"
+    },
+    {
+      "feature": "Honest failure banners",
+      "status": "closed",
+      "branch": "error-banners",
+      "commit": "b6ce68b",
+      "verifier": "pass_code"
+    },
+    {
+      "feature": "Image attach / camera / vision",
+      "status": "closed",
+      "branch": "media-integration",
+      "commit": "eaf513c",
+      "verifier": "pass_code"
+    },
+    {
+      "feature": "MCP builtins + Tools toggles",
+      "status": "closed",
+      "branch": "mcp-integration",
+      "commit": "60552be+",
+      "verifier": "pass_code"
+    },
+    {
+      "feature": "Web search + Deep research wiring",
+      "status": "closed",
+      "branch": "logic-wiring",
+      "commit": "62e4948",
+      "verifier": "pass_code_env_missing",
+      "note": "MIND_SEARCH_* unset on box"
+    },
+    {
+      "feature": "Notion OAuth Connect on ServiceBoard",
+      "status": "closed",
+      "branch": "mcp-integration",
+      "commit": "55d2bf3",
+      "verifier": "pass_code"
+    },
+    {
+      "feature": "Google Drive browse-and-attach (gated on connection)",
+      "status": "closed",
+      "branch": "media-integration",
+      "commit": "332c1f4",
+      "verifier": "pass_code"
+    }
+  ],
+  "gaps": [
+    {
+      "rank": 1,
+      "feature": "In-thread tool-execution timeline + live activity rail (merge)",
+      "status": "in_progress",
+      "branch": "preview/tools-timeline",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Manus",
+        "Perplexity"
+      ],
+      "effort": "M",
+      "why": "Implementation exists off-main; highest UX gap vs ref chat hero once search/OAuth/vision shipped.",
+      "evidence": [
+        "git:preview/tools-timeline Executing tools UI",
+        "/workspace/audit/reference/03-chat-hero.jpg"
+      ],
+      "changed_since_c2": "Still in_progress; not on preview/integration tip."
+    },
+    {
+      "rank": 2,
+      "feature": "Image / media generation (Grok Imagine create)",
+      "status": "in_progress",
+      "branch": "media-integration",
+      "platforms": [
+        "ChatGPT",
+        "HuggingChat",
+        "Meta AI",
+        "Poe",
+        "Copilot"
+      ],
+      "effort": "M",
+      "why": "imagine.ts present; lane lock claims generate API + UI in progress.",
+      "evidence": [
+        "/workspace/mind-command-os-media/src/lib/mind/media/imagine.ts",
+        "/workspace/locks/media-integration.lock"
+      ],
+      "changed_since_c2": "Moved open\u2192in_progress."
+    },
+    {
+      "rank": 3,
+      "feature": "OAuth connectors beyond Notion (Gmail, Drive token, GitHub, \u2026)",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "effort": "L",
+      "why": "Notion OAuth closed; Drive attach still needs a real Drive connection/token; Gmail etc. open.",
+      "evidence": [
+        "/workspace/mind-command-os-mcp/src/lib/mind/connectors/notion-oauth.ts",
+        "/workspace/mind-command-os-media/src/lib/mind/media/cloud/drive.ts"
+      ],
+      "changed_since_c2": "Narrowed after Notion OAuth + Drive browse gate."
+    },
+    {
+      "rank": 4,
+      "feature": "Guest / logged-out usable chat",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "HuggingChat",
+        "Pi"
+      ],
+      "effort": "M",
+      "why": "Activation still gated; Claude app still blocked/partial publicly.",
+      "evidence": [
+        "/workspace/rea-captures/capture-cycle3-summary-2026-11-01.json"
+      ],
+      "changed_since_c2": "Unchanged open."
+    },
+    {
+      "rank": 5,
+      "feature": "Keyboard shortcut sheet + composer \u2318K polish",
+      "status": "open",
+      "branch": null,
+      "note": "visual/polish-pass-5 claimed for voice UI chrome",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Manus",
+        "Perplexity"
+      ],
+      "effort": "S",
+      "why": "Still missing full shortcut help.",
+      "evidence": [
+        "/workspace/locks/visual-polish.lock"
+      ],
+      "changed_since_c2": "Visual busy on voice-ui mount, not shortcuts."
+    },
+    {
+      "rank": 6,
+      "feature": "Projects dashboard with progress / agent stats",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity",
+        "Copilot"
+      ],
+      "effort": "M",
+      "why": "Local projects thin vs competitor dashboards.",
+      "evidence": [
+        "/workspace/audit/reference/02-screen-grid.jpg"
+      ],
+      "changed_since_c2": "Unchanged."
+    },
+    {
+      "rank": 7,
+      "feature": "Unattended scheduled automations (DATABASE_URL + hosted worker)",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "effort": "L",
+      "why": "Local queue only.",
+      "evidence": [
+        "/workspace/mind-command-os/docs/FEATURE_COMPLETION_MATRIX.md"
+      ],
+      "changed_since_c2": "Unchanged."
+    },
+    {
+      "rank": 8,
+      "feature": "Artifacts / Canvas / Build paired computer",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Perplexity",
+        "Manus"
+      ],
+      "effort": "L",
+      "why": "HP EliteBook still not connected (HP Pairing standby).",
+      "evidence": [
+        "/workspace/rea-captures/claude/claude-c3-claude-com-features-2026-11-01.md"
+      ],
+      "changed_since_c2": "Claude.com still captured; app crashed/blocked in c3."
+    },
+    {
+      "rank": 9,
+      "feature": "Multi-bot / Explore persona directory",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "Poe",
+        "Character.AI",
+        "Manus",
+        "HuggingChat"
+      ],
+      "effort": "M",
+      "why": "Poe Explore still public in c3.",
+      "evidence": [
+        "/workspace/rea-captures/poe/poe-c3-explore-features-2026-11-01.md"
+      ],
+      "changed_since_c2": "Evidence refreshed."
+    },
+    {
+      "rank": 10,
+      "feature": "Memory UX depth",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Poe",
+        "Perplexity",
+        "ChatGPT"
+      ],
+      "effort": "M",
+      "why": "Scopes exist; competitor-depth UI missing.",
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md"
+      ],
+      "changed_since_c2": "Unchanged."
+    },
+    {
+      "rank": 11,
+      "feature": "Durable cloud DB / multi-device sync",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "All SaaS"
+      ],
+      "effort": "L",
+      "why": "Foundation.",
+      "evidence": [
+        "/workspace/mind-command-os/docs/EXTERNAL_BLOCKERS.md"
+      ],
+      "changed_since_c2": "Unchanged."
+    },
+    {
+      "rank": 12,
+      "feature": "Live search provider key (MIND_SEARCH_*) on box",
+      "status": "open",
+      "branch": "logic-wiring",
+      "platforms": [
+        "Perplexity",
+        "ChatGPT",
+        "You.com"
+      ],
+      "effort": "S",
+      "why": "Code closed but product research remains refusal without env.",
+      "evidence": [
+        "/workspace/mind-command-os-logic/src/lib/mind/research.ts"
+      ],
+      "changed_since_c2": "New explicit ops gap after search wiring closed."
+    }
+  ],
+  "capture": "/workspace/rea-captures/capture-cycle3-summary-2026-11-01.json"
+}

@@ -19,4 +19,16 @@ describe("voice levels", () => {
     assert.equal(quiet.length, 5);
     assert.ok(loud.every((h, i) => h >= quiet[i]!));
   });
+
+  it("raises bar heights as RMS level increases (overlay/dictation waveform)", () => {
+    const a = levelToBarPercents(0.1, 7);
+    const b = levelToBarPercents(0.55, 7);
+    const c = levelToBarPercents(0.95, 7);
+    assert.equal(a.length, 7);
+    const sum = (xs: number[]) => xs.reduce((n, v) => n + v, 0);
+    assert.ok(sum(b) > sum(a), "mid level bars taller than quiet");
+    assert.ok(sum(c) > sum(b), "loud bars taller than mid");
+    // Active listening should never collapse to the idle floor for every bar.
+    assert.ok(c.some((h) => h > 50));
+  });
 });

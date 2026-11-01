@@ -1,0 +1,25 @@
+feature: Refresh preview/integration with newly released fixes so the verifier can check them on the integration preview
+lane: merge-gate
+owner_bot: Merge Gate Bot
+status: done, released
+claimed_by: Merge Gate Bot
+claimed_at: 2026-11-01T14:50:30+01:00
+released_at: 2026-11-01T14:55:10+01:00
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:52:00+01:00
+cycle: 17
+commits_merged:
+  - mcp bbb75f0 → 197dd39
+  - logic d2ef414 → f3863fd; 886d759 → f0075d4; f8db0a3 → 41454e6
+  - visual bfd073e → 3954eb2; a6a1174 → 144d019
+  - restore+regression 93eb15a
+skipped:
+  - media ffc677b (explicit)
+  - error-banners eae5297 (explicit, not on origin)
+  - fleet-panels.tsx from bfd073e (pc-shell bypass lock claimed)
+acceptance_criteria:
+  - typecheck + npm test + build pass on merged tip; integration-security-c17 regression asserting SSRF block + proto reject survived
+  - push preview/integration only; artifacts /workspace/audit/integration-c17/; done on Notion mirror; lock done, released
+notes: |
+  Tip 93eb15a pushed. Notion: https://app.notion.com/p/40bb95f33e4281a2a48ac501cd5a91aa
+  Artifacts: /workspace/audit/integration-c17/

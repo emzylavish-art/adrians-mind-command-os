@@ -1,20 +1,29 @@
+import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
+import { assertImagineSpendAllowed, getImagineSpendLedger } from "./spend-ledger.ts";
+import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
 import { resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
 import {
   GROK_IMAGINE_MODEL,
   normalizeImaginePrompt,
+  resolveImagineModel,
   XAI_IMAGES_EDITS_URL,
   XAI_IMAGES_GENERATIONS_URL,
 } from "./imagine-shared.ts";
 
 export {
   GROK_IMAGINE_MODEL,
+  GROK_IMAGINE_QUALITY_MODEL,
+  GROK_IMAGINE_MODELS,
+  resolveImagineModel,
   normalizeImaginePrompt,
   parseImagineCommand,
   XAI_IMAGES_EDITS_URL,
   XAI_IMAGES_GENERATIONS_URL,
   XAI_IMAGE_VARIATIONS_SUPPORTED,
+  XAI_MULTI_IMAGE_EDITS_SUPPORTED,
 } from "./imagine-shared.ts";
+export type { GrokImagineModel } from "./imagine-shared.ts";
 
 export type ImagineRequest = {
   prompt: string;
@@ -41,7 +50,7 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 function clampCount(n: unknown): number {
   const num = typeof n === "number" ? n : Number(n);
   if (!Number.isFinite(num) || num < 1) return 1;
-  return Math.min(MAX_IMAGES_PER_TURN, Math.floor(num));
+  return Math.min(IMAGINE_MAX_N, MAX_IMAGES_PER_TURN, Math.floor(num));
 }
 
 
@@ -75,20 +84,35 @@ function dataUrlFromB64(b64: string, mimeHint?: string): { ok: true; dataUrl: st
 async function downloadUrlToDataUrl(
   url: string,
   fetchImpl: FetchLike,
+  lookup?: LookupFn,
 ): Promise<{ ok: true; dataUrl: string; mime: string } | { ok: false; error: string }> {
-  let response: Response;
-  try {
-    response = await fetchImpl(url, { method: "GET" });
-  } catch {
-    return { ok: false, error: "Could not download the generated image URL." };
+  const pinned = await resolveAndPinUrl(url, lookup);
+  if (!pinned.ok) return pinned;
+
+  // Production: connect to the pinned address (no redirects).
+  // Tests: after a successful pin check, a custom fetchImpl may supply bytes.
+  if (fetchImpl !== fetch) {
+    let response: Response;
+    try {
+      response = await fetchImpl(url, { method: "GET", redirect: "error" });
+    } catch {
+      return { ok: false, error: "Could not download the generated image URL." };
+    }
+    if (!response.ok) {
+      return { ok: false, error: `Downloading the generated image failed (HTTP ${response.status}).` };
+    }
+    const contentType = (response.headers.get("content-type") || "image/jpeg").split(";")[0]!.trim();
+    const buf = Buffer.from(await response.arrayBuffer());
+    if (buf.byteLength > Math.floor(MAX_DATA_URL_CHARS * 0.75)) {
+      return { ok: false, error: "Downloaded image exceeded the size cap." };
+    }
+    return dataUrlFromB64(buf.toString("base64"), contentType.startsWith("image/") ? contentType : "image/jpeg");
   }
-  if (!response.ok) {
-    return { ok: false, error: `Downloading the generated image failed (HTTP ${response.status}).` };
-  }
-  const contentType = (response.headers.get("content-type") || "image/jpeg").split(";")[0]!.trim();
-  const buf = Buffer.from(await response.arrayBuffer());
-  const b64 = buf.toString("base64");
-  return dataUrlFromB64(b64, contentType.startsWith("image/") ? contentType : "image/jpeg");
+
+  const downloaded = await fetchPinnedUrl(url, { lookup, maxBytes: Math.floor(MAX_DATA_URL_CHARS * 0.75) });
+  if (!downloaded.ok) return downloaded;
+  const b64 = downloaded.bytes.toString("base64");
+  return dataUrlFromB64(b64, downloaded.contentType.startsWith("image/") ? downloaded.contentType : "image/jpeg");
 }
 
 /**
@@ -101,22 +125,42 @@ export async function generateImagineImages(
     apiKey?: string;
     fetchImpl?: FetchLike;
     endpoint?: string;
+    lookup?: LookupFn;
+    /** Required for production spend controls (rate limit + daily ledger). */
+    meter?: { ownerId: string; sessionId?: string };
+    /** Test-only escape hatch — never set from HTTP/agent routes. */
+    skipSpendControls?: boolean;
   } = {},
 ): Promise<ImagineResult> {
   const normalized = normalizeImaginePrompt(input.prompt);
   if (!normalized.ok) return normalized;
 
+  const model = resolveImagineModel(input.model);
+  const n = clampCount(input.n);
+
+  if (!options.skipSpendControls) {
+    const ownerId = options.meter?.ownerId?.trim() ?? "";
+    if (!ownerId) {
+      return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
+    }
+    const allowed = assertImagineSpendAllowed({
+      ownerId,
+      sessionId: options.meter?.sessionId,
+      n,
+      checkRateLimit: checkImagineRateLimit,
+      rateLimitKey: imagineRateLimitKey,
+    });
+    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
+  }
+
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
   if (!apiKey) {
     return {
       ok: false,
-      error: "No xAI inference API key is available for image generation. Check /home/box/.secrets/xai_inference.env.",
+      error: "Image generation is not configured on the server.",
       status: 503,
     };
   }
-
-  const model = (input.model || GROK_IMAGINE_MODEL).trim() || GROK_IMAGINE_MODEL;
-  const n = clampCount(input.n);
   const responseFormat = input.responseFormat ?? "b64_json";
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_GENERATIONS_URL;
@@ -154,13 +198,13 @@ export async function generateImagineImages(
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   if (!response.ok) {
     const err = record.error;
-    const message =
+    const raw =
       typeof err === "string"
         ? err
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image generation failed (HTTP ${response.status}).`;
-    return { ok: false, error: message, status: response.status };
+    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
@@ -179,7 +223,7 @@ export async function generateImagineImages(
       continue;
     }
     if (typeof row.url === "string" && row.url) {
-      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl);
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
       if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }
@@ -189,9 +233,13 @@ export async function generateImagineImages(
     return { ok: false, error: "Image generation returned no usable image payloads.", status: response.status };
   }
 
+  const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
+  if (!options.skipSpendControls && options.meter?.ownerId) {
+    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || n });
+  }
   return {
     ok: true,
-    model: typeof record.model === "string" && record.model ? record.model : model,
+    model: resolvedModel,
     images,
     usage: record.usage,
   };
@@ -201,15 +249,29 @@ export async function generateImagineImages(
 
 export type ImagineEditRequest = {
   prompt: string;
-  /** data:image/...;base64,... input image */
-  imageDataUrl: string;
+  /** Single input (legacy). Prefer imageDataUrls for one or many. */
+  imageDataUrl?: string;
+  /** One or more data:image/... inputs. Live-confirmed: API accepts `image_urls: string[]`. */
+  imageDataUrls?: string[];
   model?: string;
   responseFormat?: "b64_json" | "url";
 };
 
+
+export function collectEditImageUrls(input: ImagineEditRequest): string[] {
+  const urls: string[] = [];
+  for (const value of input.imageDataUrls ?? []) {
+    if (typeof value === "string" && value.startsWith("data:image/")) urls.push(value);
+  }
+  if (typeof input.imageDataUrl === "string" && input.imageDataUrl.startsWith("data:image/")) {
+    if (!urls.includes(input.imageDataUrl)) urls.unshift(input.imageDataUrl);
+  }
+  return urls.slice(0, 4);
+}
+
 /**
- * Edit an existing image with Grok Imagine via POST /v1/images/edits.
- * Body shape confirmed live: `{ model, prompt, image_url: dataUrl, response_format }`.
+ * Edit one or more images with Grok Imagine via POST /v1/images/edits.
+ * Single: `{ image_url }`. Multi (live-probed): `{ image_urls: [...] }`.
  * Multipart and raw-string `image` fields are rejected by the API.
  */
 export async function editImagineImage(
@@ -218,27 +280,59 @@ export async function editImagineImage(
     apiKey?: string;
     fetchImpl?: FetchLike;
     endpoint?: string;
+    lookup?: LookupFn;
+    meter?: { ownerId: string; sessionId?: string };
+    skipSpendControls?: boolean;
   } = {},
 ): Promise<ImagineResult> {
   const normalized = normalizeImaginePrompt(input.prompt);
   if (!normalized.ok) return normalized;
-  if (typeof input.imageDataUrl !== "string" || !input.imageDataUrl.startsWith("data:image/")) {
-    return { ok: false, error: "Edit with Imagine needs an image data URL as input." };
+  const imageUrls = collectEditImageUrls(input);
+  if (imageUrls.length === 0) {
+    return { ok: false, error: "Edit with Imagine needs at least one image data URL as input.", status: 400 };
+  }
+  for (const imageUrl of imageUrls) {
+    if (imageUrl.length > MAX_DATA_URL_CHARS) {
+      return { ok: false, error: "That edit image is too large.", status: 413 };
+    }
+  }
+
+  if (!options.skipSpendControls) {
+    const ownerId = options.meter?.ownerId?.trim() ?? "";
+    if (!ownerId) {
+      return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
+    }
+    const allowed = assertImagineSpendAllowed({
+      ownerId,
+      sessionId: options.meter?.sessionId,
+      n: 1,
+      checkRateLimit: checkImagineRateLimit,
+      rateLimitKey: imagineRateLimitKey,
+    });
+    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
   }
 
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
   if (!apiKey) {
     return {
       ok: false,
-      error: "No xAI inference API key is available for image editing. Check /home/box/.secrets/xai_inference.env.",
+      error: "Image editing is not configured on the server.",
       status: 503,
     };
   }
 
-  const model = (input.model || GROK_IMAGINE_MODEL).trim() || GROK_IMAGINE_MODEL;
+  const model = resolveImagineModel(input.model);
   const responseFormat = input.responseFormat ?? "b64_json";
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_EDITS_URL;
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    prompt: normalized.prompt,
+    response_format: responseFormat,
+  };
+  if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
+  else requestBody.image_urls = imageUrls;
 
   let response: Response;
   try {
@@ -248,20 +342,15 @@ export async function editImagineImage(
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        prompt: normalized.prompt,
-        response_format: responseFormat,
-        image_url: input.imageDataUrl,
-      }),
+      body: JSON.stringify(requestBody),
     });
   } catch {
     return { ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 };
   }
 
-  let body: unknown;
+  let responseJson: unknown;
   try {
-    body = await response.json();
+    responseJson = await response.json();
   } catch {
     return {
       ok: false,
@@ -270,16 +359,16 @@ export async function editImagineImage(
     };
   }
 
-  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const record = responseJson && typeof responseJson === "object" ? (responseJson as Record<string, unknown>) : {};
   if (!response.ok) {
     const err = record.error;
-    const message =
+    const raw =
       typeof err === "string"
         ? err
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image editing failed (HTTP ${response.status}).`;
-    return { ok: false, error: message, status: response.status };
+    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
@@ -298,7 +387,7 @@ export async function editImagineImage(
       continue;
     }
     if (typeof row.url === "string" && row.url) {
-      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl);
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
       if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }
@@ -308,9 +397,13 @@ export async function editImagineImage(
     return { ok: false, error: "Image editing returned no usable image payloads.", status: response.status };
   }
 
+  const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
+  if (!options.skipSpendControls && options.meter?.ownerId) {
+    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || 1 });
+  }
   return {
     ok: true,
-    model: typeof record.model === "string" && record.model ? record.model : model,
+    model: resolvedModel,
     images,
     usage: record.usage,
   };

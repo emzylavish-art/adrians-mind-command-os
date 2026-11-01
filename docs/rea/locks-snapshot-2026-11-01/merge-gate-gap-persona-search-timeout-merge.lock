@@ -1,0 +1,26 @@
+feature: Merge preview/persona-directory (ae338c7) + logic-wiring search-timeout fix (d507e30, 6bb0b7b) into preview/integration so both can be verified on the integration preview
+lane: merge-gate
+owner_bot: Merge Gate Bot
+gap_rank: gap 9 (persona directory, done/released 14:33) + hardening H8 (done/released 14:32)
+status: done, released
+claimed_by: Merge Gate Bot
+claimed_at: 2026-11-01T14:36:40+01:00
+released_at: 2026-11-01T14:39:20+01:00
+evidence:
+  - /workspace/locks/grok-build-gap-persona-directory.lock (base 27d2985, push origin/preview/persona-directory @ ae338c7)
+  - /workspace/locks/logic-wiring-gap-search-timeout.lock
+  - /workspace/rea-captures/hardening-log.md (H8)
+  - /workspace/audit/integration-persona/
+acceptance_criteria:
+  - Merge ae338c7 and logic-wiring commits d507e30+6bb0b7b only (do NOT take logic-wiring commits after 6bb0b7b; logic-wiring.lock is claimed for new work)
+  - Keep every lane's behavior in command-app.tsx intact (voice, model chip, banners, MCP, media/Imagine, tools timeline)
+  - typecheck + npm test + build pass; regression test proving /explore renders + search timeout reply survives the merge
+  - Screenshot /explore on integration preview under /workspace/audit/integration-persona/
+  - Push preview/integration only; post done on Notion mirror 40bb95f33e42814aacf8c3281b4f528d (child page ok); set lock done, released
+notes: |
+  Done with partial scope. Merged persona ae338c7 only (28be9c3 + regression 00c5fe5). Tip 00c5fe5 pushed.
+  SKIPPED d507e30+6bb0b7b: logic-wiring.lock claimed by Logic Bot (14:32). Verifier released; gap done/released.
+  Search-timeout half of regression documents the skip (asserts markers absent until re-merge).
+  Notion child page under mirror (append to huge body fails).
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:34:34+01:00

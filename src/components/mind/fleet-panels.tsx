@@ -400,9 +400,9 @@ export function FleetPanel({
         </button>
       </div>
       {pageNote ? <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{pageNote}</p> : null}
-      <ul className="mt-4 space-y-2 text-sm">
+      <ul className="tool-list mt-4 space-y-2 text-sm">
         {toolCatalog().map((tool) => (
-          <li key={tool.id} className="dense-card flex flex-col gap-1 p-3">
+          <li key={tool.id} className="tool-card dense-card flex flex-col gap-1 p-3" data-available={tool.available ? "true" : "false"}>
             <p className="font-semibold">{tool.name} · {tool.available ? "Available" : "Not available"}</p>
             <p className="text-xs text-muted">{tool.reason}</p>
           </li>

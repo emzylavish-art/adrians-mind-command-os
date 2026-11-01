@@ -9,4 +9,51 @@ describe("SharedAudioOutput", () => {
     out.interrupt();
     assert.equal(out.isPlaying, false);
   });
+
+  it("interrupt resolves an in-flight playMpegBase64 await (Speak cutoff)", async () => {
+    const out = new SharedAudioOutput();
+    // Minimal valid-looking base64 so decode succeeds; Audio may not exist in node.
+    const AudioStub = class {
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = "";
+      play() {
+        return new Promise<void>(() => {
+          /* never resolves — interrupt must finish the SharedAudioOutput promise */
+        });
+      }
+      pause() {}
+      removeAttribute() {}
+      load() {}
+    };
+    const g = globalThis as unknown as { Audio?: typeof Audio; URL?: typeof URL; Blob?: typeof Blob };
+    const prevAudio = g.Audio;
+    const prevURL = g.URL;
+    const prevBlob = g.Blob;
+    g.Audio = AudioStub as unknown as typeof Audio;
+    g.URL = {
+      createObjectURL: () => "blob:test",
+      revokeObjectURL: () => undefined,
+    } as unknown as typeof URL;
+    g.Blob = class {
+      constructor(_parts?: unknown[], _opts?: unknown) {}
+    } as unknown as typeof Blob;
+
+    try {
+      const pending = out.playMpegBase64(Buffer.from("ID3").toString("base64"));
+      // Allow play() to start
+      await Promise.resolve();
+      assert.equal(out.isPlaying, true);
+      out.interrupt();
+      await Promise.race([
+        pending,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("playMpeg did not settle after interrupt")), 500)),
+      ]);
+      assert.equal(out.isPlaying, false);
+    } finally {
+      g.Audio = prevAudio;
+      g.URL = prevURL;
+      g.Blob = prevBlob;
+    }
+  });
 });

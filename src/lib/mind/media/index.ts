@@ -9,3 +9,6 @@ export * from "./pack.ts";
 export * from "./history.ts";
 export * from "./imagine-shared.ts";
 export * from "./blob-store.ts";
+export * from "./harden.ts";
+export * from "./imagine-tab-lock.ts";
+export * from "./clipboard-guard.ts";

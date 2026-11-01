@@ -10,6 +10,8 @@ export type ResearchResult = {
   /** Present when deep research ran multiple searches. */
   steps?: { query: string; ok: boolean; count: number }[];
   summary?: string;
+  /** True when some deep-research queries timed out but real citations were kept. */
+  partial?: boolean;
 };
 
 /** Per-query search fetch budget (ms). Override with MIND_SEARCH_TIMEOUT_MS (≥1000). */
@@ -36,7 +38,7 @@ export function deepSearchTimeoutMs(env: Record<string, string | undefined> = pr
 
 function sanitizeTitle(raw: string): string {
   return raw
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\p{Cc}/gu, " ")  // C0/C1 controls + DEL; unicode property avoids no-control-regex
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 200);
@@ -302,9 +304,21 @@ export async function performDeepResearch(input: {
       steps,
     };
   }
-  const summary = [
+  const summaryLines = [
     `Deep research used ${steps.length} searches and kept ${citations.length} http(s) sources the provider returned:`,
     ...citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`),
-  ].join("\n");
-  return { ok: true, configured: true, citations, error: "", steps, summary };
+  ];
+  if (sawTimeout) {
+    summaryLines.push("Note: some searches timed out; only confirmed sources are listed.");
+  }
+  const summary = summaryLines.join("\n");
+  return {
+    ok: true,
+    configured: true,
+    citations,
+    error: "",
+    steps,
+    summary,
+    ...(sawTimeout ? { partial: true as const } : {}),
+  };
 }

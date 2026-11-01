@@ -262,8 +262,17 @@ html[data-theme="light"] {
 }
 
 .logo-mark {
-  color: #7c5cff;
+  color: #ffffff;
   background: #7c5cff;
+  box-shadow: 0 0 18px rgb(124 92 255 / 0.45);
+}
+
+.floating-menu {
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--color-line);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
 }
 .logo-badge {
   box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25);
@@ -552,7 +561,7 @@ html[data-theme="light"] .promo-banner {
   body {
     font-size: var(--text-base);
     line-height: var(--leading-body);
-    letter-spacing: -0.011em;
+    letter-spacing: 0;
   }
   h1, .font-display.text-4xl, .font-display.text-3xl {
     letter-spacing: var(--tracking-tight);

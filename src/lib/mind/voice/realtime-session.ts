@@ -1,5 +1,6 @@
 import { SharedAudioOutput, sharedAudioOutput } from "./audio-output.ts";
-import { rmsLevel } from "./levels.ts";
+import { rmsFromTimeDomain } from "./level.ts";
+import { resolveXaiVoiceId } from "./voices.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 export const REALTIME_MODEL = "grok-voice-latest";
@@ -7,17 +8,20 @@ export const REALTIME_SAMPLE_RATE = 24000;
 
 export type RealtimeHandlers = {
   onTranscript?: (text: string) => void;
+  /** Live interim ASR partials; replaced when the final transcript arrives. */
+  onPartialTranscript?: (text: string) => void;
   onSpeechStarted?: () => void;
   onError?: (message: string) => void;
   onStatus?: (status: "connecting" | "listening" | "processing" | "speaking" | "idle" | "closed") => void;
+  /** 0..1 mic RMS from AnalyserNode while capturing. */
   onLevel?: (level: number) => void;
+  /** Fired when the socket closes without an intentional close() (mic released). */
+  onUnexpectedClose?: () => void;
 };
 
-export type RealtimeConnectOptions = {
-  /** When true, cancel auto model replies so the app owns Direct/Orchestrator routing. */
-  captureOnly?: boolean;
+export type RealtimeSessionOptions = {
+  /** Built-in or allowlisted voice id applied on session.update (default eve). */
   voice?: string;
-  instructions?: string;
 };
 
 type WsLike = {
@@ -61,28 +65,37 @@ export class RealtimeVoiceSession {
   private media: MediaStream | null = null;
   private processor: ScriptProcessorNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
-  private analyser: AnalyserNode | null = null;
   private open = false;
   private capturing = false;
-  private muted = false;
-  private captureOnly = true;
   private handlers: RealtimeHandlers;
   private output: SharedAudioOutput;
   private socketFactory: RealtimeSocketFactory;
   private pendingTranscript = "";
-  private responseBusy = false;
-  private speakQueue: string[] = [];
-  private pendingForce = false;
-  private levelTimer: ReturnType<typeof setInterval> | null = null;
+  private intentionalClose = false;
+  private muted = false;
+  private analyser: AnalyserNode | null = null;
+  private levelRaf = 0;
+
+  private voiceId: string;
 
   constructor(
     handlers: RealtimeHandlers = {},
     output: SharedAudioOutput = sharedAudioOutput,
     socketFactory: RealtimeSocketFactory = defaultSocketFactory,
+    options: RealtimeSessionOptions = {},
   ) {
     this.handlers = handlers;
     this.output = output;
     this.socketFactory = socketFactory;
+    this.voiceId = resolveXaiVoiceId(options.voice);
+  }
+
+  setVoice(voice: string) {
+    const next = resolveXaiVoiceId(voice);
+    this.voiceId = next;
+    if (this.open) {
+      this.send({ type: "session.update", session: { voice: next } });
+    }
   }
 
   get isOpen() {
@@ -102,9 +115,9 @@ export class RealtimeVoiceSession {
     if (muted) this.handlers.onLevel?.(0);
   }
 
-  async connect(ephemeralSecret: string, options: RealtimeConnectOptions = {}) {
+  async connect(ephemeralSecret: string) {
     if (!ephemeralSecret) throw new Error("Missing ephemeral voice secret.");
-    this.captureOnly = options.captureOnly !== false;
+    this.intentionalClose = false;
     this.handlers.onStatus?.("connecting");
     const ws = this.socketFactory(REALTIME_ENDPOINT, [`xai-client-secret.${ephemeralSecret}`]);
     this.ws = ws;
@@ -123,20 +136,18 @@ export class RealtimeVoiceSession {
       ws.addEventListener("error", onError);
       ws.addEventListener("message", (event) => this.onMessage(event as MessageEvent));
       ws.addEventListener("close", () => {
+        const unexpected = !this.intentionalClose && (this.open || this.capturing || this.media != null);
         this.open = false;
-        this.capturing = false;
+        this.stopCapture();
         this.handlers.onStatus?.("closed");
+        if (unexpected) this.handlers.onUnexpectedClose?.();
       });
     });
     this.send({
       type: "session.update",
       session: {
-        voice: options.voice || "eve",
-        instructions:
-          options.instructions ||
-          (this.captureOnly
-            ? "You only listen for transcription. Do not answer unless a force_message is sent."
-            : "You are a helpful realtime voice assistant."),
+        voice: this.voiceId,
+        instructions: "You are a voice capture helper. Prefer short replies when asked to speak.",
         turn_detection: { type: "server_vad" },
         audio: {
           input: { format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE } },
@@ -150,24 +161,6 @@ export class RealtimeVoiceSession {
   private send(payload: unknown) {
     if (!this.ws || this.ws.readyState !== 1) return;
     this.ws.send(JSON.stringify(payload));
-  }
-
-  private flushSpeakQueue() {
-    if (this.responseBusy || !this.speakQueue.length) return;
-    const next = this.speakQueue.shift();
-    if (!next) return;
-    this.responseBusy = true;
-    this.pendingForce = true;
-    this.send({
-      type: "conversation.item.create",
-      item: {
-        type: "force_message",
-        role: "assistant",
-        interruptible: true,
-        content: [{ type: "output_text", text: next.slice(0, 500) }],
-      },
-    });
-    this.handlers.onStatus?.("speaking");
   }
 
   private onMessage(event: MessageEvent) {
@@ -195,70 +188,60 @@ export class RealtimeVoiceSession {
       this.handlers.onStatus?.("listening");
       return;
     }
+    if (
+      type === "conversation.item.input_audio_transcription.delta" ||
+      type === "conversation.item.input_audio_transcription.partial" ||
+      type === "input_audio_transcription.delta"
+    ) {
+      const partial = (msg.delta || msg.transcript || "").trim();
+      if (partial) this.handlers.onPartialTranscript?.(partial);
+      return;
+    }
     if (type === "conversation.item.input_audio_transcription.completed") {
       const text = (msg.transcript || "").trim();
       if (text) {
         this.pendingTranscript = text;
+        // Final replaces any interim partial in the UI.
+        this.handlers.onPartialTranscript?.(text);
         this.handlers.onTranscript?.(text);
         this.handlers.onStatus?.("processing");
-      }
-      return;
-    }
-    if (type === "response.created") {
-      this.responseBusy = true;
-      if (this.captureOnly && this.speakQueue.length === 0 && !this.pendingForce) {
-        // Auto reply from server VAD — cancel so Direct/Orchestrator own the reply.
-        this.send({ type: "response.cancel" });
       }
       return;
     }
     if (type === "response.output_audio.delta" || type === "response.audio.delta") {
       if (msg.delta) {
         this.handlers.onStatus?.("speaking");
-        void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE }).then(() => {
-          /* level from playback approximated below */
-        });
-        // Approximate speak level from PCM magnitude without full decode cost.
-        try {
-          const bin = atob(msg.delta);
-          let peak = 0;
-          for (let i = 0; i + 1 < bin.length; i += 2) {
-            const sample = (bin.charCodeAt(i) | (bin.charCodeAt(i + 1) << 8)) << 16 >> 16;
-            peak = Math.max(peak, Math.abs(sample) / 32768);
-          }
-          this.handlers.onLevel?.(Math.min(1, peak * 1.4));
-        } catch {
-          /* ignore */
-        }
+        void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE });
       }
       return;
     }
     if (type === "response.done") {
-      this.responseBusy = false;
-      this.pendingForce = false;
       this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
-      this.flushSpeakQueue();
     }
   }
 
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback() {
     this.output.interrupt();
-    this.speakQueue = [];
-    this.pendingForce = false;
     this.send({ type: "response.cancel" });
   }
 
   async startCapture() {
     if (!this.open) throw new Error("Voice session is not connected.");
     if (this.capturing) return;
-    const media = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    });
+    let media: MediaStream;
+    try {
+      media = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+    } catch (err) {
+      // Preserve DOMException name (NotAllowedError / NotFoundError) for UI mapping.
+      throw err;
+    }
     this.media = media;
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioCtx = new Ctx({ sampleRate: REALTIME_SAMPLE_RATE });
@@ -267,27 +250,40 @@ export class RealtimeVoiceSession {
     this.analyser.fftSize = 2048;
     this.processor = this.audioCtx.createScriptProcessor(4096, 1, 1);
     this.processor.onaudioprocess = (ev) => {
-      if (!this.capturing) return;
+      if (!this.capturing || this.muted) return;
       const input = ev.inputBuffer.getChannelData(0);
-      this.handlers.onLevel?.(this.muted ? 0 : rmsLevel(input));
-      if (this.muted) return;
       const pcm = floatTo16BitPCM(input);
       this.send({ type: "input_audio_buffer.append", audio: bufferToBase64(pcm) });
     };
     this.source.connect(this.analyser);
-    this.analyser.connect(this.processor);
+    this.source.connect(this.processor);
     this.processor.connect(this.audioCtx.destination);
     this.capturing = true;
     this.handlers.onStatus?.("listening");
+    this.startLevelPump();
+  }
+
+  private startLevelPump() {
+    const tick = () => {
+      if (!this.capturing || !this.analyser || this.muted) {
+        this.handlers.onLevel?.(0);
+        if (this.capturing && this.analyser) this.levelRaf = requestAnimationFrame(tick);
+        return;
+      }
+      const buf = new Uint8Array(this.analyser.fftSize);
+      this.analyser.getByteTimeDomainData(buf);
+      this.handlers.onLevel?.(rmsFromTimeDomain(buf));
+      this.levelRaf = requestAnimationFrame(tick);
+    };
+    if (typeof requestAnimationFrame === "function") this.levelRaf = requestAnimationFrame(tick);
   }
 
   stopCapture() {
     this.capturing = false;
+    if (this.levelRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.levelRaf);
+    this.levelRaf = 0;
+    this.handlers.onLevel?.(0);
     this.interruptPlayback();
-    if (this.levelTimer) {
-      clearInterval(this.levelTimer);
-      this.levelTimer = null;
-    }
     try {
       this.processor?.disconnect();
       this.analyser?.disconnect();
@@ -302,23 +298,29 @@ export class RealtimeVoiceSession {
     this.media = null;
     void this.audioCtx?.close().catch(() => undefined);
     this.audioCtx = null;
-    this.handlers.onLevel?.(0);
     this.handlers.onStatus?.("idle");
   }
 
-  /** Speak assistant text through force_message after any cancelled auto-reply settles. */
+  /** Speak assistant text through the shared realtime → SharedAudioOutput path. */
   speakText(text: string) {
     const trimmed = text.trim();
     if (!trimmed || !this.open) return;
-    this.output.interrupt();
-    this.speakQueue.push(trimmed);
-    this.pendingForce = true;
-    if (!this.responseBusy) this.flushSpeakQueue();
+    this.interruptPlayback();
+    this.send({
+      type: "conversation.item.create",
+      item: {
+        type: "force_message",
+        role: "assistant",
+        interruptible: true,
+        content: [{ type: "output_text", text: trimmed.slice(0, 500) }],
+      },
+    });
+    this.handlers.onStatus?.("speaking");
   }
 
   close() {
+    this.intentionalClose = true;
     this.stopCapture();
-    this.speakQueue = [];
     try {
       this.ws?.close();
     } catch {

@@ -1,4 +1,4 @@
-import type { ImageAttachment } from "@/lib/mind/media";
+import { isSafeImageSrc, sanitizeMediaLabel, type ImageAttachment } from "@/lib/mind/media";
 
 export function AttachmentChips({
   images,
@@ -19,9 +19,13 @@ export function AttachmentChips({
             className="block overflow-hidden rounded-panel"
             aria-label={image.name ? `Attached ${image.name}` : `Attached image ${index + 1}`}
           >
-            <img src={image.dataUrl} alt={image.name || `Attachment ${index + 1}`} className="size-12 object-cover" />
+            {isSafeImageSrc(image.dataUrl) ? (
+              <img src={image.dataUrl} alt={sanitizeMediaLabel(image.name) || `Attachment ${index + 1}`} className="size-12 object-cover" />
+            ) : (
+              <span className="text-[10px] text-muted">blocked</span>
+            )}
           </button>
-          <span className="max-w-24 truncate text-muted">{image.name || `Image ${index + 1}`}</span>
+          <span className="max-w-24 truncate text-muted">{sanitizeMediaLabel(image.name) || `Image ${index + 1}`}</span>
           {onEditImagine && (
             <button
               type="button"
