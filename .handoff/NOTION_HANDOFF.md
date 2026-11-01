@@ -181,3 +181,16 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Trial merge add2c08 + origin/preview/integration@2c1eb0f → resolved conflicts (command-app/package.json/service-board/handoff); typecheck pass; TS 454/454; build pass. Temp worktree removed.
 - Notion: child page https://app.notion.com/p/40bb95f33e4281cdb275f3196d0d4e31 under mirror 40bb95f33e42814aacf8c3281b4f528d.
 - Lock releasing.
+
+## 2026-11-01T15:06:00+01:00 (Africa/Lagos) — Error Banners Bot — image-generation banner (banner 4)
+- Gap: Imagine / Edit Imagine failures only called setError; no red Retry + View log banner.
+- Lock: /workspace/locks/error-banners-imagine-banner.lock
+- Lock check: media-integration.lock ACTIVE interrupted claims media/** + command-app clipboard paste ONLY — banner/classifier/retry wiring outside clipboard OK. imagine-hardening done/released. Did not touch media HTTP / mapImagineHttpError implementation (mirrored copy in failure-states only).
+- Built: HonestFailureKind image_generation_failed; mapImagineHttpErrorCopy + imageGenerationFailure + imagineRetryParams; command-app runImagine/runImagineEdit → reportFailure with identical prompt/n/imageDataUrl Retry (onceRetry) + audit View log.
+- Three Retry bugs: already in 18809f7 + 58f8894; retry-fidelity tests still pass.
+- Commit on error-banners: 62a191e (from cb44e0c). Pushed.
+- Checks: typecheck pass; TS 353/353; lint 0 errors/5 warnings; build pass. Scripts 4 pre-existing .grok/skills/og failures not re-run under memory pressure.
+- Live check: INCOMPLETE — stopped. Temp WT /workspace/eb-imagine-live :8191 (~1.5GB) killed + removed per parent memory steering. Playwright chromium timed out/crashed. Evidence: /workspace/audit/error-banners-imagine-20261101T150039+01:00/. Reuse shared integration preview after Merge Gate c19.
+- Remote: git ls-remote origin error-banners → 62a191ecc772bb8e6af685be67d1700fc8894f4a
+- Notion: child page https://app.notion.com/p/40bb95f33e4281a0b648e8639a6cedaf under mirror 40bb95f33e42814aacf8c3281b4f528d
+- Lock releasing done.
