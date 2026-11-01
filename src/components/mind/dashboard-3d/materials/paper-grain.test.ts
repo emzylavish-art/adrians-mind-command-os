@@ -38,7 +38,13 @@ import {
 import {
   createPainterlyLaneNebulae,
   createLaneNebulaMaterial,
+  LANE_NEBULAE_MAX,
 } from "./lane-nebula.ts";
+import {
+  createBuildingBrushMaterial,
+  setBuildingProgress,
+  setBuildingWindowGlow,
+} from "./building-surface.ts";
 import {
   estimateTextureBytes,
   sanitizeTextureBudgetBytes,
@@ -1195,13 +1201,14 @@ describe("painter c9: createLaneNebulae one-call adopt helper", () => {
       { health: "idle", center: [-4, 0, 2] },
     ]);
     assert.equal(neb.count, 3);
-    assert.equal(tracked.length, 3);
+    assert.equal(neb.materialCount, 4);
+    assert.equal(tracked.length, 4, "shared mats by health tone");
     assert.ok(tracked.every((m) => m.name === "LaneNebulaMaterial"));
     neb.tick(2);
     assert.equal(tracked[0]!.uniforms["uTime"]!.value, 2);
     neb.update([{ health: "stalled", center: [1, 1, 1] }]);
     assert.equal(neb.count, 1);
-    assert.equal(tracked.length, 1);
+    assert.equal(tracked.length, 4, "shared mats persist across update");
     neb.dispose();
     assert.equal(tracked.length, 0);
     assert.equal(neb.group.children.length, 0);
@@ -1212,5 +1219,96 @@ describe("painter c9: createLaneNebulae one-call adopt helper", () => {
     assert.ok((hot.uniforms["uHealth"]!.value as { g: number }).g > 0.5);
     idle.dispose();
     hot.dispose();
+  });
+});
+
+
+describe("hacker pass c10: lane nebula flood / NaN + shared mats", () => {
+  it("truncates huge lane dumps; skips NaN centers; keeps ≤4 shared materials", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+    } as unknown as PainterlyKit;
+    const flood = [];
+    for (let i = 0; i < 500; i++) {
+      if (i % 9 === 0) flood.push({ health: "healthy", center: [NaN, Infinity, 0] as const });
+      else if (i % 5 === 0) flood.push({ health: "not-a-tone", center: [i, 0, 0] as const });
+      else flood.push({
+        health: (["healthy", "stalled", "blocked", "idle"] as const)[i % 4]!,
+        center: [i * 0.1, 0, 0] as const,
+      });
+    }
+    const neb = createPainterlyLaneNebulae(kit, flood);
+    assert.equal(neb.truncated, true);
+    assert.ok(neb.count <= LANE_NEBULAE_MAX);
+    assert.ok(neb.skippedInvalid > 0);
+    assert.equal(neb.materialCount, 4);
+    assert.equal(tracked.length, 4);
+    neb.tick(1);
+    neb.tick(1, true); // reduced motion freezes
+    neb.dispose();
+    assert.equal(tracked.length, 0);
+  });
+});
+
+describe("hacker pass c10: reduced-motion freezes painter clocks + tick cost", () => {
+  it("tickPainterlyKit reducedMotion freezes uTime and reports uniform writes", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const pass = { uniforms: { uTime: { value: 0 }, amount: { value: 0.4 } } };
+    const kit = {
+      painterlyPass: pass,
+      tracked,
+      trackedSkies: [],
+      textureBindings: [],
+      disposed: false,
+      contextLost: false,
+      lastTickError: null,
+      lastTickErrorCount: 0,
+      lastTickUniformWrites: 0,
+      frozenTickTime: 0,
+      starSpriteTexture: { dispose() {} },
+      paperGrainTexture: { dispose() {} },
+    } as unknown as PainterlyKit;
+    const star = createStarWatercolorMaterial();
+    const building = createBuildingBrushMaterial({ progress: 0.5, floors: 6 });
+    tracked.push(star, building);
+    tickPainterlyKit(kit, 12);
+    assert.ok(kit.lastTickUniformWrites >= 3); // pass + 2 mats
+    assert.equal(star.uniforms["uTime"]!.value, 12);
+    assert.equal(kit.frozenTickTime, 12);
+    tickPainterlyKit(kit, 99, { reducedMotion: true });
+    assert.equal(star.uniforms["uTime"]!.value, 12, "frozen under reduced motion");
+    assert.equal(building.uniforms["uTime"]!.value, 12);
+    assert.ok(kit.lastTickUniformWrites >= 1);
+    tickPainterlyKit(kit, 20, { reducedMotion: false });
+    assert.equal(star.uniforms["uTime"]!.value, 20);
+    star.dispose();
+    building.dispose();
+  });
+});
+
+describe("painter c10: brush building window-light washes from real progress", () => {
+  it("uWindowGlow tracks progress; zero progress → dark windows; no fabricated occupancy", () => {
+    const dark = createBuildingBrushMaterial({ floors: 8, progress: 0 });
+    assert.equal(dark.uniforms["uProgress"]!.value, 0);
+    assert.equal(dark.uniforms["uWindowGlow"]!.value, 0);
+    const lit = createBuildingBrushMaterial({ floors: 10, progress: 0.6 });
+    assert.equal(lit.uniforms["uProgress"]!.value, 0.6);
+    assert.ok((lit.uniforms["uWindowGlow"]!.value as number) > 0.5);
+    setBuildingProgress(lit, 0);
+    assert.equal(lit.uniforms["uWindowGlow"]!.value, 0);
+    setBuildingProgress(lit, 0.8);
+    assert.ok((lit.uniforms["uWindowGlow"]!.value as number) > 0.5);
+    setBuildingWindowGlow(lit, 0.2);
+    setBuildingProgress(lit, 1);
+    assert.equal(lit.uniforms["uWindowGlow"]!.value, 0.2, "locked glow not overwritten");
+    assert.match(BrushBuildingShader.fragmentShader, /uWindowGlow/);
+    assert.match(BrushBuildingShader.fragmentShader, /windowCell/);
+    dark.dispose();
+    lit.dispose();
   });
 });

@@ -44,6 +44,7 @@ export {
   createBuildingBrushMaterial,
   tickBuildingMaterial,
   setBuildingProgress,
+  setBuildingWindowGlow,
   type BuildingSurfaceOptions,
 } from "./building-surface.ts";
 export {
@@ -93,6 +94,7 @@ export {
   tickLaneNebulaMaterial,
   setLaneNebulaHealth,
   createPainterlyLaneNebulae,
+  LANE_NEBULAE_MAX,
   type LaneNebulaOptions,
   type LaneNebulaInput,
   type PainterlyLaneNebulaeHandle,
@@ -144,6 +146,7 @@ export {
   usePainterlyKitFactory,
   type PainterlyKit,
   type PainterlyKitOptions,
+  type PainterlyTickOptions,
   type PainterlyTextureSlot,
   type PainterlyTextureBinding,
 } from "./use-painterly-kit.ts";

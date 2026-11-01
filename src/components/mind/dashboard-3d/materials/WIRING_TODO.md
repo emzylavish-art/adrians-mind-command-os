@@ -139,3 +139,19 @@ nebulaGroup.clear(); // after prior neb.dispose()
 nebulaGroup.add(neb.group);
 // on poll: neb.update(...); cleanup: neb.dispose();
 ```
+
+
+## c10 — reduced-motion tick + city window washes + nebula flood
+
+```ts
+// Each frame (honor a11y / low-power):
+tickPainterlyKit(kit, t, { reducedMotion });
+// kit.lastTickUniformWrites reports cost; uTime frozen when reducedMotion.
+
+// City buildings already use createBuildingBrushMaterial({ progress: lit/floors }).
+// Window-light washes track real progress via uWindowGlow (0 when progress=0).
+setBuildingProgress(mat, litFloors / floors); // also refreshes window glow
+// optional lock: setBuildingWindowGlow(mat, 0.4);
+
+// Lane nebulae: shared ≤4 mats; LANE_NEBULAE_MAX=32; NaN centers skipped.
+```
