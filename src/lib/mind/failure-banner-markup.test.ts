@@ -41,10 +41,12 @@ describe("failure banner markup contract", () => {
     ["model_unavailable", HONEST_FAILURE_MESSAGES.model_unreachable],
     ["database_write_failed", HONEST_FAILURE_MESSAGES.database_write_failed],
     ["emergency_stop_active", HONEST_FAILURE_MESSAGES.emergency_stop_active],
+    ["mcp_tool_failed", HONEST_FAILURE_MESSAGES.mcp_tool_failed],
+    ["mcp_tool_failed", "MCP tool “pglite_query” failed. PGLite query error: boom"],
   ] as const;
 
   for (const [kind, message] of cases) {
-    it(`renders red alert banner for ${kind} with Retry and View log`, () => {
+    it(`renders red alert banner for ${kind} (${message.slice(0, 24)}) with Retry and View log`, () => {
       const calls: string[] = [];
       const retry = bindRetry((label: string) => calls.push(label), [`retry-${kind}`] as [string]);
       const html = renderToStaticMarkup(
