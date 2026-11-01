@@ -28,6 +28,15 @@ describe("chip ↔ Mode picker sync", () => {
       "Auto→Build · grok-build-0.1",
     );
     assert.equal(chipLabelForTier({ selected: "Expert", lastModel: "grok-4.5" }), "Expert · grok-4.5");
+    assert.equal(
+      chipLabelForTier({ selected: "Expert", lastModel: "model unknown" }),
+      "Expert · model unknown",
+    );
+    assert.equal(
+      chipLabelForTier({ selected: "Auto", lastResolved: "Fast", lastModel: "model unknown" }),
+      "Auto→Fast · model unknown",
+    );
+
   });
 });
 
