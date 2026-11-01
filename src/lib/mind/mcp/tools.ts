@@ -325,12 +325,71 @@ export async function pcRunShell(input: {
 
 
 const WRITE_SQL =
-  /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|call|do|execute|merge|vacuum|reindex|cluster|comment|security|owner|refresh|listen|notify|set\s+role|reset\s+role|load|discard)\b/i;
+  /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|call|do|execute|merge|vacuum|reindex|cluster|comment|security|owner|refresh|listen|notify|set\s+role|reset\s+role|load|discard|into|prepare|deallocate|lock|checkpoint|import)\b/i;
 
-/** Reject multi-statement payloads and write verbs anywhere (incl. CTE bodies). */
-export function assertReadOnlySql(sql: string): { ok: true; sql: string } | { ok: false; text: string } {
+/** Row-locking reads (FOR SHARE / FOR KEY SHARE / FOR NO KEY UPDATE) hold locks on the shared connection. */
+const LOCKING_READ = /\bfor\s+(share|key\s+share|no\s+key\s+update|update)\b/i;
+
+/**
+ * Functions that change session/database state, touch files or other backends,
+ * run nested SQL strings, or block the (single-threaded) PGLite engine.
+ * PGLite runs synchronously inside the Node event loop and ignores
+ * statement_timeout, so a long call freezes the whole server, not just this query.
+ */
+const SIDE_EFFECT_FUNCTIONS = new RegExp(
+  "\\b(" +
+    [
+      "set_config",
+      "nextval",
+      "setval",
+      "pg_sleep(?:_for|_until)?",
+      "pg_(?:try_)?advisory\\w*",
+      "lo_\\w+",
+      "lowrite",
+      "loread",
+      "(?:query|cursor)_to_xml\\w*",
+      "query_to_xml_and_xmlschema",
+      "dblink\\w*",
+      "pg_read_(?:binary_)?file",
+      "pg_ls_\\w+",
+      "pg_stat_file",
+      "pg_file_\\w+",
+      "pg_terminate_backend",
+      "pg_cancel_backend",
+      "pg_reload_conf",
+      "pg_rotate_logfile",
+      "pg_switch_wal",
+      "pg_promote",
+      "pg_(?:create|drop|copy)_\\w+",
+      "pg_replication_\\w+",
+      "pg_logical_\\w+",
+      "pg_notify",
+      "pg_import_system_collations",
+      "pg_stat_reset\\w*",
+      "pg_backup_\\w+",
+      "pg_(?:start|stop)_backup",
+      "pg_wal_replay_\\w+",
+      "pg_log_backend_memory_contexts",
+      "txid_current",
+      "pg_current_xact_id",
+    ].join("|") +
+    ")\\s*\\(",
+  "i",
+);
+
+/** Unicode-escape identifiers/strings (U&"\\0073et_config") hide names from every word check. */
+const UNICODE_ESCAPE = /\bu&\s*['"]/i;
+
+/** Reject multi-statement payloads, write verbs, side-effect functions, and escape tricks. */
+export function assertReadOnlySql(sql: string): { ok: true; sql: string; explain: boolean } | { ok: false; text: string } {
   let trimmed = sql.trim();
   if (!trimmed) return { ok: false, text: "SQL is empty. Nothing was queried." };
+  if (trimmed.length > 20_000) {
+    return { ok: false, text: "SQL is too long (over 20,000 characters). Nothing was queried." };
+  }
+  if (trimmed.includes("\u0000")) {
+    return { ok: false, text: "SQL contains a NUL byte. Nothing was queried." };
+  }
   // Strip one trailing semicolon only; extra statements are refused.
   trimmed = trimmed.replace(/;\s*$/, "");
   if (trimmed.includes(";")) {
@@ -339,13 +398,32 @@ export function assertReadOnlySql(sql: string): { ok: true; sql: string } | { ok
   // Block classic comment-smuggled writes and dollar-quote escapes lightly
   const withoutLineComments = trimmed.replace(/--[^\n]*/g, " ");
   const withoutBlockComments = withoutLineComments.replace(/\/\*[\s\S]*?\*\//g, " ");
-  if (WRITE_SQL.test(withoutBlockComments)) {
+  if (/\/\*|\*\//.test(withoutBlockComments)) {
+    // Nested or unterminated block comments can hide text from the checks below.
+    return { ok: false, text: "Nested or unterminated SQL comments are not allowed. Nothing was queried." };
+  }
+  if (UNICODE_ESCAPE.test(withoutBlockComments)) {
+    return { ok: false, text: "Unicode-escaped identifiers or strings (U&) are not allowed in pglite_query. Nothing was queried." };
+  }
+  if (WRITE_SQL.test(withoutBlockComments) || LOCKING_READ.test(withoutBlockComments)) {
     return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+  }
+  // Quoted identifiers ("set_config"(...)) would otherwise slip past the name check.
+  const fn = SIDE_EFFECT_FUNCTIONS.exec(withoutBlockComments.replace(/"/g, ""));
+  if (fn) {
+    return {
+      ok: false,
+      text: `pglite_query refuses ${fn[1]}(): it changes database or session state, reaches outside the database, or can freeze the server. Nothing was run.`,
+    };
   }
   if (!/^\s*(select|with|explain)\b/i.test(withoutBlockComments)) {
     return { ok: false, text: "Only SELECT, WITH, or EXPLAIN statements are allowed. Nothing was queried." };
   }
-  return { ok: true, sql: trimmed };
+  const explain = /^\s*explain\b/i.test(withoutBlockComments);
+  if (explain && /\banaly[sz]e\b/i.test(withoutBlockComments)) {
+    return { ok: false, text: "EXPLAIN ANALYZE runs the statement, so it is not allowed in pglite_query. Use plain EXPLAIN. Nothing was run." };
+  }
+  return { ok: true, sql: trimmed, explain };
 }
 
 export const PGLITE_DEFAULT_ROW_LIMIT = 100;
@@ -366,14 +444,17 @@ export async function pgliteQuery(input: {
   if (!checked.ok) return { ok: false, status: "error", text: checked.text };
   const rowLimit = Math.min(Math.max(input.rowLimit ?? PGLITE_DEFAULT_ROW_LIMIT, 1), 500);
   const timeoutMs = Math.min(Math.max(input.timeoutMs ?? PGLITE_DEFAULT_TIMEOUT_MS, 100), 30_000);
-  const limitedSql = `SELECT * FROM (${checked.sql}) AS _mind_q LIMIT ${rowLimit}`;
+  // EXPLAIN cannot sit inside a subquery, so it runs as-is (its output is a short plan).
+  const limitedSql = checked.explain ? checked.sql : `SELECT * FROM (${checked.sql}) AS _mind_q LIMIT ${rowLimit}`;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const rows = await Promise.race([
+    const allRows = await Promise.race([
       input.sqlClient.query(limitedSql, input.params ?? []),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs}ms`)), timeoutMs);
+        timer = setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs}ms`)), timeoutMs);
       }),
     ]);
+    const rows = Array.isArray(allRows) ? allRows.slice(0, rowLimit) : [];
     return {
       ok: true,
       status: "ok",
@@ -383,6 +464,8 @@ export async function pgliteQuery(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Query failed.";
     return { ok: false, status: "error", text: `PGLite query error: ${message}` };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
