@@ -19,6 +19,8 @@ import {
   imagineRetryParams,
   mapImagineHttpErrorCopy,
   shouldShowFailureBanner,
+  isAuthRequiredNotice,
+  MCP_AUTH_REQUIRED_NOTICE,
 } from "./failure-states.ts";
 
 describe("honest failure states", () => {
@@ -301,5 +303,27 @@ describe("H22 intentional STOPPED_REPLY vs failure banners", () => {
   it("exports a one-line mount hint for command-app without editing it here", () => {
     assert.match(failureBannerMountHint(), /shouldShowFailureBanner/);
     assert.match(failureBannerMountHint(), /reportFailure/);
+  });
+});
+
+describe("H23 auth_required is a notice, not a red failure banner", () => {
+  it("shouldShowFailureBanner is false for auth_required", () => {
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.auth_required), false);
+    assert.equal(shouldShowFailureBanner("Sign in is required."), false);
+    assert.equal(shouldShowFailureBanner("Unauthorized"), false);
+    assert.equal(isAuthRequiredNotice(HONEST_FAILURE_MESSAGES.auth_required), true);
+    assert.equal(MCP_AUTH_REQUIRED_NOTICE, "Sign in to load MCP servers.");
+  });
+
+  it("real failures still show the red banner", () => {
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.network_failure), true);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.forbidden_cross_site), true);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.mcp_list_failed), true);
+  });
+
+  it("mount hint documents notice + reportFailure gate", () => {
+    assert.match(failureBannerMountHint(), /shouldShowFailureBanner/);
+    assert.match(failureBannerMountHint(), /Sign in to load MCP servers/);
+    assert.match(failureBannerMountHint(), /reportFailureRef|reportFailure/);
   });
 });

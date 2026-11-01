@@ -400,3 +400,13 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42810bad93f2cd22be479d
 - Pushed origin/error-banners → f24d1252d5766ff3ed13abf73b9cfa52451090ed
 - Lock releasing.
+
+## 2026-11-01T18:08:30+01:00 (Africa/Lagos) — Error Banners Bot — H23 MCP auth_required notice
+- Gap: live adrians-mind.vercel.app paints MCP auth_required as blocking red failure banners before sign-in.
+- Lock: /workspace/locks/error-banners-gap-auth-required-notice.lock
+- Merge origin/preview/integration ABORTED (conflict in forbidden command-app.tsx). Branch remains behind PI.
+- Root cause: mcp-list-state FleetListStatusRowsInner treated auth_required as failure-banner; fleet-panels onFailure escalated; command-app loadMcpLists catch ≈603–613 also reportFailure (owning lane — not edited).
+- Fix: AuthRequiredNoticeRow + LIST_AUTH_NOTICE_COPY; skip onFailure for auth; shouldShowFailureBanner(false) for auth_required; mount hint for command-app.
+- Checks: typecheck pass; TS 833/836 (3 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror (URL filled after create).
+- Lock releasing.

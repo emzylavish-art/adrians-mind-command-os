@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { HONEST_FAILURE_MESSAGES } from "./failure-states.ts";
+import { HONEST_FAILURE_MESSAGES, MCP_AUTH_REQUIRED_NOTICE } from "./failure-states.ts";
 import {
+  LIST_AUTH_NOTICE_COPY,
   MCP_LIST_EMPTY_COPY,
   MCP_LIST_LOADING_COPY,
   MCP_LIST_LOAD_TIMEOUT_MS,
@@ -88,9 +89,30 @@ describe("MCP list: loading / empty / error are distinct", () => {
     assert.equal(renderServers(state), "");
   });
 
+  const authNoticeCases: [string, () => Promise<unknown>][] = [
+    ["401 status", async () => { throw httpError(401); }],
+    ["Unauthorized middleware error", async () => { throw new Error("Unauthorized"); }],
+  ];
+  for (const [name, fetcher] of authNoticeCases) {
+    it(`auth_required (${name}) is a dismissible notice, not a red Retry banner`, async () => {
+      const state = await loadMcpList(fetcher);
+      assert.equal(state.status, "error");
+      if (state.status !== "error") return;
+      assert.equal(state.kind, "auth_required");
+      assert.equal(state.message, MCP_AUTH_REQUIRED_NOTICE);
+      const html = renderServers(state);
+      assert.match(html, /data-testid="auth-required-notice"/);
+      assert.match(html, /data-mcp-list-state="auth_notice"/);
+      assert.match(html, /role="status"/);
+      assert.match(html, /Sign in to load MCP servers/);
+      assert.match(html, /data-testid="auth-notice-dismiss"/);
+      assert.match(html, /border-line bg-surface/);
+      assert.doesNotMatch(html, /data-testid="failure-banner"|failure-retry|border-danger\/40|role="alert"/);
+      assert.doesNotMatch(html, /mcp-list-empty|No MCP servers/);
+    });
+  }
+
   const errorCases: [string, () => Promise<unknown>, string, RegExp][] = [
-    ["401 status", async () => { throw httpError(401); }, "auth_required", /Sign in is required/],
-    ["Unauthorized middleware error", async () => { throw new Error("Unauthorized"); }, "auth_required", /Sign in is required/],
     ["403 cross-site", async () => { throw httpError(403, "Forbidden: cross-site request blocked"); }, "forbidden_cross_site", /cross-site request blocked/],
     ["403 status only", async () => { throw httpError(403); }, "forbidden_cross_site", /Forbidden/],
     ["500", async () => { throw httpError(500); }, "network_failure", /HTTP 500/],
@@ -198,6 +220,20 @@ describe("MCP tools list: empty vs error", () => {
     assert.doesNotMatch(html, /mcp-tools-list-empty|No MCP tools/);
   });
 
+  it("tools 401 is a dismissible notice, not a red Retry banner", async () => {
+    const state = await loadMcpToolsList(async () => {
+      throw httpError(401);
+    });
+    assert.equal(state.status, "error");
+    if (state.status !== "error") return;
+    assert.equal(state.kind, "auth_required");
+    assert.equal(state.message, LIST_AUTH_NOTICE_COPY.mcp_tools);
+    const html = renderTools(state);
+    assert.match(html, /auth-required-notice/);
+    assert.match(html, /Sign in to load MCP tools/);
+    assert.doesNotMatch(html, /failure-banner|failure-retry/);
+  });
+
   it("empty only on a successful zero-tool payload", async () => {
     const state = await loadMcpToolsList(async () => ({ tools: [] }));
     assert.deepEqual(state, { status: "ready", items: [] });
@@ -220,16 +256,18 @@ describe("MCP tools list: empty vs error", () => {
 });
 
 describe("PC approvals list: empty vs error", () => {
-  it("rejected approvals fetch shows the red banner, not 'nothing pending'", async () => {
+  it("rejected approvals fetch (401) is a dismissible notice, not 'nothing pending' and not a red Retry banner", async () => {
     const state = await loadPcApprovalsList(async () => {
       throw httpError(401);
     });
     assert.equal(state.status, "error");
     if (state.status !== "error") return;
     assert.equal(state.kind, "auth_required");
+    assert.equal(state.message, LIST_AUTH_NOTICE_COPY.pc_approvals);
     const html = renderApprovals(state);
-    assert.match(html, /failure-banner/);
-    assert.match(html, /PC shell approvals list/);
+    assert.match(html, /auth-required-notice/);
+    assert.match(html, /Sign in to load PC shell approvals/);
+    assert.doesNotMatch(html, /failure-banner|failure-retry/);
     assert.doesNotMatch(html, /pc-approvals-list-empty|No pending PC shell approvals/);
   });
 
@@ -310,16 +348,18 @@ describe("Worker health status: offline vs load error", () => {
     assert.doesNotMatch(html, /Nothing is reported as online|No worker process is running/);
   });
 
-  it("401 is auth_required, not offline", async () => {
+  it("401 is auth_required notice, not offline and not a red Retry banner", async () => {
     const state = await loadWorkerHealthStatus(async () => {
       throw httpError(401, "Unauthorized");
     });
     assert.equal(state.status, "error");
     if (state.status !== "error") return;
     assert.equal(state.kind, "auth_required");
+    assert.equal(state.message, LIST_AUTH_NOTICE_COPY.worker_health);
     const html = renderWorkerHealth(state);
-    assert.match(html, /failure-banner/);
-    assert.match(html, /Sign in is required/);
+    assert.match(html, /auth-required-notice/);
+    assert.match(html, /Sign in to read worker status/);
+    assert.doesNotMatch(html, /failure-banner|failure-retry/);
   });
 
   it("honest offline detail is ready, not an error banner", async () => {

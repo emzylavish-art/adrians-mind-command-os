@@ -1,11 +1,13 @@
 /**
  * Fleet panel async loads: MCP servers, MCP tools, PC approvals, and Scheduled worker health.
- * A failed load (401/403, 5xx, network, timeout, non-JSON) must never look like an empty/offline success.
- * Classification reuses failure-states.ts kinds; the banner follows the standard red failure banner.
+ * A failed load (403, 5xx, network, timeout, non-JSON) must never look like an empty/offline success.
+ * Pre-sign-in auth_required is a non-blocking dismissible notice (not a red Retry banner).
+ * Classification reuses failure-states.ts kinds.
  */
-import { createElement } from "react";
+import { createElement, useState, type ReactNode } from "react";
 import {
   HONEST_FAILURE_MESSAGES,
+  MCP_AUTH_REQUIRED_NOTICE,
   classifyHonestFailure,
   normalizeClientFailureMessage,
   type HonestFailureKind,
@@ -80,6 +82,19 @@ const LIST_FAILED_COPY: Record<ListFailureScope, string> = {
   worker_health: HONEST_FAILURE_MESSAGES.worker_health_failed,
 };
 
+/** One-line non-blocking notice when a fleet list load needs sign-in (no Retry). */
+export const LIST_AUTH_NOTICE_COPY: Record<ListFailureScope, string> = {
+  mcp_list: MCP_AUTH_REQUIRED_NOTICE,
+  mcp_tools: "Sign in to load MCP tools.",
+  pc_approvals: "Sign in to load PC shell approvals.",
+  worker_health: "Sign in to read worker status.",
+};
+
+/** True when a list error should render as a dismissible notice, not a red failure banner. */
+export function isListAuthRequiredNotice(kind: HonestFailureKind): boolean {
+  return kind === "auth_required";
+}
+
 /** Map a rejected list load to one honest banner message + failure-states kind. */
 export function classifyListFailure(
   caught: unknown,
@@ -92,7 +107,7 @@ export function classifyListFailure(
     return { kind: "network_failure", message: `${failed} (timed out)` };
   }
   if (status === 401 || raw === "Unauthorized" || /sign in is required/i.test(raw)) {
-    return { kind: "auth_required", message: `${failed} ${HONEST_FAILURE_MESSAGES.auth_required}` };
+    return { kind: "auth_required", message: LIST_AUTH_NOTICE_COPY[scope] };
   }
   if (status === 403 || /cross-site request blocked|^Forbidden/i.test(raw)) {
     return { kind: "forbidden_cross_site", message: HONEST_FAILURE_MESSAGES.forbidden_cross_site };
@@ -106,7 +121,7 @@ export function classifyListFailure(
   const normalized = normalizeClientFailureMessage(caught);
   const kind = classifyHonestFailure(normalized);
   if (kind === "auth_required") {
-    return { kind, message: `${failed} ${HONEST_FAILURE_MESSAGES.auth_required}` };
+    return { kind, message: LIST_AUTH_NOTICE_COPY[scope] };
   }
   if (kind === "forbidden_cross_site") return { kind, message: HONEST_FAILURE_MESSAGES.forbidden_cross_site };
   return { kind: "network_failure", message: `${failed} ${HONEST_FAILURE_MESSAGES.network_failure}` };
@@ -236,6 +251,33 @@ export function onceListRetry(action: () => void): () => void {
   };
 }
 
+/** Local-only dismissible notice for auth_required list loads (no persistence, no Retry). */
+function AuthRequiredNoticeRow({ message }: { message: string }): ReactNode {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return createElement(
+    "li",
+    {
+      className: "flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted",
+      role: "status",
+      "data-testid": "auth-required-notice",
+      "data-failure-kind": "auth_required",
+      "data-mcp-list-state": "auth_notice",
+    },
+    createElement("p", { className: "text-sm text-muted" }, message),
+    createElement(
+      "button",
+      {
+        type: "button",
+        "data-testid": "auth-notice-dismiss",
+        className: "inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm text-muted",
+        onClick: () => setDismissed(true),
+      },
+      "Dismiss",
+    ),
+  );
+}
+
 function FleetListStatusRowsInner({
   state,
   loadingCopy,
@@ -259,6 +301,9 @@ function FleetListStatusRowsInner({
   if (state.status === "ready") {
     if (!state.empty) return null;
     return createElement("li", { className: "text-sm text-muted", "data-testid": emptyTestId }, emptyCopy);
+  }
+  if (isListAuthRequiredNotice(state.kind)) {
+    return createElement(AuthRequiredNoticeRow, { message: state.message });
   }
   return createElement(
     "li",

@@ -31,6 +31,7 @@ import {
   PcApprovalsListStatusRows,
   WorkerHealthStatusRows,
   isCurrentListGeneration,
+  isListAuthRequiredNotice,
   loadMcpList,
   loadMcpToolsList,
   loadPcApprovalsList,
@@ -138,7 +139,10 @@ export function FleetPanel({
           return;
         }
         setMcpServers([]);
-        if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpServers));
+        // auth_required → local dismissible notice in McpListStatusRows; do not escalate to top red banner / Retry storm.
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadMcpServers));
+        }
       })
       .finally(() => {
         if (generation === mcpListGeneration.current) mcpListInFlight.current = false;
@@ -161,7 +165,9 @@ export function FleetPanel({
           return;
         }
         setMcpTools([]);
-        if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpTools));
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadMcpTools));
+        }
       })
       .finally(() => {
         if (generation === mcpToolsGeneration.current) mcpToolsInFlight.current = false;
@@ -190,7 +196,9 @@ export function FleetPanel({
           return;
         }
         setPcApprovals([]);
-        if (next.status === "error") onFailure?.(next.message, onceListRetry(refreshPcApprovals));
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(refreshPcApprovals));
+        }
       })
       .finally(() => {
         if (generation === pcApprovalsGeneration.current) pcApprovalsInFlight.current = false;
@@ -230,7 +238,9 @@ export function FleetPanel({
       .then((next) => {
         if (!isCurrentListGeneration(generation, workerHealthGeneration.current)) return;
         setWorkerHealthState(next);
-        if (next.status === "error") onFailure?.(next.message, onceListRetry(loadWorkerHealth));
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadWorkerHealth));
+        }
       })
       .finally(() => {
         if (generation === workerHealthGeneration.current) workerHealthInFlight.current = false;

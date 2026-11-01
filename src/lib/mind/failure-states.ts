@@ -66,6 +66,10 @@ export const HONEST_FAILURE_MESSAGES = {
   image_generation_timeout: "Image generation timed out. Nothing was saved as a success.",
 } as const;
 
+/** Non-blocking copy when MCP (or similar) list load hits 401 before sign-in. */
+export const MCP_AUTH_REQUIRED_NOTICE = "Sign in to load MCP servers.";
+
+
 export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
   model_unavailable: "model_unavailable",
   database_write_failed: "database_write_failed",
@@ -237,11 +241,19 @@ export function classifyHonestTurnOutcome(message: string): HonestTurnOutcomeKin
 
 /**
  * Whether the red failure banner (Retry + View log) should be shown for this message.
- * Intentional Stop → false. Timeouts, disconnects, and other honest failures → true.
+ * Intentional Stop → false. Pre-sign-in auth_required → false (use a dismissible notice instead).
+ * Timeouts, disconnects, and other honest failures → true.
  * Unclassified messages stay true so existing chat_failed banner behavior is preserved until classified.
  */
 export function shouldShowFailureBanner(message: string): boolean {
-  return !isUserStoppedReply(message);
+  if (isUserStoppedReply(message)) return false;
+  if (classifyHonestFailure(message) === "auth_required") return false;
+  return true;
+}
+
+/** True when copy is the pre-sign-in auth gate (not a hard failure). */
+export function isAuthRequiredNotice(message: string): boolean {
+  return classifyHonestFailure(message) === "auth_required";
 }
 
 /**
@@ -256,16 +268,25 @@ export function honestTurnAuditAction(message: string): string | null {
 }
 
 /**
- * MOUNT (command-app.tsx / another lane — one-line gate before reportFailure):
+ * MOUNT (command-app.tsx owning lane — do not edit command-app from error-banners):
  *
- *   if (!shouldShowFailureBanner(message)) { setNotice(message); return null; }
- *   const kind = classifyHonestFailure(message);
- *   reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retry);
+ * 1) loadMcpLists catch (≈ lines 603–606 and 610–613):
+ *    const message = normalizeClientFailureMessage(caught);
+ *    if (!shouldShowFailureBanner(message)) {
+ *      setNotice(isAuthRequiredNotice(message) ? "Sign in to load MCP servers." : message);
+ *      return;
+ *    }
+ *    reportFailureRef.current(message, "mcp_list_failed", "...", loadMcpLists);
  *
- * Or equivalently use isUserStoppedReply(message) and setNotice(STOPPED_REPLY) with no reportFailure.
+ * 2) After sign-in becomes available: call loadMcpLists() once more (auth signal is only in command-app).
+ * 3) Chat/Stop path: same shouldShowFailureBanner gate before reportFailure (H22).
+ *
+ * FleetPanel list rows already render auth_required as a local dismissible notice (mcp-list-state)
+ * and skip onFailure escalation — that part ships with this lane. The top red banner before sign-in
+ * is from command-app loadMcpLists above and needs the one-line gate from the owning lane.
  */
 export function failureBannerMountHint(): string {
-  return "if (!shouldShowFailureBanner(message)) { setNotice(message); return null; } // then existing reportFailure(classifyHonestFailure...)";
+  return "loadMcpLists catch: if (!shouldShowFailureBanner(message)) { setNotice(\"Sign in to load MCP servers.\"); return; } else reportFailureRef.current(...)";
 }
 
 export function honestFailureDescription(kind: HonestFailureKind, message?: string): string {
