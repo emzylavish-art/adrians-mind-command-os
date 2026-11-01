@@ -6568,3 +6568,64 @@ aside .max-w-\[14rem\].truncate {
   .shell > .composer-bar.is-fixed,
   .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
 }
+
+/* —— Evolution c92: microinteractions — composer focus + send press (markup exists) —— */
+.floating-composer:focus-within,
+.composer-dock:focus-within,
+[data-composer="floating"]:focus-within,
+section.command-card.composer-dock:focus-within,
+section.command-card.composer-dock:has(textarea:focus),
+section.command-card.composer-dock:has(input:focus) {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow:
+    0 0 0 1px rgb(232 236 245 / 0.35),
+    0 0 0 4px rgb(232 236 245 / 0.08),
+    0 22px 56px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+html[data-theme="light"] .floating-composer:focus-within,
+html[data-theme="light"] .composer-dock:focus-within {
+  border-color: rgb(15 23 42 / 0.2) !important;
+  box-shadow:
+    0 0 0 1px rgb(15 23 42 / 0.2),
+    0 0 0 4px rgb(15 23 42 / 0.06),
+    0 18px 44px rgb(15 23 42 / 0.12) !important;
+}
+.floating-composer textarea:focus,
+.composer-dock textarea:focus,
+.floating-composer input:focus,
+.composer-dock input:focus {
+  outline: none !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12) !important;
+}
+
+/* Send press — submit in floating composer / dock */
+.floating-composer button[type="submit"],
+.composer-dock button[type="submit"],
+form.floating-composer button[type="submit"] {
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease !important;
+}
+.floating-composer button[type="submit"]:hover:not(:disabled),
+.composer-dock button[type="submit"]:hover:not(:disabled) {
+  filter: brightness(1.06) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+}
+.floating-composer button[type="submit"]:active:not(:disabled),
+.composer-dock button[type="submit"]:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  filter: brightness(0.95) !important;
+}
+.floating-composer button[type="submit"]:disabled,
+.composer-dock button[type="submit"]:disabled {
+  opacity: 0.45 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-composer button[type="submit"],
+  .composer-dock button[type="submit"] {
+    transition: none !important;
+  }
+  .floating-composer button[type="submit"]:active:not(:disabled) {
+    transform: none !important;
+  }
+}
