@@ -4333,3 +4333,62 @@ main:focus-visible {
 html[data-theme="light"] :focus-visible {
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(9 9 11 / 0.55) !important;
 }
+
+/* —— Evolution c56: GPT/Grok hero density — chips, type, empty wells —— */
+.main-stage .masthead h1,
+.main-stage .masthead .font-display,
+.main-stage h1.font-display,
+.main-stage .masthead h2 {
+  font-size: clamp(1.65rem, 4vw, 2.15rem) !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.02em !important;
+  font-weight: 650 !important;
+}
+.main-stage .masthead p,
+.main-stage .masthead .text-muted {
+  font-size: 0.95rem !important;
+  line-height: 1.45 !important;
+  color: #a1a1aa !important;
+  max-width: 36rem;
+}
+.main-stage .masthead {
+  padding: 1.35rem 1.35rem 1.2rem !important;
+  gap: 0.65rem !important;
+}
+/* Suggestion / action chips denser like GPT */
+.main-stage button.rounded-full,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage .flex.gap-2.overflow-x-auto > button {
+  min-height: 2.75rem !important;
+  padding: 0.55rem 1rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 550 !important;
+  letter-spacing: 0.01em;
+  border-radius: 999px !important;
+}
+.main-stage .flex.flex-col.gap-2 > button.rounded-full,
+.main-stage a.underline {
+  font-size: 0.95rem !important;
+  line-height: 1.4 !important;
+}
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted:only-child) {
+  min-height: 9.5rem !important;
+  padding: 1.5rem 1.35rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+}
+.main-stage .empty-state h2,
+.main-stage .empty-state h3,
+.main-stage [data-empty="true"] h2 {
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+}
+@media (max-width: 429.98px) {
+  .main-stage .masthead { padding: 1.1rem 1rem !important; }
+  .main-stage button.rounded-full { padding-inline: 0.85rem !important; font-size: 0.8125rem !important; }
+}
