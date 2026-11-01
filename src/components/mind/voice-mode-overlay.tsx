@@ -2,7 +2,16 @@ import { Mic, MicOff, X } from "lucide-react";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { voiceModeLabel, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 
-export type VoiceOverlayPhase = "idle" | "listening" | "processing" | "speaking" | "interrupted";
+export type VoiceOverlayPhase =
+  | "idle"
+  | "requesting_mic"
+  | "getting_session"
+  | "connecting"
+  | "listening"
+  | "processing"
+  | "speaking"
+  | "interrupted"
+  | "error";
 
 /**
  * Full-screen voice mode overlay. Wired to realtime capture + TTS by the parent.
@@ -20,20 +29,35 @@ export function VoiceModeOverlay(props: {
   onMute: () => void;
   onClose: () => void;
   onInterrupt?: () => void;
+  onRetry?: () => void;
 }) {
   if (!props.open) return null;
   const status =
-    props.phase === "listening"
-      ? "Listening…"
-      : props.phase === "processing"
-        ? "Thinking…"
-        : props.phase === "speaking"
-          ? "Speaking…"
-          : props.phase === "interrupted"
-            ? "Interrupted — listening"
-            : "Voice mode";
-  const active = props.phase === "listening" || props.phase === "speaking" || props.phase === "interrupted";
+    props.phase === "requesting_mic"
+      ? "Requesting mic…"
+      : props.phase === "getting_session"
+        ? "Getting session…"
+        : props.phase === "connecting"
+          ? "Connecting…"
+          : props.phase === "listening"
+            ? "Listening…"
+            : props.phase === "processing"
+              ? "Thinking…"
+              : props.phase === "speaking"
+                ? "Speaking…"
+                : props.phase === "interrupted"
+                  ? "Interrupted — listening"
+                  : props.phase === "error"
+                    ? "Connection failed"
+                    : "Voice mode";
+  const active =
+    props.phase === "listening" ||
+    props.phase === "speaking" ||
+    props.phase === "interrupted" ||
+    props.phase === "connecting";
   const speaking = props.phase === "speaking";
+  const connecting =
+    props.phase === "requesting_mic" || props.phase === "getting_session" || props.phase === "connecting";
 
   return (
     <div
@@ -63,16 +87,15 @@ export function VoiceModeOverlay(props: {
           </button>
         </div>
 
-        <VoiceWaveform
-          level={props.level}
-          active={active}
-          bars={11}
-          label={status}
-          className="h-12"
-        />
+        <VoiceWaveform level={props.level} active={active} bars={11} label={status} className="h-12" />
         <p className="text-sm font-semibold" data-testid="voice-overlay-status">
           {status}
         </p>
+        {connecting ? (
+          <p className="text-xs text-muted" data-testid="voice-overlay-stage">
+            {status} Each stage times out after 10s.
+          </p>
+        ) : null}
         {props.phase === "interrupted" ? (
           <span className="rounded-full border border-line px-2 py-1 text-xs text-accent" data-testid="voice-interrupted-chip">
             Interrupted — listening
@@ -85,8 +108,8 @@ export function VoiceModeOverlay(props: {
           >
             {props.transcript}
           </p>
-        ) : (
-          <p className="text-xs text-muted">Speak after the session connects. Transcripts appear here. Interrupt while it speaks to barge in.</p>
+        ) : connecting || props.phase === "error" ? null : (
+          <p className="text-xs text-muted">Speak after the session connects. Transcripts appear here.</p>
         )}
         {props.notice ? <p className="w-full text-xs text-muted">{props.notice}</p> : null}
         {props.error ? (
@@ -103,6 +126,7 @@ export function VoiceModeOverlay(props: {
             aria-pressed={props.muted}
             aria-label={props.muted ? "Unmute microphone" : "Mute microphone"}
             data-testid="voice-mute"
+            disabled={connecting || props.phase === "error" || props.phase === "idle"}
           >
             {props.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             {props.muted ? "Unmute" : "Mute"}
@@ -117,6 +141,16 @@ export function VoiceModeOverlay(props: {
               disabled={!speaking}
             >
               Interrupt
+            </button>
+          ) : null}
+          {props.phase === "error" ? (
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+              onClick={props.onRetry}
+              data-testid="voice-overlay-retry"
+            >
+              Retry
             </button>
           ) : null}
           <button
