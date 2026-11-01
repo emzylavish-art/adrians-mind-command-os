@@ -14,8 +14,8 @@ import { KEY_RGB, RIM_RGB, normalizeHealthTone, type HealthTone } from "./health
  */
 
 export const FOCUS_EASE_MS = 350;
-export const FOCUS_KEY_INTENSITY = 60;
-export const FOCUS_RIM_INTENSITY = 34;
+export const FOCUS_KEY_INTENSITY = 12;
+export const FOCUS_RIM_INTENSITY = 14;
 /** Distance of key / rim from the focused node (world units). */
 export const FOCUS_KEY_OFFSET = 4.2;
 export const FOCUS_RIM_OFFSET = 3.0;
