@@ -382,3 +382,33 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
     return mintRealtimeClientSecret({});
   });
+
+export const transcribeAudio = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { audioBase64: string; mime?: string; filename?: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was transcribed." };
+    if (!allowMindRequest("stt", context.userId, 12)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
+    const { resolveVoiceApiKey } = await import("./voice/keys");
+    const apiKey = resolveVoiceApiKey(process.env);
+    if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was transcribed." };
+    const raw = (data.audioBase64 || "").trim();
+    if (!raw) return { ok: false as const, error: "No audio was recorded. Nothing was transcribed." };
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(raw, "base64");
+    } catch {
+      return { ok: false as const, error: "Recorded audio could not be read." };
+    }
+    if (bytes.length < 32 || bytes.length > 4_000_000) {
+      return { ok: false as const, error: "Recorded audio was empty or too large. Nothing was transcribed." };
+    }
+    const { transcribeWavBytes } = await import("./voice/stt");
+    return transcribeWavBytes({
+      bytes,
+      apiKey,
+      mime: data.mime || "audio/webm",
+      filename: data.filename,
+    });
+  });
