@@ -3,13 +3,19 @@
  * Heavy excerpts / timeline samples / full notion pages load lazily per bot.
  */
 import type { DashboardStatus } from "./types.ts";
+import {
+  commitsForBranch,
+  composeBotNotes,
+  queueItemsForBot,
+  sanitizeLockCommitLines,
+} from "./bot-detail.ts";
 
 export const STATUS_SUMMARY_MARK = "summary" as const;
 
 const MAX_TIMELINE_EVENTS = 48;
 const MAX_SKY_FEED = 24;
-const MAX_COMMITS = 24;
-const MAX_QUEUE = 16;
+export const MAX_COMMITS = 72;
+export const MAX_QUEUE = 64;
 const MAX_NOTE = 160;
 const MAX_PAGE_TITLE = 96;
 
@@ -155,10 +161,22 @@ export function botDetailFromStatus(status: DashboardStatus, botId: string) {
     (p) => p.id === pageId || (bot.name && p.title?.includes(bot.name.slice(0, 12))),
   );
   // Prefer mapped page; if excerpts were stripped in summary, client may still need lock notes (already on bot).
+  const laneName = status.constellations?.find((c) => (c.botIds as string[]).includes(bot.id))?.name ?? null;
+  const branchCommits = commitsForBranch(status.commits ?? [], bot.branch, 8, bot.id);
+  const lockCommits = sanitizeLockCommitLines([...(bot.commits ?? []), ...((bot.lock?.commits as string[] | undefined) ?? [])], 12);
+  const queueItems = queueItemsForBot(status.fleetPlan?.queue ?? [], bot, laneName).slice(0, 12);
+  const notes = composeBotNotes({
+    lockNotes: bot.lock?.notes,
+    botNotes: bot.notes,
+    notionTitles: pages.map((p) => p.title).filter(Boolean) as string[],
+  });
   return {
     ok: true as const,
-    bot,
+    bot: { ...bot, notes: notes || bot.notes, commits: lockCommits.length ? lockCommits : bot.commits },
     notionPages: pages.slice(0, 8),
-    branchCommits: (status.commits ?? []).filter((c) => c.branch && bot.branch && c.branch.includes(bot.branch.replace(/^origin\//, "").slice(0, 12))).slice(0, 8),
+    branchCommits,
+    lockCommits,
+    queueItems,
+    notes,
   };
 }

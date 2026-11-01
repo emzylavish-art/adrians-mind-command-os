@@ -4,7 +4,10 @@ import { loadMoneyView } from "./spend.ts";
 import { buildDashboardCharts } from "./chart-series.ts";
 import { buildNotionMirrorView } from "./notion-mirror.ts";
 import { buildForeverContractGuard } from "./forever-contract.ts";
-import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { collectBranchCommits, collectKnownBotBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { branchesForBot } from "./bot-branches.ts";
+import { loadLaneQueueDocs } from "./lane-queue.ts";
+import { composeBotNotes } from "./bot-detail.ts";
 import { loadCommitsSnapshot } from "./commits-snapshot.ts";
 import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
 import { buildSkyFeed } from "./sky-feed.ts";
@@ -82,12 +85,36 @@ export async function buildDashboardStatus(
     }
   }
 
+  // Per-bot origin branches (bounded + cached). Merge so Star Detail Recent commits can resolve.
+  try {
+    const perBot = collectKnownBotBranchCommits(repoDir, now);
+    if (perBot.length) {
+      const seen = new Set(commits.map((c) => c.sha));
+      for (const c of perBot) {
+        if (seen.has(c.sha)) continue;
+        seen.add(c.sha);
+        commits.push(c);
+      }
+      if (commitsSource === "none") commitsSource = "git";
+      gitOk = true;
+    }
+  } catch {
+    /* keep prior commits */
+  }
+
   const bots: BotNode[] = DASHBOARD_BOTS.map((def) => {
     const lock = pickPrimaryLock(locks, def.lockMatchers, def.ownerMatchers);
-    const branch = lock?.branch ?? null;
+    const known = branchesForBot(def.id, lock?.branch ?? null);
+    const branch = known[0] ?? lock?.branch ?? null;
     const gitActivity = latestCommitActivityForBranch(commits, branch);
     const lastActivityAt = gitActivity || lock?.released_at || lock?.claimed_at || null;
     const { health, reason } = classifyHealth({ lock, lastActivityAt, now });
+    const notes = composeBotNotes({
+      lockNotes: lock?.notes,
+      botNotes: "",
+      notionTitles: [], // filled after notion graph loads
+      maxLen: 1200,
+    });
     return {
       id: def.id,
       name: def.name,
@@ -96,7 +123,7 @@ export async function buildDashboardStatus(
       branch,
       lastActivityAt,
       commits: lock?.commits ?? [],
-      notes: lock?.notes ?? "",
+      notes,
       reason,
     };
   });
@@ -181,7 +208,54 @@ export async function buildDashboardStatus(
     money,
   };
 
+  // Enrich notes with mapped Notion page titles (real titles only).
+  for (const bot of statusBots) {
+    const mapped = notionGraph.botPageMap?.[bot.id];
+    const titles: string[] = [];
+    if (mapped) {
+      const page = notionGraph.pages.find((p) => p.id === mapped);
+      if (page?.title) titles.push(page.title);
+    }
+    for (const p of notionGraph.pages) {
+      if (titles.length >= 4) break;
+      const hay = `${p.title}`.toLowerCase();
+      if (hay.includes(bot.id) || hay.includes(bot.name.replace(/\s+bot$/i, "").trim().toLowerCase())) {
+        if (p.title && !titles.includes(p.title)) titles.push(p.title);
+      }
+    }
+    if (notion.available && "stopPoints" in notion) {
+      for (const sp of notion.stopPoints.slice(0, 24)) {
+        if (titles.length >= 6) break;
+        const text = typeof sp.text === "string" ? sp.text : "";
+        const hay = text.toLowerCase();
+        if (hay.includes(bot.id) || hay.includes(bot.name.replace(/\s+bot$/i, "").trim().toLowerCase().slice(0, 12))) {
+          const line = text.split("\n")[0]!.trim().slice(0, 160);
+          if (line && !titles.includes(line)) titles.push(line);
+        }
+      }
+    }
+    bot.notes = composeBotNotes({
+      lockNotes: bot.lock?.notes,
+      botNotes: bot.notes,
+      notionTitles: titles,
+    });
+  }
+
   const fleetPlan = buildFleetPlan(statusBots, env);
+  try {
+    const laneItems = loadLaneQueueDocs(repoDir);
+    if (laneItems.length) {
+      const seen = new Set(fleetPlan.queue.map((q) => `${q.index}:${q.title}`));
+      for (const it of laneItems) {
+        const key = `${it.index}:${it.title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        fleetPlan.queue.push(it);
+      }
+    }
+  } catch {
+    /* lane docs optional */
+  }
   const skyFeed = buildSkyFeed({
     conductor,
     gapDispatcher,

@@ -12,6 +12,11 @@ import { sharedMotionClock, type MotionClock } from "./motion-clock.ts";
 
 export const TRAVELER_DURATION = 7.5;
 export const TRAVELER_OPACITY = 0.95;
+/** Opacity multiplier while paused. */
+export const TRAVELER_PAUSED_DIM = 0.55;
+/** Dim ease time constant (motion-seconds). */
+export const TRAVELER_DIM_TAU = 0.18;
+const MAX_DIM_STEP_S = 0.1;
 
 export type TravelerXyz = { x: number; y: number; z: number };
 
@@ -22,6 +27,18 @@ export type TravelerEaseState = {
   paused: boolean;
   /** Stable seed for reduced-motion static pose / phase offset. */
   seed: number;
+  /**
+   * Hacker c21: motion-seconds re-anchor applied after a hold (pause / reduced-motion) so
+   * resume continues from the frozen progress instead of snapping to the clock phase.
+   * Optional so hand-built states stay valid; kept folded into [0, duration).
+   */
+  phaseOffset?: number;
+  /** True while progress is held (paused or reduced-motion); next free step re-anchors. */
+  held?: boolean;
+  /** 0 = full opacity, 1 = paused dim. Eased so focus churn does not pop. */
+  dim?: number;
+  /** Motion time of the last step (for the dim ease; clock-mapped, resume-safe). */
+  lastT?: number;
 };
 
 export type TravelerEaseSample = {
@@ -48,7 +65,7 @@ export function createTravelerEaseState(seed = 0): TravelerEaseState {
   const s = finiteOr(seed, 0);
   let u = s - Math.floor(s);
   if (u < 0) u += 1;
-  return { progress: u, paused: false, seed: s };
+  return { progress: u, paused: false, seed: s, phaseOffset: 0, held: false, dim: 0, lastT: Number.NaN };
 }
 
 export function createTravelerEaseSample(): TravelerEaseSample {
@@ -134,9 +151,25 @@ export function stepTravelerEase(
   seedFrac = seedFrac - Math.floor(seedFrac);
   if (seedFrac < 0) seedFrac += 1;
 
+  // Clock is mapped every step (also while held) so the anchor stays live and every
+  // sampler fed the same `t` stays phase-locked.
+  const t = clock.map(tSeconds);
+  const lastT = state.lastT;
+  let dtm = typeof lastT === "number" && Number.isFinite(lastT) ? t - lastT : 0;
+  if (!(dtm > 0)) dtm = 0;
+  else if (dtm > MAX_DIM_STEP_S) dtm = MAX_DIM_STEP_S;
+  state.lastT = t;
+
+  let prog = finiteOr(state.progress, seedFrac);
+  prog = prog - Math.floor(prog);
+  if (!(prog >= 0 && prog < 1)) prog = seedFrac;
+
   if (reducedMotion) {
+    // Hacker c21: do not clear `paused` (silent resume); hold so leaving reduced-motion
+    // re-anchors from the static pose instead of snapping to clock phase.
     state.progress = seedFrac;
-    state.paused = false;
+    state.held = true;
+    state.dim = 0;
     sampleTravelerPolyline(out, points, state.progress);
     out.progress = state.progress;
     out.opacity = baseOpacity;
@@ -144,27 +177,44 @@ export function stepTravelerEase(
     return out;
   }
 
+  // Eased paused dim (no 1-frame opacity pop under focus churn).
+  const target = state.paused ? 1 : 0;
+  let dim = clamp01(finiteOr(state.dim ?? 0, 0));
+  if (dtm > 0) dim += (target - dim) * (1 - Math.exp(-dtm / TRAVELER_DIM_TAU));
+  state.dim = dim;
+  const opacity = baseOpacity * (1 - (1 - TRAVELER_PAUSED_DIM) * dim);
+
   if (state.paused) {
-    state.progress = clamp01(finiteOr(state.progress, seedFrac));
+    state.progress = prog;
+    state.held = true;
     sampleTravelerPolyline(out, points, state.progress);
     out.progress = state.progress;
-    out.opacity = baseOpacity * 0.55;
+    out.opacity = opacity;
     out.done = false;
     return out;
   }
 
-  // MotionClock-mapped time → looping progress (seed offsets phase).
-  const t = clock.map(tSeconds);
-  let u = (t + finiteOr(state.seed, 0)) / duration;
+  const seed = finiteOr(state.seed, 0);
+  let offset = finiteOr(state.phaseOffset ?? 0, 0);
+  if (state.held) {
+    // Re-anchor: choose offset so this frame lands exactly on the held progress.
+    offset = prog * duration - t - seed;
+    state.held = false;
+  }
+  // Fold offset into [0, duration) so it never grows without bound.
+  offset = offset - Math.floor(offset / duration) * duration;
+  if (!Number.isFinite(offset)) offset = 0;
+  state.phaseOffset = offset;
+
+  // MotionClock-mapped time → looping progress (seed + re-anchor offset the phase).
+  let u = (t + seed + offset) / duration;
   u = u - Math.floor(u);
-  if (u < 0) u += 1;
-  // Blend a tiny bit with previous progress so a pathological dt blip does not snap;
-  // primary source remains clock-mapped u (resume-safe).
-  void dt; // reserved for future velocity blending; progress is clock-mapped
+  if (!(u >= 0 && u < 1)) u = seedFrac;
+  void dt; // progress is clock-mapped; caller dt is untrusted
   state.progress = u;
   sampleTravelerPolyline(out, points, state.progress);
   out.progress = state.progress;
-  out.opacity = baseOpacity;
+  out.opacity = opacity;
   out.done = false;
   return out;
 }

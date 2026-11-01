@@ -26,10 +26,17 @@ function splitRowCells(line: string): string[] | null {
  * or whose bold title itself contained an em dash, so queued items vanished
  * and the forever guard / sky road showed a thinner (or empty) queue than reality.
  */
-export function parseDashboardQueueMarkdown(md: string): QueueItem[] {
+export function parseDashboardQueueMarkdown(md: string | null | undefined): QueueItem[] {
   const items: QueueItem[] = [];
   const seen = new Set<number>();
-  const text = typeof md === "string" ? md.slice(0, MAX_QUEUE_MD_BYTES) : "";
+  // Attacker: null/non-string/huge/malformed tables must never throw.
+  let text = "";
+  try {
+    if (typeof md !== "string") return [];
+    text = md.slice(0, MAX_QUEUE_MD_BYTES);
+  } catch {
+    return [];
+  }
   for (const line of text.split(/\r?\n/)) {
     if (items.length >= MAX_QUEUE_ROWS) break;
     const cells = splitRowCells(line);

@@ -28,7 +28,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, formatMeterBadge, statsAtFocus, projectedRadiusUv, parseCssColor } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -79,12 +79,13 @@ import {
   stepEdgePulseSync,
   createCometLaunchState,
   createCometLaunchSample,
-  scheduleCometLaunchBurst,
+  reconcileCometLaunch,
+  cometHeadSize,
   stepCometLaunchEase,
-  clearCometLaunch,
   createTravelerEaseState,
   createTravelerEaseSample,
   stepTravelerEase,
+  stepTravelerTrails,
   pauseTraveler,
   resumeTraveler,
   type TravelerEaseState,
@@ -913,7 +914,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     const cometLaunch = createCometLaunchState(24);
     const cometLaunchSamples = Array.from({ length: 24 }, () => createCometLaunchSample());
-    scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
+    // Motion c22: sha-keyed reconcile — no 5s blink when the commit list is unchanged.
+    reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
 
@@ -997,6 +999,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       let nextDetailDim: typeof detailDimHandle = null;
       try {
         nextDetailDim = createDetailBackdropDimPass();
+        nextDetailDim.setCardProbe(true); // Light #84/#92 — meter focused Imagine card rect
         composer.addPass(nextDetailDim.pass);
       } catch {
         nextDetailDim = null;
@@ -1718,12 +1721,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             mat.uniforms["uPulse"].value = Math.min(1, base + 0.55 * edgePulseSample.highlight);
           }
         }
+        // Motion c21: batch traveler step + honest wrap count (no teleport on resume)
+        const travelerHold = fly.level !== "universe" || Boolean(rig.subjectId);
+        const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, { hold: travelerHold });
+        if (wraps > 0) dust.impulseGust(0.55, 0.12, -0.35, 0.45);
         for (const tr of landingTrails) {
-          stepTravelerEase(tr.ease, tr.sample, tr.points, t, dt, reducedMotion);
-          // Motion c13: gust dust when a landing traveler wraps a hop loop (real event)
-          if (!reducedMotion && tr.sample.progress + 0.5 < tr.lastProgress) {
-            dust.impulseGust(0.55, 0.12, -0.35, 0.45);
-          }
           tr.lastProgress = tr.sample.progress;
           tr.mesh.position.set(tr.sample.x, tr.sample.y + 0.35, tr.sample.z);
           (tr.mesh.material as THREE.MeshStandardMaterial).opacity = tr.sample.opacity;
@@ -1751,7 +1753,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const mat = (head as THREE.Points).material as THREE.PointsMaterial;
           if (mat && "opacity" in mat) {
             mat.opacity = (reducedMotion ? 0.35 : 0.95) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
-            mat.size = Math.max(0.12, (mat.size || 0.2) * (0.85 + 0.15 * sample.scale));
+            const base = typeof head.userData.baseSize === "number" ? head.userData.baseSize : (mat.size || 0.2);
+            mat.size = cometHeadSize(base, sample, reducedMotion);
           }
         }
       }
@@ -1901,10 +1904,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             if (focusedVis) {
               const rad = projectedRadiusUv(focusedVis.mesh.position, cardRadiusWorld, camera);
               lift.setFocus(focusedVis.mesh.position, camera, rad);
-              lift.setBackdrop(
-                statsAtFocus(liveDetailDim?.contrast ?? null, liveDetailDim?.rects ?? null, lift.focusUv),
-                { reducedMotion },
-              );
+              {
+                const b = liftBackdrop(
+                  liveDetailDim?.contrast ?? null,
+                  liveDetailDim?.rects ?? null,
+                  lift.focusUv,
+                );
+                lift.setBackdrop(b?.stats ?? null, { reducedMotion, source: b?.source ?? null });
+              }
             } else {
               lift.setFocus(null, camera, null);
               lift.setBackdrop(null, { reducedMotion });
@@ -1959,8 +1966,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
-        clearCometLaunch(cometLaunch);
-        scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
+        reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
         feedGlyphs.dispose();
       inkEdges?.dispose();
       inkEdges = null;

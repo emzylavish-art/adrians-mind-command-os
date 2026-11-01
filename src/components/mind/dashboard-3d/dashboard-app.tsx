@@ -1,20 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
-import { UniverseScene } from "./universe-scene";
 import { useDashboardStatus } from "./use-dashboard-status";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
-import { createHealthSound, type SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
+import type { SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
 import { applyScrubToBots, formatWat, scrubAt } from "@/lib/mind/dashboard/time-scrub";
 import { buildDashboardCharts } from "@/lib/mind/dashboard/chart-series";
 import { TimeScrubber } from "./time-scrubber";
 import { FeedPanel } from "./feed-panel";
 import { MoneyPanel } from "./money-panel";
 import { adjustBurnForHiddenGap } from "@/lib/mind/dashboard/spend-core";
-import { ChartsPanel } from "./charts-panel";
+
+/** Perf: three.js + postfx + lore live behind UniverseScene; charts behind ChartsPanel. */
+const UniverseScene = lazy(() =>
+  import("./universe-scene").then((m) => ({ default: m.UniverseScene })),
+);
+const ChartsPanel = lazy(() =>
+  import("./charts-panel").then((m) => ({ default: m.ChartsPanel })),
+);
 import {
   OperatorConsole,
   loadInitialOperatorPrefs,
@@ -66,7 +72,13 @@ export function DashboardApp() {
     return () => mq.removeEventListener?.("change", apply);
   }, []);
 
-  const soundRef = useRef<ReturnType<typeof createHealthSound> | null>(null);
+  type HealthSoundHandle = {
+    sync: (voices: SoundVoiceSpec[]) => void;
+    setMuted: (muted: boolean) => void;
+    dispose?: () => void;
+  };
+  const soundRef = useRef<HealthSoundHandle | null>(null);
+
   const [soundMuted, setSoundMuted] = useState(true);
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
@@ -143,16 +155,23 @@ export function DashboardApp() {
     setOperatorPrefs(loadInitialOperatorPrefs());
   }, []);
   useEffect(() => {
-    const sound = createHealthSound({ reducedMotion });
-    soundRef.current = sound;
-    setSoundMuted(sound.muted);
-    const onVis = () => sound.setHidden(document.hidden);
+    let sound: (HealthSoundHandle & { setHidden?: (h: boolean) => void; setReducedMotion?: (r: boolean) => void; unlock?: () => void; muted?: boolean; dispose: () => void }) | null = null;
+    let cancelled = false;
+    const onVis = () => sound?.setHidden?.(document.hidden);
+    void import("@/lib/mind/dashboard/health-sound").then(({ createHealthSound }) => {
+      if (cancelled) return;
+      sound = createHealthSound({ reducedMotion }) as typeof sound;
+      soundRef.current = sound;
+      sound?.setMuted(true);
+      setSoundMuted(Boolean(sound?.muted ?? true));
+      onVis();
+    });
     document.addEventListener("visibilitychange", onVis);
-    onVis();
     return () => {
+      cancelled = true;
       document.removeEventListener("visibilitychange", onVis);
-      sound.dispose();
-      soundRef.current = null;
+      try { sound?.dispose(); } catch { /* */ }
+      if (soundRef.current === sound) soundRef.current = null;
     };
   }, [reducedMotion]);
 
@@ -372,6 +391,7 @@ export function DashboardApp() {
         <div id="dash3d-skybar" className="dash3d-skybar" hidden aria-hidden="true" data-testid="dash3d-skybar-fallback" />
       ) : null}
       {sceneData && !webglError ? (
+        <Suspense fallback={<div className="dash3d-canvas-wrap" data-testid="dash3d-scene-fallback" aria-busy="true" />}>
         <UniverseScene
           data={sceneData}
           reducedMotion={reducedMotion}
@@ -403,6 +423,7 @@ export function DashboardApp() {
           onUnavailable={setWebglError}
           onFlyoverChange={onFlyoverChange}
         />
+        </Suspense>
       ) : null}
 
       {webglError ? (
@@ -622,6 +643,7 @@ export function DashboardApp() {
         </>
       ) : null}
       {viewData && chartsForScrub && operatorPrefs.layers.charts ? (
+        <Suspense fallback={<aside className="dash3d-charts-panel dash3d-glass" data-testid="charts-fallback" aria-busy="true"><h2>Charts</h2><p className="dash3d-muted">Loading…</p></aside>}>
         <ChartsPanel
           charts={chartsForScrub}
           scrubNote={
@@ -642,6 +664,7 @@ export function DashboardApp() {
             setScrubMs(tl.earliestMs + ratio * span);
           }}
         />
+        </Suspense>
       ) : null}
       {viewData ? (
         <NotionMirrorPanel

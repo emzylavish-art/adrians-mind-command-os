@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import type { GitCommit } from "./types.ts";
+import { allKnownBotBranches, sanitizeGitBranchName } from "./bot-branches.ts";
 import { repoDirFromEnvSafe } from "./safe-paths.ts";
 
 export function repoDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
@@ -139,7 +140,8 @@ export function collectBranchCommits(
   const seen = new Set<string>();
   const out: GitCommit[] = [];
   for (const branch of branches) {
-    const short = branch.replace(/^origin\//, "");
+    const short = sanitizeGitBranchName(branch);
+    if (!short) continue;
     const candidates = [short, `origin/${short}`];
     let log = "";
     for (const ref of candidates) {
@@ -176,4 +178,35 @@ export function collectBranchCommits(
   };
   out.sort((a, b) => ms(b.date) - ms(a.date));
   return out;
+}
+
+type BranchCommitCache = { at: number; commits: GitCommit[] };
+let branchCommitCache: BranchCommitCache | null = null;
+export const BRANCH_COMMIT_CACHE_MS = 30_000;
+/** Per-branch cap when collecting the full known-bot set (status rebuild). */
+export const KNOWN_BOT_COMMITS_PER_BRANCH = 12;
+
+/**
+ * Bounded, sanitized, cached git log across every known bot branch.
+ * Attackers: huge limits clamp; dirty branch names are skipped.
+ */
+export function collectKnownBotBranchCommits(
+  repo: string,
+  nowMs = Date.now(),
+  opts?: { limitPerBranch?: number; cacheMs?: number; branches?: readonly string[] },
+): GitCommit[] {
+  const cacheMs = opts?.cacheMs ?? BRANCH_COMMIT_CACHE_MS;
+  if (branchCommitCache && nowMs - branchCommitCache.at < cacheMs) {
+    return branchCommitCache.commits;
+  }
+  const per = opts?.limitPerBranch ?? KNOWN_BOT_COMMITS_PER_BRANCH;
+  const branches = opts?.branches ?? allKnownBotBranches();
+  const commits = collectBranchCommits(repo, branches, per);
+  branchCommitCache = { at: nowMs, commits };
+  return commits;
+}
+
+/** Test helper — drop the cache between attacker cases. */
+export function clearBranchCommitCache(): void {
+  branchCommitCache = null;
 }
