@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c27 — Gap#1 status last-good + Gap#2 interior gate. Next: #19 Feed severity pulse + Gap#3.
+Last release: Dashboard c28 — land motion focus-ease + painter Imagine mats; Gaps #9–#11. Next: #19 Feed severity pulse.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -42,6 +42,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 | 23 | **Status-error last-good (Gap#1)** — keep last-good scene on status fail; calm stale chrome; backoff retry; never blank wipe | **done** | c27 — soft error overlay + lastData hydrate + exponential backoff; interior gated to fly.interior |
 | 24 | **Idle interior drawer (Gap#2)** — keep INTERIOR collapsed until a building is focused | **done** | c27 — BuildingInteriorPanel mounts only when fly.level===interior |
+| 31 | **Large-fleet crash + portrait 404 (Gap#11)** — cap/LOD scene bots; portrait fallback never broken image | **done** | c28 — MAX_SCENE_BOTS=48; ImagineNode wash + portrait-dashboard fallback; focus-ease + painter Imagine mats landed |
+| 32 | **Slow status as pending not error (Gap#9)** — ignore StrictMode/unmount AbortError; first-load stays loading | **done** | c28 — aborted+stopped / first-load abort ignored |
+| 33 | **Focus during flight (Gap#10)** — preserve latest selection; queue camera retarget until glide settles | **done** | c28 — onSelectBot always; pendingFocusBotId until acceptPointerPick |
 | 25 | **Pan/drag remount splash (Gap#3)** — keep last WebGL frame across context-loss/remount; no full splash on pan | queued | REA capture desktop-pan; three.js pauseAnimation pattern |
 | 26 | **Star hover tooltip + edge highlight (Gap#4)** — health/lane/branch/heartbeat tooltip; highlight constellation edges | queued | Obsidian/Kepler hover literacy |
 | 27 | **Constellation Filters/Groups drawer (Gap#5)** — search, orphans, lane/health groups beyond Operator filter | queued | Obsidian Filters & Groups; Bloom Filter drawer |

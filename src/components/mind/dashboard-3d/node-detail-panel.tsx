@@ -170,8 +170,8 @@ export function NodeDetailPanel({
       : null;
 
   return (
-    <aside className={`dash3d-side ${open && (bot || notionPage) ? "is-open" : ""}`} aria-hidden={!open} data-testid="node-detail">
-      <div className="dash3d-glass">
+    <aside className={`dash3d-side dash3d-node-detail ${open && (bot || notionPage) ? "is-open" : ""}`} aria-hidden={!open} data-testid="node-detail" data-dash3d-node={bot?.id ?? notionPage?.id ?? undefined}>
+      <div className="dash3d-glass dash3d-node-card">
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×
         </button>

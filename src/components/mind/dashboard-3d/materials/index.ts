@@ -4,6 +4,7 @@ export const PAINTER_MATERIALS = {
   buildingBrush: "BuildingBrushMaterial",
   lorePlaque: "LorePlaqueMaterial",
   inkWashEdge: "InkWashEdgeMaterial",
+  imagineNode: "ImagineNodeMaterial",
   paperGrain: "PaperGrainTexture",
   parchment: "ParchmentTexture",
   nebulaSky: "NebulaSkyMaterial",
@@ -61,6 +62,13 @@ export {
   type HealthTone,
 } from "./ink-wash-edge.ts";
 export {
+  createImagineNodeMaterial,
+  setImagineNodeMap,
+  setImagineNodePaperMap,
+  tickImagineNodeMaterial,
+  type ImagineNodeOptions,
+} from "./imagine-node.ts";
+export {
   createNebulaTexture,
   createNebulaSkyMaterial,
   type NebulaTextureOptions,
@@ -70,9 +78,13 @@ export {
   tickPainterlyKit,
   disposePainterlyKit,
   attachPainterlyContextHandlers,
+  rebindPainterlyKitTextures,
+  applyTextureBinding,
   painterlyKitResourceCounts,
   releasePainterlyMaterial,
   usePainterlyKitFactory,
   type PainterlyKit,
   type PainterlyKitOptions,
+  type PainterlyTextureSlot,
+  type PainterlyTextureBinding,
 } from "./use-painterly-kit.ts";

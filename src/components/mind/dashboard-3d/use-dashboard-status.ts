@@ -42,9 +42,16 @@ export function useDashboardStatus() {
       setState((prev) => reducePoll(prev, { type: "success", seq, data }));
     } catch (err) {
       const aborted = (err as Error)?.name === "AbortError";
-      const error = aborted ? "Status request timed out/aborted" : err instanceof Error ? err.message : String(err);
+      // Gap#9: React StrictMode / effect cleanup abort is not a user-facing error.
+      if (aborted && stopped.current) return;
+      if (aborted && !lastGoodRef.current && failCountRef.current === 0) {
+        // First-load self-abort → stay loading; schedule will retry (pending, not error).
+        return;
+      }
+      const error = aborted ? "Status request timed out" : err instanceof Error ? err.message : String(err);
       failCountRef.current += 1;
       setState((prev) => {
+        // If we already have ready data, reducePoll keeps it stale — never wipe.
         const next = reducePoll(prev, { type: "failure", seq, error, at: new Date().toISOString() });
         if (next.status === "error" && !next.lastData && lastGoodRef.current) {
           return { ...next, lastData: lastGoodRef.current };

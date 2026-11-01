@@ -11,6 +11,8 @@ import {
   tickPainterlyKit,
   disposePainterlyKit,
   attachPainterlyContextHandlers,
+  setImagineNodeMap,
+  releasePainterlyMaterial,
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
@@ -45,6 +47,11 @@ import {
   sampleStarPulse,
   sanitizeDt,
   sharedMotionClock,
+  createFocusEaseState,
+  stepFocusEase,
+  applyFocusPulse,
+  applyFocusDrift,
+  type FocusEaseState,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
@@ -352,6 +359,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     sunMesh.userData.botId = "grok-build";
     scene.add(sunMesh);
 
+    const MAX_SCENE_BOTS = 48; // Gap#11: hard cap so a spiked payload cannot kill the tab
+    const PORTRAIT_FALLBACK = "/dashboard-3d/art/portrait-dashboard.webp";
+    let fallbackPortraitTex: THREE.Texture | null = null;
+    const focusEase = new Map<string, FocusEaseState>();
+    let pendingFocusBotId: string | null = null;
+
+    function disposeBotMaterial(mat: THREE.Material) {
+      if ((mat as THREE.ShaderMaterial).isShaderMaterial) {
+        releasePainterlyMaterial(kit, mat as THREE.ShaderMaterial);
+      } else {
+        mat.dispose();
+      }
+    }
+
     function rebuildBots(list: BotNode[]) {
       // Hacker-pass c8: dispose per-bot materials on each 5 s rebuild (previously leaked
       // ~2 materials per bot per rebuild → thousands of orphaned materials per hour).
@@ -359,12 +380,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const ch = botGroup.children[0]!;
         botGroup.remove(ch);
         if (ch instanceof THREE.Mesh || ch instanceof THREE.Sprite) {
-          (ch.material as THREE.Material).dispose();
+          disposeBotMaterial(ch.material as THREE.Material);
         }
       }
       botVis.length = 0;
       botMeshes.length = 0;
-      for (const bot of list) {
+      focusEase.clear();
+      const capped = list.length > MAX_SCENE_BOTS ? list.slice(0, MAX_SCENE_BOTS) : list;
+      for (const bot of capped) {
         const posArr = botWorldPosition(bot.id);
         const pos = new THREE.Vector3(...posArr);
         if (bot.id === "grok-build") {
@@ -394,37 +417,45 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           depthWrite: false,
           blending: THREE.AdditiveBlending,
         });
+        kit.bindSharedTexture(glowMat, "starSprite");
         const glow = new THREE.Sprite(glowMat);
-        // Portrait card + life-size character plane (Imagine art). Clickable via botId userData.
+        // Portrait card + life-size character (ImagineNodeMaterial wash until map loads).
         const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
+        const cardMat = kit.createImagineNodeMaterial({ accent: color });
+        const card = new THREE.Sprite(cardMat as unknown as THREE.SpriteMaterial);
+        // Sprite needs SpriteMaterial — use Mesh plane for Imagine shader instead of Sprite.
+        const cardPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), cardMat);
+        cardPlane.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
+        cardPlane.userData.botId = bot.id;
+        cardPlane.userData.kind = "portrait";
+        botGroup.add(cardPlane);
+        const personMat = kit.createImagineNodeMaterial({ accent: color });
+        const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
+        person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
+        person.userData.botId = bot.id;
+        person.userData.kind = "character";
+        botGroup.add(person);
+        const applyPortrait = (tex: THREE.Texture) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          setImagineNodeMap(cardMat, tex);
+          setImagineNodeMap(personMat, tex);
+        };
         loader.load(
           portraitUrl,
-          (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            const card = new THREE.Sprite(
-              new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.95 }),
-            );
-            card.scale.set(1.8, 1.8, 1.8);
-            card.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
-            card.userData.botId = bot.id;
-            botGroup.add(card);
-            // Life-size billboard person/character in the constellation (reuses same Imagine portrait).
-            const personMat = new THREE.MeshBasicMaterial({
-              map: tex,
-              transparent: true,
-              depthWrite: false,
-              side: THREE.DoubleSide,
-              opacity: 0.9,
-            });
-            const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
-            person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
-            person.userData.botId = bot.id;
-            person.userData.kind = "character";
-            botGroup.add(person);
-          },
+          applyPortrait,
           undefined,
-          () => { /* no portrait asset yet */ },
+          () => {
+            if (fallbackPortraitTex) {
+              applyPortrait(fallbackPortraitTex);
+              return;
+            }
+            loader.load(PORTRAIT_FALLBACK, (tex) => {
+              fallbackPortraitTex = tex;
+              applyPortrait(tex);
+            });
+          },
         );
+        void card; // keep lint calm if Sprite unused
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
         botGroup.add(glow);
@@ -455,24 +486,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       { url: "/dashboard-3d/art/scene-collab-tower.webp", pos: new THREE.Vector3(10.2, -0.2, 3.8), scale: [4.8, 2.7] as const },
     ];
     for (const art of sceneArts) {
+      const mat = kit.createImagineNodeMaterial({});
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
+      plane.position.copy(art.pos);
+      plane.userData.kind = "scene";
+      botGroup.add(plane);
       loader.load(
         art.url,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
-          const mat = new THREE.MeshBasicMaterial({
-            map: tex,
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            opacity: 0.55,
-          });
-          const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
-          plane.position.copy(art.pos);
-          plane.userData.kind = "scene";
-          botGroup.add(plane);
+          setImagineNodeMap(mat, tex);
         },
         undefined,
-        () => { /* missing art — keep procedural sky */ },
+        () => { /* missing art — wash fallback stays */ },
       );
     }
 
@@ -1114,6 +1140,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const stepped = stepRigSmooth(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.35);
         rig = stepped.rig;
         applyPose(stepped.position, stepped.lookAt);
+      } else if (pendingFocusBotId) {
+        const botId = pendingFocusBotId;
+        pendingFocusBotId = null;
+        document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId } }));
       }
 
       // billboard cards
@@ -1130,11 +1160,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         n.label.visible = show && labelsOn && fly.level === "universe" && !labelsPaused;
         const phase = pulsePhaseFromId(n.id);
         sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
+        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, wallT, phase, reducedMotion);
+        let st = focusEase.get(n.id);
+        if (!st) {
+          st = createFocusEaseState();
+          focusEase.set(n.id, st);
+        }
+        stepFocusEase(st, n.id, rig.subjectId, dt, reducedMotion);
+        applyFocusPulse(pulseOut, st.pulseMul);
+        applyFocusDrift(driftOut, n.base, st.driftMul);
         n.mesh.scale.setScalar(pulseOut.scale);
         n.glow.scale.setScalar(pulseOut.glow);
         const mat = n.mesh.material as THREE.MeshStandardMaterial;
         if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
-        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, wallT, phase, reducedMotion);
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
@@ -1232,20 +1270,29 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
       if (!botId) return;
       const bot = dataRef.current.bots.find((b) => b.id === botId);
-      if (!bot) return;
+      if (!bot) {
+        // Unknown id: clear misleading stale detail by selecting nothing useful
+        cbs.current.onSkyView();
+        return;
+      }
+      // Always update selection immediately so STAR DETAIL matches the latest request (Gap#10).
+      cbs.current.onSelectBot(bot);
       const pos =
         bot.id === "grok-build"
           ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
           : botWorldPosition(bot.id);
       const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
-      if (!acceptPointerPick(rig)) return;
+      if (!acceptPointerPick(rig)) {
+        pendingFocusBotId = botId;
+        return;
+      }
+      pendingFocusBotId = null;
       rig = flyTo(
         rig,
         target,
         [camera.position.x, camera.position.y, camera.position.z],
         [lookAt.x, lookAt.y, lookAt.z],
       );
-      cbs.current.onSelectBot(bot);
     };
     document.addEventListener("dash3d-focus-bot", onFocusBot);
     const onLayers = (ev: Event) => {
