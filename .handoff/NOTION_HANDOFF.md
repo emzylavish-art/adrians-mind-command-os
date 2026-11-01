@@ -55,3 +55,9 @@
 ## Off-limits respected
 
 No styles/CSS, failure-states, model-tiers/xAI adapter, voice, media. `command-app.tsx` / `server.ts` touched only for Tools/MCP wiring.
+
+## Notion append attempt
+
+Tried `notion-update-page` insert_content on page `40b1aa27632381768d58cde0731f142a` via user-Notion MCP.
+**Result:** 404 `object_not_found` — page not in the connected workspace / integration lacks access.
+No substitute page was created. This file is the durable handoff mirror.
