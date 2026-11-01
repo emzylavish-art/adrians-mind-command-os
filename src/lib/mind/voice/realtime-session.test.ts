@@ -96,6 +96,25 @@ describe("RealtimeVoiceSession", () => {
     session.close();
   });
 
+  it("ignores benign cancellation errors from response.cancel", async () => {
+    let created: FakeSocket | undefined;
+    const errors: string[] = [];
+    const session = new RealtimeVoiceSession(
+      { onError: (message) => errors.push(message) },
+      new SharedAudioOutput(),
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created;
+      },
+    );
+    await session.connect("ephemeral-test");
+    created!.emitMessage({ type: "error", error: { message: "Cancellation failed: no active response found" } });
+    created!.emitMessage({ type: "error", error: { message: "real failure" } });
+    assert.deepEqual(errors, ["real failure"]);
+    session.close();
+  });
+
   it("streams testAudioUrl PCM instead of requesting the mic", async () => {
     let created: FakeSocket | undefined;
     const statuses: string[] = [];

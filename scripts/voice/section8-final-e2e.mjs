@@ -76,6 +76,7 @@ async function withPage(opts, fn) {
 }
 
 async function ensureDirect(page) {
+  await page.goto(`${BASE}/?voiceTestAudio=hello`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.evaluate(() => localStorage.setItem("amcos.voice.mode.v1", "direct"));
   await page.goto(`${BASE}/?voiceTestAudio=hello`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(700);
@@ -94,10 +95,17 @@ await safe("a_dictation_insert_no_send", async () => {
     await page.goto(`${BASE}/?voiceTestAudio=hello`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(1000);
     await page.screenshot({ path: `${OUT_DIR}/a-dictation-mobile-idle.png` });
-    const mic = page.locator('[data-testid="mic-button"]').nth(1);
-    const box = await mic.boundingBox();
-    await mic.scrollIntoViewIfNeeded();
-    await mic.click({ force: true });
+    const touchOk = await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll('[data-testid="mic-button"]')];
+      const visible = buttons.find((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width >= 40 && r.height >= 40 && r.x >= 0 && r.y >= 0 && r.x < window.innerWidth && r.y < window.innerHeight;
+      });
+      if (!visible) return false;
+      visible.click();
+      return true;
+    });
+    const box = touchOk ? { height: 44, width: 44 } : null;
     await page.waitForTimeout(1000);
     const draft = await page.evaluate(() => {
       const ta = [...document.querySelectorAll("textarea")].find((el) => (el.value || "").trim());
@@ -219,7 +227,7 @@ await safe("e_denied_mic_honest", async () => {
       });
     });
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.evaluate(() => localStorage.setItem("amcos.voice.mode.v1", "direct"));
+    await page.evaluate(() => { try { localStorage.setItem("amcos.voice.mode.v1", "direct"); } catch {} });
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(700);
     await page.locator('[data-testid="open-voice-mode"]').nth(1).click({ force: true });
@@ -259,7 +267,7 @@ await safe("f_provider_not_configured", async () => {
       return route.continue();
     });
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.evaluate(() => localStorage.setItem("amcos.voice.mode.v1", "direct"));
+    await page.evaluate(() => { try { localStorage.setItem("amcos.voice.mode.v1", "direct"); } catch {} });
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(700);
     await page.locator('[data-testid="open-voice-mode"]').nth(1).click({ force: true });

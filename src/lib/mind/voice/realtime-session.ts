@@ -200,7 +200,12 @@ export class RealtimeVoiceSession {
     }
     const type = msg.type || "";
     if (type === "error") {
-      this.handlers.onError?.(msg.error?.message || "Voice realtime error.");
+      const message = msg.error?.message || "Voice realtime error.";
+      // Benign: response.cancel when nothing is active (capture-only / barge-in / force_message prep).
+      if (/no active response|cancell?ation failed: no active response/i.test(message)) {
+        return;
+      }
+      this.handlers.onError?.(message);
       return;
     }
     if (type === "input_audio_buffer.speech_started") {
