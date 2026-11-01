@@ -33,6 +33,25 @@ export function consumeToken(
 
 const windows = new Map<string, number[]>();
 
+/** Soft cap on distinct rate-limit keys (after TTL prune). */
+export const MAX_RATE_LIMIT_KEYS = 2_000;
+
+function pruneRateLimitWindows(now: number, windowMs: number): void {
+  for (const [key, stamps] of windows) {
+    const recent = stamps.filter((stamp) => now - stamp < windowMs);
+    if (recent.length === 0) windows.delete(key);
+    else windows.set(key, recent);
+  }
+  if (windows.size <= MAX_RATE_LIMIT_KEYS) return;
+  const ordered = [...windows.entries()].sort((a, b) => {
+    const aMax = a[1][a[1].length - 1] ?? 0;
+    const bMax = b[1][b[1].length - 1] ?? 0;
+    return aMax - bMax;
+  });
+  const excess = windows.size - MAX_RATE_LIMIT_KEYS;
+  for (let i = 0; i < excess; i += 1) windows.delete(ordered[i]![0]);
+}
+
 export function allowMindRequest(bucket: string, userId: string, limit: number, windowMs = 60_000, now = Date.now()): boolean {
   return consumeMindRateLimit(bucket, userId, limit, windowMs, now).ok;
 }
@@ -50,12 +69,24 @@ export function consumeMindRateLimit(
   windowMs = 60_000,
   now = Date.now(),
 ): RateLimitResult {
-  return consumeToken(windows, `${bucket}:${userId}`, limit, windowMs, now);
+  pruneRateLimitWindows(now, windowMs);
+  const result = consumeToken(windows, `${bucket}:${userId}`, limit, windowMs, now);
+  pruneRateLimitWindows(now, windowMs);
+  return result;
 }
 
 /** Test-only: clear the process-wide rate-limit windows. */
 export function resetMindRateLimitsForTests(): void {
   windows.clear();
+}
+
+/** Test-only: run TTL prune + size cap. */
+export function pruneMindRateLimitsForTests(now: number, windowMs: number): void {
+  pruneRateLimitWindows(now, windowMs);
+}
+
+export function rateLimitMapSizeForTests(): number {
+  return windows.size;
 }
 
 export function mindRateLimitHeaders(retryAfterSec: number): Record<string, string> {

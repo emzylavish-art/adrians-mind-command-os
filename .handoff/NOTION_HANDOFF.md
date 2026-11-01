@@ -65,3 +65,13 @@ Full local write-up: `MEDIA_HANDOFF.md`.
 - Counts: typecheck pass; mind 333 pass; scripts 198 pass / 4 skipped; build pass
 - Notion child: https://app.notion.com/p/40bb95f33e42817c8ed0e8b11340e7e7
 - Lock: logic-wiring.lock → done, released
+
+## 2026-11-01T15:16:16+01:00 (Africa/Lagos) — Logic Bot — stop point: H13 forged execution + LOW provider status
+- Branch tip: (pending push) on origin/logic-wiring
+- H13: `execution-ledger.ts` — server-issued one-shot receipts; `recordAgentExecution` ignores client ok/detail; unknown/replay rejected; record flood → 429 + Retry-After; ledger TTL + size cap; rate-limit map prune/bound
+- Fail-closed for command-app until that lane mints/uses server ids (no command-app / service-board edits)
+- LOW: non-Grok `handleMindTurn` branch calls `consumeMindRateLimit` (same chat bucket); missing/unknown provider → HTTP 503/400 via `httpStatusForProviderSelection`; Grok missing key → 503; live-turn still surfaces JSON error
+- Counts: typecheck pass; mind 345 pass / 0 fail; scripts 198 pass / 0 fail / 4 skipped; build pass
+- Locks: logic-wiring.lock + logic-wiring-gap-forged-execution-records.lock → done, released
+- Notion mirror: https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d
+

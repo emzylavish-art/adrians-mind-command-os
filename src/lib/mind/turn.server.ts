@@ -6,7 +6,7 @@ import { sanitizeAttachments, type ImageAttachment } from "./media/index.ts";
 import type { ChatContent } from "./media/types.ts";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
-import { callConfiguredProvider, selectProvider } from "./provider-call";
+import { callConfiguredProvider, httpStatusForProviderSelection, selectProvider } from "./provider-call";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
@@ -184,10 +184,13 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const tierField = parseModelTierField(body.modelTier);
   if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
   const selected = selectProvider(body.provider, process.env);
-  if (!selected.ok) return json(selected);
+  if (!selected.ok) return json(selected, httpStatusForProviderSelection(selected.error));
   if (selected.id !== "grok") {
     const { haltIsOn } = await import("./halt.server");
     if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." });
+    // Same chat rate limit as Grok — non-Grok must not skip the token bucket.
+    const limited = consumeMindRateLimit("chat", userId, 12);
+    if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
     const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: globalThis.fetch });
     return json({ ...called, provider: selected.id });
@@ -203,7 +206,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
   const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
+  if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." }, 503);
   return relayModelStream({
     apiKey,
     model: prepared.model,

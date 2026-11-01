@@ -102,6 +102,7 @@ export const searchWeb = createServerFn({ method: "POST" })
 export const recordAgentExecution = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { id?: string; tool?: string; action?: string; ok?: boolean; detail?: string }) => ({
+    // Only a server-issued id is honored. tool/ok/detail from the client are ignored.
     id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
     tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
     action: input.action === "voice" ? "voice" : "chat",
@@ -109,11 +110,20 @@ export const recordAgentExecution = createServerFn({ method: "POST" })
     detail: typeof input.detail === "string" ? input.detail.slice(0, 500) : "",
   }))
   .handler(async ({ data, context }) => {
-    if (!data.id || !data.tool) return { ok: false as const, error: "The execution was not recorded." };
+    const { recordIssuedExecution } = await import("./execution-ledger");
     const { writeToolRun } = await import("./notion-record");
     const { getSql } = await import("../db");
-    await writeToolRun(await getSql(), context.userId, data);
-    return { ok: true as const };
+    const sql = await getSql();
+    const result = await recordIssuedExecution({
+      userId: context.userId,
+      id: data.id,
+      clientOk: data.ok,
+      clientDetail: data.detail,
+      write: async (run) => {
+        await writeToolRun(sql, context.userId, run);
+      },
+    });
+    return result;
   });
 
 export const notionStatus = createServerFn({ method: "GET" })
