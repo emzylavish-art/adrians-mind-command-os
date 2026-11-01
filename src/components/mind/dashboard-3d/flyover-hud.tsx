@@ -1,6 +1,8 @@
+import { useRef } from "react";
 import type { FlyEvent, FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import type { CityLayout } from "@/lib/mind/dashboard/city-layout";
 import type { AgentStat, ProjectBuilding, ProjectsDashboard } from "@/lib/mind/dashboard/projects";
+import type { BotNode } from "@/lib/mind/dashboard/types";
 
 export function sendFly(ev: FlyEvent) {
   document.dispatchEvent(new CustomEvent<FlyEvent>("dash3d-fly", { detail: ev }));
@@ -79,22 +81,68 @@ function fmtTime(at: string | null): string {
 export function BuildingInteriorPanel({
   fly,
   projects,
+  bots,
   onClose,
 }: {
   fly: FlyState;
   projects: ProjectsDashboard | null | undefined;
+  bots?: readonly BotNode[] | null;
   onClose: () => void;
 }) {
   const open = fly.level === "interior" && Boolean(fly.buildingId);
-  const p: ProjectBuilding | undefined = projects?.projects?.find((x) => x.id === fly.buildingId);
+  const cacheRef = useRef<Map<string, ProjectBuilding>>(new Map());
+  const live: ProjectBuilding | undefined = projects?.projects?.find((x) => x.id === fly.buildingId);
+  if (live && fly.buildingId) cacheRef.current.set(fly.buildingId, live);
+  const cached = fly.buildingId ? cacheRef.current.get(fly.buildingId) : undefined;
+  const p: ProjectBuilding | undefined = live ?? cached;
   const agents: AgentStat[] = p ? (projects?.agents ?? []).filter((a) => p.bots.includes(a.name)) : [];
+  const botId = fly.buildingId?.startsWith("bot-") ? fly.buildingId.slice(4) : null;
+  const botFallback = !p && botId ? (bots ?? []).find((b) => b.id === botId) : null;
   return (
     <aside className={`dash3d-side dash3d-interior ${open ? "is-open" : ""}`} aria-hidden={!open} data-testid="interior-panel">
       <div className="dash3d-glass">
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Leave building">
           ×
         </button>
-        {!p ? (
+        {!p && botFallback ? (
+          <>
+            <h2>Bot building</h2>
+            <img
+              className="dash3d-portrait"
+              src={`/dashboard-3d/art/portrait-${botFallback.id}.webp`}
+              alt=""
+              width={72}
+              height={72}
+              loading="lazy"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+            <p className="dash3d-title">{botFallback.name}</p>
+            <p>
+              <span className={`dash3d-dot ${botFallback.health}`} /> <strong>{botFallback.health}</strong>
+              <span className="dash3d-muted"> — {botFallback.reason || "status from lock/git"}</span>
+            </p>
+            <p className="dash3d-mono dash3d-muted" style={{ fontSize: "0.75rem" }}>
+              branch: {botFallback.branch || "no source yet"}
+              <br />
+              lock: {botFallback.lock?.file || "no source yet"} · {botFallback.lock?.status || "—"}
+              <br />
+              claimed: {fmtTime(botFallback.lock?.claimed_at ?? null)}
+            </p>
+            <h3>Notes</h3>
+            <pre className="dash3d-mono dash3d-muted" style={{ whiteSpace: "pre-wrap", fontSize: "0.7rem" }}>
+              {botFallback.notes || botFallback.lock?.notes || "no source yet"}
+            </pre>
+            <h3>Lock commits</h3>
+            <ul className="dash3d-list dash3d-mono">
+              {(botFallback.commits?.length ? botFallback.commits : []).slice(0, 8).map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+              {!botFallback.commits?.length ? <li className="dash3d-muted">no source yet</li> : null}
+            </ul>
+          </>
+        ) : !p ? (
           <>
             <h2>Interior</h2>
             <p className="dash3d-muted">Building data unavailable (it may have left the city on the last refresh).</p>

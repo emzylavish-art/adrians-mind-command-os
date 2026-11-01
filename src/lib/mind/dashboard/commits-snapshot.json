@@ -1,14 +1,119 @@
 {
-  "generatedAt": "2026-11-01T19:39:53.521Z",
+  "generatedAt": "2026-11-01T20:06:01.115Z",
   "timezoneNote": "Commit author dates are ISO from git; snapshot stamped UTC.",
   "source": "git log --all",
   "repoHint": "mind-command-os-dashboard worktree at snapshot time",
   "commits": [
     {
+      "sha": "d331925",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T15:04:49-05:00",
+      "branch": "voice-integration",
+      "subject": "merge: origin/voice-wiring into voice-integration"
+    },
+    {
+      "sha": "0f19a30",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T15:03:09-05:00",
+      "branch": "unknown",
+      "subject": "merge: origin/preview/integration into voice-integration"
+    },
+    {
+      "sha": "8d611d3",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:51:50-05:00",
+      "branch": "preview/integration",
+      "subject": "Merge origin/dashboard-3d (9501c68): final visual pass"
+    },
+    {
+      "sha": "9501c68",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:50:02-05:00",
+      "branch": "dashboard-3d",
+      "subject": "visual: merge origin/dashboard-3d before push (c35–c41)"
+    },
+    {
+      "sha": "b0a9f86",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:49:38-05:00",
+      "branch": "unknown",
+      "subject": "visual(c41): force rail nav icons mono; keep logo purple"
+    },
+    {
+      "sha": "b8076ad",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:48:40-05:00",
+      "branch": "unknown",
+      "subject": "visual(c40): add mono Imagine textures (empty-well, chart-grid, panel-noise)"
+    },
+    {
+      "sha": "21f9262",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:47:54-05:00",
+      "branch": "unknown",
+      "subject": "visual(c39): mono chart gradients, gridlines, tooltips, progress"
+    },
+    {
+      "sha": "ff492b0",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:47:54-05:00",
+      "branch": "unknown",
+      "subject": "visual(c38): spacing rhythm, chip contrast, empty/disabled wells"
+    },
+    {
+      "sha": "e48f5e2",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:47:32-05:00",
+      "branch": "unknown",
+      "subject": "visual(c37): mono kill status/icon/mic color leaks; purple only logo"
+    },
+    {
+      "sha": "b84abac",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:47:32-05:00",
+      "branch": "unknown",
+      "subject": "visual(c36): force glass blur + frost on cards, dock, rail, charts"
+    },
+    {
+      "sha": "994400a",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:47:13-05:00",
+      "branch": "unknown",
+      "subject": "visual(c35): uncrush desk main-stage — fix composer-bar.is-fixed"
+    },
+    {
+      "sha": "056717b",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:47:12-05:00",
+      "branch": "unknown",
+      "subject": "fix(auth): follow Supabase OAuth authorize URL instead of showing an error"
+    },
+    {
+      "sha": "6825455",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:43:28-05:00",
+      "branch": "unknown",
+      "subject": "merge: origin/dashboard-3d 4150986 into preview/integration (c18 content gaps)"
+    },
+    {
+      "sha": "4150986",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:42:22-05:00",
+      "branch": "unknown",
+      "subject": "dashboard(c18): fill content gaps — commits snapshot, charts, Imagine scenes"
+    },
+    {
+      "sha": "5269c2b",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:40:27-05:00",
+      "branch": "unknown",
+      "subject": "Merge origin/mcp-integration (c7ee46a): MCP list soft-auth for Supabase users"
+    },
+    {
       "sha": "14d3c52",
       "author": "emzylavish-art",
       "date": "2026-11-01T14:39:33-05:00",
-      "branch": "preview/integration",
+      "branch": "unknown",
       "subject": "chore: redeploy to pick up Supabase Marketplace env vars"
     },
     {
@@ -29,7 +134,7 @@
       "sha": "32de552",
       "author": "emzylavish-art",
       "date": "2026-11-01T14:13:27-05:00",
-      "branch": "dashboard-3d",
+      "branch": "unknown",
       "subject": "visual(c34): collapse idle composer effort/autonomy on mobile"
     },
     {
@@ -318,111 +423,6 @@
       "date": "2026-11-01T13:29:19-05:00",
       "branch": "unknown",
       "subject": "index on dashboard-3d: 8e32e20 merge: origin/dashboard-3d before operator push"
-    },
-    {
-      "sha": "8a5bbcd",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T13:29:19-05:00",
-      "branch": "unknown",
-      "subject": "untracked files on dashboard-3d: 8e32e20 merge: origin/dashboard-3d before operator push"
-    },
-    {
-      "sha": "7aedb18",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T13:22:31-05:00",
-      "branch": "unknown",
-      "subject": "fix(routes): sync routeTree.gen.ts for /auth/callback"
-    },
-    {
-      "sha": "ec1719a",
-      "author": "Cosmos Motion Bot",
-      "date": "2026-11-01T13:21:46-05:00",
-      "branch": "dashboard-3d-visual-motion",
-      "subject": "merge: keep clean land tip 0ac1c77 over prior motion lane history"
-    },
-    {
-      "sha": "a5c9291",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T13:21:40-05:00",
-      "branch": "dashboard-3d-visual-light",
-      "subject": "merge: sync light branch with origin/dashboard-3d (final sync)"
-    },
-    {
-      "sha": "cf734cb",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T13:21:38-05:00",
-      "branch": "xai-verification",
-      "subject": "Record 2026-11-01 19:22 WAT live xAI re-verification."
-    },
-    {
-      "sha": "0ac1c77",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T08:58:50-05:00",
-      "branch": "dashboard-3d-visual-motion",
-      "subject": "motion(c4): comet tail fade + head glow; MotionClock per-time-base anchors + stutter cap (hacker)"
-    },
-    {
-      "sha": "4c44cce",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T13:20:38-05:00",
-      "branch": "dashboard-3d-visual-painter",
-      "subject": "painter: reconcile stale remote branch (no file changes)"
-    },
-    {
-      "sha": "00dea54",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:15:30-05:00",
-      "branch": "deploy/dashboard-live",
-      "subject": "merge: origin/dashboard-3d 8e32e20 into preview/integration deploy lane"
-    },
-    {
-      "sha": "7eb0db4",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:15:22-05:00",
-      "branch": "unknown",
-      "subject": "merge: mcp soft-auth 525212e — quiet unauthenticated MCP list"
-    },
-    {
-      "sha": "148a1d7",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:10:47-05:00",
-      "branch": "unknown",
-      "subject": "merge: error-banners H23 — calm MCP auth_required notice"
-    },
-    {
-      "sha": "8e32e20",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:10:09-05:00",
-      "branch": "unknown",
-      "subject": "merge: origin/dashboard-3d before operator push"
-    },
-    {
-      "sha": "635c328",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:10:08-05:00",
-      "branch": "unknown",
-      "subject": "dashboard(c16): queue #8 Operator console + #9 Notion mirror"
-    },
-    {
-      "sha": "5ac5fab",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:09:55-05:00",
-      "branch": "unknown",
-      "subject": "merge: preview/ui-completion auth into preview/integration"
-    },
-    {
-      "sha": "33604cd",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:09:31-05:00",
-      "branch": "unknown",
-      "subject": "merge: latest dashboard-3d a89e1a7 into preview/integration deploy lane"
-    },
-    {
-      "sha": "7b84809",
-      "author": "emzylavish-art",
-      "date": "2026-11-01T12:08:28-05:00",
-      "branch": "error-banners",
-      "subject": "docs(handoff): H23 Notion child URL + pushed SHA"
     }
   ]
 }
