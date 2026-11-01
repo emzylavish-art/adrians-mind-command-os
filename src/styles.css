@@ -4134,3 +4134,25 @@ html[data-theme="light"] .dash3d-node-detail {
   border-color: rgb(9 9 11 / 0.12) !important;
   color: #18181b !important;
 }
+
+/* —— Evolution c49: tablet — dock in-flow, Speak bar docked under content without cover —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    position: sticky !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 0.75rem !important;
+    z-index: 5 !important;
+  }
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed {
+    /* keep as shell child but out of crushing flex: already fixed→sticky */
+    flex: 0 0 auto !important;
+  }
+  .shell > .main-stage {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+  }
+}
