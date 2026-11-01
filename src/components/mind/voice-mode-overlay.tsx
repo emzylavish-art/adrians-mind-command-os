@@ -131,14 +131,13 @@ export function VoiceModeOverlay(props: {
             {props.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             {props.muted ? "Unmute" : "Mute"}
           </button>
-          {speaking || props.phase === "interrupted" ? (
+          {speaking ? (
             <button
               type="button"
               className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-danger/40 px-4 text-sm text-danger"
               onClick={props.onInterrupt}
               aria-label="Interrupt speaking"
               data-testid="voice-interrupt"
-              disabled={!speaking}
             >
               Interrupt
             </button>

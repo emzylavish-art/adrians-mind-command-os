@@ -107,6 +107,10 @@ export class RealtimeVoiceSession {
   private testAudioUrl: string | null = null;
   private testAudioKind: string | null = null;
   private testAudioTimer: ReturnType<typeof setInterval> | null = null;
+  /** True after audio deltas until response.done + local buffers drain. */
+  private awaitingPlaybackEnd = false;
+  /** Server finished the current response; local audio may still be playing. */
+  private serverResponseComplete = true;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -202,6 +206,8 @@ export class RealtimeVoiceSession {
     if (!next) return;
     this.responseBusy = true;
     this.pendingForce = true;
+    this.awaitingPlaybackEnd = false;
+    this.serverResponseComplete = false;
     this.send({
       type: "conversation.item.create",
       item: {
@@ -216,11 +222,38 @@ export class RealtimeVoiceSession {
     // Prevent residual test-audio / mic energy from cutting off the reply immediately.
     this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (this.testAudioKind) this.muted = true;
-    this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    if (!this.speakingStartedAt) {
-          this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-        }
-        this.handlers.onStatus?.("speaking");
+    this.handlers.onStatus?.("speaking");
+  }
+
+  private armPlaybackEndWatch() {
+    const setEnded = this.output.setEndedListener?.bind(this.output);
+    if (!setEnded) return;
+    setEnded(() => {
+      // Gaps between PCM chunks fire ended early — ignore until the server is done.
+      if (!this.serverResponseComplete || this.responseBusy || this.speakQueue.length > 0) return;
+      this.awaitingPlaybackEnd = false;
+      this.pendingForce = false;
+      this.bargeInArmed = false;
+      if (this.testAudioKind) this.muted = false;
+      this.handlers.onStatus?.(this.capturing || this.open ? "listening" : "idle");
+    });
+  }
+
+  private finishSpeakingWhenPlaybackAllows() {
+    if (this.speakQueue.length > 0 || this.responseBusy) {
+      this.flushSpeakQueue();
+      return;
+    }
+    if (this.output.isPlaying || this.awaitingPlaybackEnd) {
+      this.handlers.onStatus?.("speaking");
+      this.armPlaybackEndWatch();
+      return;
+    }
+    this.awaitingPlaybackEnd = false;
+    this.pendingForce = false;
+    this.bargeInArmed = false;
+    if (this.testAudioKind) this.muted = false;
+    this.handlers.onStatus?.(this.capturing || this.open ? "listening" : "idle");
   }
 
   private onMessage(event: MessageEvent) {
@@ -275,7 +308,10 @@ export class RealtimeVoiceSession {
     }
     if (type === "response.output_audio.delta" || type === "response.audio.delta") {
       if (msg.delta) {
+        this.serverResponseComplete = false;
+        this.awaitingPlaybackEnd = true;
         this.handlers.onStatus?.("speaking");
+        this.armPlaybackEndWatch();
         void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE }).then(() => {
           /* level from playback approximated below */
         });
@@ -296,31 +332,31 @@ export class RealtimeVoiceSession {
     }
     if (type === "response.done") {
       this.responseBusy = false;
+      this.serverResponseComplete = true;
       const nextSpeak = completeSpeak(this.speakQ);
       if (nextSpeak && !this.speakQueue.includes(nextSpeak)) this.speakQueue.push(nextSpeak);
       // Always flush — speakText may have queued while captureOnly cancel held responseBusy.
       this.flushSpeakQueue();
-      if (!this.speakQueue.length && !this.pendingForce) {
-        this.pendingForce = false;
-      }
-      this.bargeInArmed = this.speakQueue.length > 0 || this.pendingForce;
       this.speakingHotMs = 0;
-      if (this.testAudioKind && !this.speakQueue.length) this.muted = false;
-      this.handlers.onStatus?.(this.capturing ? "listening" : this.pendingForce ? "speaking" : "idle");
-      this.flushSpeakQueue();
+      // Keep Speaking until local audio finishes — response.done is request-end, not playback-end.
+      this.finishSpeakingWhenPlaybackAllows();
     }
   }
 
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback(options?: { reason?: "speech" | "manual" | "rms" | "stop" }) {
     this.speakingStartedAt = 0;
-    const wasSpeaking = this.responseBusy || this.pendingForce || this.speakQueue.length > 0;
+    const wasSpeaking = this.responseBusy || this.pendingForce || this.speakQueue.length > 0 || this.awaitingPlaybackEnd || this.output.isPlaying;
+    this.awaitingPlaybackEnd = false;
+    this.serverResponseComplete = true;
+    this.output.setEndedListener?.(null);
     this.output.interrupt();
     this.speakQueue = [];
     this.pendingForce = false;
     this.responseBusy = false;
     this.speakQ = createSpeakQueue();
     this.speakingHotMs = 0;
+    this.bargeInArmed = false;
     this.send({ type: "response.cancel" });
     if (wasSpeaking && options?.reason && options.reason !== "stop") {
       this.handlers.onStatus?.("listening");

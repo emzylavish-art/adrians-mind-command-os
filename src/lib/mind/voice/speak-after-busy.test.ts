@@ -48,6 +48,7 @@ describe("Direct testAudio speak regression", () => {
     const stubOutput = {
       interrupt() {},
       async playPcm16Base64() {},
+      setEndedListener() {},
       get isPlaying() { return false; },
     };
     const session = new RealtimeVoiceSession(

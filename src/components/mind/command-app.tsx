@@ -56,6 +56,8 @@ import { dictationTranscriptForTestAudio, fetchVoiceTestAudioBlob, readVoiceTest
 import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import { probeMicrophone } from "@/lib/mind/voice/mic-probe";
 import { BARGE_IN_ECHO_GUARD_MS, SPEAKING_MIN_VISIBLE_MS } from "@/lib/mind/voice/barge-in";
+import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
+
 import { beginFlight, createFlightGate, endFlight, nextMuteState, secretNeedsRemint } from "@/lib/mind/voice/spam-guard";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
@@ -1196,26 +1198,34 @@ export function CommandApp() {
 
   async function speak(text: string) {
     setSpeaking(true);
+    speakingRef.current = true;
+    setVoicePhase((prev) => (prev === "idle" || prev === "error" ? prev : "speaking"));
     setError(null);
     const result = await speakText({ data: { text } });
-    setSpeaking(false);
     if (!result.ok) {
       if (!result.error.includes("No speech key")) {
+        setSpeaking(false);
+        speakingRef.current = false;
         setError(result.error);
         return;
       }
       const synth = window.speechSynthesis;
       if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
+        setSpeaking(false);
+        speakingRef.current = false;
         setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
         return;
       }
       const utter = new SpeechSynthesisUtterance(text);
-      utter.onend = () => setSpeaking(false);
+      utter.onend = () => {
+        setSpeaking(false);
+        speakingRef.current = false;
+      };
       utter.onerror = () => {
         setSpeaking(false);
+        speakingRef.current = false;
         setError("Browser speech failed. Nothing was spoken.");
       };
-      setSpeaking(true);
       synth.cancel();
       synth.speak(utter);
       setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
@@ -1223,11 +1233,13 @@ export function CommandApp() {
     }
     sharedAudioOutput.interrupt();
     try {
+      // Keep Speaking until MPEG playback ends — not when the TTS HTTP request returns.
       await sharedAudioOutput.playMpegBase64(result.audio);
     } catch {
       setError("The browser blocked playback.");
     } finally {
       setSpeaking(false);
+      speakingRef.current = false;
     }
   }
 
@@ -1481,13 +1493,15 @@ export function CommandApp() {
   }
 
   async function handleVoiceTranscript(transcript: string) {
-    const text = transcript.trim();
-    if (!text) {
+    const routed = routeVoiceModeTranscript(transcript);
+    const text = routed.overlayTranscript;
+    if (!text || !routed.sendAsChatTurn) {
       setNotice("No words were recognized. Nothing was sent.");
       return;
     }
     setVoiceTranscript(text);
-    setDraft(text);
+    // Voice-mode turns belong in chat, not the composer draft.
+    setDraft(routed.composerDraft);
     voiceNext.current = true;
     setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
     // Dev test-audio shortcut: speak a canned reply so headless can reach Speaking without a live chat turn.
