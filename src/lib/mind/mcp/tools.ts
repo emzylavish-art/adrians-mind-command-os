@@ -151,10 +151,23 @@ export async function notionAppendSection(input: {
   return { ok: true, status: "ok", text: `Appended heading “${heading}” to page ${pageId}.`, data: { pageId, heading } };
 }
 
-const DEFAULT_SHELL_ALLOWLIST = [/^pwd$/, /^uname( -[a-z]+)?$/, /^echo /, /^date$/, /^whoami$/];
+/** Each pattern must match the WHOLE command (anchored both ends). */
+const DEFAULT_SHELL_ALLOWLIST = [/^pwd$/, /^uname( -[a-z]+)?$/, /^echo [A-Za-z0-9 _.,:=+\/-]+$/, /^date$/, /^whoami$/];
+
+/**
+ * Characters a paired agent's shell (sh, cmd.exe, PowerShell) could treat as
+ * syntax: chaining (; & | newline), substitution ($ ` ( ) { }), redirection
+ * (< >), globbing (* ? [ ] ~), escapes/quotes (\\ ' " ^ %), history (!), comments (#).
+ * Allowlisted commands run WITHOUT human approval, so anything outside this
+ * plain set must go through the approval flow instead.
+ */
+const SHELL_SAFE_CHARS = /^[A-Za-z0-9 _.,:=+\/-]+$/;
+const SHELL_ALLOWLIST_MAX = 200;
 
 export function isShellAllowlisted(command: string, patterns: RegExp[] = DEFAULT_SHELL_ALLOWLIST): boolean {
   const trimmed = command.trim();
+  if (!trimmed || trimmed.length > SHELL_ALLOWLIST_MAX) return false;
+  if (!SHELL_SAFE_CHARS.test(trimmed)) return false;
   return patterns.some((pattern) => pattern.test(trimmed));
 }
 
