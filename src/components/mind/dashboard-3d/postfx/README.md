@@ -213,3 +213,17 @@ document.addEventListener("visibilitychange", () => liveDetailDim?.setHidden(doc
 Every readback's real begin→resolve time is recorded (`meter.backoff.lastLatencyMs`, null until a read lands — never estimated). A read slower than `METER_SLOW_READ_MS` (33 ms), a frame ≥ `METER_DROP_FRAME_MS` (50 ms) while a read is in flight (fed by `tick(dtMs)` → `meter.noteFrame`), or a readback timeout doubles the sampling interval up to `METER_MAX_BACKOFF`× (8× → 4 s). Reads at or under `METER_FAST_READ_MS` (17 ms) halve it back. The state is surfaced on `dim.contrast.backoff` (`multiplier`, `intervalMs`, `lastLatencyMs`, `reason`) for debug badges; it survives `reset()` because it describes the device's GPU, not the layout. No wiring change needed: it is live wherever the #68 dim pass already ticks.
 
 Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (mixed `Date.now`/`performance.now` clocks, injected clocks) produced a negative age that counted as fresh — forever. Now rejected as `lastError: "clock-skew"`, `measurementFor` never returns a measurement for a time before it was sampled, and `due` re-arms instead of stalling on a backwards clock (`meter-backoff.test.ts`).
+
+## #83 (queued as light #81) — Imagine-scene key lift + meter badge; hacker: hidden-tab readback excused
+
+- **Hacker (live, no wiring):** a backdrop readback in flight when the tab hid was billed as GPU cost — the hidden time became `slow-readback` latency, or the never-polled read a `readback-timeout`, doubling the meter interval on a fast device. The real loop pauses before it can call `setHidden(true)`, so the dim now also listens to `visibilitychange` (removed on dispose) and checks `document.hidden` when a read lands. `meter.suspend()` excuses the in-flight read: no back-off, no latency, no measurement; surfaced as `lastError: "readback-suspended"`. Test: `postfx/meter-suspend.test.ts`.
+- **`scene-key-lift.ts`** — Imagine cards are an unlit ShaderMaterial (shaders/ lane), so lights can't reach them. Screen-space pass lifting shadows/mid-tones (highlights protected) of the focused card with an upper-left key falloff, gain from the measured backdrop mean (full ≤0.03, none ≥0.15 linear). No fresh reading under the card → disabled. Wiring (Dashboard Bot, universe-scene):
+  ```ts
+  const lift = createSceneKeyLiftPass(); composer.addPass(lift.pass); // AFTER detailDim.pass (meter must see un-lifted frame)
+  // per frame, after liveDetailDim.setRects/setHole:
+  lift.setFocus(focusedVis?.mesh.position ?? null, camera, rad);
+  lift.setBackdrop(statsAtFocus(liveDetailDim.contrast, liveDetailDim.rects, lift.focusUv), { reducedMotion });
+  lift.tick(dt * 1000); // dispose with the postfx bundle
+  ```
+- **`meter-badge.ts`** — `formatMeterBadge(dim.contrast, lift.report)` → `{ text, level }` for the debug overlay; prints only real readings ("no read yet" otherwise).
+- Register tests: `postfx/{meter-suspend,scene-key-lift,meter-backoff,meter-sample-age,detail-dim-per-rect}.test.ts`.
