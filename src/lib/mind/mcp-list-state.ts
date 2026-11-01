@@ -16,10 +16,12 @@ export type McpListServer = { id: string; label: string; kind: string; enabled: 
 export type McpListState =
   | { status: "loading" }
   | { status: "ready"; servers: McpListServer[] }
+  | { status: "unauthenticated" }
   | { status: "error"; kind: HonestFailureKind; message: string };
 
 export const MCP_LIST_EMPTY_COPY = "No MCP servers are registered.";
 export const MCP_LIST_LOADING_COPY = "Loading MCP servers…";
+export const MCP_LIST_SIGN_IN_COPY = "Sign in to see MCP servers.";
 
 function statusOf(caught: unknown): number | null {
   if (!caught || typeof caught !== "object") return null;
@@ -61,16 +63,27 @@ function isServer(value: unknown): value is McpListServer {
   return typeof row.id === "string" && typeof row.label === "string";
 }
 
-/** Run one list load. Resolves to ready (possibly empty) or error; never throws. */
+/** Run one list load. Resolves to ready / unauthenticated / error; never throws. */
 export async function loadMcpList(fetchList: () => Promise<unknown>): Promise<McpListState> {
   try {
-    const result = (await fetchList()) as { servers?: unknown } | null;
-    if (!result || typeof result !== "object" || !Array.isArray(result.servers) || !result.servers.every(isServer)) {
+    const result = (await fetchList()) as { servers?: unknown; status?: unknown } | null;
+    if (!result || typeof result !== "object") {
+      return { status: "error", kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)` };
+    }
+    if (result.status === "unauthenticated") {
+      return { status: "unauthenticated" };
+    }
+    if (!Array.isArray(result.servers) || !result.servers.every(isServer)) {
       return { status: "error", kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)` };
     }
     return { status: "ready", servers: result.servers as McpListServer[] };
   } catch (caught) {
-    return { status: "error", ...classifyMcpListFailure(caught) };
+    const classified = classifyMcpListFailure(caught);
+    // Signed-out must be a quiet empty state, never the red error banner.
+    if (classified.kind === "auth_required") {
+      return { status: "unauthenticated" };
+    }
+    return { status: "error", ...classified };
   }
 }
 
@@ -96,6 +109,13 @@ export function McpListStatusRows({
 }) {
   if (state.status === "loading") {
     return createElement("li", { className: "text-sm text-muted", role: "status", "aria-busy": "true", "data-testid": "mcp-list-loading" }, MCP_LIST_LOADING_COPY);
+  }
+  if (state.status === "unauthenticated") {
+    return createElement(
+      "li",
+      { className: "text-sm text-muted", "data-testid": "mcp-list-sign-in", "data-mcp-list-state": "unauthenticated" },
+      MCP_LIST_SIGN_IN_COPY,
+    );
   }
   if (state.status === "ready") {
     if (state.servers.length > 0) return null;

@@ -6,6 +6,7 @@ import { HONEST_FAILURE_MESSAGES } from "./failure-states.ts";
 import {
   MCP_LIST_EMPTY_COPY,
   MCP_LIST_LOADING_COPY,
+  MCP_LIST_SIGN_IN_COPY,
   McpListStatusRows,
   classifyMcpListFailure,
   loadMcpList,
@@ -43,9 +44,30 @@ describe("MCP list: loading / empty / error are distinct", () => {
     assert.equal(render(state), "");
   });
 
+  it("typed unauthenticated payload is a quiet sign-in empty state (no banner)", async () => {
+    const state = await loadMcpList(async () => ({ status: "unauthenticated", servers: [] }));
+    assert.equal(state.status, "unauthenticated");
+    const html = render(state);
+    assert.match(html, /data-testid="mcp-list-sign-in"/);
+    assert.match(html, new RegExp(MCP_LIST_SIGN_IN_COPY));
+    assert.doesNotMatch(html, /failure-banner|role="alert"|border-danger/);
+  });
+
+  it("thrown 401 / Unauthorized become quiet unauthenticated, not a red banner", async () => {
+    for (const fetcher of [async () => { throw httpError(401); }, async () => { throw new Error("Unauthorized"); }, async () => { throw new Error("Sign in is required."); }]) {
+      const state = await loadMcpList(fetcher);
+      assert.equal(state.status, "unauthenticated");
+      assert.doesNotMatch(render(state), /failure-banner/);
+    }
+  });
+
+  it("signed-in list with servers is ready", async () => {
+    const state = await loadMcpList(async () => ({ status: "ok", servers: [{ id: "builtin", label: "Built-in", kind: "builtin", enabled: true }] }));
+    assert.equal(state.status, "ready");
+    if (state.status === "ready") assert.equal(state.servers.length, 1);
+  });
+
   const errorCases: [string, () => Promise<unknown>, string, RegExp][] = [
-    ["401 status", async () => { throw httpError(401); }, "auth_required", /Sign in is required/],
-    ["Unauthorized middleware error", async () => { throw new Error("Unauthorized"); }, "auth_required", /Sign in is required/],
     ["403 cross-site", async () => { throw httpError(403, "Forbidden: cross-site request blocked"); }, "forbidden_cross_site", /cross-site request blocked/],
     ["403 status only", async () => { throw httpError(403); }, "forbidden_cross_site", /Forbidden/],
     ["500", async () => { throw httpError(500); }, "network_failure", /HTTP 500/],

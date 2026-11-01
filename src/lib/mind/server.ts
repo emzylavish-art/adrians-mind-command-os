@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
@@ -404,11 +404,41 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
     return mintRealtimeClientSecret({});
   });
+/**
+ * MCP server list for Tools. Soft-auth: same session resolution as authMiddleware
+ * (getSessionUser + bearer), but returns a typed `unauthenticated` payload instead
+ * of throwing — so the Tools panel can show a quiet sign-in empty state (not a banner).
+ * Grok Build owns accepting Supabase HttpOnly cookies inside getSessionUser.
+ */
 export const mcpRegistryList = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([
+    createMiddleware({ type: "function" })
+      .client(async ({ next }) => {
+        const { getBearerToken } = await import("../auth/client");
+        return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+      })
+      .server(async ({ next, context }) => {
+        const { assertSameSiteRequest } = await import("../auth/isolation.server");
+        assertSameSiteRequest();
+        return next({ context: { bearerToken: context.bearerToken as string | undefined } });
+      }),
+  ])
   .handler(async ({ context }) => {
+    const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
+    const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
+    let userId: string | null = null;
+    if (!authConfigured && !gateIdentityEnabled()) {
+      // Match requireUserId: auth-off + no DATABASE_URL → shared dev user.
+      if (!process.env.DATABASE_URL?.trim()) userId = DEV_USER_ID;
+    } else {
+      const user = await getSessionUser(context.bearerToken);
+      userId = user?.id ?? null;
+    }
+    if (!userId) {
+      return { status: "unauthenticated" as const, servers: [] as { id: string; label: string; kind: string; enabled: boolean }[] };
+    }
     const { listRegistryServers } = await import("./mcp/registry");
-    return { servers: listRegistryServers(context.userId) };
+    return { status: "ok" as const, servers: listRegistryServers(userId) };
   });
 
 export const mcpRegistryToggle = createServerFn({ method: "POST" })

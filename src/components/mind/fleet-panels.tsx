@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, workerHealth } from "@/lib/mind/server";
+import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -81,7 +81,7 @@ export function FleetPanel({
   >([]);
   const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
 
-  /** One MCP list load: loading → ready (maybe empty) or error banner. Retry re-runs this once. */
+  /** One MCP list load: loading → ready / quiet sign-in / error banner. Retry re-runs this once. */
   function loadMcpServers() {
     if (mcpListInFlight.current) return;
     mcpListInFlight.current = true;
@@ -94,6 +94,7 @@ export function FleetPanel({
         return;
       }
       setMcpServers([]);
+      // Signed-out is a quiet empty state — never escalate to the red failure banner.
       if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpServers));
     });
   }
@@ -120,6 +121,31 @@ export function FleetPanel({
     const timer = window.setInterval(refreshPcApprovals, 15_000);
     return () => window.clearInterval(timer);
   }, [mode]);
+
+  // After sign-in, refetch the MCP list so servers appear without a full reload.
+  useEffect(() => {
+    if (mode !== "tools") return;
+    if (mcpListState.status !== "unauthenticated") return;
+    const refetchIfSignedIn = () => {
+      void mindStatus()
+        .then((status) => {
+          if (status.signedIn === true) loadMcpServers();
+        })
+        .catch(() => undefined);
+    };
+    const onFocus = () => refetchIfSignedIn();
+    const onVis = () => {
+      if (document.visibilityState === "visible") refetchIfSignedIn();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    const poll = window.setInterval(refetchIfSignedIn, 4_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(poll);
+    };
+  }, [mode, mcpListState.status]);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
