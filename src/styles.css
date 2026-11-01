@@ -7181,3 +7181,55 @@ aside.rail nav,
   box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
   color: #fff !important;
 }
+
+/* —— Evolution c107: Grok-reference layered glass (frost + highlight + inner glow + soft shadow) ——
+   Note: SwiftShader/CI often fails to rasterize backdrop-filter (WITH==NO blur crops).
+   These layers still read as glass without GPU blur; real devices keep the blur decls. */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .rounded-panel.border.border-line.bg-surface,
+.main-stage form.rounded-panel.border.border-line,
+.floating-composer,
+.composer-dock,
+.composer-bar__card,
+.login-card {
+  background-color: rgb(14 16 22 / 0.55) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 28%, transparent 55%),
+    linear-gradient(90deg, rgb(255 255 255 / 0.04), transparent 40%, rgb(255 255 255 / 0.03)),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, auto, 240px 240px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 0 0 1px rgb(255 255 255 / 0.06),
+    0 1px 0 rgb(255 255 255 / 0.04),
+    0 18px 48px rgb(0 0 0 / 0.45),
+    0 4px 12px rgb(0 0 0 / 0.25) !important;
+  backdrop-filter: blur(28px) saturate(1.28) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.28) !important;
+}
+/* Top highlight edge hairline */
+.main-stage .dense-card::before,
+.main-stage .glow-card::before,
+.composer-dock::before,
+.floating-composer::before,
+.composer-bar__card::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 0 auto 0 !important;
+  height: 1px !important;
+  border-radius: inherit !important;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent) !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+.main-stage .dense-card,
+.main-stage .glow-card,
+.composer-dock,
+.floating-composer,
+.composer-bar__card {
+  position: relative !important;
+  overflow: hidden !important;
+}
