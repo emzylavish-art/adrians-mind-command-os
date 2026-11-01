@@ -13,7 +13,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -641,17 +641,38 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let composer: EffectComposer | null = null;
     let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
     let gradeHandle: ReturnType<typeof createColorGradePass> | null = null;
+    let raysHandle: ReturnType<typeof createGodRayPass> | null = null;
+    // Light lane #12: idle until real weather arrives (not healthy-green before data)
+    const exposureRide = createExposureRide({ tone: "idle", reducedMotion });
+    exposureRide.apply(renderer);
     if (!reducedMotion) {
-      composer = new EffectComposer(renderer);
+      try {
+        const depthTex = new THREE.DepthTexture(Math.max(1, width), Math.max(1, height));
+        const rt = new THREE.WebGLRenderTarget(Math.max(1, width), Math.max(1, height), {
+          depthTexture: depthTex,
+        });
+        composer = new EffectComposer(renderer, rt);
+      } catch {
+        composer = new EffectComposer(renderer);
+      }
       composer.addPass(new RenderPass(scene, camera));
       try {
-        bloomHandle = createTunedBloomPass(new THREE.Vector2(width, height), "healthy");
+        raysHandle = createGodRayPass({ healthy: 0, total: 0, reducedMotion: false });
+        if (composer.readBuffer?.depthTexture) {
+          raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
+        }
+        composer.addPass(raysHandle.pass); // before bloom/grade per light README
+      } catch {
+        raysHandle = null;
+      }
+      try {
+        bloomHandle = createTunedBloomPass(new THREE.Vector2(width, height), "idle");
         composer.addPass(bloomHandle.pass);
       } catch {
         composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.62, 0.75, 0.22));
       }
       try {
-        gradeHandle = createColorGradePass("healthy");
+        gradeHandle = createColorGradePass("idle");
         composer.addPass(gradeHandle.pass);
       } catch {
         /* optional */
@@ -960,14 +981,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city.tick(wallT, reducedMotion);
       dust.update(wallT, reducedMotion);
       comets.update(wallT, reducedMotion);
+      const botsNow = dataRef.current.bots;
+      const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
+      const healthy = botsNow.filter((b) => b.health === "healthy").length;
+      const total = botsNow.length;
+      const localHour = new Date().getHours(); // box clock = Africa/Lagos
+      exposureRide.setTarget({ tone, hour: localHour, reducedMotion });
+      exposureRide.tick(dt * 1000);
+      exposureRide.apply(renderer, bloomHandle ?? undefined);
+
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
         tickPainterlyKit(kit, t);
-        if (atm) {
-          const tone = dataRef.current.weather?.tone ?? deriveFleetTone(dataRef.current.bots.map((b) => b.health));
-          atm.update(tone);
-          bloomHandle?.update(tone);
-          gradeHandle?.update(tone);
+        if (atm) atm.update(tone);
+        bloomHandle?.update(tone);
+        gradeHandle?.update(tone);
+        if (raysHandle) {
+          raysHandle.setSun(sunMesh.position, camera);
+          raysHandle.update({ healthy, total, reducedMotion: false, tone: tone as never });
         }
       }
 
@@ -993,6 +1024,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.setSize(w, h);
       labelRenderer.setSize(w, h);
       composer?.setSize(w, h);
+      bloomHandle?.setSize?.(w, h);
+      if (raysHandle && composer?.readBuffer?.depthTexture) {
+        raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
+      }
     };
     
     const onSkyEvent = () => {
@@ -1033,6 +1068,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       skyMat.map?.dispose();
       skyMat.dispose();
       disposePainterlyKit(kit);
+      raysHandle?.dispose();
+      bloomHandle?.dispose?.();
+      gradeHandle?.dispose?.();
+      exposureRide.dispose();
       renderer.dispose();
       composer?.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
