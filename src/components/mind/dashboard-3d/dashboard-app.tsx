@@ -196,6 +196,12 @@ export function DashboardApp() {
       data-health-filter={operatorPrefs.healthFilter}
       onPointerDownCapture={unlockSound}
     >
+      <a className="dash3d-skip-link" href="#dash3d-skybar" data-testid="dash3d-skip-skybar">
+        Skip to skybar
+      </a>
+      {!viewData ? (
+        <div id="dash3d-skybar" className="dash3d-skybar" hidden aria-hidden="true" data-testid="dash3d-skybar-fallback" />
+      ) : null}
       {sceneData && !webglError ? (
         <UniverseScene
           data={sceneData}
@@ -271,9 +277,6 @@ export function DashboardApp() {
 
       {viewData ? (
         <>
-        <a className="dash3d-skip-link" href="#dash3d-skybar" data-testid="dash3d-skip-skybar">
-          Skip to skybar
-        </a>
         <div className="dash3d-skybar" id="dash3d-skybar" aria-live="polite" role="region" aria-label="Dashboard skybar">
           {state.status === "ready" && state.stale ? (
             <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">

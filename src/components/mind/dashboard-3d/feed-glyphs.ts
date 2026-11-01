@@ -48,7 +48,7 @@ export function createFeedGlyphs(scene: THREE.Scene, events: readonly FeedEvent[
     el.dataset.testid = "feed-glyph";
     el.title = ev.text;
     el.setAttribute("role", "button");
-    el.tabIndex = 0;
+    el.tabIndex = -1; // Gap#14: out of tab order; Feed panel is the keyboard path
     const mark = document.createElement("span");
     mark.className = "dash3d-feed-glyph-mark";
     mark.textContent = ev.glyph;
