@@ -61,3 +61,12 @@ No styles/CSS, failure-states, model-tiers/xAI adapter, voice, media. `command-a
 Tried `notion-update-page` insert_content on page `40b1aa27632381768d58cde0731f142a` via user-Notion MCP.
 **Result:** 404 `object_not_found` — page not in the connected workspace / integration lacks access.
 No substitute page was created. This file is the durable handoff mirror.
+
+## Stop-point posted to mirror (2026-11-01, Africa/Lagos)
+
+Appended section **mcp-integration stop-point** to Notion mirror page
+`40bb95f33e42814aacf8c3281b4f528d`
+(https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d).
+`notion-update-page` `insert_content` at end succeeded (returned page id).
+Status recorded as `complete` (typecheck, 226/226 src tests, build passed;
+e2e `pglite_query` SELECT 1 verified). Primary page `40b1aa27…` remains 404.
