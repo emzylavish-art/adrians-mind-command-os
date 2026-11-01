@@ -212,3 +212,31 @@ hides immediately (no delay). Reduced-motion snaps.
 - `sanitizeMotionPoseBag` rebuilds a clean bag (strips `__proto__` / `constructor`, caps ids)
 - `restoreFocusPosesForKnownIds` / `restoreCharacterPosesForKnownIds` — skip stale ids
 
+## Constellation edge highlight pulse sync (c11)
+
+Complements Dashboard #26 edge highlight + hover tooltip motion (c10).
+
+```ts
+import {
+  createEdgePulseState, createEdgePulseSample, stepEdgePulseSync,
+} from "./motion";
+
+const edgeSt = createEdgePulseState();
+const edgeOut = createEdgePulseSample();
+
+// each frame, per visible constellation edge (fromId→toId):
+stepEdgePulseSync(
+  edgeSt, edgeOut,
+  hoverOut.edge,          // strength from hover tooltip sample
+  edge.fromId, edge.toId,
+  focusId ?? hoverOut.hoverId,
+  tSeconds, reducedMotion,
+);
+// ribbon opacity = edgeOut.highlight
+// wave head along edge = edgeOut.travel (0=from … 1=to, oriented toward focus)
+// neighbor star pulse scale *= edgeOut.neighborPulseMul
+```
+
+Reduced-motion → static mid-edge highlight, pulse=1. Hacker c11: `lastWallDt` never
+negative on backwards worker clocks; pose-hold for-in early-break on huge id maps.
+
