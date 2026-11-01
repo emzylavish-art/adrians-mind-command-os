@@ -14,7 +14,7 @@ import { FeedPanel } from "./feed-panel";
 import { MoneyPanel } from "./money-panel";
 import "./dashboard-3d.css";
 
-export function DashboardApp() {
+export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const { state } = useDashboardStatus();
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
@@ -140,7 +140,7 @@ export function DashboardApp() {
   };
 
   return (
-    <main className="dash3d-root dash3d-universe" data-fly-level={fly.level} onPointerDownCapture={unlockSound}>
+    <main className={`dash3d-root dash3d-universe${embedded ? " is-embedded" : ""}`} data-fly-level={fly.level} onPointerDownCapture={unlockSound}>
       {state.status === "ready" && sceneData && !webglError ? (
         <UniverseScene
           data={sceneData}
