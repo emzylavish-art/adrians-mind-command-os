@@ -33,6 +33,26 @@ export function DashboardApp() {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }, []);
 
+  const spendView = useMemo(() => {
+    if (state.status !== "ready") return { available: false as const, reason: "No source." };
+    const s = state.data.spend;
+    if (!s.available) return { available: false as const, reason: s.reason || "No source." };
+    const n = Array.isArray(s.entries) ? s.entries.length : 0;
+    return {
+      available: true as const,
+      summary: n ? `Live spend log on box · ${n} entr${n === 1 ? "y" : "ies"}` : "Live spend log on box (empty).",
+    };
+  }, [state]);
+
+  const laneForBot = useCallback(
+    (bot: BotNode | null) => {
+      if (!bot || state.status !== "ready") return { name: null as string | null, health: null as BotNode["health"] | null };
+      const lane = state.data.constellations.find((c) => c.botIds.includes(bot.id));
+      return { name: lane?.name ?? null, health: lane?.health ?? null };
+    },
+    [state],
+  );
+
   const openNotion = (pageId: string) => {
     if (state.status !== "ready") return;
     const page = state.data.notionGraph.pages.find((p) => p.id === pageId) ?? null;
@@ -173,6 +193,9 @@ export function DashboardApp() {
         bot={selected}
         notionPage={notionPage}
         open={Boolean(selected || notionPage)}
+        laneName={laneForBot(selected).name}
+        laneHealth={laneForBot(selected).health}
+        spend={spendView}
         onClose={() => {
           setSelected(null);
           setNotionPage(null);
