@@ -107,3 +107,24 @@ focusDepth.setFogColor((scene.fog as THREE.FogExp2).color.getHex());
 focusDepth.tick(dtMs);
 // unmount / context loss: focusDepth.dispose();
 ```
+
+## Hacker-pass notes (cycle — Nov 1 2026 late)
+- **Ping-pong flat depth** (`depth-validity.ts`): only the composer target RenderPass just drew holds scene depth; every ShaderPass that writes a target auto-clears it to the quad's constant depth. With god-rays enabled (any healthy bot), focus-depth read the swapped target's flat depth → one band weight for every pixel → the focused Imagine card was muted along with the whole frame (or nothing was). Lane passes now mark the target they write with `renderer.info.render.frame`; a consumer whose readBuffer was written in the immediately preceding render call falls back to its radial mask. No wiring change. Test: `postfx/depth-validity.test.ts`.
+- **Exposure ride crawl**: universe-scene calls `setTarget` every frame; an unchanged target used to restart the 400 ms ease each frame (~0.5%/frame, ~10 s crawl). Test: `postfx/exposure-retarget.test.ts`.
+- **UnrealBloom high-pass leak**: three r187 `UnrealBloomPass.dispose()` skips `materialHighPassFilter`; `createTunedBloomPass().dispose()` now frees it (one program leaked per context-loss rebuild / unmount).
+
+## Focus-aware bloom guard (`createFocusBloomGuard`, queue #57)
+While a node is focused, masks the bloom SOURCE (luminosity high-pass) inside the focus band so Imagine portrait/card highlights don't haze over detail; background keeps tone bloom. Uses scene depth when valid, else a radial disc around the focused node sized by `radiusUv`. With no focus the original high-pass material is swapped back (zero cost). Reduced motion snaps (static).
+
+```ts
+const bloomGuard = createFocusBloomGuard(bloomHandle); // or the UnrealBloomPass
+// per frame, next to focusDepth.setFocus:
+bloomGuard.setFocus(focusedMesh?.position ?? null, camera, {
+  reducedMotion,
+  radiusUv: projectedRadiusUv(focusedMesh.position, nodeAndCardRadiusWorld, camera) ?? undefined,
+});
+bloomGuard.tick(dtMs);
+// context-loss factory: return { ..., bloom: nextBloom, focusBloomGuard: createFocusBloomGuard(nextBloom) }
+// unmount: bloomGuard.dispose() (also auto-tears down if bloom is disposed first)
+```
+Also add `postfx/depth-validity.test.ts`, `postfx/exposure-retarget.test.ts`, `postfx/focus-bloom-guard.test.ts` to `npm test`.
