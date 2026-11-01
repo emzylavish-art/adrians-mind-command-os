@@ -67,7 +67,7 @@ Full local write-up: `MEDIA_HANDOFF.md`.
 - Lock: logic-wiring.lock → done, released
 
 ## 2026-11-01T15:16:16+01:00 (Africa/Lagos) — Logic Bot — stop point: H13 forged execution + LOW provider status
-- Branch tip: (pending push) on origin/logic-wiring
+- Branch tip: 6a6308c on origin/logic-wiring
 - H13: `execution-ledger.ts` — server-issued one-shot receipts; `recordAgentExecution` ignores client ok/detail; unknown/replay rejected; record flood → 429 + Retry-After; ledger TTL + size cap; rate-limit map prune/bound
 - Fail-closed for command-app until that lane mints/uses server ids (no command-app / service-board edits)
 - LOW: non-Grok `handleMindTurn` branch calls `consumeMindRateLimit` (same chat bucket); missing/unknown provider → HTTP 503/400 via `httpStatusForProviderSelection`; Grok missing key → 503; live-turn still surfaces JSON error
