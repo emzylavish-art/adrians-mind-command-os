@@ -17,7 +17,12 @@ describe("pglite_query guard: side-effect functions", () => {
     db = new PGlite();
     await db.exec("create table t(id serial primary key, v text); insert into t(v) values ('a');");
     baselineSearchPath = (await db.query<{ search_path: string }>("show search_path")).rows[0].search_path;
-    client = { query: async (q, p = []) => (await db.query(q, p)).rows as Record<string, unknown>[] };
+    client = {
+      query: async (q, p = []) => (await db.query(q, p)).rows as Record<string, unknown>[],
+      exec: async (q) => {
+        await db.exec(q);
+      },
+    };
   });
   after(async () => {
     await db.close();
@@ -43,7 +48,6 @@ describe("pglite_query guard: side-effect functions", () => {
     "SELECT * FROM t FOR KEY SHARE",
     "SELECT 1 INTO evil_copy",
     "EXPLAIN ANALYZE SELECT 1",
-    "SELECT 1 /* /* nested */ set_config('search_path','x',false) */",
   ];
 
   for (const sql of attacks) {
@@ -90,4 +94,101 @@ describe("pglite_query guard: side-effect functions", () => {
   it("refuses oversized SQL", () => {
     assert.equal(assertReadOnlySql("SELECT " + "1,".repeat(15_000) + "1").ok, false);
   });
+
+  it("treats nested block comments as comments (payload inside does not execute)", async () => {
+    const sql = "SELECT 1 /* /* nested */ set_config('search_path','x',false) */ AS n";
+    assert.equal(assertReadOnlySql(sql).ok, true);
+    const result = await pgliteQuery({ sql, sqlClient: client });
+    assert.equal(result.ok, true, result.text);
+    const path = (await db.query<{ search_path: string }>("show search_path")).rows[0].search_path;
+    assert.equal(path, baselineSearchPath);
+  });
 });
+
+
+describe("pglite_query guard: comment-strip / string-literal bypass (H12)", () => {
+  let db: PGlite;
+  let client: SqlLike;
+  let baselineSearchPath = "";
+
+  before(async () => {
+    db = new PGlite();
+    await db.exec("create table t(id serial primary key, v text); insert into t(v) values ('ok');");
+    baselineSearchPath = (await db.query<{ search_path: string }>("show search_path")).rows[0].search_path;
+    client = {
+      query: async (q, p = []) => (await db.query(q, p)).rows as Record<string, unknown>[],
+      exec: async (q) => {
+        await db.exec(q);
+      },
+    };
+  });
+  after(async () => {
+    await db.close();
+  });
+
+  const attacks = [
+    "SELECT '--' AS a, set_config('search_path','evil',false)",
+    "SELECT '/*' AS a, pg_sleep(60), '*/' AS b",
+    "SELECT $$--$$ AS a, set_config('search_path','evil',false)",
+    "SELECT $tag$/* hide *$tag$ AS a, pg_sleep(5)",
+    "SELECT E'--' AS a, set_config('search_path','x',false)",
+    "SELECT E'\\/*' AS a, pg_sleep(5), E'*/' AS b",
+    "SELECT 'a' /* /* nested */ */, set_config('search_path','evil',false)",
+    "SELECT '--' AS a, \"set_config\"('search_path','evil',false)",
+  ];
+
+  for (const sql of attacks) {
+    it(`refuses string/comment smuggle: ${sql}`, async () => {
+      assert.equal(assertReadOnlySql(sql).ok, false, `assertReadOnlySql should refuse: ${sql}`);
+      const result = await pgliteQuery({ sql, sqlClient: client, timeoutMs: 500 });
+      assert.equal(result.ok, false);
+      assert.doesNotMatch(result.text, /rowCount/);
+    });
+  }
+
+  it("allows legitimate queries that contain '--' or '/*' inside string literals", async () => {
+    const cases = [
+      "SELECT '--' AS dash, 1 AS n",
+      "SELECT '/*' AS open, '*/' AS close, 2 AS n",
+      "SELECT $$-- still literal$$ AS s, 3 AS n",
+      "SELECT $q$/* not a comment *$q$ AS s, 4 AS n",
+      "SELECT E'line\\n--not comment' AS s, 5 AS n",
+    ];
+    for (const sql of cases) {
+      assert.equal(assertReadOnlySql(sql).ok, true, sql);
+      const result = await pgliteQuery({ sql, sqlClient: client });
+      assert.equal(result.ok, true, `${sql} -> ${result.text}`);
+      assert.match(result.text, /rowCount/);
+    }
+  });
+
+  it("runs reads inside BEGIN READ ONLY and restores session via RESET ALL", async () => {
+    // Poison the session, then a guarded read must RESET it.
+    await db.query("SELECT set_config('search_path', 'evil', false)");
+    assert.equal((await db.query<{ search_path: string }>("show search_path")).rows[0].search_path, "evil");
+    const result = await pgliteQuery({ sql: "SELECT v FROM t", sqlClient: client });
+    assert.equal(result.ok, true, result.text);
+    const path = (await db.query<{ search_path: string }>("show search_path")).rows[0].search_path;
+    assert.equal(path, baselineSearchPath);
+    assert.notEqual(path, "evil");
+  });
+
+  it("refuses writes even if the static guard were bypassed (READ ONLY txn)", async () => {
+    // Directly exercise the RO wrapper path with a write that somehow passed the static check —
+    // craft via client-only call simulating limitedSql. We assert BEGIN READ ONLY blocks INSERT
+    // when used the same way pgliteQuery does.
+    await client.exec?.("BEGIN READ ONLY");
+    let failed = false;
+    try {
+      await client.query("INSERT INTO t(v) VALUES ('nope')");
+    } catch {
+      failed = true;
+    }
+    await client.exec?.("ROLLBACK");
+    await client.exec?.("RESET ALL");
+    assert.equal(failed, true);
+    const n = (await db.query<{ n: number }>("select count(*)::int as n from t")).rows[0].n;
+    assert.equal(n, 1);
+  });
+});
+

@@ -299,3 +299,23 @@ command on Zack's PC.
 - `/api/mind/mcp/servers` (toggle/register/remove) and `/api/mind/mcp/call` POSTs have no Origin/same-site check. The SameSite=Lax cookie blocks cross-site requests, but same-site sibling origins (for example other preview subdomains) could still send them. `assertSameSiteRequest` exists in `src/lib/auth/isolation.server.ts`. Next cycle candidate.
 - DNS rebinding for http MCP servers is still open.
 - CPU-heavy pure reads can still block PGLite's event loop (needs a worker).
+
+## Gap: H12 pglite comment-strip / string-literal bypass (2026-11-01, Africa/Lagos)
+
+**Status:** complete (2026-11-01T15:09:29+01:00)  
+**Lock:** `mcp-integration-gap-pglite-comment-strip-bypass.lock`
+
+### Bug
+`assertReadOnlySql` stripped `--` / `/* */` with regexes that ignored string literals, so
+`SELECT '--' AS a, set_config(...)` and `SELECT '/*' AS a, pg_sleep(60), '*/' AS b` passed the guard.
+
+### Fix
+- Quote-aware tokenizer (`tokenizeSqlForGuard`): single quotes (`''`), `E''` backslash escapes, dollar quotes `$$` / `$tag$`, double-quoted idents, `--` and nested `/* */` only outside literals.
+- Keyword / side-effect function checks run on **identifier tokens**, not raw comment-stripped text.
+- Defense in depth in `pgliteQuery`: `RESET ALL` before query, `BEGIN READ ONLY` … `ROLLBACK`, then `RESET ALL` again (verified on real PGLite).
+
+### Verification
+- `tsc --noEmit`: pass
+- mind/src tests: **336/336** (incl. H12 cases in `pglite-guard.test.ts` on real PGLite)
+- `npm run build`: pass
+
