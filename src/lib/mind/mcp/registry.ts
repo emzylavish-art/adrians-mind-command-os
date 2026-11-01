@@ -12,6 +12,8 @@ import {
   type SqlLike,
   type ToolResult,
 } from "./tools.ts";
+import { callStdioTool, listStdioTools, type StdioOptions } from "./stdio.ts";
+import { readHaltFile } from "../halt-file.ts";
 
 export type McpServerKind = "builtin" | "http" | "command";
 
@@ -22,17 +24,22 @@ export type RegistryServer = {
   enabled: boolean;
   /** For kind=http */
   url?: string;
-  /** For kind=command (stdio) — not executed until explicitly enabled and called */
+  /** For kind=command (stdio) — spawned only when enabled AND a list/call is requested */
   command?: string;
   args?: string[];
+  /** Server-specific env for kind=command. The app's own env is never passed through (only PATH/HOME). Never returned to the client. */
+  env?: Record<string, string>;
+  /** Optional per-server timeouts for kind=command (ms). */
+  connectTimeoutMs?: number;
+  callTimeoutMs?: number;
   /** Opaque token for external HTTP MCP; never returned to the client */
   token?: string;
   builtin?: boolean;
 };
 
-export type RegistryServerPublic = Omit<RegistryServer, "token"> & { hasToken: boolean };
+export type RegistryServerPublic = Omit<RegistryServer, "token" | "env"> & { hasToken: boolean; envKeys?: string[] };
 
-export type ToolCallStatus = "running" | "ok" | "error";
+export type ToolCallStatus = "running" | "ok" | "error" | "timeout";
 
 export type RegistryToolCallResult = {
   status: ToolCallStatus;
@@ -88,8 +95,52 @@ function writeStore(userId: string, store: StoreFile) {
 }
 
 function toPublic(server: RegistryServer): RegistryServerPublic {
-  const { token: _token, ...rest } = server;
-  return { ...rest, hasToken: Boolean(server.token) };
+  const { token: _token, env, ...rest } = server;
+  return { ...rest, hasToken: Boolean(server.token), ...(env ? { envKeys: Object.keys(env) } : {}) };
+}
+
+const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
+/** Sanitize a server-specific env map (bounded keys/values). */
+export function sanitizeServerEnv(input: unknown): Record<string, string> | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>).slice(0, 20)) {
+    if (!ENV_KEY.test(key)) continue;
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
+    out[key] = String(value).slice(0, 1000);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function timeoutField(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.min(300_000, Math.max(100, Math.floor(n)));
+}
+
+export type StdioDeps = {
+  /** Options forwarded to the stdio runner (timeouts, caps). */
+  stdio?: StdioOptions;
+  /** Emergency-stop check. Defaults to the durable halt file. When halted, no stdio child is spawned. */
+  isHalted?: (userId: string) => Promise<boolean> | boolean;
+};
+
+function defaultIsHalted(userId: string): boolean {
+  const file = readHaltFile(userId);
+  return file.ownerId ? file.halted : false;
+}
+
+function stdioConfig(server: RegistryServer) {
+  return {
+    id: server.id,
+    label: server.label,
+    command: server.command ?? "",
+    args: server.args ?? [],
+    env: server.env,
+    connectTimeoutMs: server.connectTimeoutMs,
+    callTimeoutMs: server.callTimeoutMs,
+  };
 }
 
 export function listRegistryServers(userId: string): RegistryServerPublic[] {
@@ -107,7 +158,16 @@ export function setServerEnabled(userId: string, id: string, enabled: boolean): 
 
 export function registerExternalServer(
   userId: string,
-  input: { label: string; url?: string; command?: string; args?: string[]; token?: string },
+  input: {
+    label: string;
+    url?: string;
+    command?: string;
+    args?: string[];
+    token?: string;
+    env?: Record<string, unknown>;
+    connectTimeoutMs?: number;
+    callTimeoutMs?: number;
+  },
 ): { ok: true; servers: RegistryServerPublic[] } | { ok: false; error: string } {
   const label = input.label.trim().slice(0, 80);
   if (!label) return { ok: false, error: "A label is required. Nothing was saved." };
@@ -141,7 +201,10 @@ export function registerExternalServer(
       kind: "command",
       enabled: false,
       command: input.command.trim().slice(0, 200),
-      args: Array.isArray(input.args) ? input.args.map((a) => String(a).slice(0, 100)).slice(0, 20) : [],
+      args: Array.isArray(input.args) ? input.args.map((a) => String(a).slice(0, 300)).slice(0, 20) : [],
+      env: sanitizeServerEnv(input.env),
+      connectTimeoutMs: timeoutField(input.connectTimeoutMs),
+      callTimeoutMs: timeoutField(input.callTimeoutMs),
     });
     writeStore(userId, store);
     return { ok: true, servers: store.servers.map(toPublic) };
@@ -157,7 +220,15 @@ export function removeRegistryServer(userId: string, id: string): RegistryServer
   return store.servers.map(toPublic);
 }
 
-export type ListedTool = { serverId: string; serverLabel: string; name: string; description: string; enabled: boolean };
+export type ListedTool = {
+  serverId: string;
+  serverLabel: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  /** Honest listing status for this row (placeholder rows carry error/timeout/disabled). */
+  status?: "ok" | "error" | "timeout" | "disabled";
+};
 
 export function listBuiltinTools(enabled: boolean): ListedTool[] {
   return BUILTIN_TOOL_DEFS.map((tool) => ({
@@ -225,6 +296,7 @@ async function rpc(
 export async function listRegistryTools(
   userId: string,
   fetchImpl: FetchLike = globalThis.fetch as FetchLike,
+  deps: StdioDeps = {},
 ): Promise<ListedTool[]> {
   const store = readStore(userId);
   const tools: ListedTool[] = [];
@@ -240,17 +312,55 @@ export async function listRegistryTools(
         name: "(disabled)",
         description: "Server is disabled. Enable it to list tools.",
         enabled: false,
+        status: "disabled",
       });
       continue;
     }
     if (server.kind === "command") {
-      tools.push({
-        serverId: server.id,
-        serverLabel: server.label,
-        name: "(stdio)",
-        description: `Command MCP “${server.command}” is registered but stdio calls are not wired in this lane. Nothing was called.`,
-        enabled: true,
-      });
+      if (await (deps.isHalted ?? defaultIsHalted)(userId)) {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: "(halted)",
+          description: "Emergency stop is on. The stdio server was not started.",
+          enabled: true,
+          status: "error",
+        });
+        continue;
+      }
+      const listed = await listStdioTools(stdioConfig(server), deps.stdio);
+      if (listed.status !== "ok") {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: listed.status === "timeout" ? "(timeout)" : "(error)",
+          description: `${listed.error}${listed.stderr ? ` · stderr: ${listed.stderr.slice(0, 160)}` : ""}`.slice(0, 400),
+          enabled: true,
+          status: listed.status,
+        });
+        continue;
+      }
+      if (listed.tools.length === 0) {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: "(no tools)",
+          description: "The stdio server started and answered tools/list with no tools.",
+          enabled: true,
+          status: "ok",
+        });
+        continue;
+      }
+      for (const tool of listed.tools) {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: tool.name,
+          description: tool.description,
+          enabled: true,
+          status: "ok",
+        });
+      }
       continue;
     }
     if (!server.url) continue;
@@ -349,7 +459,7 @@ export async function callRegistryTool(input: {
   args?: Record<string, unknown>;
   getSql: () => Promise<SqlLike>;
   fetch?: FetchLike;
-}): Promise<RegistryToolCallResult> {
+} & StdioDeps): Promise<RegistryToolCallResult> {
   const store = readStore(input.userId);
   const server = store.servers.find((item) => item.id === input.serverId);
   if (!server) {
@@ -371,12 +481,17 @@ export async function callRegistryTool(input: {
     };
   }
   if (server.kind === "command") {
+    if (await (input.isHalted ?? defaultIsHalted)(input.userId)) {
+      return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on. No MCP tool was called." };
+    }
+    const result = await callStdioTool(stdioConfig(server), input.tool, args, input.stdio);
     return {
-      status: "error",
-      ok: false,
+      status: result.status,
+      ok: result.ok,
       serverId: server.id,
       tool: input.tool,
-      text: "Stdio MCP command servers are registered but not executed in this lane. Nothing was called.",
+      text: result.text,
+      data: result.data ?? undefined,
     };
   }
   if (!server.url) {

@@ -17,7 +17,8 @@ export const Route = createFileRoute("/api/mind/mcp/tools")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          const tools = await listRegistryTools(userId);
+          const { haltIsOn } = await import("@/lib/mind/halt.server");
+          const tools = await listRegistryTools(userId, undefined, { isHalted: haltIsOn });
           return json({ ok: true, tools });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";

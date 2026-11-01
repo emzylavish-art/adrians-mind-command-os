@@ -42,6 +42,9 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
             command?: string;
             args?: string[];
             token?: string;
+            env?: Record<string, unknown>;
+            connectTimeoutMs?: number;
+            callTimeoutMs?: number;
           };
           if (body.action === "toggle" && typeof body.id === "string") {
             return json({ ok: true, servers: setServerEnabled(userId, body.id, body.enabled === true) });
@@ -56,6 +59,9 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
               command: body.command,
               args: body.args,
               token: body.token,
+              env: body.env,
+              connectTimeoutMs: body.connectTimeoutMs,
+              callTimeoutMs: body.callTimeoutMs,
             });
             if (!saved.ok) return json(saved, 400);
             return json(saved);
