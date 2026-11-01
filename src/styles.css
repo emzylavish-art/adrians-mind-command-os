@@ -3903,3 +3903,60 @@ html[data-theme="light"] .masthead .font-display {
   color: #09090b !important;
   text-shadow: none !important;
 }
+
+/* —— Round e3b6ec4 / fix6: idle composer action row + mono active nav —— */
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock:not(:focus-within) {
+    padding: 0.65rem 0.75rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 0.4rem !important;
+  }
+  /* keep Attach (≈+) Dictate mic Send(white) visible; hide mid actions when idle */
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:not([aria-label="Dictate"]):not([type="submit"]):not(:first-child) {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: 999px !important;
+    padding-inline: 0 !important;
+    justify-content: center !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child span,
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child :not(svg) {
+    /* keep icon; hide label text nodes via font-size on button text — icons stay */
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    font-size: 0 !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child svg {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+}
+/* Active nav purple glow kill (markup still has shadow-[0_0_18px_rgb(124_92_255...)]) */
+aside nav button.bg-accent,
+aside nav button[class*="shadow-[0_0_18px_rgb(124_92_255"],
+aside button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.3) !important;
+}
+html[data-theme="light"] aside nav button.bg-accent,
+html[data-theme="light"] aside nav button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.12) !important;
+}
+/* logo mark keeps purple */
+aside span.grid.size-11.rounded-2xl,
+.logo-mark,
+.logo-badge {
+  color: #fff !important;
+  background: #7c5cff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+  filter: none !important;
+}
