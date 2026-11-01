@@ -8434,3 +8434,20 @@ nav[aria-label="Primary"] button,
   color: #fff !important;
   filter: none !important;
 }
+
+
+/* —— Evolution c141: dash3d HUD stray chroma leftovers —— */
+.dash3d-hud-focus-toggle,
+.dash3d-pill,
+.dash3d-side-close,
+.dash3d-skip-link {
+  color: #c8c8c8 !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
+  background-image: none !important;
+}
+.dash3d-hud-focus-toggle:hover,
+.dash3d-pill:hover,
+.dash3d-side-close:hover {
+  color: #e8e8e8 !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
