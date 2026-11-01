@@ -5,7 +5,17 @@ import type { MsgImage } from "@/lib/mind/types";
 
 const MD_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
-function TextWithImages({ text }: { text: string }) {
+function TextWithImages({
+  text,
+  onEditImagine,
+  onSaveImage,
+  onDownloadImage,
+}: {
+  text: string;
+  onEditImagine?: (src: string) => void;
+  onSaveImage?: (src: string, alt: string) => void;
+  onDownloadImage?: (src: string, alt: string) => void;
+}) {
   const nodes: ReactNode[] = [];
   let last = 0;
   let match: RegExpExecArray | null;
@@ -15,7 +25,16 @@ function TextWithImages({ text }: { text: string }) {
     const alt = match[1] || "image";
     const src = match[2]!;
     if (src.startsWith("data:image/") || /^https?:\/\//i.test(src)) {
-      nodes.push(<InlineImage key={`img-${match.index}`} src={src} alt={alt} />);
+      nodes.push(
+        <InlineImage
+          key={`img-${match.index}`}
+          src={src}
+          alt={alt}
+          onEditImagine={src.startsWith("data:image/") ? onEditImagine : undefined}
+          onSave={onSaveImage}
+          onDownload={onDownloadImage}
+        />,
+      );
     } else {
       nodes.push(match[0]);
     }
@@ -25,13 +44,32 @@ function TextWithImages({ text }: { text: string }) {
   return <p className="whitespace-pre-wrap">{nodes}</p>;
 }
 
-export function MessageBody({ text, images }: { text: string; images?: MsgImage[] }) {
+export function MessageBody({
+  text,
+  images,
+  onEditImagine,
+  onSaveImage,
+  onDownloadImage,
+}: {
+  text: string;
+  images?: MsgImage[];
+  onEditImagine?: (src: string) => void;
+  onSaveImage?: (src: string, alt: string) => void;
+  onDownloadImage?: (src: string, alt: string) => void;
+}) {
   const blocks = splitBlocks(text);
   const [copied, setCopied] = useState<number | null>(null);
   return (
     <div className="space-y-2">
       {images?.map((image, index) => (
-        <InlineImage key={`attach-${index}`} src={image.dataUrl} alt={image.name || `Attachment ${index + 1}`} />
+        <InlineImage
+          key={`attach-${index}`}
+          src={image.dataUrl}
+          alt={image.name || `Attachment ${index + 1}`}
+          onEditImagine={onEditImagine}
+          onSave={onSaveImage}
+          onDownload={onDownloadImage}
+        />
       ))}
       {blocks.map((block, index) =>
         block.kind === "code" ? (
@@ -51,7 +89,13 @@ export function MessageBody({ text, images }: { text: string; images?: MsgImage[
             <code>{block.code}</code>
           </pre>
         ) : (
-          <TextWithImages key={index} text={block.text} />
+          <TextWithImages
+            key={index}
+            text={block.text}
+            onEditImagine={onEditImagine}
+            onSaveImage={onSaveImage}
+            onDownloadImage={onDownloadImage}
+          />
         ),
       )}
     </div>

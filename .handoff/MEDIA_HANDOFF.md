@@ -145,3 +145,11 @@ See `/workspace/locks/media-integration.lock`.
 - Did not touch `model-tiers.ts` or picker UI.
 - Tests: agent.test imagine cases + registry includes four tools.
 
+
+## Upgrade B: Edit with Imagine — 2026-11-01T13:40 Africa/Lagos
+
+- **Supported:** `POST https://api.x.ai/v1/images/edits` with JSON `{ model, prompt, image_url: dataUrl, response_format: "b64_json" }` (live-probed).
+- **Not supported:** OpenAI-style `POST /v1/images/variations` returns HTTP 405 — documented via `XAI_IMAGE_VARIATIONS_SUPPORTED = false`; no Variations UI.
+- Helper `editImagineImage`; generate route accepts `mode:"edit"` / `image` data URL.
+- UI: **Edit with Imagine** on inline bubble images + **Edit** on attachment chips (composer draft = edit instruction).
+

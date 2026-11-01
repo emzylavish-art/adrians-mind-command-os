@@ -1215,6 +1215,85 @@ export function CommandApp() {
     }
   }
 
+  async function runImagineEdit(imageDataUrl: string, promptRaw?: string) {
+    if (busy || ws.halted) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write an edit instruction in the composer, then press Edit with Imagine.");
+      return;
+    }
+    if (!imageDataUrl.startsWith("data:image/")) {
+      setError("Edit with Imagine only works on images kept as data URLs in this chat.");
+      return;
+    }
+    setDraft("");
+    setError(null);
+    setBusy(true);
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1 }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        setError(payload.error || `Edit with Imagine failed (HTTP ${response.status}).`);
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-edit-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      setPendingImages(images);
+      setNotice(`Edited with ${payload.model || "grok-imagine-image"}. Staged for Send / Agent.`);
+      if (active) {
+        const chatId = active.id;
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "user" as const,
+                      content: `Edit with Imagine: ${prompt}`,
+                      at: new Date().toISOString(),
+                    },
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Edited with ${payload.model || "grok-imagine-image"}.`,
+                      at: new Date().toISOString(),
+                      model: payload.model || "grok-imagine-image",
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Edit with Imagine could not be reached.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function enableMemory() {
     if (armMemory === "composer") {
       setMemoryChoice("on");
@@ -1856,7 +1935,7 @@ export function CommandApp() {
                     >
                       Imagine
                     </button>
-                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} />
+                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -2118,6 +2197,7 @@ export function CommandApp() {
                 const prompt = viaCmd !== null ? viaCmd : draft.trim();
                 void runImagine(prompt || undefined, active);
               }}
+              onEditImagine={(src) => void runImagineEdit(src)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -2423,7 +2503,7 @@ export function CommandApp() {
               {agentImages.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {agentImages.map((image, index) => (
-                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} />
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} />
                   ))}
                 </div>
               )}
@@ -3100,6 +3180,7 @@ function ChatPane({
   onOpenCamera,
   onOpenCloud,
   onImagine,
+  onEditImagine,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -3147,6 +3228,7 @@ function ChatPane({
   onOpenCamera: () => void;
   onOpenCloud: () => void;
   onImagine: () => void;
+  onEditImagine: (src: string) => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -3273,7 +3355,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} images={msg.images} />
+                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
@@ -3362,7 +3444,7 @@ function ChatPane({
             placeholder={`Message (${modelTier})...`}
             className="min-h-11 w-full bg-transparent text-sm outline-none"
           />
-          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} />
+          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">

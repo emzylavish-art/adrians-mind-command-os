@@ -109,3 +109,42 @@ describe("generateImagineImages", () => {
     }
   });
 });
+
+describe("editImagineImage", () => {
+  it("posts image_url JSON to the edits endpoint and maps b64", async () => {
+    const { editImagineImage, XAI_IMAGES_EDITS_URL } = await import("./imagine.ts");
+    const tiny =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const input = `data:image/png;base64,${tiny}`;
+    let seenUrl = "";
+    let seenBody: Record<string, unknown> = {};
+    const result = await editImagineImage(
+      { prompt: "make it blue", imageDataUrl: input },
+      {
+        apiKey: "test-key",
+        fetchImpl: async (url, init) => {
+          seenUrl = String(url);
+          seenBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+          return new Response(JSON.stringify({ data: [{ b64_json: tiny, mime_type: "image/png" }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+      },
+    );
+    assert.equal(seenUrl, XAI_IMAGES_EDITS_URL);
+    assert.equal(seenBody.image_url, input);
+    assert.equal(seenBody.response_format, "b64_json");
+    assert.equal(result.ok, true);
+    if (result.ok) assert.match(result.images[0]!.dataUrl, /^data:image\/png;base64,/);
+  });
+
+  it("rejects edits without an image data URL", async () => {
+    const { editImagineImage } = await import("./imagine.ts");
+    const result = await editImagineImage(
+      { prompt: "blue", imageDataUrl: "https://example.com/a.png" },
+      { apiKey: "test-key", fetchImpl: async () => new Response("{}") },
+    );
+    assert.equal(result.ok, false);
+  });
+});

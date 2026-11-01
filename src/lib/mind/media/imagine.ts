@@ -201,3 +201,126 @@ export async function generateImagineImages(
     usage: record.usage,
   };
 }
+
+
+export const XAI_IMAGES_EDITS_URL = "https://api.x.ai/v1/images/edits";
+
+export type ImagineEditRequest = {
+  prompt: string;
+  /** data:image/...;base64,... input image */
+  imageDataUrl: string;
+  model?: string;
+  responseFormat?: "b64_json" | "url";
+};
+
+/**
+ * Edit an existing image with Grok Imagine via POST /v1/images/edits.
+ * Body shape confirmed live: `{ model, prompt, image_url: dataUrl, response_format }`.
+ * Multipart and raw-string `image` fields are rejected by the API.
+ */
+export async function editImagineImage(
+  input: ImagineEditRequest,
+  options: {
+    apiKey?: string;
+    fetchImpl?: FetchLike;
+    endpoint?: string;
+  } = {},
+): Promise<ImagineResult> {
+  const normalized = normalizeImaginePrompt(input.prompt);
+  if (!normalized.ok) return normalized;
+  if (typeof input.imageDataUrl !== "string" || !input.imageDataUrl.startsWith("data:image/")) {
+    return { ok: false, error: "Edit with Imagine needs an image data URL as input." };
+  }
+
+  const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: "No xAI inference API key is available for image editing. Check /home/box/.secrets/xai_inference.env.",
+      status: 503,
+    };
+  }
+
+  const model = (input.model || GROK_IMAGINE_MODEL).trim() || GROK_IMAGINE_MODEL;
+  const responseFormat = input.responseFormat ?? "b64_json";
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const endpoint = options.endpoint ?? XAI_IMAGES_EDITS_URL;
+
+  let response: Response;
+  try {
+    response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        prompt: normalized.prompt,
+        response_format: responseFormat,
+        image_url: input.imageDataUrl,
+      }),
+    });
+  } catch {
+    return { ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 };
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return {
+      ok: false,
+      error: `Image editing returned a non-JSON response (HTTP ${response.status}).`,
+      status: response.status,
+    };
+  }
+
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (!response.ok) {
+    const err = record.error;
+    const message =
+      typeof err === "string"
+        ? err
+        : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
+          ? String((err as { message: string }).message)
+          : `Image editing failed (HTTP ${response.status}).`;
+    return { ok: false, error: message, status: response.status };
+  }
+
+  const rawData = Array.isArray(record.data) ? record.data : [];
+  if (rawData.length === 0) {
+    return { ok: false, error: "Image editing returned no images.", status: response.status };
+  }
+
+  const images: ImagineImage[] = [];
+  for (const item of rawData) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.b64_json === "string" && row.b64_json) {
+      const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
+      if (!built.ok) return { ok: false, error: built.error, status: response.status };
+      images.push({ dataUrl: built.dataUrl, mime: built.mime });
+      continue;
+    }
+    if (typeof row.url === "string" && row.url) {
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl);
+      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
+      images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
+    }
+  }
+
+  if (images.length === 0) {
+    return { ok: false, error: "Image editing returned no usable image payloads.", status: response.status };
+  }
+
+  return {
+    ok: true,
+    model: typeof record.model === "string" && record.model ? record.model : model,
+    images,
+    usage: record.usage,
+  };
+}
+
+/** OpenAI-style variations are not offered by xAI (POST /v1/images/variations → 405). */
+export const XAI_IMAGE_VARIATIONS_SUPPORTED = false;

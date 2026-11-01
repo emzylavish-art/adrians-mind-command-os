@@ -1,6 +1,6 @@
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
-import { generateImagineImages, GROK_IMAGINE_MODEL, normalizeImaginePrompt } from "./imagine.ts";
+import { editImagineImage, generateImagineImages, GROK_IMAGINE_MODEL, normalizeImaginePrompt } from "./imagine.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -52,13 +52,23 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
 
   const n = typeof record.n === "number" ? record.n : typeof record.count === "number" ? record.count : 1;
   const model = typeof record.model === "string" ? record.model : GROK_IMAGINE_MODEL;
+  const imageDataUrl = typeof record.image === "string" ? record.image : typeof record.imageDataUrl === "string" ? record.imageDataUrl : "";
+  const mode = record.mode === "edit" || imageDataUrl ? "edit" : "generate";
 
-  const result = await generateImagineImages({
-    prompt: normalized.prompt,
-    n,
-    model,
-    responseFormat: "b64_json",
-  });
+  const result =
+    mode === "edit"
+      ? await editImagineImage({
+          prompt: normalized.prompt,
+          imageDataUrl,
+          model,
+          responseFormat: "b64_json",
+        })
+      : await generateImagineImages({
+          prompt: normalized.prompt,
+          n,
+          model,
+          responseFormat: "b64_json",
+        });
 
   if (!result.ok) {
     const status = result.status && result.status >= 400 && result.status < 600 ? result.status : 502;
