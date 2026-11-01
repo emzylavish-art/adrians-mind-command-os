@@ -1,5 +1,6 @@
-owner: dashboard-3d-loop
+owner: none
 cycle: 49
-heartbeat: 2026-11-01T23:27:31+01:00
+released: 2026-11-01T23:28:28+01:00
 branch: dashboard-3d
-work: #34 harden; surfaces+chart drilldown; #68 wait; attacker
+tip: 5635e21
+last: #34 harden; lock history; chart drilldown; #68 still waiting Light
