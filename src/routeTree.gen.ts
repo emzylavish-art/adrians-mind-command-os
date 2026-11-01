@@ -53,6 +53,7 @@ import { Route as ApiMindOauthNotionCallbackRouteImport } from './routes/api/min
 import { Route as ApiMindOauthNotionDisconnectRouteImport } from './routes/api/mind/oauth/notion/disconnect'
 import { Route as ApiMindOauthNotionStartRouteImport } from './routes/api/mind/oauth/notion/start'
 import { Route as ApiMindOauthNotionStatusRouteImport } from './routes/api/mind/oauth/notion/status'
+import { Route as ApiMindMediaAssetUrlRouteImport } from './routes/api/mind/media/asset-url'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -283,6 +284,9 @@ const ApiMindOauthNotionStatusRoute =
     path: '/api/mind/oauth/notion/status',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiMindMediaAssetUrlRoute = ApiMindMediaAssetUrlRouteImport.update({
+  id: '/api/mind/media/asset-url',
+  path: '/api/mind/media/asset-url',
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -321,6 +325,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -329,6 +334,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
   '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -367,6 +373,7 @@ export interface FileRoutesByTo {
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -375,6 +382,7 @@ export interface FileRoutesByTo {
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
   '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -414,6 +422,7 @@ export interface FileRoutesById {
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -422,6 +431,7 @@ export interface FileRoutesById {
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
   '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
+    | '/api/mind/media/asset-url'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -470,6 +481,7 @@ export interface FileRouteTypes {
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
     | '/api/mind/oauth/notion/status'
+    | '/api/mind/media/asset-url'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -508,6 +520,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
+    | '/api/mind/media/asset-url'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -516,6 +529,7 @@ export interface FileRouteTypes {
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
     | '/api/mind/oauth/notion/status'
+    | '/api/mind/media/asset-url'
   id:
     | '__root__'
     | '/'
@@ -554,6 +568,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
+    | '/api/mind/media/asset-url'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -562,6 +577,7 @@ export interface FileRouteTypes {
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
     | '/api/mind/oauth/notion/status'
+    | '/api/mind/media/asset-url'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -609,6 +625,7 @@ export interface RootRouteChildren {
   ApiMindOauthNotionDisconnectRoute: typeof ApiMindOauthNotionDisconnectRoute
   ApiMindOauthNotionStartRoute: typeof ApiMindOauthNotionStartRoute
   ApiMindOauthNotionStatusRoute: typeof ApiMindOauthNotionStatusRoute
+  ApiMindMediaAssetUrlRoute: typeof ApiMindMediaAssetUrlRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -919,6 +936,11 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/oauth/notion/status'
       fullPath: '/api/mind/oauth/notion/status'
       preLoaderRoute: typeof ApiMindOauthNotionStatusRouteImport
+    '/api/mind/media/asset-url': {
+      id: '/api/mind/media/asset-url'
+      path: '/api/mind/media/asset-url'
+      fullPath: '/api/mind/media/asset-url'
+      preLoaderRoute: typeof ApiMindMediaAssetUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -961,6 +983,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
   ApiMindMediaStorageStatusRoute: ApiMindMediaStorageStatusRoute,
   ApiMindMediaStorageUploadRoute: ApiMindMediaStorageUploadRoute,
+  ApiMindMediaAssetUrlRoute,
   ApiMindOauthConnectorCallbackRoute: ApiMindOauthConnectorCallbackRoute,
   ApiMindOauthConnectorDisconnectRoute: ApiMindOauthConnectorDisconnectRoute,
   ApiMindOauthConnectorStartRoute: ApiMindOauthConnectorStartRoute,
@@ -969,6 +992,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindOauthNotionDisconnectRoute: ApiMindOauthNotionDisconnectRoute,
   ApiMindOauthNotionStartRoute: ApiMindOauthNotionStartRoute,
   ApiMindOauthNotionStatusRoute: ApiMindOauthNotionStatusRoute,
+  ApiMindMediaAssetUrlRoute: ApiMindMediaAssetUrlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
