@@ -207,6 +207,9 @@ function humanAction(action: string) {
     create_project: "Project created",
     archive_memory: "Note archived",
     message_sent: "Grok replied",
+    chat_failed: "Chat failed",
+    open_page_failed: "Open page failed",
+    research_failed: "Research failed",
     rea_doctor: "REA doctor ran",
     rea_inspect: "REA inspected a file",
   };
@@ -244,6 +247,8 @@ export function CommandApp() {
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null } | null>(null);
+  const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
@@ -309,6 +314,12 @@ export function CommandApp() {
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
+
+  useEffect(() => {
+    if (!focusAuditId || view !== "activity") return;
+    const node = document.getElementById(`audit-${focusAuditId}`);
+    node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focusAuditId, view, ws.audit]);
 
   useEffect(() => {
     if (!ready) return;
@@ -663,7 +674,9 @@ export function CommandApp() {
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
     const routed = chosenProvider(providerChoice, grokConfigured);
     if (!routed.ok) {
-      setError(routed.error);
+      reportFailure(routed.error, "chat_failed", "provider", () => {
+        void deliver(chat, text, source, resume);
+      });
       return;
     }
     const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
@@ -680,6 +693,7 @@ export function CommandApp() {
     setBusy(true);
     setLiveText("");
     setError(null);
+    setFailure(null);
     turnAbort.current?.abort();
     const generation = ++turnGen.current;
     const controller = new AbortController();
@@ -714,7 +728,10 @@ export function CommandApp() {
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (!shouldStoreReply(result)) {
-        setError(result.ok ? "Grok returned an empty reply." : result.error);
+        const message = result.ok ? "Grok returned an empty reply." : result.error;
+        reportFailure(message, "chat_failed", chat.id, () => {
+          void deliver(chat, text, source, true);
+        });
         return;
       }
       setWs((prev) => {
@@ -759,7 +776,15 @@ export function CommandApp() {
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
-      setError(caught instanceof Error && caught.message === "Unauthorized" ? "Sign in is required." : caught instanceof Error ? caught.message : "Grok could not be reached.");
+      const message =
+        caught instanceof Error && caught.message === "Unauthorized"
+          ? "Sign in is required."
+          : caught instanceof Error
+            ? caught.message
+            : "Grok could not be reached.";
+      reportFailure(message, "chat_failed", chat.id, () => {
+        void deliver(chat, text, source, resume);
+      });
     }
   }
 
@@ -883,15 +908,29 @@ export function CommandApp() {
       return;
     }
     setResearchCitations([]);
+    const query = researchText;
     try {
-      const result = await searchWeb({ data: { query: researchText } });
+      const result = await searchWeb({ data: { query } });
       setError(null);
       setResearchCitations(result.citations);
       setResearchNote(result.ok ? "" : result.error);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
+      if (!result.ok) {
+        reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
+          setResearchText(query);
+          void startResearch();
+        });
+      } else {
+        clearFailure();
+      }
     } catch (caught) {
       setResearchCitations([]);
-      setResearchNote(caught instanceof Error ? caught.message : "The search did not run. No citations were created.");
+      const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
+      setResearchNote(message);
+      reportFailure(message, "research_failed", "search", () => {
+        setResearchText(query);
+        void startResearch();
+      });
     }
   }
 
@@ -1085,6 +1124,22 @@ export function CommandApp() {
   function explain(text: string) {
     setNotice(text);
     setError(null);
+  }
+
+  function clearFailure() {
+    setFailure(null);
+    setError(null);
+  }
+
+  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null) {
+    const auditId = crypto.randomUUID();
+    setWs((prev) => ({
+      ...prev,
+      audit: [{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit].slice(0, 200),
+    }));
+    setFailure({ message, auditId, retry });
+    setError(message);
+    setNotice(null);
   }
 
   function openChat() {
@@ -1453,6 +1508,43 @@ export function CommandApp() {
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
               Clear stop
             </button>
+          </div>
+        )}
+        {(failure || error) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2" role="alert" data-testid="failure-banner">
+            <p className="text-sm text-danger">{failure?.message ?? error}</p>
+            <div className="flex flex-wrap gap-2">
+              {failure?.retry ? (
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+                  onClick={() => {
+                    const retry = failure.retry;
+                    clearFailure();
+                    retry?.();
+                  }}
+                >
+                  Retry
+                </button>
+              ) : null}
+              {failure?.auditId ? (
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center justify-center rounded-panel border border-danger/40 px-4 text-sm text-danger"
+                  onClick={() => {
+                    setView("activity");
+                    setFocusAuditId(failure.auditId);
+                    setActivityQuery("");
+                    setNavOpen(false);
+                  }}
+                >
+                  View log
+                </button>
+              ) : null}
+              <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm" onClick={() => clearFailure()}>
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
@@ -2200,7 +2292,7 @@ export function CommandApp() {
             </section>
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
-          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
+          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry) => reportFailure(message, "open_page_failed", "browser", retry)} />}
           {view === "build" && (
             <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
               <h2 className="font-display text-3xl font-bold">Build</h2>
@@ -2384,7 +2476,11 @@ export function CommandApp() {
                   <li className="text-sm text-muted">No events match that filter.</li>
                 )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).map((entry) => (
-                  <li key={entry.id} className="glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface p-3 text-sm">
+                  <li
+                    key={entry.id}
+                    id={`audit-${entry.id}`}
+                    className={`glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border p-3 text-sm ${focusAuditId === entry.id ? "border-danger bg-danger/10" : "border-line bg-surface"}`}
+                  >
                     <div>
                       <p className="font-semibold">{humanAction(entry.action)}</p>
                       <p className="text-muted">{entry.result}</p>
