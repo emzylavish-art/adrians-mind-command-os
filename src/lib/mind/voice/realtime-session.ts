@@ -7,6 +7,8 @@ export const REALTIME_SAMPLE_RATE = 24000;
 
 export type RealtimeHandlers = {
   onTranscript?: (text: string) => void;
+  /** Live interim ASR partials; replaced when the final transcript arrives. */
+  onPartialTranscript?: (text: string) => void;
   onSpeechStarted?: () => void;
   onError?: (message: string) => void;
   onStatus?: (status: "connecting" | "listening" | "processing" | "speaking" | "idle" | "closed") => void;
@@ -14,6 +16,11 @@ export type RealtimeHandlers = {
   onLevel?: (level: number) => void;
   /** Fired when the socket closes without an intentional close() (mic released). */
   onUnexpectedClose?: () => void;
+};
+
+export type RealtimeSessionOptions = {
+  /** Built-in or allowlisted voice id applied on session.update (default eve). */
+  voice?: string;
 };
 
 type WsLike = {
@@ -67,14 +74,26 @@ export class RealtimeVoiceSession {
   private analyser: AnalyserNode | null = null;
   private levelRaf = 0;
 
+  private voiceId: string;
+
   constructor(
     handlers: RealtimeHandlers = {},
     output: SharedAudioOutput = sharedAudioOutput,
     socketFactory: RealtimeSocketFactory = defaultSocketFactory,
+    options: RealtimeSessionOptions = {},
   ) {
     this.handlers = handlers;
     this.output = output;
     this.socketFactory = socketFactory;
+    this.voiceId = (options.voice || "eve").trim() || "eve";
+  }
+
+  setVoice(voice: string) {
+    const next = (voice || "eve").trim() || "eve";
+    this.voiceId = next;
+    if (this.open) {
+      this.send({ type: "session.update", session: { voice: next } });
+    }
   }
 
   get isOpen() {
@@ -116,7 +135,7 @@ export class RealtimeVoiceSession {
     this.send({
       type: "session.update",
       session: {
-        voice: "eve",
+        voice: this.voiceId,
         instructions: "You are a voice capture helper. Prefer short replies when asked to speak.",
         turn_detection: { type: "server_vad" },
         audio: {
@@ -158,10 +177,21 @@ export class RealtimeVoiceSession {
       this.handlers.onStatus?.("listening");
       return;
     }
+    if (
+      type === "conversation.item.input_audio_transcription.delta" ||
+      type === "conversation.item.input_audio_transcription.partial" ||
+      type === "input_audio_transcription.delta"
+    ) {
+      const partial = (msg.delta || msg.transcript || "").trim();
+      if (partial) this.handlers.onPartialTranscript?.(partial);
+      return;
+    }
     if (type === "conversation.item.input_audio_transcription.completed") {
       const text = (msg.transcript || "").trim();
       if (text) {
         this.pendingTranscript = text;
+        // Final replaces any interim partial in the UI.
+        this.handlers.onPartialTranscript?.(text);
         this.handlers.onTranscript?.(text);
         this.handlers.onStatus?.("processing");
       }
