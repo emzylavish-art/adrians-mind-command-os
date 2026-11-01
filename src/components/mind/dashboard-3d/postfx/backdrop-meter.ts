@@ -107,8 +107,15 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
     },
     resolve(t, perRect, nowMs) {
       if (!pending || pending.token !== t) return; // superseded / reset
-      const key = pending.key;
+      const { key, atMs: sampledAt } = pending;
       pending = null;
+      // Age is measured from the frame that was SAMPLED, not when the async
+      // readback landed: a 1.9 s driver stall must not make a 1.9 s-old backdrop
+      // count as fresh for another METER_MAX_AGE_MS (hacker pass, cycle after #68).
+      if (!Number.isFinite(nowMs) || nowMs - sampledAt > maxAge) {
+        lastError = "stale-readback";
+        return;
+      }
       const ok = perRect.filter((s): s is LuminanceStats => !!s);
       if (!ok.length || ok.length !== perRect.length) {
         lastError = "empty-readback";
@@ -116,7 +123,7 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
       }
       // Worst case across rects drives the single dim strength.
       const worst = ok.reduce((a, b) => (b.p90 > a.p90 ? b : a));
-      latest = { stats: worst, perRect: ok, atMs: nowMs, key };
+      latest = { stats: worst, perRect: ok, atMs: sampledAt, key };
       lastError = null;
     },
     fail(t, error) {
@@ -140,6 +147,7 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
     reset() {
       pending = null;
       latest = null;
+      lastError = null; // a reconfigured meter must not report a previous layout's failure
       lastKey = "";
       lastStart = -Infinity;
     },
