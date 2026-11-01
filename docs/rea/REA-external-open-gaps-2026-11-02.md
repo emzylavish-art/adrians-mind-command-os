@@ -24,3 +24,6 @@ Notes for Gap Dispatcher:
 - **Guest / logged-out usable chat** — Grok Build declined: changes Zack's sign-in-gated design, needs Zack's call first. STAYS OPEN, parked on Zack's design decision.
 - **Artifacts / Canvas side panel** — Media Integration declined (lane asleep, no new features). UNOWNED; needs Zack to assign a lane.
 - Note: Grok Build is now sole merger; REA already pushes to rea-features only (no merges).
+- **Unattended scheduled automations (hosted worker)** — Logic declined (lane on "no new features"). UNOWNED; needs Zack to assign a lane.
+- **Computer / long-running project handoff** — Logic declined (same). UNOWNED; needs Zack to assign a lane.
+- **Live search provider key readiness** — Logic: not code work; search wiring done, only needs Zack to supply env `MIND_SEARCH_ENDPOINT` + `MIND_SEARCH_KEY`. Logic is raising with Zack.
