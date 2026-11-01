@@ -43,6 +43,13 @@ import {
   type PcApprovalRow,
   type WorkerHealthState,
 } from "@/lib/mind/mcp-list-state";
+import {
+  PcApprovalActionStatusRows,
+  onceRetry,
+  runPcApprovalAction,
+  snapshotPcApprovalActionParams,
+  type PcApprovalActionState,
+} from "@/lib/mind/pc-approval-action";
 
 
 function botAvatarSrc(name: string) {
@@ -105,6 +112,7 @@ export function FleetPanel({
   const pcApprovalsInFlight = useRef(false);
   const pcApprovalsGeneration = useRef(0);
   const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
+  const [pcApprovalActionState, setPcApprovalActionState] = useState<PcApprovalActionState>({ status: "idle" });
 
   /** One MCP server list load: loading → ready (maybe empty) or error banner. Timeout + stale guard. */
   function loadMcpServers() {
@@ -530,21 +538,34 @@ export function FleetPanel({
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() => {
-                    setPcApprovalNote(`approving ${item.id}`);
-                    void fetch("/api/mind/pc/approve", {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ approvalId: item.id, token: item.token, command: item.command }),
-                    })
-                      .then(async (res) => {
-                        const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; error?: string } | null;
-                        setPcApprovalNote(body?.ok ? `ok: ${body.text ?? "ran"}` : `error: ${body?.error ?? res.status}`);
-                        refreshPcApprovals();
-                      })
-                      .catch((error: unknown) => {
-                        setPcApprovalNote(error instanceof Error ? error.message : "Approve failed.");
+                    const params = snapshotPcApprovalActionParams({
+                      action: "approve",
+                      approvalId: item.id,
+                      token: item.token,
+                      command: item.command,
+                    });
+                    const run = () => {
+                      setPcApprovalActionState({ status: "running", action: "approve", approvalId: item.id });
+                      setPcApprovalNote(`approving ${item.id}`);
+                      void runPcApprovalAction(params, fetch).then((result) => {
+                        if (result.ok) {
+                          setPcApprovalActionState({ status: "ok", note: result.note });
+                          setPcApprovalNote(result.note);
+                          refreshPcApprovals();
+                          return;
+                        }
+                        setPcApprovalActionState({
+                          status: "error",
+                          kind: result.kind,
+                          message: result.message,
+                          params: result.params,
+                        });
+                        setPcApprovalNote(null);
+                        const retry = onceRetry(() => run());
+                        if (retry) onFailure?.(result.message, retry);
                       });
+                    };
+                    run();
                   }}
                 >
                   Approve
@@ -553,21 +574,33 @@ export function FleetPanel({
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() => {
-                    setPcApprovalNote(`denying ${item.id}`);
-                    void fetch("/api/mind/pc/deny", {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ approvalId: item.id, token: item.token }),
-                    })
-                      .then(async (res) => {
-                        const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-                        setPcApprovalNote(body?.ok ? `denied ${item.id}` : `error: ${body?.error ?? res.status}`);
-                        refreshPcApprovals();
-                      })
-                      .catch((error: unknown) => {
-                        setPcApprovalNote(error instanceof Error ? error.message : "Deny failed.");
+                    const params = snapshotPcApprovalActionParams({
+                      action: "deny",
+                      approvalId: item.id,
+                      token: item.token,
+                    });
+                    const run = () => {
+                      setPcApprovalActionState({ status: "running", action: "deny", approvalId: item.id });
+                      setPcApprovalNote(`denying ${item.id}`);
+                      void runPcApprovalAction(params, fetch).then((result) => {
+                        if (result.ok) {
+                          setPcApprovalActionState({ status: "ok", note: result.note });
+                          setPcApprovalNote(result.note);
+                          refreshPcApprovals();
+                          return;
+                        }
+                        setPcApprovalActionState({
+                          status: "error",
+                          kind: result.kind,
+                          message: result.message,
+                          params: result.params,
+                        });
+                        setPcApprovalNote(null);
+                        const retry = onceRetry(() => run());
+                        if (retry) onFailure?.(result.message, retry);
                       });
+                    };
+                    run();
                   }}
                 >
                   Deny
@@ -578,7 +611,38 @@ export function FleetPanel({
             : null}
           <PcApprovalsListStatusRows state={pcApprovalsState} onRetry={onceListRetry(refreshPcApprovals)} />
         </ul>
-        {pcApprovalNote ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
+        <PcApprovalActionStatusRows
+          state={pcApprovalActionState}
+          onRetry={
+            pcApprovalActionState.status === "error"
+              ? onceRetry(() => {
+                  const params = pcApprovalActionState.params;
+                  const run = () => {
+                    setPcApprovalActionState({ status: "running", action: params.action, approvalId: params.approvalId });
+                    void runPcApprovalAction(params, fetch).then((result) => {
+                      if (result.ok) {
+                        setPcApprovalActionState({ status: "ok", note: result.note });
+                        setPcApprovalNote(result.note);
+                        refreshPcApprovals();
+                        return;
+                      }
+                      setPcApprovalActionState({
+                        status: "error",
+                        kind: result.kind,
+                        message: result.message,
+                        params: result.params,
+                      });
+                      setPcApprovalNote(null);
+                      const retry = onceRetry(() => run());
+                      if (retry) onFailure?.(result.message, retry);
+                    });
+                  };
+                  run();
+                }) ?? (() => undefined)
+              : () => undefined
+          }
+        />
+        {pcApprovalNote && pcApprovalActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
       </div>
 
       <div className="mt-6 space-y-3">

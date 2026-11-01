@@ -351,3 +351,12 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281ffa97ddfb8c11cf266
 - Pushed origin/error-banners → 673b9ec72209959350994602f3389c4328200708 (ls-remote matches).
 - Lock releasing.
+
+## 2026-11-01T17:38:37+01:00 (Africa/Lagos) — Error Banners Bot — H18 PC approve/deny action banners
+- Gap: Tools panel Approve/Deny catch → muted pcApprovalNote only; HTTP ok:false also muted.
+- Lock: /workspace/locks/error-banners-gap-pc-approve-deny.lock
+- preview/integration unchanged @ 7f3e641 (no merge needed).
+- Fix: pc-approval-action.ts runPcApprovalAction + snapshot params + PcApprovalActionStatusRows; onceRetry; onFailure→reportFailure. failure-states pc_approve_failed / pc_deny_failed.
+- Checks: typecheck pass; TS 811/813 (2 pre-existing); lint our files 0e; build pass.
+- Notion: (pending)
+- Lock releasing.

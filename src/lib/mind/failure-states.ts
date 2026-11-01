@@ -46,6 +46,8 @@ export const HONEST_FAILURE_MESSAGES = {
   pc_approvals_list_failed: "The PC shell approvals list could not be loaded.",
   /** Scheduled panel: workerHealth() rejected / timed out / non-JSON — not the same as honest offline. */
   worker_health_failed: "The worker status could not be read.",
+  pc_approve_failed: "The PC shell approval could not be completed.",
+  pc_deny_failed: "The PC shell denial could not be completed.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -186,6 +188,10 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text.includes("PC shell approvals list could not be loaded")
     || text === HONEST_FAILURE_MESSAGES.worker_health_failed
     || text.includes("worker status could not be read")
+    || text === HONEST_FAILURE_MESSAGES.pc_approve_failed
+    || text.includes("PC shell approval could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.pc_deny_failed
+    || text.includes("PC shell denial could not be completed")
   ) {
     return "network_failure";
   }
