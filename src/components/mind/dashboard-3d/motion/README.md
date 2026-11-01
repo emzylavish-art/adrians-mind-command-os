@@ -82,3 +82,8 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - `star-batch.ts` — `stepStarFieldBatch` for N stars (pulse/focus/orbit)
 - `cpu-budget.test.ts` — 10k-frame CPU budget (mean < 2ms); camera dolly stays Dashboard-owned
 
+
+## Star-batch harden + health pulse crossfade (c17)
+
+- Hacker c17 on `star-batch`: count 0 / 100k→`STAR_BATCH_MAX`, NaN bases finite, id holes skipped, mid-frame shrink snapshot, `createStarBatchScratch` / `disposeStarBatchScratch` typed-array reuse
+- `health-pulse-crossfade.ts` — ease pulse amp/speed on health flip; reduced-motion snaps; star-batch + focus-ring APIs unchanged
