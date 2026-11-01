@@ -103,3 +103,21 @@ export {
   type PainterlyTextureSlot,
   type PainterlyTextureBinding,
 } from "./use-painterly-kit.ts";
+
+export {
+  createPainterlyPass,
+  tickPainterlyPass,
+  disposePainterlyPass,
+  resizePainterlyPass,
+  safePainterlyPassSize,
+  painterlyAmountFromHealth,
+  setPainterlyPassHealth,
+  setPainterlyPassAmount,
+  painterlyPassResizeStats,
+  PAINTER_PASS_MAX_EDGE,
+  PAINTER_AMOUNT_MIN,
+  PAINTER_AMOUNT_MAX,
+  PAINTER_AMOUNT_DEFAULT,
+  type PainterlyPassOptions,
+  type PainterlyHealthInputs,
+} from "../shaders/painterly-pass.ts";

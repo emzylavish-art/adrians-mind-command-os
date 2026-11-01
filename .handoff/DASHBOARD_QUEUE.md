@@ -71,7 +71,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 - ~~**Painter — ink-wash constellation edge ribbons**~~ — **done (Cosmos Painter Bot c3)**: `InkWashEdgeMaterial` + `buildInkWashRibbon`; mediump time wrap; release on rebuild.
 - ~~**Painter — Imagine node cards**~~ — **done (Cosmos Painter Bot c4)**: `ImagineNodeMaterial` watercolor edge bleed + paper-grain overlay + brush frame + missing/loading wash fallback; context-restore `rebindPainterlyKitTextures` + `bindSharedTexture` for star/paper consumers.
-- ~~**Painter — lore plaque text atlas**~~ — **done (Cosmos Painter Bot c5)**: `createLoreTextAtlas` + `uTextMap` on lore plaque; Imagine texture sanitize (dims/NPOT/MAX_TEXTURE_SIZE/taint + explicit `imagineMapError`). Next: Dashboard Bot wire-up / post-pass health amount.
+- ~~**Painter — lore plaque text atlas**~~ — **done (Cosmos Painter Bot c5)**: `createLoreTextAtlas` + `uTextMap` on lore plaque; Imagine texture sanitize (dims/NPOT/MAX_TEXTURE_SIZE/taint + explicit `imagineMapError`).
+- ~~**Painter — post-pass health amount**~~ — **done (Cosmos Painter Bot c6)**: `painterlyAmountFromHealth` / `kit.setPassHealth({ healthy, total })`; resize/DPR clamp + RT-skip + compile fallback. Next: Dashboard Bot wire `setPassHealth`/`resizePass` in universe-scene.
 - ~~**Depth-aware god-ray shafts**~~ — **done (wired c9)**: god-ray pass + depth RT in universe-scene.
 - ~~**Health-reactive exposure ride**~~ — **done (wired c9)**: `createExposureRide` in universe-scene; idle until data; reduced-motion snaps.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
