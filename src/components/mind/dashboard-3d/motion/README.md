@@ -38,3 +38,9 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - Complements Dashboard queue #21; markup/styles not owned here
 - Hacker c8: hot-path `opts = {}` → frozen empty (no per-frame alloc); `+Infinity` walk speed; `hardResetSharedMotionClockForTests`
 
+## Pan / remount pose hold (c9)
+
+- `capture*Pose` / `restore*Pose` + `MotionPoseBag` — keep focus/character/breadcrumb/node/scene easing across UniverseScene remount
+- Complements Dashboard #25 last-frame freeze (canvas snapshot); this covers motion state
+- Hacker c9: remount without restore snaps mid-ease; sprite refs ≥0 under double dispose; 100k-frame stress
+
