@@ -1,7 +1,10 @@
 /** Multi-account cloud storage rotation types (server-only). */
 
-export const STORAGE_SERVICES = ["google_drive", "dropbox", "onedrive"] as const;
+export const STORAGE_SERVICES = ["supabase", "google_drive", "dropbox", "onedrive"] as const;
 export type StorageService = (typeof STORAGE_SERVICES)[number];
+
+/** How an upload is filed into Supabase Storage buckets. Unknown lands in media-images. */
+export type MediaStorageKind = "image" | "camera" | "video" | "audio" | "unknown";
 
 export type StorageAccountConfig = {
   service: StorageService;
@@ -9,7 +12,7 @@ export type StorageAccountConfig = {
   accountEmail: string;
   /** Soft quota ceiling in bytes (free-tier defaults: Drive 15GB, Dropbox 2GB, OneDrive 5GB). */
   capBytes: number;
-  /** Lower order uploads first (1 = Drive default). */
+  /** Lower order uploads first (1 = Supabase when that account is configured). */
   order: number;
   enabled: boolean;
 };
@@ -38,6 +41,11 @@ export type StorageUploadInput = {
   mimeType: string;
   /** Remote folder path segments under AdriansMind/, e.g. ["media", "imagine"]. */
   folderSegments?: string[];
+  /**
+   * Optional explicit kind. Supabase maps this to a private bucket.
+   * When omitted, the provider infers a kind from mimeType and folderSegments.
+   */
+  mediaKind?: MediaStorageKind;
 };
 
 export type StorageUploadResult = {
@@ -61,6 +69,8 @@ export type StoreMediaInput = {
   fileName: string;
   mimeType?: string;
   folderSegments?: string[];
+  /** Optional. Supabase bucket routing; other providers ignore it. */
+  mediaKind?: MediaStorageKind;
 };
 
 export type StoreMediaSuccess = {
@@ -97,13 +107,27 @@ export type AccountPublicStatus = {
   quotaSource: StorageQuota["source"];
 };
 
+/** Supabase free-plan project quota (1 GiB, same byte base as the other caps). */
+export const SUPABASE_QUOTA_BYTES = 1 * 1024 * 1024 * 1024;
+
+/** Supabase private buckets reject objects above this size. Rotation then tries the next provider. */
+export const SUPABASE_MAX_FILE_BYTES = 50 * 1024 * 1024;
+
 /** Default free-tier caps (bytes). */
 export const DEFAULT_CAPS = {
+  supabase: SUPABASE_QUOTA_BYTES,
   google_drive: 15 * 1024 * 1024 * 1024, // 15 GiB
   dropbox: 2 * 1024 * 1024 * 1024, // 2 GiB
   onedrive: 5 * 1024 * 1024 * 1024, // 5 GiB
 } as const;
 
+/** Per-provider object size ceiling. Omitted services accept any file under STORE_MEDIA_MAX_BYTES. */
+export const PROVIDER_FILE_LIMITS: Partial<Record<StorageService, number>> = {
+  supabase: SUPABASE_MAX_FILE_BYTES,
+};
+
 export const DEFAULT_SWITCH_THRESHOLD = 0.9;
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MiB per request (route cap)
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MiB HTTP route cap (matches the Supabase object limit)
+/** Direct storeMedia ceiling. Files above the Supabase object limit fall through to the next provider. */
+export const STORE_MEDIA_MAX_BYTES = 512 * 1024 * 1024;
 export const MEDIA_REMOTE_ROOT = "AdriansMind";
