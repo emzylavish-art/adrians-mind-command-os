@@ -52,6 +52,7 @@ export function DashboardApp() {
   const [soundMuted, setSoundMuted] = useState(true);
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
+  const [perfHint, setPerfHint] = useState<string | null>(null);
   const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
   useEffect(() => {
     const sound = createHealthSound({ reducedMotion });
@@ -87,6 +88,14 @@ export function DashboardApp() {
   }, [operatorPrefs]);
 
   useOperatorHotkey(() => setOperatorOpen((o) => !o));
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const hint = document.documentElement.dataset.dashPerf || null;
+      setPerfHint((prev) => (prev === hint ? prev : hint));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
 
   const unlockSound = useCallback(() => {
     soundRef.current?.unlock();
@@ -261,6 +270,12 @@ export function DashboardApp() {
             <p className="dash3d-title">{state.data.weather.label}</p>
             <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>{state.data.weather.summary}</p>
           </div>
+          {perfHint ? (
+            <div className="dash3d-glass dash3d-skybar-card" data-testid="perf-budget-hint" role="status">
+              <h2>Perf</h2>
+              <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>{perfHint}</p>
+            </div>
+          ) : null}
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Notion galaxy</h2>
             <p className="dash3d-title">

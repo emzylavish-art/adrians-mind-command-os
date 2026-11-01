@@ -5,6 +5,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { evaluatePerfBudget, nextEmaFrameMs } from "@/lib/mind/dashboard/perf-budget";
 import {
   createPainterlyKit,
   tickPainterlyKit,
@@ -1075,6 +1076,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     });
 
     let last = performance.now();
+    let perfEma = 16.7;
+    let labelsPaused = false;
     let raf = 0;
     let sync = 0;
     const travelOut = { x: 0, y: 0, z: 0 };
@@ -1092,6 +1095,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       const dt = sanitizeDt((now - last) / 1000);
       last = now;
+      // Queue #17: EMA frame budget — pause CSS2D labels when 18+ bots run hot.
+      perfEma = nextEmaFrameMs(perfEma, dt * 1000);
+      {
+        const perf = evaluatePerfBudget({ botCount: botVis.length, emaFrameMs: perfEma, labelsPaused });
+        labelsPaused = perf.labelsPaused;
+        try {
+          if (perf.hint) document.documentElement.dataset.dashPerf = perf.hint;
+          else delete document.documentElement.dataset.dashPerf;
+        } catch {
+          /* ignore */
+        }
+      }
 
       if (rig.t < 1) {
         const stepped = stepRigSmooth(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.35);
@@ -1110,7 +1125,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const show = starHealthFilter === "all" || n.health === starHealthFilter;
         n.mesh.visible = show;
         n.glow.visible = show;
-        n.label.visible = show && labelsOn && fly.level === "universe";
+        n.label.visible = show && labelsOn && fly.level === "universe" && !labelsPaused;
         const phase = pulsePhaseFromId(n.id);
         sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
         n.mesh.scale.setScalar(pulseOut.scale);
