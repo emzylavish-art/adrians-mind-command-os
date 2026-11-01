@@ -365,7 +365,7 @@ export const speakText = createServerFn({ method: "POST" })
         method: "POST",
         signal: AbortSignal.timeout(20_000),
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ text, voice_id: "eve" }),
+        body: JSON.stringify({ text, voice_id: "eve", language: "en", output_format: { codec: "mp3" } }),
       });
     } catch {
       return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
@@ -442,3 +442,80 @@ export const mcpRegistryCall = createServerFn({ method: "POST" })
     };
   });
 
+export const listMindMemories = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Memories were not listed.", memories: [] as const };
+    }
+    const { getSql } = await import("../db");
+    const { listOwnerMemories } = await import("./memory/owner-ops");
+    const listed = await listOwnerMemories(await getSql(), context.userId, { includeArchived: false });
+    return { ok: true as const, memories: listed.memories };
+  });
+
+export const createMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { scope?: string; text?: string; projectId?: string | null; chatId?: string | null; source?: string }) => {
+    const scope = input.scope === "project" || input.scope === "chat" ? input.scope : ("global" as const);
+    return {
+      scope: scope as "global" | "project" | "chat",
+      text: typeof input.text === "string" ? input.text : "",
+      projectId: typeof input.projectId === "string" ? input.projectId : null,
+      chatId: typeof input.chatId === "string" ? input.chatId : null,
+      source: typeof input.source === "string" ? input.source.slice(0, 160) : "owner",
+    };
+  })
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was saved.", memorySaved: false as const, savedMemoryId: null };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute.", memorySaved: false as const, savedMemoryId: null };
+    }
+    const { getSql } = await import("../db");
+    const { createOwnerMemory } = await import("./memory/owner-ops");
+    const { memorySignalFromSave } = await import("./memory/signal");
+    const saved = await createOwnerMemory(await getSql(), context.userId, data);
+    if (!saved.ok) return { ok: false as const, error: saved.error, ...memorySignalFromSave(saved) };
+    return { ok: true as const, item: saved.item, ...memorySignalFromSave({ ok: true, id: saved.item.id }) };
+  });
+
+export const editMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; text?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+    text: typeof input.text === "string" ? input.text : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was edited." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { editOwnerMemory } = await import("./memory/owner-ops");
+    return editOwnerMemory(await getSql(), context.userId, data.id, data.text);
+  });
+
+export const deleteMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was deleted." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { deleteOwnerMemory } = await import("./memory/owner-ops");
+    return deleteOwnerMemory(await getSql(), context.userId, data.id);
+  });

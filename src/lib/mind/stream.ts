@@ -1,3 +1,6 @@
+/** Honest label when a done event did not confirm which model answered. */
+export const UNKNOWN_MODEL_LABEL = "model unknown";
+
 export type ModelUsage = { prompt_tokens?: number; completion_tokens?: number };
 
 export function readModelPayload(raw: string): { text: string; streamed: boolean; usage: ModelUsage | null } {
@@ -60,7 +63,7 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string }
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null }
   | { event: "error"; error: string }
   | { event: "canceled"; error: string };
 
@@ -91,16 +94,19 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
     else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error });
     else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error });
     else if (name === "done" && typeof record.text === "string") {
+      const modelRaw = typeof record.model === "string" ? record.model.trim() : "";
       events.push({
         event: "done",
         text: record.text,
-        model: typeof record.model === "string" ? record.model : "grok-4.5",
+        model: modelRaw || UNKNOWN_MODEL_LABEL,
         usage: record.usage && typeof record.usage === "object" ? (record.usage as ModelUsage) : null,
         usedIds: Array.isArray(record.usedIds) ? record.usedIds.filter((id) => typeof id === "string") : [],
         requestId: typeof record.requestId === "string" ? record.requestId : null,
         modelTier: typeof record.modelTier === "string" ? record.modelTier : undefined,
         resolvedTier: typeof record.resolvedTier === "string" ? record.resolvedTier : undefined,
         tierReason: typeof record.tierReason === "string" ? record.tierReason : undefined,
+        memorySaved: record.memorySaved === true,
+        savedMemoryId: typeof record.savedMemoryId === "string" ? record.savedMemoryId : null,
       });
     }
   }

@@ -158,6 +158,119 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Slack: `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`, `SLACK_OAUTH_REDIRECT_URI`
 - GitHub: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`
 
+
+## Gap done: OAuth callback XSS / state traversal (2026-11-01 Africa/Lagos)
+
+**Status:** done (typecheck + oauth/security/stdio/pairing tests + build passed; one flaky workspace normalize timing under load unrelated)
+
+### Fixed
+- H1: shared `oauth-callback-html` escape + CSP + nosniff; fixed provider error messages; postMessage to `window.location.origin`
+- H2: strict state regex + pending path containment; atomic rename claim
+- H3: 10m TTL, single-use, prune, connector+owner bind
+- Attacker pass: redirect_uri https/localhost; Origin CSRF on start/disconnect; no upstream error_description leak; CONNECTOR_TOKEN_SECRET required ≥16; revokeOk honesty; pairing id path validation; ServiceBoard settles status errors
+
+### Commits
+- `2595ba7` Harden OAuth connectors…
+- (routes/ServiceBoard/pairing + tests follow)
+
+## Gap done: stdio MCP servers (2026-11-01 Africa/Lagos)
+
+**Status:** done (stdio unit + e2e PASS; typecheck/build previously green on tip)
+
+### Shipped
+- Execute registered command MCP servers: initialize, tools/list, tools/call with connect/call timeouts and child cleanup
+- Operator allowlist `MIND_MCP_STDIO_ALLOW` required before any spawn (deny by default)
+- Block LD_PRELOAD/NODE_OPTIONS/PATH override etc. from server env
+- Tools UI timeout/error status; e2e script `scripts/mcp/stdio-e2e.mjs`
+
+### Commits
+- `cf3bc07` Execute registered stdio MCP servers…
+- `8d46376` Tools UI timeout/error status for stdio…
+- (allowlist commit on tip)
+
+## Security fix: unauthenticated built-in MCP HTTP endpoint (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed (`d113625`).
+
+### Weakness (confirmed)
+`/api/mind/mcp/builtin` had no auth. Anyone who could reach the app could POST
+JSON-RPC `tools/call` and run `pglite_query` against the app DB (confirmed earlier:
+anonymous call on :8083 returned rows, see `live-verify.log`), read/append Notion
+pages with the server `NOTION_TOKEN`, and send `pc_run_shell` with `confirm=true`
+to the legacy `MIND_PC_AGENT_URL` agent (if one is set).
+
+### Fix
+- `handleBuiltinMcpHttp(request, { authenticate, getSql?, isHalted? })`: without an
+  authenticator, or when it returns null or throws → 401 JSON-RPC error before any
+  MCP server or tool is created (no tool list leaks). The old `(request, getSql)` call
+  shape also fails closed.
+- Emergency stop → 403; a halt read that throws also counts as halted.
+- Tools are scoped to the signed-in owner (`ownerId` goes to notion_* and pc_run_shell).
+- Route uses `requireUserId` (cookie or bearer session) and `haltIsOn`.
+- Callers in e2e/verify-live scripts updated.
+
+### Checks
+- New `src/lib/mind/mcp/builtin-server.test.ts`: 7 tests. All 7 failed before the fix and all 7 pass after it.
+- typecheck: pass
+- mind/src tests: 284/284 pass
+- scripts tests: 198/202. The 4 failures (SKILL.md/AGENTS.md/og-skill doc checks) were already failing before this change and are unrelated.
+- build: pass; `npm run mcp:e2e`: pass
+- Live on a local preview (:8141, built from this commit): an anonymous call and a forged bearer to `tools/call pglite_query` both got **HTTP 401**. Not checked live: a signed-in call (no session on the box). That path is covered only by unit tests.
+- Auth-disabled dev mode (`VITE_AUTH_ENABLED=false`, no DATABASE_URL) still maps to `dev-user`, the same as every other route.
+
+### Open (attacker pass notes, not fixed this cycle)
+- HTTP MCP registry `rpc()` has no fetch timeout, no response-size cap, and follows redirects. A hostile https MCP server can hang the Tools list (servers are listed one after another), use up memory, or redirect to internal hosts (blind SSRF / port probe through the status code).
+- https registration accepts private/link-local IP literals. http is allowed on localhost by design.
+- `pglite_query` guard: functions with side effects like `set_config()`/`nextval()` are not write verbs, so they pass the guard (only matters inside PGLite).
+
+
+## Security fix: remote (http) MCP server hang / memory / SSRF (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed.
+
+### Weakness (confirmed in code)
+`registry.ts` `rpc()` had no timeout, read the whole body with no size cap, and
+followed redirects (forwarding the Bearer token). Registration accepted https to
+private/link-local IP literals (e.g. `169.254.169.254`) and URLs with
+`user:pass@`. A hostile or broken server could hang the Tools list (servers are
+listed one after another), exhaust memory, or bounce requests to internal hosts.
+
+### Fix
+- 15s per-request deadline (AbortController + race); list rows and calls report `timeout` honestly.
+- 1 MB response cap (content-length precheck + streamed read that cancels on overflow).
+- `redirect: "manual"`; any 3xx is an error, never followed.
+- `httpServerUrlProblem()`: refuses embedded credentials and private/loopback/link-local/CGNAT/multicast/IPv4-mapped IPv6 literals; http only on localhost. Re-checked at call time for stores saved before this guard.
+
+### Checks
+- New `src/lib/mind/mcp/registry-http.test.ts` (6 tests, real local http servers): hang → timeout, 307 redirect target never hit, 12.8 MB stream dropped at 100 KB cap, private/credentialed URLs refused, legacy stored metadata URL never fetched, well-behaved server still lists + calls. Test file fails against the pre-fix registry.
+- typecheck pass; mind/src tests 290/290; build pass; `npm run mcp:e2e` pass.
+
+### Open
+- DNS rebinding / hostnames that resolve to private IPs are not checked (no DNS resolution at save or call time).
+- `pglite_query` guard: side-effect functions (`set_config()`, `nextval()`) still pass (PGLite-only impact).
+
+## Gap: H9 pc_run_shell confirm bypass (2026-11-01, Africa/Lagos)
+
+**Status:** complete (2026-11-01T14:52:06+01:00)  
+**Lock:** `mcp-integration-gap-pc-shell-confirm-bypass.lock` (released after push)
+
+### Fix
+- `pc_run_shell` **ignores** tool-arg `confirm` / `approved` / `approvalId`.
+- Non-allowlisted commands create a **server-issued** pending approval (command hash, agent id, owner, TTL 3 min) and return `needsApproval` + approval id (token **not** in MCP result).
+- Only authenticated human POST `/api/mind/pc/approve` (session cookie) can consume the one-time token (timing-safe compare); `/api/mind/pc/deny` rejects; list via GET `/api/mind/pc/approvals`.
+- Approvals are single-use, expire, reject forged/mismatched/reused tokens; emergency stop blocks create + approve.
+- Tools UI: minimal Approve/Deny under **PC shell approvals** (`fleet-panels.tsx`; not `service-board.tsx`).
+
+### Verification
+- `tsc --noEmit`: pass
+- mind/src tests: **296/296** pass (incl. `pc-pairing/approvals.test.ts` H9 regressions)
+- `npm run build`: pass
+
+### Commits (this gap)
+- (pending push) Harden pc_run_shell with human UI approvals; ignore client confirm.
+
+
+
 ## 2026-11-01T14:45:02+01:00 (Africa/Lagos) — Error Banners Bot — connector status stuck fixed
 - Gap: ServiceBoard cards stuck on "Checking connection…" (GitHub/Gmail/Drive/Calendar/Slack); Notion "status could not be read" on preview/integration.
 - Lock: /workspace/locks/error-banners-gap-connector-status-stuck.lock — no ACTIVE exclusive claim on service-board.tsx. Did not touch connectors/ or OAuth routes.
@@ -194,3 +307,11 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Remote: git ls-remote origin error-banners → 62a191ecc772bb8e6af685be67d1700fc8894f4a
 - Notion: child page https://app.notion.com/p/40bb95f33e4281a0b648e8639a6cedaf under mirror 40bb95f33e42814aacf8c3281b4f528d
 - Lock releasing done.
+
+# 2026-11-01 (Africa/Lagos) — Grok Build: Memory UX depth
+- Branch: preview/memory-ux (worktree /workspace/mind-command-os-memory)
+- Base: origin/preview/integration @ 7c73ba3
+- Real: /memory manager (list/edit/delete/empty/add + localStorage persist); owner-scoped server list/edit/delete/create; turn SSE memorySaved signal; per-chat skip helpers + tests
+- Pending mount: MemorySavedIndicator + MemoryChatToggle into command-app.tsx (claimed by other lanes) — see /workspace/audit/mind-os/memory-ux/MOUNT.md
+- Notion: do NOT write from this lane; mirror at /workspace/audit/mind-os/memory-ux/
+

@@ -7,6 +7,7 @@ import {
   type ConcreteModelTier,
   type ModelTier,
 } from "@/lib/mind/model-tiers";
+import { readTierOutcome } from "@/lib/mind/model-tier-memory";
 
 export type ModelTierChipProps = {
   tier: ModelTier;
@@ -14,6 +15,8 @@ export type ModelTierChipProps = {
   /** After a completed turn, Auto shows Auto→resolved and optionally the model id. */
   lastResolved?: ConcreteModelTier | null;
   lastModel?: string | null;
+  /** Why Auto (or the owner) picked this model — shown in title/aria. */
+  tierReason?: string | null;
   className?: string;
 };
 
@@ -21,11 +24,21 @@ export type ModelTierChipProps = {
  * Header model chip. Same source of truth as Mode picker: both call onChoose(tier).
  * Not a display preference — selecting a tier changes which model the next send uses.
  */
-export function ModelTierChip({ tier, onChoose, lastResolved = null, lastModel = null, className = "" }: ModelTierChipProps) {
+export function ModelTierChip({ tier, onChoose, lastResolved = null, lastModel = null, tierReason = null, className = "" }: ModelTierChipProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
-  const label = chipLabelForTier({ selected: tier, lastResolved, lastModel });
+  const remembered = typeof window === "undefined" ? null : readTierOutcome();
+  const effectiveResolved = lastResolved ?? remembered?.resolved ?? null;
+  const effectiveModel = lastModel ?? remembered?.model ?? null;
+  const label = chipLabelForTier({ selected: tier, lastResolved: effectiveResolved, lastModel: effectiveModel });
+  const reasonText =
+    (tierReason && tierReason.trim()) ||
+    (remembered?.reason && remembered.reason.trim()) ||
+    (tier === "Auto"
+      ? "Auto picks Fast, Expert, Heavy, or Build from the prompt. After a turn, the chip shows which model answered."
+      : `Mode ${tier} selects a fixed Grok model for the next send.`);
+
 
   useEffect(() => {
     if (!open) return;
@@ -51,6 +64,8 @@ export function ModelTierChip({ tier, onChoose, lastResolved = null, lastModel =
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
+        aria-label={`Model mode ${label}. ${reasonText}`}
+        title={reasonText}
         onClick={() => setOpen((value) => !value)}
       >
         <span className="max-w-[14rem] truncate">{label}</span>

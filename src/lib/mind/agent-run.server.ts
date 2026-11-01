@@ -1,12 +1,14 @@
 import { requireUserId } from "../auth/verify.server";
 import { buildAgentModelBody, readAgentMessage, runBoundedAgent, type AgentModel } from "./agent";
 import { resolveModelTier } from "./model-tiers";
+import { AGENT_TIMEOUT_REPLY, agentRunTimeoutMs, boundAbortSignal, isTimeoutAbort } from "./turn-timeouts";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { decideFetchSite } from "./request-guard";
 import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
 import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
+import { parseModelTierField, readJsonObjectBody } from "./request-body";
 
 const MAX_BODY = 2_500_000;
 
@@ -73,14 +75,11 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message, log: [] }, message === "Unauthorized" ? 401 : 403);
   }
-  const raw = await request.text();
-  if (raw.length > MAX_BODY) return json({ ok: false, error: "That request is too large.", log: [] }, 413);
-  let body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown };
-  try {
-    body = JSON.parse(raw) as typeof body;
-  } catch {
-    return json({ ok: false, error: "That request could not be read.", log: [] }, 400);
-  }
+  const read = await readJsonObjectBody(request, MAX_BODY);
+  if (!read.ok) return json({ ok: false, error: read.error, log: [] }, read.status);
+  const body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown } = read.body;
+  const tierField = parseModelTierField(body.modelTier);
+  if (!tierField.ok) return json({ ok: false, error: tierField.error, log: [] }, 400);
   const { haltIsOn } = await import("./halt.server");
   if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on. No new action can run.", log: [] });
   if (!allowMindRequest("agent", userId, 6)) return json({ ok: false, error: "Too many agent runs. Wait a minute and try again.", log: [] });
@@ -118,32 +117,63 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     versions: [],
   }));
   const goal = typeof body.goal === "string" ? body.goal : "";
-  const tier = resolveModelTier(body.modelTier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
+  const tier = resolveModelTier(tierField.tier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
-  const result = await runBoundedAgent({
-    ws,
-    goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
-    model: grokModel(apiKey, request.signal, {
+  const bound = boundAbortSignal(request.signal, agentRunTimeoutMs());
+  try {
+    const result = await runBoundedAgent({
+      ws,
+      goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
+      model: grokModel(apiKey, bound.signal, {
+        model: tier.model,
+        temperature: tier.params.temperature,
+        max_tokens: tier.params.max_tokens,
+        reasoning_effort: tier.params.reasoning_effort,
+      }),
+      signal: bound.signal,
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      images,
+    });
+    if (!result.ok && isTimeoutAbort(bound.signal, bound.signal.reason)) {
+      return json({
+        ok: false,
+        text: "",
+        log: result.log,
+        error: AGENT_TIMEOUT_REPLY,
+        model: tier.model,
+        modelTier: tier.selected,
+        resolvedTier: tier.resolved,
+        tierReason: tier.reason,
+      });
+    }
+    return json({
+      ok: result.ok,
+      text: result.text,
+      log: result.log,
+      error: result.error ?? "",
       model: tier.model,
-      temperature: tier.params.temperature,
-      max_tokens: tier.params.max_tokens,
-      reasoning_effort: tier.params.reasoning_effort,
-    }),
-    signal: request.signal,
-    autonomy: "ask",
-    halted: false,
-    approved: true,
-    images,
-  });
-  return json({
-    ok: result.ok,
-    text: result.text,
-    log: result.log,
-    error: result.error ?? "",
-    model: tier.model,
-    modelTier: tier.selected,
-    resolvedTier: tier.resolved,
-    tierReason: tier.reason,
-    images: result.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name, mime: image.mime })) ?? [],
-  });
+      modelTier: tier.selected,
+      resolvedTier: tier.resolved,
+      tierReason: tier.reason,
+      images: result.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name, mime: image.mime })) ?? [],
+    });
+  } catch (caught) {
+    if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {
+      return json({
+        ok: false,
+        text: "",
+        log: [],
+        error: AGENT_TIMEOUT_REPLY,
+        model: tier.model,
+        modelTier: tier.selected,
+        resolvedTier: tier.resolved,
+        tierReason: tier.reason,
+      });
+    }
+    throw caught;
+  } finally {
+    bound.cleanup();
+  }
 }

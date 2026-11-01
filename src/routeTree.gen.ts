@@ -10,7 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MemoryRouteImport } from './routes/memory'
+import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
@@ -19,6 +22,9 @@ import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
 import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
+import { Route as ApiMindPcApprovalsRouteImport } from './routes/api/mind/pc/approvals'
+import { Route as ApiMindPcApproveRouteImport } from './routes/api/mind/pc/approve'
+import { Route as ApiMindPcDenyRouteImport } from './routes/api/mind/pc/deny'
 import { Route as ApiMindPcJobsRouteImport } from './routes/api/mind/pc/jobs'
 import { Route as ApiMindPcRegisterRouteImport } from './routes/api/mind/pc/register'
 import { Route as ApiMindPcResultRouteImport } from './routes/api/mind/pc/result'
@@ -40,9 +46,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExploreRoute = ExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PersonasRoute = PersonasRouteImport.update({
+  id: '/personas',
+  path: '/personas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -83,6 +104,21 @@ const ApiMindMcpToolsRoute = ApiMindMcpToolsRouteImport.update({
 const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
   id: '/api/mind/media/generate',
   path: '/api/mind/media/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPcApprovalsRoute = ApiMindPcApprovalsRouteImport.update({
+  id: '/api/mind/pc/approvals',
+  path: '/api/mind/pc/approvals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPcApproveRoute = ApiMindPcApproveRouteImport.update({
+  id: '/api/mind/pc/approve',
+  path: '/api/mind/pc/approve',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPcDenyRoute = ApiMindPcDenyRouteImport.update({
+  id: '/api/mind/pc/deny',
+  path: '/api/mind/pc/deny',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindPcJobsRoute = ApiMindPcJobsRouteImport.update({
@@ -170,7 +206,10 @@ const ApiMindOauthNotionStatusRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
+  '/memory': typeof MemoryRoute
+  '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -179,6 +218,9 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/pc/approvals': typeof ApiMindPcApprovalsRoute
+  '/api/mind/pc/approve': typeof ApiMindPcApproveRoute
+  '/api/mind/pc/deny': typeof ApiMindPcDenyRoute
   '/api/mind/pc/jobs': typeof ApiMindPcJobsRoute
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
@@ -197,7 +239,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
+  '/memory': typeof MemoryRoute
+  '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -206,6 +251,9 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/pc/approvals': typeof ApiMindPcApprovalsRoute
+  '/api/mind/pc/approve': typeof ApiMindPcApproveRoute
+  '/api/mind/pc/deny': typeof ApiMindPcDenyRoute
   '/api/mind/pc/jobs': typeof ApiMindPcJobsRoute
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
@@ -225,7 +273,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
+  '/memory': typeof MemoryRoute
+  '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -234,6 +285,9 @@ export interface FileRoutesById {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/pc/approvals': typeof ApiMindPcApprovalsRoute
+  '/api/mind/pc/approve': typeof ApiMindPcApproveRoute
+  '/api/mind/pc/deny': typeof ApiMindPcDenyRoute
   '/api/mind/pc/jobs': typeof ApiMindPcJobsRoute
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
@@ -254,7 +308,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/explore'
     | '/login'
+    | '/memory'
+    | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -263,6 +320,9 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/pc/approvals'
+    | '/api/mind/pc/approve'
+    | '/api/mind/pc/deny'
     | '/api/mind/pc/jobs'
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
@@ -281,7 +341,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/explore'
     | '/login'
+    | '/memory'
+    | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -290,6 +353,9 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/pc/approvals'
+    | '/api/mind/pc/approve'
+    | '/api/mind/pc/deny'
     | '/api/mind/pc/jobs'
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
@@ -308,7 +374,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/explore'
     | '/login'
+    | '/memory'
+    | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -317,6 +386,9 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/pc/approvals'
+    | '/api/mind/pc/approve'
+    | '/api/mind/pc/deny'
     | '/api/mind/pc/jobs'
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
@@ -336,7 +408,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ExploreRoute: typeof ExploreRoute
   LoginRoute: typeof LoginRoute
+  MemoryRoute: typeof MemoryRoute
+  PersonasRoute: typeof PersonasRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
@@ -345,6 +420,9 @@ export interface RootRouteChildren {
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
   ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
   ApiMindMediaGenerateRoute: typeof ApiMindMediaGenerateRoute
+  ApiMindPcApprovalsRoute: typeof ApiMindPcApprovalsRoute
+  ApiMindPcApproveRoute: typeof ApiMindPcApproveRoute
+  ApiMindPcDenyRoute: typeof ApiMindPcDenyRoute
   ApiMindPcJobsRoute: typeof ApiMindPcJobsRoute
   ApiMindPcRegisterRoute: typeof ApiMindPcRegisterRoute
   ApiMindPcResultRoute: typeof ApiMindPcResultRoute
@@ -371,11 +449,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/explore': {
+      id: '/explore'
+      path: '/explore'
+      fullPath: '/explore'
+      preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/personas': {
+      id: '/personas'
+      path: '/personas'
+      fullPath: '/personas'
+      preLoaderRoute: typeof PersonasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -432,6 +531,27 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/media/generate'
       fullPath: '/api/mind/media/generate'
       preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pc/approvals': {
+      id: '/api/mind/pc/approvals'
+      path: '/api/mind/pc/approvals'
+      fullPath: '/api/mind/pc/approvals'
+      preLoaderRoute: typeof ApiMindPcApprovalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pc/approve': {
+      id: '/api/mind/pc/approve'
+      path: '/api/mind/pc/approve'
+      fullPath: '/api/mind/pc/approve'
+      preLoaderRoute: typeof ApiMindPcApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pc/deny': {
+      id: '/api/mind/pc/deny'
+      path: '/api/mind/pc/deny'
+      fullPath: '/api/mind/pc/deny'
+      preLoaderRoute: typeof ApiMindPcDenyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/pc/jobs': {
@@ -544,7 +664,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ExploreRoute: ExploreRoute,
   LoginRoute: LoginRoute,
+  MemoryRoute: MemoryRoute,
+  PersonasRoute: PersonasRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
@@ -553,6 +676,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
   ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
   ApiMindMediaGenerateRoute: ApiMindMediaGenerateRoute,
+  ApiMindPcApprovalsRoute: ApiMindPcApprovalsRoute,
+  ApiMindPcApproveRoute: ApiMindPcApproveRoute,
+  ApiMindPcDenyRoute: ApiMindPcDenyRoute,
   ApiMindPcJobsRoute: ApiMindPcJobsRoute,
   ApiMindPcRegisterRoute: ApiMindPcRegisterRoute,
   ApiMindPcResultRoute: ApiMindPcResultRoute,

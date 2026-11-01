@@ -25,8 +25,11 @@ async function defaultGetSql(): Promise<SqlLike> {
   return getSql();
 }
 
-/** Create an MCP server instance exposing the four built-in tools. */
-export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSql) {
+/**
+ * Create an MCP server instance exposing the built-in tools.
+ * `ownerId` scopes Notion OAuth tokens and PC pairing to the signed-in user.
+ */
+export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSql, ownerId?: string) {
   const server = new McpServer({ name: "adrians-mind-builtin", version: "1.0.0" });
 
   server.registerTool(
@@ -37,7 +40,7 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
         page_id: z.string().describe("Notion page id or URL"),
       },
     },
-    async ({ page_id }) => asContent(await notionReadPage({ pageIdOrUrl: page_id })),
+    async ({ page_id }) => asContent(await notionReadPage({ pageIdOrUrl: page_id, ownerId })),
   );
 
   server.registerTool(
@@ -51,19 +54,19 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
       },
     },
     async ({ page_id, heading, markdown }) =>
-      asContent(await notionAppendSection({ pageIdOrUrl: page_id, heading, markdown })),
+      asContent(await notionAppendSection({ pageIdOrUrl: page_id, heading, markdown, ownerId })),
   );
 
   server.registerTool(
     "pc_run_shell",
     {
-      description: "Run a shell command on the paired PC. Allowlist or confirm required.",
+      description: "Run a shell command on the paired PC. Allowlisted commands run; others need human approval in Tools. confirm tool args are ignored.",
       inputSchema: {
         command: z.string().describe("Shell command"),
-        confirm: z.boolean().optional().describe("Explicit confirmation for non-allowlisted commands"),
+        confirm: z.boolean().optional().describe("Ignored. Human approval is required for non-allowlisted commands."),
       },
     },
-    async ({ command, confirm }) => asContent(await pcRunShell({ command, confirm })),
+    async ({ command }) => asContent(await pcRunShell({ command, ownerId })),
   );
 
   server.registerTool(
@@ -95,19 +98,65 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
   return server;
 }
 
+export type BuiltinHttpOptions = {
+  /**
+   * REQUIRED. Resolve the signed-in user for this request, or null/throw when
+   * there is no valid session. Without it every request is refused (fail closed):
+   * this endpoint exposes pglite_query, notion_* (server token) and pc_run_shell.
+   */
+  authenticate: (request: Request) => Promise<string | null | undefined>;
+  getSql?: BuiltinSqlProvider;
+  /** Emergency-stop check for the resolved owner. When true, nothing runs. */
+  isHalted?: (ownerId: string) => Promise<boolean> | boolean;
+};
+
+function rpcError(status: number, code: number, message: string): Response {
+  return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code, message } }), {
+    status,
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      ...(status === 401 ? { "www-authenticate": 'Bearer realm="mind-mcp"' } : {}),
+    },
+  });
+}
+
 /**
  * Handle one Streamable HTTP MCP request against a fresh built-in server.
  * Stateless JSON responses so the existing mind MCP client can parse them.
+ *
+ * SECURITY: the caller must be authenticated via `options.authenticate`.
+ * Anonymous, forged, or legacy (no authenticator) calls get 401 before any
+ * MCP server or tool is created, so no tool list or result can leak.
  */
-export async function handleBuiltinMcpHttp(
-  request: Request,
-  getSql: BuiltinSqlProvider = defaultGetSql,
-): Promise<Response> {
+export async function handleBuiltinMcpHttp(request: Request, options: BuiltinHttpOptions): Promise<Response> {
+  const authenticate = options && typeof options === "object" ? options.authenticate : undefined;
+  if (typeof authenticate !== "function") {
+    return rpcError(401, -32001, "Sign in is required. No MCP tool was listed or called.");
+  }
+  let ownerId: string | null | undefined;
+  try {
+    ownerId = await authenticate(request);
+  } catch {
+    ownerId = null;
+  }
+  if (typeof ownerId !== "string" || !ownerId.trim()) {
+    return rpcError(401, -32001, "Sign in is required. No MCP tool was listed or called.");
+  }
+  if (options.isHalted) {
+    let halted = true;
+    try {
+      halted = await options.isHalted(ownerId);
+    } catch {
+      halted = true; // cannot read the stop switch -> do not run tools
+    }
+    if (halted) return rpcError(403, -32002, "Emergency stop is on. No MCP tool was called.");
+  }
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  const server = createBuiltinMcpServer(getSql);
+  const server = createBuiltinMcpServer(options.getSql ?? defaultGetSql, ownerId);
   await server.connect(transport);
   try {
     return await transport.handleRequest(request);

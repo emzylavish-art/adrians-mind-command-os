@@ -12,6 +12,8 @@ import {
   type SqlLike,
   type ToolResult,
 } from "./tools.ts";
+import { callStdioTool, isBlockedChildEnvKey, listStdioTools, type StdioOptions } from "./stdio.ts";
+import { readHaltFile } from "../halt-file.ts";
 
 export type McpServerKind = "builtin" | "http" | "command";
 
@@ -22,17 +24,22 @@ export type RegistryServer = {
   enabled: boolean;
   /** For kind=http */
   url?: string;
-  /** For kind=command (stdio) — not executed until explicitly enabled and called */
+  /** For kind=command (stdio) — spawned only when enabled AND a list/call is requested */
   command?: string;
   args?: string[];
+  /** Server-specific env for kind=command. The app's own env is never passed through (only PATH/HOME). Never returned to the client. */
+  env?: Record<string, string>;
+  /** Optional per-server timeouts for kind=command (ms). */
+  connectTimeoutMs?: number;
+  callTimeoutMs?: number;
   /** Opaque token for external HTTP MCP; never returned to the client */
   token?: string;
   builtin?: boolean;
 };
 
-export type RegistryServerPublic = Omit<RegistryServer, "token"> & { hasToken: boolean };
+export type RegistryServerPublic = Omit<RegistryServer, "token" | "env"> & { hasToken: boolean; envKeys?: string[] };
 
-export type ToolCallStatus = "running" | "ok" | "error";
+export type ToolCallStatus = "running" | "ok" | "error" | "timeout";
 
 export type RegistryToolCallResult = {
   status: ToolCallStatus;
@@ -88,8 +95,52 @@ function writeStore(userId: string, store: StoreFile) {
 }
 
 function toPublic(server: RegistryServer): RegistryServerPublic {
-  const { token: _token, ...rest } = server;
-  return { ...rest, hasToken: Boolean(server.token) };
+  const { token: _token, env, ...rest } = server;
+  return { ...rest, hasToken: Boolean(server.token), ...(env ? { envKeys: Object.keys(env) } : {}) };
+}
+
+const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
+/** Sanitize a server-specific env map (bounded keys/values). */
+export function sanitizeServerEnv(input: unknown): Record<string, string> | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>).slice(0, 20)) {
+    if (!ENV_KEY.test(key) || isBlockedChildEnvKey(key)) continue;
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
+    out[key] = String(value).slice(0, 1000);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function timeoutField(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.min(300_000, Math.max(100, Math.floor(n)));
+}
+
+export type StdioDeps = {
+  /** Options forwarded to the stdio runner (timeouts, caps). */
+  stdio?: StdioOptions;
+  /** Emergency-stop check. Defaults to the durable halt file. When halted, no stdio child is spawned. */
+  isHalted?: (userId: string) => Promise<boolean> | boolean;
+};
+
+function defaultIsHalted(userId: string): boolean {
+  const file = readHaltFile(userId);
+  return file.ownerId ? file.halted : false;
+}
+
+function stdioConfig(server: RegistryServer) {
+  return {
+    id: server.id,
+    label: server.label,
+    command: server.command ?? "",
+    args: server.args ?? [],
+    env: server.env,
+    connectTimeoutMs: server.connectTimeoutMs,
+    callTimeoutMs: server.callTimeoutMs,
+  };
 }
 
 export function listRegistryServers(userId: string): RegistryServerPublic[] {
@@ -107,7 +158,16 @@ export function setServerEnabled(userId: string, id: string, enabled: boolean): 
 
 export function registerExternalServer(
   userId: string,
-  input: { label: string; url?: string; command?: string; args?: string[]; token?: string },
+  input: {
+    label: string;
+    url?: string;
+    command?: string;
+    args?: string[];
+    token?: string;
+    env?: Record<string, unknown>;
+    connectTimeoutMs?: number;
+    callTimeoutMs?: number;
+  },
 ): { ok: true; servers: RegistryServerPublic[] } | { ok: false; error: string } {
   const label = input.label.trim().slice(0, 80);
   if (!label) return { ok: false, error: "A label is required. Nothing was saved." };
@@ -119,10 +179,8 @@ export function registerExternalServer(
     } catch {
       return { ok: false, error: "That is not a URL. Nothing was saved." };
     }
-    const local = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-    if (!(parsed.protocol === "https:" || (parsed.protocol === "http:" && local))) {
-      return { ok: false, error: "Only https, or http on localhost, can be saved. Nothing was saved." };
-    }
+    const refused = httpServerUrlProblem(parsed);
+    if (refused) return { ok: false, error: `${refused} Nothing was saved.` };
     store.servers.push({
       id: randomUUID(),
       label,
@@ -141,7 +199,10 @@ export function registerExternalServer(
       kind: "command",
       enabled: false,
       command: input.command.trim().slice(0, 200),
-      args: Array.isArray(input.args) ? input.args.map((a) => String(a).slice(0, 100)).slice(0, 20) : [],
+      args: Array.isArray(input.args) ? input.args.map((a) => String(a).slice(0, 300)).slice(0, 20) : [],
+      env: sanitizeServerEnv(input.env),
+      connectTimeoutMs: timeoutField(input.connectTimeoutMs),
+      callTimeoutMs: timeoutField(input.callTimeoutMs),
     });
     writeStore(userId, store);
     return { ok: true, servers: store.servers.map(toPublic) };
@@ -157,7 +218,15 @@ export function removeRegistryServer(userId: string, id: string): RegistryServer
   return store.servers.map(toPublic);
 }
 
-export type ListedTool = { serverId: string; serverLabel: string; name: string; description: string; enabled: boolean };
+export type ListedTool = {
+  serverId: string;
+  serverLabel: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  /** Honest listing status for this row (placeholder rows carry error/timeout/disabled). */
+  status?: "ok" | "error" | "timeout" | "disabled";
+};
 
 export function listBuiltinTools(enabled: boolean): ListedTool[] {
   return BUILTIN_TOOL_DEFS.map((tool) => ({
@@ -193,38 +262,185 @@ function rpcMessage(body: string): { result?: unknown; error?: string } {
   return { error: "The MCP server did not return a JSON-RPC result." };
 }
 
+/** Per-request deadline for remote (http) MCP servers. */
+export const HTTP_RPC_TIMEOUT_MS = 15_000;
+/** Largest response body read from a remote MCP server. */
+export const HTTP_RPC_MAX_BYTES = 1_000_000;
+
+export type HttpRpcOptions = { timeoutMs?: number; maxBytes?: number };
+
+/**
+ * Hostnames that are always local by design (http allowed).
+ */
+function isLocalHostname(host: string): boolean {
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+}
+
+/**
+ * True for private, loopback (other than the local names above), link-local,
+ * CGNAT, unspecified, multicast and IPv4-mapped literals. Hostnames are not
+ * resolved here (DNS rebinding is out of scope for this check).
+ */
+export function isPrivateAddressLiteral(hostname: string): boolean {
+  let host = hostname.toLowerCase();
+  if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return (
+      a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  if (!host.includes(":")) return false;
+  if (host === "::" || host === "::1") return true;
+  const mapped = /^::ffff:(.+)$/.exec(host);
+  if (mapped) {
+    const tail = mapped[1];
+    if (tail.includes(".")) return isPrivateAddressLiteral(tail);
+    const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(tail);
+    if (hex) {
+      const n = (parseInt(hex[1], 16) << 16) | parseInt(hex[2], 16);
+      return isPrivateAddressLiteral([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join("."));
+    }
+    return true;
+  }
+  return /^(fc|fd|fe[89ab]|ff)/.test(host);
+}
+
+/** Why a remote MCP URL may not be saved or called, or null if it is fine. */
+export function httpServerUrlProblem(parsed: URL): string | null {
+  if (parsed.username || parsed.password) return "URLs with embedded credentials are refused; use the token field.";
+  const local = isLocalHostname(parsed.hostname);
+  if (!(parsed.protocol === "https:" || (parsed.protocol === "http:" && local))) {
+    return "Only https, or http on localhost, can be saved.";
+  }
+  if (!local && isPrivateAddressLiteral(parsed.hostname)) {
+    return "Private, link-local and internal IP addresses are refused.";
+  }
+  return null;
+}
+
+type RpcFailure = { ok: false; error: string; session: string | null; timedOut?: boolean };
+
+async function readCappedBody(
+  response: Awaited<ReturnType<FetchLike>> & { body?: unknown },
+  maxBytes: number,
+): Promise<{ ok: true; text: string } | { ok: false }> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
+  const body = response.body as { getReader?: () => ReadableStreamDefaultReader<Uint8Array> } | null | undefined;
+  if (body && typeof body.getReader === "function") {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let total = 0;
+    let text = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false };
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return { ok: true, text: text + decoder.decode() };
+  }
+  const text = await response.text();
+  if (Buffer.byteLength(text, "utf8") > maxBytes) return { ok: false };
+  return { ok: true, text };
+}
+
 async function rpc(
   fetchImpl: FetchLike,
   url: string,
   token: string,
   session: string | null,
   message: unknown,
-): Promise<{ ok: true; result: unknown; session: string | null } | { ok: false; error: string; session: string | null }> {
-  let response: Awaited<ReturnType<FetchLike>>;
+  options: HttpRpcOptions = {},
+): Promise<{ ok: true; result: unknown; session: string | null } | RpcFailure> {
+  let parsedUrl: URL;
   try {
-    response = await fetchImpl(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json, text/event-stream",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-        ...(session ? { "mcp-session-id": session } : {}),
-      },
-      body: JSON.stringify(message),
-    });
+    parsedUrl = new URL(url);
   } catch {
-    return { ok: false, error: "The MCP server could not be reached.", session };
+    return { ok: false, error: "The saved MCP URL is invalid. Nothing was called.", session };
   }
-  const nextSession = response.headers.get("mcp-session-id") || session;
-  if (!response.ok) return { ok: false, error: `The MCP server returned ${response.status}. Nothing was called.`, session: nextSession };
-  const parsed = rpcMessage(await response.text());
-  if (parsed.error) return { ok: false, error: parsed.error, session: nextSession };
-  return { ok: true, result: parsed.result, session: nextSession };
+  // Re-check at call time: stores saved before this guard existed may hold internal targets.
+  const refused = httpServerUrlProblem(parsedUrl);
+  if (refused) return { ok: false, error: `${refused} Nothing was called.`, session };
+  const timeoutMs = options.timeoutMs ?? HTTP_RPC_TIMEOUT_MS;
+  const maxBytes = options.maxBytes ?? HTTP_RPC_MAX_BYTES;
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new Error("timeout"));
+    }, timeoutMs);
+  });
+  const timeoutFailure = (): RpcFailure => ({
+    ok: false,
+    error: `The MCP server did not answer within ${Math.round(timeoutMs / 1000) || 1}s. Nothing was called.`,
+    session,
+    timedOut: true,
+  });
+  try {
+    let response: Awaited<ReturnType<FetchLike>>;
+    try {
+      response = await Promise.race([
+        fetchImpl(parsedUrl.toString(), {
+          method: "POST",
+          redirect: "manual",
+          signal: controller.signal,
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+            ...(session ? { "mcp-session-id": session } : {}),
+          },
+          body: JSON.stringify(message),
+        }),
+        deadline,
+      ]);
+    } catch {
+      if (timedOut) return timeoutFailure();
+      return { ok: false, error: "The MCP server could not be reached.", session };
+    }
+    const nextSession = response.headers.get("mcp-session-id") || session;
+    if ((response.status >= 300 && response.status < 400) || response.status === 0) {
+      return { ok: false, error: "The MCP server tried to redirect. Redirects are not followed. Nothing was called.", session: nextSession };
+    }
+    if (!response.ok) return { ok: false, error: `The MCP server returned ${response.status}. Nothing was called.`, session: nextSession };
+    let body: Awaited<ReturnType<typeof readCappedBody>>;
+    try {
+      body = await Promise.race([readCappedBody(response, maxBytes), deadline]);
+    } catch {
+      if (timedOut) return timeoutFailure();
+      return { ok: false, error: "The MCP server response could not be read.", session: nextSession };
+    }
+    if (!body.ok) {
+      controller.abort();
+      return { ok: false, error: `The MCP server response was larger than ${maxBytes} bytes and was dropped.`, session: nextSession };
+    }
+    const parsed = rpcMessage(body.text);
+    if (parsed.error) return { ok: false, error: parsed.error, session: nextSession };
+    return { ok: true, result: parsed.result, session: nextSession };
+  } finally {
+    clearTimeout(timer);
+    deadline.catch(() => undefined);
+  }
 }
 
 export async function listRegistryTools(
   userId: string,
   fetchImpl: FetchLike = globalThis.fetch as FetchLike,
+  deps: StdioDeps & { http?: HttpRpcOptions } = {},
 ): Promise<ListedTool[]> {
   const store = readStore(userId);
   const tools: ListedTool[] = [];
@@ -240,17 +456,55 @@ export async function listRegistryTools(
         name: "(disabled)",
         description: "Server is disabled. Enable it to list tools.",
         enabled: false,
+        status: "disabled",
       });
       continue;
     }
     if (server.kind === "command") {
-      tools.push({
-        serverId: server.id,
-        serverLabel: server.label,
-        name: "(stdio)",
-        description: `Command MCP “${server.command}” is registered but stdio calls are not wired in this lane. Nothing was called.`,
-        enabled: true,
-      });
+      if (await (deps.isHalted ?? defaultIsHalted)(userId)) {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: "(halted)",
+          description: "Emergency stop is on. The stdio server was not started.",
+          enabled: true,
+          status: "error",
+        });
+        continue;
+      }
+      const listed = await listStdioTools(stdioConfig(server), deps.stdio);
+      if (listed.status !== "ok") {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: listed.status === "timeout" ? "(timeout)" : "(error)",
+          description: `${listed.error}${listed.stderr ? ` · stderr: ${listed.stderr.slice(0, 160)}` : ""}`.slice(0, 400),
+          enabled: true,
+          status: listed.status,
+        });
+        continue;
+      }
+      if (listed.tools.length === 0) {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: "(no tools)",
+          description: "The stdio server started and answered tools/list with no tools.",
+          enabled: true,
+          status: "ok",
+        });
+        continue;
+      }
+      for (const tool of listed.tools) {
+        tools.push({
+          serverId: server.id,
+          serverLabel: server.label,
+          name: tool.name,
+          description: tool.description,
+          enabled: true,
+          status: "ok",
+        });
+      }
       continue;
     }
     if (!server.url) continue;
@@ -259,31 +513,33 @@ export async function listRegistryTools(
       id: 1,
       method: "initialize",
       params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } },
-    });
+    }, deps.http);
     if (!opened.ok) {
       tools.push({
         serverId: server.id,
         serverLabel: server.label,
-        name: "(unreachable)",
+        name: opened.timedOut ? "(timeout)" : "(unreachable)",
         description: opened.error,
         enabled: true,
+        status: opened.timedOut ? "timeout" : "error",
       });
       continue;
     }
-    await rpc(fetchImpl, server.url, server.token ?? "", opened.session, { jsonrpc: "2.0", method: "notifications/initialized" });
+    await rpc(fetchImpl, server.url, server.token ?? "", opened.session, { jsonrpc: "2.0", method: "notifications/initialized" }, deps.http);
     const listed = await rpc(fetchImpl, server.url, server.token ?? "", opened.session, {
       jsonrpc: "2.0",
       id: 2,
       method: "tools/list",
       params: {},
-    });
+    }, deps.http);
     if (!listed.ok || !listed.result || typeof listed.result !== "object") {
       tools.push({
         serverId: server.id,
         serverLabel: server.label,
-        name: "(error)",
+        name: !listed.ok && listed.timedOut ? "(timeout)" : "(error)",
         description: listed.ok ? "No tools returned." : listed.error,
         enabled: true,
+        status: !listed.ok && listed.timedOut ? "timeout" : "error",
       });
       continue;
     }
@@ -349,7 +605,8 @@ export async function callRegistryTool(input: {
   args?: Record<string, unknown>;
   getSql: () => Promise<SqlLike>;
   fetch?: FetchLike;
-}): Promise<RegistryToolCallResult> {
+  http?: HttpRpcOptions;
+} & StdioDeps): Promise<RegistryToolCallResult> {
   const store = readStore(input.userId);
   const server = store.servers.find((item) => item.id === input.serverId);
   if (!server) {
@@ -371,12 +628,17 @@ export async function callRegistryTool(input: {
     };
   }
   if (server.kind === "command") {
+    if (await (input.isHalted ?? defaultIsHalted)(input.userId)) {
+      return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on. No MCP tool was called." };
+    }
+    const result = await callStdioTool(stdioConfig(server), input.tool, args, input.stdio);
     return {
-      status: "error",
-      ok: false,
+      status: result.status,
+      ok: result.ok,
       serverId: server.id,
       tool: input.tool,
-      text: "Stdio MCP command servers are registered but not executed in this lane. Nothing was called.",
+      text: result.text,
+      data: result.data ?? undefined,
     };
   }
   if (!server.url) {
@@ -388,18 +650,18 @@ export async function callRegistryTool(input: {
     id: 1,
     method: "initialize",
     params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } },
-  });
+  }, input.http);
   if (!opened.ok) {
-    return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: opened.error };
+    return { status: opened.timedOut ? "timeout" : "error", ok: false, serverId: server.id, tool: input.tool, text: opened.error };
   }
   const called = await rpc(fetchImpl, server.url, server.token ?? "", opened.session, {
     jsonrpc: "2.0",
     id: 3,
     method: "tools/call",
     params: { name: input.tool, arguments: args },
-  });
+  }, input.http);
   if (!called.ok) {
-    return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: called.error };
+    return { status: called.timedOut ? "timeout" : "error", ok: false, serverId: server.id, tool: input.tool, text: called.error };
   }
   const content =
     called.result && typeof called.result === "object" && Array.isArray((called.result as { content?: unknown }).content)

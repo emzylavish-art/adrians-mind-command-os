@@ -7,7 +7,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { pendingMigrations } from "../../../scripts/migration-plan.mjs";
 import type { Sql } from "../db.ts";
 import { applyAgentTurn } from "./agent-session.ts";
-import { safeToResume, voiceProviderStatus } from "./memory.ts";
+import { safeToResume, voiceProviderStatus } from "./memory/index.ts";
 import type { AgentTool } from "./orchestrator.ts";
 import { readToolRuns, writeToolRun } from "./notion-record.ts";
 import { readSnapshot, writeSnapshot } from "./store.ts";

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync, renameSync } from "node:fs";
+import { join, resolve, relative, sep, isAbsolute } from "node:path";
 import { decryptSecret, encryptSecret } from "./crypto.ts";
 
 export const CONNECTOR_IDS = [
@@ -136,25 +136,107 @@ export function storeAccessToken(input: {
   return conn;
 }
 
-export function savePendingOAuth(pending: PendingOAuth) {
-  ensureOwnerDir(pending.ownerId);
-  mkdirSync(join(directory, "pending"), { recursive: true });
-  writeFileSync(join(directory, "pending", `${pending.state}.json`), JSON.stringify(pending));
+export const OAUTH_STATE_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
+export const PENDING_OAUTH_TTL_MS = 10 * 60 * 1000;
+
+export function isValidOAuthState(state: string): boolean {
+  return typeof state === "string" && OAUTH_STATE_PATTERN.test(state) && !state.includes("\0");
 }
 
-export function takePendingOAuth(state: string): PendingOAuth | null {
-  const path = join(directory, "pending", `${state}.json`);
+function pendingDir(): string {
+  return resolve(directory, "pending");
+}
+
+/** Resolve pending file path only when state is a strict token and stays inside pending/. */
+export function pendingOAuthPath(state: string): string | null {
+  if (!isValidOAuthState(state)) return null;
+  const base = pendingDir();
+  const candidate = resolve(base, `${state}.json`);
+  const rel = relative(base, candidate);
+  if (!rel || rel.startsWith("..") || isAbsolute(rel) || rel.includes(`..${sep}`)) return null;
+  if (!candidate.startsWith(base + sep)) return null;
+  return candidate;
+}
+
+export function pruneStalePendingOAuth(nowMs = Date.now()): number {
+  const base = pendingDir();
+  if (!existsSync(base)) return 0;
+  let removed = 0;
+  for (const name of readdirSync(base)) {
+    if (!name.endsWith(".json")) continue;
+    const state = name.slice(0, -".json".length);
+    const path = pendingOAuthPath(state);
+    if (!path) continue;
+    try {
+      const pending = JSON.parse(readFileSync(path, "utf8")) as PendingOAuth;
+      const created = Date.parse(pending.createdAt);
+      if (!Number.isFinite(created) || nowMs - created > PENDING_OAUTH_TTL_MS) {
+        unlinkSync(path);
+        removed += 1;
+      }
+    } catch {
+      try {
+        unlinkSync(path);
+        removed += 1;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return removed;
+}
+
+export function savePendingOAuth(pending: PendingOAuth) {
+  if (!isValidOAuthState(pending.state)) {
+    throw new Error("Refusing to store OAuth pending state with an invalid state token.");
+  }
+  if (!isConnectorId(pending.connector)) {
+    throw new Error("Refusing to store OAuth pending state with an unknown connector.");
+  }
+  ensureOwnerDir(pending.ownerId);
+  mkdirSync(pendingDir(), { recursive: true });
+  pruneStalePendingOAuth();
+  const path = pendingOAuthPath(pending.state);
+  if (!path) throw new Error("Invalid OAuth state path.");
+  writeFileSync(path, JSON.stringify(pending));
+}
+
+/**
+ * Single-use consume: validate state, enforce path containment + TTL, delete on read.
+ * Returns null for invalid / missing / expired / corrupt entries.
+ */
+export function takePendingOAuth(state: string, nowMs = Date.now()): PendingOAuth | null {
+  pruneStalePendingOAuth(nowMs);
+  const path = pendingOAuthPath(state);
+  if (!path) return null;
+  const claimed = `${path}.claimed.${randomBytes(8).toString("hex")}`;
   try {
-    const pending = JSON.parse(readFileSync(path, "utf8")) as PendingOAuth;
-    unlinkSync(path);
+    // Atomic claim so concurrent callbacks cannot both consume the same state.
+    renameSync(path, claimed);
+  } catch {
+    return null;
+  }
+  try {
+    const raw = readFileSync(claimed, "utf8");
+    unlinkSync(claimed);
+    const pending = JSON.parse(raw) as PendingOAuth;
+    if (!pending || pending.state !== state) return null;
+    if (!isConnectorId(pending.connector)) return null;
+    const created = Date.parse(pending.createdAt);
+    if (!Number.isFinite(created) || nowMs - created > PENDING_OAUTH_TTL_MS) return null;
     return pending;
   } catch {
+    try {
+      unlinkSync(claimed);
+    } catch {
+      /* ignore */
+    }
     return null;
   }
 }
 
 export function newOAuthState(): { state: string; codeVerifier: string; codeChallenge: string } {
-  const state = randomBytes(24).toString("base64url");
+  const state = randomBytes(32).toString("base64url");
   const codeVerifier = randomBytes(32).toString("base64url");
   const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
   return { state, codeVerifier, codeChallenge };

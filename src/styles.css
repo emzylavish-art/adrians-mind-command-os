@@ -792,3 +792,300 @@ html[data-theme="light"] .banner-error {
 .voice-zone-rail.is-live .waveform span:nth-child(3) { animation-delay: 0.2s; }
 .voice-zone-rail.is-live .waveform span:nth-child(4) { animation-delay: 0.05s; }
 .voice-zone-rail.is-live .waveform span:nth-child(5) { animation-delay: 0.15s; }
+
+/* —— Pass 8: light-theme crawl (contrast, borders, shadows, glass) —— */
+html[data-theme="light"] {
+  --shadow-panel: 0 14px 36px rgb(15 23 42 / 0.08), 0 0 0 1px rgb(15 23 42 / 0.06);
+}
+html[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse 60% 50% at 80% -10%, rgb(124 92 255 / 0.08), transparent 55%),
+    radial-gradient(ellipse 40% 40% at 10% 20%, rgb(56 189 248 / 0.07), transparent 50%),
+    var(--color-bg);
+}
+html[data-theme="light"] .main-stage { background: transparent; }
+html[data-theme="light"] .tile-active {
+  box-shadow:
+    inset 0 0 0 1px rgb(109 77 255 / 0.28),
+    inset 0 0 18px rgb(109 77 255 / 0.1),
+    0 6px 18px rgb(109 77 255 / 0.14);
+}
+html[data-theme="light"] .model-chip,
+html[data-theme="light"] .suggestion-chip,
+html[data-theme="light"] .voice-zone,
+html[data-theme="light"] .sidebar-plus {
+  background: rgb(255 255 255 / 0.9);
+  border-color: rgb(15 23 42 / 0.1);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05), inset 0 1px 0 #fff;
+  color: var(--color-fg);
+}
+html[data-theme="light"] .model-chip:hover,
+html[data-theme="light"] .suggestion-chip:hover,
+html[data-theme="light"] .sidebar-plus:hover {
+  background: #fff;
+  border-color: rgb(109 77 255 / 0.3);
+  box-shadow: 0 4px 14px rgb(15 23 42 / 0.08);
+}
+html[data-theme="light"] .model-option-active {
+  background: linear-gradient(180deg, rgb(109 77 255 / 0.1), rgb(109 77 255 / 0.05));
+  box-shadow: inset 0 0 0 1px rgb(109 77 255 / 0.22);
+}
+html[data-theme="light"] .floating-menu {
+  background: rgb(255 255 255 / 0.96);
+  border-color: rgb(15 23 42 / 0.08);
+  box-shadow: 0 20px 48px rgb(15 23 42 / 0.14), 0 0 0 1px rgb(15 23 42 / 0.04);
+}
+html[data-theme="light"] .voice-zone-rail {
+  background: rgb(255 255 255 / 0.88);
+  border-color: rgb(15 23 42 / 0.08);
+  box-shadow: 0 10px 28px rgb(15 23 42 / 0.08);
+}
+html[data-theme="light"] .dictation-pill {
+  background: rgb(240 253 250 / 0.95);
+  border-color: rgb(13 148 136 / 0.35);
+  color: #0f3d3a;
+  box-shadow: inset 0 0 12px rgb(45 212 191 / 0.1), 0 6px 18px rgb(15 23 42 / 0.08);
+}
+html[data-theme="light"] .dictation-pill[data-dictation="transcribing"] {
+  background: rgb(248 250 252 / 0.95);
+  border-color: rgb(15 23 42 / 0.12);
+}
+html[data-theme="light"] .page-hero::after {
+  background: radial-gradient(circle, rgb(109 77 255 / 0.1), transparent 65%);
+}
+html[data-theme="light"] .card-texture {
+  background-image:
+    radial-gradient(circle at 12% 20%, rgb(109 77 255 / 0.035), transparent 35%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.6), transparent 40%);
+}
+html[data-theme="light"] .glow-card:hover,
+html[data-theme="light"] .settings-row:hover {
+  border-color: rgb(109 77 255 / 0.22);
+}
+html[data-theme="light"] .text-muted { color: #4b5567; } /* AA on #fff and #f5f7fb */
+html[data-theme="light"] .border-line { border-color: rgb(15 23 42 / 0.1); }
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+  background-color: #fff;
+  border-color: rgb(15 23 42 / 0.12);
+  color: var(--color-fg);
+}
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder { color: #6b7385; }
+html[data-theme="light"] .floating-composer textarea,
+html[data-theme="light"] .floating-composer input { background-color: transparent; }
+html[data-theme="light"] .scroll-bottom-fab { box-shadow: 0 10px 28px rgb(15 23 42 / 0.12); }
+html[data-theme="light"] .empty-state { border-color: rgb(15 23 42 / 0.14); }
+html[data-theme="light"] .bot-avatar-img { box-shadow: 0 0 0 1px rgb(15 23 42 / 0.08), 0 4px 12px rgb(15 23 42 / 0.08); }
+html[data-theme="light"] .chat-empty-hero .chat-empty-title { color: var(--color-fg); }
+
+/* —— Pass 8: focus + tab-order cues on every interactive element —— */
+a:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="menuitemradio"]:focus-visible,
+[role="option"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="switch"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible,
+label:focus-within > input[type="checkbox"],
+label:focus-within > input[type="radio"] {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px rgb(124 92 255 / 0.6), 0 0 22px rgb(124 92 255 / 0.22);
+}
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 2px solid rgb(124 92 255 / 0.8);
+  outline-offset: 2px;
+}
+/* Rail + chip items: ring sits inside so it isn't clipped by overflow */
+.nav-item:focus-visible,
+.dense-row:focus-visible,
+.floating-menu button:focus-visible,
+.floating-menu [role^="menuitem"]:focus-visible {
+  box-shadow: inset 0 0 0 2px rgb(124 92 255 / 0.7), 0 0 18px rgb(124 92 255 / 0.18);
+}
+/* Cards that contain the focused control get a quiet lift so the eye follows Tab */
+.dense-card:focus-within,
+.settings-row:focus-within,
+.glow-card:focus-within {
+  border-color: rgb(124 92 255 / 0.32);
+}
+.floating-composer:focus-within {
+  box-shadow: 0 0 0 1px rgb(124 92 255 / 0.4), 0 18px 48px rgb(0 0 0 / 0.4), 0 0 32px rgb(124 92 255 / 0.16);
+}
+html[data-theme="light"] .floating-composer:focus-within {
+  box-shadow: 0 0 0 1px rgb(109 77 255 / 0.35), 0 16px 40px rgb(15 23 42 / 0.1);
+}
+html[data-theme="light"] :focus-visible {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(109 77 255 / 0.7);
+}
+/* Skip-style first-focus cue: main landmark shows a hairline when focused programmatically */
+main:focus-visible { box-shadow: inset 0 0 0 2px rgb(124 92 255 / 0.45); }
+
+/* —— Pass 8: calm Tools + Connected cards (consistent single depth) —— */
+.tool-card,
+.service-card,
+.main-stage .grid > article.dense-card.card-texture {
+  background: rgb(14 18 28 / 0.6);
+  background-image: none;
+  border-color: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.tool-card:hover,
+.service-card:hover,
+.main-stage .grid > article.dense-card.card-texture:hover {
+  transform: none;
+  border-color: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 8px 24px rgb(0 0 0 / 0.25);
+}
+.main-stage .grid > article.dense-card.card-texture > p.text-sm.text-muted {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.8125rem;
+}
+.main-stage .grid > article.dense-card.card-texture > div > span.rounded-full,
+.tool-card .tool-card__status {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: rgb(255 255 255 / 0.04);
+}
+.tool-card[data-available="false"] { opacity: 0.72; }
+.tool-card[data-available="false"]:hover { opacity: 1; }
+.tool-card[data-available="true"] { border-left: 2px solid rgb(125 255 168 / 0.45); }
+.tool-list { display: grid; gap: 0.5rem; }
+.tool-list > * + * { margin-top: 0 !important; }
+@media (min-width: 900px) {
+  .tool-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+html[data-theme="light"] .tool-card,
+html[data-theme="light"] .service-card,
+html[data-theme="light"] .main-stage .grid > article.dense-card.card-texture {
+  background: #fff;
+  border-color: rgb(15 23 42 / 0.08);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+html[data-theme="light"] .tool-card:hover,
+html[data-theme="light"] .service-card:hover,
+html[data-theme="light"] .main-stage .grid > article.dense-card.card-texture:hover {
+  border-color: rgb(15 23 42 / 0.16);
+  box-shadow: 0 6px 18px rgb(15 23 42 / 0.07);
+}
+html[data-theme="light"] .tool-card[data-available="true"] { border-left-color: rgb(4 120 87 / 0.55); }
+
+/* —— Pass 8: help + settings prose → cards (CSS only; markup lives in locked command-app.tsx) —— */
+.main-stage section.max-w-3xl > ul.space-y-2 {
+  display: grid;
+  gap: 0.75rem;
+}
+.main-stage section.max-w-3xl > ul.space-y-2 > * + * { margin-top: 0 !important; }
+@media (min-width: 768px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card {
+  padding: 1rem 1.1rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+.main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card > .font-semibold:first-child {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--color-fg);
+  font-size: 0.95rem;
+}
+/* Settings “How to use this” list: each line becomes a small card */
+.rounded-panel:has(> p.font-semibold + ul.text-muted) {
+  background: transparent;
+  border-color: transparent;
+  padding-inline: 0;
+}
+.rounded-panel:has(> p.font-semibold + ul.text-muted) > p.font-semibold {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+.rounded-panel > p.font-semibold + ul.text-muted {
+  display: grid;
+  gap: 0.5rem;
+}
+.rounded-panel > p.font-semibold + ul.text-muted > * + * { margin-top: 0 !important; }
+@media (min-width: 768px) {
+  .rounded-panel > p.font-semibold + ul.text-muted { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.rounded-panel > p.font-semibold + ul.text-muted > li {
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  line-height: 1.45;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(14 18 28 / 0.55);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  transition: border-color var(--dur-med) var(--ease-soft), background var(--dur-med) var(--ease-soft);
+}
+.rounded-panel > p.font-semibold + ul.text-muted > li:hover { border-color: rgb(124 92 255 / 0.25); }
+html[data-theme="light"] .rounded-panel > p.font-semibold + ul.text-muted > li {
+  background: #fff;
+  border-color: rgb(15 23 42 / 0.08);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+/* —— Pass 8: settings tab feel (CSS-only; sticky section headers) —— */
+.settings-card { scroll-margin-top: 5rem; }
+.settings-card .settings-row > div:first-child > p.font-semibold { font-size: 0.95rem; }
+.settings-card .settings-row button.min-h-11 {
+  text-transform: capitalize;
+  border-radius: 999px;
+}
+
+/* —— Pass 8: smoothness — page/scroll/loading —— */
+.main-stage, .chat-stream { scroll-behavior: smooth; overscroll-behavior: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .main-stage, .chat-stream { scroll-behavior: auto; }
+}
+.page-shell, .main-stage > section { animation: page-fade var(--dur-slow) var(--ease-out); }
+.empty-state { animation: fade-in var(--dur-slow) var(--ease-soft); }
+.empty-state img { transition: transform var(--dur-slow) var(--ease-out); }
+.empty-state:hover img { transform: translateY(-2px); }
+[aria-busy="true"] { cursor: progress; }
+.skeleton,
+[data-loading="true"] {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.04));
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.75rem;
+}
+html[data-theme="light"] .skeleton,
+html[data-theme="light"] [data-loading="true"] {
+  background: linear-gradient(90deg, rgb(15 23 42 / 0.04), rgb(15 23 42 / 0.08), rgb(15 23 42 / 0.04));
+  background-size: 200% 100%;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* —— Pass 8 crawl fixes: light masthead + voice launch contrast —— */
+html[data-theme="light"] .masthead {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.92), rgb(255 255 255 / 0.7) 55%, rgb(255 255 255 / 0.35)),
+    url("/brand/hero-bg.jpg") center top / cover no-repeat,
+    radial-gradient(ellipse 42% 120% at 78% -20%, rgb(109 77 255 / 0.14), transparent 70%);
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.06), 0 12px 32px rgb(15 23 42 / 0.06);
+}
+html[data-theme="light"] .masthead h1 { color: #0a0d14; }
+html[data-theme="light"] .masthead .text-accent { color: #5b3df5; }
+html[data-theme="light"] .masthead .text-muted { color: #3f4859; }
+html[data-theme="light"] .voice-mode-launch {
+  background: rgb(109 77 255 / 0.08);
+  border-color: rgb(109 77 255 / 0.3);
+  color: #4c2fd1;
+}
+html[data-theme="light"] .voice-mode-launch:hover { background: rgb(109 77 255 / 0.14); }
+html[data-theme="light"] .voice-mode-launch[aria-pressed="true"] {
+  background: rgb(109 77 255 / 0.18);
+  box-shadow: 0 0 0 1px rgb(109 77 255 / 0.3), 0 6px 18px rgb(109 77 255 / 0.18);
+}

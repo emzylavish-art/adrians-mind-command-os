@@ -36,6 +36,7 @@ export const Route = createFileRoute("/api/mind/mcp/call")({
             tool,
             args: body.args && typeof body.args === "object" ? body.args : {},
             getSql,
+            isHalted: haltIsOn,
           });
           return json(result, result.ok ? 200 : 200);
         } catch (error) {

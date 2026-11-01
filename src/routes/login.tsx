@@ -27,9 +27,14 @@ function Login() {
             </button>
           ))}
         </div>
-        <Link to="/" className="mt-4 inline-flex min-h-11 items-center text-sm text-accent">
-          Back to the command page
-        </Link>
+        <div className="mt-4 flex flex-col gap-2 text-sm">
+          <Link to="/" className="inline-flex min-h-11 items-center text-muted underline-offset-2 hover:underline">
+            Back to the command page
+          </Link>
+          <Link to="/memory" className="inline-flex min-h-11 items-center text-muted underline-offset-2 hover:underline">
+            Memory manager
+          </Link>
+        </div>
       </div>
     </main>
   );

@@ -4,6 +4,7 @@ import {
   addMemory,
   canonical,
   createChat,
+  deleteMemory,
   emptyWorkspace,
   memoriesForChat,
   mergeWorkspace,
@@ -112,5 +113,15 @@ describe("workspace memory", () => {
     assert.equal(normalized.chats.length, 40);
     assert.ok(packed.length > 10_000);
     assert.ok(elapsed < 200, `normalize and canonical took ${elapsed.toFixed(1)}ms`);
+  });
+  it("deleteMemory removes a note for real", () => {
+    let ws = emptyWorkspace();
+    ws = addMemory(ws, { scope: "global", text: "temp", source: "owner", projectId: null, chatId: null });
+    const id = ws.memories[0]?.id;
+    assert.ok(id);
+    ws = deleteMemory(ws, id!);
+    assert.equal(ws.memories.length, 0);
+    ws = deleteMemory(ws, "missing");
+    assert.equal(ws.memories.length, 0);
   });
 });

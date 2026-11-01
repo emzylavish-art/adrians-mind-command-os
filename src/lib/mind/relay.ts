@@ -1,4 +1,6 @@
 import { createSseFeed, pushSse, type ModelUsage } from "./stream.ts";
+import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
+export { CHAT_DISCONNECT_REPLY };
 import type { ChatContent } from "./media/types.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
@@ -67,7 +69,7 @@ export function relayModelStream(input: {
   /** Optional metadata echoed on the done event (e.g. selected/resolved tier). */
   meta?: Record<string, unknown>;
 }): Response {
-  const linked = combineAbort(input.requestSignal, input.timeoutMs ?? 25_000);
+  const linked = combineAbort(input.requestSignal, input.timeoutMs ?? chatTurnTimeoutMs());
   const encoder = new TextEncoder();
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let closed = false;
@@ -104,7 +106,7 @@ export function relayModelStream(input: {
           } catch {
             /* the provider reader is already closed */
           }
-          send("error", { error: "Grok did not answer in time. Nothing was saved as a success." });
+          send("error", { error: CHAT_TIMEOUT_REPLY });
           finish();
           return;
         }
@@ -133,7 +135,11 @@ export function relayModelStream(input: {
         }
         if (!res.ok || !res.body) {
           await res.body?.cancel().catch(() => undefined);
-          send("error", { error: `Grok returned ${res.status}. Nothing was saved as a success.` });
+          const error =
+            res.status === 404
+              ? "That model is not available. Nothing was saved as a success."
+              : `Grok returned ${res.status}. Nothing was saved as a success.`;
+          send("error", { error });
           finish();
           return;
         }
@@ -179,10 +185,13 @@ export function relayModelStream(input: {
           ...(input.meta ?? {}),
         });
         finish();
-      } catch {
+      } catch (caught) {
         if (linked.signal.aborted) await stopped();
         else {
-          send("error", { error: "Grok did not answer in time. Nothing was saved as a success." });
+          // Network / mid-stream drop — never mislabel as a turn timeout.
+          const msg = caught instanceof Error ? caught.message : "";
+          void msg;
+          send("error", { error: CHAT_DISCONNECT_REPLY });
           finish();
         }
       } finally {

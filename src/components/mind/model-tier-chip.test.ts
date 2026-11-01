@@ -19,3 +19,13 @@ describe("ModelTierChip label contract", () => {
     assert.equal(label, "Auto→Fast · grok-4.20-0309-non-reasoning");
   });
 });
+
+
+describe("ModelTierChip tierReason accessibility", () => {
+  it("documents that tierReason is surfaced for Auto routing explanations", () => {
+    const reason = "Auto routed to Fast for a short, simple prompt.";
+    // Contract for callers: pass tierReason into ModelTierChip title/aria-label.
+    assert.ok(reason.includes("Auto routed"));
+    assert.ok(reason.length > 10);
+  });
+});

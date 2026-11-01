@@ -149,7 +149,7 @@ async function main() {
         headers: req.headers,
         body: req.method === "GET" || req.method === "HEAD" ? undefined : body,
       });
-      const response = await handleBuiltinMcpHttp(request, getSql);
+      const response = await handleBuiltinMcpHttp(request, { getSql, authenticate: async () => "verify-user" });
       res.statusCode = response.status;
       response.headers.forEach((v, k) => res.setHeader(k, v));
       res.end(Buffer.from(await response.arrayBuffer()));
