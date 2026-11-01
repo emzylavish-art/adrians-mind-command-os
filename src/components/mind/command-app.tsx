@@ -41,7 +41,7 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
@@ -98,6 +98,7 @@ import {
   classifyHonestFailure,
   honestFailureAuditAction,
   HONEST_FAILURE_MESSAGES,
+  mcpToolFailure,
 } from "@/lib/mind/failure-states";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
@@ -855,6 +856,7 @@ export function CommandApp() {
   async function askMcp(chat: Chat, text: string, confirmed = false) {
     setBusy(true);
     setError(null);
+    clearFailure();
     setToolResultStatus("running");
     try {
       const result = await mcpCommand({ data: { text, confirmed } });
@@ -877,11 +879,26 @@ export function CommandApp() {
       const reply = [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.";
       const status = result.ok ? "ok" : "error";
       setToolResultStatus(status);
+      const failure = mcpToolFailure({
+        ok: result.ok,
+        status,
+        text: result.text,
+        error: result.error,
+        needsConfirmation: result.needsConfirmation,
+      });
+      if (failure) {
+        reportFailure(failure.message, failure.kind, failure.target, () => {
+          void askMcp(chat, text, confirmed);
+        });
+      }
       recordToolTurn(chat, text, `[${status}] ${reply}`, undefined, { tool: "mcp", ok: result.ok, action: "chat" });
     } catch {
       setBusy(false);
       setToolResultStatus("error");
-      setError("The MCP server could not be reached. Nothing was called.");
+      const message = HONEST_FAILURE_MESSAGES.mcp_unreachable;
+      reportFailure(message, "mcp_tool_failed", "mcp", () => {
+        void askMcp(chat, text, confirmed);
+      });
     }
   }
 
@@ -1662,7 +1679,21 @@ export function CommandApp() {
         return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
       });
       setError(null);
-      setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`);
+      let notice = `Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`;
+      // Keep mcp/voice analyzeImageFile path alongside media attach when the raw file is small enough.
+      if (file.size <= 400_000) {
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let binary = "";
+          for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+          const result = await analyzeImageFile({ data: { name: file.name, bytes: file.size, imageBase64: btoa(binary) } });
+          if (result.analyzed) notice = `${notice} ${result.provider} returned: ${result.text}`;
+          else if (result.error) notice = `${notice} Analyze: ${result.error}`;
+        } catch {
+          // attach already succeeded
+        }
+      }
+      setNotice(notice);
     } catch {
       setError("That image could not be prepared.");
     }
