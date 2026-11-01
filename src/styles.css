@@ -3871,3 +3871,35 @@ html[data-theme="light"] aside.fixed.inset-0.z-40.flex {
   border-color: rgb(9 9 11 / 0.12) !important;
   box-shadow: 0 16px 40px rgb(0 0 0 / 0.1), inset 0 1px 0 #fff !important;
 }
+
+/* —— Round e3b6ec4 / fix5: light-theme mobile dock + tabs parity —— */
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+  background: rgb(255 255 255 / 0.94) !important;
+  border-top: 1px solid rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 -10px 28px rgb(0 0 0 / 0.08) !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+  color: #52525b !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button.text-accent {
+  color: #09090b !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button.text-accent::before {
+  background: #18181b !important;
+}
+html[data-theme="light"] section.command-card.composer-dock textarea {
+  background: rgb(244 244 245 / 0.9) !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] section.command-card.composer-dock button.border-line {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  color: #18181b !important;
+}
+html[data-theme="light"] .masthead h1,
+html[data-theme="light"] .masthead h2,
+html[data-theme="light"] .masthead .font-display {
+  color: #09090b !important;
+  text-shadow: none !important;
+}
