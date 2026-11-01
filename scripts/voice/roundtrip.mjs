@@ -143,7 +143,7 @@ async function run() {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     const timeout = setTimeout(() => {
-      try { ws.close(); } catch {}
+      try { ws.close(); } catch { /* ignore */ }
       reject(new Error(`roundtrip timeout 45000ms events=${eventTypes.join(',')}`));
     }, 45000);
 
@@ -214,7 +214,7 @@ async function run() {
       if (event.type === 'response.done') {
         tResponseDone = performance.now();
         clearTimeout(timeout);
-        try { ws.close(); } catch {}
+        try { ws.close(); } catch { /* ignore */ }
         resolve();
       }
     });

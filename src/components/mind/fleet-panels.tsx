@@ -85,6 +85,17 @@ export function FleetPanel({
       .catch(() => setWorkerNote("Worker status could not be read. Nothing is reported as online."));
   }, [mode]);
 
+  useEffect(() => {
+    if (mode !== "tools") return;
+    void mcpRegistryList()
+      .then((result) => setMcpServers(result.servers))
+      .catch(() => setMcpServers([]));
+    void mcpRegistryTools()
+      .then((result) => setMcpTools(result.tools))
+      .catch(() => setMcpTools([]));
+  }, [mode]);
+
+
   function apply(result: { ok: true; ws: Workspace } | { ok: false; error: string }) {
     if (!result.ok) {
       setNote(result.error);
@@ -318,16 +329,6 @@ export function FleetPanel({
     );
   }
 
-
-  useEffect(() => {
-    if (mode !== "tools") return;
-    void mcpRegistryList()
-      .then((result) => setMcpServers(result.servers))
-      .catch(() => setMcpServers([]));
-    void mcpRegistryTools()
-      .then((result) => setMcpTools(result.tools))
-      .catch(() => setMcpTools([]));
-  }, [mode]);
 
   return (
     <section className="page-shell">

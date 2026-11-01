@@ -18,13 +18,13 @@ import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/bui
 import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
+import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
+import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
+import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
 import { Route as ApiMindOauthNotionCallbackRouteImport } from './routes/api/mind/oauth/notion/callback'
 import { Route as ApiMindOauthNotionDisconnectRouteImport } from './routes/api/mind/oauth/notion/disconnect'
 import { Route as ApiMindOauthNotionStartRouteImport } from './routes/api/mind/oauth/notion/start'
 import { Route as ApiMindOauthNotionStatusRouteImport } from './routes/api/mind/oauth/notion/status'
-import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
-import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
-import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -71,6 +71,21 @@ const ApiMindMcpToolsRoute = ApiMindMcpToolsRouteImport.update({
   path: '/api/mind/mcp/tools',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindMediaCloudFetchRoute = ApiMindMediaCloudFetchRouteImport.update({
+  id: '/api/mind/media/cloud/fetch',
+  path: '/api/mind/media/cloud/fetch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindMediaCloudListRoute = ApiMindMediaCloudListRouteImport.update({
+  id: '/api/mind/media/cloud/list',
+  path: '/api/mind/media/cloud/list',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindMediaCloudStatusRoute = ApiMindMediaCloudStatusRouteImport.update({
+  id: '/api/mind/media/cloud/status',
+  path: '/api/mind/media/cloud/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindOauthNotionCallbackRoute =
   ApiMindOauthNotionCallbackRouteImport.update({
     id: '/api/mind/oauth/notion/callback',
@@ -94,21 +109,6 @@ const ApiMindOauthNotionStatusRoute =
     path: '/api/mind/oauth/notion/status',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiMindMediaCloudFetchRoute = ApiMindMediaCloudFetchRouteImport.update({
-  id: '/api/mind/media/cloud/fetch',
-  path: '/api/mind/media/cloud/fetch',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiMindMediaCloudListRoute = ApiMindMediaCloudListRouteImport.update({
-  id: '/api/mind/media/cloud/list',
-  path: '/api/mind/media/cloud/list',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiMindMediaCloudStatusRoute = ApiMindMediaCloudStatusRouteImport.update({
-  id: '/api/mind/media/cloud/status',
-  path: '/api/mind/media/cloud/status',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -120,13 +120,13 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
+  '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
+  '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
   '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
-  '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
-  '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
-  '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -138,13 +138,13 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
+  '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
+  '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
   '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
-  '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
-  '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
-  '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -157,13 +157,13 @@ export interface FileRoutesById {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
+  '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
+  '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
   '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
-  '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
-  '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
-  '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -177,13 +177,13 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/media/cloud/fetch'
+    | '/api/mind/media/cloud/list'
+    | '/api/mind/media/cloud/status'
     | '/api/mind/oauth/notion/callback'
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
     | '/api/mind/oauth/notion/status'
-| '/api/mind/media/cloud/fetch'
-| '/api/mind/media/cloud/list'
-| '/api/mind/media/cloud/status'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -195,13 +195,13 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/media/cloud/fetch'
+    | '/api/mind/media/cloud/list'
+    | '/api/mind/media/cloud/status'
     | '/api/mind/oauth/notion/callback'
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
     | '/api/mind/oauth/notion/status'
-| '/api/mind/media/cloud/fetch'
-| '/api/mind/media/cloud/list'
-| '/api/mind/media/cloud/status'
   id:
     | '__root__'
     | '/'
@@ -213,13 +213,13 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/media/cloud/fetch'
+    | '/api/mind/media/cloud/list'
+    | '/api/mind/media/cloud/status'
     | '/api/mind/oauth/notion/callback'
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
     | '/api/mind/oauth/notion/status'
-| '/api/mind/media/cloud/fetch'
-| '/api/mind/media/cloud/list'
-| '/api/mind/media/cloud/status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -232,13 +232,13 @@ export interface RootRouteChildren {
   ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
   ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
+  ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
+  ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
+  ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
   ApiMindOauthNotionCallbackRoute: typeof ApiMindOauthNotionCallbackRoute
   ApiMindOauthNotionDisconnectRoute: typeof ApiMindOauthNotionDisconnectRoute
   ApiMindOauthNotionStartRoute: typeof ApiMindOauthNotionStartRoute
   ApiMindOauthNotionStatusRoute: typeof ApiMindOauthNotionStatusRoute
-  ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
-  ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
-  ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -306,6 +306,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMcpToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/media/cloud/fetch': {
+      id: '/api/mind/media/cloud/fetch'
+      path: '/api/mind/media/cloud/fetch'
+      fullPath: '/api/mind/media/cloud/fetch'
+      preLoaderRoute: typeof ApiMindMediaCloudFetchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/media/cloud/list': {
+      id: '/api/mind/media/cloud/list'
+      path: '/api/mind/media/cloud/list'
+      fullPath: '/api/mind/media/cloud/list'
+      preLoaderRoute: typeof ApiMindMediaCloudListRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/media/cloud/status': {
+      id: '/api/mind/media/cloud/status'
+      path: '/api/mind/media/cloud/status'
+      fullPath: '/api/mind/media/cloud/status'
+      preLoaderRoute: typeof ApiMindMediaCloudStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/oauth/notion/callback': {
       id: '/api/mind/oauth/notion/callback'
       path: '/api/mind/oauth/notion/callback'
@@ -334,27 +355,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindOauthNotionStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/mind/media/cloud/fetch': {
-      id: '/api/mind/media/cloud/fetch'
-      path: '/api/mind/media/cloud/fetch'
-      fullPath: '/api/mind/media/cloud/fetch'
-      preLoaderRoute: typeof ApiMindMediaCloudFetchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/mind/media/cloud/list': {
-      id: '/api/mind/media/cloud/list'
-      path: '/api/mind/media/cloud/list'
-      fullPath: '/api/mind/media/cloud/list'
-      preLoaderRoute: typeof ApiMindMediaCloudListRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/mind/media/cloud/status': {
-      id: '/api/mind/media/cloud/status'
-      path: '/api/mind/media/cloud/status'
-      fullPath: '/api/mind/media/cloud/status'
-      preLoaderRoute: typeof ApiMindMediaCloudStatusRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -368,13 +368,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMcpCallRoute: ApiMindMcpCallRoute,
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
   ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
+  ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
+  ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,
+  ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
   ApiMindOauthNotionCallbackRoute: ApiMindOauthNotionCallbackRoute,
   ApiMindOauthNotionDisconnectRoute: ApiMindOauthNotionDisconnectRoute,
   ApiMindOauthNotionStartRoute: ApiMindOauthNotionStartRoute,
   ApiMindOauthNotionStatusRoute: ApiMindOauthNotionStatusRoute,
-  ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
-  ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,
-  ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -24,7 +24,6 @@ export function decryptSecret(ciphertext: string, secret = process.env.CONNECTOR
   try {
     const [ivB64, tagB64, dataB64] = ciphertext.split(".");
     if (!ivB64 || !tagB64 || !dataB64) return null;
-    const ephemeral = !secret?.trim();
     const key = keyFromSecret(secret?.trim() || `ephemeral:${process.pid}:${process.env.USER || "box"}`);
     const decipher = createDecipheriv(ALGO, key, Buffer.from(ivB64, "base64url"));
     decipher.setAuthTag(Buffer.from(tagB64, "base64url"));

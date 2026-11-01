@@ -25,7 +25,6 @@ import {
   Square,
   Video,
   CalendarClock,
-  ChevronDown,
   CircleHelp,
   Link2,
   ListTree,
@@ -358,7 +357,6 @@ export function CommandApp() {
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
 
   useEffect(() => {
     const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
@@ -533,7 +531,6 @@ export function CommandApp() {
     setAccountOpen(false);
     setContextOpen(false);
     setToolsOpen(false);
-      setModelMenuOpen(false);
   }
 
   function requestProtected(kind: string, id: string, label: string, detail: string, confirm: string, run: () => void) {
