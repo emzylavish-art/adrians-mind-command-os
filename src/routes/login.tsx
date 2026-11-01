@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useState, type FormEvent, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   getSupabaseAuthUser,
@@ -15,6 +15,10 @@ import {
   resolveLoginProviderAction,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
+
+const LazyMonoMotion = lazy(() =>
+  import("@/components/mind/motion/MonoMotionGraphic").then((m) => ({ default: m.MonoMotionGraphic })),
+);
 
 type LoginSearch = {
   next?: string;
@@ -55,6 +59,9 @@ function AuthBrand({ title, subtitle }: { title: string; subtitle?: string }) {
       <span className="logo-mark grid size-11 place-items-center rounded-2xl text-lg font-bold tracking-tight">
         A
       </span>
+      <Suspense fallback={null}>
+        <LazyMonoMotion className="mt-1" />
+      </Suspense>
       <div>
         <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
           Adrian&apos;s Mind

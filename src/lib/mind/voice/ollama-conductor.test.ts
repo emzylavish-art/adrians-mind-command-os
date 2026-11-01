@@ -21,8 +21,10 @@ describe("ollama conductor", () => {
   });
 
   it("includes a custom base URL in the unreachable message", async () => {
+    // Non-loopback bases require allowRemote (SSRF guard); unreachable text must still name the URL.
     const result = await runOllamaConductor("hello", {
       baseUrl: "http://192.168.1.10:11434/",
+      allowRemote: true,
       fetchImpl: async () => {
         throw new TypeError("fetch failed");
       },
