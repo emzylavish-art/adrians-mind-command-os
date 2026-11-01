@@ -137,8 +137,6 @@ const EXTERNAL = [
 
 type Staged = { name: string; text: string };
 
-const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build"] as const;
-
 const NAV_ICON_SRC: Partial<Record<View, string>> = {
   command: "/icons/chat.svg",
   agents: "/icons/bots.svg",
@@ -1527,6 +1525,7 @@ export function CommandApp() {
       stopVoiceSession();
       setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
     }
+  }
 
   function listenBrowserFallback() {
     setListening(true);
@@ -1558,7 +1557,6 @@ export function CommandApp() {
       setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
     };
     rec.start();
-  }
   }
 
   async function checkRea() {
