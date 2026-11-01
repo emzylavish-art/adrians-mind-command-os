@@ -130,6 +130,7 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
   if (count === 0) {
     handle.dispose = () => {
       handle.disposed = true;
+      stepWindGust(gustState, gustOut, 0, true); // c14: clear residual after dispose
     };
     return handle;
   }
@@ -232,6 +233,7 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
   handle.dispose = () => {
     if (handle.disposed) return;
     handle.disposed = true;
+    stepWindGust(gustState, gustOut, 0, true); // c14: no residual velocity after dispose
     if (handle.mesh) {
       // Drop the LOD camera callback so an unmounted mesh cannot keep writing handle.lod.
       handle.mesh.onBeforeRender = () => {};

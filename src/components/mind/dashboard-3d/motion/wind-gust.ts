@@ -5,6 +5,7 @@
  * impulses superpose into a velocity vector, magnitude is hard-capped, then
  * exponential decay each frame. Reduced-motion → impulses ignored / force zero.
  * 1000 events in one frame cannot exceed GUST_MAX_SPEED.
+ * c14: reject non-finite/huge dirs; snap sub-ε residuals; mid RM clears fully.
  */
 import { clamp01 } from "./ease.ts";
 import { finiteOr, sanitizeDt } from "./sanitize.ts";
@@ -81,7 +82,8 @@ export function impulseWindGust(
   const y = finiteOr(dy, 0);
   const z = finiteOr(dz, 0);
   const len = Math.hypot(x, y, z);
-  if (!(len > 1e-8)) return;
+  // Hacker c14: zero / NaN / overflow dirs must not inject Infinity into velocity.
+  if (!Number.isFinite(len) || !(len > 1e-8)) return;
   const inv = 1 / len;
   const mag = impulse * str;
   state.vx = finiteOr(state.vx, 0) + x * inv * mag;
@@ -128,7 +130,11 @@ export function stepWindGust(
   out.y = state.vy;
   out.z = state.vz;
   out.speed = Math.hypot(out.x, out.y, out.z);
-  if (!Number.isFinite(out.speed)) {
+  // Hacker c14: long-session decay leaves denormal dust — snap residual to rest.
+  if (!Number.isFinite(out.speed) || out.speed < 1e-4) {
+    state.vx = 0;
+    state.vy = 0;
+    state.vz = 0;
     out.x = 0;
     out.y = 0;
     out.z = 0;
