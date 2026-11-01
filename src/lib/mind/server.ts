@@ -3,6 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
+import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
@@ -39,6 +40,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       ok: false as const,
       grok: "down" as const,
       model: MODEL,
+      modelTiers: modelTierCatalog(process.env),
       database: gate.error,
       isolation: "failed" as const,
       executionHalted,
@@ -54,6 +56,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     ok: true as const,
     grok: process.env.XAI_API_KEY ? ("configured" as const) : ("unconfigured" as const),
     model: MODEL,
+    modelTiers: modelTierCatalog(process.env),
     database: mindUrl
       ? "A Mind project URL is set and is not a forbidden project."
       : "No dedicated project yet. The free organization already holds two active projects.",
@@ -294,6 +297,7 @@ export const sendTurn = createServerFn({ method: "POST" })
     halted: boolean;
     history: { role: "user" | "assistant"; content: string }[];
     memoryContext: { id: string; text: string }[];
+    modelTier?: string;
   }) => input)
   .handler(async ({ data, context }) => {
     const { completeModelReply, prepareMindTurn } = await import("./turn.server");

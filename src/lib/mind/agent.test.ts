@@ -190,6 +190,7 @@ describe("bounded agent", () => {
       { role: "tool", toolCallId: "call-1", name: "list_chats", content: "Dock" },
     ]);
     assert.equal(body.model, "grok-4.5");
+    assert.equal(buildAgentModelBody([], { model: "grok-build-0.1" }).model, "grok-build-0.1");
     assert.deepEqual(body.tools.map((tool) => tool.function.name), ["list_projects", "list_chats", "search_notes"]);
     const encoded = JSON.stringify(body);
     assert.equal(encoded.includes("shell"), false);

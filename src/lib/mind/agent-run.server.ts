@@ -1,5 +1,6 @@
 import { requireUserId } from "../auth/verify.server";
 import { buildAgentModelBody, readAgentMessage, runBoundedAgent, type AgentModel } from "./agent";
+import { resolveModelTier } from "./model-tiers";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { decideFetchSite } from "./request-guard";
@@ -19,14 +20,30 @@ function names(value: unknown, limit: number) {
   return value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 200)).filter(Boolean).slice(0, limit);
 }
 
-function grokModel(apiKey: string, parent: AbortSignal): AgentModel {
+function grokModel(
+  apiKey: string,
+  parent: AbortSignal,
+  options: {
+    model: string;
+    temperature: number;
+    max_tokens: number;
+    reasoning_effort?: "low" | "medium" | "high" | "xhigh";
+  },
+): AgentModel {
   return async ({ messages, signal }) => {
     const linked = typeof AbortSignal.any === "function" ? AbortSignal.any([parent, signal]) : parent;
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       signal: linked,
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(buildAgentModelBody(messages)),
+      body: JSON.stringify(
+        buildAgentModelBody(messages, {
+          model: options.model,
+          temperature: options.temperature,
+          max_tokens: options.max_tokens,
+          reasoning_effort: options.reasoning_effort,
+        }),
+      ),
     });
     if (!response.ok) throw new Error(`status ${response.status}`);
     return readAgentMessage(await response.json());
@@ -56,7 +73,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   }
   const raw = await request.text();
   if (raw.length > MAX_BODY) return json({ ok: false, error: "That request is too large.", log: [] }, 413);
-  let body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown };
+  let body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown };
   try {
     body = JSON.parse(raw) as typeof body;
   } catch {
@@ -98,14 +115,30 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     archived: false,
     versions: [],
   }));
+  const goal = typeof body.goal === "string" ? body.goal : "";
+  const tier = resolveModelTier(body.modelTier, goal, process.env);
   const result = await runBoundedAgent({
     ws,
-    goal: typeof body.goal === "string" ? body.goal : "",
-    model: grokModel(apiKey, request.signal),
+    goal,
+    model: grokModel(apiKey, request.signal, {
+      model: tier.model,
+      temperature: tier.params.temperature,
+      max_tokens: tier.params.max_tokens,
+      reasoning_effort: tier.params.reasoning_effort,
+    }),
     signal: request.signal,
     autonomy: "ask",
     halted: false,
     approved: true,
   });
-  return json({ ok: result.ok, text: result.text, log: result.log, error: result.error ?? "" });
+  return json({
+    ok: result.ok,
+    text: result.text,
+    log: result.log,
+    error: result.error ?? "",
+    model: tier.model,
+    modelTier: tier.selected,
+    resolvedTier: tier.resolved,
+    tierReason: tier.reason,
+  });
 }
