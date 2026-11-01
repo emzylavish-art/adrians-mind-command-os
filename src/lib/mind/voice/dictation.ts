@@ -70,6 +70,7 @@ export async function createDictationRecorder(options?: {
 
   try {
     audioCtx = new AudioContext();
+    void audioCtx.resume();
     source = audioCtx.createMediaStreamSource(stream);
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 512;
