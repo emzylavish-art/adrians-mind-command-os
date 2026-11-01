@@ -37,3 +37,34 @@ describe("retry fidelity", () => {
     assert.equal(shouldBlockForEmergencyStop(false, false), false);
   });
 });
+
+import { commandSendPlan, onceRetry } from "./retry-fidelity.ts";
+import { mcpToolFailure } from "./failure-states.ts";
+
+describe("retry after Clear stop", () => {
+  it("uses live halt state: blocked while halted, sends after Clear stop", () => {
+    assert.equal(commandSendPlan({ liveHalted: true, text: "hi", imageCount: 0 }), "blocked");
+    assert.equal(commandSendPlan({ liveHalted: false, text: "hi", imageCount: 0 }), "send");
+  });
+  it("never creates an empty New session", () => {
+    assert.equal(commandSendPlan({ liveHalted: false, text: "   ", imageCount: 0 }), "empty");
+    assert.equal(commandSendPlan({ liveHalted: true, text: "", imageCount: 0 }), "empty");
+    assert.equal(commandSendPlan({ liveHalted: false, text: "", imageCount: 1 }), "send");
+  });
+  it("Retry sends exactly once even when clicked repeatedly", () => {
+    let sends = 0;
+    const retry = onceRetry(() => { sends += 1; });
+    retry?.(); retry?.(); retry?.();
+    assert.equal(sends, 1);
+    assert.equal(onceRetry(null), null);
+  });
+});
+
+describe("MCP call-site failure banner", () => {
+  it("maps a failed askMcp result to an mcp_tool_failed banner with a target", () => {
+    const f = mcpToolFailure({ ok: false, status: "error", error: "boom", tool: "mcp", serverId: "pglite" });
+    assert.equal(f?.kind, "mcp_tool_failed");
+    assert.match(f!.message, /boom/);
+    assert.equal(f?.target, "mcp:pglite/mcp");
+  });
+});

@@ -95,6 +95,8 @@ import {
 import {
   historyForDeliver,
   resolveChatMessages,
+  commandSendPlan,
+  onceRetry,
   shouldBlockForEmergencyStop,
   snapshotImages,
 } from "@/lib/mind/retry-fidelity";
@@ -1192,11 +1194,12 @@ export function CommandApp() {
       return;
     }
     const images = pendingImages;
-    if (!text && images.length === 0) {
+    const plan = commandSendPlan({ liveHalted: wsRef.current.halted, text, imageCount: images.length });
+    if (plan === "empty") {
       setError("Write what you want to work on.");
       return;
     }
-    if (wsRef.current.halted) {
+    if (plan === "blocked") {
       const snapshot = text;
       const file = staged;
       const imageSnapshot = snapshotImages(images) as ImageAttachment[];
@@ -1793,7 +1796,7 @@ export function CommandApp() {
       ...prev,
       audit: [{ id: auditId, at: new Date().toISOString(), action: auditAction, target, result: message }, ...prev.audit].slice(0, 200),
     }));
-    setFailure({ message, auditId, retry });
+    setFailure({ message, auditId, retry: onceRetry(retry) });
     setError(message);
     setNotice(null);
   }

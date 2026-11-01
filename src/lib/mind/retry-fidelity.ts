@@ -46,3 +46,24 @@ export function snapshotImages(images: RetryImage[]): RetryImage[] {
 export function shouldBlockForEmergencyStop(liveHalted: boolean, _sourceHalted?: boolean): boolean {
   return liveHalted === true;
 }
+
+/**
+ * What a composer send (or its Retry) should do, using the LIVE halt flag.
+ * "empty" means no chat may be created (no blank "New session").
+ */
+export function commandSendPlan(input: { liveHalted: boolean; text: string; imageCount: number }): "blocked" | "empty" | "send" {
+  if (!input.text.trim() && input.imageCount === 0) return "empty";
+  if (input.liveHalted) return "blocked";
+  return "send";
+}
+
+/** Wrap a banner Retry so repeated clicks fire the action exactly once. */
+export function onceRetry(retry: (() => void) | null): (() => void) | null {
+  if (!retry) return null;
+  let fired = false;
+  return () => {
+    if (fired) return;
+    fired = true;
+    retry();
+  };
+}
