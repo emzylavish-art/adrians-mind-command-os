@@ -7545,3 +7545,35 @@ html, body {
   max-width: 100% !important;
   min-width: 0 !important;
 }
+
+/* —— Evolution c119: mono focus-visible / hover / active consistency —— */
+:where(button, a, [role="button"], [role="menuitem"], input, textarea, select):focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow:
+    0 0 0 2px rgb(10 10 11 / 0.95),
+    0 0 0 4px rgb(244 244 245 / 0.95) !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(button, a[href], [role="button"], [role="menuitem"]):hover:not(:disabled):not(.bg-accent) {
+    background-color: rgb(255 255 255 / 0.07) !important;
+    border-color: rgb(255 255 255 / 0.18) !important;
+  }
+  :where(button.bg-accent, a.bg-accent):hover:not(:disabled) {
+    filter: brightness(1.06) !important;
+  }
+}
+:where(button, a[href], [role="button"]):active:not(:disabled) {
+  transform: translateY(1px) !important;
+  filter: brightness(0.96) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"]):active:not(:disabled) {
+    transform: none !important;
+  }
+}
+/* Keep logo purple only */
+.logo-mark:focus-visible,
+.logo-badge:focus-visible {
+  outline-color: rgb(124 92 255) !important;
+}
