@@ -2607,3 +2607,42 @@ aside nav button[class*="bg-accent"] {
 aside span.grid.size-11.rounded-2xl {
   filter: none !important;
 }
+
+/* —— Cycle 32 / item 1: solid glass composer + scroll clearance —— */
+.composer-dock,
+.command-card.composer-dock,
+.floating-composer,
+[data-composer="floating"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
+    rgb(10 10 12 / 0.94) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 22px 56px rgb(0 0 0 / 0.62),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+.composer-dock textarea,
+.command-card.composer-dock textarea,
+.floating-composer textarea {
+  background: rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+.main-stage {
+  padding-bottom: calc(7.5rem + env(safe-area-inset-bottom)) !important;
+}
+@media (min-width: 768px) {
+  .main-stage {
+    padding-bottom: 2.5rem !important;
+  }
+}
+html[data-theme="light"] .composer-dock,
+html[data-theme="light"] .command-card.composer-dock,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] [data-composer="floating"] {
+  background: rgb(255 255 255 / 0.94) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.12), inset 0 1px 0 #fff !important;
+}
