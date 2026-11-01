@@ -451,6 +451,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       { url: "/dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
       { url: "/dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
       { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
+      { url: "/dashboard-3d/art/scene-merge-beacon.webp", pos: new THREE.Vector3(-11.5, 2.8, -2.5), scale: [5.0, 2.8] as const },
+      { url: "/dashboard-3d/art/scene-collab-tower.webp", pos: new THREE.Vector3(10.2, -0.2, 3.8), scale: [4.8, 2.7] as const },
     ];
     for (const art of sceneArts) {
       loader.load(
