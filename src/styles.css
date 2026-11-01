@@ -3754,3 +3754,32 @@ aside .text-xs.text-muted,
     padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
   }
 }
+
+/* —— Round e3b6ec4 / fix1: compact idle mobile composer (Grok slim bar) —— */
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock {
+    max-height: 10.75rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form > .mb-2.flex.flex-wrap.gap-2 {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form textarea {
+    min-height: 2.75rem !important;
+    max-height: 3.25rem !important;
+    rows: 1;
+  }
+  section.command-card.composer-dock:focus-within,
+  section.command-card.composer-dock:has(textarea:focus) {
+    max-height: min(58vh, 28rem) !important;
+  }
+  section.command-card.composer-dock:focus-within > .grid.gap-2,
+  section.command-card.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2 {
+    display: grid !important;
+  }
+  section.command-card.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2 {
+    display: flex !important;
+  }
+}
