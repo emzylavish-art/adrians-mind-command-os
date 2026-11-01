@@ -3527,10 +3527,13 @@ export function CommandApp() {
               onFocus={() => setPaletteOpen(true)}
               placeholder="Search or jump…"
               className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
+              role="combobox"
               aria-label="Search"
               aria-keyshortcuts="Control+K Meta+K"
               aria-expanded={paletteOpen}
               aria-controls="command-palette"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
@@ -3607,14 +3610,17 @@ export function CommandApp() {
           </div>
           <button
             type="button"
-            className="grid size-11 place-items-center rounded-full border border-line bg-white/5"
+            className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Alerts"
+            aria-expanded={bellOpen}
+            aria-controls="alerts-panel"
+            data-testid="alerts-toggle"
             onClick={() => {
               setBellOpen((open) => !open);
               setAccountOpen(false);
             }}
           >
-            <Bell className="size-4" />
+            <Bell className="size-4" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -3629,7 +3635,7 @@ export function CommandApp() {
           </button>
         </header>
         {bellOpen && (
-          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+          <div id="alerts-panel" className="border-b border-line bg-surface px-4 py-3 text-sm" data-testid="alerts-panel" role="region" aria-label="Alerts">
             <p className="font-semibold">Alerts</p>
             {ws.halted && <p className="mt-1 text-danger">Emergency stop is on. Sending and approvals are blocked.</p>}
             {ws.audit.length === 0 && !ws.halted && <p className="mt-1 text-muted">No alerts.</p>}
@@ -4389,12 +4395,12 @@ export function CommandApp() {
                 <div className="grid gap-2">
                 <textarea value={memoryText} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={3} className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <div className="flex flex-wrap gap-2">
-                  <select value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                  <select aria-label="Memory scope" value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                     <option value="global">Global</option>
                     <option value="project">Project</option>
                   </select>
                   {memoryScope === "project" && (
-                    <select value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                    <select aria-label="Memory project" value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                       <option value="">Choose project</option>
                       {ws.projects.map((project) => (
                         <option key={project.id} value={project.id}>{project.name}</option>

@@ -5,16 +5,18 @@ import {
   emailPasswordGate,
   isOwnerBrokerConfigured,
   loginErrorBannerFromSearch,
+  parseSupabaseOAuthProviders,
   resolveLoginProviderAction,
 } from "./login-providers.ts";
 
 describe("resolveLoginProviderAction", () => {
-  it("routes Google/GitHub/Apple through Supabase when configured", () => {
+  it("routes Google/GitHub/Apple through Supabase when configured and listed", () => {
     for (const provider of ["google", "github", "apple"] as const) {
       assert.deepEqual(
         resolveLoginProviderAction(provider, {
           supabaseConfigured: true,
           betterAuthEnabled: true,
+          supabaseOAuthProviders: ["google", "github", "apple"],
         }),
         { kind: "supabase_oauth", provider },
       );
@@ -113,5 +115,61 @@ describe("isOwnerBrokerConfigured", () => {
       }),
       true,
     );
+  });
+});
+
+describe("parseSupabaseOAuthProviders", () => {
+  it("defaults to none when unset or empty", () => {
+    assert.deepEqual(parseSupabaseOAuthProviders(undefined), []);
+    assert.deepEqual(parseSupabaseOAuthProviders(""), []);
+    assert.deepEqual(parseSupabaseOAuthProviders(" , "), []);
+  });
+
+  it("parses a comma/space list and ignores unknown ids", () => {
+    assert.deepEqual(parseSupabaseOAuthProviders("google, github"), ["google", "github"]);
+    assert.deepEqual(parseSupabaseOAuthProviders("Apple GOOGLE twitter"), ["apple", "google"]);
+  });
+});
+
+describe("resolveLoginProviderAction supabase OAuth allowlist", () => {
+  it("disables Supabase OAuth providers when the allowlist is empty (default)", () => {
+    for (const provider of ["github", "apple"] as const) {
+      const action = resolveLoginProviderAction(provider, {
+        supabaseConfigured: true,
+        betterAuthEnabled: false,
+        supabaseOAuthProviders: [],
+      });
+      assert.equal(action.kind, "not_configured");
+      assert.equal((action as { message: string }).message, "Not enabled yet");
+    }
+  });
+
+  it("falls back to broker Google when Supabase Google is not allowlisted", () => {
+    assert.deepEqual(
+      resolveLoginProviderAction("google", {
+        supabaseConfigured: true,
+        betterAuthEnabled: true,
+        supabaseOAuthProviders: [],
+      }),
+      { kind: "better_auth", providerId: "grok-google", label: "Google" },
+    );
+  });
+
+  it("enables only listed Supabase OAuth providers", () => {
+    assert.deepEqual(
+      resolveLoginProviderAction("github", {
+        supabaseConfigured: true,
+        betterAuthEnabled: false,
+        supabaseOAuthProviders: ["github"],
+      }),
+      { kind: "supabase_oauth", provider: "github" },
+    );
+    const apple = resolveLoginProviderAction("apple", {
+      supabaseConfigured: true,
+      betterAuthEnabled: false,
+      supabaseOAuthProviders: ["github"],
+    });
+    assert.equal(apple.kind, "not_configured");
+    assert.equal((apple as { message: string }).message, "Not enabled yet");
   });
 });

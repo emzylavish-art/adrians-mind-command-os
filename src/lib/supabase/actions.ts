@@ -10,6 +10,8 @@ import { decideDashboardGate, type SupabaseGateUser } from "./gate";
 import {
   dashboardLoginSearch,
   isOwnerBrokerConfigured,
+  parseSupabaseOAuthProviders,
+  type SupabaseOAuthProviderId,
 } from "@/lib/auth/login-providers";
 
 function asString(value: unknown, max = 320): string {
@@ -34,21 +36,27 @@ function probeBrokerConfigured(): boolean {
   });
 }
 
+function probeSupabaseOAuthProviders(): SupabaseOAuthProviderId[] {
+  return parseSupabaseOAuthProviders(process.env.SUPABASE_OAUTH_PROVIDERS);
+}
+
 async function probeAuthUser(): Promise<{
   configured: boolean;
   user: SupabaseGateUser | null;
   brokerConfigured: boolean;
+  supabaseOAuthProviders: SupabaseOAuthProviderId[];
 }> {
   const brokerConfigured = probeBrokerConfigured();
+  const supabaseOAuthProviders = probeSupabaseOAuthProviders();
   const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
   if (!readSupabaseEnv()) {
-    return { configured: false, user: null, brokerConfigured };
+    return { configured: false, user: null, brokerConfigured, supabaseOAuthProviders };
   }
   const supabase = createSupabaseServerClient();
   // Prefer getUser() over getSession() — validates the JWT with the Auth server.
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
-    return { configured: true, user: null, brokerConfigured };
+    return { configured: true, user: null, brokerConfigured, supabaseOAuthProviders };
   }
   return {
     configured: true,
@@ -57,6 +65,7 @@ async function probeAuthUser(): Promise<{
       email: data.user.email ?? null,
     },
     brokerConfigured,
+    supabaseOAuthProviders,
   };
 }
 
@@ -64,6 +73,7 @@ export type AuthUserResult = {
   configured: boolean;
   user: SupabaseGateUser | null;
   brokerConfigured: boolean;
+  supabaseOAuthProviders: SupabaseOAuthProviderId[];
 };
 
 export const getSupabaseAuthUser = createServerFn({ method: "GET" }).handler(
