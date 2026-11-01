@@ -9,7 +9,7 @@ export async function synthesizeSpeech(input: { text: string; voiceKey: string |
     response = await input.fetch("https://api.x.ai/v1/tts", {
       method: "POST",
       headers: { authorization: `Bearer ${input.voiceKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ text, voice_id: "eve" }),
+      body: JSON.stringify({ text, voice_id: "eve", language: "en", output_format: { codec: "mp3" } }),
     });
   } catch {
     return { ok: false, audio: "", error: "Voice did not answer in time. Nothing was played." };
