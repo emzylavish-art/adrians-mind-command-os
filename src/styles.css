@@ -6414,7 +6414,6 @@ aside nav button:disabled,
   .main-stage {
     padding-bottom: 0 !important;
   }
-  .main-stage { pb: unset; }
   .composer-bar.is-fixed,
   .shell > .composer-bar.is-fixed {
     bottom: 0.35rem !important;
