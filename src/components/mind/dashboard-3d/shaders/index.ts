@@ -6,6 +6,7 @@ export const PAINTER_SHADERS = {
   lorePlaque: "LorePlaqueShader",
   inkWashEdge: "InkWashEdgeShader",
   imagineNode: "ImagineNodeShader",
+  laneNebula: "LaneNebulaShader",
 } as const;
 
 export {
@@ -40,3 +41,4 @@ export { BrushBuildingShader } from "./brush-building.ts";
 export { LorePlaqueShader } from "./lore-plaque.ts";
 export { InkWashEdgeShader } from "./ink-wash-edge.ts";
 export { ImagineNodeShader } from "./imagine-node.ts";
+export { LaneNebulaShader } from "./lane-nebula.ts";
