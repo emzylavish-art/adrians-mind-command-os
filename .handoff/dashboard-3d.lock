@@ -1,6 +1,6 @@
 owner: dashboard-3d-loop
-cycle: 44
+cycle: 45
 status: released
-released_at: 2026-11-01T22:57:06+01:00
-tip: 125d5b4
-work: Gap#35+#31-44+Light53f5ad1+Motion c15 lane
+released_at: 2026-11-01T23:03:33+01:00
+tip: a8f9a0d
+work: Gap#41/#43 + Motion c16 lane; attacker no #45+ in feed
