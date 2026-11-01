@@ -6,6 +6,8 @@ import { locksDirFromEnv, readLocksDir } from "./locks.ts";
 import { fetchNotionStopPoints } from "./notion.ts";
 import { buildConstellations, constellationEdges, systemWeather } from "./constellations.ts";
 import { loadNotionSnapshotFile } from "./notion-graph.ts";
+import { buildProjectsDashboard } from "./projects.ts";
+import { buildFleetPlan } from "./fleet-plan.ts";
 import type { BotNode, DashboardStatus, LockRecord } from "./types.ts";
 
 function pickPrimaryLock(locks: LockRecord[], fileRe: RegExp[], ownerRe: RegExp[]): LockRecord | null {
@@ -76,29 +78,42 @@ export async function buildDashboardStatus(
 
   const notion = await fetchNotionStopPoints(env.NOTION_TOKEN);
   const notionGraph = loadNotionSnapshotFile();
-  // Prefer live Notion when token works — snapshot remains the graph source until live crawl lands
   if (notion.available) {
     notionGraph.mode = notionGraph.available ? notionGraph.mode : "live";
   }
 
-  return {
+  const conductor = loadConductorNudges("/workspace");
+  const gapDispatcher = loadGapDispatcherFeed("/workspace/rea-captures");
+  const orchestrator = orchestratorFromLocks(locks);
+  const spend = loadSpend();
+  const constellations = buildConstellations(bots);
+  const edges = constellationEdges(bots);
+  const weather = systemWeather(bots);
+
+  const base = {
     generatedAt: new Date(now).toISOString(),
     bots,
     commits,
     notion,
-    conductor: loadConductorNudges("/workspace"),
-    gapDispatcher: loadGapDispatcherFeed("/workspace/rea-captures"),
-    orchestrator: orchestratorFromLocks(locks),
-    spend: loadSpend(),
+    conductor,
+    gapDispatcher,
+    orchestrator,
+    spend,
     sources: {
       locksDir,
       repoDir,
       locksOk: locks.length > 0,
       gitOk,
     },
-    constellations: buildConstellations(bots),
-    constellationEdges: constellationEdges(bots),
-    weather: systemWeather(bots),
+    constellations,
+    constellationEdges: edges,
+    weather,
     notionGraph,
+  };
+
+  return {
+    ...base,
+    projects: buildProjectsDashboard(base),
+    fleetPlan: buildFleetPlan(bots, env),
   };
 }

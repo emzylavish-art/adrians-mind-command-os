@@ -107,6 +107,17 @@ export function DashboardApp() {
               {state.data.notionGraph.reason ? ` — ${state.data.notionGraph.reason.slice(0, 90)}` : ""}
             </p>
           </div>
+          <div className="dash3d-glass dash3d-skybar-card">
+            <h2>Fleet plan</h2>
+            <p className="dash3d-title">
+              {state.data.fleetPlan?.queueHead
+                ? `#${state.data.fleetPlan.queueHead.index} ${state.data.fleetPlan.queueHead.title}`
+                : "Queue"}
+            </p>
+            <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
+              {(state.data.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
+            </p>
+          </div>
           <button
             type="button"
             className="dash3d-glass dash3d-zoomout"

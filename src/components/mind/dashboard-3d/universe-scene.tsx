@@ -9,6 +9,11 @@ import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/type
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
+  rebuildLandingPaths,
+  rebuildQueueRoad,
+  rebuildFleetLaneLines,
+} from "./fleet-plan-layer";
+import {
   createRig,
   dollyPose,
   flyTo,
@@ -261,6 +266,12 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     scene.add(cardGroup);
     const pageGroup = new THREE.Group();
     scene.add(pageGroup);
+    const landingGroup = new THREE.Group();
+    scene.add(landingGroup);
+    const queueGroup = new THREE.Group();
+    scene.add(queueGroup);
+    const fleetLineGroup = new THREE.Group();
+    scene.add(fleetLineGroup);
 
     type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3 };
     const botVis: BotVis[] = [];
@@ -486,6 +497,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       rebuildCards(status);
       rebuildPages(status);
       rebuildNebulae(status);
+      if (status.fleetPlan) {
+        rebuildLandingPaths(landingGroup, status.fleetPlan);
+        rebuildQueueRoad(queueGroup, status.fleetPlan);
+        rebuildFleetLaneLines(fleetLineGroup, status.fleetPlan, (id) => {
+          if (id === "grok-build") return sunMesh.position.clone();
+          const v = botVis.find((b) => b.id === id);
+          return v ? v.base.clone() : null;
+        });
+      }
     }
     rebuildAll();
 

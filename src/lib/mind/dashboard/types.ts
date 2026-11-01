@@ -91,4 +91,6 @@ export type DashboardStatus = {
   constellationEdges: import("./constellations.ts").ConstellationEdge[];
   weather: SystemWeather;
   notionGraph: import("./notion-graph.ts").NotionGraph;
+  projects: import("./projects.ts").ProjectsDashboard;
+  fleetPlan: import("./fleet-plan.ts").FleetPlan;
 };
