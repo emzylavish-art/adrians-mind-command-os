@@ -4800,3 +4800,253 @@ html[data-theme="light"] aside.rail .sidebar-plus * {
     white-space: nowrap !important;
   }
 }
+
+/* —— Evolution c63: mono hard-kill remaining purple chrome; loading status; aria-current —— */
+
+/* Kill ambient purple wash on body (B/W shell) */
+body {
+  background:
+    radial-gradient(ellipse 55% 45% at 78% -8%, rgb(255 255 255 / 0.04), transparent 55%),
+    radial-gradient(ellipse 40% 40% at 8% 18%, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-bg) !important;
+}
+
+/* Active nav (aria-current) — markup may omit bg-accent but keep purple utility shadows */
+aside.rail nav button[aria-current="page"],
+aside.rail nav a[aria-current="page"],
+aside nav button[aria-current="page"],
+aside.rail nav button[class*="shadow-[0_0_18px_rgb(124_92_255"],
+aside.rail nav button[class*="124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+  filter: none !important;
+}
+aside.rail nav button[aria-current="page"] *,
+aside.rail nav button[aria-current="page"] svg,
+aside.rail nav button[aria-current="page"] svg * {
+  color: #09090b !important;
+  stroke: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"],
+html[data-theme="light"] aside.rail nav button[class*="124_92_255"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.12) !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"] * {
+  color: #fafafa !important;
+  stroke: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Settings / Help selected pills — force mono borders (no purple glow) */
+.main-stage button.tile-active,
+.main-stage button.border-accent,
+.main-stage button[aria-pressed="true"],
+.main-stage .tile-active {
+  border-color: #f4f4f5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 0 1px rgb(255 255 255 / 0.18) !important;
+}
+.main-stage button.tile-active.bg-accent,
+.main-stage button[aria-pressed="true"].bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] .main-stage button.tile-active.bg-accent,
+html[data-theme="light"] .main-stage button[aria-pressed="true"].bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+  border-color: #18181b !important;
+}
+
+/* Loading shell on /explore /memory — presentational only (no focusables yet) */
+main.min-h-screen > p.text-sm.text-muted:only-child {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.72;
+  letter-spacing: 0.01em;
+}
+main.min-h-screen:has(> p.text-sm.text-muted:only-child) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* —— Evolution c64: motion — hover/press, sheets, reduced-motion —— */
+:root {
+  --dur-fast: 120ms;
+  --dur-med: 180ms;
+  --dur-slow: 280ms;
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.nav-item, .dense-card, .dense-row, .model-chip, .suggestion-chip, .sidebar-plus,
+button, .glow-card, .settings-row, a, .tool-card, .service-card,
+.main-stage .rounded-panel, .empty-state, .settings-card {
+  transition:
+    background var(--dur-med) var(--ease-soft),
+    color var(--dur-fast) var(--ease-soft),
+    border-color var(--dur-med) var(--ease-soft),
+    box-shadow var(--dur-med) var(--ease-soft),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-med) var(--ease-soft),
+    filter var(--dur-med) var(--ease-soft) !important;
+}
+
+button:not(:disabled):hover,
+.nav-item:hover,
+.dense-row:hover,
+.tool-card:hover,
+.service-card:hover,
+.settings-row:hover {
+  border-color: rgb(255 255 255 / 0.22);
+  transform: translateY(-1px);
+}
+button:not(:disabled):active,
+.nav-item:active,
+.dense-card:active,
+.dense-row:active,
+.tool-card:active {
+  transform: scale(0.985) translateY(0);
+}
+
+/* Sheets / overlays — smoother open; respect reduced motion */
+.overlay-backdrop {
+  animation: fade-in var(--dur-med) var(--ease-soft) both;
+}
+.overlay-panel,
+.floating-menu,
+[role="dialog"],
+[data-testid="alerts-panel"],
+.composer-dock:focus-within {
+  animation: sheet-rise var(--dur-slow) var(--ease-sheet) both;
+}
+@keyframes sheet-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.page-enter {
+  animation: page-fade var(--dur-slow) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-backdrop,
+  .overlay-panel,
+  .floating-menu,
+  [role="dialog"],
+  [data-testid="alerts-panel"],
+  .composer-dock:focus-within,
+  .page-enter,
+  .empty-state,
+  .mono-motion-graphic__ring {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+  button:not(:disabled):hover,
+  .nav-item:hover,
+  .dense-row:hover,
+  .tool-card:hover,
+  .service-card:hover {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c65: inner-page hero / empty density (Runs, Projects, Library…) —— */
+.main-stage .page-hero,
+.main-stage > .mx-auto .page-hero,
+.main-stage h2.font-display,
+.main-stage .font-display.text-3xl {
+  letter-spacing: -0.02em !important;
+  line-height: 1.15 !important;
+}
+.main-stage .page-hero {
+  padding: 1.15rem 1.25rem !important;
+  margin-bottom: 1rem !important;
+  border-radius: 1.25rem !important;
+  background-color: rgb(10 10 12 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+}
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel:has(> p.text-muted):has(svg) {
+  min-height: 10rem !important;
+  padding: 1.75rem 1.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.55rem !important;
+  text-align: center !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, cover !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+}
+.main-stage .empty-state p,
+.main-stage [data-empty="true"] p {
+  max-width: 28rem;
+  color: #a1a1aa !important;
+  font-size: 0.9rem !important;
+  line-height: 1.45 !important;
+}
+.main-stage .settings-card,
+.main-stage .settings-row {
+  border-radius: 1rem !important;
+}
+.main-stage .settings-row {
+  padding: 0.85rem 1rem !important;
+  min-height: 3rem;
+}
+.main-stage .settings-card + .settings-card,
+.main-stage section.rounded-panel + section.rounded-panel {
+  margin-top: 0.85rem !important;
+}
+
+/* —— Evolution c66: uncrush Voice mode / Switch chrome; alerts panel sheet —— */
+[data-testid="voice-mode-badge-header"],
+[data-testid="voice-mode-badge-composer"],
+[data-testid="open-voice-mode"] {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  height: auto !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+[data-testid="voice-mode-toggle-header"],
+[data-testid="voice-mode-toggle-composer"] {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding-inline: 0.65rem !important;
+}
+/* Top voice cluster — keep row, never stack glyphs sideways */
+.topbar [data-testid="voice-controls"],
+[data-testid="voice-controls"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  writing-mode: horizontal-tb !important;
+}
+[data-testid="alerts-panel"] {
+  border-radius: 1rem !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    rgb(10 10 12 / 0.88) !important;
+  backdrop-filter: blur(20px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  padding: 0.75rem 1rem !important;
+}
