@@ -39,19 +39,19 @@ describe("scene depth validity across composer ping-pong (hacker)", () => {
     const focus = createFocusDepthPass();
     focus.setFocus(new THREE.Vector3(0, 0, 0), cam(), { reducedMotion: true });
     const fu = focus.pass.uniforms as Record<string, { value: unknown }>;
-    let seen: { use: unknown; tex: unknown } | null = null;
+    const seen: { use?: unknown; tex?: unknown; drew?: boolean } = {};
     let phase = "";
     const r = mockRenderer(() => {
-      if (phase === "focus") seen = { use: fu.useDepth.value, tex: fu.tDepth.value };
+      if (phase === "focus") Object.assign(seen, { drew: true, use: fu.useDepth.value, tex: fu.tDepth.value });
     });
     r.render(); // RenderPass → T has real scene depth
     phase = "rays";
     rays.pass.render(r as never, U, T, 0, false); // reads T, writes U (clobbers U depth), swap
     phase = "focus";
     focus.pass.render(r as never, T, U, 0, false); // reads U: flat quad depth
-    assert.ok(seen, "focus pass drew");
-    assert.equal(seen!.use, 0, "flat depth must fall back to radial mask");
-    assert.equal(seen!.tex, null);
+    assert.ok(seen.drew, "focus pass drew");
+    assert.equal(seen.use, 0, "flat depth must fall back to radial mask");
+    assert.equal(seen.tex, null);
   });
 
   it("first depth consumer after RenderPass keeps real scene depth", () => {
