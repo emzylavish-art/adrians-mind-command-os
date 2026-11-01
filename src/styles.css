@@ -4697,3 +4697,54 @@ html[data-theme="light"] [role="button"]:focus-visible {
   outline: 2px solid #18181b !important;
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px #18181b !important;
 }
+
+/* —— Evolution c61: sidebar-plus contrast beat rail [class*=text-]; tablet ASK tile stretch —— */
+aside.rail .sidebar-plus,
+aside.rail .sidebar-plus.bg-accent,
+aside.rail button.sidebar-plus,
+aside.rail .sidebar-plus[class*="text-"],
+aside.rail button.sidebar-plus[class*="text-"],
+aside.rail .sidebar-plus.text-accent-ink {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  -webkit-text-fill-color: #09090b !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+aside.rail .sidebar-plus *,
+aside.rail button.sidebar-plus * {
+  color: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail .sidebar-plus,
+html[data-theme="light"] aside.rail .sidebar-plus[class*="text-"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  -webkit-text-fill-color: #fafafa !important;
+}
+html[data-theme="light"] aside.rail .sidebar-plus * {
+  color: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Tablet+: stop ASK/AUTOMATIC/Memory grid stretching to ~374px row */
+@media (min-width: 768px) {
+  section.composer-dock > .grid.gap-2,
+  section.command-card.composer-dock > .grid.gap-2,
+  section.floating-composer.composer-dock > .grid.gap-2,
+  .main-stage section.composer-dock > .grid.gap-2 {
+    grid-template-rows: auto !important;
+    align-items: stretch !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+  section.composer-dock > .grid.gap-2 > button,
+  section.command-card.composer-dock > .grid.gap-2 > button,
+  section.floating-composer.composer-dock > .grid.gap-2 > button {
+    height: auto !important;
+    min-height: 3.5rem !important;
+    max-height: none !important;
+    align-self: stretch !important;
+  }
+}
