@@ -5,7 +5,7 @@
  * 1. import { createPainterlyKit, tickPainterlyKit, disposePainterlyKit } from ".../materials";
  * 2. const kit = createPainterlyKit(); composer.addPass(kit.painterlyPass);
  * 3. Stars: kit.createStarMaterial({ color }); Buildings: kit.createBuildingMaterial({...});
- * 4. Lore plaques: kit.createLorePlaqueMaterial({ accent }); edges: kit.createInkWashEdgeMaterial({ health });
+ * 4. Lore plaques: kit.createLorePlaqueMaterial({ accent }); edges: kit.createInkEdges(edges) (batched) or kit.createInkWashEdgeMaterial;
  * 5. Imagine cards/sprites: kit.createImagineNodeMaterial({ map }); setImagineNodeMap when load completes
  * 6. Sky: kit.createSkyMaterial();
  * 7. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
@@ -59,6 +59,12 @@ import {
   type PainterlyBotStarOptions,
   type PainterlyBotStarBundle,
 } from "./painterly-bot-star.ts";
+import {
+  createPainterlyInkEdges,
+  type PainterlyInkEdgeInput,
+  type PainterlyInkEdgesOptions,
+  type PainterlyInkEdgesHandle,
+} from "./painterly-ink-edges.ts";
 
 export type PainterlyKitOptions = {
   pass?: PainterlyPassOptions;
@@ -117,6 +123,14 @@ export type PainterlyKit = {
    * Glow is auto bindSharedTexture'd to kit.starSpriteTexture.
    */
   createBotStar: (opts?: PainterlyBotStarOptions) => PainterlyBotStarBundle;
+  /**
+   * One-line ink-wash constellation edges (replaces LineDashedMaterial rebuildEdges).
+   * Batches by health → ≤4 draw calls; handle.update / handle.dispose.
+   */
+  createInkEdges: (
+    edges?: PainterlyInkEdgeInput[],
+    opts?: PainterlyInkEdgesOptions,
+  ) => PainterlyInkEdgesHandle;
   /** Detach context listeners (set by attachPainterlyContextHandlers). */
   detachContext: (() => void) | null;
   /** Last per-material tick error message (null if healthy). Never throws out of tick. */
@@ -214,6 +228,9 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     },
     createBotStar(starOpts) {
       return createPainterlyBotStar(kit, starOpts);
+    },
+    createInkEdges(edges = [], eOpts) {
+      return createPainterlyInkEdges(kit, edges, eOpts);
     },
   };
   LIVE_PAINTER_KITS.add(kit);

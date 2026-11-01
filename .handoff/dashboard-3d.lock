@@ -1,5 +1,5 @@
 owner: dashboard-3d-loop
-cycle: 39
-heartbeat: 2026-11-01T22:05:08+01:00
+cycle: 40
+heartbeat: 2026-11-01T22:16:49+01:00
 branch: dashboard-3d
-work: #30 minimap
+work: Painter c8 inkEdges + Motion c10/c11 + #39/#21-25 + feedback confirm

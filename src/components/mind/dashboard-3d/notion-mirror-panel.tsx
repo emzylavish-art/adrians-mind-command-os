@@ -1,10 +1,31 @@
 import type { NotionMirrorView } from "@/lib/mind/dashboard/notion-mirror";
 import { NO_MIRROR_SOURCE } from "@/lib/mind/dashboard/notion-mirror";
+import { extractIsoPrefix, formatRelativeWhen } from "@/lib/mind/dashboard/format-when";
 
 type Props = {
   mirror: NotionMirrorView;
   onOpenPage?: (pageId: string) => void;
 };
+
+
+function MirrorTitle({ title }: { title: string | null | undefined }) {
+  const raw = title || NO_MIRROR_SOURCE;
+  const { iso, rest } = extractIsoPrefix(raw);
+  if (!iso) {
+    return (
+      <span className="dash3d-muted dash3d-mirror-title" title={raw}>
+        {raw}
+      </span>
+    );
+  }
+  const when = formatRelativeWhen(iso);
+  const label = rest ? `${when.label} — ${rest}` : when.label;
+  return (
+    <span className="dash3d-muted dash3d-mirror-title" title={when.title}>
+      {label}
+    </span>
+  );
+}
 
 export function NotionMirrorPanel({ mirror, onOpenPage }: Props) {
   return (
@@ -35,9 +56,7 @@ export function NotionMirrorPanel({ mirror, onOpenPage }: Props) {
                 <span className={`dash3d-mirror-fresh${r.stale ? " is-stale" : ""}`}>
                   {r.freshLabel}
                 </span>
-                <span className="dash3d-muted dash3d-mirror-title">
-                  {r.title || NO_MIRROR_SOURCE}
-                </span>
+                <MirrorTitle title={r.title} />
               </button>
             </li>
           ))}

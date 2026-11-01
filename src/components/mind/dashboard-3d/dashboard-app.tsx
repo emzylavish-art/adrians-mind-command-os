@@ -24,12 +24,13 @@ import { ForeverContractPanel } from "./forever-contract-panel";
 import { GraphFiltersPanel } from "./graph-filters-panel";
 import { MinimapPanel } from "./minimap-panel";
 import { portraitUrlForBot } from "@/lib/mind/dashboard/portrait-resolve";
+import { buildViewUrlSearch, parseViewUrlSearch, type ViewLevel } from "@/lib/mind/dashboard/view-url";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import { pollViewData } from "@/lib/mind/dashboard/status-poll";
+import "./dashboard-3d.css";
 
 /** Gap#3: once we have painted a scene this session, never re-show the boot splash. */
 let dash3dStagePrimed = false;
-import "./dashboard-3d.css";
 
 export function DashboardApp() {
   const { state, refresh } = useDashboardStatus();
@@ -62,6 +63,64 @@ export function DashboardApp() {
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [hudFocus, setHudFocus] = useState(false);
+  const urlBootstrapped = useRef(false);
+
+  // Gap#16 / #39 — hydrate focus+level from URL once bots exist.
+  useEffect(() => {
+    if (!viewData || urlBootstrapped.current) return;
+    if (typeof window === "undefined") return;
+    urlBootstrapped.current = true;
+    const allowed = new Set(viewData.bots.map((b) => b.id));
+    const parsed = parseViewUrlSearch(window.location.search, allowed);
+    if (parsed.focus) {
+      const bot = viewData.bots.find((b) => b.id === parsed.focus) ?? null;
+      if (bot) {
+        setSelected(bot);
+        document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId: bot.id } }));
+      }
+    }
+    if (parsed.level === "city") sendFly({ type: "DIVE" });
+    else if (parsed.level === "interior") {
+      sendFly({ type: "DIVE" });
+      // interior without building stays at city; honest
+    }
+  }, [viewData]);
+
+  // Write URL on selection / fly level (replace on focus, push on level change).
+  const lastLevel = useRef<ViewLevel>("universe");
+  useEffect(() => {
+    if (typeof window === "undefined" || !urlBootstrapped.current) return;
+    const level = (fly.level === "interior" || fly.level === "city" || fly.level === "universe"
+      ? fly.level
+      : "universe") as ViewLevel;
+    const next = buildViewUrlSearch({ focus: selected?.id ?? null, level });
+    const url = `${window.location.pathname}${next}${window.location.hash}`;
+    if (level !== lastLevel.current) {
+      window.history.pushState({ dash3d: true, level, focus: selected?.id ?? null }, "", url);
+      lastLevel.current = level;
+    } else {
+      window.history.replaceState({ dash3d: true, level, focus: selected?.id ?? null }, "", url);
+    }
+  }, [selected?.id, fly.level]);
+
+  useEffect(() => {
+    const onPop = () => {
+      if (typeof window === "undefined") return;
+      const allowed = new Set((viewData?.bots ?? []).map((b) => b.id));
+      const parsed = parseViewUrlSearch(window.location.search, allowed);
+      lastLevel.current = parsed.level;
+      if (parsed.level === "universe") sendFly({ type: "SKY" });
+      else if (parsed.level === "city") sendFly({ type: "DIVE" });
+      if (parsed.focus) {
+        document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId: parsed.focus } }));
+      } else {
+        setSelected(null);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [viewData]);
+
   const [perfHint, setPerfHint] = useState<string | null>(null);
   const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
   useEffect(() => {
@@ -145,10 +204,19 @@ export function DashboardApp() {
     };
   }, [state]);
 
-  const nowMs = useMemo(() => Date.now(), [state]);
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  useEffect(() => {
+    // Gap#21: avoid SSR/client Date.now mismatch — set clock after mount only.
+    setNowMs(Date.now());
+    const id = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(id);
+  }, [state.status]);
   const scrubView = useMemo(() => {
     if (!viewData) {
       return { data: null as null, mode: "live" as const, message: null as string | null, scrubMs: null as number | null };
+    }
+    if (nowMs == null) {
+      return { data: viewData, mode: "live" as const, message: null as string | null, scrubMs: null as number | null };
     }
     const timeline = viewData.timeline ?? {
       events: [],
@@ -161,7 +229,8 @@ export function DashboardApp() {
     const liveHealth = Object.fromEntries(
       viewData.bots.map((b) => [b.id, { health: b.health, reason: b.reason }]),
     );
-    const target = scrubMs == null ? nowMs : scrubMs;
+    const clock = nowMs ?? 0;
+    const target = scrubMs == null ? clock : scrubMs;
     const result = scrubAt({
       timeline,
       botIds: viewData.bots.map((b) => b.id),
@@ -362,7 +431,7 @@ export function DashboardApp() {
               truncated: false,
             }}
             scrubMs={scrubView.scrubMs}
-            nowMs={nowMs}
+            nowMs={nowMs ?? 0}
             message={scrubView.message}
             mode={scrubView.mode}
             onScrubMs={setScrubMs}

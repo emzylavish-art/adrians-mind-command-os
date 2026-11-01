@@ -1,5 +1,5 @@
 /**
- * Pan / remount pose-hold helpers (Cosmos Motion Bot c9).
+ * Pan / remount pose-hold helpers (Cosmos Motion Bot c9 / hardened c10).
  *
  * Complements Dashboard queue #25 (last-frame WebGL freeze): when UniverseScene
  * remounts, local motion state (focus ease, character loco, breadcrumb, node open,
@@ -8,6 +8,8 @@
  * (shared clock already survives; never call hardReset on remount).
  *
  * Pure, allocation-light: capture writes into caller-owned hold objects.
+ * c10: JSON parse / sanitize rejects foreign versions, wrong types, __proto__ keys,
+ * and restore-*ForKnownIds skips stale ids removed from the live scene.
  */
 import { clamp01 } from "./ease.ts";
 import { finiteOr } from "./sanitize.ts";
@@ -19,6 +21,9 @@ import type { SceneTransitionState } from "./transition-ease.ts";
 import { normalizeSceneId } from "./transition-ease.ts";
 
 export const POSE_HOLD_VERSION = 1 as const;
+
+/** Max entries accepted from a sessionStorage bag (DoS / huge-array guard). */
+export const POSE_HOLD_MAX_IDS = 512;
 
 export type FocusPoseHold = { pulseMul: number; driftMul: number };
 export type CharacterPoseHold = { loco: number; lookYaw: number };
@@ -137,40 +142,143 @@ export function createMotionPoseBag(): MotionPoseBag {
   };
 }
 
-/** Sanitize a hold in place (NaN/overflow) — safe after JSON round-trip from session. */
-export function sanitizeMotionPoseBag(bag: MotionPoseBag): MotionPoseBag {
-  if (!bag || typeof bag !== "object") return createMotionPoseBag();
-  bag.version = POSE_HOLD_VERSION;
-  if (!bag.focusById || typeof bag.focusById !== "object") {
-    bag.focusById = Object.create(null) as Record<string, FocusPoseHold>;
+const DANGEROUS_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return v != null && typeof v === "object" && !Array.isArray(v);
+}
+
+function numField(v: unknown, fallback: number): number {
+  return typeof v === "number" ? finiteOr(v, fallback) : fallback;
+}
+
+function cleanIdMap<T>(
+  raw: unknown,
+  read: (entry: unknown) => T | null,
+): Record<string, T> {
+  const out = Object.create(null) as Record<string, T>;
+  if (!isPlainRecord(raw)) return out;
+  // Hacker c11: for-in + early break — Object.keys(100k) allocates a huge array first.
+  let n = 0;
+  for (const id in raw) {
+    if (!Object.prototype.hasOwnProperty.call(raw, id)) continue;
+    if (DANGEROUS_KEYS.has(id)) continue;
+    if (typeof id !== "string" || id.length === 0) continue;
+    if (n >= POSE_HOLD_MAX_IDS) break;
+    const entry = read(raw[id]);
+    if (entry == null) continue;
+    out[id] = entry;
+    n++;
   }
-  if (!bag.characterById || typeof bag.characterById !== "object") {
-    bag.characterById = Object.create(null) as Record<string, CharacterPoseHold>;
+  return out;
+}
+
+function readFocusHold(entry: unknown): FocusPoseHold | null {
+  if (!isPlainRecord(entry)) return null;
+  return {
+    pulseMul: numField(entry.pulseMul, 1),
+    driftMul: clamp01(numField(entry.driftMul, 1)),
+  };
+}
+
+function readCharacterHold(entry: unknown): CharacterPoseHold | null {
+  if (!isPlainRecord(entry)) return null;
+  return {
+    loco: clamp01(numField(entry.loco, 0)),
+    lookYaw: numField(entry.lookYaw, 0),
+  };
+}
+
+function readBreadcrumb(raw: unknown): BreadcrumbPoseHold {
+  const b = createBreadcrumbPoseHold();
+  if (!isPlainRecord(raw)) return b;
+  b.amount = clamp01(numField(raw.amount, 0));
+  b.target = numField(raw.target, 0) >= 0.5 ? 1 : 0;
+  b.focusId =
+    typeof raw.focusId === "string" && raw.focusId.length > 0 ? raw.focusId : null;
+  return b;
+}
+
+function readNodeOpen(raw: unknown): NodeOpenPoseHold {
+  const n = createNodeOpenPoseHold();
+  if (!isPlainRecord(raw)) return n;
+  n.amount = clamp01(numField(raw.amount, 0));
+  n.target = numField(raw.target, 0) >= 0.5 ? 1 : 0;
+  return n;
+}
+
+function readSceneTx(raw: unknown): SceneTransitionPoseHold {
+  const s = createSceneTransitionPoseHold();
+  if (!isPlainRecord(raw)) return s;
+  s.progress = clamp01(numField(raw.progress, 0));
+  s.target = numField(raw.target, 0) >= 0.5 ? 1 : 0;
+  s.fromId = normalizeSceneId(raw.fromId as string | null | undefined);
+  s.toId = normalizeSceneId(raw.toId as string | null | undefined);
+  return s;
+}
+
+/**
+ * Sanitize any bag-shaped value in place when possible, else rebuild.
+ * Safe after JSON round-trip / sessionStorage tampering (c10).
+ */
+export function sanitizeMotionPoseBag(bag: unknown): MotionPoseBag {
+  if (!isPlainRecord(bag)) return createMotionPoseBag();
+  const out = createMotionPoseBag();
+  // Always pin current version (foreign/stale versions are accepted as "best effort"
+  // field reads, never as a signal to trust nested shapes).
+  out.version = POSE_HOLD_VERSION;
+  out.focusById = cleanIdMap(bag.focusById, readFocusHold);
+  out.characterById = cleanIdMap(bag.characterById, readCharacterHold);
+  out.breadcrumb = readBreadcrumb(bag.breadcrumb);
+  out.nodeOpen = readNodeOpen(bag.nodeOpen);
+  out.sceneTx = readSceneTx(bag.sceneTx);
+  return out;
+}
+
+/** Parse sessionStorage / JSON text into a sanitized bag. Never throws. */
+export function parseMotionPoseBag(raw: unknown): MotionPoseBag {
+  if (raw == null) return createMotionPoseBag();
+  if (typeof raw === "string") {
+    try {
+      return sanitizeMotionPoseBag(JSON.parse(raw));
+    } catch {
+      return createMotionPoseBag();
+    }
   }
-  for (const id of Object.keys(bag.focusById)) {
-    const h = bag.focusById[id]!;
-    h.pulseMul = finiteOr(h.pulseMul, 1);
-    h.driftMul = clamp01(finiteOr(h.driftMul, 1));
+  return sanitizeMotionPoseBag(raw);
+}
+
+/**
+ * Restore focus holds only for ids still present in `live`.
+ * Stale ids (removed bots/nodes) are ignored — never inserted into live.
+ */
+export function restoreFocusPosesForKnownIds(
+  live: Map<string, FocusEaseState>,
+  holds: Readonly<Record<string, FocusPoseHold>>,
+): void {
+  if (!holds || typeof holds !== "object") return;
+  for (const id of Object.keys(holds)) {
+    if (DANGEROUS_KEYS.has(id)) continue;
+    const state = live.get(id);
+    if (!state) continue;
+    const h = holds[id];
+    if (!h) continue;
+    restoreFocusPose(state, h);
   }
-  for (const id of Object.keys(bag.characterById)) {
-    const h = bag.characterById[id]!;
-    h.loco = clamp01(finiteOr(h.loco, 0));
-    h.lookYaw = finiteOr(h.lookYaw, 0);
+}
+
+/** Restore character holds only for ids still present in `live`. */
+export function restoreCharacterPosesForKnownIds(
+  live: Map<string, CharacterMotionState>,
+  holds: Readonly<Record<string, CharacterPoseHold>>,
+): void {
+  if (!holds || typeof holds !== "object") return;
+  for (const id of Object.keys(holds)) {
+    if (DANGEROUS_KEYS.has(id)) continue;
+    const state = live.get(id);
+    if (!state) continue;
+    const h = holds[id];
+    if (!h) continue;
+    restoreCharacterPose(state, h);
   }
-  if (!bag.breadcrumb) bag.breadcrumb = createBreadcrumbPoseHold();
-  bag.breadcrumb.amount = clamp01(finiteOr(bag.breadcrumb.amount, 0));
-  bag.breadcrumb.target = finiteOr(bag.breadcrumb.target, 0) >= 0.5 ? 1 : 0;
-  bag.breadcrumb.focusId =
-    typeof bag.breadcrumb.focusId === "string" && bag.breadcrumb.focusId.length > 0
-      ? bag.breadcrumb.focusId
-      : null;
-  if (!bag.nodeOpen) bag.nodeOpen = createNodeOpenPoseHold();
-  bag.nodeOpen.amount = clamp01(finiteOr(bag.nodeOpen.amount, 0));
-  bag.nodeOpen.target = finiteOr(bag.nodeOpen.target, 0) >= 0.5 ? 1 : 0;
-  if (!bag.sceneTx) bag.sceneTx = createSceneTransitionPoseHold();
-  bag.sceneTx.progress = clamp01(finiteOr(bag.sceneTx.progress, 0));
-  bag.sceneTx.target = finiteOr(bag.sceneTx.target, 0) >= 0.5 ? 1 : 0;
-  bag.sceneTx.fromId = normalizeSceneId(bag.sceneTx.fromId);
-  bag.sceneTx.toId = normalizeSceneId(bag.sceneTx.toId);
-  return bag;
 }

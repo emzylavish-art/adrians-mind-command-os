@@ -989,3 +989,51 @@
   pointer-events: none;
 }
 .dash3d-root[data-hud-focus="1"] .dash3d-minimap { opacity: 0; pointer-events: none; visibility: hidden; }
+
+/* Gap #24 — readable floor for feed / commits / focus chip (never <11px meta, 12px body) */
+.dash3d-feed-panel,
+.dash3d-feed-panel .dash3d-muted,
+.dash3d-feed-panel li,
+.dash3d-feed-panel button {
+  font-size: max(12px, 0.75rem);
+}
+.dash3d-feed-panel .dash3d-mono,
+.dash3d-feed-panel code {
+  font-size: max(11px, 0.6875rem);
+}
+.dash3d-hud-focus-toggle {
+  font-size: max(12px, 0.75rem);
+}
+.dash3d-feed-glyph-text {
+  font-size: max(11px, 0.6875rem);
+}
+
+/* Gap #23 — short / 200% zoom viewports: scrollable stack, pin operator */
+@media (max-height: 520px), (max-width: 720px) and (max-height: 640px) {
+  .dash3d-root {
+    overflow: auto;
+  }
+  .dash3d-skybar,
+  .dash3d-charts-panel,
+  .dash3d-feed-panel,
+  .dash3d-graph-filters,
+  .dash3d-mirror-panel,
+  .dash3d-flyhud,
+  .dash3d-minimap {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: min(100%, 420px);
+    margin: 0.35rem 0.5rem;
+    max-height: none;
+  }
+  .dash3d-hud-focus-toggle,
+  .dash3d-operator-open,
+  [data-testid="operator-open"] {
+    position: sticky;
+    top: 0.35rem;
+    z-index: 12;
+  }
+}

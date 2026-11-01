@@ -46,6 +46,7 @@ export function FeedPanel({ feed, onFocusBot }: Props) {
                 className="dash3d-feed-row"
                 data-kind={ev.kind}
                 data-testid="feed-row"
+                title={ev.text}
                 disabled={!ev.botId}
                 onClick={() => {
                   if (ev.botId) {

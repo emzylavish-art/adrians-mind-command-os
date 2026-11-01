@@ -121,6 +121,7 @@ export function useDashboardStatus() {
     };
     const scheduleNext = () => {
       if (stopped.current) return;
+      if (typeof document !== "undefined" && document.hidden) return;
       if (retryTimer.current != null) window.clearTimeout(retryTimer.current);
       const nextDelay = failCountRef.current > 0 ? nextBackoffMs(failCountRef.current - 1) : POLL_MS;
       retryTimer.current = window.setTimeout(() => {
@@ -129,7 +130,21 @@ export function useDashboardStatus() {
     };
     // First fetch immediately, then poll / backoff loop.
     void refresh().finally(scheduleNext);
+    const onVis = () => {
+      if (document.hidden) {
+        // Gap#25: pause timers while hidden — no background status hammering.
+        if (retryTimer.current != null) {
+          window.clearTimeout(retryTimer.current);
+          retryTimer.current = null;
+        }
+        return;
+      }
+      // Visible again: immediate fetch, then resume schedule.
+      void refresh().finally(scheduleNext);
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
+      document.removeEventListener("visibilitychange", onVis);
       stopped.current = true;
       if (retryTimer.current != null) window.clearTimeout(retryTimer.current);
       inFlight.current?.abort();

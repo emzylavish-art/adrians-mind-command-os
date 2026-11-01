@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c39 — Gap#8 minimap (#30). Next: #39 URL state (Gap#16).
+Last release: Dashboard c40 — Painter c8 createInkEdges + Motion c10/c11 + #39 URL + Gaps #21–#25 + god-rays feedback confirm. Next: queue #22+ / fleet tips.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -55,11 +55,17 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 36 | **Persist last-good across reload (Gap#13)** — sessionStorage/IDB snapshot + stale-since banner when status outage on boot | **done** | c31 — sessionStorage last-good; hydrate ready+stale; skybar stale WAT banner |
 | 37 | **Skip-link first + glyphs out of tab order (Gap#14)** — skip to skybar first; feed-glyph tabindex=-1; Feed list is keyboard path | **done** | c32 — skip link first in main; glyphs tabIndex=-1; skybar fallback target |
 | 38 | **Charts readable ticks + values (Gap#15)** — non-truncated labels, inline top values, focusable marks / touch tooltips | **done** | c33 — chartTickLabel hour/initials; value labels; focusable marks + aria |
-| 39 | **View state in URL (Gap#16)** — `?focus=&level=` shareable; Back zooms out via popstate | queued | REA 215417; Kepler/Grafana URL state |
+| 39 | **View state in URL (Gap#16)** — `?focus=&level=` shareable; Back zooms out via popstate | **done** | c40 — view-url parse/build; replaceState focus; pushState level; popstate |
 | 40 | **Charts vs Star Detail overlap (Gap#17)** — node detail wins z-order / collapse charts when focused | **done** | c38 — node-detail z-index above charts when open |
 | 41 | **Sanitize hostile bot names (Gap#18)** — strip bidi overrides; ellipsis + title on long names | **done** | c38 — bot-normalize stripBidi + dash3d-node-title |
 | 42 | **Portrait negative cache (Gap#19)** — Star Detail onError → portrait-dashboard; no 404 storm | **done** | c38 — portrait-resolve session miss cache |
 | 43 | **Dedupe duplicate bot ids (Gap#20)** — normalize status bots by id (newest heartbeat) | **done** | c38 — dedupeBotsById in status hook |
+| 44 | **Hydration mismatch (Gap#21)** — no Date.now() during SSR render; client clock after mount | **done** | c40 — nowMs state set in useEffect |
+| 45 | **Notion mirror readable times (Gap#22)** — unescape Markdown ISO; relative + WAT title | **done** | c40 — format-when + MirrorTitle |
+| 46 | **200% zoom / short viewport reflow (Gap#23)** — stack panels; pin Operator | **done** | c40 — max-height media query in dashboard-3d.css |
+| 47 | **Feed text ≥12px (Gap#24)** — raise feed/commit floors; title tooltips | **done** | c40 — max(12px) feed CSS + feed-row title |
+| 48 | **Pause status poll when hidden (Gap#25)** — visibilitychange pause; refetch on visible | **done** | c40 — use-dashboard-status hidden gate |
+
 
 
 ## After each upgrade

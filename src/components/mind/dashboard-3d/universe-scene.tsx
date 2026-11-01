@@ -66,6 +66,13 @@ import {
   restoreFocusPose,
   createFocusPoseHold,
   sanitizeMotionPoseBag,
+  createHoverTooltipState,
+  createHoverTooltipSample,
+  setHoverTooltipTarget,
+  stepHoverTooltip,
+  createEdgePulseState,
+  createEdgePulseSample,
+  stepEdgePulseSync,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
@@ -540,54 +547,61 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       );
     }
 
-    type FlowLine = { line: THREE.Line; seed: number; speed: number; baseOpacity: number };
-    const flowLines: FlowLine[] = [];
+    type EdgeRec = { from: string; to: string; health: string; kind: string; fromPos: [number, number, number]; toPos: [number, number, number] };
+    let edgeRecs: EdgeRec[] = [];
+    let inkEdges: ReturnType<typeof kit.createInkEdges> | null = null;
     type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number };
     const landingTrails: LandingTrail[] = [];
     const travelerGeo = new THREE.SphereGeometry(0.16, 12, 12);
 
+    const posOfTuple = (id: string): [number, number, number] | null => {
+      if (id === "grok-build") return [sunMesh.position.x, sunMesh.position.y, sunMesh.position.z];
+      const v = botVis.find((b) => b.id === id);
+      return v ? [v.base.x, v.base.y, v.base.z] : null;
+    };
+
+    const mapInkInput = (recs: EdgeRec[]) =>
+      recs.map((e) => ({
+        from: e.fromPos,
+        to: e.toPos,
+        health: e.health,
+        kind: e.kind === "hub" ? "hub" : "link",
+        id: `${e.from}>${e.to}`,
+      }));
+
+    const applyEdgeVisibilityFilter = () => {
+      if (!inkEdges) return;
+      let recs = edgeRecs;
+      if (nhopVisibleIds) {
+        recs = recs.filter((e) => nhopVisibleIds!.has(e.from) && nhopVisibleIds!.has(e.to));
+      } else if (graphVisibleIds) {
+        recs = recs.filter((e) => graphVisibleIds!.has(e.from) && graphVisibleIds!.has(e.to));
+      }
+      inkEdges.update(mapInkInput(recs));
+    };
+
     function rebuildEdges(status: DashboardStatus) {
-      while (edgeGroup.children.length) {
-        const ch = edgeGroup.children[0]!;
-        edgeGroup.remove(ch);
-        if (ch instanceof THREE.Line) {
-          ch.geometry.dispose();
-          (ch.material as THREE.Material).dispose();
-        }
-      }
-      flowLines.length = 0;
-      const posOf = (id: string) => {
-        if (id === "grok-build") return sunMesh.position.clone();
-        const v = botVis.find((b) => b.id === id);
-        return v ? v.base.clone() : null;
-      };
-      let ei = 0;
+      edgeRecs = [];
       for (const e of status.constellationEdges) {
-        const a = posOf(e.from);
-        const b = posOf(e.to);
+        const a = posOfTuple(e.from);
+        const b = posOfTuple(e.to);
         if (!a || !b) continue;
-        const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-        // Animation #3: dashed flow along constellation edges (static under reducedMotion)
-        const mat = new THREE.LineDashedMaterial({
-          color: HEALTH_COLOR[e.health],
-          transparent: true,
-          opacity: e.kind === "hub" ? 0.35 : 0.6,
-          dashSize: e.kind === "hub" ? 0.35 : 0.28,
-          gapSize: e.kind === "hub" ? 0.22 : 0.18,
+        edgeRecs.push({
+          from: e.from,
+          to: e.to,
+          health: e.health,
+          kind: e.kind,
+          fromPos: a,
+          toPos: b,
         });
-        const line = new THREE.Line(geo, mat);
-        line.computeLineDistances();
-        line.userData.from = e.from;
-        line.userData.to = e.to;
-        edgeGroup.add(line);
-        flowLines.push({
-          line,
-          seed: ei * 0.37,
-          speed: e.health === "blocked" ? 0.9 : e.health === "stalled" ? 0.35 : e.health === "healthy" ? 0.55 : 0.15,
-          baseOpacity: e.kind === "hub" ? 0.35 : 0.6,
-        });
-        ei += 1;
       }
+      if (!inkEdges) {
+        inkEdges = kit.createInkEdges(mapInkInput(edgeRecs));
+        edgeGroup.add(inkEdges.group);
+      } else {
+        inkEdges.update(mapInkInput(edgeRecs));
+      }
+      applyEdgeVisibilityFilter();
     }
 
     function rebuildCards(status: DashboardStatus) {
@@ -890,27 +904,33 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     tipEl.setAttribute("role", "tooltip");
     tipEl.hidden = true;
     mount.appendChild(tipEl);
+    const hoverTipState = createHoverTooltipState();
+    const hoverTipSample = createHoverTooltipSample();
+    const edgePulseState = createEdgePulseState();
+    const edgePulseSample = createEdgePulseSample();
     const setEdgeHover = (botId: string | null) => {
-      for (const ch of edgeGroup.children) {
-        if (!(ch instanceof THREE.Line)) continue;
-        const mat = ch.material as THREE.LineDashedMaterial;
-        const connected = botId != null && (ch.userData.from === botId || ch.userData.to === botId);
-        const base = flowLines.find((f) => f.line === ch)?.baseOpacity ?? 0.5;
+      // Painter c8 batches edges by health — boost uPulse on batches that contain the hover star.
+      if (!inkEdges) return;
+      for (const ch of inkEdges.group.children) {
+        if (!(ch instanceof THREE.Mesh)) continue;
+        const mat = ch.material as THREE.ShaderMaterial;
+        if (!mat.uniforms?.["uPulse"]) continue;
         if (!botId) {
-          mat.opacity = base;
-          ch.visible = true;
-        } else if (connected) {
-          mat.opacity = Math.min(1, base + 0.45);
-          ch.visible = true;
-        } else {
-          mat.opacity = Math.max(0.08, base * 0.25);
+          mat.uniforms["uPulse"].value = 0.35;
+          continue;
         }
+        const tone = String(ch.userData.inkEdgeBatch || "");
+        const hit = edgeRecs.some(
+          (e) => e.health === tone && (e.from === botId || e.to === botId),
+        );
+        mat.uniforms["uPulse"].value = hit ? 0.85 : 0.12;
       }
     };
     const showBotTip = (botId: string | null, clientX: number, clientY: number) => {
       if (!botId) {
         tipEl.hidden = true;
         tipEl.textContent = "";
+        setHoverTooltipTarget(hoverTipState, null);
         setEdgeHover(null);
         hoverBotId = null;
         return;
@@ -921,6 +941,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         return;
       }
       hoverBotId = botId;
+      setHoverTooltipTarget(hoverTipState, botId);
       setEdgeHover(botId);
       const heartbeat = bot.lastActivityAt
         ? new Date(bot.lastActivityAt).toLocaleString("en-GB", { timeZone: "Africa/Lagos", hour12: false }) + " WAT"
@@ -1272,6 +1293,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId } }));
       }
 
+      stepHoverTooltip(hoverTipState, hoverTipSample, dt, reducedMotion);
+      if (hoverTipSample.hoverId && !tipEl.hidden) {
+        tipEl.style.opacity = String(hoverTipSample.opacity);
+        tipEl.style.transform = `translateY(${hoverTipSample.offsetY}px) scale(${hoverTipSample.scale})`;
+      } else if (!hoverTipSample.hoverId && tipEl.hidden === false && hoverTipSample.opacity < 0.02) {
+        tipEl.hidden = true;
+      }
+
       // billboard cards
       for (const ch of cardGroup.children) {
         ch.lookAt(camera.position);
@@ -1300,8 +1329,28 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         stepFocusEase(st, n.id, rig.subjectId, dt, reducedMotion);
         applyFocusPulse(pulseOut, st.pulseMul);
         applyFocusDrift(driftOut, n.base, st.driftMul);
-        n.mesh.scale.setScalar(pulseOut.scale);
-        n.glow.scale.setScalar(pulseOut.glow);
+        let scaleMul = pulseOut.scale;
+        if (hoverTipSample.edge > 0.05 && hoverTipSample.hoverId) {
+          const hid = hoverTipSample.hoverId;
+          const neigh =
+            n.id === hid ||
+            edgeRecs.some((e) => (e.from === hid && e.to === n.id) || (e.to === hid && e.from === n.id));
+          if (neigh) {
+            stepEdgePulseSync(
+              edgePulseState,
+              edgePulseSample,
+              hoverTipSample.edge,
+              hid,
+              n.id,
+              hid,
+              t,
+              reducedMotion,
+            );
+            scaleMul *= edgePulseSample.neighborPulseMul;
+          }
+        }
+        n.mesh.scale.setScalar(scaleMul);
+        n.glow.scale.setScalar(pulseOut.glow * (scaleMul / Math.max(1e-6, pulseOut.scale)));
         if (n.setColor) n.setColor(HEALTH_COLOR[n.health], pulseOut.emissive);
         else {
           const mat = n.mesh.material as THREE.MeshStandardMaterial;
@@ -1313,11 +1362,28 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         // label visibility owned above (health filter + labels layer + fly level)
       }
       if (!reducedMotion) {
-        for (const fl of flowLines) {
-          const mat = fl.line.material as THREE.LineDashedMaterial;
-          // LineDashedMaterial has no dashOffset in this three build — pulse opacity as flowing energy
-          const phase = lineFlowPhase(t, fl.speed, fl.seed);
-          mat.opacity = fl.baseOpacity * (0.42 + 0.58 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
+        inkEdges?.tick(t);
+        const edgeFocusId = rig.subjectId ?? hoverTipSample.hoverId;
+        // Motion c11: drive ink uPulse from hover edge strength + focus orientation sample
+        if (inkEdges && edgeRecs.length) {
+          const sample = edgeRecs[0]!;
+          stepEdgePulseSync(
+            edgePulseState,
+            edgePulseSample,
+            hoverTipSample.edge,
+            sample.from,
+            sample.to,
+            edgeFocusId,
+            t,
+            reducedMotion,
+          );
+          for (const ch of inkEdges.group.children) {
+            if (!(ch instanceof THREE.Mesh)) continue;
+            const mat = ch.material as THREE.ShaderMaterial;
+            if (!mat.uniforms?.["uPulse"]) continue;
+            const base = 0.35;
+            mat.uniforms["uPulse"].value = Math.min(1, base + 0.55 * edgePulseSample.highlight);
+          }
         }
         for (const tr of landingTrails) {
           samplePolylineTravel(travelOut, tr.points, travelProgress(t, 7.5, tr.seed));
@@ -1379,6 +1445,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
         feedGlyphs.dispose();
+      inkEdges?.dispose();
+      inkEdges = null;
         feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };
@@ -1470,17 +1538,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           graphFilter,
         );
       }
-      // Also dim edges not touching a visible bot
-      for (const ch of edgeGroup.children) {
-        if (!(ch instanceof THREE.Line)) continue;
-        if (!graphVisibleIds) {
-          ch.visible = true;
-          continue;
-        }
-        const a = String(ch.userData.from || "");
-        const b = String(ch.userData.to || "");
-        ch.visible = graphVisibleIds.has(a) && graphVisibleIds.has(b);
-      }
+      applyEdgeVisibilityFilter();
     };
     document.addEventListener("dash3d-graph-filter", onGraphFilter);
     const onNhop = (ev: Event) => {
@@ -1494,17 +1552,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           Number(d.depth) || 0,
         );
       }
-      for (const ch of edgeGroup.children) {
-        if (!(ch instanceof THREE.Line)) continue;
-        if (!nhopVisibleIds) {
-          // leave graph-filter edge visibility alone when nhop cleared — re-run graph filter path
-          if (!graphVisibleIds) ch.visible = true;
-          continue;
-        }
-        const a = String(ch.userData.from || "");
-        const b = String(ch.userData.to || "");
-        ch.visible = nhopVisibleIds.has(a) && nhopVisibleIds.has(b);
-      }
+      applyEdgeVisibilityFilter();
     };
     document.addEventListener("dash3d-nhop", onNhop);
 
