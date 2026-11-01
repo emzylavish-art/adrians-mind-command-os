@@ -1,8 +1,14 @@
+import { clampOllamaTranscript } from "./limits.ts";
+import { ollamaAllowRemoteFromEnv, resolveSafeOllamaBase } from "./ollama-host.ts";
+
 export type OllamaConductorConfig = {
   baseUrl?: string;
   model?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  /** When true, non-loopback hosts are allowed. Defaults from MIND_OLLAMA_ALLOW_REMOTE. */
+  allowRemote?: boolean;
+  env?: Record<string, string | undefined>;
 };
 
 export type OllamaConductorResult =
@@ -15,19 +21,25 @@ export const DEFAULT_OLLAMA_MODEL = "llama3.2";
 export const OLLAMA_UNREACHABLE =
   "The local Ollama conductor is unreachable at the configured host. Orchestrator mode needs Ollama running; nothing was sent to a cloud model.";
 
+function resolveBase(config: OllamaConductorConfig) {
+  const allowRemote = config.allowRemote ?? ollamaAllowRemoteFromEnv(config.env ?? process.env);
+  return resolveSafeOllamaBase(config.baseUrl, { allowRemote, fallback: DEFAULT_OLLAMA_BASE });
+}
+
 export async function runOllamaConductor(
   transcript: string,
   config: OllamaConductorConfig = {},
 ): Promise<OllamaConductorResult> {
-  const text = transcript.trim();
+  const text = clampOllamaTranscript(transcript);
   if (!text) return { ok: false, error: "Nothing to conduct.", unreachable: false };
-  const base = (config.baseUrl || DEFAULT_OLLAMA_BASE).replace(/\/$/, "");
+  const resolved = resolveBase(config);
+  if (!resolved.ok) return { ok: false, error: resolved.error, unreachable: false };
   const model = config.model || DEFAULT_OLLAMA_MODEL;
   const fetchImpl = config.fetchImpl ?? fetch;
   const timeoutMs = config.timeoutMs ?? 20_000;
   let response: Response;
   try {
-    response = await fetchImpl(`${base}/api/chat`, {
+    response = await fetchImpl(`${resolved.base}/api/chat`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       signal: AbortSignal.timeout(timeoutMs),
@@ -68,20 +80,17 @@ export async function runOllamaConductor(
 export async function probeOllamaConductor(
   config: OllamaConductorConfig = {},
 ): Promise<OllamaConductorResult> {
-  const base = (config.baseUrl || DEFAULT_OLLAMA_BASE).replace(/\/$/, "");
+  const resolved = resolveBase(config);
+  if (!resolved.ok) return { ok: false, error: resolved.error, unreachable: false };
   const fetchImpl = config.fetchImpl ?? fetch;
   const timeoutMs = config.timeoutMs ?? 3_000;
   try {
-    const response = await fetchImpl(`${base}/api/tags`, {
+    const response = await fetchImpl(`${resolved.base}/api/tags`, {
       method: "GET",
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
-      return {
-        ok: false,
-        error: OLLAMA_UNREACHABLE,
-        unreachable: true,
-      };
+      return { ok: false, error: OLLAMA_UNREACHABLE, unreachable: true };
     }
     return { ok: true, text: "ok", model: config.model || DEFAULT_OLLAMA_MODEL };
   } catch {

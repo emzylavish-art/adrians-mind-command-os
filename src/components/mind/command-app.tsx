@@ -52,6 +52,9 @@ import {
   subscribeVoiceMode,
 } from "@/lib/mind/voice/mode-store";
 import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
+import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
+import { createListenGuard } from "@/lib/mind/voice/listen-guard";
+import { formatMicCaptureError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
 import {
   isEditableKeyboardTarget,
   matchesVoiceToggleShortcut,
@@ -268,8 +271,11 @@ export function CommandApp() {
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
+  const [voiceLiveTranscript, setVoiceLiveTranscript] = useState("");
   const speakAbortRef = useRef<AbortController | null>(null);
   const speakGenRef = useRef(0);
+  const listenGuardRef = useRef(createListenGuard());
+  const voiceReconnectRef = useRef(0);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -346,7 +352,7 @@ export function CommandApp() {
   }
 
   useEffect(() => {
-    return () => {
+    const releaseVoice = () => {
       interruptMessageSpeak({
         sharedAudio: sharedAudioOutput,
         abortSpeak: speakAbortRef.current,
@@ -354,6 +360,20 @@ export function CommandApp() {
       });
       voiceSession.current?.close();
       voiceSession.current = null;
+      setVoiceListening(false);
+      setVoiceLevel(0);
+      setSpeaking(false);
+      listenGuardRef.current.end();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") releaseVoice();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", releaseVoice);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", releaseVoice);
+      releaseVoice();
     };
   }, []);
 
@@ -1183,6 +1203,11 @@ export function CommandApp() {
 
   async function speak(text: string) {
     interruptSpeakPlayback();
+    const clipped = clampSpeakText(text);
+    if (!clipped) {
+      setError("Nothing to read aloud.");
+      return;
+    }
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
     speakAbortRef.current = abort;
@@ -1190,7 +1215,7 @@ export function CommandApp() {
     setError(null);
     let result: Awaited<ReturnType<typeof speakText>>;
     try {
-      result = await speakText({ data: { text } });
+      result = await speakText({ data: { text: clipped } });
     } catch (caught) {
       if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
       setSpeaking(false);
@@ -1210,7 +1235,7 @@ export function CommandApp() {
         setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
         return;
       }
-      const utter = new SpeechSynthesisUtterance(text);
+      const utter = new SpeechSynthesisUtterance(clipped);
       utter.onend = () => {
         if (generation === speakGenRef.current) setSpeaking(false);
       };
@@ -1242,14 +1267,17 @@ export function CommandApp() {
     voiceSession.current = null;
     setVoiceListening(false);
     setVoiceLevel(0);
+    setVoiceLiveTranscript("");
+    listenGuardRef.current.end();
   }
 
   async function handleVoiceTranscript(transcript: string) {
-    const text = transcript.trim();
-    if (!text) {
-      setNotice("No words were recognized. Nothing was sent.");
+    const sanitized = sanitizeVoiceTranscript(transcript);
+    if (!sanitized.ok) {
+      setNotice(sanitized.error);
       return;
     }
+    const text = sanitized.text;
     setDraft(text);
     voiceNext.current = true;
     setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
@@ -1306,18 +1334,26 @@ export function CommandApp() {
   async function listen() {
     if (voiceListening) {
       stopVoiceSession();
+      listenGuardRef.current.end();
       setNotice("Voice capture stopped.");
+      return;
+    }
+    if (!listenGuardRef.current.begin()) {
+      setNotice("Voice is already starting. Wait a moment.");
       return;
     }
     // Cut message-level Speak / TTS / browser speech before opening the mic.
     interruptSpeakPlayback();
     if (ws.halted) {
+      listenGuardRef.current.end();
       setError("Emergency stop is on. Voice was not started.");
       return;
     }
     setError(null);
     setNotice(null);
-    voiceSession.current?.interruptPlayback();
+    // Close any stale session before minting a new secret (spam / race).
+    voiceSession.current?.close();
+    voiceSession.current = null;
 
     try {
       if (voiceModeRef.current === "orchestrator") {
@@ -1353,6 +1389,7 @@ export function CommandApp() {
 
       const session = new RealtimeVoiceSession({
         onTranscript: (text) => {
+          setVoiceLiveTranscript(text.trim().slice(0, 240));
           void handleVoiceTranscript(text);
         },
         onSpeechStarted: () => {
@@ -1367,15 +1404,36 @@ export function CommandApp() {
           if (status === "idle" || status === "closed") setVoiceLevel(0);
         },
         onLevel: (level) => setVoiceLevel(level),
+        onUnexpectedClose: () => {
+          listenGuardRef.current.end();
+          setVoiceListening(false);
+          setVoiceLevel(0);
+          setSpeaking(false);
+          setError(VOICE_CONNECTION_DROPPED);
+          setNotice(VOICE_CONNECTION_DROPPED);
+          // Optional single reconnect attempt.
+          if (voiceReconnectRef.current < 1) {
+            voiceReconnectRef.current += 1;
+            setNotice("Voice connection dropped. Reconnecting once…");
+            window.setTimeout(() => {
+              void listenRef.current();
+            }, 400);
+          }
+        },
       });
       voiceSession.current = session;
       await session.connect(secret.value);
       await session.startCapture();
       setVoiceListening(true);
+      voiceReconnectRef.current = 0;
       setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Press mic again to stop.`);
     } catch (caught) {
       stopVoiceSession();
-      setError(formatVoiceClientError(caught));
+      const mic = formatMicCaptureError(caught);
+      setError(mic || formatVoiceClientError(caught));
+    } finally {
+      // Keep guard held while listening; release when idle/stop/error.
+      if (!voiceSession.current?.isOpen) listenGuardRef.current.end();
     }
   }
   listenRef.current = () => {
@@ -1555,6 +1613,11 @@ export function CommandApp() {
                 listening={voiceListening}
                 onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               />
+              {voiceLiveTranscript ? (
+                <p className="max-w-[14rem] truncate text-xs text-muted" data-testid="voice-live-transcript" title={voiceLiveTranscript}>
+                  Heard: {voiceLiveTranscript}
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="relative min-w-0 flex-1">

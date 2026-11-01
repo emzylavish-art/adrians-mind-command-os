@@ -12,9 +12,19 @@ export function voiceModeLabel(mode: VoiceRoutingMode): "Direct" | "Orchestrator
   return mode === "orchestrator" ? "Orchestrator" : "Direct";
 }
 
-export function readStoredVoiceMode(storage?: Pick<Storage, "getItem"> | null): VoiceRoutingMode {
+export function readStoredVoiceMode(storage?: Pick<Storage, "getItem" | "setItem"> | null): VoiceRoutingMode {
   try {
-    return parseVoiceMode(storage?.getItem(VOICE_MODE_STORAGE_KEY));
+    const raw = storage?.getItem(VOICE_MODE_STORAGE_KEY);
+    const mode = parseVoiceMode(raw);
+    // Rewrite corrupted / unexpected values to a clean canonical token.
+    if (raw != null && raw !== mode) {
+      try {
+        storage?.setItem(VOICE_MODE_STORAGE_KEY, mode);
+      } catch {
+        /* ignore */
+      }
+    }
+    return mode;
   } catch {
     return "direct";
   }

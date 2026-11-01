@@ -12,6 +12,8 @@ export type RealtimeHandlers = {
   onStatus?: (status: "connecting" | "listening" | "processing" | "speaking" | "idle" | "closed") => void;
   /** 0..1 mic RMS from AnalyserNode while capturing. */
   onLevel?: (level: number) => void;
+  /** Fired when the socket closes without an intentional close() (mic released). */
+  onUnexpectedClose?: () => void;
 };
 
 type WsLike = {
@@ -61,6 +63,7 @@ export class RealtimeVoiceSession {
   private output: SharedAudioOutput;
   private socketFactory: RealtimeSocketFactory;
   private pendingTranscript = "";
+  private intentionalClose = false;
   private analyser: AnalyserNode | null = null;
   private levelRaf = 0;
 
@@ -84,6 +87,7 @@ export class RealtimeVoiceSession {
 
   async connect(ephemeralSecret: string) {
     if (!ephemeralSecret) throw new Error("Missing ephemeral voice secret.");
+    this.intentionalClose = false;
     this.handlers.onStatus?.("connecting");
     const ws = this.socketFactory(REALTIME_ENDPOINT, [`xai-client-secret.${ephemeralSecret}`]);
     this.ws = ws;
@@ -102,9 +106,11 @@ export class RealtimeVoiceSession {
       ws.addEventListener("error", onError);
       ws.addEventListener("message", (event) => this.onMessage(event as MessageEvent));
       ws.addEventListener("close", () => {
+        const unexpected = !this.intentionalClose && (this.open || this.capturing || this.media != null);
         this.open = false;
-        this.capturing = false;
+        this.stopCapture();
         this.handlers.onStatus?.("closed");
+        if (unexpected) this.handlers.onUnexpectedClose?.();
       });
     });
     this.send({
@@ -182,13 +188,19 @@ export class RealtimeVoiceSession {
   async startCapture() {
     if (!this.open) throw new Error("Voice session is not connected.");
     if (this.capturing) return;
-    const media = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    });
+    let media: MediaStream;
+    try {
+      media = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+    } catch (err) {
+      // Preserve DOMException name (NotAllowedError / NotFoundError) for UI mapping.
+      throw err;
+    }
     this.media = media;
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioCtx = new Ctx({ sampleRate: REALTIME_SAMPLE_RATE });
@@ -265,6 +277,7 @@ export class RealtimeVoiceSession {
   }
 
   close() {
+    this.intentionalClose = true;
     this.stopCapture();
     try {
       this.ws?.close();

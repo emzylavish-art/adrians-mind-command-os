@@ -29,7 +29,7 @@ function bindStorage() {
 }
 
 /** Call once on the client before first paint when possible. */
-export function hydrateVoiceModeStore(storage?: Pick<Storage, "getItem"> | null): VoiceRoutingMode {
+export function hydrateVoiceModeStore(storage?: Pick<Storage, "getItem" | "setItem"> | null): VoiceRoutingMode {
   bindStorage();
   const store = storage ?? (typeof localStorage === "undefined" ? null : localStorage);
   current = readStoredVoiceMode(store);
