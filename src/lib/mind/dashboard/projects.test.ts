@@ -95,6 +95,20 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
       droppedDupes: 0,
       generatedAtMs: 0,
     },
+    money: {
+      available: false,
+      reason: "no spend source yet",
+      source: null,
+      currency: "USD",
+      todayTotalUsd: null,
+      burnPerHourUsd: null,
+      warnings: [],
+      asOfMs: null,
+      eventCount: 0,
+      stale: false,
+      droppedInvalid: 0,
+      todayKey: null,
+    },
     ...partial,
   };
 }

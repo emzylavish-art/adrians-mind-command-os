@@ -476,3 +476,21 @@
 .dash3d-feed-glyph[data-kind="landing"] .dash3d-feed-glyph-mark { color: #86efac; }
 .dash3d-feed-glyph[data-kind="merge_gate"] .dash3d-feed-glyph-mark { color: #fda4af; }
 .dash3d-feed-glyph[data-kind="notion_stop"] .dash3d-feed-glyph-mark { color: #93c5fd; }
+
+
+/* Queue #7 MONEY */
+.dash3d-money {
+  min-width: 160px;
+  max-width: 240px;
+}
+.dash3d-money[data-available="0"] .dash3d-title {
+  color: #fbbf24;
+}
+.dash3d-money-warn {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  font-size: 0.68rem;
+}
+.dash3d-money-warn li[data-level="warn"] { color: #fbbf24; }
+.dash3d-money-warn li[data-level="crit"] { color: #fb7185; }

@@ -80,6 +80,8 @@ export type DashboardStatus = {
     lockFile: string | null;
   };
   spend: { available: false; reason: string } | { available: true; entries: unknown[] };
+  /** Queue #7 — burn/today/warnings from real spend adapter only. */
+  money: import("./spend.ts").MoneyView;
   sources: {
     locksDir: string;
     repoDir: string;

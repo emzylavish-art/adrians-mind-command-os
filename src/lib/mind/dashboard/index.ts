@@ -8,3 +8,4 @@ export { createRig, flyTo, stepRig, focusBotTarget, zoomOutTarget } from "./came
 export type * from "./types.ts";
 export { buildTimeline, scrubAt, applyScrubToBots, formatWat } from "./time-scrub.ts";
 export { buildSkyFeed, sanitizeFeedText } from "./sky-feed.ts";
+export { loadMoneyView, buildMoneyView, createFilesystemSpendAdapter, NO_SPEND_SOURCE } from "./spend.ts";

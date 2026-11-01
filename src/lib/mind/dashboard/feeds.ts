@@ -118,7 +118,7 @@ export function loadSpend():
   if (!hits.length) {
     return {
       available: false,
-      reason: "No spend/usage/cost log found under /workspace (.handoff, *xai*, scripts).",
+      reason: "no spend source yet",
     };
   }
 

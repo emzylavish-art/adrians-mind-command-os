@@ -1,5 +1,6 @@
 import { DASHBOARD_BOTS, matchBotForLock } from "./bots.ts";
 import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFromLocks } from "./feeds.ts";
+import { loadMoneyView } from "./spend.ts";
 import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
 import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
 import { buildSkyFeed } from "./sky-feed.ts";
@@ -97,6 +98,7 @@ export async function buildDashboardStatus(
   const gapDispatcher = loadGapDispatcherFeed("/workspace/rea-captures");
   const orchestrator = orchestratorFromLocks(locks);
   const spend = loadSpend();
+  const money = loadMoneyView({ nowMs: now });
   const constellations = buildConstellations(bots);
   const edges = constellationEdges(bots);
   const weather = systemWeather(bots);
@@ -144,6 +146,7 @@ export async function buildDashboardStatus(
     weather,
     notionGraph,
     timeline,
+    money,
   };
 
   const fleetPlan = buildFleetPlan(bots, env);

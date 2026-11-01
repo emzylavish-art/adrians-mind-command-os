@@ -11,6 +11,7 @@ import { createHealthSound, type SoundVoiceSpec } from "@/lib/mind/dashboard/hea
 import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
 import { TimeScrubber } from "./time-scrubber";
 import { FeedPanel } from "./feed-panel";
+import { MoneyPanel } from "./money-panel";
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
@@ -63,13 +64,20 @@ export function DashboardApp() {
   }, []);
 
   const spendView = useMemo(() => {
-    if (state.status !== "ready") return { available: false as const, reason: "No source." };
-    const s = state.data.spend;
-    if (!s.available) return { available: false as const, reason: s.reason || "No source." };
-    const n = Array.isArray(s.entries) ? s.entries.length : 0;
+    if (state.status !== "ready") return { available: false as const, reason: "no spend source yet" };
+    const m = state.data.money;
+    if (!m?.available) {
+      const reason =
+        m?.reason ||
+        (!state.data.spend.available ? state.data.spend.reason : null) ||
+        "no spend source yet";
+      return { available: false as const, reason };
+    }
+    const today = m.todayTotalUsd != null ? `today $${m.todayTotalUsd.toFixed(2)}` : "today —";
+    const burn = m.burnPerHourUsd != null ? `burn $${m.burnPerHourUsd.toFixed(2)}/hr` : "burn —";
     return {
       available: true as const,
-      summary: n ? `Live spend log on box · ${n} entr${n === 1 ? "y" : "ies"}` : "Live spend log on box (empty).",
+      summary: `${today} · ${burn} · ${m.eventCount} event(s)`,
     };
   }, [state]);
 
@@ -225,6 +233,7 @@ export function DashboardApp() {
               {state.data.notionGraph.reason ? ` — ${state.data.notionGraph.reason.slice(0, 90)}` : ""}
             </p>
           </div>
+          <MoneyPanel money={state.data.money} />
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Fleet plan</h2>
             <p className="dash3d-title">
