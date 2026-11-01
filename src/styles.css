@@ -1814,3 +1814,321 @@ html[data-theme="light"] .voice-mode-launch[aria-pressed="true"] {
   background: rgb(109 77 255 / 0.18);
   box-shadow: 0 0 0 1px rgb(109 77 255 / 0.3), 0 6px 18px rgb(109 77 255 / 0.18);
 }
+
+/* —— Pass 9: load-resilience visual tier —— */
+/* content-visibility for long chat threads */
+[data-testid="chat-message"],
+.chat-message {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
+/* will-change only while animations are active */
+.voice-mode-orb--listening .voice-mode-orb__core,
+.voice-mode-orb--speaking .voice-mode-orb__core,
+.voice-mode-orb--thinking .voice-mode-orb__core,
+.voice-zone.is-live .waveform span,
+.voice-zone-rail.is-live .waveform span {
+  will-change: transform, opacity, box-shadow;
+}
+
+body.is-scrolling .voice-mode-orb__core,
+body.is-scrolling .voice-mode-orb__ring,
+body.is-scrolling .waveform span,
+html[data-perf="lite"] .voice-mode-orb__core,
+html[data-perf="lite"] .voice-mode-orb__ring,
+html[data-perf="lite"] .waveform span,
+body[data-perf="lite"] .voice-mode-orb__core,
+body[data-perf="lite"] .voice-mode-orb__ring,
+body[data-perf="lite"] .waveform span {
+  will-change: auto;
+  animation-play-state: paused !important;
+}
+
+/* Shared lite recipe: drop blur, stacked shadows, glow */
+body.is-scrolling .rail,
+body.is-scrolling .topbar,
+body.is-scrolling .glow-card,
+body.is-scrolling .glass-panel,
+body.is-scrolling .command-card,
+body.is-scrolling .floating-composer,
+body.is-scrolling .floating-menu,
+body.is-scrolling .voice-zone,
+body.is-scrolling .voice-zone-rail,
+body.is-scrolling .login-card,
+body.is-scrolling .banner-error,
+body.is-scrolling .scroll-bottom-fab,
+body.is-scrolling .overlay-panel,
+html[data-perf="lite"] .rail,
+html[data-perf="lite"] .topbar,
+html[data-perf="lite"] .glow-card,
+html[data-perf="lite"] .glass-panel,
+html[data-perf="lite"] .command-card,
+html[data-perf="lite"] .floating-composer,
+html[data-perf="lite"] .floating-menu,
+html[data-perf="lite"] .voice-zone,
+html[data-perf="lite"] .voice-zone-rail,
+html[data-perf="lite"] .login-card,
+html[data-perf="lite"] .banner-error,
+html[data-perf="lite"] .scroll-bottom-fab,
+html[data-perf="lite"] .overlay-panel,
+body[data-perf="lite"] .rail,
+body[data-perf="lite"] .topbar,
+body[data-perf="lite"] .glow-card,
+body[data-perf="lite"] .glass-panel,
+body[data-perf="lite"] .command-card,
+body[data-perf="lite"] .floating-composer,
+body[data-perf="lite"] .floating-menu,
+body[data-perf="lite"] .voice-zone,
+body[data-perf="lite"] .voice-zone-rail,
+body[data-perf="lite"] .login-card,
+body[data-perf="lite"] .banner-error,
+body[data-perf="lite"] .scroll-bottom-fab,
+body[data-perf="lite"] .overlay-panel {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08) !important;
+}
+
+body.is-scrolling .nav-item-active,
+body.is-scrolling .tile-active,
+body.is-scrolling .model-option-active,
+body.is-scrolling .voice-mode-orb,
+body.is-scrolling .voice-mode-orb__core,
+html[data-perf="lite"] .nav-item-active,
+html[data-perf="lite"] .tile-active,
+html[data-perf="lite"] .model-option-active,
+html[data-perf="lite"] .voice-mode-orb,
+html[data-perf="lite"] .voice-mode-orb__core,
+body[data-perf="lite"] .nav-item-active,
+body[data-perf="lite"] .tile-active,
+body[data-perf="lite"] .model-option-active,
+body[data-perf="lite"] .voice-mode-orb,
+body[data-perf="lite"] .voice-mode-orb__core {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+body.is-scrolling .command-card::before,
+body.is-scrolling .floating-composer::before,
+html[data-perf="lite"] .command-card::before,
+html[data-perf="lite"] .floating-composer::before,
+body[data-perf="lite"] .command-card::before,
+body[data-perf="lite"] .floating-composer::before {
+  display: none !important;
+}
+
+body.is-scrolling .chat-message,
+body.is-scrolling [data-testid="chat-message"],
+html[data-perf="lite"] .chat-message,
+html[data-perf="lite"] [data-testid="chat-message"],
+body[data-perf="lite"] .chat-message,
+body[data-perf="lite"] [data-testid="chat-message"] {
+  animation: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+@media (prefers-reduced-transparency: reduce), (update: slow) {
+  .rail, .topbar, .glow-card, .glass-panel, .command-card, .floating-composer,
+  .floating-menu, .voice-zone, .voice-zone-rail, .login-card, .banner-error,
+  .scroll-bottom-fab, .overlay-panel, .chat-message, [data-testid="chat-message"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .glow-card, .glass-panel, .command-card, .floating-composer, .floating-menu {
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08) !important;
+  }
+  .nav-item-active, .tile-active, .model-option-active, .voice-mode-orb, .voice-mode-orb__core {
+    box-shadow: none !important;
+    filter: none !important;
+  }
+  .voice-mode-orb__core, .voice-mode-orb__ring, .waveform span {
+    animation: none !important;
+    will-change: auto !important;
+  }
+  .command-card::before, .floating-composer::before { display: none !important; }
+}
+
+/* —— Pass 9: Markdown prose (Grok/GPT-style) —— */
+.md-prose {
+  display: grid;
+  gap: 0.65rem;
+  line-height: 1.55;
+  font-size: 0.95rem;
+  color: var(--color-fg);
+}
+.md-prose .md-p { margin: 0; white-space: pre-wrap; }
+.md-prose .md-h {
+  margin: 0.35rem 0 0.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.md-prose .md-h1 { font-size: 1.35rem; }
+.md-prose .md-h2 { font-size: 1.2rem; }
+.md-prose .md-h3 { font-size: 1.08rem; }
+.md-prose .md-h4, .md-prose .md-h5, .md-prose .md-h6 { font-size: 1rem; }
+.md-prose .md-ul,
+.md-prose .md-ol {
+  margin: 0.15rem 0;
+  padding-left: 1.35rem;
+  display: grid;
+  gap: 0.28rem;
+}
+.md-prose .md-ul { list-style: disc; }
+.md-prose .md-ol { list-style: decimal; }
+.md-prose .md-quote {
+  margin: 0.2rem 0;
+  padding: 0.55rem 0.85rem;
+  border-left: 3px solid rgb(124 92 255 / 0.55);
+  border-radius: 0 0.75rem 0.75rem 0;
+  background: rgb(255 255 255 / 0.03);
+  color: var(--color-muted);
+}
+.md-prose .md-hr {
+  border: 0;
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+  margin: 0.5rem 0;
+}
+.md-inline-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  padding: 0.12em 0.35em;
+  border-radius: 0.4rem;
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.08);
+}
+.md-link {
+  color: #a78bfa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md-link-inert {
+  color: var(--color-muted);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+.md-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  max-width: 100%;
+}
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  min-width: 280px;
+}
+.md-table th,
+.md-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+  text-align: left;
+  vertical-align: top;
+}
+.md-table th {
+  font-weight: 600;
+  background: rgb(255 255 255 / 0.04);
+  white-space: nowrap;
+}
+.md-table tr:last-child td { border-bottom: 0; }
+.md-code-block {
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+.md-copy-btn[aria-live] { min-width: 5.5rem; text-align: right; }
+html[data-theme="light"] .md-quote {
+  background: rgb(15 23 42 / 0.03);
+  border-left-color: rgb(109 77 255 / 0.55);
+}
+html[data-theme="light"] .md-inline-code {
+  background: rgb(15 23 42 / 0.05);
+  border-color: rgb(15 23 42 / 0.08);
+}
+html[data-theme="light"] .md-link { color: #5b3df5; }
+html[data-theme="light"] .md-table-wrap { border-color: rgb(15 23 42 / 0.1); }
+html[data-theme="light"] .md-table th { background: rgb(15 23 42 / 0.04); }
+html[data-theme="light"] .md-table th,
+html[data-theme="light"] .md-table td { border-bottom-color: rgb(15 23 42 / 0.08); }
+
+/* —— Pass 9: Connected / service cards calm —— */
+.service-board .service-card {
+  transition: border-color var(--dur-med) var(--ease-soft), background var(--dur-med) var(--ease-soft);
+}
+.service-board .service-card--connected {
+  border-color: rgb(125 255 168 / 0.28);
+  box-shadow: inset 0 0 0 1px rgb(125 255 168 / 0.12);
+  background: linear-gradient(180deg, rgb(125 255 168 / 0.06), transparent 42%), var(--color-surface);
+}
+.service-board .service-card--connected .service-card__status--ok {
+  color: var(--color-ok);
+  border-color: rgb(125 255 168 / 0.35);
+  background: rgb(125 255 168 / 0.08);
+}
+.service-board .service-card__detail {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+html[data-theme="light"] .service-board .service-card--connected {
+  background: linear-gradient(180deg, rgb(4 120 87 / 0.06), #fff 50%);
+  border-color: rgb(4 120 87 / 0.22);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+/* —— Pass 9: attach menu / settings / composer presentational hooks —— */
+.floating-menu[data-menu="attach"] button,
+.attach-menu button,
+.floating-menu.attach-sheet [role="menuitem"] {
+  min-height: 2.75rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding-inline: 0.85rem;
+}
+.floating-menu[data-menu="attach"] .attach-sep,
+.attach-menu .attach-sep {
+  height: 1px;
+  margin: 0.35rem 0.65rem;
+  background: rgb(255 255 255 / 0.08);
+}
+.settings-tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 0.5rem 0;
+  background: linear-gradient(180deg, var(--color-bg), rgb(5 7 13 / 0.92));
+  backdrop-filter: blur(10px);
+}
+.settings-tabs [role="tab"],
+.settings-tabs button {
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.03);
+  font-size: 0.85rem;
+}
+.settings-tabs [role="tab"][aria-selected="true"],
+.settings-tabs button[aria-pressed="true"],
+.settings-tabs button.is-active {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(124 92 255 / 0.18));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+}
+html[data-theme="light"] .settings-tabs {
+  background: linear-gradient(180deg, #f5f7fb, rgb(245 247 251 / 0.92));
+}
+html[data-perf="lite"] .settings-tabs,
+body.is-scrolling .settings-tabs,
+body[data-perf="lite"] .settings-tabs {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Composer-first tab order: mount tabindex on command-app when free */

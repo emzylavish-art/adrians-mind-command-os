@@ -23,6 +23,11 @@ const SERVICES: Service[] = [
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
 ];
 
+function isConnectedState(state: string): boolean {
+  const s = state.toLowerCase();
+  return s === "connected" || s === "key present" || s.startsWith("connected");
+}
+
 export function ServiceBoard({
   grokConfigured,
   onSetup,
@@ -48,25 +53,36 @@ export function ServiceBoard({
   );
 
   return (
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-      {[grok, ...services].map((service) => (
-        <article key={service.name} className="dense-card card-texture p-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="font-semibold">{service.name}</h3>
-            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
-          </div>
-          <p className="mt-2 text-sm text-muted">{service.detail}</p>
-          {service.name === "Notion" && notion?.state === "connected" && onDisconnect ? (
-            <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
-              Disconnect
-            </button>
-          ) : (
-            <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
-              {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
-            </button>
-          )}
-        </article>
-      ))}
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 service-board">
+      {[grok, ...services].map((service) => {
+        const connected = isConnectedState(service.state);
+        return (
+          <article
+            key={service.name}
+            className={`dense-card card-texture p-3 service-card${connected ? " service-card--connected" : " service-card--idle"}`}
+            data-connected={connected ? "true" : "false"}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-semibold">{service.name}</h3>
+              <span
+                className={`rounded-full border border-line px-2 py-0.5 text-xs text-muted service-card__status${connected ? " service-card__status--ok" : ""}`}
+              >
+                {service.state}
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-muted service-card__detail">{service.detail}</p>
+            {service.name === "Notion" && notion?.state === "connected" && onDisconnect ? (
+              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
+                Disconnect
+              </button>
+            ) : (
+              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
+                {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
+              </button>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
 }
