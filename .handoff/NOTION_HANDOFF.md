@@ -330,3 +330,84 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - typecheck pass; TS tests 555/555; lint 1 error (pre-existing research.ts:39) + 8 warnings; build pass.
 - Notion: https://app.notion.com/p/40bb95f33e4281d7a921c1780538952d
 - Open: the onFailure target in command-app is "browser" (owned by another lane). The inline banner has no View log; the top banner provides it.
+
+## 2026-11-01T17:30:59+01:00 (Africa/Lagos) — Error Banners Bot — H16 fleet-panels silent lists
+- Lock check: no ACTIVE exclusive claim on fleet-panels.tsx; claimed error-banners-gap-fleet-panels-silent-lists.lock.
+- Merged origin/preview/integration @ 7518a1d into error-banners as b00088e (package.json test union; no forbidden conflicts).
+- 9fe7482: MCP tools + PC approvals distinct loading/empty/error (red banner + Retry); mcp-list-state timeout 15s + stale generation guards; failure-states mcp_tools_list_failed / pc_approvals_list_failed. onFailure→reportFailure for audit + top View log (826aa99 pattern).
+- Checks: typecheck pass; TS 797/799 (2 pre-existing: integration-security-c16 Imagine allowlist deferred; voice/ollama-conductor — present without H16 edits); lint 32e/55w other lanes (our files 0e/1w hooks); build pass.
+- Pushed origin/error-banners → 9fe7482b0d91dc90992de376eb18ff3774d21c2e (ls-remote matches).
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281d0b385c9a20bbae697
+- Open: inline View log needs command-app.tsx (forbidden); FleetPanel onFailure still tagged open_page_failed/browser there.
+- Lock releasing.
+
+## 2026-11-01T17:35:39+01:00 (Africa/Lagos) — Error Banners Bot — H17 worker-health silent status
+- Gap: Scheduled panel `workerHealth().catch` → muted "Nothing is reported as online" with no red Retry/View log (gap audit #12 / H16 follow-on).
+- Lock: /workspace/locks/error-banners-gap-worker-health-silent.lock
+- Lock check: no ACTIVE exclusive claim on fleet-panels.tsx / failure-states / mcp-list-state; claimed worker-health gap.
+- Merged origin/preview/integration @ 7f3e641 into error-banners as dd1e237 (nav Dashboard Link; no forbidden conflicts).
+- Fix: loadWorkerHealthStatus + WorkerHealthStatusRows (loading/ready/error); timeout 15s + stale generation; honest offline/local stays ready; load failures → red banner + onceListRetry + onFailure→reportFailure. failure-states worker_health_failed → network_failure.
+- Checks: typecheck pass; TS 806/808 (2 pre-existing: integration-security-c16 Imagine allowlist deferred; voice/ollama-conductor — present without H17 edits); lint our files 0e/2w hooks; build pass.
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281ffa97ddfb8c11cf266
+- Pushed origin/error-banners → 673b9ec72209959350994602f3389c4328200708 (ls-remote matches).
+- Lock releasing.
+
+## 2026-11-01T17:38:37+01:00 (Africa/Lagos) — Error Banners Bot — H18 PC approve/deny action banners
+- Gap: Tools panel Approve/Deny catch → muted pcApprovalNote only; HTTP ok:false also muted.
+- Lock: /workspace/locks/error-banners-gap-pc-approve-deny.lock
+- preview/integration unchanged @ 7f3e641 (no merge needed).
+- Fix: pc-approval-action.ts runPcApprovalAction + snapshot params + PcApprovalActionStatusRows; onceRetry; onFailure→reportFailure. failure-states pc_approve_failed / pc_deny_failed.
+- Checks: typecheck pass; TS 811/813 (2 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42816b8d15c9f6e5037f9b
+- Pushed origin/error-banners → e59f339afdc6b1d72338c5f1b1d502a1fb905dfd
+- Lock releasing.
+
+## 2026-11-01T17:40:11+01:00 (Africa/Lagos) — Error Banners Bot — H19 MCP Try SELECT 1 call banner
+- Gap: Tools panel Try SELECT 1 catch → muted mcpCallNote; status error/timeout also muted.
+- Lock: /workspace/locks/error-banners-gap-mcp-try-select.lock (no mcp/ touched).
+- preview/integration still @ 7f3e641.
+- Fix: mcp-call-action.ts under src/lib/mind; snapshot serverId/tool/sql; onceRetry; onFailure→reportFailure.
+- Checks: typecheck pass; TS 815/817 (2 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e428113ad87df9f6beaf908
+- Pushed origin/error-banners → 109c2f9d4e965c1a1197dd9253947765e99c68b7
+- Lock releasing.
+
+## 2026-11-01T17:41:30+01:00 (Africa/Lagos) — Error Banners Bot — H20 copy-code clipboard banner
+- Gap: message-body Copy code .catch → setCopied(null) silent (H10).
+- Lock: error-banners-gap-copy-code.lock; markdown lock done/released.
+- Fix: copy-code-action.ts; red banner + Retry re-copies identical text; optional onFailure for View log (command-app mount still forbidden).
+- Checks: typecheck pass; TS 819/821 (2 pre-existing); lint 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42812d9ca0f88a58319ab4
+- Pushed origin/error-banners → 27ad1018f777dc5439bc386c7fd2eca66bd72851
+- Lock releasing.
+
+## 2026-11-01T17:43:02+01:00 (Africa/Lagos) — Error Banners Bot — H21 memory-manager action banner
+- Gap: MemoryManagerView setError → bare red text, no Retry/View log.
+- Lock: error-banners-gap-memory-manager.lock; memory-ux locks done/released.
+- Fix: memory-action.ts; MemoryActionFailureBanner + onceRetry of identical save_new/save_edit/delete params; optional onFailure (command-app mount still forbidden).
+- Checks: typecheck pass; TS 823/825 (2 pre-existing); lint 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e4281ba9ee0c9041e792007
+- Pushed origin/error-banners → 464fe8f9ffbbcd700e649ed7e565dc9351e8b524
+- Lock releasing.
+
+## 2026-11-01T17:45:28+01:00 (Africa/Lagos) — Error Banners Bot — H22 STOPPED_REPLY user_stopped
+- Gap: intentional Stop (STOPPED_REPLY) fell through to reportFailure as chat_failed red banner.
+- Lock: error-banners-gap-stopped-reply.lock; failure-states free (dashboard lock only forbids Dashboard from editing it).
+- preview/integration still @ 7f3e641 (no merge).
+- Fix (src/lib/mind only; command-app NOT edited): STOPPED_REPLY + isUserStoppedReply + classifyHonestTurnOutcome("user_stopped") + shouldShowFailureBanner(false) + honestTurnAuditAction("user_stopped") + failureBannerMountHint(). Timeouts/disconnects still chat_timeout/network_failure with banners. Agent "Stopped after N tool steps." unchanged (still bannerable unclassified).
+- Mount for another lane (one line before reportFailure): `if (!shouldShowFailureBanner(message)) { setNotice(message); return null; }`
+- Checks: typecheck pass; TS 830/832 (2 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42810bad93f2cd22be479d
+- Pushed origin/error-banners → f24d1252d5766ff3ed13abf73b9cfa52451090ed
+- Lock releasing.
+
+## 2026-11-01T18:08:30+01:00 (Africa/Lagos) — Error Banners Bot — H23 MCP auth_required notice
+- Gap: live adrians-mind.vercel.app paints MCP auth_required as blocking red failure banners before sign-in.
+- Lock: /workspace/locks/error-banners-gap-auth-required-notice.lock
+- Merge origin/preview/integration ABORTED (conflict in forbidden command-app.tsx). Branch remains behind PI.
+- Root cause: mcp-list-state FleetListStatusRowsInner treated auth_required as failure-banner; fleet-panels onFailure escalated; command-app loadMcpLists catch ≈603–613 also reportFailure (owning lane — not edited).
+- Fix: AuthRequiredNoticeRow + LIST_AUTH_NOTICE_COPY; skip onFailure for auth; shouldShowFailureBanner(false) for auth_required; mount hint for command-app.
+- Checks: typecheck pass; TS 833/836 (3 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child: https://app.notion.com/p/40bb95f33e42812b841ece22e9e38f99
+- Pushed origin/error-banners → 413595890690100e7b5d710ba40da8a8aa4a4aee
+- Lock releasing.

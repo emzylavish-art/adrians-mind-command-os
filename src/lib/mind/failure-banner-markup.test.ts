@@ -5,7 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   CHAT_TIMEOUT_REPLY,
   HONEST_FAILURE_MESSAGES,
+  STOPPED_REPLY,
   classifyHonestFailure,
+  shouldShowFailureBanner,
   bindRetry,
 } from "./failure-states.ts";
 
@@ -46,7 +48,6 @@ describe("failure banner markup contract", () => {
     ["mcp_tool_failed", "MCP tool “pglite_query” failed. PGLite query error: boom"],
     ["chat_timeout", CHAT_TIMEOUT_REPLY],
     ["network_failure", "Failed to fetch"],
-    ["auth_required", HONEST_FAILURE_MESSAGES.auth_required],
     ["forbidden_cross_site", HONEST_FAILURE_MESSAGES.forbidden_cross_site],
     ["rate_limited", "grok rate limited the request. Nothing was substituted."],
     ["image_generation_failed", HONEST_FAILURE_MESSAGES.image_generation_failed],
@@ -81,4 +82,19 @@ describe("failure banner markup contract", () => {
       assert.deepEqual(calls, [`retry-${kind}`]);
     });
   }
+});
+
+describe("H22 STOPPED_REPLY is not a red failure banner", () => {
+  it("classifyHonestFailure leaves STOPPED_REPLY unclassified and shouldShowFailureBanner is false", () => {
+    assert.equal(classifyHonestFailure(STOPPED_REPLY), null);
+    assert.equal(shouldShowFailureBanner(STOPPED_REPLY), false);
+  });
+});
+
+describe("H23 auth_required is not a red failure banner", () => {
+  it("shouldShowFailureBanner is false for auth_required copy", () => {
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.auth_required), false);
+    assert.equal(shouldShowFailureBanner("Sign in is required."), false);
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.auth_required), "auth_required");
+  });
 });

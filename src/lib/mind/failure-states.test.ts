@@ -4,15 +4,23 @@ import {
   CHAT_DISCONNECT_REPLY,
   CHAT_TIMEOUT_REPLY,
   HONEST_FAILURE_MESSAGES,
+  STOPPED_REPLY,
   bindRetry,
   classifyHonestFailure,
+  classifyHonestTurnOutcome,
+  failureBannerMountHint,
   honestFailureAuditAction,
   honestFailureDescription,
+  honestTurnAuditAction,
+  isUserStoppedReply,
   mcpToolFailure,
   normalizeClientFailureMessage,
   imageGenerationFailure,
   imagineRetryParams,
   mapImagineHttpErrorCopy,
+  shouldShowFailureBanner,
+  isAuthRequiredNotice,
+  MCP_AUTH_REQUIRED_NOTICE,
 } from "./failure-states.ts";
 
 describe("honest failure states", () => {
@@ -131,6 +139,13 @@ describe("top-5 gap classifiers", () => {
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.network_offline), "network_failure");
     assert.equal(classifyHonestFailure("TypeError: NetworkError when attempting to fetch resource."), "network_failure");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_list_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_tools_list_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_approvals_list_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.worker_health_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_approve_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_deny_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_try_select_failed), "network_failure");
+    assert.equal(classifyHonestFailure("The worker status could not be read. The network request failed. Nothing was substituted."), "network_failure");
     assert.equal(honestFailureAuditAction("network_failure"), "network_failure");
   });
 
@@ -242,5 +257,73 @@ describe("banner 4 image_generation_failed", () => {
     const params = imagineRetryParams(failure);
     assert.deepEqual(params, { mode: "generate", prompt: "harbor at dawn", n: 1 });
     assert.equal("imageDataUrl" in params, false);
+  });
+});
+
+describe("H22 intentional STOPPED_REPLY vs failure banners", () => {
+  it("STOPPED_REPLY is user_stopped, not chat_failed and not an honest failure kind", () => {
+    assert.equal(STOPPED_REPLY, "Stopped. The unfinished reply was not saved.");
+    assert.equal(isUserStoppedReply(STOPPED_REPLY), true);
+    assert.equal(classifyHonestFailure(STOPPED_REPLY), null);
+    assert.equal(classifyHonestTurnOutcome(STOPPED_REPLY), "user_stopped");
+    assert.equal(honestTurnAuditAction(STOPPED_REPLY), "user_stopped");
+    assert.notEqual(honestTurnAuditAction(STOPPED_REPLY), "chat_failed");
+  });
+
+  it("intentional stop must not show the red failure banner", () => {
+    assert.equal(shouldShowFailureBanner(STOPPED_REPLY), false);
+    assert.equal(shouldShowFailureBanner(`  ${STOPPED_REPLY}  `), false);
+  });
+
+  it("timeouts and disconnects still classify as failures with banners", () => {
+    assert.equal(classifyHonestTurnOutcome(CHAT_TIMEOUT_REPLY), "chat_timeout");
+    assert.equal(shouldShowFailureBanner(CHAT_TIMEOUT_REPLY), true);
+    assert.equal(classifyHonestFailure(CHAT_TIMEOUT_REPLY), "chat_timeout");
+    assert.equal(classifyHonestTurnOutcome(CHAT_DISCONNECT_REPLY), "network_failure");
+    assert.equal(shouldShowFailureBanner(CHAT_DISCONNECT_REPLY), true);
+    assert.equal(classifyHonestFailure("Failed to fetch"), "network_failure");
+    assert.equal(shouldShowFailureBanner("Failed to fetch"), true);
+    assert.equal(classifyHonestTurnOutcome(HONEST_FAILURE_MESSAGES.chat_timeout_stale), "chat_timeout");
+  });
+
+  it("agent budget stop is not an intentional user stop", () => {
+    const agentStop = "Stopped after 8 tool steps.";
+    assert.equal(isUserStoppedReply(agentStop), false);
+    assert.equal(classifyHonestTurnOutcome(agentStop), null);
+    assert.equal(shouldShowFailureBanner(agentStop), true);
+    assert.equal(honestTurnAuditAction(agentStop), null);
+  });
+
+  it("provider close without abort stays a bannerable failure path (unclassified or model)", () => {
+    const closed = "Grok closed the reply before it finished. Nothing was saved as a success.";
+    assert.equal(isUserStoppedReply(closed), false);
+    assert.equal(shouldShowFailureBanner(closed), true);
+  });
+
+  it("exports a one-line mount hint for command-app without editing it here", () => {
+    assert.match(failureBannerMountHint(), /shouldShowFailureBanner/);
+    assert.match(failureBannerMountHint(), /reportFailure/);
+  });
+});
+
+describe("H23 auth_required is a notice, not a red failure banner", () => {
+  it("shouldShowFailureBanner is false for auth_required", () => {
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.auth_required), false);
+    assert.equal(shouldShowFailureBanner("Sign in is required."), false);
+    assert.equal(shouldShowFailureBanner("Unauthorized"), false);
+    assert.equal(isAuthRequiredNotice(HONEST_FAILURE_MESSAGES.auth_required), true);
+    assert.equal(MCP_AUTH_REQUIRED_NOTICE, "Sign in to load MCP servers.");
+  });
+
+  it("real failures still show the red banner", () => {
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.network_failure), true);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.forbidden_cross_site), true);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.mcp_list_failed), true);
+  });
+
+  it("mount hint documents notice + reportFailure gate", () => {
+    assert.match(failureBannerMountHint(), /shouldShowFailureBanner/);
+    assert.match(failureBannerMountHint(), /Sign in to load MCP servers/);
+    assert.match(failureBannerMountHint(), /reportFailureRef|reportFailure/);
   });
 });
