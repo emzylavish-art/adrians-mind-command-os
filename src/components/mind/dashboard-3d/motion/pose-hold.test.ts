@@ -28,6 +28,7 @@ import {
   stepSceneTransition,
 } from "./transition-ease.ts";
 import { createMotionClock } from "./motion-clock.ts";
+import { sanitizeDt } from "./sanitize.ts";
 import { sampleStarPulse } from "./star-pulse.ts";
 import { sampleOrbitDrift } from "./orbit-drift.ts";
 import { createDustField } from "../particles/dust-field.ts";
@@ -54,6 +55,9 @@ import {
   restoreNodeOpenPose,
   restoreSceneTransitionPose,
   sanitizeMotionPoseBag,
+  restoreFocusPosesForKnownIds,
+  restoreCharacterPosesForKnownIds,
+  parseMotionPoseBag,
 } from "./pose-hold.ts";
 
 describe("hacker c9 — remount snap without pose hold + sprite refs + stress", () => {
@@ -213,11 +217,11 @@ describe("pose-hold — capture/restore + sanitize", () => {
     restoreBreadcrumbPose(bc2, bh);
     assert.equal(bc2.focusId, "bot:z");
 
-    const bag = createMotionPoseBag();
-    bag.focusById.a = { pulseMul: Number.NaN, driftMul: 2 };
-    bag.characterById.a = { loco: 99, lookYaw: Number.POSITIVE_INFINITY };
-    bag.breadcrumb.amount = Number.NaN;
-    sanitizeMotionPoseBag(bag);
+    const dirty = createMotionPoseBag();
+    dirty.focusById.a = { pulseMul: Number.NaN, driftMul: 2 };
+    dirty.characterById.a = { loco: 99, lookYaw: Number.POSITIVE_INFINITY };
+    dirty.breadcrumb.amount = Number.NaN;
+    const bag = sanitizeMotionPoseBag(dirty);
     assert.equal(bag.focusById.a!.pulseMul, 1);
     assert.equal(bag.focusById.a!.driftMul, 1);
     assert.equal(bag.characterById.a!.loco, 1);
@@ -226,3 +230,87 @@ describe("pose-hold — capture/restore + sanitize", () => {
   });
 });
 
+describe("hacker c10 — corrupted / stale / polluted pose-hold JSON", () => {
+  it("foreign version + missing fields + wrong types must not throw or poison state", () => {
+    const raw = {
+      version: 99,
+      focusById: null,
+      characterById: "not-an-object",
+      breadcrumb: { amount: "hot", target: {}, focusId: 42 },
+      nodeOpen: undefined,
+      sceneTx: { progress: NaN, target: Infinity, fromId: { x: 1 }, toId: "" },
+      extraHuge: new Array(10_000).fill(0),
+    };
+    const bag = sanitizeMotionPoseBag(raw as never);
+    assert.equal(bag.version, 1);
+    assert.equal(typeof bag.focusById, "object");
+    assert.equal(typeof bag.characterById, "object");
+    assert.ok(Number.isFinite(bag.breadcrumb.amount));
+    assert.ok(bag.breadcrumb.amount >= 0 && bag.breadcrumb.amount <= 1);
+    assert.equal(bag.breadcrumb.focusId, null);
+    assert.ok(Number.isFinite(bag.nodeOpen.amount));
+    assert.ok(Number.isFinite(bag.sceneTx.progress));
+    assert.equal(bag.sceneTx.fromId, null);
+    assert.equal(bag.sceneTx.toId, null);
+  });
+
+  it("parseMotionPoseBag recovers from sessionStorage tampering string", () => {
+    const bad = '{"version":"nope","focusById":[],"characterById":null,"breadcrumb":null}';
+    const bag = parseMotionPoseBag(bad);
+    assert.equal(bag.version, 1);
+    assert.ok(bag.focusById);
+    assert.ok(Number.isFinite(bag.breadcrumb.amount));
+    const worse = parseMotionPoseBag("{not json");
+    assert.equal(worse.version, 1);
+    const nullish = parseMotionPoseBag(null);
+    assert.equal(nullish.version, 1);
+  });
+
+  it("__proto__ / constructor keys in focusById must not pollute Object.prototype", () => {
+    const polluted = JSON.parse(
+      '{"version":1,"focusById":{"__proto__":{"pulseMul":9,"driftMul":9},"constructor":{"pulseMul":9,"driftMul":9},"bot:a":{"pulseMul":1.2,"driftMul":0.5}},"characterById":{"__proto__":{"loco":1,"lookYaw":99}},"breadcrumb":{"amount":0,"target":0,"focusId":null},"nodeOpen":{"amount":0,"target":0},"sceneTx":{"progress":0,"target":0,"fromId":null,"toId":null}}',
+    );
+    const before = ({} as Record<string, unknown>).pulseMul;
+    const bag = sanitizeMotionPoseBag(polluted);
+    const after = ({} as Record<string, unknown>).pulseMul;
+    assert.equal(after, before, "Object.prototype must stay clean");
+    assert.equal(Object.prototype.hasOwnProperty.call(bag.focusById, "__proto__"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(bag.focusById, "constructor"), false);
+    assert.ok(bag.focusById["bot:a"]);
+    assert.ok(Number.isFinite(bag.focusById["bot:a"]!.pulseMul));
+  });
+
+  it("restoreFocusPosesForKnownIds skips ids no longer in the live set", () => {
+    const bag = createMotionPoseBag();
+    bag.focusById["gone"] = { pulseMul: 1.2, driftMul: 0.1 };
+    bag.focusById["alive"] = { pulseMul: 1.15, driftMul: 0.2 };
+    const live = new Map<string, ReturnType<typeof createFocusEaseState>>();
+    live.set("alive", createFocusEaseState());
+    restoreFocusPosesForKnownIds(live, bag.focusById);
+    assert.equal(live.has("gone"), false);
+    assert.ok(Math.abs(live.get("alive")!.pulseMul - 1.15) < 1e-9);
+    // character twin
+    bag.characterById["ghost"] = { loco: 0.9, lookYaw: 1 };
+    bag.characterById["alive"] = { loco: 0.4, lookYaw: 0.2 };
+    const chars = new Map<string, ReturnType<typeof createCharacterMotionState>>();
+    chars.set("alive", createCharacterMotionState());
+    restoreCharacterPosesForKnownIds(chars, bag.characterById);
+    assert.equal(chars.has("ghost"), false);
+    assert.ok(Math.abs(chars.get("alive")!.loco - 0.4) < 1e-9);
+  });
+
+  it("hours-hidden then visibilitychange: sanitizeDt + restore stay finite (no spike)", () => {
+    const hours = 3 * 3600;
+    const dt = sanitizeDt(hours);
+    assert.ok(dt <= 0.05 && dt >= 0);
+    const focus = createFocusEaseState();
+    const hold = createFocusPoseHold();
+    hold.pulseMul = 1.2;
+    hold.driftMul = 0.3;
+    restoreFocusPose(focus, hold);
+    stepFocusEase(focus, "bot:a", "bot:a", dt, false);
+    assert.ok(Number.isFinite(focus.pulseMul));
+    assert.ok(focus.pulseMul <= FOCUS_PULSE_SCALE + 0.01);
+    assert.ok(focus.driftMul >= 0 && focus.driftMul <= 1);
+  });
+});

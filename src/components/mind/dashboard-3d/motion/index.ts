@@ -120,6 +120,10 @@ export {
   restoreNodeOpenPose,
   restoreSceneTransitionPose,
   sanitizeMotionPoseBag,
+  parseMotionPoseBag,
+  restoreFocusPosesForKnownIds,
+  restoreCharacterPosesForKnownIds,
+  POSE_HOLD_MAX_IDS,
   type BreadcrumbPoseHold,
   type CharacterPoseHold,
   type FocusPoseHold,
@@ -127,4 +131,19 @@ export {
   type NodeOpenPoseHold,
   type SceneTransitionPoseHold,
 } from "./pose-hold.ts";
+export {
+  HOVER_INTENT_DELAY,
+  HOVER_FADE_DURATION,
+  HOVER_LIFT_PX,
+  HOVER_SCALE_FROM,
+  HOVER_SCALE_TO,
+  clearHoverTooltip,
+  createHoverTooltipSample,
+  createHoverTooltipState,
+  setHoverTooltipTarget,
+  stepHoverTooltip,
+  type HoverTooltipOpts,
+  type HoverTooltipSample,
+  type HoverTooltipState,
+} from "./hover-tooltip-motion.ts";
 

@@ -44,3 +44,8 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - Complements Dashboard #25 last-frame freeze (canvas snapshot); this covers motion state
 - Hacker c9: remount without restore snaps mid-ease; sprite refs ≥0 under double dispose; 100k-frame stress
 
+## Star hover tooltip motion (c10)
+
+- `hover-tooltip-motion.ts` — intent delay + fade/lift/scale + edge strength; reduced-motion snaps
+- Hacker c10: pose-hold corrupted/stale/__proto__ JSON; known-id restore; tab-hidden dt spike
+
