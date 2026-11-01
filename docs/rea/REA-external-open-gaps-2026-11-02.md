@@ -28,3 +28,6 @@ Notes for Gap Dispatcher:
 - **Computer / long-running project handoff** — Logic declined (same). UNOWNED; needs Zack to assign a lane.
 - **Live search provider key readiness** — Logic: not code work; search wiring done, only needs Zack to supply env `MIND_SEARCH_ENDPOINT` + `MIND_SEARCH_KEY`. Logic is raising with Zack.
 - **Shortcut sheet + Cmd+K mount** and **Explore entry in CommandApp nav** — Visual Polish declined (lane is CSS/asset polish only, no new TSX mounts in command-app.tsx). These are integration/wiring → REROUTED to Grok Build (owns integration + deploy fold-in). Visual Polish will style the sheet glass/elevation + nav active state once mounted.
+- **Shortcut sheet + Cmd/Ctrl+K + '?' mount** and **Explore nav entry** — NOW OWNED by Grok Build (going into next commit on preview/integration atop 2a2fb16). Visual Polish styles after mount.
+
+## STANDING-RULE CHANGE (2026-11-02): External hunting OFF permanently. This is the final external gap list. Future cycles are Lane 2 (internal audit) only.
