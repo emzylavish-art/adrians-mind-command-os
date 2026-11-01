@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { createBuildingBrushMaterial, tickBuildingMaterial } from "../materials";
+import {
+  createBuildingBrushMaterial,
+  tickBuildingMaterial,
+  setBuildingProgress,
+} from "../materials";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { Health } from "@/lib/mind/dashboard/types";
 import type { CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -20,6 +24,8 @@ export type CityLayerHandle = {
   clouds: THREE.Group;
   pickables: THREE.Object3D[];
   rebuild(layout: CityLayout): void;
+  /** Live window wash from real progress only (no full rebuild). */
+  applyBuildingProgress(layout: CityLayout): void;
   setInterior(buildingId: string | null): void;
   setLabelsVisible(v: boolean): void;
   tick(t: number, reducedMotion: boolean): void;
@@ -107,6 +113,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   group.add(dyn);
   const pickables: THREE.Object3D[] = [];
   const brushMats: THREE.ShaderMaterial[] = [];
+  const brushById = new Map<string, THREE.ShaderMaterial>();
   const ownedMats: THREE.Material[] = [];
   const ownedGeos: THREE.BufferGeometry[] = [];
   const backdropMats: THREE.Material[] = [];
@@ -168,6 +175,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     labels.length = 0;
     while (dyn.children.length) dyn.remove(dyn.children[0]!);
     for (const m of brushMats) m.dispose();
+    brushById.clear();
     for (const m of ownedMats) m.dispose();
     for (const g of ownedGeos) g.dispose();
     brushMats.length = 0;
@@ -190,14 +198,18 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
 
       const bodyGeo = new THREE.BoxGeometry(b.width, b.height, b.depth);
       ownedGeos.push(bodyGeo);
+      // Painter c10: real progress only — unknown → 0 so window wash stays dark
+      const progress = b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0;
       const mat = createBuildingBrushMaterial({
         base: 0x121a30,
         accent,
         floors: b.floors,
-        progress: b.progressKnown ? b.litFloors / b.floors : 0,
+        progress,
         paper: 0.16,
       });
+      setBuildingProgress(mat, progress);
       brushMats.push(mat);
+      brushById.set(b.id, mat);
       const body = new THREE.Mesh(bodyGeo, mat);
       body.position.y = b.height / 2;
       body.userData.cityPick = { buildingId: b.id, part: "facade", floor: null } satisfies CityPick;
@@ -245,9 +257,13 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       ownedGeos.push(winGeo);
       const litMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 });
       const dimMat = new THREE.MeshBasicMaterial({ color: 0x24304f, transparent: true, opacity: 0.85 });
-      ownedMats.push(litMat, dimMat);
+      const nightMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: b.nightShiftSteady ? 0.92 : 0.8 });
+      ownedMats.push(litMat, dimMat, nightMat);
+      const nightSet = new Set(b.nightShiftFloors ?? []);
       for (let f = 1; f < b.floors; f++) {
-        const w = new THREE.Mesh(winGeo, f < b.litFloors ? litMat : dimMat);
+        const night = nightSet.has(f);
+        const w = new THREE.Mesh(winGeo, night ? nightMat : f < b.litFloors ? litMat : dimMat);
+        if (night) w.userData.nightShift = true;
         w.position.set(0, 0.15 + f * b.floorHeight + b.floorHeight / 2, b.depth / 2 + 0.01);
         w.userData.cityPick = { buildingId: b.id, part: "window", floor: f } satisfies CityPick;
         shell.add(w);
@@ -367,6 +383,16 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     for (const l of labels) l.visible = v;
   }
 
+  /** Painter c11: live window wash from real lit/floors only — no source → 0. */
+  function applyBuildingProgress(layout: CityLayout) {
+    for (const b of layout.buildings) {
+      const mat = brushById.get(b.id);
+      if (!mat) continue;
+      const progress = b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0;
+      setBuildingProgress(mat, progress);
+    }
+  }
+
   function tick(t: number, reducedMotion: boolean) {
     if (reducedMotion) return;
     for (const m of brushMats) tickBuildingMaterial(m, t);
@@ -402,6 +428,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     clouds,
     pickables,
     rebuild,
+    applyBuildingProgress,
     setInterior,
     setLabelsVisible,
     tick,

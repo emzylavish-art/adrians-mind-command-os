@@ -4,7 +4,45 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c16 — Operator (#8) + Notion mirror (#9). Next: #10 Forever-contract guard.
+Last release: Dashboard c42 — Gap#29 publicize+405 + Gap#28 server TTL/single-flight + Motion 831225f (motion/+particles/, skip package.json) + Painter c10 94c28c7. Next: probe-ranked gaps + fleet tips.
+
+
+## c43 attacker pass ranked
+| Gap | Rank | Notes |
+|-----|------|-------|
+| #22 Spend JSONL | **done** | tail+partial+canonical; no USD source on box |
+| #30 hostile branch/notes HTML | **fixed c43** | sanitizeHostileText in bot-normalize |
+| #31 Notion outage badge | P2 | |
+| #32 WebGL mid-zoom restore desync | P2 | |
+| #33 500+ bots status O(n) cold | P2 | |
+| #34 hidden-tab money burn window | P3 | |
+| Motion 3fff118 / Painter bbf6c47 | landed | motion/+particles/; materials/shaders |
+
+## Probe 20261101-162902 ranked (after c42)
+
+| Item | Rank | Notes |
+|------|------|-------|
+| Gap#29 remaining HTML-embedded paths | **P0 follow-up in c42b** | bare `/workspace` in notion excerpts — harden BARE_ABS_PATH_RE |
+| Gap#28 cache | **done** | parallel8 wall ~0.04s; warm GET ~4ms on :8102 |
+| Gap#29 methods | **done** | POST/PUT/PATCH/DELETE → 405 JSON + Allow:GET; raw bags=0 |
+| Filters Groups | **done** | capture filtersOpen=true; no TDZ/feedback |
+| Next gap-feed head after #29 | **read latest ###** | continue from newest undelivered gaps below #29 |
+
+## Motion / Painter lane notes (c42)
+- Motion tip `831225f` also listed `package.json` — **skipped**; registered `wind-gust.test.ts` in dashboard lane (no new runtime deps).
+- Painter tip `94c28c7` rebased on dashboard-3d (wide MB diff); landed **materials/shaders only** from the c10 commit; `styles.css` not taken.
+
+
+## Gap Dispatcher 20261101-220802 ranked into queue (c41)
+
+| Gap | Rank | Action |
+|-----|------|--------|
+| #26 ink-edge `nhopVisibleIds` TDZ crash | **P0 — fixed c41** | Hoist filter sets before apply; `edge-visibility` helper + regression tests |
+| #27 Filters toggle under Notion Mirror (1280×800) | **P1 next** | Reposition toggle to skybar/toolbar; z-order in dashboard-3d.css |
+| #28 Status API ~1s / 214KB / serial blocking | **P2** | Server-side short TTL + single-flight; lazy timeline/notionGraph (dashboard lane) |
+| #29 Status leaks `/workspace` paths + raw notes; non-GET 200 | **P1 security** | Redact paths/raw; 405 non-GET before public deploy |
+| Motion tip `a65cd9a` | note | Touches `package.json` outside lane — land **motion/ only**; add any needed test script entries in dashboard lane after review (no new runtime deps unless essential) |
+
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -26,10 +64,47 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 7 | **Money** — API spend burn/daily/per-lane warning from real source only; honest empty element | **done** | c14 — `spend.ts` adapter (filesystem JSON/JSONL); UI Money panel; **no spend source yet** on box; hacker NaN/neg/overflow/stale; warnings only on real thresholds |
 | 8 | **Operator layer** — in-dashboard camera/focus/last-node in localStorage only (no geolocation) | **done** | c16 — Cmd/Ctrl-K palette; fly bot/building/notion; health filter; layer toggles; copy lock/branch; XSS/hotkey/cap hacker |
 | 9 | **Notion mirror** — render handoff `40b1aa27…` stop-point + next task in-world (snapshot/MCP; live if token) | **done** | c16 — per-bot snapshot stop/mapped pages, freshness + stale (6h); panel; fallback empty no source yet |
-| 10 | **Forever-contract guard** — keep this queue non-empty; append next researched upgrade after each ship; show queue head in-world | queued | |
+| 10 | **Forever-contract guard** — keep this queue non-empty; append next researched upgrade after each ship; show queue head in-world | **done** | c20 (c17 WIP landed) — skybar panel: queue tone green≥3/amber1–2/red0, unknown when queue file unreadable (Vercel); next 4 queued listed; lane-idle needs-next@30m; unit test fails if 0 queued; REA-grounded #14–16 appended |
 | 11 | **Light — depth-aware god-ray shafts** | **done** | Landed+wired c9: `createGodRayPass` before bloom; depth RT; intensity ↔ healthy/total; off under reduced-motion |
 | 12 | **Light — health-reactive exposure ride** | **done** | Landed+wired c9: `createExposureRide` eases ACES+bloom threshold ~400ms; idle until data; reduced-motion snaps |
 | 13 | **Light — WebGL context-loss recovery** | **done** | Landed+wired c10: `createContextLossRecovery` owns bloom/grade/rays/exposure across lost/restored; atm post-dispose fog guard |
+| 14 | **Operator last-node breadcrumb** — show last palette target in Flyover HUD from localStorage only | **done** | c21 — Flyover HUD last palette target + Revisit; prefs lastNodeId sanitized; missing-target mark; hacker XSS tests |
+| 15 | **Mobile / touch pass** — larger skybar hit targets, touch-friendly operator open, safe-area padding | **done** | c22 — 44px hit targets + safe-area on skybar/flyhud; Operator open aria; hotkey 300ms debounce hacker |
+| 16 | **Accessibility pass** — focus rings, aria on forever/operator, skip-link to skybar | **done** | c23 — skip-link to #dash3d-skybar; focus-visible rings; operator aria-labelledby; forever region already labeled |
+| 17 | **Perf budget at 18+ bots** — frame/draw hint when bot count ≥18; pause nonessential CSS2D under budget miss | **done** | c24 — perf-budget EMA; CSS2D label pause at ≥18 + >24ms; skybar hint; NaN/neg hacker tests |
+| 18 | **City night-shift windows** — per-floor window glow only for floors whose lock changed in last 30 min (real claimed_at/released_at); steady under reduced-motion | **done** | c25 — night-shift from lastActivityAt ≤30m; warm window floors; reduced-motion steady; hacker null/garbage timestamps |
+| 19 | **Feed severity pulse** — pulse sky-feed glyphs faster when Merge Gate / lock notes mention blocked/main (real text only) | **done** | c29 — feedSeverity from real text; alert pulseMul 2.2 + glyph is-alert |
+| 20 | **Imagine zone densify** — add 1–2 more character/scene billboards for under-art constellations (GenerateImage→webp≤300KB) | **done** | c26 — scene-merge-beacon + scene-collab-tower webp billboards |
+| 21 | **Star focus breadcrumb twin** — when a star is focused, mirror name+lane health beside last-palette crumb with Back to sky | **done** | c35 — FlyoverHud focus crumb + motion breadcrumb-ease (c8) |
+| 22 | **Spend JSONL hook readiness** — document + adapter probe for future xAI usage append path (still honest empty until real USD events exist) | **done** | c43 — canonical spend.jsonl + tail/partial/malformed harden; **no real USD ledger on box** → honest empty |
+
+| 23 | **Status-error last-good (Gap#1)** — keep last-good scene on status fail; calm stale chrome; backoff retry; never blank wipe | **done** | c27 — soft error overlay + lastData hydrate + exponential backoff; interior gated to fly.interior |
+| 24 | **Idle interior drawer (Gap#2)** — keep INTERIOR collapsed until a building is focused | **done** | c27 — BuildingInteriorPanel mounts only when fly.level===interior |
+| 31 | **Large-fleet crash + portrait 404 (Gap#11)** — cap/LOD scene bots; portrait fallback never broken image | **done** | c28 — MAX_SCENE_BOTS=48; ImagineNode wash + portrait-dashboard fallback; focus-ease + painter Imagine mats landed |
+| 32 | **Slow status as pending not error (Gap#9)** — ignore StrictMode/unmount AbortError; first-load stays loading | **done** | c28 — aborted+stopped / first-load abort ignored |
+| 33 | **Focus during flight (Gap#10)** — preserve latest selection; queue camera retarget until glide settles | **done** | c28 — onSelectBot always; pendingFocusBotId until acceptPointerPick |
+| 25 | **Pan/drag remount splash (Gap#3)** — keep last WebGL frame across context-loss/remount; no full splash on pan | **done** | c30 — preserveDrawingBuffer + last-frame freeze; splash suppressed after stage primed |
+| 26 | **Star hover tooltip + edge highlight (Gap#4)** — health/lane/branch/heartbeat tooltip; highlight constellation edges | **done** | c34 — dash3d-star-tooltip + edge opacity highlight on hover |
+| 27 | **Constellation Filters/Groups drawer (Gap#5)** — search, orphans, lane/health groups beyond Operator filter | **done** | c35 — GraphFiltersPanel + dash3d-graph-filter → scene visibility |
+| 28 | **N-hop / expand neighbors (Gap#6)** — local graph depth around focused star | **done** | c36 — nhopBotIds + depth slider; dash3d-nhop isolates stars/edges |
+| 29 | **HUD focus mode / collapsible layers (Gap#7)** — one-gesture collapse Mirror/Feed/Charts/sky chrome | **done** | c37 — Focus stage toggle + F hotkey; data-hud-focus hides chrome |
+| 30 | **Orientation minimap / compass (Gap#8)** — inset overview after zoom/pan | **done** | c39 — MinimapPanel + projectMinimap; click → focus bot |
+| 35 | **Sparse status crash (Gap#12)** — `{"bots":[]}` / missing spend|notionGraph|weather must not take down the app | **done** | c30 — normalize sparse sections in status hook; optional-chain UI reads |
+| 36 | **Persist last-good across reload (Gap#13)** — sessionStorage/IDB snapshot + stale-since banner when status outage on boot | **done** | c31 — sessionStorage last-good; hydrate ready+stale; skybar stale WAT banner |
+| 37 | **Skip-link first + glyphs out of tab order (Gap#14)** — skip to skybar first; feed-glyph tabindex=-1; Feed list is keyboard path | **done** | c32 — skip link first in main; glyphs tabIndex=-1; skybar fallback target |
+| 38 | **Charts readable ticks + values (Gap#15)** — non-truncated labels, inline top values, focusable marks / touch tooltips | **done** | c33 — chartTickLabel hour/initials; value labels; focusable marks + aria |
+| 39 | **View state in URL (Gap#16)** — `?focus=&level=` shareable; Back zooms out via popstate | **done** | c40 — view-url parse/build; replaceState focus; pushState level; popstate |
+| 40 | **Charts vs Star Detail overlap (Gap#17)** — node detail wins z-order / collapse charts when focused | **done** | c38 — node-detail z-index above charts when open |
+| 41 | **Sanitize hostile bot names (Gap#18)** — strip bidi overrides; ellipsis + title on long names | **done** | c38 — bot-normalize stripBidi + dash3d-node-title |
+| 42 | **Portrait negative cache (Gap#19)** — Star Detail onError → portrait-dashboard; no 404 storm | **done** | c38 — portrait-resolve session miss cache |
+| 43 | **Dedupe duplicate bot ids (Gap#20)** — normalize status bots by id (newest heartbeat) | **done** | c38 — dedupeBotsById in status hook |
+| 44 | **Hydration mismatch (Gap#21)** — no Date.now() during SSR render; client clock after mount | **done** | c40 — nowMs state set in useEffect |
+| 45 | **Notion mirror readable times (Gap#22)** — unescape Markdown ISO; relative + WAT title | **done** | c40 — format-when + MirrorTitle |
+| 46 | **200% zoom / short viewport reflow (Gap#23)** — stack panels; pin Operator | **done** | c40 — max-height media query in dashboard-3d.css |
+| 47 | **Feed text ≥12px (Gap#24)** — raise feed/commit floors; title tooltips | **done** | c40 — max(12px) feed CSS + feed-row title |
+| 48 | **Pause status poll when hidden (Gap#25)** — visibilitychange pause; refetch on visible | **done** | c40 — use-dashboard-status hidden gate |
+
+
 
 ## After each upgrade
 1. Commit + push `origin/dashboard-3d` (never main, no force).
@@ -38,14 +113,15 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
-- **Operator last-node breadcrumb** (researched c16) — show last palette target in Flyover HUD from localStorage only.
+- ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
 - ~~**Real-data charts panel**~~ — **done c15**: SVG sparks for commits/bot, lock claims/hour, landings/lane, spend (honest empty).
 - **Spend JSONL writer in xAI adapter** (researched c14) — when live usage returns cost/USD, append allowlisted `/workspace/audit/dashboard-3d/spend.jsonl` so Money panel lights up without inventing numbers.
 - **Feed severity tint** (researched c13) — glyph accent by kind already; next: pulse faster when Merge Gate notes mention blocked/main, still real-text only.
 - **City night-shift windows from lock timestamps** (Dashboard next after #4 Sound, or earlier if Sound blocked) — window glow per floor flickers on only for floors whose task/lock changed in the last 30 min (real claimed_at/released_at), so the city shows *where work is happening now*; static when no recent activity; reduced-motion = steady.
 - **Star focus breadcrumb in Flyover HUD** (researched c9) — when a star is focused (`rig.subjectId`), show its name + lane health in the Flyover HUD with a "Back to sky" twin of Zoom to sky; keeps keyboard users oriented without opening the side card.
 - ~~**Motion LOD / visibility budget**~~ — **done (Cosmos Motion Bot c3)**: camera-distance dust LOD via `onBeforeRender`, frame-budget governor (EMA >24ms trims to 30% floor, recovers <18ms), active-slice instance upload, `document.hidden` pause; plus shared continuous `MotionClock` (no teleport on tab resume / 24h fold).
-- **Motion — comet tail fade** — additive vertex-color head→tail gradient + brighter head point on commit comets; dimmed static under reduced-motion (Cosmos Motion Bot next).
+- ~~**Motion — comet tail fade**~~ — **done (Cosmos Motion Bot c4)**: additive vertex-color head→tail gradient + soft head sprite (shared, refcounted, 2s grace so the 5s rebuild never re-uploads); reduced-motion = dim static. Hacker c4: MotionClock per-time-base anchors (no 2× speed with two time bases) + stutter cap (no freeze at <4fps).
+- **Motion — focus-aware star easing** — selected/hovered star eases to a 1.25× pulse + orbit-drift damped to 0 near the focused star so click-and-zoom (#2) lands on a still target; exposes `focusId` input, reduced-motion = instant (Cosmos Motion Bot next).
 
 - **Painter — ink-wash constellation edge ribbons** — ShaderMaterial/Line2 ribbons replacing LineBasic edges; health-tinted wash; mediump-safe (next painter cycle).
 - **Painter — lore plaque text atlas** — procedural canvas glyph atlas for lock-note body text on plaques (no external fonts/assets).
@@ -68,3 +144,15 @@ Rules:
 2. Fleet **never** edits files outside its lane folders (or its own lock).
 3. Fleet bots appear as stars in the **Visual Fleet** constellation; health comes from their lane lock (no lock ⇒ idle).
 4. Hold `dashboard-3d.lock` only while actively merging/editing the shared worktree; **release between milestones** so fleet can land.
+
+## c18 content gaps (2026-11-01 ~20:42 WAT)
+Filled: detail branch commits (bot/branch map), bot-health + commits/day charts, spend empty-chart frame, 20s status poll, build-time commits snapshot for Vercel, larger portrait + character planes + Imagine scene billboards (`scene-operator-character.webp`, `scene-agents-walk.webp`), building interior portrait. Spend remains honest empty (no real USD ledger). See `/workspace/audit/dashboard-3d/c18-gaps.md`.
+
+
+## c19 content pass (2026-11-01 Africa/Lagos)
+- Mirror lock fallback for cosmos lanes; interior bot fallback; 3 new Imagine scene webps; chart labels; commits snapshot refresh.
+- Spend still no source yet. Zoom+feed verified.
+
+## c20 hacker + guard (2026-11-01 Africa/Lagos)
+- Hacker: old single-regex queue parser silently dropped any row without " — detail" or with an em dash inside the bold title (rows 11–13 vanished; a `| 18 | **X** | queued |` row was invisible → forever guard/sky road under-reported). Now cell-based, 512 KB / 200-row caps, index dedupe; queue file missing (Vercel) ⇒ "Queue source unavailable" (tone unknown), never a false red breach; no absolute path leaked to client. Log: `/workspace/audit/dashboard-3d/c20-hacker.md`.
+- Shipped #10 Forever-contract panel in skybar (c17 WIP), next-4 queued list, lanes needing next task.

@@ -12,10 +12,16 @@ export function sanitizeTime(tSeconds: number, fallback = 0): number {
   return tSeconds;
 }
 
-/** Cap a frame delta (seconds) so resume-from-background cannot explode motion. */
+/** Cap a frame delta (seconds) so resume-from-background cannot explode motion.
+ *  +Infinity is treated as a corrupt huge gap → capped (same as finite overflow).
+ *  NaN / -Infinity / negative → 0 (no backwards step). */
 export function sanitizeDt(dtSeconds: number, max = 0.05): number {
+  const cap = Number.isFinite(max) && max > 0 ? max : 0.05;
+  // Hacker c6: +Infinity used to fall through !isFinite → 0 and freeze damp/focus-ease,
+  // while a huge finite dt correctly advanced one capped frame.
+  if (dtSeconds === Number.POSITIVE_INFINITY) return cap;
   if (!Number.isFinite(dtSeconds) || dtSeconds < 0) return 0;
-  return dtSeconds > max ? max : dtSeconds;
+  return dtSeconds > cap ? cap : dtSeconds;
 }
 
 export function finiteXyz(

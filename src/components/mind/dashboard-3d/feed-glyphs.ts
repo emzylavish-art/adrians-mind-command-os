@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { FeedEvent } from "@/lib/mind/dashboard/sky-feed";
+import { feedPulseSpeedMul, feedSeverity } from "@/lib/mind/dashboard/feed-severity";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
 import type { DashboardBotId } from "@/lib/mind/dashboard/types";
 
@@ -20,6 +21,7 @@ type GlyphNode = {
   yBase: number;
   life: number; // 0..1 fade cycle
   botId: DashboardBotId | null;
+  pulseMul: number;
 };
 
 function hash(s: string): number {
@@ -46,7 +48,7 @@ export function createFeedGlyphs(scene: THREE.Scene, events: readonly FeedEvent[
     el.dataset.testid = "feed-glyph";
     el.title = ev.text;
     el.setAttribute("role", "button");
-    el.tabIndex = 0;
+    el.tabIndex = -1; // Gap#14: out of tab order; Feed panel is the keyboard path
     const mark = document.createElement("span");
     mark.className = "dash3d-feed-glyph-mark";
     mark.textContent = ev.glyph;
@@ -86,6 +88,9 @@ export function createFeedGlyphs(scene: THREE.Scene, events: readonly FeedEvent[
     obj.position.set(home[0], home[1] + 1.1 + (h - 0.5) * 0.8, home[2]);
     obj.userData.home = obj.position.clone();
     group.add(obj);
+    const severity = feedSeverity(ev.kind, ev.text);
+    el.dataset.severity = severity;
+    if (severity === "alert") el.classList.add("is-alert");
     nodes.push({
       obj,
       el,
@@ -95,6 +100,7 @@ export function createFeedGlyphs(scene: THREE.Scene, events: readonly FeedEvent[
       yBase: obj.position.y,
       life: h,
       botId,
+      pulseMul: feedPulseSpeedMul(severity),
     });
   }
 
@@ -121,7 +127,7 @@ export function createFeedGlyphs(scene: THREE.Scene, events: readonly FeedEvent[
         const base = (n.obj.userData.home as THREE.Vector3) ?? n.obj.position;
         n.obj.position.set(base.x + ox, n.yBase + Math.sin(ang * 1.3) * 0.25, base.z + oz);
         // Fade pulse 0.35..1
-        const fade = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(tSeconds * 0.7 + n.life * 6));
+        const fade = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(tSeconds * 0.7 * n.pulseMul + n.life * 6));
         n.el.style.opacity = String(fade);
       }
     },

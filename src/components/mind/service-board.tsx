@@ -61,7 +61,13 @@ export function ServiceBoard({
               Disconnect
             </button>
           ) : (
-            <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
+            <button
+              type="button"
+              className={`service-setup mt-3 min-h-11 rounded-panel border border-line px-3 text-sm${service.name === "Grok" && grokConfigured ? "" : " is-coming-soon"}`}
+              title={service.name === "Grok" && grokConfigured ? service.detail : `Coming soon — ${service.detail}`}
+              aria-disabled={service.name === "Grok" && grokConfigured ? undefined : true}
+              onClick={() => onSetup(service.detail)}
+            >
               {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
             </button>
           )}

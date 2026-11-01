@@ -1,7 +1,7 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { BotNode, Health } from "./types.ts";
-import { parseDashboardQueueMarkdown, queueHead, type QueueItem } from "./queue-parse.ts";
+import { MAX_QUEUE_MD_BYTES, parseDashboardQueueMarkdown, queueHead, type QueueItem } from "./queue-parse.ts";
 import { inspectAllFleetLandings, type FleetLandingStatus } from "./landing-status.ts";
 import { repoDirFromEnv } from "./git.ts";
 import { execFileSync } from "node:child_process";
@@ -24,6 +24,8 @@ export type FleetPlan = {
   landings: FleetLandingStatus[];
   queue: QueueItem[];
   queueHead: QueueItem | null;
+  /** ".handoff/DASHBOARD_QUEUE.md" when read, or "unavailable" (e.g. Vercel: no .handoff on disk). */
+  queueSource: string;
   mergeGateNote: string;
 };
 
@@ -47,20 +49,31 @@ function latestCommitOnBranch(repo: string, branch: string): string | null {
   }
 }
 
-function loadQueueFile(cwd = process.cwd()): QueueItem[] {
-  const candidates = [
-    join(cwd, ".handoff/DASHBOARD_QUEUE.md"),
+export type QueueFileResult = { items: QueueItem[]; source: string };
+
+/**
+ * Hacker c20: report *where* the queue came from so a missing file (Vercel,
+ * renamed worktree) shows "unavailable" instead of a false "0 queued" breach.
+ * Oversized files are refused rather than read whole on every status poll.
+ */
+export function loadQueueFile(
+  candidates: readonly string[] = [
+    join(process.cwd(), ".handoff/DASHBOARD_QUEUE.md"),
     "/workspace/mind-command-os-dashboard/.handoff/DASHBOARD_QUEUE.md",
-  ];
+  ],
+): QueueFileResult {
   for (const path of candidates) {
     try {
       if (!existsSync(path)) continue;
-      return parseDashboardQueueMarkdown(readFileSync(path, "utf8"));
+      const st = statSync(path);
+      if (!st.isFile() || st.size > MAX_QUEUE_MD_BYTES) continue;
+      // Label only — never leak absolute server paths to the client.
+      return { items: parseDashboardQueueMarkdown(readFileSync(path, "utf8")), source: ".handoff/DASHBOARD_QUEUE.md" };
     } catch {
       // next
     }
   }
-  return [];
+  return { items: [], source: "unavailable" };
 }
 
 const FLEET: Array<{ botId: string; lane: "painter" | "light" | "motion"; name: string; lockFile: string }> = [
@@ -78,7 +91,8 @@ export function buildFleetPlan(bots: BotNode[], env: NodeJS.ProcessEnv = process
     : repo;
 
   const landings = inspectAllFleetLandings(tipRepo);
-  const queue = loadQueueFile("/workspace/mind-command-os-dashboard");
+  const queueFile = loadQueueFile();
+  const queue = queueFile.items;
 
   const fleetStars: FleetStarStatus[] = FLEET.map((f) => {
     const bot = bots.find((b) => b.id === f.botId);
@@ -106,6 +120,7 @@ export function buildFleetPlan(bots: BotNode[], env: NodeJS.ProcessEnv = process
     landings,
     queue,
     queueHead: queueHead(queue),
+    queueSource: queueFile.source,
     mergeGateNote:
       "Merge Gate Bot watches dashboard-3d (≈20-min cycle): preview/integration only when dashboard-3d.lock is released; main only with Zack's approval.",
   };

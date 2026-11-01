@@ -3,7 +3,9 @@ import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFrom
 import { loadMoneyView } from "./spend.ts";
 import { buildDashboardCharts } from "./chart-series.ts";
 import { buildNotionMirrorView } from "./notion-mirror.ts";
+import { buildForeverContractGuard } from "./forever-contract.ts";
 import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { loadCommitsSnapshot } from "./commits-snapshot.ts";
 import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
 import { buildSkyFeed } from "./sky-feed.ts";
 import { readFileSync } from "node:fs";
@@ -51,15 +53,31 @@ export async function buildDashboardStatus(
   let commits: DashboardStatus["commits"] = [];
   let gitOk = false;
   let gitError: string | undefined;
+  let commitsSource: "git" | "snapshot" | "none" = "none";
+  let commitsSnapshotAt: string | undefined;
   try {
-    const res = collectRecentCommitsResult(repoDir, 20);
+    const res = collectRecentCommitsResult(repoDir, 40);
     gitOk = res.ok;
     commits = res.commits;
     if (!res.ok) gitError = res.error;
+    if (res.ok && res.commits.length) commitsSource = "git";
   } catch (error) {
     gitOk = false;
     gitError = error instanceof Error ? error.message : String(error);
     commits = [];
+  }
+  // Vercel / hosts without .git: fall back to build-time snapshot (never invent).
+  if (!commits.length) {
+    const snap = loadCommitsSnapshot();
+    if (snap?.commits?.length) {
+      commits = snap.commits.slice(0, 40);
+      commitsSource = "snapshot";
+      commitsSnapshotAt = snap.generatedAt || undefined;
+      gitOk = true;
+      gitError = gitError
+        ? `${gitError}; using commits snapshot @ ${snap.generatedAt || "unknown"}`
+        : `git unavailable; using commits snapshot @ ${snap.generatedAt || "unknown"}`;
+    }
   }
 
   const bots: BotNode[] = DASHBOARD_BOTS.map((def) => {
@@ -140,6 +158,8 @@ export async function buildDashboardStatus(
       repoDir,
       locksOk: locks.length > 0,
       gitOk,
+      commitsSource,
+      ...(commitsSnapshotAt ? { commitsSnapshotAt } : {}),
       ...(gitError ? { gitError } : {}),
       ...(locksSafe.rejected ? { locksRejected: locksSafe.rejected } : {}),
       ...(repoSafe.rejected ? { repoRejected: repoSafe.rejected } : {}),
@@ -170,6 +190,7 @@ export async function buildDashboardStatus(
       timeline: base.timeline,
       landings: fleetPlan.landings,
       money,
+      bots,
       nowMs: now,
     });
   } catch {
@@ -183,6 +204,18 @@ export async function buildDashboardStatus(
     notionMirror = buildNotionMirrorView({ bots: [], graph: null, nowMs: now });
   }
 
+  let foreverContract;
+  try {
+    foreverContract = buildForeverContractGuard({
+      queue: fleetPlan.queue,
+      bots,
+      nowMs: now,
+      queueSource: fleetPlan.queueSource,
+    });
+  } catch {
+    foreverContract = buildForeverContractGuard({ queue: [], bots: [], nowMs: now, queueSource: "unavailable" });
+  }
+
   return {
     ...base,
     projects: buildProjectsDashboard(base),
@@ -190,5 +223,6 @@ export async function buildDashboardStatus(
     skyFeed,
     charts,
     notionMirror,
+    foreverContract,
   };
 }

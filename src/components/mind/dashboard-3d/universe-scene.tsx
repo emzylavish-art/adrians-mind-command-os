@@ -5,11 +5,24 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { evaluatePerfBudget, nextEmaFrameMs } from "@/lib/mind/dashboard/perf-budget";
+import { filterEdgeRecsByVisibility } from "@/lib/mind/dashboard/edge-visibility";
+import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
+import { nhopBotIds } from "@/lib/mind/dashboard/nhop";
+import {
+  captureCanvasFrame,
+  hideLastFrameFreeze,
+  showLastFrameFreeze,
+} from "@/lib/mind/dashboard/last-frame-freeze";
 import {
   createPainterlyKit,
   tickPainterlyKit,
   disposePainterlyKit,
   attachPainterlyContextHandlers,
+  setImagineNodeMap,
+  createLoreTextAtlas,
+  setLorePlaqueTextAtlas,
+  releasePainterlyMaterial,
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
@@ -44,6 +57,35 @@ import {
   sampleStarPulse,
   sanitizeDt,
   sharedMotionClock,
+  createFocusEaseState,
+  stepFocusEase,
+  applyFocusPulse,
+  applyFocusDrift,
+  type FocusEaseState,
+  createMotionPoseBag,
+  captureFocusPose,
+  restoreFocusPose,
+  createFocusPoseHold,
+  sanitizeMotionPoseBag,
+  createHoverTooltipState,
+  createHoverTooltipSample,
+  setHoverTooltipTarget,
+  stepHoverTooltip,
+  createEdgePulseState,
+  createEdgePulseSample,
+  stepEdgePulseSync,
+  createCometLaunchState,
+  createCometLaunchSample,
+  scheduleCometLaunchBurst,
+  stepCometLaunchEase,
+  clearCometLaunch,
+  createTravelerEaseState,
+  createTravelerEaseSample,
+  stepTravelerEase,
+  pauseTraveler,
+  resumeTraveler,
+  type TravelerEaseState,
+  type TravelerEaseSample,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
@@ -232,6 +274,18 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   return tex;
 }
 
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
+/** Motion c9 — survive UniverseScene remount / pan context-loss without easing snap. */
+const motionPoseBag = createMotionPoseBag();
+
 export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const dataRef = useRef(data);
@@ -265,13 +319,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     camera.position.set(...UNIVERSE_HIGH.position);
     camera.lookAt(...UNIVERSE_HIGH.lookAt);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.setClearColor(0x050814, 1);
+    const maxTexSize = renderer.capabilities.maxTextureSize || 2048;
+
     mount.appendChild(renderer.domElement);
+    // Gap#3: keep prior freeze visible until first successful frame after (re)mount.
+    let freezePendingClear = true;
+
 
     const labelRenderer = new CSS2DRenderer();
     labelRenderer.setSize(width, height);
@@ -336,7 +395,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const fleetLineGroup = new THREE.Group();
     scene.add(fleetLineGroup);
 
-    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3 };
+    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void };
     const botVis: BotVis[] = [];
     const botMeshes: THREE.Mesh[] = [];
     const pageIdByIndex: string[] = [];
@@ -351,6 +410,22 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     sunMesh.userData.botId = "grok-build";
     scene.add(sunMesh);
 
+    const MAX_SCENE_BOTS = 48; // Gap#11: hard cap so a spiked payload cannot kill the tab
+    const PORTRAIT_FALLBACK = "/dashboard-3d/art/portrait-dashboard.webp";
+    let fallbackPortraitTex: THREE.Texture | null = null;
+    const focusEase = new Map<string, FocusEaseState>();
+    sanitizeMotionPoseBag(motionPoseBag);
+
+    let pendingFocusBotId: string | null = null;
+
+    function disposeBotMaterial(mat: THREE.Material) {
+      if ((mat as THREE.ShaderMaterial).isShaderMaterial) {
+        releasePainterlyMaterial(kit, mat as THREE.ShaderMaterial);
+      } else {
+        mat.dispose();
+      }
+    }
+
     function rebuildBots(list: BotNode[]) {
       // Hacker-pass c8: dispose per-bot materials on each 5 s rebuild (previously leaked
       // ~2 materials per bot per rebuild → thousands of orphaned materials per hour).
@@ -358,12 +433,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const ch = botGroup.children[0]!;
         botGroup.remove(ch);
         if (ch instanceof THREE.Mesh || ch instanceof THREE.Sprite) {
-          (ch.material as THREE.Material).dispose();
+          disposeBotMaterial(ch.material as THREE.Material);
         }
       }
       botVis.length = 0;
       botMeshes.length = 0;
-      for (const bot of list) {
+      focusEase.clear();
+      const capped = list.length > MAX_SCENE_BOTS ? list.slice(0, MAX_SCENE_BOTS) : list;
+      for (const bot of capped) {
         const posArr = botWorldPosition(bot.id);
         const pos = new THREE.Vector3(...posArr);
         if (bot.id === "grok-build") {
@@ -373,47 +450,72 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           continue;
         }
         const color = HEALTH_COLOR[bot.health];
-        const mat = new THREE.MeshStandardMaterial({
-          color,
-          emissive: color,
-          emissiveIntensity: bot.health === "idle" ? 0.25 : 0.9,
-          roughness: 0.35,
-          metalness: 0.15,
-        });
-        const mesh = new THREE.Mesh(sphereGeo, mat);
+        // Painter c7: watercolor core + glow (keeps botId pick target on mesh).
+        const star = kit.createBotStar({ color, idle: bot.health === "idle" });
+        const mesh = new THREE.Mesh(sphereGeo, star.meshMaterial);
         mesh.position.copy(pos);
         mesh.userData.botId = bot.id;
         botGroup.add(mesh);
         botMeshes.push(mesh);
 
-        const glowMat = new THREE.SpriteMaterial({
-          map: starTex,
-          color,
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        });
-        const glow = new THREE.Sprite(glowMat);
-        // Portrait sprite (additive halo still uses starTex); portrait sits as small card sprite if asset exists
+        const glow = new THREE.Sprite(star.glowMaterial);
+        // Portrait card + life-size character (ImagineNodeMaterial wash until map loads).
         const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
+        const cardMat = kit.createImagineNodeMaterial({ accent: color });
+        const card = new THREE.Sprite(cardMat as unknown as THREE.SpriteMaterial);
+        // Sprite needs SpriteMaterial — use Mesh plane for Imagine shader instead of Sprite.
+        const cardPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), cardMat);
+        cardPlane.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
+        cardPlane.userData.botId = bot.id;
+        cardPlane.userData.kind = "portrait";
+        botGroup.add(cardPlane);
+        const personMat = kit.createImagineNodeMaterial({ accent: color });
+        const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
+        person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
+        person.userData.botId = bot.id;
+        person.userData.kind = "character";
+        botGroup.add(person);
+        const applyPortrait = (tex: THREE.Texture) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const r1 = setImagineNodeMap(cardMat, tex, { maxTextureSize: maxTexSize });
+          const r2 = setImagineNodeMap(personMat, tex, { maxTextureSize: maxTexSize });
+          // Painter c5: surface sanitize failures honestly (wash stays; never silent).
+          cardPlane.userData.imagineMapError = (cardMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r1.ok ? null : r1.reason);
+          person.userData.imagineMapError = (personMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r2.ok ? null : r2.reason);
+        };
         loader.load(
           portraitUrl,
-          (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            const card = new THREE.Sprite(
-              new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.92 }),
-            );
-            card.scale.set(1.15, 1.15, 1.15);
-            card.position.copy(pos).add(new THREE.Vector3(0, 0.95, 0));
-            card.userData.botId = bot.id;
-            botGroup.add(card);
-          },
+          applyPortrait,
           undefined,
-          () => { /* no portrait asset yet */ },
+          () => {
+            if (fallbackPortraitTex) {
+              applyPortrait(fallbackPortraitTex);
+              return;
+            }
+            loader.load(PORTRAIT_FALLBACK, (tex) => {
+              fallbackPortraitTex = tex;
+              applyPortrait(tex);
+            });
+          },
         );
+        void card; // keep lint calm if Sprite unused
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
         botGroup.add(glow);
+
+        // Painter c5: lore plaque text atlas from real lock notes (honest empty if none).
+        {
+          const notesRaw = bot.lock?.notes || bot.notes || "";
+          const loreMat = kit.createLorePlaqueMaterial({ accent: color });
+          const atlas = createLoreTextAtlas(notesRaw, { maxTextureSize: maxTexSize, seed: hashStr(bot.id) });
+          setLorePlaqueTextAtlas(loreMat, atlas, { owned: true });
+          const lore = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), loreMat);
+          lore.position.copy(pos).add(new THREE.Vector3(-1.2, 0.85, 0.15));
+          lore.userData.botId = bot.id;
+          lore.userData.kind = "lore";
+          lore.userData.loreEmpty = atlas.empty;
+          botGroup.add(lore);
+        }
 
         const el = document.createElement("div");
         el.className = "dash3d-label";
@@ -422,56 +524,97 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         label.position.set(pos.x, pos.y + 0.75, pos.z);
         botGroup.add(label);
 
-        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone() });
+        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone(), setColor: star.setColor });
       }
     }
 
-    type FlowLine = { line: THREE.Line; seed: number; speed: number; baseOpacity: number };
-    const flowLines: FlowLine[] = [];
-    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number };
+
+    // Shared scene characters / environments (real Imagine assets already in public/).
+    const sceneArts = [
+      { url: "/dashboard-3d/art/backdrop-nebula.webp", pos: new THREE.Vector3(-10, 4.5, -8), scale: [6.5, 3.8] as const },
+      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
+      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
+      { url: "/dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
+      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
+      { url: "/dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
+      { url: "/dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
+      { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
+      { url: "/dashboard-3d/art/scene-merge-beacon.webp", pos: new THREE.Vector3(-11.5, 2.8, -2.5), scale: [5.0, 2.8] as const },
+      { url: "/dashboard-3d/art/scene-collab-tower.webp", pos: new THREE.Vector3(10.2, -0.2, 3.8), scale: [4.8, 2.7] as const },
+    ];
+    for (const art of sceneArts) {
+      const mat = kit.createImagineNodeMaterial({});
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
+      plane.position.copy(art.pos);
+      plane.userData.kind = "scene";
+      botGroup.add(plane);
+      loader.load(
+        art.url,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const r = setImagineNodeMap(mat, tex, { maxTextureSize: maxTexSize });
+          plane.userData.imagineMapError = (mat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r.ok ? null : r.reason);
+        },
+        undefined,
+        () => { /* missing art — wash fallback stays */ },
+      );
+    }
+
+    // Gap#26: declare filter sets BEFORE applyEdgeVisibilityFilter / rebuildEdges (avoid TDZ)
+    let graphFilter: GraphFilterState = { ...DEFAULT_GRAPH_FILTER };
+    let graphVisibleIds: Set<string> | null = null; // null = no graph filter active
+    let nhopVisibleIds: Set<string> | null = null; // Gap#6 local graph isolate
+
+    type EdgeRec = { from: string; to: string; health: string; kind: string; fromPos: [number, number, number]; toPos: [number, number, number] };
+    let edgeRecs: EdgeRec[] = [];
+    let inkEdges: ReturnType<typeof kit.createInkEdges> | null = null;
+    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number; ease: TravelerEaseState; sample: TravelerEaseSample; lastProgress: number };
     const landingTrails: LandingTrail[] = [];
     const travelerGeo = new THREE.SphereGeometry(0.16, 12, 12);
 
+    const posOfTuple = (id: string): [number, number, number] | null => {
+      if (id === "grok-build") return [sunMesh.position.x, sunMesh.position.y, sunMesh.position.z];
+      const v = botVis.find((b) => b.id === id);
+      return v ? [v.base.x, v.base.y, v.base.z] : null;
+    };
+
+    const mapInkInput = (recs: EdgeRec[]) =>
+      recs.map((e) => ({
+        from: e.fromPos,
+        to: e.toPos,
+        health: e.health,
+        kind: e.kind === "hub" ? "hub" : "link",
+        id: `${e.from}>${e.to}`,
+      }));
+
+    const applyEdgeVisibilityFilter = () => {
+      if (!inkEdges) return;
+      const recs = filterEdgeRecsByVisibility(edgeRecs, nhopVisibleIds, graphVisibleIds);
+      inkEdges.update(mapInkInput(recs));
+    };
+
     function rebuildEdges(status: DashboardStatus) {
-      while (edgeGroup.children.length) {
-        const ch = edgeGroup.children[0]!;
-        edgeGroup.remove(ch);
-        if (ch instanceof THREE.Line) {
-          ch.geometry.dispose();
-          (ch.material as THREE.Material).dispose();
-        }
-      }
-      flowLines.length = 0;
-      const posOf = (id: string) => {
-        if (id === "grok-build") return sunMesh.position.clone();
-        const v = botVis.find((b) => b.id === id);
-        return v ? v.base.clone() : null;
-      };
-      let ei = 0;
+      edgeRecs = [];
       for (const e of status.constellationEdges) {
-        const a = posOf(e.from);
-        const b = posOf(e.to);
+        const a = posOfTuple(e.from);
+        const b = posOfTuple(e.to);
         if (!a || !b) continue;
-        const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-        // Animation #3: dashed flow along constellation edges (static under reducedMotion)
-        const mat = new THREE.LineDashedMaterial({
-          color: HEALTH_COLOR[e.health],
-          transparent: true,
-          opacity: e.kind === "hub" ? 0.35 : 0.6,
-          dashSize: e.kind === "hub" ? 0.35 : 0.28,
-          gapSize: e.kind === "hub" ? 0.22 : 0.18,
+        edgeRecs.push({
+          from: e.from,
+          to: e.to,
+          health: e.health,
+          kind: e.kind,
+          fromPos: a,
+          toPos: b,
         });
-        const line = new THREE.Line(geo, mat);
-        line.computeLineDistances();
-        edgeGroup.add(line);
-        flowLines.push({
-          line,
-          seed: ei * 0.37,
-          speed: e.health === "blocked" ? 0.9 : e.health === "stalled" ? 0.35 : e.health === "healthy" ? 0.55 : 0.15,
-          baseOpacity: e.kind === "hub" ? 0.35 : 0.6,
-        });
-        ei += 1;
       }
+      if (!inkEdges) {
+        inkEdges = kit.createInkEdges(mapInkInput(edgeRecs));
+        edgeGroup.add(inkEdges.group);
+      } else {
+        inkEdges.update(mapInkInput(edgeRecs));
+      }
+      applyEdgeVisibilityFilter();
     }
 
     function rebuildCards(status: DashboardStatus) {
@@ -577,27 +720,21 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     }
 
-    // Lane nebula tints
+    // Painter c9: batched lane nebulae (replace MeshBasicMaterial tint spheres)
     const nebulaGroup = new THREE.Group();
     scene.add(nebulaGroup);
+    let laneNebulae: ReturnType<typeof kit.createLaneNebulae> | null = null;
     function rebuildNebulae(status: DashboardStatus) {
-      while (nebulaGroup.children.length) {
-        const ch = nebulaGroup.children[0]!;
-        nebulaGroup.remove(ch);
-        (ch as THREE.Mesh).geometry.dispose();
-        ((ch as THREE.Mesh).material as THREE.Material).dispose();
-      }
-      for (const lane of status.constellations) {
-        const color = HEALTH_COLOR[lane.health];
-        const mat = new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: lane.health === "idle" ? 0.04 : 0.09,
-          depthWrite: false,
-        });
-        const mesh = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 16), mat);
-        mesh.position.set(...lane.center);
-        nebulaGroup.add(mesh);
+      const lanes = status.constellations.map((l) => ({
+        health: l.health,
+        center: l.center,
+        id: l.id,
+      }));
+      if (!laneNebulae) {
+        laneNebulae = kit.createLaneNebulae(lanes);
+        nebulaGroup.add(laneNebulae.group);
+      } else {
+        laneNebulae.update(lanes);
       }
     }
 
@@ -642,7 +779,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const mesh = new THREE.Mesh(travelerGeo, mat);
           mesh.position.set(points[0]!.x, points[0]!.y, points[0]!.z);
           landingGroup.add(mesh);
-          landingTrails.push({ points, mesh, seed: li * 1.7 });
+          landingTrails.push({ points, mesh, seed: li * 1.7, ease: createTravelerEaseState(li * 1.7), sample: createTravelerEaseSample(), lastProgress: 0 });
         });
       }
     }
@@ -654,13 +791,22 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let layoutSig = "";
     let fly: FlyState = { ...FLY_HOME };
     const knownIds = () => new Set(layout.buildings.map((b) => b.id));
+    let layoutProgressSig = "";
     const syncCity = () => {
       const next = buildCityLayout(dataRef.current.projects);
-      const sig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.litFloors, b.x, b.z]));
+      // Structure vs progress: live setBuildingProgress without full rebuild (Painter c11)
+      const structSig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.x, b.z]));
+      const progressSig = JSON.stringify(
+        next.buildings.map((b) => [b.id, b.progressKnown ? b.litFloors : 0, b.progressKnown]),
+      );
       layout = next;
-      if (sig !== layoutSig) {
-        layoutSig = sig;
+      if (structSig !== layoutSig) {
+        layoutSig = structSig;
+        layoutProgressSig = progressSig;
         city.rebuild(layout);
+      } else if (progressSig !== layoutProgressSig) {
+        layoutProgressSig = progressSig;
+        city.applyBuildingProgress(layout);
       }
       const reconciled = reconcileFlyover(fly, knownIds());
       if (reconciled !== fly) setFly(reconciled, true);
@@ -669,8 +815,12 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const dust = createDustField(scene, { count: 480, seed: 42 });
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    const cometLaunch = createCometLaunchState(24);
+    const cometLaunchSamples = Array.from({ length: 24 }, () => createCometLaunchSample());
+    scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
+
     let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
@@ -763,6 +913,73 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let hoverPageId: string | null = null;
+    let hoverBotId: string | null = null;
+    const tipEl = document.createElement("div");
+    tipEl.className = "dash3d-star-tooltip";
+    tipEl.dataset.testid = "star-hover-tooltip";
+    tipEl.setAttribute("role", "tooltip");
+    tipEl.hidden = true;
+    mount.appendChild(tipEl);
+    const hoverTipState = createHoverTooltipState();
+    const hoverTipSample = createHoverTooltipSample();
+    const edgePulseState = createEdgePulseState();
+    const edgePulseSample = createEdgePulseSample();
+    const setEdgeHover = (botId: string | null) => {
+      // Painter c8 batches edges by health — boost uPulse on batches that contain the hover star.
+      if (!inkEdges) return;
+      for (const ch of inkEdges.group.children) {
+        if (!(ch instanceof THREE.Mesh)) continue;
+        const mat = ch.material as THREE.ShaderMaterial;
+        if (!mat.uniforms?.["uPulse"]) continue;
+        if (!botId) {
+          mat.uniforms["uPulse"].value = 0.35;
+          continue;
+        }
+        const tone = String(ch.userData.inkEdgeBatch || "");
+        const hit = edgeRecs.some(
+          (e) => e.health === tone && (e.from === botId || e.to === botId),
+        );
+        mat.uniforms["uPulse"].value = hit ? 0.85 : 0.12;
+      }
+    };
+    const showBotTip = (botId: string | null, clientX: number, clientY: number) => {
+      if (!botId) {
+        tipEl.hidden = true;
+        tipEl.textContent = "";
+        setHoverTooltipTarget(hoverTipState, null);
+        setEdgeHover(null);
+        hoverBotId = null;
+        return;
+      }
+      const bot = dataRef.current.bots.find((b) => b.id === botId);
+      if (!bot) {
+        showBotTip(null, clientX, clientY);
+        return;
+      }
+      hoverBotId = botId;
+      setHoverTooltipTarget(hoverTipState, botId);
+      setEdgeHover(botId);
+      const heartbeat = bot.lastActivityAt
+        ? new Date(bot.lastActivityAt).toLocaleString("en-GB", { timeZone: "Africa/Lagos", hour12: false }) + " WAT"
+        : "—";
+      tipEl.innerHTML = "";
+      const title = document.createElement("strong");
+      title.textContent = bot.name;
+      const meta = document.createElement("div");
+      meta.className = "dash3d-star-tooltip-meta";
+      meta.textContent = `${bot.health} · ${bot.branch || "no branch"} · ${heartbeat}`;
+      const lane = document.createElement("div");
+      lane.className = "dash3d-muted";
+      lane.style.fontSize = "0.68rem";
+      lane.textContent = bot.id;
+      tipEl.appendChild(title);
+      tipEl.appendChild(meta);
+      tipEl.appendChild(lane);
+      tipEl.hidden = false;
+      const rect = mount.getBoundingClientRect();
+      tipEl.style.left = `${Math.min(rect.width - 200, Math.max(8, clientX - rect.left + 12))}px`;
+      tipEl.style.top = `${Math.min(rect.height - 80, Math.max(8, clientY - rect.top + 12))}px`;
+    };
     const pageIndexById = () => {
       const m = new Map<string, number>();
       pageIdByIndex.forEach((id, i) => m.set(id, i));
@@ -1003,7 +1220,21 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       camera.position.copy(freePos);
       camera.lookAt(lookAt);
     };
-    const onPointerHoverNotion = (ev: PointerEvent) => {
+    const onPointerHoverStars = (ev: PointerEvent) => {
+      if (dragging || fly.level !== "universe") {
+        if (hoverBotId) showBotTip(null, ev.clientX, ev.clientY);
+        return;
+      }
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(botMeshes, false);
+      const id = (hits[0]?.object.userData.botId as string | undefined) ?? null;
+      if (id !== hoverBotId) showBotTip(id, ev.clientX, ev.clientY);
+      else if (id) showBotTip(id, ev.clientX, ev.clientY); // refresh position
+    };
+        const onPointerHoverNotion = (ev: PointerEvent) => {
       if (dragging || fly.level !== "universe" || !pageMesh) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1020,14 +1251,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointermove", onPointerHoverNotion);
+    renderer.domElement.addEventListener("pointermove", onPointerHoverStars);
     renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
 
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
       layoutSig = ""; // force GPU resources to re-upload after restore
       syncCity();
+      freezePendingClear = true; // clear freeze after first post-restore frame
     });
+    // Gap#3: snapshot last frame on context lost so the stage does not flash splash/black.
+    const onCtxLostFreeze = () => {
+      const url = captureCanvasFrame(renderer.domElement);
+      if (url) showLastFrameFreeze(mount, url);
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onCtxLostFreeze, false);
 
     let last = performance.now();
+    let perfEma = 16.7;
+    let labelsPaused = false;
     let raf = 0;
     let sync = 0;
     const travelOut = { x: 0, y: 0, z: 0 };
@@ -1045,11 +1286,35 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       const dt = sanitizeDt((now - last) / 1000);
       last = now;
+      // Queue #17: EMA frame budget — pause CSS2D labels when 18+ bots run hot.
+      perfEma = nextEmaFrameMs(perfEma, dt * 1000);
+      {
+        const perf = evaluatePerfBudget({ botCount: botVis.length, emaFrameMs: perfEma, labelsPaused });
+        labelsPaused = perf.labelsPaused;
+        try {
+          if (perf.hint) document.documentElement.dataset.dashPerf = perf.hint;
+          else delete document.documentElement.dataset.dashPerf;
+        } catch {
+          /* ignore */
+        }
+      }
 
       if (rig.t < 1) {
         const stepped = stepRigSmooth(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.35);
         rig = stepped.rig;
         applyPose(stepped.position, stepped.lookAt);
+      } else if (pendingFocusBotId) {
+        const botId = pendingFocusBotId;
+        pendingFocusBotId = null;
+        document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId } }));
+      }
+
+      stepHoverTooltip(hoverTipState, hoverTipSample, dt, reducedMotion);
+      if (hoverTipSample.hoverId && !tipEl.hidden) {
+        tipEl.style.opacity = String(hoverTipSample.opacity);
+        tipEl.style.transform = `translateY(${hoverTipSample.offsetY}px) scale(${hoverTipSample.scale})`;
+      } else if (!hoverTipSample.hoverId && tipEl.hidden === false && hoverTipSample.opacity < 0.02) {
+        tipEl.hidden = true;
       }
 
       // billboard cards
@@ -1060,32 +1325,91 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const wallT = now * 0.001;
       const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
-        const show = starHealthFilter === "all" || n.health === starHealthFilter;
+        const healthOk = starHealthFilter === "all" || n.health === starHealthFilter;
+        const graphOk = !graphVisibleIds || graphVisibleIds.has(n.id);
+        const nhopOk = !nhopVisibleIds || nhopVisibleIds.has(n.id);
+        const show = healthOk && graphOk && nhopOk;
         n.mesh.visible = show;
         n.glow.visible = show;
-        n.label.visible = show && labelsOn && fly.level === "universe";
+        n.label.visible = show && labelsOn && fly.level === "universe" && !labelsPaused;
         const phase = pulsePhaseFromId(n.id);
         sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
-        n.mesh.scale.setScalar(pulseOut.scale);
-        n.glow.scale.setScalar(pulseOut.glow);
-        const mat = n.mesh.material as THREE.MeshStandardMaterial;
-        if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
         sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, wallT, phase, reducedMotion);
+        let st = focusEase.get(n.id);
+        if (!st) {
+          st = createFocusEaseState();
+          const held = motionPoseBag.focusById[n.id];
+          if (held) restoreFocusPose(st, held);
+          focusEase.set(n.id, st);
+        }
+        stepFocusEase(st, n.id, rig.subjectId, dt, reducedMotion);
+        applyFocusPulse(pulseOut, st.pulseMul);
+        applyFocusDrift(driftOut, n.base, st.driftMul);
+        let scaleMul = pulseOut.scale;
+        if (hoverTipSample.edge > 0.05 && hoverTipSample.hoverId) {
+          const hid = hoverTipSample.hoverId;
+          const neigh =
+            n.id === hid ||
+            edgeRecs.some((e) => (e.from === hid && e.to === n.id) || (e.to === hid && e.from === n.id));
+          if (neigh) {
+            stepEdgePulseSync(
+              edgePulseState,
+              edgePulseSample,
+              hoverTipSample.edge,
+              hid,
+              n.id,
+              hid,
+              t,
+              reducedMotion,
+            );
+            scaleMul *= edgePulseSample.neighborPulseMul;
+          }
+        }
+        n.mesh.scale.setScalar(scaleMul);
+        n.glow.scale.setScalar(pulseOut.glow * (scaleMul / Math.max(1e-6, pulseOut.scale)));
+        if (n.setColor) n.setColor(HEALTH_COLOR[n.health], pulseOut.emissive);
+        else {
+          const mat = n.mesh.material as THREE.MeshStandardMaterial;
+          if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
+        }
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
         // label visibility owned above (health filter + labels layer + fly level)
       }
       if (!reducedMotion) {
-        for (const fl of flowLines) {
-          const mat = fl.line.material as THREE.LineDashedMaterial;
-          // LineDashedMaterial has no dashOffset in this three build — pulse opacity as flowing energy
-          const phase = lineFlowPhase(t, fl.speed, fl.seed);
-          mat.opacity = fl.baseOpacity * (0.42 + 0.58 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
+        inkEdges?.tick(t);
+        const edgeFocusId = rig.subjectId ?? hoverTipSample.hoverId;
+        // Motion c11: drive ink uPulse from hover edge strength + focus orientation sample
+        if (inkEdges && edgeRecs.length) {
+          const sample = edgeRecs[0]!;
+          stepEdgePulseSync(
+            edgePulseState,
+            edgePulseSample,
+            hoverTipSample.edge,
+            sample.from,
+            sample.to,
+            edgeFocusId,
+            t,
+            reducedMotion,
+          );
+          for (const ch of inkEdges.group.children) {
+            if (!(ch instanceof THREE.Mesh)) continue;
+            const mat = ch.material as THREE.ShaderMaterial;
+            if (!mat.uniforms?.["uPulse"]) continue;
+            const base = 0.35;
+            mat.uniforms["uPulse"].value = Math.min(1, base + 0.55 * edgePulseSample.highlight);
+          }
         }
         for (const tr of landingTrails) {
-          samplePolylineTravel(travelOut, tr.points, travelProgress(t, 7.5, tr.seed));
-          tr.mesh.position.set(travelOut.x, travelOut.y + 0.35, travelOut.z);
+          stepTravelerEase(tr.ease, tr.sample, tr.points, t, dt, reducedMotion);
+          // Motion c13: gust dust when a landing traveler wraps a hop loop (real event)
+          if (!reducedMotion && tr.sample.progress + 0.5 < tr.lastProgress) {
+            dust.impulseGust(0.55, 0.12, -0.35, 0.45);
+          }
+          tr.lastProgress = tr.sample.progress;
+          tr.mesh.position.set(tr.sample.x, tr.sample.y + 0.35, tr.sample.z);
+          (tr.mesh.material as THREE.MeshStandardMaterial).opacity = tr.sample.opacity;
           tr.mesh.visible = fly.level === "universe";
         }
       } else {
@@ -1094,6 +1418,26 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city.tick(wallT, reducedMotion);
       dust.update(wallT, reducedMotion);
       comets.update(wallT, reducedMotion);
+      stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
+      for (let ci = 0; ci < comets.count; ci++) {
+        const sample = cometLaunchSamples[ci];
+        if (!sample) continue;
+        const line = comets.group.getObjectByName(`motion-comet-${ci}`);
+        const head = comets.group.getObjectByName(`motion-comet-head-${ci}`);
+        if (line) {
+          line.visible = sample.visible || reducedMotion;
+          const mat = (line as THREE.Line).material as THREE.LineBasicMaterial;
+          if (mat && "opacity" in mat) mat.opacity = (reducedMotion ? 0.22 : 0.55) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
+        }
+        if (head) {
+          head.visible = sample.visible || reducedMotion;
+          const mat = (head as THREE.Points).material as THREE.PointsMaterial;
+          if (mat && "opacity" in mat) {
+            mat.opacity = (reducedMotion ? 0.35 : 0.95) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
+            mat.size = Math.max(0.12, (mat.size || 0.2) * (0.85 + 0.15 * sample.scale));
+          }
+        }
+      }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
       const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
@@ -1108,9 +1452,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const liveExposure = postfxRecovery.bundle.exposure ?? exposureRide;
       liveExposure.apply(renderer, liveBloom ?? undefined);
 
+      // Painter c11: always tick (freezes uTime under RM; also flushes throttled resizePass)
+      tickPainterlyKit(kit, t, { reducedMotion });
+      kit.setPassHealth({ healthy, total, reducedMotion });
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
-        tickPainterlyKit(kit, t);
         if (atm) atm.update(tone);
         liveBloom?.update(tone);
         liveGrade?.update(tone);
@@ -1123,14 +1469,31 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (composer) composer.render();
       else renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
+      if (freezePendingClear) {
+        freezePendingClear = false;
+        hideLastFrameFreeze(mount);
+      }
 
+      if (Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
+        document.dispatchEvent(
+          new CustomEvent("dash3d-camera", {
+            detail: { lookAt: [lookAt.x, lookAt.y, lookAt.z] as [number, number, number] },
+          }),
+        );
+      }
       if (now - sync > 5000) {
         sync = now;
         rebuildAll();
         syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+        clearCometLaunch(cometLaunch);
+        scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
         feedGlyphs.dispose();
+      inkEdges?.dispose();
+      inkEdges = null;
+      laneNebulae?.dispose();
+      laneNebulae = null;
         feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };
@@ -1145,6 +1508,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       labelRenderer.setSize(w, h);
       composer?.setSize(w, h);
       bloomHandle?.setSize?.(w, h);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      kit.resizePass(w, h, dpr);
       if (raysHandle && composer?.readBuffer?.depthTexture) {
         raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
       }
@@ -1168,20 +1533,29 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
       if (!botId) return;
       const bot = dataRef.current.bots.find((b) => b.id === botId);
-      if (!bot) return;
+      if (!bot) {
+        // Unknown id: clear misleading stale detail by selecting nothing useful
+        cbs.current.onSkyView();
+        return;
+      }
+      // Always update selection immediately so STAR DETAIL matches the latest request (Gap#10).
+      cbs.current.onSelectBot(bot);
       const pos =
         bot.id === "grok-build"
           ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
           : botWorldPosition(bot.id);
       const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
-      if (!acceptPointerPick(rig)) return;
+      if (!acceptPointerPick(rig)) {
+        pendingFocusBotId = botId;
+        return;
+      }
+      pendingFocusBotId = null;
       rig = flyTo(
         rig,
         target,
         [camera.position.x, camera.position.y, camera.position.z],
         [lookAt.x, lookAt.y, lookAt.z],
       );
-      cbs.current.onSelectBot(bot);
     };
     document.addEventListener("dash3d-focus-bot", onFocusBot);
     const onLayers = (ev: Event) => {
@@ -1193,6 +1567,41 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
     };
     document.addEventListener("dash3d-layers", onLayers);
+    const onGraphFilter = (ev: Event) => {
+      const d = (ev as CustomEvent<GraphFilterState>).detail;
+      if (!d || typeof d !== "object") return;
+      graphFilter = { ...DEFAULT_GRAPH_FILTER, ...d };
+      const active =
+        Boolean(graphFilter.query.trim()) ||
+        graphFilter.orphansOnly ||
+        graphFilter.health !== "all" ||
+        graphFilter.lane !== "all";
+      if (!active) {
+        graphVisibleIds = null;
+      } else {
+        graphVisibleIds = filterBotIds(
+          dataRef.current.bots,
+          dataRef.current.constellationEdges ?? [],
+          graphFilter,
+        );
+      }
+      applyEdgeVisibilityFilter();
+    };
+    document.addEventListener("dash3d-graph-filter", onGraphFilter);
+    const onNhop = (ev: Event) => {
+      const d = (ev as CustomEvent<{ botId?: string | null; depth?: number; isolate?: boolean }>).detail || {};
+      if (!d.isolate || !d.botId) {
+        nhopVisibleIds = null;
+      } else {
+        nhopVisibleIds = nhopBotIds(
+          d.botId,
+          dataRef.current.constellationEdges ?? [],
+          Number(d.depth) || 0,
+        );
+      }
+      applyEdgeVisibilityFilter();
+    };
+    document.addEventListener("dash3d-nhop", onNhop);
 
 
     document.addEventListener("dash3d-sky", onSkyEvent);
@@ -1203,9 +1612,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
+      document.removeEventListener("dash3d-graph-filter", onGraphFilter);
+      document.removeEventListener("dash3d-nhop", onNhop);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);
+      renderer.domElement.removeEventListener("webglcontextlost", onCtxLostFreeze, false);
+      // Gap#3: snapshot before teardown so remount keeps last frame (no splash flash).
+      const lastUrl = captureCanvasFrame(renderer.domElement);
+      if (lastUrl) showLastFrameFreeze(mount, lastUrl);
+      // Motion c9 pose-hold: capture focus easing before state teardown.
+      for (const [id, st] of focusEase) {
+        motionPoseBag.focusById[id] ??= createFocusPoseHold();
+        captureFocusPose(motionPoseBag.focusById[id]!, st);
+      }
       detachContext();
       city.dispose();
       renderer.domElement.removeEventListener("wheel", onWheel);
@@ -1213,6 +1633,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointermove", onPointerHoverNotion);
+      renderer.domElement.removeEventListener("pointermove", onPointerHoverStars);
+      tipEl.remove();
       cancelAnimationFrame(raf);
       dust.dispose();
       comets.dispose();

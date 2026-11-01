@@ -1476,7 +1476,7 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+              <section className="command-card composer-dock rounded-panel bg-surface p-3 md:p-4" data-composer="floating">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
@@ -1624,8 +1624,8 @@ export function CommandApp() {
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
                 <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
                 <Quick label="Research" icon={Search} tone="text-ok" onClick={() => { setView("research"); if (staged) void inspectWithRea(staged, "research"); else void checkRea(); }} />
-                <Quick label="Generate Image" icon={Image} tone="text-warn" onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
-                <Quick label="Generate Video" icon={Video} tone="text-accent" onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
+                <Quick label="Generate Image" icon={Image} tone="text-warn" comingSoon title="Coming soon — image generation is a paid API and is not called from this app." onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
+                <Quick label="Generate Video" icon={Video} tone="text-accent" comingSoon title="Coming soon — video generation is a paid API and is not called from this app." onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
@@ -2587,9 +2587,15 @@ export function CommandApp() {
   );
 }
 
-function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
+function Quick({ label, icon: Icon, tone, onClick, comingSoon, title }: { label: string; icon: typeof Folder; tone: string; onClick: () => void; comingSoon?: boolean; title?: string }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      title={title || (comingSoon ? "Coming soon — not wired yet" : undefined)}
+      aria-disabled={comingSoon ? true : undefined}
+      className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm${comingSoon ? " is-coming-soon" : ""}`}
+    >
       <Icon className={`size-4 ${tone}`} />
       {label}
     </button>
@@ -2938,7 +2944,7 @@ function ChatPane({
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
         </div>
         <form
-          className="command-card m-3 rounded-panel bg-surface p-3"
+          className="command-card composer-dock m-3 rounded-panel bg-surface p-3" data-composer="floating"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();

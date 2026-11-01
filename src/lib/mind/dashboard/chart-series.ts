@@ -3,7 +3,8 @@
  * Pure — no fs. Missing inputs → empty series + "no source yet".
  * Hacker: NaN/neg counts dropped; hour buckets capped; never invents points.
  */
-import type { GitCommit } from "./types.ts";
+import type { GitCommit, Health } from "./types.ts";
+import type { BotNode } from "./types.ts";
 import type { Timeline, TimelineEvent } from "./time-scrub.ts";
 import type { FleetLandingStatus } from "./landing-status.ts";
 import type { MoneyView } from "./spend-core.ts";
@@ -26,6 +27,8 @@ export type ChartSeries = {
 
 export type DashboardCharts = {
   commitsPerBotHour: ChartSeries;
+  commitsPerDay: ChartSeries;
+  botHealth: ChartSeries;
   lockHealthShare: ChartSeries;
   landingsPerLane: ChartSeries;
   spend: ChartSeries;
@@ -243,16 +246,126 @@ export function buildSpendSeries(money: MoneyView | null | undefined): ChartSeri
   };
 }
 
+
+/** Bots counted by current health state (real status payload only). */
+export function buildBotHealthCounts(bots: readonly BotNode[] | null | undefined): ChartSeries {
+  const title = "Bot health (count)";
+  if (!bots || !bots.length) {
+    return {
+      id: "bot-health",
+      title,
+      unit: "bots",
+      points: [],
+      source: NO_CHART_SOURCE,
+      emptyReason: NO_CHART_SOURCE,
+    };
+  }
+  const order: Health[] = ["healthy", "stalled", "blocked", "idle"];
+  const counts = new Map<string, number>();
+  for (const b of bots) {
+    const h = (b.health || "idle") as string;
+    counts.set(h, (counts.get(h) ?? 0) + 1);
+  }
+  const points: ChartPoint[] = [];
+  for (const h of order) {
+    const value = counts.get(h) ?? 0;
+    if (finiteNonNeg(value) != null && value > 0) points.push({ label: h, value });
+  }
+  // Include any unexpected health labels honestly
+  for (const [label, value] of counts) {
+    if (!(order as readonly string[]).includes(label) && finiteNonNeg(value) != null && value > 0) {
+      points.push({ label, value });
+    }
+  }
+  return {
+    id: "bot-health",
+    title,
+    unit: "bots",
+    points,
+    source: "status.bots health",
+    emptyReason: points.length ? null : NO_CHART_SOURCE,
+  };
+}
+
+/** Commits per WAT calendar day from real git (or snapshot) log. */
+export function buildCommitsPerDay(
+  commits: readonly GitCommit[] | null | undefined,
+  nowMs = Date.now(),
+  maxDays = 14,
+): ChartSeries {
+  const title = "Commits / day";
+  if (!commits || !commits.length) {
+    return {
+      id: "commits-per-day",
+      title,
+      unit: "commits",
+      points: [],
+      source: NO_CHART_SOURCE,
+      emptyReason: NO_CHART_SOURCE,
+    };
+  }
+  const byDay = new Map<string, { value: number; order: number }>();
+  let used = 0;
+  for (const c of commits) {
+    const at = parseTimeMs(c.date, nowMs);
+    if (at == null) continue;
+    if (nowMs - at > maxDays * 86400_000) continue;
+    let key = "";
+    try {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Africa/Lagos",
+        year: "2-digit",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date(at));
+      const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+      key = `${get("day")}/${get("month")}`;
+    } catch {
+      key = new Date(at).toISOString().slice(5, 10);
+    }
+    const row = byDay.get(key) ?? { value: 0, order: at };
+    row.value += 1;
+    row.order = Math.min(row.order, at);
+    byDay.set(key, row);
+    used += 1;
+  }
+  if (!used) {
+    return {
+      id: "commits-per-day",
+      title,
+      unit: "commits",
+      points: [],
+      source: "git",
+      emptyReason: NO_CHART_SOURCE,
+    };
+  }
+  const points = [...byDay.entries()]
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([label, row]) => ({ label, value: row.value }))
+    .filter((p) => finiteNonNeg(p.value) != null);
+  return {
+    id: "commits-per-day",
+    title,
+    unit: "commits",
+    points,
+    source: "git commits (WAT day)",
+    emptyReason: points.length ? null : NO_CHART_SOURCE,
+  };
+}
+
 export function buildDashboardCharts(input: {
   commits?: readonly GitCommit[] | null;
   timeline?: Timeline | null;
   landings?: readonly FleetLandingStatus[] | null;
   money?: MoneyView | null;
+  bots?: readonly BotNode[] | null;
   nowMs?: number;
 }): DashboardCharts {
   const nowMs = Number.isFinite(input.nowMs) ? (input.nowMs as number) : Date.now();
   return {
     commitsPerBotHour: buildCommitsPerBotHour(input.commits, nowMs),
+    commitsPerDay: buildCommitsPerDay(input.commits, nowMs),
+    botHealth: buildBotHealthCounts(input.bots),
     lockHealthShare: buildLockHealthShare(input.timeline, nowMs),
     landingsPerLane: buildLandingsPerLane(input.landings),
     spend: buildSpendSeries(input.money),

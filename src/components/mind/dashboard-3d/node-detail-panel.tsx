@@ -1,3 +1,4 @@
+import { PORTRAIT_FALLBACK_URL, markPortraitMissing } from "@/lib/mind/dashboard/portrait-resolve";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import {
@@ -35,9 +36,18 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
           width={72}
           height={72}
           loading="lazy"
+          onError={(e) => {
+            const img = e.currentTarget;
+            const botId = String(img.dataset.botId || detail.botId || "");
+            if (botId) markPortraitMissing(botId);
+            if (img.src !== PORTRAIT_FALLBACK_URL && !img.src.endsWith("portrait-dashboard.webp")) {
+              img.src = PORTRAIT_FALLBACK_URL;
+            }
+          }}
+          data-bot-id={detail.botId}
         />
       ) : null}
-      <p className="dash3d-title">{detail.name}</p>
+      <p className="dash3d-title dash3d-node-title" title={detail.name}>{detail.name}</p>
       <p>
         <span className={`dash3d-dot ${detail.health}`} /> <strong>{detail.health}</strong>
         <span className="dash3d-muted"> — {detail.reason || NO_SOURCE}</span>
@@ -170,8 +180,8 @@ export function NodeDetailPanel({
       : null;
 
   return (
-    <aside className={`dash3d-side ${open && (bot || notionPage) ? "is-open" : ""}`} aria-hidden={!open} data-testid="node-detail">
-      <div className="dash3d-glass">
+    <aside className={`dash3d-side dash3d-node-detail ${open && (bot || notionPage) ? "is-open" : ""}`} aria-hidden={!open} data-testid="node-detail" data-dash3d-node={bot?.id ?? notionPage?.id ?? undefined}>
+      <div className="dash3d-glass dash3d-node-card">
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×
         </button>
@@ -192,6 +202,41 @@ export function NodeDetailPanel({
               <Field label="edited" value={notionPage.lastEdited ? formatWat(notionPage.lastEdited) : null} />
               <Field label="id" value={notionPage.id} />
             </p>
+            
+          {bot ? (
+            <div className="dash3d-nhop" data-testid="nhop-controls">
+              <label className="dash3d-muted" style={{ fontSize: "0.68rem" }}>
+                Local graph depth
+                <input
+                  type="range"
+                  min={0}
+                  max={3}
+                  step={1}
+                  defaultValue={1}
+                  data-testid="nhop-depth"
+                  onChange={(e) => {
+                    const depth = Number(e.target.value) || 0;
+                    document.dispatchEvent(
+                      new CustomEvent("dash3d-nhop", {
+                        detail: { botId: bot.id, depth, isolate: depth > 0 },
+                      }),
+                    );
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="dash3d-pill"
+                data-testid="nhop-clear"
+                onClick={() =>
+                  document.dispatchEvent(new CustomEvent("dash3d-nhop", { detail: { botId: null, depth: 0, isolate: false } }))
+                }
+              >
+                Expand all
+              </button>
+            </div>
+          ) : null}
+
             <h3 style={{ marginTop: "0.75rem" }}>Linked neighbors</h3>
             <ul className="dash3d-list">
               {notionNeighbors && notionNeighbors.length ? (

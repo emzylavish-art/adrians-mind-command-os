@@ -7,6 +7,8 @@ import {
   buildLandingsPerLane,
   buildLockHealthShare,
   buildSpendSeries,
+  buildBotHealthCounts,
+  buildCommitsPerDay,
 } from "./chart-series.ts";
 import { buildTimeline } from "./time-scrub.ts";
 import type { GitCommit } from "./types.ts";
@@ -20,6 +22,24 @@ describe("chart-series (real data + hacker)", () => {
     assert.equal(charts.commitsPerBotHour.points.length, 0);
     assert.equal(charts.spend.emptyReason, NO_CHART_SOURCE);
     assert.equal(charts.landingsPerLane.points.length, 0);
+    assert.equal(charts.botHealth.emptyReason, NO_CHART_SOURCE);
+    assert.equal(charts.commitsPerDay.emptyReason, NO_CHART_SOURCE);
+  });
+
+  it("bot health counts + commits/day from real inputs", () => {
+    const health = buildBotHealthCounts([
+      { id: "a", name: "A", health: "healthy", lock: null, branch: null, lastActivityAt: null, commits: [], notes: "", reason: "" },
+      { id: "b", name: "B", health: "healthy", lock: null, branch: null, lastActivityAt: null, commits: [], notes: "", reason: "" },
+      { id: "c", name: "C", health: "idle", lock: null, branch: null, lastActivityAt: null, commits: [], notes: "", reason: "" },
+    ] as any);
+    assert.equal(health.points.find((p) => p.label === "healthy")?.value, 2);
+    assert.equal(health.points.find((p) => p.label === "idle")?.value, 1);
+    const day = buildCommitsPerDay([
+      { sha: "1", subject: "x", author: "a", date: "2026-11-01T10:00:00+01:00", branch: "dashboard-3d" },
+      { sha: "2", subject: "y", author: "a", date: "2026-11-01T12:00:00+01:00", branch: "preview/integration" },
+    ], NOW);
+    assert.ok(day.points.length >= 1);
+    assert.ok(day.points[0]!.value >= 1);
   });
 
   it("maps commits to bots; drops NaN-dated; caps", () => {

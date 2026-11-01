@@ -1,20 +1,15 @@
 /**
  * Pure poll-state reducer for the dashboard status hook.
  *
- * Hacker-pass (2026-11-01 c8): before this, ONE failed poll (server restart, git timeout,
- * transient 500) flipped state to "error", which unmounted <UniverseScene/> and tore down the
- * whole WebGL context (camera position lost, GPU re-init every 5 s while the API flapped).
- * Polls were also fired on a fixed interval with no in-flight guard, so slow responses
- * (git timeout 15 s) piled up and could land out of order, overwriting newer data with older.
- *
  * Rules:
- *  - first load failure → honest "error"
+ *  - first load failure → soft "error" that UI overlays (never requires blanking the stage forever);
+ *    callers keep retrying with backoff and may hydrate from lastGood
  *  - failure after data → keep last data, mark `stale` with reason + since (never silently green)
  *  - responses with a sequence older than the last applied one are dropped
  */
 export type PollState<T> =
   | { status: "loading"; seq: number }
-  | { status: "error"; error: string; seq: number }
+  | { status: "error"; error: string; seq: number; lastData: T | null }
   | { status: "ready"; data: T; seq: number; stale: null | { error: string; since: string } };
 
 export type PollEvent<T> =
@@ -39,5 +34,19 @@ export function reducePoll<T>(prev: PollState<T>, ev: PollEvent<T>): PollState<T
       stale: prev.stale ?? { error, since: ev.at ?? new Date().toISOString() },
     };
   }
-  return { status: "error", error, seq: ev.seq };
+  const lastData = prev.status === "error" ? prev.lastData : null;
+  return { status: "error", error, seq: ev.seq, lastData };
+}
+
+/** Prefer live ready data; else lastData on error; else null. */
+export function pollViewData<T>(state: PollState<T>): T | null {
+  if (state.status === "ready") return state.data;
+  if (state.status === "error") return state.lastData;
+  return null;
+}
+
+export function nextBackoffMs(failCount: number, baseMs = 1000, capMs = 20_000): number {
+  const n = Number.isFinite(failCount) ? Math.max(0, Math.min(20, Math.floor(failCount))) : 0;
+  const ms = baseMs * Math.pow(2, n);
+  return Math.min(capMs, Math.max(baseMs, ms));
 }

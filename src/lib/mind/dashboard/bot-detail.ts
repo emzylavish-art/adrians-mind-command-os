@@ -60,16 +60,63 @@ export function lockTask(lock: BotNode["lock"]): string | null {
   return stripQuotes(lock.raw.task ?? lock.raw.working_on ?? lock.raw.workingOn ?? null);
 }
 
-/** Filter global git commits that belong to this bot's branch (exact or origin/ prefix). */
-export function commitsForBranch(commits: readonly GitCommit[], branch: string | null, limit = 8): GitCommit[] {
-  if (!branch || !commits.length) return [];
-  const want = branch.replace(/^origin\//, "");
+/** Map a git branch name onto a dashboard bot id (shared with charts). */
+export function botIdFromBranch(branch: string): string {
+  const b = branch.replace(/^origin\//, "");
+  if (/dashboard-3d-visual-painter|visual-painter/.test(b)) return "cosmos-painter";
+  if (/dashboard-3d-visual-light|visual-light/.test(b)) return "cosmos-light";
+  if (/dashboard-3d-visual-motion|visual-motion/.test(b)) return "cosmos-motion";
+  if (/^dashboard-3d$/.test(b)) return "dashboard";
+  if (/voice-wiring/.test(b)) return "voice-wiring";
+  if (/voice-integration/.test(b)) return "voice-integration";
+  if (/media-integration/.test(b)) return "media-integration";
+  if (/mcp-integration/.test(b)) return "mcp-integration";
+  if (/error-banners/.test(b)) return "error-banners";
+  if (/visual-polish|visual\//.test(b)) return "visual-polish";
+  if (/logic/.test(b)) return "logic";
+  if (/merge-gate/.test(b)) return "merge-gate";
+  if (/rea|feature-hunter/.test(b)) return "rea-feature-hunter";
+  if (/gap/.test(b)) return "gap-dispatcher";
+  if (/conductor/.test(b)) return "conductor";
+  if (/xai/.test(b)) return "xai-verification";
+  if (/hp-pairing|pc-pairing/.test(b)) return "hp-pairing";
+  if (/integration|preview/.test(b)) return "grok-build";
+  return b.slice(0, 24) || "unknown";
+}
+
+/** Filter global git commits that belong to this bot's branch (exact, origin/, or branch→bot map). */
+export function commitsForBranch(
+  commits: readonly GitCommit[],
+  branch: string | null,
+  limit = 8,
+  botId?: string | null,
+): GitCommit[] {
+  if (!commits.length) return [];
+  const want = branch ? branch.replace(/^origin\//, "") : "";
   const out: GitCommit[] = [];
+  const seen = new Set<string>();
+  const push = (c: GitCommit) => {
+    if (seen.has(c.sha)) return;
+    seen.add(c.sha);
+    out.push(c);
+  };
   for (const c of commits) {
     const b = (c.branch ?? "").replace(/^origin\//, "");
-    if (b === want || b.endsWith(`/${want}`) || b.includes(want)) {
-      out.push(c);
+    const mapped = botIdFromBranch(b);
+    const branchHit = want && (b === want || b.endsWith(`/${want}`) || b.includes(want));
+    const botHit = botId && mapped === botId;
+    if (branchHit || botHit) {
+      push(c);
       if (out.length >= limit) break;
+    }
+  }
+  // Hub bots (e.g. grok-build) with empty branch match: still show recent integration commits.
+  if (!out.length && botId === "grok-build") {
+    for (const c of commits) {
+      if (botIdFromBranch(c.branch ?? "") === "grok-build") {
+        push(c);
+        if (out.length >= limit) break;
+      }
     }
   }
   return out;
@@ -161,12 +208,12 @@ export function buildBotDetailView(input: {
     lockStatus: bot.lock?.status ?? null,
     claimedAt: bot.lock?.claimed_at ?? null,
     releasedAt: bot.lock?.released_at ?? null,
-    heartbeatAt: lockHeartbeat(bot.lock),
+    heartbeatAt: lockHeartbeat(bot.lock) ?? bot.lastActivityAt,
     task: lockTask(bot.lock),
     branch: bot.branch,
-    worktree: bot.lock?.worktree ?? null,
+    worktree: bot.lock?.worktree ?? null, // already public-label when API-publicized
     lockCommits: bot.commits ?? [],
-    branchCommits: commitsForBranch(input.commits, bot.branch),
+    branchCommits: commitsForBranch(input.commits, bot.branch, 8, bot.id),
     queueItems: queueItemsForBot(input.fleetPlan?.queue ?? [], bot, laneName),
     notionPages: notionPagesForBot(input.notionGraph, bot.id),
     connections: connectionsForBot(bot, input.constellationEdges, input.bots, input.notionGraph),

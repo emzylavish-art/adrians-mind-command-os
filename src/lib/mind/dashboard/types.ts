@@ -85,6 +85,9 @@ export type DashboardStatus = {
     repoDir: string;
     locksOk: boolean;
     gitOk: boolean;
+    /** Where commits came from: live git, build-time snapshot, or none. */
+    commitsSource?: "git" | "snapshot" | "none";
+    commitsSnapshotAt?: string;
     /** Honest reason git data is missing (never silently green). */
     gitError?: string;
     /** Env override rejected by the path allowlist (fallback used). */
@@ -108,4 +111,6 @@ export type DashboardStatus = {
   charts: import("./chart-series.ts").DashboardCharts;
   /** Queue #9 — per-bot Notion stop-point freshness from snapshot. */
   notionMirror: import("./notion-mirror.ts").NotionMirrorView;
+  /** Queue #10 — forever-contract queue health + lane-idle needs-next. */
+  foreverContract: import("./forever-contract.ts").ForeverContractGuard;
 };
