@@ -46,6 +46,7 @@ import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
+import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
 import { historyTextForImages, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
@@ -294,6 +295,7 @@ export function CommandApp() {
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -1058,6 +1060,22 @@ export function CommandApp() {
     setError(null);
   }
 
+  function applyCloudAttach(item: CloudPickerAttach) {
+    if (item.kind === "image") {
+      setPendingImages((prev) => {
+        if (prev.length >= 4) {
+          setError("You can attach up to 4 images per message.");
+          return prev;
+        }
+        return [...prev, { dataUrl: item.dataUrl, name: item.name, mime: item.mime }];
+      });
+      setError(null);
+      return;
+    }
+    setStaged({ name: item.name, text: item.text });
+    setError(null);
+  }
+
   async function addImageAttachment(file: File) {
     try {
       const scaled = await fileToDownscaledDataUrl(file);
@@ -1633,6 +1651,9 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
                       <Camera className="size-4" /> Camera
                     </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
+                      Drive
+                    </button>
                     <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} />
                     <button
                       type="button"
@@ -1889,6 +1910,7 @@ export function CommandApp() {
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
+              onOpenCloud={() => setCloudPickerOpen(true)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -2395,7 +2417,10 @@ export function CommandApp() {
                   <h2 className="font-display text-3xl font-bold">Library</h2>
                   <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
                 </div>
-                <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button>
+                </div>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
                 <aside className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
@@ -2662,6 +2687,12 @@ export function CommandApp() {
           setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
         }}
       />
+      <CloudPicker
+        open={cloudPickerOpen}
+        onClose={() => setCloudPickerOpen(false)}
+        onAttach={applyCloudAttach}
+        onNotice={(message) => setNotice(message)}
+      />
 
       {projectOpen && (
         <Overlay>
@@ -2853,6 +2884,7 @@ function ChatPane({
   onAttach,
   onAttachImage,
   onOpenCamera,
+  onOpenCloud,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -2898,6 +2930,7 @@ function ChatPane({
   onAttach: () => void;
   onAttachImage: () => void;
   onOpenCamera: () => void;
+  onOpenCloud: () => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -3136,6 +3169,9 @@ function ChatPane({
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCamera}>
               <Camera className="size-4" /> Camera
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCloud}>
+              Drive
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
