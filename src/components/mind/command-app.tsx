@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, u
 import { Link } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
+import { SupabaseAccountControls } from "@/components/mind/supabase-account";
 import {
   Activity,
   Bell,
@@ -3635,6 +3636,7 @@ export function CommandApp() {
           <div className="border-b border-line bg-surface px-4 py-3 text-sm">
             <p className="font-semibold">Adrian (Personal)</p>
             <UserButton />
+            <SupabaseAccountControls />
             <SignedOut>
               <Link to="/login" className="mt-2 inline-flex min-h-11 items-center text-accent">
                 Sign in
