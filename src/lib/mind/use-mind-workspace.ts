@@ -3,12 +3,12 @@ import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
 import { emptyWorkspace, loadWorkspace, WORKSPACE_KEY } from "./workspace";
+import { SAVE_FAIL } from "./save-error";
 
 function hasContent(ws: Workspace) {
   return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + ws.audit.length > 0;
 }
 
-const SAVE_FAIL = "The server copy could not be saved. The browser copy was kept.";
 
 export function useMindWorkspace() {
   const [ws, setWs] = useState<Workspace>(emptyWorkspace);
@@ -138,10 +138,4 @@ export function useMindWorkspace() {
   }
 
   return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError };
-}
-
-/** Pure helper for tests: classify a save result without UI. */
-export function saveFailureMessage(result: { ok: true } | { ok: false; error?: string }): string | null {
-  if (result.ok) return null;
-  return result.error || SAVE_FAIL;
 }

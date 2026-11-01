@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { saveFailureMessage } from "./use-mind-workspace.ts";
+import { saveFailureMessage } from "./save-error.ts";
 
 describe("save failure messaging", () => {
   it("returns null when save succeeded", () => {
