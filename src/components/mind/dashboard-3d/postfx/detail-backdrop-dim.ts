@@ -11,7 +11,7 @@ import {
   type LuminanceStats,
   type RegionReader,
 } from "./backdrop-meter.ts";
-import { WCAG_TEXT_AA, dimForContrast, linearToSrgb, type ContrastPlan, type Rgb } from "./wcag-contrast.ts";
+import { WCAG_GRAPHIC_AA, WCAG_TEXT_AA, dimForContrast, linearToSrgb, type ContrastPlan, type Rgb } from "./wcag-contrast.ts";
 
 /**
  * Detail-card backdrop dim (light lane, queue #60; builds on #57 radial mask).
@@ -52,7 +52,19 @@ export type ContrastTarget = {
   cardAlpha?: number | null;
   /** Ratio to reach (default WCAG_TEXT_AA 4.5 — chart tick labels are text too). */
   target?: number;
+  /**
+   * #69: non-text graphics in the same rect (chart lines, axes) — colour +
+   * ratio (default WCAG_GRAPHIC_AA 3:1). The rect's dim is the larger of the
+   * text plan and the line plan, both from the same measured stats.
+   */
+  lines?: { rgb: Rgb; target?: number } | null;
 };
+
+/**
+ * #69: one target for every rect, or one per rect (index-aligned with the
+ * rects passed to setRects; a null entry keeps that rect on the static dim).
+ */
+export type ContrastTargets = ContrastTarget | readonly (ContrastTarget | null | undefined)[];
 
 export type ContrastReport = {
   /** "measured": dim from a fresh readback; "static": #67 fixed dim (no/old/failed measurement). */
@@ -64,6 +76,10 @@ export type ContrastReport = {
   measuredAtMs: number | null;
   lastError: string | null;
   reads: number;
+  /** #69: plan per rect (null = that rect on static dim). */
+  perRectPlans: (ContrastPlan | null)[];
+  /** #69: full (pre-ease) shader strength per rect. */
+  perRectStrength: number[];
 };
 
 /**
@@ -141,6 +157,7 @@ export const DetailBackdropDimShader = {
     rectCount: { value: 0 },
     feather: { value: new THREE.Vector2(0.02, 0.02) },
     strength: { value: 0 },
+    rectWeight: { value: [1, 1] as number[] },
     lumLo: { value: DIM_LUM_LO },
     lumHi: { value: DIM_LUM_HI },
     holeUv: { value: new THREE.Vector2(0.5, 0.5) },
@@ -160,6 +177,7 @@ export const DetailBackdropDimShader = {
     uniform int rectCount;
     uniform vec2 feather;
     uniform float strength;
+    uniform float rectWeight[${DIM_MAX_RECTS}];
     uniform float lumLo;
     uniform float lumHi;
     uniform vec2 holeUv;
@@ -177,7 +195,7 @@ export const DetailBackdropDimShader = {
       vec4 tex = texture2D(tDiffuse, vUv);
       float mask = 0.0;
       for (int i = 0; i < ${DIM_MAX_RECTS}; i++) {
-        if (i < rectCount) mask = max(mask, rectMask(rects[i]));
+        if (i < rectCount) mask = max(mask, rectMask(rects[i]) * rectWeight[i]);
       }
       if (holeRadius > 0.0) {
         float d = length((vUv - holeUv) * vec2(aspect, 1.0));
@@ -218,7 +236,7 @@ export type DetailBackdropDimHandle = {
    * #68: protect this text colour with a measured backdrop dim (null → static
    * #67 dim). Measurement runs only while rects are open, tab visible.
    */
-  setContrastTarget: (target: ContrastTarget | null) => void;
+  setContrastTarget: (target: ContrastTargets | null) => void;
   /** Tab hidden → no readbacks (document.visibilityState === "hidden"). */
   setHidden: (hidden: boolean) => void;
   /** Honest state of the measured dim (for debug badges / tests). */
@@ -241,6 +259,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
   const u = pass.uniforms as unknown as DimUniforms;
   // ShaderPass clones uniforms; make vector/array values per-instance.
   u.rects.value = [new THREE.Vector4(), new THREE.Vector4()];
+  u.rectWeight.value = [1, 1];
   u.feather.value = new THREE.Vector2(0.02, 0.02);
   u.holeUv.value = new THREE.Vector2(0.5, 0.5);
   let disposed = false;
@@ -254,7 +273,8 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
   const meter = createBackdropMeter({ intervalMs: opts.intervalMs });
   let reader: RegionReader | null = opts.reader ?? null;
   const ownReader = !opts.reader;
-  let contrastTarget: ContrastTarget | null = null;
+  /** Per-rect targets (index-aligned); null = no measured dim at all. */
+  let contrastTarget: (ContrastTarget | null)[] | null = null;
   let hidden = false;
   let report: ContrastReport = {
     source: "static",
@@ -264,47 +284,90 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     measuredAtMs: null,
     lastError: null,
     reads: 0,
+    perRectPlans: [],
+    perRectStrength: [],
   };
 
-  /** Full strength (before ease): measured when fresh, else static #67. */
-  const fullStrength = (): number => {
+  /** Plan for one rect from its own measured stats (text, and lines if given). */
+  const planFor = (t: ContrastTarget, lum: number): ContrastPlan | null => {
+    const text = dimForContrast({
+      textRgb: t.textRgb,
+      cardRgb: t.cardRgb,
+      cardAlpha: t.cardAlpha,
+      target: t.target ?? WCAG_TEXT_AA,
+      backdropLum: lum,
+      maxDim: DIM_MEASURED_MAX,
+    });
+    const lines = t.lines
+      ? dimForContrast({
+          textRgb: t.lines.rgb,
+          cardRgb: t.cardRgb,
+          cardAlpha: t.cardAlpha,
+          target: t.lines.target ?? WCAG_GRAPHIC_AA,
+          backdropLum: lum,
+          maxDim: DIM_MEASURED_MAX,
+        })
+      : null;
+    if (!text) return lines;
+    if (!lines) return text;
+    // The rect needs whichever element is harder to read; report that plan.
+    return lines.dim > text.dim ? lines : text;
+  };
+
+  /**
+   * Full strength per rect (before ease): measured when that rect has a fresh
+   * reading and a target, else static #67. #69: rects no longer share the
+   * worst rect's strength — a bright nebula behind Charts doesn't over-dim the
+   * Imagine scene behind the detail card.
+   */
+  const fullStrengths = (): number[] => {
     const key = uvRects.length ? rectsKey(uvRects) : "";
     const m = contrastTarget && key ? meter.measurementFor(key, now()) : null;
-    let plan: ContrastPlan | null = null;
-    if (m && contrastTarget) {
-      plan = dimForContrast({
-        textRgb: contrastTarget.textRgb,
-        cardRgb: contrastTarget.cardRgb,
-        cardAlpha: contrastTarget.cardAlpha,
-        target: contrastTarget.target ?? WCAG_TEXT_AA,
-        backdropLum: m.stats.p90,
-        maxDim: DIM_MEASURED_MAX,
-      });
+    const plans: (ContrastPlan | null)[] = [];
+    const strengths: number[] = [];
+    for (let i = 0; i < Math.max(1, uvRects.length); i++) {
+      const t = contrastTarget?.[i] ?? null;
+      const st = m?.perRect[i] ?? null;
+      const plan = t && st ? planFor(t, st.p90) : null;
+      plans.push(plan);
+      strengths.push(plan && st ? measuredStrength(plan.dim, st.p90) : DIM_MAX);
     }
+    let worst = -1;
+    plans.forEach((p, i) => {
+      if (p && (worst < 0 || strengths[i]! > strengths[worst]!)) worst = i;
+    });
+    const anyMeasured = worst >= 0;
     report = {
-      source: plan && m ? "measured" : "static",
-      plan,
-      backdropLum: m ? m.stats.p90 : null,
+      source: anyMeasured ? "measured" : "static",
+      plan: anyMeasured ? plans[worst]! : null,
+      backdropLum: anyMeasured && m ? m.perRect[worst]!.p90 : null,
       perRect: m ? m.perRect : [],
       measuredAtMs: m ? m.atMs : null,
       lastError: meter.lastError,
       reads: meter.reads,
+      perRectPlans: plans,
+      perRectStrength: strengths,
     };
-    return plan && m ? measuredStrength(plan.dim, m.stats.p90) : DIM_MAX;
+    return strengths;
   };
 
   const measuring = () => !disposed && !!contrastTarget && !hidden && uvRects.length > 0 && target > 0;
 
-  /** Eased full strength so a new measurement never pops the dim (reduced motion snaps). */
-  let curFull = DIM_MAX;
+  /** Eased per-rect full strengths so a new measurement never pops the dim (reduced motion snaps). */
+  const curFull: number[] = [DIM_MAX, DIM_MAX];
   const apply = (dtMs?: number) => {
-    const goal = fullStrength();
-    if (reduced || level <= 0.001 || dtMs === undefined) {
-      if (reduced || level <= 0.001) curFull = goal;
-    } else {
-      curFull += (goal - curFull) * (1 - Math.exp(-Math.max(0, dtMs) / DIM_MEASURE_EASE_MS));
+    const goal = fullStrengths();
+    const snap = reduced || level <= 0.001;
+    const k = dtMs === undefined ? 0 : 1 - Math.exp(-Math.max(0, dtMs) / DIM_MEASURE_EASE_MS);
+    for (let i = 0; i < DIM_MAX_RECTS; i++) {
+      const g = goal[i] ?? goal[0] ?? DIM_MAX;
+      curFull[i] = snap ? g : curFull[i]! + (g - curFull[i]!) * k;
     }
-    u.strength.value = disposed ? 0 : curFull * level;
+    const n = Math.max(1, Math.min(DIM_MAX_RECTS, u.rectCount.value));
+    const peak = Math.max(...curFull.slice(0, n));
+    // Shader: strength = peak, each rect weighted by its share (≤1).
+    for (let i = 0; i < DIM_MAX_RECTS; i++) u.rectWeight.value[i] = peak > 1e-6 ? curFull[i]! / peak : 0;
+    u.strength.value = disposed ? 0 : peak * level;
     // While measuring keep the pass alive even at strength 0: the readback runs
     // inside its render (input buffer = undimmed backdrop, no feedback).
     pass.enabled =
@@ -392,12 +455,19 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     },
     setContrastTarget(next) {
       if (disposed) return;
-      const ok =
-        next &&
-        Array.isArray(next.textRgb) &&
-        next.textRgb.length >= 3 &&
-        next.textRgb.slice(0, 3).every((v) => Number.isFinite(v));
-      contrastTarget = ok ? next : null;
+      const valid = (t: ContrastTarget | null | undefined): ContrastTarget | null => {
+        if (!t || !Array.isArray(t.textRgb) || t.textRgb.length < 3) return null;
+        if (!t.textRgb.slice(0, 3).every((v) => Number.isFinite(v))) return null;
+        const okLines =
+          t.lines && Array.isArray(t.lines.rgb) && t.lines.rgb.length >= 3 && t.lines.rgb.slice(0, 3).every(Number.isFinite);
+        return okLines || !t.lines ? t : { ...t, lines: null }; // junk line colour → text-only, never guessed
+      };
+      const list = Array.isArray(next)
+        ? (next as readonly (ContrastTarget | null | undefined)[]).slice(0, DIM_MAX_RECTS).map(valid)
+        : next
+          ? Array.from({ length: DIM_MAX_RECTS }, () => valid(next as ContrastTarget))
+          : [];
+      contrastTarget = list.some(Boolean) ? list : null;
       if (!contrastTarget) meter.reset();
       apply();
     },
