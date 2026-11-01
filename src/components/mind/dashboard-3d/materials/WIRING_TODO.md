@@ -54,6 +54,13 @@ edgeGroup.add(mesh);
 - Dashboard Bot: any `SpriteMaterial` / `MeshBasicMaterial` that assigns `kit.starSpriteTexture` or `kit.paperGrainTexture` **must** call `kit.bindSharedTexture(mat, "starSprite"|"paperGrain")`.
 - Imagine portraits/characters/scenes: use `kit.createImagineNodeMaterial` instead of plain `MeshBasicMaterial({ map })`. Missing/loading art shows a watercolor wash fallback; `setImagineNodeMap(mat, tex)` when load completes. Do not dispose the TextureLoader map from the material — only `releasePainterlyMaterial` / `disposePainterlyKit`.
 
+## c5 — Imagine texture sanitize + lore text atlas
+
+- `setImagineNodeMap` runs `sanitizeImagineImageTexture`: rejects NaN/0/hard-max dims, exceeds `MAX_TEXTURE_SIZE` (optional downscale), NPOT → no mipmaps + clamp, cross-origin-tainted → wash fallback.
+- Failures set `mat.userData.imagineMapError` (never silent). Check it when load "succeeds" visually as wash.
+- Lore: `const atlas = createLoreTextAtlas(lockNotes); setLorePlaqueTextAtlas(mat, atlas, { owned: true });`
+- Release/dispose plaque via `releasePainterlyMaterial` so owned atlas is freed.
+
 ## Next painter candidate
-- Lore plaque text atlas (queue tail) — procedural canvas glyph atlas for lock-note body text.
-- Wire Imagine materials in universe-scene (Dashboard Bot) once this branch lands.
+- Wire lore text atlas + Imagine sanitize in universe-scene (Dashboard Bot).
+- Painterly post-pass amount tied to constellation health (optional).

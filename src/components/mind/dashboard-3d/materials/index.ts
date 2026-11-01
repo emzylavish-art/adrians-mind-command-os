@@ -44,10 +44,17 @@ export {
   createParchmentTexture,
   createParchmentTextureForGpu,
   sanitizeLoreNotes,
+  createLoreTextAtlas,
+  setLorePlaqueTextAtlas,
+  disposeLorePlaqueOwnedAtlas,
   LORE_MAX_NOTES,
   LORE_MAX_CHARS_PER_NOTE,
+  LORE_ATLAS_DEFAULT,
+  LORE_ATLAS_MAX,
   type LorePlaqueOptions,
   type LoreNote,
+  type LoreTextAtlas,
+  type LoreTextAtlasOptions,
 } from "./lore-plaque.ts";
 export {
   createInkWashEdgeMaterial,
@@ -66,7 +73,15 @@ export {
   setImagineNodeMap,
   setImagineNodePaperMap,
   tickImagineNodeMaterial,
+  sanitizeImagineImageTexture,
+  readTextureImageSize,
+  isPowerOfTwoSize,
+  isImageSourceTainted,
+  disposeImagineNodeOwnedMaps,
+  IMAGINE_IMAGE_HARD_MAX,
   type ImagineNodeOptions,
+  type ImagineTextureSanitizeOptions,
+  type ImagineTextureSanitizeResult,
 } from "./imagine-node.ts";
 export {
   createNebulaTexture,
