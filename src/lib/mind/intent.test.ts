@@ -19,8 +19,8 @@ describe("command intent", () => {
     assert.equal(gmail.kind, "blocked");
     if (gmail.kind === "blocked") assert.match(gmail.reply, /Nothing was read or sent/);
     const web = interpretCommand("search the web for piers", agents);
-    assert.equal(web.kind, "blocked");
-    if (web.kind === "blocked") assert.match(web.reply, /no citations/);
+    assert.equal(web.kind, "web_research");
+    if (web.kind === "web_research") assert.match(web.query, /piers/i);
     const media = interpretCommand("generate an image of the lake", agents);
     assert.equal(media.kind, "blocked");
     const device = interpretCommand("git commit the fix on my laptop", agents);
@@ -28,9 +28,10 @@ describe("command intent", () => {
     assert.equal(JSON.stringify([gmail, web, media, device]).includes("https://"), false);
   });
 
-  it("does not substitute a model when Research or Build mode is selected", () => {
+  it("routes Research mode to web_research and still blocks Build without a model", () => {
     const research = interpretCommand("latest pier levels", agents, "research");
-    assert.equal(research.kind, "blocked");
+    assert.equal(research.kind, "web_research");
+    if (research.kind === "web_research") assert.match(research.query, /pier/i);
     const build = interpretCommand("fix the button", agents, "build");
     assert.equal(build.kind, "blocked");
     if (build.kind === "blocked") assert.match(build.reply, /No files were changed/);

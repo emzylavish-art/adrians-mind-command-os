@@ -3,6 +3,7 @@ export type CommandMode = "ask" | "research" | "agent" | "build";
 export type CommandIntent =
   | { kind: "chat" }
   | { kind: "blocked"; area: "gmail" | "search" | "media" | "build" | "device"; reply: string }
+  | { kind: "web_research"; query: string }
   | { kind: "notion" }
   | { kind: "mcp" }
   | { kind: "skill" }
@@ -37,9 +38,11 @@ export function interpretCommand(
     return { kind: "blocked", area: "device", reply: REPLIES.device };
   }
   if (mode === "build") return { kind: "blocked", area: "build", reply: REPLIES.build };
-  if (mode === "research" && !/\bnotes\b/.test(lower)) return { kind: "blocked", area: "search", reply: REPLIES.search };
+  if (mode === "research" && !/\bnotes\b/.test(lower)) {
+    return { kind: "web_research", query: raw.slice(0, 300) };
+  }
   if (/\b(search the web|web search|look (this|it) up online)\b/.test(lower)) {
-    return { kind: "blocked", area: "search", reply: REPLIES.search };
+    return { kind: "web_research", query: raw.slice(0, 300) };
   }
 
   const askBot = lower.match(/\b(?:ask|tell|have)\s+(?:my\s+|the\s+)?(.+?)\s+(?:bot|agent)\b/);

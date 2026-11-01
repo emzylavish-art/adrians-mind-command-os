@@ -67,7 +67,8 @@ import { databaseMode } from "@/lib/mind/persistence";
 import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
-import { MODEL_TIERS, type ModelTier } from "@/lib/mind/model-tiers";
+import { ModelTierChip } from "@/components/mind/model-tier-chip";
+import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
@@ -307,6 +308,8 @@ export function CommandApp() {
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
+  const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [agentGoal, setAgentGoal] = useState("");
@@ -704,8 +707,39 @@ export function CommandApp() {
       void askMcp(chat, text);
       return true;
     }
+    if (intent.kind === "web_research") {
+      void runWebResearch(chat, intent.query, action);
+      return true;
+    }
     recordToolTurn(chat, text, intent.reply);
     return true;
+  }
+
+  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await searchWeb({ data: { query } });
+      setBusy(false);
+      setResearchCitations(result.citations);
+      if (!result.ok) {
+        recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
+        setResearchNote(result.error);
+        return;
+      }
+      const lines = [
+        result.summary || `Research returned ${result.citations.length} source${result.citations.length === 1 ? "" : "s"}:`,
+        ...result.citations.map((item) => `- ${item.title} — ${item.url}`),
+      ];
+      recordToolTurn(chat, query, lines.join("\n"), undefined, { tool: "web_search", ok: true, action });
+      setResearchNote(result.summary || "");
+      setNotice(`Research kept ${result.citations.length} http(s) citation${result.citations.length === 1 ? "" : "s"}.`);
+    } catch {
+      setBusy(false);
+      const message = "The search provider could not be reached. No citations were created.";
+      recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
+      setResearchNote(message);
+    }
   }
 
   async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null) {
@@ -880,6 +914,10 @@ export function CommandApp() {
         const tierLabel = result.model
           ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
           : result.model;
+        if (result.resolvedTier === "Fast" || result.resolvedTier === "Expert" || result.resolvedTier === "Heavy" || result.resolvedTier === "Build") {
+          setLastResolvedTier(result.resolvedTier);
+        }
+        if (result.model) setLastModelUsed(result.model);
         setNotice(`Ran ${tierLabel}.`);
         return pushAudit(
           pushUsage(next, {
@@ -1069,7 +1107,7 @@ export function CommandApp() {
       const result = await searchWeb({ data: { query } });
       setError(null);
       setResearchCitations(result.citations);
-      setResearchNote(result.ok ? "" : result.error);
+      setResearchNote(result.ok ? (result.summary || "") : result.error);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
       if (!result.ok) {
         reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
@@ -1832,42 +1870,13 @@ export function CommandApp() {
             <span className="size-2 rounded-full bg-current" />
             {headerState}
           </span>
-          <div className="relative hidden md:block">
-            <button
-              type="button"
-              className="model-chip inline-flex h-11 items-center gap-2 px-3 text-sm font-medium"
-              aria-haspopup="menu"
-              aria-expanded={modelMenuOpen}
-              onClick={() => {
-                setModelMenuOpen((open) => !open);
-                setBellOpen(false);
-                setAccountOpen(false);
-              }}
-            >
-              {modelTier}
-              <ChevronDown className="size-3.5 opacity-70" />
-            </button>
-            {modelMenuOpen && (
-              <div className="floating-menu absolute right-0 z-40 mt-2 w-56 p-2" role="menu">
-                <p className="px-2 pb-2 text-[10px] font-semibold tracking-[0.16em] text-muted">MODEL</p>
-                {MODEL_TIERS.map((tier) => (
-                  <button
-                    key={tier}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={modelTier === tier}
-                    className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${modelTier === tier ? "model-option-active" : "text-muted hover:bg-white/5"}`}
-                    onClick={() => {
-                      setModelTier(tier);
-                      setModelMenuOpen(false);
-                    }}
-                  >
-                    {tier}
-                  </button>
-                ))}
-                <p className="mt-2 border-t border-line/60 px-2 pt-2 text-[11px] text-muted">Display preference only. Send still uses the configured provider rules.</p>
-              </div>
-            )}
+          <div className="hidden md:block">
+            <ModelTierChip
+              tier={modelTier}
+              onChoose={setModelTier}
+              lastResolved={lastResolvedTier}
+              lastModel={lastModelUsed}
+            />
           </div>
           <div className={`voice-zone ${listening || speaking ? "is-live" : ""}`} aria-label="Voice controls">
             <button
