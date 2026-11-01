@@ -3753,7 +3753,7 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="floating-composer command-card composer-dock p-3 md:p-4" data-composer="floating">
+              <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
