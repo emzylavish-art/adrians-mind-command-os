@@ -5,8 +5,9 @@ import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { decideFetchSite } from "./request-guard";
 import { emptyWorkspace } from "./workspace";
+import { sanitizeAttachments } from "./media/index.ts";
 
-const MAX_BODY = 200_000;
+const MAX_BODY = 2_500_000;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -73,7 +74,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   }
   const raw = await request.text();
   if (raw.length > MAX_BODY) return json({ ok: false, error: "That request is too large.", log: [] }, 413);
-  let body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown };
+  let body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown };
   try {
     body = JSON.parse(raw) as typeof body;
   } catch {
@@ -116,10 +117,11 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     versions: [],
   }));
   const goal = typeof body.goal === "string" ? body.goal : "";
-  const tier = resolveModelTier(body.modelTier, goal, process.env);
+  const tier = resolveModelTier(body.modelTier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
+  const images = sanitizeAttachments(body.images);
   const result = await runBoundedAgent({
     ws,
-    goal,
+    goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
     model: grokModel(apiKey, request.signal, {
       model: tier.model,
       temperature: tier.params.temperature,
@@ -130,6 +132,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     autonomy: "ask",
     halted: false,
     approved: true,
+    images,
   });
   return json({
     ok: result.ok,

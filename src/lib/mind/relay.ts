@@ -1,9 +1,10 @@
 import { createSseFeed, pushSse, type ModelUsage } from "./stream.ts";
+import type { ChatContent } from "./media/types.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 const PROVIDER_URL = "https://api.x.ai/v1/chat/completions";
 
-export type RelayMessage = { role: string; content: string };
+export type RelayMessage = { role: string; content: ChatContent };
 
 export function combineAbort(incoming: AbortSignal, timeoutMs: number): {
   signal: AbortSignal;

@@ -16,6 +16,7 @@ import {
   Mic,
   MicOff,
   Paperclip,
+  Camera,
   Plus,
   Search,
   Send,
@@ -52,6 +53,10 @@ import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
+import { AttachmentChips } from "@/components/mind/media/attachment-chips";
+import { CameraCapture } from "@/components/mind/media/camera-capture";
+import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
+import { historyTextForImages, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -340,6 +345,9 @@ export function CommandApp() {
   const [importPreview, setImportPreview] = useState<{ workspace: Workspace; chats: number; memories: number; projects: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
+  const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -758,11 +766,11 @@ export function CommandApp() {
     }
   }
 
-  async function deliver(chat: Chat, text: string, source: Workspace, resume = false): Promise<string | null> {
+  async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []): Promise<string | null> {
     const latest = wsRef.current;
     if (latest.halted || source.halted) {
       reportEmergencyStop(chat.id, () => {
-        void deliver(chat, text, wsRef.current, resume);
+        void deliver(chat, text, wsRef.current, resume, images);
       });
       return null;
     }
@@ -783,7 +791,14 @@ export function CommandApp() {
     const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const history = (resume ? chat.messages.slice(0, -1) : chat.messages).slice(-12);
     if (!resume) {
-      const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
+      const displayText = historyTextForImages(text, images);
+      const userMsg = {
+        id: crypto.randomUUID(),
+        role: "user" as const,
+        content: displayText,
+        at: new Date().toISOString(),
+        images: images.length ? images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
+      };
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) =>
@@ -815,10 +830,11 @@ export function CommandApp() {
           text,
           memory: chat.memory,
           halted: wsRef.current.halted,
-          history,
+          history: history.map((item) => ({ role: item.role, content: item.content })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
           modelTier,
+          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         },
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
@@ -998,7 +1014,8 @@ export function CommandApp() {
   async function sendCommand() {
     if (busy) return;
     const text = draft.trim();
-    if (!text) {
+    const images = pendingImages;
+    if (!text && images.length === 0) {
       setError("Write what you want to work on.");
       return;
     }
@@ -1020,9 +1037,10 @@ export function CommandApp() {
     });
     const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text}${attached}`.slice(0, 8000);
+    const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
     setDraft("");
     setStaged(null);
+    setPendingImages([]);
     const source = { ...ws, chats: [made.chat, ...ws.chats] };
     if (settleIntent(made.chat, full, source)) {
       if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: projectChoice || null }));
@@ -1035,7 +1053,7 @@ export function CommandApp() {
       if (file) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
-    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] });
+    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, false, images);
   }
 
   async function startResearch() {
@@ -1087,6 +1105,8 @@ export function CommandApp() {
     setAgentBusy(true);
     setAgentNote(null);
     setAgentLog([]);
+    const plannerImages = pendingImages;
+    setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     const token = getBearerToken();
     try {
@@ -1100,6 +1120,7 @@ export function CommandApp() {
           chats: ws.chats.map((chat) => chat.title),
           notes: ws.memories.filter((note) => !note.archived).map((note) => note.text),
           modelTier,
+          images: plannerImages.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         }),
       });
       const payload = (await response.json()) as {
@@ -1128,23 +1149,27 @@ export function CommandApp() {
   async function sendInChat() {
     if (!active || busy) return;
     const text = draft.trim();
-    if (!text && !staged) return;
+    const images = pendingImages;
+    if (!text && !staged && images.length === 0) return;
     if (wsRef.current.halted) {
       const snapshot = text;
       const file = staged;
       const chatId = active.id;
+      const imageSnapshot = images;
       reportEmergencyStop(chatId, () => {
         setDraft(snapshot);
         if (file) setStaged(file);
+        setPendingImages(imageSnapshot);
         void sendInChat();
       });
       return;
     }
     const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text || "Read the attached file."}${attached}`.slice(0, 8000);
+    const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
     setDraft("");
     setStaged(null);
+    setPendingImages([]);
     const source = ws;
     const action = voiceNext.current ? "voice" as const : "chat" as const;
     voiceNext.current = false;
@@ -1155,7 +1180,7 @@ export function CommandApp() {
     if (file) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
-    await deliver(active, full, ws);
+    await deliver(active, full, ws, false, images);
   }
 
   function enableMemory() {
@@ -1193,18 +1218,34 @@ export function CommandApp() {
     setError(null);
   }
 
+  async function addImageAttachment(file: File) {
+    try {
+      const scaled = await fileToDownscaledDataUrl(file);
+      setPendingImages((prev) => {
+        if (prev.length >= 4) {
+          setError("You can attach up to 4 images per message.");
+          return prev;
+        }
+        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
+      });
+      setError(null);
+      setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`);
+    } catch {
+      setError("That image could not be prepared.");
+    }
+  }
+
   async function onPicked(file: File) {
+    if (/\.(png|jpe?g|gif|webp)$/i.test(file.name) || (file.type || "").startsWith("image/")) {
+      await addImageAttachment(file);
+      return;
+    }
     if (file.size > 400_000) {
       setError("That file is too large to keep in this browser.");
       return;
     }
-    if (/\.(png|jpe?g|gif|webp|heic)$/i.test(file.name)) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      let binary = "";
-      for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-      const result = await analyzeImageFile({ data: { name: file.name, bytes: file.size, imageBase64: btoa(binary) } });
-      if (result.analyzed) setNotice(`${result.provider} returned: ${result.text}`);
-      else setError(result.error);
+    if (/\.(heic)$/i.test(file.name)) {
+      setError("HEIC is not supported here. Convert to JPEG or PNG first.");
       return;
     }
     if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
@@ -2050,6 +2091,13 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
                       <Paperclip className="size-4" /> Attach
                     </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
+                      <Image className="size-4" /> Image
+                    </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
+                      <Camera className="size-4" /> Camera
+                    </button>
+                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} />
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -2341,7 +2389,12 @@ export function CommandApp() {
                 }));
               }}
               stagedName={staged?.name ?? null}
+              pendingImages={pendingImages}
+              onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
               onAttach={() => fileRef.current?.click()}
+              onAttachImage={() => imageInputRef.current?.click()}
+              onOpenCamera={() => setCameraOpen(true)}
+              onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
                 else {
@@ -3164,12 +3217,31 @@ export function CommandApp() {
       <input
         ref={fileRef}
         type="file"
-        accept=".txt,.md,.json,.csv,.pdf,.png,.jpg,.jpeg,.js,.ts,.mjs,text/plain,application/pdf"
+        accept=".txt,.md,.json,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp,.js,.ts,.mjs,text/plain,application/pdf,image/*"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
           if (file) void onPicked(file);
+        }}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void addImageAttachment(file);
+        }}
+      />
+      <CameraCapture
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={(dataUrl, name) => {
+          setPendingImages((prev) => (prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]));
+          setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
         }}
       />
 
@@ -3382,7 +3454,12 @@ function ChatPane({
   onComposerMemory,
   onComposerMode,
   stagedName,
+  pendingImages,
+  onRemoveImage,
   onAttach,
+  onAttachImage,
+  onOpenCamera,
+  onAddImageFile,
   onAnalyze,
   onDoctor,
   providerChoices: choices,
@@ -3428,7 +3505,12 @@ function ChatPane({
   onComposerMemory: () => void;
   onComposerMode: (mode: Autonomy) => void;
   stagedName: string | null;
+  pendingImages: ImageAttachment[];
+  onRemoveImage: (index: number) => void;
   onAttach: () => void;
+  onAttachImage: () => void;
+  onOpenCamera: () => void;
+  onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
   providerChoices: { id: string; label: string; enabled: boolean; reason: string }[];
@@ -3554,7 +3636,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} />
+                <MessageBody text={msg.content} images={msg.images} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
@@ -3626,8 +3708,32 @@ function ChatPane({
             event.preventDefault();
             onSend();
           }}
+          onDragOver={(event) => {
+            if (event.dataTransfer?.types?.includes("Files")) event.preventDefault();
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => (file.type || "").startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name));
+            for (const file of files.slice(0, 4)) onAddImageFile(file);
+          }}
         >
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message (${modelTier})...`} className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none" />
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onPaste={(event) => {
+              const items = Array.from(event.clipboardData?.items ?? []);
+              const imageItems = items.filter((item) => item.type.startsWith("image/"));
+              if (imageItems.length === 0) return;
+              event.preventDefault();
+              for (const item of imageItems.slice(0, 4)) {
+                const file = item.getAsFile();
+                if (file) onAddImageFile(file);
+              }
+            }}
+            placeholder={`Message (${modelTier})...`}
+            className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
+          />
+          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -3644,6 +3750,12 @@ function ChatPane({
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
               <Paperclip className="size-4" /> Attach
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage}>
+              <Image className="size-4" /> Image
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCamera}>
+              <Camera className="size-4" /> Camera
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>

@@ -10,3 +10,13 @@ Notion page https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d used (Erro
 - Mocked/blocked: Ollama unreachable (honest); browser mic not headless-tested; visual polish CSS untouched
 - Tests: typecheck pass; 222/222 mind tests; build pass; scripts/** .grok/skills/og pre-existing fail
 - Notion: appended to page 40bb95f3-3e42-814a-acf8-c3281b4f528d (Error Banners Bot mirror page)
+
+# Notion handoff mirror
+
+Primary page `https://app.notion.com/p/40b1aa27632381768d58cde0731f142a` returned **404** from the connected Notion workspace (same as other lanes).
+
+Appended instead to mirror page `https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d`:
+- **Media Integration — results** (2026-11-01)
+- **Media Integration — stop-point** (status: **complete**)
+
+Full local write-up: `MEDIA_HANDOFF.md`.

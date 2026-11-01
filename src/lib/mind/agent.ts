@@ -1,3 +1,4 @@
+import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
 import type { Autonomy } from "./policy.ts";
 import type { Workspace } from "./types.ts";
@@ -33,7 +34,8 @@ export type AgentToolName = (typeof AGENT_TOOLS)[number]["name"];
 export type AgentToolCall = { id: string; name: string; arguments: unknown };
 
 export type AgentMessage =
-  | { role: "system" | "user"; content: string }
+  | { role: "system"; content: string }
+  | { role: "user"; content: ChatContent }
   | { role: "assistant"; content: string; toolCalls?: AgentToolCall[] }
   | { role: "tool"; toolCallId: string; name: string; content: string };
 
@@ -131,6 +133,8 @@ export async function runBoundedAgent(input: {
   maxSteps?: number;
   deadlineMs?: number;
   now?: () => number;
+  /** Optional vision attachments for Orchestrator mode (same packaging as Direct). */
+  images?: ImageAttachment[];
   execute?: (ws: Workspace, tool: LocalTool, query?: string) => { ok: boolean; lines: string[] };
 }): Promise<AgentRunResult> {
   const maxSteps = input.maxSteps ?? AGENT_MAX_STEPS;
@@ -149,12 +153,14 @@ export async function runBoundedAgent(input: {
       halted: false,
       tokens: { [tool]: `approve:${tool}` },
     }));
+  const images = sanitizeAttachments(input.images ?? []);
+  const userContent = packageChatContent(goal, images);
   const messages: AgentMessage[] = [
     {
       role: "system",
-      content: "You may only call list_projects, list_chats, and search_notes. They read this device. Do not claim a web search, a file change, or a shell command. When you are finished, answer with no tool call.",
+      content: "You may only call list_projects, list_chats, and search_notes. They read this device. Do not claim a web search, a file change, or a shell command. When you are finished, answer with no tool call." + (images.length ? " An image may be attached to the user message; describe it if relevant, then use tools only when needed." : ""),
     },
-    { role: "user", content: goal },
+    { role: "user", content: userContent },
   ];
   let toolsRun = 0;
   while (toolsRun <= maxSteps) {
