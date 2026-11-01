@@ -41,8 +41,8 @@ import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { formatVoiceClientError, shouldPersistVoiceMode } from "@/lib/mind/voice/errors";
-import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { formatVoiceClientError } from "@/lib/mind/voice/errors";
+import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
@@ -250,7 +250,6 @@ export function CommandApp() {
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
   const voiceModeRef = useRef<VoiceRoutingMode>("direct");
   const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
-  const [voiceModeHydrated, setVoiceModeHydrated] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
@@ -303,17 +302,23 @@ export function CommandApp() {
   const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
+    // Hydrate is read-only. Never write the SSR default ("direct") from an effect —
+    // that race wiped Orchestrator after toggle+reload in live QA.
     const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
     setVoiceMode(mode);
     voiceModeRef.current = mode;
-    setVoiceModeHydrated(true);
   }, []);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
-    if (!shouldPersistVoiceMode(voiceModeHydrated)) return;
-    writeStoredVoiceMode(voiceMode, typeof localStorage === "undefined" ? null : localStorage);
-  }, [voiceMode, voiceModeHydrated]);
+  }, [voiceMode]);
+
+  function applyVoiceMode(next: VoiceRoutingMode) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const committed = commitVoiceMode(next, storage);
+    voiceModeRef.current = committed;
+    setVoiceMode(committed);
+  }
 
   useEffect(() => {
     return () => {
@@ -1487,7 +1492,7 @@ export function CommandApp() {
             <VoiceModeBadge
               mode={voiceMode}
               listening={voiceListening}
-              onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
             />
           </div>
           <div className="relative min-w-0 flex-1">
@@ -1788,7 +1793,7 @@ export function CommandApp() {
               <VoiceModeBadge
                 mode={voiceMode}
                 listening={voiceListening}
-                onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               />
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="text-sm text-danger">{error}</p>}
@@ -1932,7 +1937,7 @@ export function CommandApp() {
               speaking={speaking}
               voiceMode={voiceMode}
               voiceListening={voiceListening}
-              onToggleVoiceMode={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+              onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
