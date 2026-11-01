@@ -507,3 +507,33 @@ for (const tr of landingTrails) { /* mesh.position / opacity / visible from tr.s
 
 Capped at `TRAVELER_TRAILS_MAX` (256). Zero per-frame alloc. No new deps.
 Queue rows: #90 (wire, Dashboard) and #91 (Motion c22 probe) — numbered past local c52 #83–#89; renumber freely on landing.
+
+## Comet churn + character re-entry (c22)
+
+- Hacker c22 (#91): universe-scene's 5s sync does `clearCometLaunch` + `scheduleCometLaunchBurst`
+  after rebuilding comets, so **every landed comet blinks to opacity 0 and re-launches every
+  5 seconds even when the commit list is unchanged** (reproduced in `comet-churn.test.ts`).
+  The head size line `mat.size = max(0.12, mat.size * (0.85 + 0.15 * scale))` also compounds
+  per frame: each launch shrinks the head permanently and the 5s relaunch pins every head at
+  the 0.12 floor.
+- `reconcileCometLaunch(state, keys, reducedMotion, opts?)` — keyed by commit sha per slot:
+  unchanged key → untouched (landed stays at 1, in-flight keeps easing); new/changed key →
+  staggered launch (maxConcurrent respected; overflow parks visible, never hidden forever);
+  gone/empty key → hidden. Key compare capped at 128 chars. Legacy states adopt `keys`.
+- `cometHeadSize(baseSize, sample, reducedMotion)` — non-compounding; `particles/commit-comets`
+  now stores `head.userData.baseSize` and exposes `handle.shas`.
+- Character: `stepCharacterMotion` state gains optional `amp`; reduced-motion parks it at 0
+  and leaving reduced eases bob/breath back in (λ 6) instead of popping to full amplitude.
+  dt=0 resamples hold. No call-site change.
+
+```ts
+// init and in the 5s sync, after createCommitComets:
+reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion); // replaces clear+schedule
+// per frame, head:
+mat.size = cometHeadSize(head.userData.baseSize as number, sample, reducedMotion);
+```
+
+### Requests (c22)
+- Register in package.json `test` (strip-types list):
+  `src/components/mind/dashboard-3d/motion/comet-churn.test.ts`. No new deps.
+- Queue row #96 (wire). Renumber freely on landing.
