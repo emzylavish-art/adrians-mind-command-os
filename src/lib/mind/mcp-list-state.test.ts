@@ -6,23 +6,61 @@ import { HONEST_FAILURE_MESSAGES } from "./failure-states.ts";
 import {
   MCP_LIST_EMPTY_COPY,
   MCP_LIST_LOADING_COPY,
+  MCP_LIST_LOAD_TIMEOUT_MS,
+  MCP_TOOLS_EMPTY_COPY,
+  MCP_TOOLS_LOADING_COPY,
   McpListStatusRows,
+  McpToolsListStatusRows,
+  PC_APPROVALS_EMPTY_COPY,
+  PC_APPROVALS_LOADING_COPY,
+  PcApprovalsListStatusRows,
   classifyMcpListFailure,
+  isCurrentListGeneration,
   loadMcpList,
+  loadMcpToolsList,
+  loadPcApprovalsList,
+  nextListGeneration,
   onceListRetry,
+  withListTimeout,
+  type FleetListState,
   type McpListState,
+  type McpToolRow,
+  type PcApprovalRow,
 } from "./mcp-list-state.ts";
 
-const render = (state: McpListState, viewLog = true) =>
+const renderServers = (state: McpListState, viewLog = true) =>
   renderToStaticMarkup(createElement(McpListStatusRows, { state, onRetry: () => {}, onViewLog: viewLog ? () => {} : null }));
+
+const renderTools = (state: FleetListState<McpToolRow>, viewLog = true) =>
+  renderToStaticMarkup(createElement(McpToolsListStatusRows, { state, onRetry: () => {}, onViewLog: viewLog ? () => {} : null }));
+
+const renderApprovals = (state: FleetListState<PcApprovalRow>, viewLog = true) =>
+  renderToStaticMarkup(createElement(PcApprovalsListStatusRows, { state, onRetry: () => {}, onViewLog: viewLog ? () => {} : null }));
 
 function httpError(status: number, message = `HTTP ${status}`) {
   return Object.assign(new Error(message), { status });
 }
 
+const sampleTool: McpToolRow = {
+  serverId: "builtin",
+  serverLabel: "Built-in",
+  name: "pglite_query",
+  description: "SQL",
+  enabled: true,
+};
+
+const sampleApproval: PcApprovalRow = {
+  id: "a1",
+  token: "t1",
+  command: "dir",
+  agentId: "agent",
+  agentLabel: "Agent",
+  expiresAt: "2099-01-01T00:00:00.000Z",
+};
+
 describe("MCP list: loading / empty / error are distinct", () => {
   it("loading renders a busy status row, never the empty copy or a banner", () => {
-    const html = render({ status: "loading" });
+    const html = renderServers({ status: "loading" });
     assert.match(html, /data-testid="mcp-list-loading"/);
     assert.match(html, new RegExp(MCP_LIST_LOADING_COPY));
     assert.doesNotMatch(html, /failure-banner|mcp-list-empty/);
@@ -31,7 +69,7 @@ describe("MCP list: loading / empty / error are distinct", () => {
   it("empty only when the load succeeded with zero servers", async () => {
     const state = await loadMcpList(async () => ({ servers: [] }));
     assert.deepEqual(state, { status: "ready", servers: [] });
-    const html = render(state);
+    const html = renderServers(state);
     assert.match(html, /data-testid="mcp-list-empty"/);
     assert.match(html, new RegExp(MCP_LIST_EMPTY_COPY));
     assert.doesNotMatch(html, /failure-banner/);
@@ -40,7 +78,7 @@ describe("MCP list: loading / empty / error are distinct", () => {
   it("ready with servers renders no status row", async () => {
     const state = await loadMcpList(async () => ({ servers: [{ id: "builtin", label: "Built-in", kind: "builtin", enabled: true }] }));
     assert.equal(state.status, "ready");
-    assert.equal(render(state), "");
+    assert.equal(renderServers(state), "");
   });
 
   const errorCases: [string, () => Promise<unknown>, string, RegExp][] = [
@@ -62,7 +100,7 @@ describe("MCP list: loading / empty / error are distinct", () => {
       if (state.status !== "error") return;
       assert.equal(state.kind, kind);
       assert.match(state.message, copy);
-      const html = render(state);
+      const html = renderServers(state);
       assert.match(html, /role="alert"/);
       assert.match(html, /data-testid="failure-banner"/);
       assert.match(html, new RegExp(`data-failure-kind="${kind}"`));
@@ -78,7 +116,147 @@ describe("MCP list: loading / empty / error are distinct", () => {
   });
 });
 
-describe("MCP list Retry", () => {
+describe("MCP list timeout + Retry", () => {
+  it("reuses the existing 15s list timeout constant", () => {
+    assert.equal(MCP_LIST_LOAD_TIMEOUT_MS, 15_000);
+  });
+
+  it("hung fetch times out into the error state and Retry can succeed", async () => {
+    let calls = 0;
+    const fetcher = () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise(() => {
+          /* never settles — client timeout must win */
+        });
+      }
+      return Promise.resolve({ servers: [{ id: "a", label: "A", kind: "http", enabled: true }] });
+    };
+    const first = await loadMcpList(fetcher, { timeoutMs: 30 });
+    assert.equal(first.status, "error");
+    if (first.status === "error") {
+      assert.match(first.message, /timed out/i);
+      assert.equal(first.kind, "network_failure");
+    }
+    const pending: Promise<McpListState>[] = [];
+    const retry = onceListRetry(() => {
+      pending.push(loadMcpList(fetcher, { timeoutMs: 30 }));
+    });
+    retry();
+    retry();
+    assert.equal(pending.length, 1);
+    const second = await pending[0];
+    assert.equal(calls, 2);
+    assert.equal(second.status, "ready");
+    if (second.status === "ready") assert.equal(second.servers[0]?.id, "a");
+  });
+
+  it("withListTimeout rejects a hung promise and leaves Retry enabled", async () => {
+    await assert.rejects(() => withListTimeout(new Promise(() => {}), 20, "The MCP server list"), /timed out/);
+  });
+});
+
+describe("stale list responses are ignored", () => {
+  it("nextListGeneration bumps and isCurrentListGeneration gates older results", async () => {
+    let generation = 0;
+    const results: McpListState[] = [];
+    const run = async (delayMs: number, payload: { servers: { id: string; label: string; kind: string; enabled: boolean }[] }) => {
+      const mine = nextListGeneration(generation);
+      generation = mine;
+      await new Promise((r) => setTimeout(r, delayMs));
+      const state = await loadMcpList(async () => payload, { timeoutMs: 200 });
+      if (!isCurrentListGeneration(mine, generation)) return;
+      results.push(state);
+    };
+    const slow = run(40, { servers: [{ id: "stale", label: "Stale", kind: "http", enabled: true }] });
+    const fast = run(5, { servers: [{ id: "fresh", label: "Fresh", kind: "http", enabled: true }] });
+    await Promise.all([slow, fast]);
+    assert.equal(results.length, 1);
+    assert.equal(results[0]?.status, "ready");
+    if (results[0]?.status === "ready") assert.equal(results[0].servers[0]?.id, "fresh");
+  });
+});
+
+describe("MCP tools list: empty vs error", () => {
+  it("rejected tools fetch shows the red banner, not the empty copy", async () => {
+    const state = await loadMcpToolsList(async () => {
+      throw httpError(500);
+    });
+    assert.equal(state.status, "error");
+    if (state.status !== "error") return;
+    assert.match(state.message, /MCP tools list/);
+    const html = renderTools(state);
+    assert.match(html, /failure-banner/);
+    assert.match(html, /failure-retry/);
+    assert.doesNotMatch(html, /mcp-tools-list-empty|No MCP tools/);
+  });
+
+  it("empty only on a successful zero-tool payload", async () => {
+    const state = await loadMcpToolsList(async () => ({ tools: [] }));
+    assert.deepEqual(state, { status: "ready", items: [] });
+    const html = renderTools(state);
+    assert.match(html, /data-testid="mcp-tools-list-empty"/);
+    assert.match(html, new RegExp(MCP_TOOLS_EMPTY_COPY));
+    assert.doesNotMatch(html, /failure-banner/);
+  });
+
+  it("loading copy is distinct from empty", () => {
+    const html = renderTools({ status: "loading" });
+    assert.match(html, new RegExp(MCP_TOOLS_LOADING_COPY));
+    assert.doesNotMatch(html, new RegExp(MCP_TOOLS_EMPTY_COPY));
+  });
+
+  it("ready with tools renders no status row", async () => {
+    const state = await loadMcpToolsList(async () => ({ tools: [sampleTool] }));
+    assert.equal(renderTools(state), "");
+  });
+});
+
+describe("PC approvals list: empty vs error", () => {
+  it("rejected approvals fetch shows the red banner, not 'nothing pending'", async () => {
+    const state = await loadPcApprovalsList(async () => {
+      throw httpError(401);
+    });
+    assert.equal(state.status, "error");
+    if (state.status !== "error") return;
+    assert.equal(state.kind, "auth_required");
+    const html = renderApprovals(state);
+    assert.match(html, /failure-banner/);
+    assert.match(html, /PC shell approvals list/);
+    assert.doesNotMatch(html, /pc-approvals-list-empty|No pending PC shell approvals/);
+  });
+
+  it("empty only when ok:true and approvals:[]", async () => {
+    const state = await loadPcApprovalsList(async () => ({ ok: true, approvals: [] }));
+    assert.deepEqual(state, { status: "ready", items: [] });
+    const html = renderApprovals(state);
+    assert.match(html, /data-testid="pc-approvals-list-empty"/);
+    assert.match(html, new RegExp(PC_APPROVALS_EMPTY_COPY));
+    assert.doesNotMatch(html, /failure-banner/);
+  });
+
+  it("loading copy is distinct from empty", () => {
+    const html = renderApprovals({ status: "loading" });
+    assert.match(html, new RegExp(PC_APPROVALS_LOADING_COPY));
+    assert.doesNotMatch(html, new RegExp(PC_APPROVALS_EMPTY_COPY));
+  });
+
+  it("ready with approvals renders no status row", async () => {
+    const state = await loadPcApprovalsList(async () => ({ ok: true, approvals: [sampleApproval] }));
+    assert.equal(renderApprovals(state), "");
+  });
+
+  it("HTTP 500 on approvals is an error, not empty", async () => {
+    const state = await loadPcApprovalsList(async () => {
+      throw httpError(500);
+    });
+    assert.equal(state.status, "error");
+    const html = renderApprovals(state as FleetListState<PcApprovalRow>);
+    assert.match(html, /failure-banner/);
+  });
+});
+
+describe("MCP list Retry button", () => {
   it("re-runs the same list load exactly once, then loads successfully", async () => {
     let calls = 0;
     const fetcher = async () => {
@@ -89,7 +267,9 @@ describe("MCP list Retry", () => {
     let state = await loadMcpList(fetcher);
     assert.equal(state.status, "error");
     const pending: Promise<McpListState>[] = [];
-    const retry = onceListRetry(() => { pending.push(loadMcpList(fetcher)); });
+    const retry = onceListRetry(() => {
+      pending.push(loadMcpList(fetcher));
+    });
     retry();
     retry();
     assert.equal(pending.length, 1);

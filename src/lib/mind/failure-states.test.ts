@@ -131,6 +131,8 @@ describe("top-5 gap classifiers", () => {
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.network_offline), "network_failure");
     assert.equal(classifyHonestFailure("TypeError: NetworkError when attempting to fetch resource."), "network_failure");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_list_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_tools_list_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_approvals_list_failed), "network_failure");
     assert.equal(honestFailureAuditAction("network_failure"), "network_failure");
   });
 

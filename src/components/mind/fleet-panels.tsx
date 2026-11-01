@@ -24,7 +24,22 @@ import {
   type ProviderConnection,
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
-import { McpListStatusRows, loadMcpList, onceListRetry, type McpListState } from "@/lib/mind/mcp-list-state";
+import {
+  MCP_LIST_LOAD_TIMEOUT_MS,
+  McpListStatusRows,
+  McpToolsListStatusRows,
+  PcApprovalsListStatusRows,
+  isCurrentListGeneration,
+  loadMcpList,
+  loadMcpToolsList,
+  loadPcApprovalsList,
+  nextListGeneration,
+  onceListRetry,
+  type FleetListState,
+  type McpListState,
+  type McpToolRow,
+  type PcApprovalRow,
+} from "@/lib/mind/mcp-list-state";
 
 
 function botAvatarSrc(name: string) {
@@ -73,52 +88,110 @@ export function FleetPanel({
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
   const [mcpListState, setMcpListState] = useState<McpListState>({ status: "loading" });
   const mcpListInFlight = useRef(false);
-  const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean; status?: string }[]>([]);
+  const mcpListGeneration = useRef(0);
+  const [mcpTools, setMcpTools] = useState<McpToolRow[]>([]);
+  const [mcpToolsState, setMcpToolsState] = useState<FleetListState<McpToolRow>>({ status: "loading" });
+  const mcpToolsInFlight = useRef(false);
+  const mcpToolsGeneration = useRef(0);
   const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
   const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
-  const [pcApprovals, setPcApprovals] = useState<
-    { id: string; token: string; command: string; agentId: string; agentLabel: string; expiresAt: string }[]
-  >([]);
+  const [pcApprovals, setPcApprovals] = useState<PcApprovalRow[]>([]);
+  const [pcApprovalsState, setPcApprovalsState] = useState<FleetListState<PcApprovalRow>>({ status: "loading" });
+  const pcApprovalsInFlight = useRef(false);
+  const pcApprovalsGeneration = useRef(0);
   const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
 
-  /** One MCP list load: loading → ready (maybe empty) or error banner. Retry re-runs this once. */
+  /** One MCP server list load: loading → ready (maybe empty) or error banner. Timeout + stale guard. */
   function loadMcpServers() {
     if (mcpListInFlight.current) return;
     mcpListInFlight.current = true;
+    const generation = nextListGeneration(mcpListGeneration.current);
+    mcpListGeneration.current = generation;
     setMcpListState({ status: "loading" });
-    void loadMcpList(() => mcpRegistryList()).then((next) => {
-      mcpListInFlight.current = false;
-      setMcpListState(next);
-      if (next.status === "ready") {
-        setMcpServers(next.servers);
-        return;
-      }
-      setMcpServers([]);
-      if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpServers));
-    });
+    void loadMcpList(() => mcpRegistryList(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, mcpListGeneration.current)) return;
+        setMcpListState(next);
+        if (next.status === "ready") {
+          setMcpServers(next.servers);
+          return;
+        }
+        setMcpServers([]);
+        if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpServers));
+      })
+      .finally(() => {
+        if (generation === mcpListGeneration.current) mcpListInFlight.current = false;
+      });
   }
 
-  function refreshPcApprovals() {
-    void fetch("/api/mind/pc/approvals", { credentials: "include" })
-      .then(async (res) => {
-        const body = (await res.json().catch(() => null)) as
-          | { ok?: boolean; approvals?: typeof pcApprovals }
-          | null;
-        if (body?.ok && Array.isArray(body.approvals)) setPcApprovals(body.approvals);
-        else setPcApprovals([]);
+  /** One MCP tools list load — never swallows failures as []. */
+  function loadMcpTools() {
+    if (mcpToolsInFlight.current) return;
+    mcpToolsInFlight.current = true;
+    const generation = nextListGeneration(mcpToolsGeneration.current);
+    mcpToolsGeneration.current = generation;
+    setMcpToolsState({ status: "loading" });
+    void loadMcpToolsList(() => mcpRegistryTools(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, mcpToolsGeneration.current)) return;
+        setMcpToolsState(next);
+        if (next.status === "ready") {
+          setMcpTools(next.items);
+          return;
+        }
+        setMcpTools([]);
+        if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpTools));
       })
-      .catch(() => setPcApprovals([]));
+      .finally(() => {
+        if (generation === mcpToolsGeneration.current) mcpToolsInFlight.current = false;
+      });
+  }
+
+  /** One PC approvals list load — failed fetch must not look like "nothing pending". */
+  function refreshPcApprovals() {
+    if (pcApprovalsInFlight.current) return;
+    pcApprovalsInFlight.current = true;
+    const generation = nextListGeneration(pcApprovalsGeneration.current);
+    pcApprovalsGeneration.current = generation;
+    setPcApprovalsState({ status: "loading" });
+    void loadPcApprovalsList(async () => {
+      const res = await fetch("/api/mind/pc/approvals", { credentials: "include" });
+      if (!res.ok) {
+        throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+      }
+      return res.json();
+    }, { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, pcApprovalsGeneration.current)) return;
+        setPcApprovalsState(next);
+        if (next.status === "ready") {
+          setPcApprovals(next.items);
+          return;
+        }
+        setPcApprovals([]);
+        if (next.status === "error") onFailure?.(next.message, onceListRetry(refreshPcApprovals));
+      })
+      .finally(() => {
+        if (generation === pcApprovalsGeneration.current) pcApprovalsInFlight.current = false;
+      });
   }
 
   useEffect(() => {
     if (mode !== "tools") return;
     loadMcpServers();
-    void mcpRegistryTools()
-      .then((result) => setMcpTools(result.tools))
-      .catch(() => setMcpTools([]));
+    loadMcpTools();
     refreshPcApprovals();
     const timer = window.setInterval(refreshPcApprovals, 15_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      // Invalidate in-flight responses when leaving tools mode.
+      mcpListGeneration.current = nextListGeneration(mcpListGeneration.current);
+      mcpToolsGeneration.current = nextListGeneration(mcpToolsGeneration.current);
+      pcApprovalsGeneration.current = nextListGeneration(pcApprovalsGeneration.current);
+      mcpListInFlight.current = false;
+      mcpToolsInFlight.current = false;
+      pcApprovalsInFlight.current = false;
+    };
   }, [mode]);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
@@ -413,7 +486,8 @@ export function FleetPanel({
         <h3 className="font-semibold">PC shell approvals</h3>
         <p className="text-sm text-muted">Non-allowlisted pc_run_shell commands wait here. Approve or deny from this panel only — tool confirm args cannot authorize them.</p>
         <ul className="space-y-2 text-sm">
-          {pcApprovals.map((item) => (
+          {pcApprovalsState.status === "ready"
+            ? pcApprovals.map((item) => (
             <li key={item.id} className="rounded-panel border border-line bg-surface p-3">
               <p className="font-semibold">{item.command}</p>
               <p className="text-xs text-muted">Agent {item.agentLabel || item.agentId} · expires {item.expiresAt} · id {item.id}</p>
@@ -466,8 +540,9 @@ export function FleetPanel({
                 </button>
               </div>
             </li>
-          ))}
-          {pcApprovals.length === 0 ? <li className="text-sm text-muted">No pending PC shell approvals.</li> : null}
+              ))
+            : null}
+          <PcApprovalsListStatusRows state={pcApprovalsState} onRetry={onceListRetry(refreshPcApprovals)} />
         </ul>
         {pcApprovalNote ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
       </div>
@@ -476,8 +551,8 @@ export function FleetPanel({
         <h3 className="font-semibold">MCP servers</h3>
         <p className="text-sm text-muted">Every registered server is listed. Disabled servers keep their tools visible but calls refuse honestly. Toggles persist on the server.</p>
         <ul className="space-y-2 text-sm">
-          {mcpServers.map((server) => {
-            const tools = mcpTools.filter((tool) => tool.serverId === server.id);
+          {mcpListState.status === "ready" ? mcpServers.map((server) => {
+            const tools = mcpToolsState.status === "ready" ? mcpTools.filter((tool) => tool.serverId === server.id) : [];
             return (
               <li key={server.id} className="rounded-panel border border-line bg-surface p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -491,7 +566,7 @@ export function FleetPanel({
                     onClick={() => {
                       void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
                         setMcpServers(result.servers);
-                        void mcpRegistryTools().then((listed) => setMcpTools(listed.tools)).catch(() => undefined);
+                        loadMcpTools();
                       });
                     }}
                   >
@@ -531,8 +606,9 @@ export function FleetPanel({
                 </ul>
               </li>
             );
-          })}
+          }) : null}
           <McpListStatusRows state={mcpListState} onRetry={onceListRetry(loadMcpServers)} />
+          <McpToolsListStatusRows state={mcpToolsState} onRetry={onceListRetry(loadMcpTools)} />
         </ul>
         {mcpCallNote ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
       </div>

@@ -1,6 +1,6 @@
 /**
- * MCP server list: loading vs empty vs error.
- * A failed list load (401/403, 5xx, network rejection, non-JSON) must never look like an empty list.
+ * Fleet Tools panel lists: MCP servers, MCP tools, PC approvals.
+ * A failed list load (401/403, 5xx, network, timeout, non-JSON) must never look like an empty list.
  * Classification reuses failure-states.ts kinds; the banner follows the standard red failure banner.
  */
 import { createElement } from "react";
@@ -11,8 +11,35 @@ import {
   type HonestFailureKind,
 } from "./failure-states.ts";
 
+/** Client list-load budget; matches HTTP_RPC_TIMEOUT_MS in mcp/registry.ts (15s). */
+export const MCP_LIST_LOAD_TIMEOUT_MS = 15_000;
+
 export type McpListServer = { id: string; label: string; kind: string; enabled: boolean };
 
+export type McpToolRow = {
+  serverId: string;
+  serverLabel: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  status?: string;
+};
+
+export type PcApprovalRow = {
+  id: string;
+  token: string;
+  command: string;
+  agentId: string;
+  agentLabel: string;
+  expiresAt: string;
+};
+
+export type FleetListState<T> =
+  | { status: "loading" }
+  | { status: "ready"; items: T[] }
+  | { status: "error"; kind: HonestFailureKind; message: string };
+
+/** @deprecated Prefer FleetListState — kept for existing MCP server list callers. */
 export type McpListState =
   | { status: "loading" }
   | { status: "ready"; servers: McpListServer[] }
@@ -20,6 +47,10 @@ export type McpListState =
 
 export const MCP_LIST_EMPTY_COPY = "No MCP servers are registered.";
 export const MCP_LIST_LOADING_COPY = "Loading MCP servers…";
+export const MCP_TOOLS_EMPTY_COPY = "No MCP tools are registered.";
+export const MCP_TOOLS_LOADING_COPY = "Loading MCP tools…";
+export const PC_APPROVALS_EMPTY_COPY = "No pending PC shell approvals.";
+export const PC_APPROVALS_LOADING_COPY = "Loading PC shell approvals…";
 
 function statusOf(caught: unknown): number | null {
   if (!caught || typeof caught !== "object") return null;
@@ -30,29 +61,58 @@ function statusOf(caught: unknown): number | null {
   return null;
 }
 
+function isTimeoutFailure(caught: unknown, raw: string): boolean {
+  if (caught && typeof caught === "object") {
+    const name = (caught as { name?: unknown }).name;
+    if (name === "TimeoutError" || name === "AbortError") return true;
+  }
+  if (statusOf(caught) === 408) return true;
+  return /timed out|timeout/i.test(raw);
+}
+
+type ListFailureScope = "mcp_list" | "mcp_tools" | "pc_approvals";
+
+const LIST_FAILED_COPY: Record<ListFailureScope, string> = {
+  mcp_list: HONEST_FAILURE_MESSAGES.mcp_list_failed,
+  mcp_tools: HONEST_FAILURE_MESSAGES.mcp_tools_list_failed,
+  pc_approvals: HONEST_FAILURE_MESSAGES.pc_approvals_list_failed,
+};
+
 /** Map a rejected list load to one honest banner message + failure-states kind. */
-export function classifyMcpListFailure(caught: unknown): { kind: HonestFailureKind; message: string } {
+export function classifyListFailure(
+  caught: unknown,
+  scope: ListFailureScope = "mcp_list",
+): { kind: HonestFailureKind; message: string } {
+  const failed = LIST_FAILED_COPY[scope];
   const status = statusOf(caught);
   const raw = caught instanceof Error ? caught.message : typeof caught === "string" ? caught : "";
+  if (isTimeoutFailure(caught, raw)) {
+    return { kind: "network_failure", message: `${failed} (timed out)` };
+  }
   if (status === 401 || raw === "Unauthorized" || /sign in is required/i.test(raw)) {
-    return { kind: "auth_required", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} ${HONEST_FAILURE_MESSAGES.auth_required}` };
+    return { kind: "auth_required", message: `${failed} ${HONEST_FAILURE_MESSAGES.auth_required}` };
   }
   if (status === 403 || /cross-site request blocked|^Forbidden/i.test(raw)) {
     return { kind: "forbidden_cross_site", message: HONEST_FAILURE_MESSAGES.forbidden_cross_site };
   }
   if (status !== null && status >= 500) {
-    return { kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (HTTP ${status})` };
+    return { kind: "network_failure", message: `${failed} (HTTP ${status})` };
   }
   if (caught instanceof SyntaxError || /not valid JSON|Unexpected token|JSON\.parse|not JSON/i.test(raw)) {
-    return { kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)` };
+    return { kind: "network_failure", message: `${failed} (response was not JSON)` };
   }
   const normalized = normalizeClientFailureMessage(caught);
   const kind = classifyHonestFailure(normalized);
   if (kind === "auth_required") {
-    return { kind, message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} ${HONEST_FAILURE_MESSAGES.auth_required}` };
+    return { kind, message: `${failed} ${HONEST_FAILURE_MESSAGES.auth_required}` };
   }
   if (kind === "forbidden_cross_site") return { kind, message: HONEST_FAILURE_MESSAGES.forbidden_cross_site };
-  return { kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} ${HONEST_FAILURE_MESSAGES.network_failure}` };
+  return { kind: "network_failure", message: `${failed} ${HONEST_FAILURE_MESSAGES.network_failure}` };
+}
+
+/** @deprecated Prefer classifyListFailure(..., "mcp_list"). */
+export function classifyMcpListFailure(caught: unknown): { kind: HonestFailureKind; message: string } {
+  return classifyListFailure(caught, "mcp_list");
 }
 
 function isServer(value: unknown): value is McpListServer {
@@ -61,16 +121,106 @@ function isServer(value: unknown): value is McpListServer {
   return typeof row.id === "string" && typeof row.label === "string";
 }
 
-/** Run one list load. Resolves to ready (possibly empty) or error; never throws. */
-export async function loadMcpList(fetchList: () => Promise<unknown>): Promise<McpListState> {
+function isTool(value: unknown): value is McpToolRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.serverId === "string" && typeof row.name === "string";
+}
+
+function isApproval(value: unknown): value is PcApprovalRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === "string" && typeof row.token === "string" && typeof row.command === "string";
+}
+
+/** Race a load against a client timeout. Always settles (never hangs). */
+export function withListTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(Object.assign(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000) || 1}s.`), { status: 408, name: "TimeoutError" }));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/** Monotonic generation helper: ignore stale responses from an older load. */
+export function nextListGeneration(current: number): number {
+  return current + 1;
+}
+
+export function isCurrentListGeneration(expected: number, current: number): boolean {
+  return expected === current;
+}
+
+/** Run one MCP server list load. Resolves to ready (possibly empty) or error; never throws. */
+export async function loadMcpList(
+  fetchList: () => Promise<unknown>,
+  options?: { timeoutMs?: number },
+): Promise<McpListState> {
+  const timeoutMs = options?.timeoutMs ?? MCP_LIST_LOAD_TIMEOUT_MS;
   try {
-    const result = (await fetchList()) as { servers?: unknown } | null;
+    const result = (await withListTimeout(fetchList(), timeoutMs, "The MCP server list")) as { servers?: unknown } | null;
     if (!result || typeof result !== "object" || !Array.isArray(result.servers) || !result.servers.every(isServer)) {
       return { status: "error", kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)` };
     }
     return { status: "ready", servers: result.servers as McpListServer[] };
   } catch (caught) {
-    return { status: "error", ...classifyMcpListFailure(caught) };
+    return { status: "error", ...classifyListFailure(caught, "mcp_list") };
+  }
+}
+
+/** Run one MCP tools list load. Never throws; never looks like an empty success on failure. */
+export async function loadMcpToolsList(
+  fetchTools: () => Promise<unknown>,
+  options?: { timeoutMs?: number },
+): Promise<FleetListState<McpToolRow>> {
+  const timeoutMs = options?.timeoutMs ?? MCP_LIST_LOAD_TIMEOUT_MS;
+  try {
+    const result = (await withListTimeout(fetchTools(), timeoutMs, "The MCP tools list")) as { tools?: unknown } | null;
+    if (!result || typeof result !== "object" || !Array.isArray(result.tools) || !result.tools.every(isTool)) {
+      return { status: "error", kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_tools_list_failed} (response was not JSON)` };
+    }
+    return { status: "ready", items: result.tools as McpToolRow[] };
+  } catch (caught) {
+    return { status: "error", ...classifyListFailure(caught, "mcp_tools") };
+  }
+}
+
+/**
+ * Run one PC approvals list load.
+ * fetchApprovals should throw on HTTP/network failure and return the parsed body on success.
+ */
+export async function loadPcApprovalsList(
+  fetchApprovals: () => Promise<unknown>,
+  options?: { timeoutMs?: number },
+): Promise<FleetListState<PcApprovalRow>> {
+  const timeoutMs = options?.timeoutMs ?? MCP_LIST_LOAD_TIMEOUT_MS;
+  try {
+    const result = (await withListTimeout(fetchApprovals(), timeoutMs, "The PC shell approvals list")) as
+      | { ok?: boolean; approvals?: unknown }
+      | null;
+    if (!result || typeof result !== "object" || result.ok !== true || !Array.isArray(result.approvals) || !result.approvals.every(isApproval)) {
+      if (result && typeof result === "object" && "status" in result && typeof (result as { status: unknown }).status === "number") {
+        return { status: "error", ...classifyListFailure(result, "pc_approvals") };
+      }
+      return {
+        status: "error",
+        kind: "network_failure",
+        message: `${HONEST_FAILURE_MESSAGES.pc_approvals_list_failed} (response was not JSON)`,
+      };
+    }
+    return { status: "ready", items: result.approvals as PcApprovalRow[] };
+  } catch (caught) {
+    return { status: "error", ...classifyListFailure(caught, "pc_approvals") };
   }
 }
 
@@ -84,22 +234,29 @@ export function onceListRetry(action: () => void): () => void {
   };
 }
 
-/** Non-list rows for the MCP server list (loading / empty / error). Ready-with-servers renders nothing here. */
-export function McpListStatusRows({
+function FleetListStatusRowsInner({
   state,
+  loadingCopy,
+  emptyCopy,
+  loadingTestId,
+  emptyTestId,
   onRetry,
   onViewLog,
 }: {
-  state: McpListState;
+  state: { status: "loading" } | { status: "ready"; empty: boolean } | { status: "error"; kind: HonestFailureKind; message: string };
+  loadingCopy: string;
+  emptyCopy: string;
+  loadingTestId: string;
+  emptyTestId: string;
   onRetry: () => void;
   onViewLog?: (() => void) | null;
 }) {
   if (state.status === "loading") {
-    return createElement("li", { className: "text-sm text-muted", role: "status", "aria-busy": "true", "data-testid": "mcp-list-loading" }, MCP_LIST_LOADING_COPY);
+    return createElement("li", { className: "text-sm text-muted", role: "status", "aria-busy": "true", "data-testid": loadingTestId }, loadingCopy);
   }
   if (state.status === "ready") {
-    if (state.servers.length > 0) return null;
-    return createElement("li", { className: "text-sm text-muted", "data-testid": "mcp-list-empty" }, MCP_LIST_EMPTY_COPY);
+    if (!state.empty) return null;
+    return createElement("li", { className: "text-sm text-muted", "data-testid": emptyTestId }, emptyCopy);
   }
   return createElement(
     "li",
@@ -138,4 +295,79 @@ export function McpListStatusRows({
         : null,
     ),
   );
+}
+
+/** Non-list rows for the MCP server list (loading / empty / error). Ready-with-servers renders nothing here. */
+export function McpListStatusRows({
+  state,
+  onRetry,
+  onViewLog,
+}: {
+  state: McpListState;
+  onRetry: () => void;
+  onViewLog?: (() => void) | null;
+}) {
+  const normalized =
+    state.status === "ready"
+      ? ({ status: "ready", empty: state.servers.length === 0 } as const)
+      : state;
+  return FleetListStatusRowsInner({
+    state: normalized,
+    loadingCopy: MCP_LIST_LOADING_COPY,
+    emptyCopy: MCP_LIST_EMPTY_COPY,
+    loadingTestId: "mcp-list-loading",
+    emptyTestId: "mcp-list-empty",
+    onRetry,
+    onViewLog,
+  });
+}
+
+/** Loading / empty / error rows for the MCP tools list. */
+export function McpToolsListStatusRows({
+  state,
+  onRetry,
+  onViewLog,
+}: {
+  state: FleetListState<McpToolRow>;
+  onRetry: () => void;
+  onViewLog?: (() => void) | null;
+}) {
+  const normalized =
+    state.status === "ready"
+      ? ({ status: "ready", empty: state.items.length === 0 } as const)
+      : state;
+  return FleetListStatusRowsInner({
+    state: normalized,
+    loadingCopy: MCP_TOOLS_LOADING_COPY,
+    emptyCopy: MCP_TOOLS_EMPTY_COPY,
+    loadingTestId: "mcp-tools-list-loading",
+    emptyTestId: "mcp-tools-list-empty",
+    onRetry,
+    onViewLog,
+  });
+}
+
+/** Loading / empty / error rows for the PC approvals list. */
+export function PcApprovalsListStatusRows({
+  state,
+  onRetry,
+  onViewLog,
+}: {
+  state: FleetListState<PcApprovalRow>;
+  onRetry: () => void;
+  onViewLog?: (() => void) | null;
+}) {
+  const normalized =
+    state.status === "ready"
+      ? ({ status: "ready", empty: state.items.length === 0 } as const)
+      : state;
+  return FleetListStatusRowsInner({
+    state: normalized,
+    loadingCopy: PC_APPROVALS_LOADING_COPY,
+    emptyCopy: PC_APPROVALS_EMPTY_COPY,
+    loadingTestId: "pc-approvals-list-loading",
+    emptyTestId: "pc-approvals-list-empty",
+    onRetry,
+    onViewLog,
+  });
 }
