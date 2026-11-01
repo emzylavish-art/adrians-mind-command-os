@@ -136,6 +136,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 82 | **Motion c20 — edge pulse flip + pruneMotionStateMap** | **done** | c51 — prune on bot-list change; edge-pulse-flip + state-prune tests |
 | 83 | **Gap#58 Notion href allowlist** — https only; notion.so / www / app.notion.com / *.notion.site; neutralize js/data/http | **done** | c52 — sanitizeNotionHref in parse + Star Detail |
 | 84 | **Gap#57 Escape focus restore** — blur hidden close; restore to opener/canvas host; inert when closed | **done** | c52 — restoreFocusAfterDetailClose + canvas host tabIndex |
+| 85 | **Gap# empty Notes / Lock commits honesty** — surface real notes+lock.commits when present; keep no-source when absent | **queued** | c52 forever-contract; surfaces still empty Notes/Lock commits for many bots |
+| 86 | **Hostile Notion title sanitize in Star Detail** — show plain text only (already sanitizeNotionPlainText); verify no raw <b> in panel | **queued** | gap-feed #44 follow-up / attacker |
+| 87 | **Scene: focus restore visible ring** — canvas-host :focus-visible outline when Escape returns keyboard to stage | **queued** | pairs Gap#57 |
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |
