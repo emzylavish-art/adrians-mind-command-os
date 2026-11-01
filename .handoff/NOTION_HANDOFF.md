@@ -169,3 +169,15 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Trial merge eae5297 + origin/mcp-integration: service-board kept as our superset; typecheck pass; TS 371 (1 MCP stdio timeout flake, re-run pass); build pass.
 - Notion: child page https://app.notion.com/p/40bb95f33e42811a969ee5efb98eae7a under mirror 40bb95f33e42814aacf8c3281b4f528d (parent insert_content rejected on oversized page; create-pages child used).
 - Lock releasing done.
+
+## 2026-11-01T14:52:02+01:00 (Africa/Lagos) — Error Banners Bot — top-5 gap fixes
+- Gaps 1–5 from audit https://app.notion.com/p/40bb95f33e4281eebd02c7304ad35223
+- Lock: /workspace/locks/error-banners-gap-top5.lock
+- Lock check: mcp-integration-gap-pc-shell-confirm-bypass ACTIVE exclusive on fleet-panels.tsx → skipped fleet list catch. voice/media/visual only claim non-banner command-app regions. failure-states free. Remotes: mcp still swallows list errors; logic has CHAT_TIMEOUT_REPLY/CHAT_DISCONNECT_REPLY but no classifier.
+- Fixed: classifier kinds chat_timeout, network_failure, auth_required, forbidden_cross_site, rate_limited; command-app mcpList/mcpRegistryList reportFailure+Retry+View log; deliver uses classified audit actions.
+- Skipped: fleet-panels.tsx MCP list .catch→[] (ACTIVE MCP pc-shell-confirm-bypass lock).
+- Commit on error-banners: add2c08 (from f481e58). Not pushed.
+- Checks: typecheck pass; TS 344/344; scripts 198/202 (4 pre-existing .grok/skills/og); lint 0 errors/5 warnings; build pass.
+- Trial merge add2c08 + origin/preview/integration@2c1eb0f → resolved conflicts (command-app/package.json/service-board/handoff); typecheck pass; TS 454/454; build pass. Temp worktree removed.
+- Notion: child page https://app.notion.com/p/40bb95f33e4281cdb275f3196d0d4e31 under mirror 40bb95f33e42814aacf8c3281b4f528d.
+- Lock releasing.
