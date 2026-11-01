@@ -27,3 +27,4 @@ Notes for Gap Dispatcher:
 - **Unattended scheduled automations (hosted worker)** — Logic declined (lane on "no new features"). UNOWNED; needs Zack to assign a lane.
 - **Computer / long-running project handoff** — Logic declined (same). UNOWNED; needs Zack to assign a lane.
 - **Live search provider key readiness** — Logic: not code work; search wiring done, only needs Zack to supply env `MIND_SEARCH_ENDPOINT` + `MIND_SEARCH_KEY`. Logic is raising with Zack.
+- **Shortcut sheet + Cmd+K mount** and **Explore entry in CommandApp nav** — Visual Polish declined (lane is CSS/asset polish only, no new TSX mounts in command-app.tsx). These are integration/wiring → REROUTED to Grok Build (owns integration + deploy fold-in). Visual Polish will style the sheet glass/elevation + nav active state once mounted.
