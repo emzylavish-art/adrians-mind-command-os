@@ -266,13 +266,13 @@ Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (m
 - `plateStatsFor(report, rects, callerIndex)` maps the CALLER index through `contrast.rectSource`, so if the detail card is off-canvas and gets dropped, Charts never ends up on the detail card's reading.
 - Wiring (Dashboard Bot, universe-scene, in the Gap#67/#68/#79 block and after the #83/#93 passes):
   ```ts
-  // rebuildPostfxBundle, AFTER nextKeyLift (and after the #93 edge pass if wired), before kit.painterlyPass:
+  // rebuildPostfxBundle, AFTER nextKeyLift and nextCardEdge (#93, wired in 498c945), before kit.painterlyPass:
   const plate = createChartsDepthPlatePass(); composer.addPass(plate.pass); // dispose with the bundle / on unmount like sceneKeyLiftHandle
   // per frame, in the per-rect dim block: remember the Charts caller index when pushing it
   let chartsIdx = -1; if (chartEl) { chartsIdx = rects.length; rects.push(chartEl.getBoundingClientRect()); /* …targets.push as today */ }
   // after liveDetailDim.tick(dt * 1000):
   plate.setPlate(liveDetailDim?.contrast ?? null, liveDetailDim?.rects ?? null, chartsIdx, vp, { reducedMotion });
   plate.tick(dt * 1000);
-  // badge: formatMeterBadge(liveDetailDim.contrast, lift.report, edge?.report ?? null, plate.report) → "plate spread 0.21 +0.85" / "plate spread 0.02 ok" / "plate no reading"
+  // badge: formatMeterBadge(liveDetailDim.contrast, lift.report, cardEdgeHandle?.report ?? null, plate.report) → "plate spread 0.21 +0.85" / "plate spread 0.02 ok" / "plate no reading"
   ```
-- Register tests: `postfx/{charts-depth-plate,projected-radius-real}.test.ts` (plus the #93 list `card-edge`, `probe-radius-honest` if not yet registered).
+- Register tests: `postfx/{charts-depth-plate,projected-radius-real}.test.ts` (the #93 `card-edge` + `probe-radius-honest` are already registered).
