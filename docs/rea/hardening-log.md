@@ -128,3 +128,11 @@
 - Impact: same class as the pg_sleep block H12 closed — one tool call (or prompt-injected search/tool result) hangs the server.
 - Fix: run pglite_query on a dedicated PGlite worker/worker_thread (terminate on timeout) or a separate read-only PGlite instance in a Worker; also SET LOCAL statement_timeout inside the READ ONLY txn as defense-in-depth; fail closed if BEGIN READ ONLY is rejected (tools.ts:802-805 currently continues without it). Regression test: CPU-heavy query returns a timeout error within timeoutMs+slack while a concurrent timer keeps ticking.
 - Owning lane: MCP Integration Bot
+
+## 2026-11-01T15:18:00+01:00 — Gap Dispatcher c23 attack pass (read-only, error-banners @ 826aa99, fleet-panels.tsx + mcp-list-state.ts)
+
+### H16. Fleet panels still turn load failures into honest-looking empty lists; MCP list load can hang forever — MED (silent failure; hidden pending PC approvals)
+- File:line: fleet-panels.tsx:118 & :494 (mcpRegistryTools catch → [] / undefined), :110 (pc approvals catch → []), mcp-list-state.ts:65 loadMcpList (no timeout), fleet-panels loadMcpServers (mcpListInFlight cleared only in .then, no stale guard)
+- Repro: make /api tools list return 500 → Tools panel shows no tools, no banner. Make /api/mind/pc/approvals 401 → "no pending approvals" while one is waiting. Make mcpRegistryList never resolve → spinner forever, Retry is a no-op.
+- Fix: same loading/empty/error + timeout treatment for every list; finally-clear in-flight guard; ignore late responses.
+- Owning lane: Error Banners Bot
