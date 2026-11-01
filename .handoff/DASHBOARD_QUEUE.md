@@ -2,18 +2,20 @@
 
 ## Cadence (Zack 2026-11-01)
 
-2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running. Report to parent every **two** upgrades.
+2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
+Painter lane branch: `dashboard-3d-visual-painter` · Worktree: `/workspace/mind-command-os-dashboard-painter`  
 Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/workspace/audit/dashboard-3d/`, Notion handoff pages.
 
 | # | Upgrade | Status | Notes |
 |---|---------|--------|-------|
-| 0 | **Universe** (+ Visual Fleet stars + extension folders) — painterly cosmos, constellations, Notion galaxy snapshot, weather, fly-to camera rig foundation | **active** | Current ship |
-| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | **active** | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; shots flyover-high/city/interior |
+| 0 | **Universe** (+ Visual Fleet stars + extension folders) — painterly cosmos, constellations, Notion galaxy snapshot, weather, fly-to camera rig foundation | **active** | Dashboard Bot current ship; painter kit modules ready to consume |
+| 0b | **Painter kit (shaders/materials)** — brush/watercolor ShaderMaterials, star+building surfaces, paper grain, procedural nebula, painterly post-pass + `createPainterlyKit` hook | **done (painter lane)** | Files under `src/components/mind/dashboard-3d/shaders/` + `materials/`; wire-up TODO for owner (see materials/WIRING_TODO.md) |
+| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | **active** | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; use `createBuildingBrushMaterial`; shots flyover-high/city/interior |
 | 2 | **Click-and-zoom** — star click eases camera in + detail; wheel/pinch dolly; empty-space/zoom-out → sky; reuse camera FSM | queued | Shots zoom-star.png, zoom-sky.png |
-| 3 | **Animation pass** — living motion: orbiting, drifting, pulsing, transition polish | queued | After click-zoom |
+| 3 | **Animation pass** — living motion: orbiting, drifting, pulsing, transition polish | queued | After click-zoom; tickPainterlyKit time uniforms |
 | 4 | **Sound** — WebAudio procedural only; health tones spatialized; muted by default + unmute toggle | queued | |
 | 5 | **Time** — timeline scrubber from git commits + lock timestamps; real data only | queued | |
 | 6 | **Feed** — Conductor nudges + Gap Dispatcher as drifting sky events (comets/lanterns) | queued | |
@@ -29,9 +31,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
-- **Constellation lore plaques** — short painted plaques per lane with last 3 lock notes + health reason, readable when camera is mid-dolly.
+- **Painter kit wire-up** — Dashboard Bot imports `createPainterlyKit` into `universe-scene.tsx`; replace inlined PainterlyShader / canvas helpers; enable star watercolor + post-pass on live preview.
+- **Constellation lore plaques** — short painted plaques per lane with last 3 lock notes + health reason, readable when camera is mid-dolly (plaque ShaderMaterial variant).
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
-
 
 ## Visual Fleet
 

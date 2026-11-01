@@ -1,2 +1,16 @@
-/** Painter lane shader registry — fleet fills this in. */
-export const PAINTER_SHADERS = {} as const;
+/** Painter lane shader registry. */
+export const PAINTER_SHADERS = {
+  painterlyPass: "PainterlyPassShader",
+  watercolorStar: "WatercolorStarShader",
+  brushBuilding: "BrushBuildingShader",
+} as const;
+
+export { GLSL_HASH_NOISE, PAINTER_SHADER_VERSION } from "./glsl-noise.ts";
+export {
+  PainterlyPassShader,
+  createPainterlyPass,
+  tickPainterlyPass,
+  type PainterlyPassOptions,
+} from "./painterly-pass.ts";
+export { WatercolorStarShader } from "./watercolor-star.ts";
+export { BrushBuildingShader } from "./brush-building.ts";
