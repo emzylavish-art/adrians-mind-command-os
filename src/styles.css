@@ -6568,3 +6568,320 @@ aside .max-w-\[14rem\].truncate {
   .shell > .composer-bar.is-fixed,
   .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
 }
+
+/* —— Evolution c92: microinteractions — composer focus + send press (markup exists) —— */
+.floating-composer:focus-within,
+.composer-dock:focus-within,
+[data-composer="floating"]:focus-within,
+section.command-card.composer-dock:focus-within,
+section.command-card.composer-dock:has(textarea:focus),
+section.command-card.composer-dock:has(input:focus) {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow:
+    0 0 0 1px rgb(232 236 245 / 0.35),
+    0 0 0 4px rgb(232 236 245 / 0.08),
+    0 22px 56px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+html[data-theme="light"] .floating-composer:focus-within,
+html[data-theme="light"] .composer-dock:focus-within {
+  border-color: rgb(15 23 42 / 0.2) !important;
+  box-shadow:
+    0 0 0 1px rgb(15 23 42 / 0.2),
+    0 0 0 4px rgb(15 23 42 / 0.06),
+    0 18px 44px rgb(15 23 42 / 0.12) !important;
+}
+.floating-composer textarea:focus,
+.composer-dock textarea:focus,
+.floating-composer input:focus,
+.composer-dock input:focus {
+  outline: none !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12) !important;
+}
+
+/* Send press — submit in floating composer / dock */
+.floating-composer button[type="submit"],
+.composer-dock button[type="submit"],
+form.floating-composer button[type="submit"] {
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease !important;
+}
+.floating-composer button[type="submit"]:hover:not(:disabled),
+.composer-dock button[type="submit"]:hover:not(:disabled) {
+  filter: brightness(1.06) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+}
+.floating-composer button[type="submit"]:active:not(:disabled),
+.composer-dock button[type="submit"]:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  filter: brightness(0.95) !important;
+}
+.floating-composer button[type="submit"]:disabled,
+.composer-dock button[type="submit"]:disabled {
+  opacity: 0.45 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-composer button[type="submit"],
+  .composer-dock button[type="submit"] {
+    transition: none !important;
+  }
+  .floating-composer button[type="submit"]:active:not(:disabled) {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c93: message appear + typing/waiting indicator (existing markup) —— */
+@keyframes msg-appear {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.main-stage article.max-w-3xl.rounded-panel,
+.chat-stream article.max-w-3xl {
+  animation: msg-appear 220ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+/* Stagger-ish: later siblings slightly delayed via nth (cap) */
+.main-stage article.max-w-3xl.rounded-panel:nth-child(n+2) { animation-delay: 20ms; }
+.main-stage article.max-w-3xl.rounded-panel:nth-child(n+4) { animation-delay: 40ms; }
+
+/* Waiting for Grok skeleton card = typing indicator surface */
+.main-stage div.max-w-3xl[aria-live="polite"],
+.main-stage div.max-w-3xl.space-y-2.rounded-panel[aria-live="polite"] {
+  position: relative !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 50%),
+    rgb(12 12 14 / 0.82) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 12px 32px rgb(0 0 0 / 0.35) !important;
+}
+/* Typing dots via three skeleton lines → soften into pulse dots look */
+.main-stage div[aria-live="polite"] .skeleton.h-3 {
+  border-radius: 999px !important;
+  max-width: 4.5rem !important;
+  height: 0.55rem !important;
+  min-height: 0.55rem !important;
+  opacity: 0.85;
+}
+.main-stage div[aria-live="polite"] .skeleton.h-3:nth-child(2) { max-width: 3.2rem !important; }
+.main-stage div[aria-live="polite"] .skeleton.h-3:nth-child(3) { max-width: 3.8rem !important; }
+.main-stage div[aria-live="polite"] .skeleton.h-3:nth-child(4) { max-width: 2.6rem !important; }
+
+/* Live "writing" stream card */
+.main-stage article.max-w-3xl.rounded-panel:has(> p.text-xs.text-muted) {
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-stage article.max-w-3xl.rounded-panel,
+  .chat-stream article.max-w-3xl {
+    animation: none !important;
+  }
+}
+
+/* —— Evolution c94: Copy / Regenerate / Speak / Edit hover actions on messages —— */
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 {
+  opacity: 0.72;
+  transition: opacity 140ms ease !important;
+}
+.main-stage article.max-w-3xl:hover .mt-2.flex.flex-wrap.gap-3,
+.main-stage article.max-w-3xl:focus-within .mt-2.flex.flex-wrap.gap-3 {
+  opacity: 1 !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button {
+  border-radius: 999px !important;
+  padding: 0.35rem 0.7rem !important;
+  border: 1px solid transparent !important;
+  color: #e8ecf5 !important; /* mono — was text-accent purple path */
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:active:not(:disabled) {
+  background: rgb(255 255 255 / 0.12) !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:disabled {
+  opacity: 0.4 !important;
+}
+/* Copy-code on fenced blocks */
+.main-stage [data-testid="copy-code"],
+.md-code-block + button,
+pre.md-code-block ~ button[data-testid="copy-code"] {
+  border-radius: 0.65rem !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e8ecf5 !important;
+  padding: 0.35rem 0.65rem !important;
+}
+.main-stage [data-testid="copy-code"]:hover {
+  background: rgb(255 255 255 / 0.12) !important;
+}
+html[data-theme="light"] .main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button {
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:hover:not(:disabled) {
+  background: rgb(15 23 42 / 0.06) !important;
+  border-color: rgb(15 23 42 / 0.14) !important;
+}
+
+/* —— Evolution c95: chat markdown / code — ChatGPT·Claude polish, mono —— */
+.md-prose {
+  display: grid !important;
+  gap: 0.65rem !important;
+  color: var(--color-fg) !important;
+  font-size: 0.95rem !important;
+  line-height: 1.65 !important;
+}
+.md-p { white-space: pre-wrap; margin: 0; }
+.md-h, .md-prose h1, .md-prose h2, .md-prose h3 {
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.3 !important;
+  margin: 0.15rem 0 0 !important;
+}
+.md-prose h1 { font-size: 1.35rem !important; }
+.md-prose h2 { font-size: 1.2rem !important; }
+.md-prose h3 { font-size: 1.05rem !important; }
+
+.md-inline-code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.84em !important;
+  padding: 0.12em 0.4em !important;
+  border-radius: 0.4rem !important;
+  background: rgb(255 255 255 / 0.08) !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  color: #f4f6fb !important;
+}
+
+.md-quote {
+  margin: 0 !important;
+  border-left: 3px solid rgb(255 255 255 / 0.28) !important; /* was purple */
+  padding: 0.35rem 0 0.35rem 0.9rem !important;
+  color: #c4cad6 !important;
+  background: rgb(255 255 255 / 0.03) !important;
+  border-radius: 0 0.5rem 0.5rem 0 !important;
+}
+
+.md-ul, .md-ol {
+  margin: 0 !important;
+  padding-left: 1.35rem !important;
+  display: grid !important;
+  gap: 0.25rem !important;
+}
+.md-ul { list-style: disc; }
+.md-ol { list-style: decimal; }
+
+.md-code-block {
+  margin: 0 !important;
+  padding: 0.85rem 1rem !important;
+  border-radius: 0.85rem !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 40%),
+    rgb(8 8 10 / 0.92) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+  overflow-x: auto !important;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.82rem !important;
+  line-height: 1.55 !important;
+  color: #e8ecf5 !important;
+  tab-size: 2 !important;
+}
+.md-code-block code {
+  font-family: inherit !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  white-space: pre !important;
+}
+
+.md-table-wrap {
+  overflow-x: auto !important;
+  border-radius: 0.85rem !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  background: rgb(10 10 12 / 0.55) !important;
+}
+.md-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: 0.88rem !important;
+}
+.md-table th,
+.md-table td {
+  padding: 0.55rem 0.75rem !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08) !important;
+  text-align: left !important;
+  vertical-align: top !important;
+}
+.md-table th {
+  font-weight: 650 !important;
+  background: rgb(255 255 255 / 0.05) !important;
+  color: #f4f6fb !important;
+}
+.md-table tr:last-child td { border-bottom: 0 !important; }
+.md-table tbody tr:hover td {
+  background: rgb(255 255 255 / 0.03) !important;
+}
+
+.md-hr {
+  border: 0 !important;
+  border-top: 1px solid rgb(255 255 255 / 0.12) !important;
+  margin: 0.35rem 0 !important;
+}
+
+/* message-body fenced pre (non-md-prose path) */
+.main-stage pre:not(.md-code-block),
+.main-stage [data-testid="message-body"] pre {
+  border-radius: 0.85rem !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  background: rgb(8 8 10 / 0.92) !important;
+  padding: 0.85rem 1rem !important;
+  overflow-x: auto !important;
+  font-family: "IBM Plex Mono", ui-monospace, monospace !important;
+  font-size: 0.82rem !important;
+}
+
+html[data-theme="light"] .md-inline-code {
+  background: rgb(15 23 42 / 0.06) !important;
+  border-color: rgb(15 23 42 / 0.1) !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .md-code-block,
+html[data-theme="light"] .main-stage pre:not(.md-code-block) {
+  background: rgb(248 250 252) !important;
+  border-color: rgb(15 23 42 / 0.12) !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .md-quote {
+  border-left-color: rgb(15 23 42 / 0.25) !important;
+  color: #334155 !important;
+  background: rgb(15 23 42 / 0.03) !important;
+}
+html[data-theme="light"] .md-table-wrap {
+  background: rgb(255 255 255 / 0.9) !important;
+  border-color: rgb(15 23 42 / 0.12) !important;
+}
+html[data-theme="light"] .md-table th {
+  background: rgb(15 23 42 / 0.04) !important;
+  color: #0a0d14 !important;
+}
+
+/* —— Evolution c96: guards after micro/md polish —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
