@@ -26,7 +26,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, projectedRadiusUv } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -1829,7 +1829,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (composer?.readBuffer?.depthTexture) {
           liveBloomGuard?.setDepthTexture(composer.readBuffer.depthTexture);
         }
-        // Gap#67: dim nebula behind open detail / charts (CSS px → DPR-safe); hole keeps portrait undimmed.
+        // Gap#67/#68: dim nebula behind open detail / charts; measured WCAG dim when text colour known.
         if (liveDetailDim) {
           const vp = renderer.domElement.getBoundingClientRect();
           const detailEl = document.querySelector<HTMLElement>(".dash3d-node-detail.is-open");
@@ -1838,6 +1838,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             Boolean,
           ) as DOMRect[];
           liveDetailDim.setRects(rects, vp, { reducedMotion });
+          const sampleEl = detailEl ?? chartEl;
+          if (sampleEl) {
+            const cs = getComputedStyle(sampleEl);
+            const text = parseCssColor(cs.color);
+            const bg = parseCssColor(cs.backgroundColor);
+            liveDetailDim.setContrastTarget(
+              text ? { textRgb: text.rgb, cardRgb: bg?.rgb, cardAlpha: bg?.alpha } : null,
+            );
+          } else {
+            liveDetailDim.setContrastTarget(null);
+          }
+          liveDetailDim.setHidden(document.hidden);
         }
         focusLight.tick(dt * 1000);
         liveFocusDepth?.tick(dt * 1000);

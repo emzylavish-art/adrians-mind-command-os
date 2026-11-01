@@ -2,6 +2,16 @@ import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { clampGuardRadius } from "./focus-bloom-guard.ts";
 import { sunScreenUv } from "./god-rays.ts";
+import {
+  METER_EDGE,
+  createBackdropMeter,
+  createRegionReader,
+  measureLuminance,
+  rectsKey,
+  type LuminanceStats,
+  type RegionReader,
+} from "./backdrop-meter.ts";
+import { WCAG_TEXT_AA, dimForContrast, linearToSrgb, type ContrastPlan, type Rgb } from "./wcag-contrast.ts";
 
 /**
  * Detail-card backdrop dim (light lane, queue #60; builds on #57 radial mask).
@@ -28,6 +38,46 @@ export const DIM_PAD_PX = 10;
 export const DIM_LUM_LO = 0.12;
 export const DIM_LUM_HI = 0.55;
 export const DIM_MAX_RECTS = 2;
+/** #68: measured mode may dim harder than the static window when WCAG needs it. */
+export const DIM_MEASURED_MAX = 0.7;
+/** Time constant for easing between static / measured strengths. */
+export const DIM_MEASURE_EASE_MS = 180;
+
+/** #68 contrast target: the DOM text colour (and card background) to protect. */
+export type ContrastTarget = {
+  /** Text / chart-line colour, encoded sRGB 0..1 (parseCssColor(getComputedStyle(el).color).rgb). */
+  textRgb: Rgb;
+  /** Card background colour + alpha (parseCssColor(...backgroundColor)); omit for bare text. */
+  cardRgb?: Rgb | null;
+  cardAlpha?: number | null;
+  /** Ratio to reach (default WCAG_TEXT_AA 4.5 — chart tick labels are text too). */
+  target?: number;
+};
+
+export type ContrastReport = {
+  /** "measured": dim from a fresh readback; "static": #67 fixed dim (no/old/failed measurement). */
+  source: "measured" | "static";
+  plan: ContrastPlan | null;
+  /** Worst-case (p90) backdrop luminance under the rects, or null. */
+  backdropLum: number | null;
+  perRect: LuminanceStats[];
+  measuredAtMs: number | null;
+  lastError: string | null;
+  reads: number;
+};
+
+/**
+ * Shader strength that makes the worst-case backdrop pixel (encoded grey of
+ * `backdropLum`) receive exactly `dim`: the shader scales dim by its own
+ * luminance window, so compensate (capped).
+ */
+export function measuredStrength(dim: number, backdropLum: number, cap = DIM_MEASURED_MAX): number {
+  if (!Number.isFinite(dim) || !Number.isFinite(backdropLum) || dim <= 0) return 0;
+  const g = linearToSrgb(backdropLum);
+  const bright = smooth01((g - DIM_LUM_LO) / (DIM_LUM_HI - DIM_LUM_LO));
+  if (bright <= 1e-3) return 0; // window wouldn't touch these pixels anyway
+  return Math.min(cap, dim / bright);
+}
 
 export type RectLike = { left: number; top: number; width: number; height: number };
 export type ViewportLike = { left?: number; top?: number; width: number; height: number };
@@ -164,10 +214,29 @@ export type DetailBackdropDimHandle = {
   /** Keep the focused node undimmed (null clears). radiusUv from projectedRadiusUv. */
   setHole: (world: THREE.Vector3 | null, camera: THREE.Camera | null, radiusUv?: number | null) => void;
   tick: (dtMs: number) => void;
+  /**
+   * #68: protect this text colour with a measured backdrop dim (null → static
+   * #67 dim). Measurement runs only while rects are open, tab visible.
+   */
+  setContrastTarget: (target: ContrastTarget | null) => void;
+  /** Tab hidden → no readbacks (document.visibilityState === "hidden"). */
+  setHidden: (hidden: boolean) => void;
+  /** Honest state of the measured dim (for debug badges / tests). */
+  readonly contrast: ContrastReport;
   dispose: () => void;
 };
 
-export function createDetailBackdropDimPass(): DetailBackdropDimHandle {
+export type CreateDetailBackdropDimOpts = {
+  /** Injected reader (tests); default creates a GPU RegionReader lazily on first measure. */
+  reader?: RegionReader | null;
+  now?: () => number;
+  intervalMs?: number;
+};
+
+const defaultNow = () =>
+  typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+
+export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = {}): DetailBackdropDimHandle {
   const pass = new ShaderPass(DetailBackdropDimShader);
   const u = pass.uniforms as unknown as DimUniforms;
   // ShaderPass clones uniforms; make vector/array values per-instance.
@@ -181,12 +250,90 @@ export function createDetailBackdropDimPass(): DetailBackdropDimHandle {
   let from = 0;
   let elapsed = DIM_EASE_MS;
   let reduced = false;
+  const now = opts.now ?? defaultNow;
+  const meter = createBackdropMeter({ intervalMs: opts.intervalMs });
+  let reader: RegionReader | null = opts.reader ?? null;
+  const ownReader = !opts.reader;
+  let contrastTarget: ContrastTarget | null = null;
+  let hidden = false;
+  let report: ContrastReport = {
+    source: "static",
+    plan: null,
+    backdropLum: null,
+    perRect: [],
+    measuredAtMs: null,
+    lastError: null,
+    reads: 0,
+  };
 
-  const apply = () => {
-    u.strength.value = disposed ? 0 : DIM_MAX * level;
-    pass.enabled = !disposed && u.strength.value > 0.001 && u.rectCount.value > 0;
+  /** Full strength (before ease): measured when fresh, else static #67. */
+  const fullStrength = (): number => {
+    const key = uvRects.length ? rectsKey(uvRects) : "";
+    const m = contrastTarget && key ? meter.measurementFor(key, now()) : null;
+    let plan: ContrastPlan | null = null;
+    if (m && contrastTarget) {
+      plan = dimForContrast({
+        textRgb: contrastTarget.textRgb,
+        cardRgb: contrastTarget.cardRgb,
+        cardAlpha: contrastTarget.cardAlpha,
+        target: contrastTarget.target ?? WCAG_TEXT_AA,
+        backdropLum: m.stats.p90,
+        maxDim: DIM_MEASURED_MAX,
+      });
+    }
+    report = {
+      source: plan && m ? "measured" : "static",
+      plan,
+      backdropLum: m ? m.stats.p90 : null,
+      perRect: m ? m.perRect : [],
+      measuredAtMs: m ? m.atMs : null,
+      lastError: meter.lastError,
+      reads: meter.reads,
+    };
+    return plan && m ? measuredStrength(plan.dim, m.stats.p90) : DIM_MAX;
+  };
+
+  const measuring = () => !disposed && !!contrastTarget && !hidden && uvRects.length > 0 && target > 0;
+
+  /** Eased full strength so a new measurement never pops the dim (reduced motion snaps). */
+  let curFull = DIM_MAX;
+  const apply = (dtMs?: number) => {
+    const goal = fullStrength();
+    if (reduced || level <= 0.001 || dtMs === undefined) {
+      if (reduced || level <= 0.001) curFull = goal;
+    } else {
+      curFull += (goal - curFull) * (1 - Math.exp(-Math.max(0, dtMs) / DIM_MEASURE_EASE_MS));
+    }
+    u.strength.value = disposed ? 0 : curFull * level;
+    // While measuring keep the pass alive even at strength 0: the readback runs
+    // inside its render (input buffer = undimmed backdrop, no feedback).
+    pass.enabled =
+      !disposed && u.rectCount.value > 0 && (u.strength.value > 0.001 || (measuring() && level > 0.001));
   };
   apply();
+
+  const baseRender = pass.render.bind(pass);
+  pass.render = ((renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
+    if (disposed) return;
+    const src = (readBuffer as THREE.WebGLRenderTarget | undefined)?.texture;
+    if (measuring() && src) {
+      const key = rectsKey(uvRects);
+      const t0 = now();
+      if (meter.due(t0, key, { hidden, reducedMotion: reduced })) {
+        const token = meter.begin(t0, key);
+        try {
+          reader ??= createRegionReader(DIM_MAX_RECTS);
+          reader
+            .read(renderer, src, uvRects)
+            .then((bufs) => meter.resolve(token, bufs.map((b) => measureLuminance(b, METER_EDGE, METER_EDGE)), now()))
+            .catch((e: unknown) => meter.fail(token, e));
+        } catch (e) {
+          meter.fail(token, e); // sync GL failure: surfaced, static dim stays
+        }
+      }
+    }
+    baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+  }) as typeof pass.render;
 
   return {
     pass,
@@ -243,6 +390,25 @@ export function createDetailBackdropDimPass(): DetailBackdropDimHandle {
       const cam = camera as THREE.PerspectiveCamera;
       u.aspect.value = cam.isPerspectiveCamera && Number.isFinite(cam.aspect) && cam.aspect > 0 ? cam.aspect : 1;
     },
+    setContrastTarget(next) {
+      if (disposed) return;
+      const ok =
+        next &&
+        Array.isArray(next.textRgb) &&
+        next.textRgb.length >= 3 &&
+        next.textRgb.slice(0, 3).every((v) => Number.isFinite(v));
+      contrastTarget = ok ? next : null;
+      if (!contrastTarget) meter.reset();
+      apply();
+    },
+    setHidden(h) {
+      if (disposed) return;
+      hidden = !!h;
+      apply();
+    },
+    get contrast() {
+      return report;
+    },
     tick(dtMs) {
       if (disposed) return;
       const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0;
@@ -255,7 +421,7 @@ export function createDetailBackdropDimPass(): DetailBackdropDimHandle {
         uvRects = [];
         u.rectCount.value = 0;
       }
-      apply();
+      apply(dt);
     },
     dispose() {
       if (disposed) return;
@@ -264,7 +430,11 @@ export function createDetailBackdropDimPass(): DetailBackdropDimHandle {
       target = 0;
       uvRects = [];
       u.rectCount.value = 0;
+      contrastTarget = null;
+      meter.reset();
       apply();
+      if (ownReader) reader?.dispose();
+      reader = null;
       pass.dispose();
     },
   };

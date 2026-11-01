@@ -122,13 +122,17 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 65 | **Gap#50 Lock claims vs releases chart drops empty hours / claims-only bars** | **done** | c47 — zero-fill hours; cyan claims + amber releases altValue |
 | 66 | **Gap#51 Compass minimap overlaps Charts at 1280×800** | **done** | c47 — charts bottom above minimap (calc +158px) |
 | 67 | **Light — Imagine portrait colour bounce + detail-card backdrop dim (#60)** | **done** | c47 — land e65a052 atmosphere/postfx; wire createPortraitBounce + createDetailBackdropDimPass; ctx-loss harden+scene retry co-exist |
-| 68 | **Light — measured-luminance backdrop dim** | queued | Light lane next after e65a052; builds on #67 dim |
+| 68 | **Light — measured-luminance backdrop dim** | **done** | c50 — land c57e111; wire setContrastTarget/setHidden; portrait lastSampleError stickiness; tests registered |
 | 69 | **Gap#52 Canvas resize/rotation keeps first aspect** — host 100dvh + ResizeObserver client box | **done** | c48 — CSS absolute fill; removed relative wrap override; RO on mount |
 | 70 | **Gap#53 Canvas accessible name** — role=img + live aria-label from bot health/weather | **done** | c48 — dash3d-stage-canvas |
 | 71 | **Gap#34 re-check — hide tab money burn + clear gap** | **done** | c49 — warn on suppress; clear hiddenGapMs after 25s visible; tests |
 | 72 | **Surfaces — lock history + chart drilldown + fly focus crumb** | **done** | c49 — timeline lock history; chart→bot/scrub; fly focus name/task |
 | 73 | **Motion c17 — health-pulse-crossfade + star-batch harden** | **done** | c50 — land fc36a5e motion/; wire crossfade + STAR_BATCH_MAX/ORBIT_OPTS |
 | 74 | **Motion c18 — neighbor-drift-damp + alloc-budget** | **done** | c50 — neighbor damp after batch; alloc-budget via --expose-gc |
+| 75 | **Gap#10 focus mid-flight** — queue focus requests while camera flies; latest wins; unknown bot clears stale detail | **queued** | REA re-check 23:25 still reproduces; Star Detail focus | 
+| 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **queued** | gap-feed captures-20261101-172519 |
+| 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **queued** | gap-feed |
+| 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **queued** | gap-feed |
 
 
 

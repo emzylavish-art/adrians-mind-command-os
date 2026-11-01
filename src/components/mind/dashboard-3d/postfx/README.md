@@ -166,3 +166,32 @@ detailDim.tick(dtMs);
 - Bounce intensity 3.2 (vs #56 key 12 / rim 14) — fill only. Reduced motion snaps level + colour.
 - Dim: luminance-weighted (pixels below 0.12 luma untouched, ≥0.55 dimmed up to 50%), 28px CSS feather, 10px pad, ≤2 rects. Rects are CSS px → DPR/resize safe; pass disabled (zero cost) with no rects. Eases 220ms; reduced motion snaps.
 - Tests to add to `npm test`: `postfx/{context-loss-throw,detail-backdrop-dim}.test.ts`, `atmosphere/portrait-bounce.test.ts` (plus the #57 list: `postfx/{depth-validity,exposure-retarget,focus-bloom-guard}.test.ts`).
+
+## #68 Measured-luminance backdrop dim + WCAG contrast check — wire-up for Dashboard Bot
+
+Builds on the #67 `detailDim` handle already wired in universe-scene. Additive: with no contrast target the pass behaves exactly like #67 (static `DIM_MAX`).
+
+```ts
+import { parseCssColor } from "./postfx";
+
+// When the detail card / charts panel opens (and on theme change), protect its real text colour:
+const cs = detailEl ? getComputedStyle(detailEl) : null;
+const text = parseCssColor(cs?.color);            // junk → null → static #67 dim (never guessed)
+const bg = parseCssColor(cs?.backgroundColor);    // card fill composited over the scene
+liveDetailDim?.setContrastTarget(text ? { textRgb: text.rgb, cardRgb: bg?.rgb, cardAlpha: bg?.alpha } : null);
+// Tab visibility (no readbacks while hidden):
+document.addEventListener("visibilitychange", () => liveDetailDim?.setHidden(document.hidden));
+// Debug badge (optional): liveDetailDim.contrast → { source: "measured"|"static", plan: { before, after, target, reachable }, backdropLum, lastError }
+```
+
+- Measurement: every 500 ms (`METER_INTERVAL_MS`) while rects are open, the dim pass downsamples its OWN INPUT (undimmed composer buffer — no feedback) under each rect into an 8×8 RGBA8 target (16 taps/texel, `createRegionReader`) and reads it back with `readRenderTargetPixelsAsync` (sync fallback). Worst case = p90 relative luminance across rects.
+- `dimForContrast` finds the SMALLEST dim (≤ `DIM_MEASURED_MAX` 0.7) giving WCAG ≥ 4.5:1 (`WCAG_TEXT_AA`; chart tick labels are text) for the text over card-bg-over-scene. Dark backdrop → dim 0 so Imagine scenes/portraits behind charts stay vivid; very bright nebula → stronger than #67's 0.5. `measuredStrength` compensates for the shader's luminance window.
+- Honesty: no read yet / read failed / layout changed / reading older than 2 s / junk colour → `source: "static"` (#67 dim). Failures on `contrast.lastError`; hung readback times out after 2 s (never wedges). Hidden tab → no reads; reduced motion → one read per layout (static). Measured changes ease (180 ms time constant), reduced motion snaps.
+- Cost: one 8×16 draw + 512-byte async read per 500 ms only while a card/chart is open; pass stays enabled at strength 0 while measuring so it can re-measure.
+- GPU resources (8×16 RT, material, quad) are owned by the dim handle and freed in `dispose()` (context-loss bundle already disposes `detailDim`).
+- Tests to add to `npm test`: `postfx/{wcag-contrast,backdrop-meter,detail-dim-measured}.test.ts`, `atmosphere/bounce-stale-error.test.ts`. (#57/#67 tests are already registered.)
+
+## Hacker-pass notes (#68 cycle) — portrait-bounce `lastSampleError` was sticky
+- Before: `lastSampleError` was only ever written on failure. After focusing one CORS-tainted Imagine portrait, every later focus (good portrait, no portrait) kept reporting the old SecurityError while the light used real pixels; a cached failure never re-surfaced once overwritten.
+- Now it describes the CURRENT focus: cleared on a real sample / no texture, re-surfaced from the per-texture cache for a known-bad portrait. Test: `atmosphere/bounce-stale-error.test.ts`.
+- Rest of the pass (resize/high-DPR bloom clamps, depth-validity, context-loss isolate+retry, health → idle on missing data, RT disposal) re-checked: no new real breakage found.
