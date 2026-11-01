@@ -3973,8 +3973,8 @@ export function CommandApp() {
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
                 <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
                 <Quick label="Research" icon={Search} tone="text-ok" onClick={() => { setView("research"); if (staged) void inspectWithRea(staged, "research"); else void checkRea(); }} />
-                <Quick label="Generate Image" icon={Image} tone="text-warn" onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
-                <Quick label="Generate Video" icon={Video} tone="text-accent" onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
+                <Quick label="Generate Image" icon={Image} tone="text-warn" comingSoon title="Coming soon — image generation is a paid API and is not called from this app." onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
+                <Quick label="Generate Video" icon={Video} tone="text-accent" comingSoon title="Coming soon — video generation is a paid API and is not called from this app." onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
@@ -5329,9 +5329,15 @@ function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compac
   );
 }
 
-function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
+function Quick({ label, icon: Icon, tone, onClick, comingSoon, title }: { label: string; icon: typeof Folder; tone: string; onClick: () => void; comingSoon?: boolean; title?: string }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line/80 bg-surface/80 px-3 text-sm shadow-[0_8px_24px_rgb(0_0_0/0.25)] backdrop-blur">
+    <button
+      type="button"
+      onClick={onClick}
+      title={title || (comingSoon ? "Coming soon — not wired yet" : undefined)}
+      aria-disabled={comingSoon ? true : undefined}
+      className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line/80 bg-surface/80 px-3 text-sm shadow-[0_8px_24px_rgb(0_0_0/0.25)] backdrop-blur${comingSoon ? " is-coming-soon" : ""}`}
+    >
       <Icon className={`size-4 ${tone}`} />
       {label}
     </button>
