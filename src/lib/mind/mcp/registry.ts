@@ -13,6 +13,14 @@ import {
   type ToolResult,
 } from "./tools.ts";
 import { callStdioTool, isBlockedChildEnvKey, listStdioTools, type StdioOptions } from "./stdio.ts";
+import {
+  defaultDnsLookup,
+  isLocalHostname,
+  isPrivateAddressLiteral,
+  pinnedHttpFetch,
+  resolveAndPinMcpHostname,
+  type DnsLookupFn,
+} from "./http-dns-pin.ts";
 import { readHaltFile } from "../halt-file.ts";
 
 export type McpServerKind = "builtin" | "http" | "command";
@@ -267,49 +275,12 @@ export const HTTP_RPC_TIMEOUT_MS = 15_000;
 /** Largest response body read from a remote MCP server. */
 export const HTTP_RPC_MAX_BYTES = 1_000_000;
 
-export type HttpRpcOptions = { timeoutMs?: number; maxBytes?: number };
+export type HttpRpcOptions = { timeoutMs?: number; maxBytes?: number; lookup?: DnsLookupFn };
 
-/**
- * Hostnames that are always local by design (http allowed).
- */
-function isLocalHostname(host: string): boolean {
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
-}
 
-/**
- * True for private, loopback (other than the local names above), link-local,
- * CGNAT, unspecified, multicast and IPv4-mapped literals. Hostnames are not
- * resolved here (DNS rebinding is out of scope for this check).
- */
-export function isPrivateAddressLiteral(hostname: string): boolean {
-  let host = hostname.toLowerCase();
-  if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return (
-      a === 0 || a === 10 || a === 127 || a >= 224 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127)
-    );
-  }
-  if (!host.includes(":")) return false;
-  if (host === "::" || host === "::1") return true;
-  const mapped = /^::ffff:(.+)$/.exec(host);
-  if (mapped) {
-    const tail = mapped[1];
-    if (tail.includes(".")) return isPrivateAddressLiteral(tail);
-    const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(tail);
-    if (hex) {
-      const n = (parseInt(hex[1], 16) << 16) | parseInt(hex[2], 16);
-      return isPrivateAddressLiteral([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join("."));
-    }
-    return true;
-  }
-  return /^(fc|fd|fe[89ab]|ff)/.test(host);
-}
+/** Re-export: private/loopback/link-local/ULA/metadata IP literals. */
+export { isPrivateAddressLiteral, isLocalHostname } from "./http-dns-pin.ts";
+export type { DnsLookupFn } from "./http-dns-pin.ts";
 
 /** Why a remote MCP URL may not be saved or called, or null if it is fine. */
 export function httpServerUrlProblem(parsed: URL): string | null {
@@ -372,6 +343,18 @@ async function rpc(
   // Re-check at call time: stores saved before this guard existed may hold internal targets.
   const refused = httpServerUrlProblem(parsedUrl);
   if (refused) return { ok: false, error: `${refused} Nothing was called.`, session };
+
+  // DNS rebinding guard for non-local external hosts: resolve now, refuse every
+  // answer, pin the connection to a validated public IP.
+  let pinnedAddress: string | null = null;
+  let pinHostname: string | null = null;
+  if (!isLocalHostname(parsedUrl.hostname)) {
+    const pin = await resolveAndPinMcpHostname(parsedUrl.hostname, options.lookup ?? defaultDnsLookup);
+    if (!pin.ok) return { ok: false, error: `${pin.error} Nothing was called.`, session };
+    pinnedAddress = pin.pinnedAddress;
+    pinHostname = pin.hostname;
+  }
+
   const timeoutMs = options.timeoutMs ?? HTTP_RPC_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? HTTP_RPC_MAX_BYTES;
   const controller = new AbortController();
@@ -393,10 +376,9 @@ async function rpc(
   try {
     let response: Awaited<ReturnType<FetchLike>>;
     try {
-      response = await Promise.race([
-        fetchImpl(parsedUrl.toString(), {
+      const init = {
           method: "POST",
-          redirect: "manual",
+          redirect: "manual" as const,
           signal: controller.signal,
           headers: {
             "content-type": "application/json",
@@ -405,9 +387,12 @@ async function rpc(
             ...(session ? { "mcp-session-id": session } : {}),
           },
           body: JSON.stringify(message),
-        }),
-        deadline,
-      ]);
+        };
+      const doFetch = () =>
+        pinnedAddress && pinHostname
+          ? pinnedHttpFetch(parsedUrl, pinnedAddress, pinHostname, init)
+          : fetchImpl(parsedUrl.toString(), init);
+      response = await Promise.race([doFetch(), deadline]);
     } catch {
       if (timedOut) return timeoutFailure();
       return { ok: false, error: "The MCP server could not be reached.", session };

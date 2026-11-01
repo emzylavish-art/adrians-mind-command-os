@@ -7,6 +7,7 @@ import {
   LIST_AUTH_NOTICE_COPY,
   MCP_LIST_EMPTY_COPY,
   MCP_LIST_LOADING_COPY,
+  MCP_LIST_SIGN_IN_COPY,
   MCP_LIST_LOAD_TIMEOUT_MS,
   MCP_TOOLS_EMPTY_COPY,
   MCP_TOOLS_LOADING_COPY,
@@ -89,28 +90,40 @@ describe("MCP list: loading / empty / error are distinct", () => {
     assert.equal(renderServers(state), "");
   });
 
-  const authNoticeCases: [string, () => Promise<unknown>][] = [
-    ["401 status", async () => { throw httpError(401); }],
-    ["Unauthorized middleware error", async () => { throw new Error("Unauthorized"); }],
-  ];
-  for (const [name, fetcher] of authNoticeCases) {
-    it(`auth_required (${name}) is a dismissible notice, not a red Retry banner`, async () => {
+  it("typed unauthenticated payload is a quiet sign-in empty state (no banner)", async () => {
+    const state = await loadMcpList(async () => ({ status: "unauthenticated", servers: [] }));
+    assert.equal(state.status, "unauthenticated");
+    const html = renderServers(state);
+    assert.match(html, /data-testid="mcp-list-sign-in"/);
+    assert.match(html, /data-mcp-list-state="unauthenticated"/);
+    assert.match(html, new RegExp(MCP_LIST_SIGN_IN_COPY));
+    assert.doesNotMatch(html, /failure-banner|role="alert"|border-danger|failure-retry/);
+    assert.doesNotMatch(html, /mcp-list-empty|No MCP servers/);
+  });
+
+  it("thrown 401 / Unauthorized become quiet unauthenticated, not a red banner", async () => {
+    for (const fetcher of [
+      async () => { throw httpError(401); },
+      async () => { throw new Error("Unauthorized"); },
+      async () => { throw new Error("Sign in is required."); },
+    ]) {
       const state = await loadMcpList(fetcher);
-      assert.equal(state.status, "error");
-      if (state.status !== "error") return;
-      assert.equal(state.kind, "auth_required");
-      assert.equal(state.message, MCP_AUTH_REQUIRED_NOTICE);
+      assert.equal(state.status, "unauthenticated");
       const html = renderServers(state);
-      assert.match(html, /data-testid="auth-required-notice"/);
-      assert.match(html, /data-mcp-list-state="auth_notice"/);
-      assert.match(html, /role="status"/);
-      assert.match(html, /Sign in to load MCP servers/);
-      assert.match(html, /data-testid="auth-notice-dismiss"/);
-      assert.match(html, /border-line bg-surface/);
-      assert.doesNotMatch(html, /data-testid="failure-banner"|failure-retry|border-danger\/40|role="alert"/);
-      assert.doesNotMatch(html, /mcp-list-empty|No MCP servers/);
-    });
-  }
+      assert.match(html, /data-testid="mcp-list-sign-in"/);
+      assert.match(html, /data-mcp-list-state="unauthenticated"/);
+      assert.doesNotMatch(html, /failure-banner|failure-retry|role="alert"/);
+    }
+  });
+
+  it("signed-in list with servers is ready", async () => {
+    const state = await loadMcpList(async () => ({
+      status: "ok",
+      servers: [{ id: "builtin", label: "Built-in", kind: "builtin", enabled: true }],
+    }));
+    assert.equal(state.status, "ready");
+    if (state.status === "ready") assert.equal(state.servers.length, 1);
+  });
 
   const errorCases: [string, () => Promise<unknown>, string, RegExp][] = [
     ["403 cross-site", async () => { throw httpError(403, "Forbidden: cross-site request blocked"); }, "forbidden_cross_site", /cross-site request blocked/],
