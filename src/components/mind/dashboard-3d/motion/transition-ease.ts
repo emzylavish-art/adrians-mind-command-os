@@ -5,6 +5,9 @@
  * crossfade) continues from the current amount — never restarts from 0/1.
  * Pure helpers, reusable out samples, zero hot-path allocation.
  * Reduced-motion snaps instantly to the target.
+ *
+ * Hacker c7: if `out === state` (aliased), sample fields are written to a module scratch
+ * so NodeOpenState / SceneTransitionState are not polluted with scale/opacity/done/etc.
  */
 import { clamp01, easeInOutCubic, easeOutQuint, lerp } from "./ease.ts";
 import { finiteOr, sanitizeDt } from "./sanitize.ts";
@@ -36,6 +39,14 @@ export type NodeOpenOpts = {
   duration?: number;
   openOffsetY?: number;
   scaleFrom?: number;
+};
+
+const nodeOpenScratch: NodeOpenSample = {
+  scale: NODE_OPEN_SCALE_FROM,
+  opacity: 0,
+  offsetY: 0,
+  amount: 0,
+  done: true,
 };
 
 export function createNodeOpenState(open = false): NodeOpenState {
@@ -79,13 +90,14 @@ export function stepNodeOpen(
   }
   state.amount = amount;
 
+  const dest: NodeOpenSample = (out as object) === (state as object) ? nodeOpenScratch : out;
   const e = easeInOutCubic(amount);
-  out.scale = lerp(scaleFrom, 1, e);
-  out.opacity = e;
-  out.offsetY = e * offsetY;
-  out.amount = amount;
-  out.done = amount === target;
-  return out;
+  dest.scale = lerp(scaleFrom, 1, e);
+  dest.opacity = e;
+  dest.offsetY = e * offsetY;
+  dest.amount = amount;
+  dest.done = amount === target;
+  return dest;
 }
 
 /** Scene crossfade / dolly progress (universe↔city↔interior etc.). */
@@ -114,6 +126,17 @@ export type SceneTransitionSample = {
 
 export type SceneTransitionOpts = {
   duration?: number;
+};
+
+const sceneTxScratch: SceneTransitionSample = {
+  linear: 0,
+  eased: 0,
+  fadeOut: 1,
+  fadeIn: 0,
+  dolly: 0,
+  done: true,
+  fromId: null,
+  toId: null,
 };
 
 export function createSceneTransitionState(
@@ -158,12 +181,10 @@ export function beginSceneTransition(
 ): void {
   const from = normalizeId(fromId);
   const to = normalizeId(toId);
-  // Same corridor (from→to already active): keep progress, ensure target=1.
   if (state.fromId === from && state.toId === to && to != null) {
     state.target = 1;
     return;
   }
-  // Reverse of active pair (to→from): reverse target, keep progress (complement).
   if (state.fromId === to && state.toId === from && state.fromId != null) {
     state.progress = clamp01(1 - state.progress);
     state.fromId = from;
@@ -204,15 +225,16 @@ export function stepSceneTransition(
   }
   state.progress = progress;
 
+  const dest: SceneTransitionSample = (out as object) === (state as object) ? sceneTxScratch : out;
   const eased = easeInOutCubic(progress);
   const dolly = easeOutQuint(progress);
-  out.linear = progress;
-  out.eased = eased;
-  out.fadeOut = 1 - eased;
-  out.fadeIn = eased;
-  out.dolly = dolly;
-  out.done = progress === target;
-  out.fromId = state.fromId;
-  out.toId = state.toId;
-  return out;
+  dest.linear = progress;
+  dest.eased = eased;
+  dest.fadeOut = 1 - eased;
+  dest.fadeIn = eased;
+  dest.dolly = dolly;
+  dest.done = progress === target;
+  dest.fromId = state.fromId;
+  dest.toId = state.toId;
+  return dest;
 }

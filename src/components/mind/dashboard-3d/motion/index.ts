@@ -68,4 +68,22 @@ export {
   type SceneTransitionSample,
   type SceneTransitionState,
 } from "./transition-ease.ts";
+export {
+  CHAR_IDLE_BOB_AMP,
+  CHAR_IDLE_BOB_SPEED,
+  CHAR_IDLE_BREATH_AMP,
+  CHAR_LOOK_LAMBDA,
+  CHAR_LOCOMOTION_LAMBDA,
+  CHAR_WALK_BOUNCE_AMP,
+  CHAR_WALK_STRIDE_HZ,
+  CHAR_WALK_SWAY_AMP,
+  characterPhaseFromId,
+  createCharacterMotionState,
+  createCharacterSample,
+  sampleCharacterIdle,
+  stepCharacterMotion,
+  type CharacterMotionOpts,
+  type CharacterMotionState,
+  type CharacterSample,
+} from "./character-motion.ts";
 
