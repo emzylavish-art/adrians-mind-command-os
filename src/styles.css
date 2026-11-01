@@ -631,3 +631,91 @@ html[data-theme="light"] [data-skeleton="true"] {
   background: linear-gradient(90deg, rgb(9 9 11 / 0.04), rgb(9 9 11 / 0.1), rgb(9 9 11 / 0.04));
   background-size: 200% 100%;
 }
+
+/* —— Cycle 7: workspace page chrome (Build/Projects/Research/Library/Runs) + logo purple —— */
+
+/* Brand mark in aside — purple ONLY here (markup uses from-info/to-accent utilities) */
+aside > div.flex.items-center > span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent,
+.logo-mark {
+  background: #7c5cff !important;
+  background-image: none !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
+
+/* Top chrome on every workspace page */
+header.flex.items-center.border-b.border-line {
+  background: rgb(8 8 10 / 0.78);
+  backdrop-filter: blur(16px) saturate(1.05);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05);
+  border-bottom-color: rgb(255 255 255 / 0.08) !important;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+html[data-theme="light"] header.flex.items-center.border-b.border-line {
+  background: rgb(255 255 255 / 0.86);
+  border-bottom-color: rgb(9 9 11 / 0.08) !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.05);
+}
+
+/* Page scroll stage */
+.flex.min-h-0.min-w-0.flex-1.flex-col .min-h-0.flex-1.overflow-auto {
+  background:
+    radial-gradient(ellipse 70% 35% at 50% -5%, rgb(255 255 255 / 0.035), transparent 55%),
+    var(--color-bg);
+}
+html[data-theme="light"] .flex.min-h-0.min-w-0.flex-1.flex-col .min-h-0.flex-1.overflow-auto {
+  background:
+    radial-gradient(ellipse 70% 35% at 50% -5%, rgb(9 9 11 / 0.03), transparent 55%),
+    var(--color-bg);
+}
+
+/* Page hero / section cards */
+.min-h-0.flex-1.overflow-auto .rounded-panel,
+.min-h-0.flex-1.overflow-auto .rounded-2xl.border {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.045), transparent 60%), var(--color-surface);
+  border-color: rgb(255 255 255 / 0.09) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 28px rgb(0 0 0 / 0.28);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-panel,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-2xl.border {
+  background: #fff;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.06);
+}
+
+/* Capability / status rows (Build stacked pills) */
+.min-h-0.flex-1.overflow-auto .rounded-full.border,
+.min-h-0.flex-1.overflow-auto .rounded-panel.border.border-line {
+  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+.min-h-0.flex-1.overflow-auto > div > .rounded-panel.border,
+.min-h-0.flex-1.overflow-auto section .rounded-panel {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* In-page pill tabs (Projects On this device / External) */
+.min-h-0.flex-1.overflow-auto .rounded-full.bg-accent,
+.min-h-0.flex-1.overflow-auto button.rounded-full.bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2), 0 6px 16px rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-full.bg-accent,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto button.rounded-full.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* External / project identity tiles — mono initials */
+.min-h-0.flex-1.overflow-auto .grid.place-items-center.rounded-2xl.bg-accent\/15,
+.min-h-0.flex-1.overflow-auto .bg-accent\/15 {
+  background: rgb(255 255 255 / 0.08) !important;
+  color: #f4f4f5 !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .bg-accent\/15 {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #18181b !important;
+}
