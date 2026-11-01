@@ -1,6 +1,6 @@
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import type { HealthTone } from "../atmosphere/health-tone.ts";
-import { AMBIENT_RGB } from "../atmosphere/health-tone.ts";
+import { AMBIENT_RGB, normalizeHealthTone } from "../atmosphere/health-tone.ts";
 
 export type ColorGradeTuning = {
   tint: readonly [number, number, number];
@@ -37,7 +37,7 @@ export const GRADE_BY_TONE: Record<HealthTone, ColorGradeTuning> = {
 };
 
 export function colorGradeParamsForTone(tone: HealthTone): ColorGradeTuning {
-  const g = GRADE_BY_TONE[tone];
+  const g = GRADE_BY_TONE[normalizeHealthTone(tone)];
   return {
     tint: [...g.tint] as [number, number, number],
     contrast: g.contrast,
@@ -93,12 +93,13 @@ export const ColorGradeShader = {
 export type ColorGradeHandle = {
   pass: ShaderPass;
   update: (tone: HealthTone) => void;
+  dispose: () => void;
 };
 
 export function createColorGradePass(tone: HealthTone = "idle"): ColorGradeHandle {
   const pass = new ShaderPass(ColorGradeShader);
   const apply = (next: HealthTone) => {
-    const g = GRADE_BY_TONE[next];
+    const g = GRADE_BY_TONE[normalizeHealthTone(next)];
     const u = pass.uniforms as {
       tint: { value: [number, number, number] };
       contrast: { value: number };
@@ -111,5 +112,5 @@ export function createColorGradePass(tone: HealthTone = "idle"): ColorGradeHandl
     u.vignette.value = g.vignette;
   };
   apply(tone);
-  return { pass, update: apply };
+  return { pass, update: apply, dispose: () => pass.dispose() };
 }

@@ -4,6 +4,7 @@ import {
   FOG_PARAMS,
   KEY_RGB,
   RIM_RGB,
+  normalizeHealthTone,
   type HealthTone,
 } from "./health-tone.ts";
 
@@ -31,7 +32,7 @@ export function createHealthAtmosphere(
   scene: THREE.Scene,
   opts: CreateHealthAtmosphereOpts = {},
 ): HealthAtmosphereHandle {
-  const tone0: HealthTone = opts.tone ?? "idle";
+  const tone0: HealthTone = normalizeHealthTone(opts.tone);
   const attachFog = opts.attachFog !== false;
 
   const ambient = new THREE.AmbientLight(rgbToHex(AMBIENT_RGB[tone0]), 0.55);
@@ -48,7 +49,8 @@ export function createHealthAtmosphere(
     scene.fog = fog;
   }
 
-  const update = (tone: HealthTone) => {
+  const update = (rawTone: HealthTone) => {
+    const tone = normalizeHealthTone(rawTone);
     ambient.color.setHex(rgbToHex(AMBIENT_RGB[tone]));
     key.color.setHex(rgbToHex(KEY_RGB[tone]));
     rim.color.setHex(rgbToHex(RIM_RGB[tone]));
