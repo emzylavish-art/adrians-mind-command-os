@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { OLLAMA_UNREACHABLE, runOllamaConductor } from "./ollama-conductor.ts";
+import { OLLAMA_UNREACHABLE, probeOllamaConductor, runOllamaConductor } from "./ollama-conductor.ts";
 
 describe("ollama conductor", () => {
   it("returns a clear unreachable error when fetch fails", async () => {
@@ -29,6 +29,19 @@ describe("ollama conductor", () => {
     if (result.ok) {
       assert.equal(result.text, "Hello there.");
       assert.equal(result.model, "mock-llama");
+    }
+  });
+
+  it("probe returns unreachable without crashing when Ollama is down", async () => {
+    const result = await probeOllamaConductor({
+      fetchImpl: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.unreachable, true);
+      assert.equal(result.error, OLLAMA_UNREACHABLE);
     }
   });
 });

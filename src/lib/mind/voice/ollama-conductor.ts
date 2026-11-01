@@ -63,3 +63,28 @@ export async function runOllamaConductor(
   if (!reply) return { ok: false, error: "Ollama returned an empty reply.", unreachable: false };
   return { ok: true, text: reply, model: payload.model || model };
 }
+
+/** Lightweight reachability check (GET /api/tags). Does not spend a chat turn. */
+export async function probeOllamaConductor(
+  config: OllamaConductorConfig = {},
+): Promise<OllamaConductorResult> {
+  const base = (config.baseUrl || DEFAULT_OLLAMA_BASE).replace(/\/$/, "");
+  const fetchImpl = config.fetchImpl ?? fetch;
+  const timeoutMs = config.timeoutMs ?? 3_000;
+  try {
+    const response = await fetchImpl(`${base}/api/tags`, {
+      method: "GET",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: OLLAMA_UNREACHABLE,
+        unreachable: true,
+      };
+    }
+    return { ok: true, text: "ok", model: config.model || DEFAULT_OLLAMA_MODEL };
+  } catch {
+    return { ok: false, error: OLLAMA_UNREACHABLE, unreachable: true };
+  }
+}
