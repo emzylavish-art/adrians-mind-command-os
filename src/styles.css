@@ -2646,3 +2646,51 @@ html[data-theme="light"] [data-composer="floating"] {
   border-color: rgb(9 9 11 / 0.12) !important;
   box-shadow: 0 18px 44px rgb(0 0 0 / 0.12), inset 0 1px 0 #fff !important;
 }
+
+/* —— Cycle 32 / item 3: unified mobile glass dock (composer + slim tabs) —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+    min-height: 2.75rem !important;
+    height: auto !important;
+    padding-top: 0.15rem;
+    padding-bottom: calc(0.15rem + env(safe-area-inset-bottom)) !important;
+    background: rgb(8 8 10 / 0.92) !important;
+    border-top: 1px solid rgb(255 255 255 / 0.1) !important;
+    backdrop-filter: blur(22px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+    box-shadow: 0 -10px 28px rgb(0 0 0 / 0.45);
+    z-index: 40 !important;
+  }
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+    min-height: 2.55rem !important;
+    font-size: 0.62rem !important;
+    gap: 0.1rem;
+    color: #a1a1aa !important;
+  }
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button svg {
+    width: 0.95rem !important;
+    height: 0.95rem !important;
+  }
+  /* Seat hero composer as dock above slim tabs */
+  .main-stage > section.command-card.composer-dock,
+  .main-stage section.command-card.composer-dock {
+    position: sticky;
+    bottom: calc(2.75rem + env(safe-area-inset-bottom));
+    z-index: 35;
+    margin-bottom: 0.35rem;
+    border-radius: 1.15rem !important;
+  }
+  /* When composer focused, collapse tab labels into icon-only and dim */
+  body:has(.composer-dock:focus-within) nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+    font-size: 0 !important;
+    line-height: 0 !important;
+    min-height: 2.25rem !important;
+  }
+  body:has(.composer-dock:focus-within) nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button svg {
+    width: 1.05rem !important;
+    height: 1.05rem !important;
+  }
+  .main-stage {
+    padding-bottom: calc(11rem + env(safe-area-inset-bottom)) !important;
+  }
+}
