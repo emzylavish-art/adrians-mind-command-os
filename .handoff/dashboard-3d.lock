@@ -1,5 +1,6 @@
-owner: dashboard-3d-loop
+owner: none
 cycle: 48
-heartbeat: 2026-11-01T23:23:31+01:00
+released: 2026-11-01T23:24:19+01:00
 branch: dashboard-3d
-work: test chain; Gap#52-53; #68 wait Light; attacker
+tip: e9430bd
+last: npm test both halves; Gap#52-53; #68 waiting Light; attacker OK
