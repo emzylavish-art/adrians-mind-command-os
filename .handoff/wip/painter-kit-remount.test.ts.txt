@@ -1,0 +1,31 @@
+/**
+ * Gap/Painter c14: after disposePainterlyKit, create* throws — remount must
+ * recreate the kit (StrictMode / HMR / teardown), never call the disposed one.
+ */
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  createPainterlyKit,
+  disposePainterlyKit,
+  PAINTER_KIT_DISPOSED,
+} from "../../../components/mind/dashboard-3d/materials/index.ts";
+
+describe("painter kit remount after dispose (dashboard StrictMode/HMR)", () => {
+  it("disposed kit throws; a fresh createPainterlyKit accepts create* again", () => {
+    const first = createPainterlyKit({ pass: { amount: 0.2 } });
+    disposePainterlyKit(first);
+    assert.equal(first.disposed, true);
+    assert.throws(
+      () => first.createSkyMaterial({ seed: 1 }),
+      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
+    );
+    // Recreate — do not reuse disposed kit (universe-scene remount path).
+    const second = createPainterlyKit({ pass: { amount: 0.2 } });
+    assert.equal(second.disposed, false);
+    const sky = second.createSkyMaterial({ seed: 2 });
+    assert.ok(sky);
+    sky.dispose();
+    disposePainterlyKit(second);
+    assert.equal(second.disposed, true);
+  });
+});

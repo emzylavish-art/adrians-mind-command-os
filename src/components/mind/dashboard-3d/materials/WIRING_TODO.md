@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 13)
+## Status vs origin/dashboard-3d (verified cycle 14)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -179,4 +179,17 @@ kit.createInkEdges(edges.map(e => ({
   weight: e.activity, // optional 0..2
 })));
 // createBotStar already sanitizes bad colors — no wiring change.
+```
+
+## c14 — lane nebula pigment pooling + disposed-kit guards
+
+- `uPool` / wash from real lane health inside `createLaneNebulae` (blocked pools heaviest). **No extra Dashboard Bot wiring** — already on shared mats.
+- Mesh pool: `neb.update` no longer `new THREE.Mesh` every poll (flicker-safe).
+- After `disposePainterlyKit`, create*/bind throw `painterly-kit-disposed` (no UAF on disposed textures).
+- Nebula wash uses period-continuous sin/cos orbit (wrap-seam safe with `sanitizeShaderTime`).
+
+```ts
+// Already wired — health drives pool automatically:
+kit.createLaneNebulae(lanes.map(l => ({ health: l.health, center: l.center })));
+// Do not call create* after disposePainterlyKit — throws painterly-kit-disposed.
 ```

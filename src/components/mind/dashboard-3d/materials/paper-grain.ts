@@ -69,6 +69,17 @@ export function sanitizeShaderTime(timeSeconds: number, period = PAINTER_TIME_PE
   return w >= p ? 0 : w;
 }
 
+/**
+ * HACKER (c14): angle in radians for period-continuous animation.
+ * sin/cos of this are continuous across the sanitizeShaderTime wrap seam
+ * (unlike raw `uTime * rate` offsets that pop when time jumps 599→0).
+ */
+export function shaderTimeAngle(timeSeconds: number, period = PAINTER_TIME_PERIOD): number {
+  const w = sanitizeShaderTime(timeSeconds, period);
+  const p = Number.isFinite(period) && period > 0 ? period : PAINTER_TIME_PERIOD;
+  return (w / p) * Math.PI * 2;
+}
+
 export function makePaperGrainRGBA(
   size: number,
   seed = 1,
