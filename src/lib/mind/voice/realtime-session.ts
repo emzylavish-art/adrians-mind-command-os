@@ -91,6 +91,7 @@ export class RealtimeVoiceSession {
   private captureOnly = true;
   private testAudioUrl: string | null = null;
   private testAudioTimer: ReturnType<typeof setInterval> | null = null;
+  private forceSpeak = false;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -203,6 +204,10 @@ export class RealtimeVoiceSession {
       return;
     }
     if (type === "input_audio_buffer.speech_started") {
+      if (this.forceSpeak) {
+        // Dev test-audio / force_message: ignore VAD barge while assistant audio plays.
+        return;
+      }
       this.interruptPlayback();
       this.handlers.onSpeechStarted?.();
       this.handlers.onStatus?.("listening");
@@ -236,12 +241,14 @@ export class RealtimeVoiceSession {
       return;
     }
     if (type === "response.done") {
+      this.forceSpeak = false;
       this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
     }
   }
 
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback() {
+    this.forceSpeak = false;
     this.output.interrupt();
     this.send({ type: "response.cancel" });
   }
@@ -372,7 +379,13 @@ export class RealtimeVoiceSession {
   speakText(text: string) {
     const trimmed = text.trim();
     if (!trimmed || !this.open) return;
-    this.interruptPlayback();
+    if (this.testAudioTimer) {
+      clearInterval(this.testAudioTimer);
+      this.testAudioTimer = null;
+    }
+    this.forceSpeak = true;
+    this.output.interrupt();
+    this.send({ type: "response.cancel" });
     this.send({
       type: "conversation.item.create",
       item: {

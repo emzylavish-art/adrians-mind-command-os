@@ -3284,8 +3284,9 @@ export function CommandApp() {
         window.setTimeout(() => {
           if (!voiceSession.current?.isOpen) return;
           if (bargeRef.current.phase === "speaking") return;
+          voiceSession.current.setMuted(true);
           voiceSession.current.speakText("It is about noon.");
-        }, 3500);
+        }, 2500);
       }
     } catch (caught) {
       stopVoiceSession();
