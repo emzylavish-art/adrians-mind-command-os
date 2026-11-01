@@ -49,7 +49,19 @@ import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { relevantMemories } from "@/lib/mind/memory";
 import { databaseMode } from "@/lib/mind/persistence";
-import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
+import { runAgentTurn, type AgentTool, type ToolEvent } from "@/lib/mind/orchestrator";
+import {
+  agentActivityFromTimeline,
+  applyToolEvent,
+  attachAuditIds,
+  connectedServicesRail,
+  elapsedMs,
+  formatElapsed,
+  recentTasksFromAudit,
+  systemStatusRail,
+  timelineCounts,
+  type ToolTimelineRow,
+} from "@/lib/mind/tools-timeline";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { chosenProvider, providerChoices } from "@/lib/mind/providers";
@@ -254,6 +266,10 @@ export function CommandApp() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null } | null>(null);
+  const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
+  const [timelineTickMs, setTimelineTickMs] = useState(0);
+  const [statusSignedIn, setStatusSignedIn] = useState<boolean | null>(null);
+  const [databaseConfigured, setDatabaseConfigured] = useState(false);
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
@@ -327,12 +343,22 @@ export function CommandApp() {
     node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focusAuditId, view, ws.audit]);
 
+  const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
+  useEffect(() => {
+    if (!timelineRunning) return;
+    setTimelineTickMs(Date.now());
+    const id = window.setInterval(() => setTimelineTickMs(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [timelineRunning]);
+
   useEffect(() => {
     if (!ready) return;
     mindStatus()
       .then((status) => {
         setGrokConfigured(status.grok === "configured");
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
+        setStatusSignedIn(status.signedIn === true);
+        setDatabaseConfigured(status.databaseBackend === "postgres");
         const mode = databaseMode(status.databaseBackend === "postgres" || status.databaseBackend === "refused" ? status.databaseBackend : "memory");
         setDatabasePill(mode.pill);
         setDatabaseDetail(mode.detail);
@@ -552,11 +578,25 @@ export function CommandApp() {
     ];
   }
 
+  function observeToolEvent(event: ToolEvent) {
+    const atMs = typeof event.atMs === "number" ? event.atMs : Date.now();
+    setToolTimeline((current) => applyToolEvent(current, { ...event, atMs }));
+    if (event.status === "running" || event.status === "queued" || event.status === "awaiting_confirmation") return;
+    const entryId = crypto.randomUUID();
+    setToolTimeline((current) => attachAuditIds(current, { [event.toolId]: entryId }));
+    setWs((prev) => ({
+      ...prev,
+      audit: [{ id: entryId, at: new Date(atMs).toISOString(), action: event.toolId, target: event.toolId, result: event.text.slice(0, 500) }, ...prev.audit].slice(0, 200),
+    }));
+  }
+
   function settleIntent(chat: Chat, text: string, source: Workspace, action: "chat" | "voice" = "chat"): boolean {
     const intent = interpretCommand(text, source.agents, commandMode);
     if (intent.kind === "chat") return false;
     if (intent.kind === "local" || intent.kind === "skill") {
       const toolId = intent.kind === "skill" ? "search_skills" : intent.tool;
+      setToolTimeline([]);
+      clearFailure();
       const turn = runAgentTurn({
         userId: "local-owner",
         sessionId: chat.id,
@@ -565,6 +605,7 @@ export function CommandApp() {
         tools: agentTools(source),
         toolId,
         nowMs: Date.now(),
+        onEvent: observeToolEvent,
       });
       if (turn.status === "awaiting_confirmation" && turn.confirm) {
         const grantNow = turn.confirm;
@@ -575,6 +616,7 @@ export function CommandApp() {
           detail: turn.text,
           confirm: "This runs only the action you just asked for.",
           run: () => {
+            setToolTimeline([]);
             const again = runAgentTurn({
               userId: "local-owner",
               sessionId: chat.id,
@@ -584,8 +626,14 @@ export function CommandApp() {
               toolId,
               confirm: grantNow,
               nowMs: Date.now(),
+              onEvent: observeToolEvent,
             });
             recordToolTurn(chat, text, again.text, toolId === "run_due_schedules" && again.status === "completed" ? (prev) => runDueSchedules(prev, new Date().toISOString()) : undefined, { tool: toolId, ok: again.status === "completed", action });
+            if (again.status === "failed" || again.status === "timed_out" || again.status === "cancelled") {
+              reportFailure(again.text, "tool_failed", toolId, () => {
+                settleIntent(chat, text, source, action);
+              });
+            }
             setNotice("The confirmed action finished on this device. Hosted realtime is not connected.");
           },
         });
@@ -594,6 +642,11 @@ export function CommandApp() {
       const notes = chat.memory === "on" ? relevantMemories(source.memories, text) : [];
       const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
       recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
+      if (turn.status === "failed" || turn.status === "timed_out" || turn.status === "cancelled") {
+        reportFailure(turn.text, "tool_failed", toolId, () => {
+          settleIntent(chat, text, source, action);
+        });
+      }
       setNotice(turn.status === "completed" ? "The agent finished on this device. Hosted realtime is not connected." : turn.text);
       return true;
     }
@@ -700,6 +753,7 @@ export function CommandApp() {
     setLiveText("");
     setError(null);
     setFailure(null);
+    setToolTimeline([]);
     turnAbort.current?.abort();
     const generation = ++turnGen.current;
     const controller = new AbortController();
@@ -1910,6 +1964,29 @@ export function CommandApp() {
               onProvider={(id) => {
                 if (id === "grok") setProviderChoice("grok");
               }}
+              toolTimeline={toolTimeline}
+              timelineNowMs={timelineTickMs || Date.now()}
+              agentActivity={agentActivityFromTimeline(toolTimeline)}
+              recentTasks={recentTasksFromAudit(ws.audit)}
+              connectedServices={connectedServicesRail({
+                grokConfigured,
+                notionState: notion?.state ?? null,
+                mcpConnected: mcpServers.some((server) => server.state === "connected"),
+              })}
+              systemStatus={systemStatusRail({
+                grokConfigured,
+                databaseConfigured,
+                searchConfigured: (CAPABILITIES.find((item) => item.id === "research")?.status === "configured"
+                  || CAPABILITIES.find((item) => item.id === "research")?.status === "ready"
+                  || CAPABILITIES.find((item) => item.id === "research")?.status === "live_verified") ?? false,
+                signedIn: statusSignedIn,
+              })}
+              onViewAudit={(auditId) => {
+                setView("activity");
+                setFocusAuditId(auditId);
+                setActivityQuery("");
+                setNavOpen(false);
+              }}
             />
           )}
 
@@ -2827,6 +2904,13 @@ function ChatPane({
   providerChoices: choices,
   providerChoice,
   onProvider,
+  toolTimeline,
+  timelineNowMs,
+  agentActivity,
+  recentTasks,
+  connectedServices,
+  systemStatus,
+  onViewAudit,
 }: {
   active: Chat | null;
   chats: Chat[];
@@ -2865,6 +2949,13 @@ function ChatPane({
   providerChoices: { id: string; label: string; enabled: boolean; reason: string }[];
   providerChoice: string;
   onProvider: (id: string) => void;
+  toolTimeline: ToolTimelineRow[];
+  timelineNowMs: number;
+  agentActivity: ReturnType<typeof agentActivityFromTimeline>;
+  recentTasks: ReturnType<typeof recentTasksFromAudit>;
+  connectedServices: ReturnType<typeof connectedServicesRail>;
+  systemStatus: ReturnType<typeof systemStatusRail>;
+  onViewAudit: (auditId: string) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -3022,13 +3113,48 @@ function ChatPane({
             </article>
             );
           })}
+          {toolTimeline.length > 0 && (
+            <div className="max-w-3xl rounded-panel border border-line bg-surface p-3" data-testid="executing-tools">
+              {(() => {
+                const counts = timelineCounts(toolTimeline);
+                return (
+                  <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                    <span className={`inline-block size-2 rounded-full ${counts.failed ? "bg-danger" : counts.running ? "bg-accent" : "bg-ok"}`} />
+                    Executing tools ({counts.done}/{counts.total})
+                  </p>
+                );
+              })()}
+              <ul className="space-y-2">
+                {toolTimeline.map((row) => {
+                  const ms = elapsedMs(row, timelineNowMs);
+                  const failed = row.status === "failed" || row.status === "timed_out" || row.status === "cancelled";
+                  const done = row.endedAtMs != null && !failed;
+                  return (
+                    <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-panel border border-line bg-bg px-3 py-2 text-sm" data-testid="tool-timeline-row" data-status={row.status}>
+                      <span className={`size-2 shrink-0 rounded-full ${failed ? "bg-danger" : done ? "bg-ok" : "bg-accent"}`} />
+                      <span className="min-w-0 flex-1 font-medium">{row.name}</span>
+                      <span className={`text-xs ${failed ? "text-danger" : "text-muted"}`}>{row.status}</span>
+                      <span className="text-xs text-muted tabular-nums">{formatElapsed(ms)}</span>
+                      {row.auditId ? (
+                        <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onViewAudit(row.auditId!)}>
+                          View
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {busy && liveText && (
             <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">Grok 4.5 · writing</p>
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
-          {busy && !liveText && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {busy && !liveText && toolTimeline.length === 0 && <p className="text-sm text-muted">Waiting for Grok.</p>}
           {busy && (
             <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
           )}
@@ -3077,7 +3203,7 @@ function ChatPane({
           </div>
         </form>
       </section>
-      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
+      <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-auto border-l border-line p-3 xl:flex" data-testid="chat-right-rail">
         <section className="rounded-panel border border-line bg-surface p-3">
           <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
         </section>
@@ -3091,6 +3217,58 @@ function ChatPane({
             <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
           </button>
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3 text-sm" data-testid="agent-activity-live">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-semibold">Agent Activity</p>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${agentActivity.live ? "bg-ok/20 text-ok" : "bg-surface-2 text-muted"}`}>
+              {agentActivity.live ? "Live" : "Idle"}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-muted">{agentActivity.label}</p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
+            <div className={`h-full ${agentActivity.live ? "bg-accent" : agentActivity.percent > 0 ? "bg-ok" : "bg-transparent"}`} style={{ width: `${agentActivity.percent}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {agentActivity.total === 0
+              ? agentActivity.detail
+              : `Step ${agentActivity.step} of ${agentActivity.total}: ${agentActivity.detail}`}
+          </p>
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3 text-sm" data-testid="recent-tasks">
+          <p className="font-semibold">Recent Tasks</p>
+          {recentTasks.length === 0 && <p className="mt-2 text-xs text-muted">No tasks yet. Actions you take show up here.</p>}
+          <ul className="mt-2 space-y-2">
+            {recentTasks.map((task) => (
+              <li key={task.id} className="flex items-start justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate font-medium">{task.label}</span>
+                <span className="shrink-0 text-muted">{task.result}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3 text-sm" data-testid="connected-services-rail">
+          <p className="font-semibold">Connected Services</p>
+          <ul className="mt-2 space-y-2">
+            {connectedServices.map((item) => (
+              <li key={item.name} className="flex items-center justify-between gap-2 text-xs">
+                <span>{item.name}</span>
+                <span className={item.tone === "ok" ? "text-ok" : item.tone === "danger" ? "text-danger" : "text-muted"}>{item.state}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3 text-sm" data-testid="system-status-rail">
+          <p className="font-semibold">System Status</p>
+          <p className="mt-1 text-xs text-muted">{systemStatus.headline}</p>
+          <ul className="mt-2 space-y-2">
+            {systemStatus.rows.map((row) => (
+              <li key={row.name} className="flex items-center justify-between gap-2 text-xs">
+                <span>{row.name}</span>
+                <span className={row.ok ? "text-ok" : "text-muted"}>{row.state}</span>
+              </li>
+            ))}
+          </ul>
         </section>
         <section className="rounded-panel border border-line bg-surface p-3 text-sm">
           <p className="font-semibold">{active?.title ?? "New session"}</p>
