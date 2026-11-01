@@ -12,6 +12,7 @@ import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
 import { TimeScrubber } from "./time-scrubber";
 import { FeedPanel } from "./feed-panel";
 import { MoneyPanel } from "./money-panel";
+import { ChartsPanel } from "./charts-panel";
 import "./dashboard-3d.css";
 
 export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
@@ -301,6 +302,9 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
 
       {state.status === "ready" && sceneData ? (
         <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
+      ) : null}
+      {state.status === "ready" && sceneData?.charts ? (
+        <ChartsPanel charts={sceneData.charts} />
       ) : null}
 
       <NodeDetailPanel

@@ -109,6 +109,13 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
       droppedInvalid: 0,
       todayKey: null,
     },
+    charts: {
+      commitsPerBotHour: { id: "commits-per-bot", title: "Commits", unit: "commits", points: [], source: "no source yet", emptyReason: "no source yet" },
+      lockHealthShare: { id: "lock-health-share", title: "Locks", unit: "claims", points: [], source: "no source yet", emptyReason: "no source yet" },
+      landingsPerLane: { id: "landings-per-lane", title: "Landings", unit: "hops", points: [], source: "no source yet", emptyReason: "no source yet" },
+      spend: { id: "spend", title: "Spend", unit: "USD", points: [], source: "no source yet", emptyReason: "no source yet" },
+      generatedAtMs: 0,
+    },
     ...partial,
   };
 }
