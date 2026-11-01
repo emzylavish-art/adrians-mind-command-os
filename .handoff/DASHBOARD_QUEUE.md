@@ -134,6 +134,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 80 | **Light — #80 meter readback cost guard** | **done** | c51 — land fd3656b (no extra wiring); meter-backoff test |
 | 81 | **Motion c19 — star-batch xfade+neighbors one-call** | **done** | c51 — land 37333fd; pass xfade/neighbors opts; renumbered (Motion tip said #79, Light owns #79) |
 | 82 | **Motion c20 — edge pulse flip + pruneMotionStateMap** | **done** | c51 — prune on bot-list change; edge-pulse-flip + state-prune tests |
+| 83 | **Gap#58 Notion href allowlist** — https only; notion.so / www / app.notion.com / *.notion.site; neutralize js/data/http | **done** | c52 — sanitizeNotionHref in parse + Star Detail |
+| 84 | **Gap#57 Escape focus restore** — blur hidden close; restore to opener/canvas host; inert when closed | **done** | c52 — restoreFocusAfterDetailClose + canvas host tabIndex |
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |

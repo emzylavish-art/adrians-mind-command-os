@@ -2070,5 +2070,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
   }, [reducedMotion, onUnavailable]);
 
-  return <div className="dash3d-canvas-wrap" ref={mountRef} />;
+  return (
+    <div
+      className="dash3d-canvas-wrap"
+      ref={mountRef}
+      data-testid="dash3d-canvas-host"
+      tabIndex={-1}
+      aria-label="Universe stage"
+    />
+  );
 }
