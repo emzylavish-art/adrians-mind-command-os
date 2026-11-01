@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  CHAT_TIMEOUT_REPLY,
   HONEST_FAILURE_MESSAGES,
   classifyHonestFailure,
   bindRetry,
@@ -43,6 +44,11 @@ describe("failure banner markup contract", () => {
     ["emergency_stop_active", HONEST_FAILURE_MESSAGES.emergency_stop_active],
     ["mcp_tool_failed", HONEST_FAILURE_MESSAGES.mcp_tool_failed],
     ["mcp_tool_failed", "MCP tool “pglite_query” failed. PGLite query error: boom"],
+    ["chat_timeout", CHAT_TIMEOUT_REPLY],
+    ["network_failure", "Failed to fetch"],
+    ["auth_required", HONEST_FAILURE_MESSAGES.auth_required],
+    ["forbidden_cross_site", HONEST_FAILURE_MESSAGES.forbidden_cross_site],
+    ["rate_limited", "grok rate limited the request. Nothing was substituted."],
   ] as const;
 
   for (const [kind, message] of cases) {

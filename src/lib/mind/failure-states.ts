@@ -3,9 +3,24 @@
  * Messages match server/client copy in turn.server, server.ts, policy, fleet, and live-turn.
  * Banner 5 (mcp_tool_failed) matches the MCP integration copy in mcp.ts / mcp/registry.ts / mcp/tools.ts
  * (status "error", ok false, "Nothing was called." / "Nothing was invented.").
+ * Top-5 gap kinds reuse CHAT_TIMEOUT_REPLY / CHAT_DISCONNECT_REPLY, auth, and provider-call copy.
  */
 
-export type HonestFailureKind = "model_unavailable" | "database_write_failed" | "emergency_stop_active" | "mcp_tool_failed";
+export type HonestFailureKind =
+  | "model_unavailable"
+  | "database_write_failed"
+  | "emergency_stop_active"
+  | "mcp_tool_failed"
+  | "chat_timeout"
+  | "network_failure"
+  | "auth_required"
+  | "forbidden_cross_site"
+  | "rate_limited";
+
+/** Logic-wiring turn-timeouts copy (CHAT_TIMEOUT_REPLY) — recognized even when that module is not on this branch. */
+export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
+/** Logic-wiring disconnect copy (CHAT_DISCONNECT_REPLY). */
+export const CHAT_DISCONNECT_REPLY = "Connection to the model dropped";
 
 export const HONEST_FAILURE_MESSAGES = {
   model_unavailable: "That model is not available. Another provider is not substituted.",
@@ -15,6 +30,15 @@ export const HONEST_FAILURE_MESSAGES = {
   emergency_stop_active: "Emergency stop is on. No new action can run.",
   mcp_tool_failed: "The MCP tool call failed. Nothing was invented.",
   mcp_unreachable: "The MCP server could not be reached. Nothing was called.",
+  chat_timeout: CHAT_TIMEOUT_REPLY,
+  /** Stale timeout marker still emitted on this branch's live-turn/relay before logic-wiring merges. */
+  chat_timeout_stale: "Grok did not answer in time. Nothing was saved as a success.",
+  network_failure: "The network request failed. Nothing was substituted.",
+  network_offline: "You are offline. Nothing was reached.",
+  auth_required: "Sign in is required.",
+  forbidden_cross_site: "Forbidden: cross-site request blocked",
+  rate_limited: "The provider rate limited the request. Nothing was substituted.",
+  mcp_list_failed: "The MCP server list could not be loaded.",
 } as const;
 
 export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
@@ -22,6 +46,11 @@ export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
   database_write_failed: "database_write_failed",
   emergency_stop_active: "emergency_stop_active",
   mcp_tool_failed: "mcp_tool_failed",
+  chat_timeout: "chat_timeout",
+  network_failure: "network_failure",
+  auth_required: "auth_required",
+  forbidden_cross_site: "forbidden_cross_site",
+  rate_limited: "rate_limited",
 };
 
 /** Copy the MCP integration code returns when a tool call fails (status "error"). */
@@ -49,9 +78,27 @@ const MODEL_UNAVAILABLE_MARKERS = [
   HONEST_FAILURE_MESSAGES.model_unconfigured,
   "No Grok key is configured",
   "Another provider is not substituted",
-  "Grok did not answer in time",
   "Grok returned an empty reply",
   "That provider is not known",
+];
+
+const CHAT_TIMEOUT_MARKERS = [
+  CHAT_TIMEOUT_REPLY,
+  HONEST_FAILURE_MESSAGES.chat_timeout_stale,
+  "Timed out waiting for Grok",
+  "Grok did not answer in time",
+];
+
+const NETWORK_FAILURE_MARKERS = [
+  HONEST_FAILURE_MESSAGES.network_failure,
+  HONEST_FAILURE_MESSAGES.network_offline,
+  CHAT_DISCONNECT_REPLY,
+  "Failed to fetch",
+  "NetworkError",
+  "Load failed",
+  "fetch failed",
+  "You are offline",
+  "network request failed",
 ];
 
 export function classifyHonestFailure(message: string): HonestFailureKind | null {
@@ -63,11 +110,33 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
   if (text === HONEST_FAILURE_MESSAGES.database_write_failed || text.includes("could not be saved")) {
     return "database_write_failed";
   }
+  if (text === HONEST_FAILURE_MESSAGES.auth_required || text === "Unauthorized" || text.includes("Sign in is required")) {
+    return "auth_required";
+  }
+  if (
+    text === HONEST_FAILURE_MESSAGES.forbidden_cross_site ||
+    text.includes("cross-site request blocked") ||
+    /^Forbidden:\s*cross-site/i.test(text)
+  ) {
+    return "forbidden_cross_site";
+  }
+  if (/rate limited/i.test(text) || /\b429\b/.test(text)) {
+    return "rate_limited";
+  }
+  if (CHAT_TIMEOUT_MARKERS.some((marker) => text.includes(marker))) {
+    return "chat_timeout";
+  }
+  if (NETWORK_FAILURE_MARKERS.some((marker) => text.includes(marker))) {
+    return "network_failure";
+  }
   if (MCP_TOOL_FAILURE_PATTERNS.some((pattern) => pattern.test(text)) || MCP_TOOL_FAILURE_MARKERS.some((marker) => text.includes(marker))) {
     return "mcp_tool_failed";
   }
   if (MODEL_UNAVAILABLE_MARKERS.some((marker) => text.includes(marker))) {
     return "model_unavailable";
+  }
+  if (text === HONEST_FAILURE_MESSAGES.mcp_list_failed || text.includes("MCP server list could not be loaded")) {
+    return "network_failure";
   }
   return null;
 }
@@ -83,11 +152,52 @@ export function honestFailureDescription(kind: HonestFailureKind, message?: stri
       return HONEST_FAILURE_MESSAGES.emergency_stop_active;
     case "mcp_tool_failed":
       return HONEST_FAILURE_MESSAGES.mcp_tool_failed;
+    case "chat_timeout":
+      return HONEST_FAILURE_MESSAGES.chat_timeout;
+    case "network_failure":
+      return HONEST_FAILURE_MESSAGES.network_failure;
+    case "auth_required":
+      return HONEST_FAILURE_MESSAGES.auth_required;
+    case "forbidden_cross_site":
+      return HONEST_FAILURE_MESSAGES.forbidden_cross_site;
+    case "rate_limited":
+      return HONEST_FAILURE_MESSAGES.rate_limited;
   }
 }
 
 export function honestFailureAuditAction(kind: HonestFailureKind): string {
   return HONEST_FAILURE_ACTIONS[kind];
+}
+
+/**
+ * Map a thrown client/network error to existing honest copy, then leave classifyHonestFailure
+ * to pick the banner kind. Offline wins over a bare "Failed to fetch".
+ */
+export function normalizeClientFailureMessage(caught: unknown): string {
+  if (typeof navigator !== "undefined" && navigator && navigator.onLine === false) {
+    return HONEST_FAILURE_MESSAGES.network_offline;
+  }
+  const raw =
+    caught instanceof Error
+      ? caught.message
+      : typeof caught === "string"
+        ? caught
+        : "";
+  const text = raw.trim();
+  if (!text) return HONEST_FAILURE_MESSAGES.network_failure;
+  if (text === "Unauthorized" || /sign in is required/i.test(text)) {
+    return HONEST_FAILURE_MESSAGES.auth_required;
+  }
+  if (/cross-site request blocked/i.test(text)) {
+    return HONEST_FAILURE_MESSAGES.forbidden_cross_site;
+  }
+  if (/rate limited/i.test(text)) {
+    return text.includes("Nothing was substituted") ? text : HONEST_FAILURE_MESSAGES.rate_limited;
+  }
+  if (/Failed to fetch|NetworkError|fetch failed|Load failed|ERR_NETWORK|ECONNREFUSED/i.test(text)) {
+    return text.includes("Failed to fetch") ? "Failed to fetch" : HONEST_FAILURE_MESSAGES.network_failure;
+  }
+  return text;
 }
 
 /** Retry keeps the same parameters object identity for the caller's closure to re-invoke. */

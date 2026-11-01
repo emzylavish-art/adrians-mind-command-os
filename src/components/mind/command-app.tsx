@@ -99,6 +99,7 @@ import {
   honestFailureAuditAction,
   HONEST_FAILURE_MESSAGES,
   mcpToolFailure,
+  normalizeClientFailureMessage,
 } from "@/lib/mind/failure-states";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
@@ -322,6 +323,7 @@ export function CommandApp() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null } | null>(null);
+  const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
   const [timelineTickMs, setTimelineTickMs] = useState(0);
   const [statusSignedIn, setStatusSignedIn] = useState<boolean | null>(null);
@@ -475,12 +477,23 @@ export function CommandApp() {
     notionStatus()
       .then((status) => setNotion(status))
       .catch(() => setNotion({ state: "unconfigured", detail: "Notion status could not be read. Nothing was searched or updated." }));
-    mcpList()
-      .then((result) => setMcpServers(result.servers))
-      .catch(() => setMcpServers([]));
-    mcpRegistryList()
-      .then((result) => setMcpRegistry(result.servers))
-      .catch(() => setMcpRegistry([]));
+    const loadMcpLists = () => {
+      mcpList()
+        .then((result) => setMcpServers(result.servers))
+        .catch((caught) => {
+          setMcpServers([]);
+          const message = normalizeClientFailureMessage(caught);
+          reportFailureRef.current(message, "mcp_list_failed", "mcp:list", loadMcpLists);
+        });
+      mcpRegistryList()
+        .then((result) => setMcpRegistry(result.servers))
+        .catch((caught) => {
+          setMcpRegistry([]);
+          const message = normalizeClientFailureMessage(caught);
+          reportFailureRef.current(message, "mcp_list_failed", "mcp:registry", loadMcpLists);
+        });
+    };
+    loadMcpLists();
     try {
       const saved = localStorage.getItem("amcos.skills.v1");
       if (saved) setEnabledSkills(JSON.parse(saved) as Record<string, boolean>);
@@ -991,8 +1004,8 @@ export function CommandApp() {
       if (!shouldStoreReply(result)) {
         const message = result.ok ? "Grok returned an empty reply." : result.error;
         const kind = classifyHonestFailure(message);
-        reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
-          void deliver(chat, text, wsRef.current, true);
+        reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, () => {
+          void deliver(chat, text, wsRef.current, true, images);
         });
         return null;
       }
@@ -1058,8 +1071,8 @@ export function CommandApp() {
             ? caught.message
             : HONEST_FAILURE_MESSAGES.model_unreachable;
       const kind = classifyHonestFailure(message);
-      reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
-        void deliver(chat, text, wsRef.current, resume);
+      reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, () => {
+        void deliver(chat, text, wsRef.current, resume, images);
       });
       return null;
     }
@@ -1809,6 +1822,7 @@ export function CommandApp() {
     setError(message);
     setNotice(null);
   }
+  reportFailureRef.current = reportFailure;
 
   function reportEmergencyStop(target: string, retry: () => void) {
     reportFailure(HONEST_FAILURE_MESSAGES.emergency_stop_active, "emergency_stop_active", target, retry);
