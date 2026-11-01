@@ -10,6 +10,8 @@ export type ResearchResult = {
   /** Present when deep research ran multiple searches. */
   steps?: { query: string; ok: boolean; count: number }[];
   summary?: string;
+  /** True when some deep-research queries timed out but real citations were kept. */
+  partial?: boolean;
 };
 
 /** Per-query search fetch budget (ms). Override with MIND_SEARCH_TIMEOUT_MS (≥1000). */
@@ -262,14 +264,8 @@ export async function performDeepResearch(input: {
   try {
     for (const q of queries) {
       if (overall.signal.aborted) {
-        const timedOut = isTimeoutAbort(overall.signal, overall.signal.reason);
-        return {
-          ok: false,
-          configured: true,
-          citations: [],
-          error: timedOut || sawTimeout ? SEARCH_TIMEOUT_REPLY : "Research stopped. No citations were saved as a success.",
-          steps,
-        };
+        sawTimeout = sawTimeout || isTimeoutAbort(overall.signal, overall.signal.reason);
+        break;
       }
       const one = await performSingleSearch({
         ...input,
@@ -281,7 +277,7 @@ export async function performDeepResearch(input: {
       if (one.error === SEARCH_TIMEOUT_REPLY) {
         sawTimeout = true;
         if (isTimeoutAbort(overall.signal, overall.signal.reason)) {
-          return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY, steps };
+          break; // keep any citations already collected; finalize below
         }
       }
       if (one.ok) collected.push(...one.citations);
@@ -302,9 +298,21 @@ export async function performDeepResearch(input: {
       steps,
     };
   }
-  const summary = [
+  const summaryLines = [
     `Deep research used ${steps.length} searches and kept ${citations.length} http(s) sources the provider returned:`,
     ...citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`),
-  ].join("\n");
-  return { ok: true, configured: true, citations, error: "", steps, summary };
+  ];
+  if (sawTimeout) {
+    summaryLines.push("Note: some searches timed out; only confirmed sources are listed.");
+  }
+  const summary = summaryLines.join("\n");
+  return {
+    ok: true,
+    configured: true,
+    citations,
+    error: "",
+    steps,
+    summary,
+    ...(sawTimeout ? { partial: true as const } : {}),
+  };
 }
