@@ -1792,3 +1792,25 @@ html[data-theme="light"] [data-loading="true"] {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
 }
+
+/* —— Pass 8 crawl fixes: light masthead + voice launch contrast —— */
+html[data-theme="light"] .masthead {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.92), rgb(255 255 255 / 0.7) 55%, rgb(255 255 255 / 0.35)),
+    url("/brand/hero-bg.jpg") center top / cover no-repeat,
+    radial-gradient(ellipse 42% 120% at 78% -20%, rgb(109 77 255 / 0.14), transparent 70%);
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.06), 0 12px 32px rgb(15 23 42 / 0.06);
+}
+html[data-theme="light"] .masthead h1 { color: #0a0d14; }
+html[data-theme="light"] .masthead .text-accent { color: #5b3df5; }
+html[data-theme="light"] .masthead .text-muted { color: #3f4859; }
+html[data-theme="light"] .voice-mode-launch {
+  background: rgb(109 77 255 / 0.08);
+  border-color: rgb(109 77 255 / 0.3);
+  color: #4c2fd1;
+}
+html[data-theme="light"] .voice-mode-launch:hover { background: rgb(109 77 255 / 0.14); }
+html[data-theme="light"] .voice-mode-launch[aria-pressed="true"] {
+  background: rgb(109 77 255 / 0.18);
+  box-shadow: 0 0 0 1px rgb(109 77 255 / 0.3), 0 6px 18px rgb(109 77 255 / 0.18);
+}
