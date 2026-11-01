@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { splitBlocks } from "@/lib/mind/blocks";
 import { InlineImage } from "@/components/mind/media/inline-image";
+import { isSafeImageSrc, sanitizeMediaLabel } from "@/lib/mind/media";
 import type { MsgImage } from "@/lib/mind/types";
 
 const MD_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
@@ -26,12 +27,12 @@ function TextWithImages({
     if (match.index > last) nodes.push(text.slice(last, match.index));
     const alt = match[1] || "image";
     const src = match[2]!;
-    if (src.startsWith("data:image/") || /^https?:\/\//i.test(src)) {
+    if (isSafeImageSrc(src)) {
       nodes.push(
         <InlineImage
           key={`img-${match.index}`}
           src={src}
-          alt={alt}
+          alt={sanitizeMediaLabel(alt) || "image"}
           onEditImagine={src.startsWith("data:image/") ? onEditImagine : undefined}
           onSave={onSaveImage}
           onDownload={onDownloadImage}
@@ -67,11 +68,11 @@ export function MessageBody({
   return (
     <div className="space-y-2">
       {images?.map((image, index) =>
-        image.dataUrl ? (
+        image.dataUrl && isSafeImageSrc(image.dataUrl) ? (
           <InlineImage
             key={`attach-${index}`}
             src={image.dataUrl}
-            alt={image.name || `Attachment ${index + 1}`}
+            alt={sanitizeMediaLabel(image.name) || `Attachment ${index + 1}`}
             onEditImagine={onEditImagine}
             onSave={onSaveImage}
             onDownload={onDownloadImage}

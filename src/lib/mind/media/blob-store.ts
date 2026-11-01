@@ -21,6 +21,16 @@ export type ImageRef = {
   mime?: string;
 };
 
+
+export function isQuotaExceededError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const name = "name" in error ? String((error as { name?: unknown }).name) : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message) : "";
+  return name === "QuotaExceededError" || /quota/i.test(message);
+}
+
+export type CompactResult = { refs: ImageRef[]; degraded: boolean; warning?: string };
+
 export function shouldOffloadDataUrl(dataUrl: string | undefined): boolean {
   return typeof dataUrl === "string" && dataUrl.startsWith("data:image/") && dataUrl.length >= INLINE_OFFLOAD_CHARS;
 }
@@ -110,9 +120,17 @@ export async function hydrateImageRefs(images: ImageRef[] | undefined, store: Me
       continue;
     }
     if (image.blobId) {
-      const dataUrl = await store.get(image.blobId);
-      if (dataUrl) {
-        out.push({ ...image, dataUrl });
+      try {
+        const dataUrl = await store.get(image.blobId);
+        if (dataUrl) {
+          out.push({ ...image, dataUrl });
+          continue;
+        }
+        // Missing blob on reload — keep the ref so UI can show an honest placeholder.
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
+        continue;
+      } catch {
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
         continue;
       }
     }
@@ -131,14 +149,26 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
   const out: ImageRef[] = [];
   for (const image of images) {
     if (image.blobId && image.dataUrl && shouldOffloadDataUrl(image.dataUrl)) {
-      await store.put(image.blobId, image.dataUrl);
-      out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
+      try {
+        await store.put(image.blobId, image.dataUrl);
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
+      } catch (error) {
+        // Quota / private mode — keep inline rather than lose the image.
+        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime });
+        if (!isQuotaExceededError(error)) {
+          /* still degraded */
+        }
+      }
       continue;
     }
     if (!image.blobId && shouldOffloadDataUrl(image.dataUrl)) {
       const blobId = newMediaBlobId();
-      await store.put(blobId, image.dataUrl!);
-      out.push({ blobId, name: image.name, mime: image.mime });
+      try {
+        await store.put(blobId, image.dataUrl!);
+        out.push({ blobId, name: image.name, mime: image.mime });
+      } catch {
+        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime });
+      }
       continue;
     }
     // Small / already-compact / legacy inline-only
@@ -192,4 +222,14 @@ export async function imagesForExport(images: ImageRef[] | undefined, store: Med
   return hydrated
     .filter((image): image is ImageRef & { dataUrl: string } => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
     .map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null }));
+}
+
+/** Prefer IndexedDB; fall back to memory when private mode / no IDB. */
+export function tryCreateIndexedDbBlobStore(): MediaBlobStore {
+  if (typeof indexedDB === "undefined") return createMemoryBlobStore();
+  try {
+    return createIndexedDbBlobStore();
+  } catch {
+    return createMemoryBlobStore();
+  }
 }

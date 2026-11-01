@@ -1186,6 +1186,7 @@ export function CommandApp() {
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ prompt, n: 1, model: resolveImagineModel(imagineModel) }),
+        signal: AbortSignal.timeout(120_000),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -1311,6 +1312,7 @@ export function CommandApp() {
             ? { prompt, image: inputImages[0], mode: "edit", n: 1, model: resolveImagineModel(imagineModel) }
             : { prompt, images: inputImages, mode: "edit", n: 1, model: resolveImagineModel(imagineModel) },
         ),
+        signal: AbortSignal.timeout(120_000),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -1360,7 +1362,7 @@ export function CommandApp() {
         }));
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Edit with Imagine could not be reached.");
+      setError(caught instanceof Error ? (/abort|timeout/i.test(caught.name + caught.message) ? "Edit with Imagine timed out. Nothing was saved as a success." : caught.message) : "Edit with Imagine could not be reached.");
     } finally {
       setBusy(false);
     }

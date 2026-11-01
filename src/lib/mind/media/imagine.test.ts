@@ -184,3 +184,30 @@ describe("resolveImagineModel", () => {
     assert.equal(resolveImagineModel("nope"), GROK_IMAGINE_MODEL);
   });
 });
+
+describe("adversarial: imagine download SSRF", () => {
+  it("refuses private URL downloads even when the API returns them", async () => {
+    const tiny = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const result = await generateImagineImages(
+      { prompt: "ssrf", n: 1, responseFormat: "url" },
+      {
+        apiKey: "test-key",
+        fetchImpl: async (input, init) => {
+          if (String(input).includes("/images/generations")) {
+            return new Response(JSON.stringify({ data: [{ url: "https://127.0.0.1/secret.png" }] }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          // Should never be reached for 127.0.0.1
+          return new Response(tiny, { status: 200, headers: { "content-type": "image/png" } });
+        },
+      },
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /unsafe|refus/i);
+  });
+});

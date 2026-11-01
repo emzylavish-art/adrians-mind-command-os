@@ -9,3 +9,4 @@ export * from "./pack.ts";
 export * from "./history.ts";
 export * from "./imagine-shared.ts";
 export * from "./blob-store.ts";
+export * from "./harden.ts";

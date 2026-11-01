@@ -3,6 +3,8 @@ import { dataUrlToDownscaled } from "./downscale";
 
 type Facing = "user" | "environment";
 
+const MAX_BURST = 12;
+
 export function CameraCapture({
   open,
   onClose,
@@ -27,6 +29,27 @@ export function CameraCapture({
     setError(null);
     setReady(false);
     setBurstCount(0);
+
+    function stopTracks(stream: MediaStream | null) {
+      if (!stream) return;
+      for (const track of stream.getTracks()) {
+        try {
+          track.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    function onVisibility() {
+      if (document.hidden) {
+        // Pause playback while hidden; keep tracks but avoid burning CPU.
+        videoRef.current?.pause();
+      } else {
+        void videoRef.current?.play().catch(() => undefined);
+      }
+    }
+
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
         setError("This browser cannot open the camera.");
@@ -38,12 +61,18 @@ export function CameraCapture({
           audio: false,
         });
         if (cancelled) {
-          for (const track of stream.getTracks()) track.stop();
+          stopTracks(stream);
           return;
         }
         const previous = streamRef.current;
-        if (previous) for (const track of previous.getTracks()) track.stop();
+        stopTracks(previous);
         streamRef.current = stream;
+        for (const track of stream.getVideoTracks()) {
+          track.addEventListener("ended", () => {
+            if (!cancelled) setError("The camera was disconnected. Close and try again.");
+            setReady(false);
+          });
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
@@ -55,6 +84,8 @@ export function CameraCapture({
           setError("Camera permission was denied. You can still attach an image file.");
         } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
           setError("No camera was found on this device.");
+        } else if (name === "NotReadableError" || name === "TrackStartError") {
+          setError("The camera is in use by another app or was unplugged.");
         } else if (name === "OverconstrainedError") {
           setError("That camera facing mode is not available on this device.");
         } else {
@@ -62,11 +93,14 @@ export function CameraCapture({
         }
       }
     })();
+
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
       const stream = streamRef.current;
       streamRef.current = null;
-      if (stream) for (const track of stream.getTracks()) track.stop();
+      stopTracks(stream);
       if (videoRef.current) videoRef.current.srcObject = null;
     };
   }, [open, facing]);
@@ -76,6 +110,10 @@ export function CameraCapture({
   async function snap(closeAfter: boolean) {
     const video = videoRef.current;
     if (!video || busySnap) return;
+    if (burstCount >= MAX_BURST) {
+      setError(`Burst limit reached (${MAX_BURST}). Close and reopen to capture more.`);
+      return;
+    }
     setBusySnap(true);
     const canvas = document.createElement("canvas");
     const width = video.videoWidth || 640;
@@ -129,7 +167,7 @@ export function CameraCapture({
           <button
             type="button"
             className="min-h-11 flex-1 rounded-panel border border-line disabled:opacity-50"
-            disabled={!ready || Boolean(error) || busySnap}
+            disabled={!ready || Boolean(error) || busySnap || burstCount >= MAX_BURST}
             onClick={() => void snap(false)}
           >
             Burst

@@ -1,4 +1,4 @@
-import { fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE } from "@/lib/mind/media";
+import { dimensionsLookLikeBomb, fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE, sanitizeMediaLabel } from "@/lib/mind/media";
 
 export type DownscaleResult = {
   dataUrl: string;
@@ -35,8 +35,19 @@ export async function fileToDownscaledDataUrl(
   file: File,
   maxEdge = MAX_IMAGE_EDGE,
 ): Promise<DownscaleResult> {
+  if (!file || file.size === 0) {
+    throw new Error("That file is empty.");
+  }
+  // HEIC/AVIF and other unsupported types fail honestly before canvas work.
+  const type = (file.type || "").toLowerCase();
+  if (type && !type.startsWith("image/")) {
+    throw new Error("That file is not an image.");
+  }
+  if (type.includes("heic") || type.includes("heif") || type.includes("avif") || /\.heic$|\.heif$|\.avif$/i.test(file.name)) {
+    throw new Error("HEIC/AVIF is not supported here. Convert to JPEG or PNG first.");
+  }
   const source = await readFileAsDataUrl(file);
-  return dataUrlToDownscaled(source, file.name || "image.jpg", maxEdge);
+  return dataUrlToDownscaled(source, sanitizeMediaLabel(file.name) || "image.jpg", maxEdge);
 }
 
 export async function dataUrlToDownscaled(
@@ -45,7 +56,13 @@ export async function dataUrlToDownscaled(
   maxEdge = MAX_IMAGE_EDGE,
 ): Promise<DownscaleResult> {
   const image = await loadImage(dataUrl);
-  let fitted = fitWithinBox(image.naturalWidth || image.width, image.naturalHeight || image.height, maxEdge);
+  const naturalW = image.naturalWidth || image.width;
+  const naturalH = image.naturalHeight || image.height;
+  if (dimensionsLookLikeBomb(naturalW, naturalH)) {
+    throw new Error("That image is too large to decode safely (possible decompression bomb).");
+  }
+  // Canvas redraw strips EXIF (orientation/GPS) — intentional privacy hardening.
+  let fitted = fitWithinBox(naturalW, naturalH, maxEdge);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas is not available in this browser.");

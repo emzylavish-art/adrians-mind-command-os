@@ -1,5 +1,7 @@
 /** Client-safe Imagine helpers (no Node APIs). */
 
+import { sanitizeImaginePrompt } from "./harden.ts";
+
 /** Default Grok Imagine model (listed by GET /v1/image-generation-models). */
 export const GROK_IMAGINE_MODEL = "grok-imagine-image";
 
@@ -23,11 +25,7 @@ export const XAI_IMAGE_VARIATIONS_SUPPORTED = false;
 export const XAI_MULTI_IMAGE_EDITS_SUPPORTED = true;
 
 export function normalizeImaginePrompt(raw: unknown): { ok: true; prompt: string } | { ok: false; error: string } {
-  if (typeof raw !== "string") return { ok: false, error: "Write a prompt for Imagine." };
-  const prompt = raw.trim();
-  if (!prompt) return { ok: false, error: "Write a prompt for Imagine." };
-  if (prompt.length > 4000) return { ok: false, error: "That Imagine prompt is too long (max 4000 characters)." };
-  return { ok: true, prompt };
+  return sanitizeImaginePrompt(raw, 4000);
 }
 
 /** Parse `/imagine <prompt>` from composer draft. Returns null when not an imagine command. */

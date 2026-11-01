@@ -1,6 +1,8 @@
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
+import { MAX_IMAGINE_BODY_CHARS, checkImagineRateLimit, mapImagineHttpError } from "./harden.ts";
 import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolveImagineModel } from "./imagine.ts";
+import { normalizeImageDataUrl } from "./data-url.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -27,10 +29,11 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   const blocked = guardSite(request);
   if (blocked) return blocked;
 
+  let userId: string;
   try {
     const authorization = request.headers.get("authorization");
     const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
-    await requireUserId(bearer);
+    userId = await requireUserId(bearer);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json(
@@ -39,11 +42,38 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     );
   }
 
+  const contentLength = Number(request.headers.get("content-length") || "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_IMAGINE_BODY_CHARS) {
+    return json({ ok: false, error: "That Imagine request body is too large." }, 413);
+  }
+
+  let rawText: string;
+  try {
+    rawText = await request.text();
+  } catch {
+    return json({ ok: false, error: "Request body could not be read." }, 400);
+  }
+  if (rawText.length > MAX_IMAGINE_BODY_CHARS) {
+    return json({ ok: false, error: "That Imagine request body is too large." }, 413);
+  }
+
   let body: unknown;
   try {
-    body = await request.json();
+    body = rawText ? JSON.parse(rawText) : {};
   } catch {
     return json({ ok: false, error: "Request body must be JSON with a prompt." }, 400);
+  }
+
+  const rate = checkImagineRateLimit(userId);
+  if (!rate.ok) {
+    return new Response(JSON.stringify({ ok: false, error: rate.error }), {
+      status: 429,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "retry-after": String(rate.retryAfterSec),
+      },
+    });
   }
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
@@ -52,12 +82,21 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
 
   const n = typeof record.n === "number" ? record.n : typeof record.count === "number" ? record.count : 1;
   const model = resolveImagineModel(record.model);
-  const imageDataUrl = typeof record.image === "string" ? record.image : typeof record.imageDataUrl === "string" ? record.imageDataUrl : "";
-  const imageDataUrls = Array.isArray(record.images)
-    ? record.images.filter((item): item is string => typeof item === "string" && item.startsWith("data:image/"))
-    : Array.isArray(record.imageDataUrls)
-      ? record.imageDataUrls.filter((item): item is string => typeof item === "string" && item.startsWith("data:image/"))
-      : [];
+  const rawImage = typeof record.image === "string" ? record.image : typeof record.imageDataUrl === "string" ? record.imageDataUrl : "";
+  const imageDataUrl = rawImage ? normalizeImageDataUrl(rawImage) || "" : "";
+  const imageDataUrls = (
+    Array.isArray(record.images)
+      ? record.images
+      : Array.isArray(record.imageDataUrls)
+        ? record.imageDataUrls
+        : []
+  )
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => normalizeImageDataUrl(item))
+    .filter((item): item is string => Boolean(item));
+  if (rawImage && !imageDataUrl) {
+    return json({ ok: false, error: "The edit image is not a recognizable PNG, JPEG, GIF, or WebP." }, 400);
+  }
   const mode = record.mode === "edit" || imageDataUrl || imageDataUrls.length ? "edit" : "generate";
 
   const result =
@@ -78,7 +117,8 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
 
   if (!result.ok) {
     const status = result.status && result.status >= 400 && result.status < 600 ? result.status : 502;
-    return json({ ok: false, error: result.error, model }, status);
+    const error = mapImagineHttpError(status, result.error);
+    return json({ ok: false, error, model }, status);
   }
 
   return json({

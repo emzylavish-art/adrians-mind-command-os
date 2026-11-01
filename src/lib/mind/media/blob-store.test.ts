@@ -8,6 +8,7 @@ import {
   hydrateWorkspaceImages,
   INLINE_OFFLOAD_CHARS,
   shouldOffloadDataUrl,
+  type MediaBlobStore,
 } from "./blob-store.ts";
 
 const big = `data:image/png;base64,${"a".repeat(INLINE_OFFLOAD_CHARS)}`;
@@ -48,5 +49,30 @@ describe("media blob store compaction", () => {
     assert.equal(compacted.chats[0]?.messages[0]?.images?.[0]?.dataUrl, small);
     const hydrated = await hydrateWorkspaceImages(compacted, store);
     assert.equal(hydrated.chats[0]?.messages[0]?.images?.[0]?.dataUrl, small);
+  });
+});
+
+describe("adversarial: blob store degrade", () => {
+  it("keeps a placeholder when the blob is missing on hydrate", async () => {
+    const store = createMemoryBlobStore();
+    const hydrated = await hydrateImageRefs([{ blobId: "missing_blob", name: "gone.png" }], store);
+    assert.equal(hydrated[0]?.dataUrl, undefined);
+    assert.equal(hydrated[0]?.blobId, "missing_blob");
+  });
+
+  it("falls back to inline when put throws QuotaExceededError", async () => {
+    const store: MediaBlobStore = {
+      async put() {
+        const err = new Error("QuotaExceededError");
+        (err as Error & { name: string }).name = "QuotaExceededError";
+        throw err;
+      },
+      async get() {
+        return undefined;
+      },
+    };
+    const bigLocal = `data:image/png;base64,${"b".repeat(INLINE_OFFLOAD_CHARS)}`;
+    const compacted = await compactImageRefs([{ dataUrl: bigLocal, name: "q.png" }], store);
+    assert.equal(compacted[0]?.dataUrl, bigLocal);
   });
 });

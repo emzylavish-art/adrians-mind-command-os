@@ -9,6 +9,7 @@ import { fetchGoogleDriveFile, listGoogleDriveFiles } from "./drive.ts";
 import { fetchOneDriveFile, listOneDriveFiles } from "./onedrive.ts";
 import { packageCloudFetchForComposer } from "./attach.ts";
 import type { CloudSource } from "./types.ts";
+import { isSafeCloudFileId, sanitizeMediaLabel } from "../harden.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -104,9 +105,10 @@ export async function handleCloudFetch(request: Request): Promise<Response> {
   const source = parseSource(body.source ?? "google_drive");
   if (!source) return json({ ok: false, error: "Unknown cloud source." }, 400);
   const fileId = typeof body.fileId === "string" ? body.fileId.trim() : "";
-  const name = typeof body.name === "string" ? body.name.trim().slice(0, 180) : "drive-file";
+  const name = sanitizeMediaLabel(body.name, 180) || "drive-file";
   const mimeType = typeof body.mimeType === "string" ? body.mimeType : "application/octet-stream";
   if (!fileId) return json({ ok: false, error: "Pick a file first." }, 400);
+  if (!isSafeCloudFileId(fileId)) return json({ ok: false, error: "That file id is not allowed." }, 400);
 
   const status = cloudConnectionStatus(userId, source);
   if (status.state !== "connected") {

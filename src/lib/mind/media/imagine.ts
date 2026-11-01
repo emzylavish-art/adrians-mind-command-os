@@ -1,3 +1,4 @@
+import { isSafeRemoteImageUrl, mapImagineHttpError } from "./harden.ts";
 import { resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
 import {
@@ -81,9 +82,12 @@ async function downloadUrlToDataUrl(
   url: string,
   fetchImpl: FetchLike,
 ): Promise<{ ok: true; dataUrl: string; mime: string } | { ok: false; error: string }> {
+  if (!isSafeRemoteImageUrl(url)) {
+    return { ok: false, error: "Refusing to download that image URL (unsafe host or scheme)." };
+  }
   let response: Response;
   try {
-    response = await fetchImpl(url, { method: "GET" });
+    response = await fetchImpl(url, { method: "GET", redirect: "error" });
   } catch {
     return { ok: false, error: "Could not download the generated image URL." };
   }
@@ -159,13 +163,13 @@ export async function generateImagineImages(
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   if (!response.ok) {
     const err = record.error;
-    const message =
+    const raw =
       typeof err === "string"
         ? err
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image generation failed (HTTP ${response.status}).`;
-    return { ok: false, error: message, status: response.status };
+    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
@@ -296,13 +300,13 @@ export async function editImagineImage(
   const record = responseJson && typeof responseJson === "object" ? (responseJson as Record<string, unknown>) : {};
   if (!response.ok) {
     const err = record.error;
-    const message =
+    const raw =
       typeof err === "string"
         ? err
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image editing failed (HTTP ${response.status}).`;
-    return { ok: false, error: message, status: response.status };
+    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
