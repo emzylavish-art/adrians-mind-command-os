@@ -7430,3 +7430,22 @@ span[class*="124_92_255"]:not(.logo-mark):not(.logo-badge) {
     z-index: 47 !important;
   }
 }
+
+/* —— Evolution c115: card padding floor (owner-video #12) —— */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .rounded-panel.border.border-line.bg-surface,
+.main-stage li.dense-card {
+  padding: max(0.9rem, 0.85rem) !important;
+}
+.main-stage .dense-card.p-4,
+.main-stage .glow-card.p-4 {
+  padding: 1rem !important;
+}
+.composer-dock .min-h-16.rounded-panel,
+.floating-composer .min-h-16.rounded-panel {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
