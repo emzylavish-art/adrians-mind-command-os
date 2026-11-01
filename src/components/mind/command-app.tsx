@@ -45,6 +45,7 @@ import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
+import { VoiceModeStage, DictationPill, type VoiceUiState, type DictationUiState } from "@/components/mind/voice-ui";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -317,6 +318,13 @@ export function CommandApp() {
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
+  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceInterrupted, setVoiceInterrupted] = useState(false);
+  const [dictationUi, setDictationUi] = useState<DictationUiState>("idle");
+  const [dictationElapsed, setDictationElapsed] = useState(0);
+  const speakingWasRef = useRef(false);
+  const dictationClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
@@ -1137,6 +1145,10 @@ export function CommandApp() {
   }
 
   async function speak(text: string) {
+    if (voiceMuted && voiceModeOpen) {
+      setNotice("Voice mode is muted. Unmute to hear replies.");
+      return;
+    }
     setSpeaking(true);
     setError(null);
     const result = await speakText({ data: { text } });
@@ -1200,6 +1212,72 @@ export function CommandApp() {
       setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
     };
     rec.start();
+  }
+
+
+  useEffect(() => {
+    if (listening && speakingWasRef.current && voiceModeOpen) {
+      setVoiceInterrupted(true);
+      const t = window.setTimeout(() => setVoiceInterrupted(false), 700);
+      return () => window.clearTimeout(t);
+    }
+    speakingWasRef.current = speaking;
+  }, [listening, speaking, voiceModeOpen]);
+
+  useEffect(() => {
+    if (listening && !voiceModeOpen) {
+      setDictationUi("recording");
+      setDictationElapsed(0);
+      if (dictationClockRef.current) clearInterval(dictationClockRef.current);
+      const started = Date.now();
+      dictationClockRef.current = setInterval(() => {
+        setDictationElapsed(Math.floor((Date.now() - started) / 1000));
+      }, 250);
+      return () => {
+        if (dictationClockRef.current) clearInterval(dictationClockRef.current);
+        dictationClockRef.current = null;
+      };
+    }
+    if (!listening) {
+      if (dictationClockRef.current) {
+        clearInterval(dictationClockRef.current);
+        dictationClockRef.current = null;
+      }
+      setDictationUi((prev) => (prev === "recording" ? "transcribing" : prev === "transcribing" ? prev : "idle"));
+      const t = window.setTimeout(() => setDictationUi("idle"), 450);
+      return () => window.clearTimeout(t);
+    }
+  }, [listening, voiceModeOpen]);
+
+  const voiceUiState: VoiceUiState = voiceInterrupted
+    ? "interrupted"
+    : speaking
+      ? "speaking"
+      : listening && voiceModeOpen
+        ? "listening"
+        : busy && voiceModeOpen
+          ? "thinking"
+          : "idle";
+
+  function openVoiceMode() {
+    setVoiceModeOpen(true);
+    setVoiceMuted(false);
+    setNotice("Voice mode is open. Listening and speaking use this browser. This is not a realtime duplex provider.");
+  }
+
+  function endVoiceMode() {
+    setVoiceModeOpen(false);
+    setVoiceInterrupted(false);
+    setListening(false);
+  }
+
+  function stopDictationVisual() {
+    setListening(false);
+    setDictationUi("idle");
+    if (dictationClockRef.current) {
+      clearInterval(dictationClockRef.current);
+      dictationClockRef.current = null;
+    }
   }
 
   async function checkRea() {
@@ -1490,14 +1568,28 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <div className={`voice-zone ${listening || speaking ? "is-live" : ""}`} aria-label="Voice controls">
+          <div className={`voice-zone ${listening || speaking || voiceModeOpen ? "is-live" : ""}`} aria-label="Voice controls">
+            <DictationPill
+              state={voiceModeOpen ? "idle" : dictationUi}
+              level={listening && !voiceModeOpen ? 0.5 : 0}
+              elapsedSec={dictationElapsed}
+              onStart={() => {
+                if (voiceModeOpen) return;
+                listen();
+              }}
+              onStop={stopDictationVisual}
+              onConfirm={stopDictationVisual}
+              disabled={voiceModeOpen || speaking}
+            />
             <button
               type="button"
-              className={`focus-ring grid size-9 place-items-center rounded-full ${listening ? "mic-pulse text-glow" : "text-muted"}`}
-              aria-label="Dictate"
-              onClick={() => listen()}
+              className="voice-mode-launch focus-ring"
+              aria-label="Open voice mode"
+              aria-pressed={voiceModeOpen}
+              data-testid="voice-mode-launch"
+              onClick={() => (voiceModeOpen ? endVoiceMode() : openVoiceMode())}
             >
-              <Mic className="size-4" />
+              Voice
             </button>
             <span className="waveform" aria-hidden="true">
               <span /><span /><span /><span /><span /><span /><span />
@@ -1506,7 +1598,7 @@ export function CommandApp() {
               type="button"
               className="focus-ring grid size-9 place-items-center rounded-full text-muted"
               aria-label="Speak last reply"
-              disabled={speaking}
+              disabled={speaking || voiceMuted}
               onClick={() => {
                 const last = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
                 if (last) void speak(last.content);
@@ -1898,6 +1990,11 @@ export function CommandApp() {
               onSpeak={(text) => void speak(text)}
               onListen={listen}
               speaking={speaking}
+              listening={listening}
+              dictationUi={dictationUi}
+              dictationElapsed={dictationElapsed}
+              onStopDictation={stopDictationVisual}
+              voiceModeOpen={voiceModeOpen}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
@@ -2795,6 +2892,16 @@ export function CommandApp() {
           More
         </button>
       </nav>
+      <VoiceModeStage
+        open={voiceModeOpen}
+        overlay
+        state={voiceUiState}
+        level={listening || speaking ? 0.62 : 0.14}
+        modeLabel="Browser speech · not realtime duplex"
+        muted={voiceMuted}
+        onMute={() => setVoiceMuted((v) => !v)}
+        onEnd={endVoiceMode}
+      />
     </div>
   );
 }
@@ -2927,6 +3034,11 @@ function ChatPane({
   onSpeak,
   onListen,
   speaking,
+  listening,
+  dictationUi,
+  dictationElapsed,
+  onStopDictation,
+  voiceModeOpen,
   memoryChoice,
   mode,
   onComposerMemory,
@@ -2965,6 +3077,11 @@ function ChatPane({
   onSpeak: (text: string) => void;
   onListen: () => void;
   speaking: boolean;
+  listening: boolean;
+  dictationUi: DictationUiState;
+  dictationElapsed: number;
+  onStopDictation: () => void;
+  voiceModeOpen: boolean;
   memoryChoice: "off" | "on";
   mode: Autonomy;
   onComposerMemory: () => void;
@@ -2985,10 +3102,23 @@ function ChatPane({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showScrollFab, setShowScrollFab] = useState(false);
+  const streamRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setRenaming(false);
     setEditingId(null);
   }, [active?.id]);
+  useEffect(() => {
+    const el = streamRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollFab(gap > 120);
+    };
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [active?.id, active?.messages.length, liveText, busy]);
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
@@ -3057,7 +3187,7 @@ function ChatPane({
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
           </div>
         </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
+        <div ref={streamRef} className="chat-stream min-h-0 flex-1 space-y-3 overflow-auto p-4" data-testid="chat-stream">
           {(!active || active.messages.length === 0) && !busy && (
             <div className="grid min-h-64 place-items-center text-center">
               <div>
@@ -3073,7 +3203,7 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "ml-auto bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
+            <article key={msg.id} data-testid="chat-message" className={`chat-message max-w-3xl rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "ml-auto bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -3134,7 +3264,7 @@ function ChatPane({
             );
           })}
           {busy && liveText && (
-            <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
+            <article className="chat-message stream-caret max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm" data-testid="chat-message-live">
               <p className="mb-1 text-xs text-muted">Grok 4.5 · writing</p>
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
@@ -3156,6 +3286,16 @@ function ChatPane({
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
         </div>
+        {showScrollFab && (
+          <button
+            type="button"
+            className="scroll-bottom-fab"
+            data-testid="scroll-bottom-fab"
+            onClick={() => streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" })}
+          >
+            Jump to latest
+          </button>
+        )}
         <form
           className="floating-composer command-card m-3 p-3"
           onSubmit={(event) => {
@@ -3164,6 +3304,20 @@ function ChatPane({
           }}
         >
           <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none" />
+          <div className="composer-dictation-row">
+            <DictationPill
+              state={voiceModeOpen ? "idle" : dictationUi}
+              level={listening && !voiceModeOpen ? 0.5 : 0}
+              elapsedSec={dictationElapsed}
+              onStart={() => {
+                if (!voiceModeOpen) onListen();
+              }}
+              onStop={onStopDictation}
+              onConfirm={onStopDictation}
+              disabled={voiceModeOpen || speaking || halted}
+            />
+            <span className="text-xs text-muted">{voiceModeOpen ? "Voice mode uses the overlay — dictation is for typing into the composer." : "Mic fills the composer only. It does not open voice mode."}</span>
+          </div>
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -3208,10 +3362,18 @@ function ChatPane({
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
-        <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
-          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label="Dictate">
-            <Mic className="size-4" />
-          </button>
+        <div className={`voice-zone-rail ${speaking || listening ? "is-live" : ""}`} aria-label="Voice controls">
+          <DictationPill
+            state={voiceModeOpen ? "idle" : dictationUi}
+            level={listening && !voiceModeOpen ? 0.5 : 0}
+            elapsedSec={dictationElapsed}
+            onStart={() => {
+              if (!voiceModeOpen) onListen();
+            }}
+            onStop={onStopDictation}
+            onConfirm={onStopDictation}
+            disabled={voiceModeOpen || speaking || halted}
+          />
           <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
           <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
             <Volume2 className="size-4" />

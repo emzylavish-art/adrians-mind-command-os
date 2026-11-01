@@ -6,6 +6,7 @@ export type VoiceUiState = "idle" | "listening" | "thinking" | "speaking" | "int
 /**
  * Immersive hands-free VOICE MODE surface (assistant can speak back).
  * Drive with `state` + optional `level` (0..1). Contract: data-voice-state.
+ * When `open` is false, renders nothing. Default open=true for harness use.
  */
 export function VoiceModeStage(props: {
   state: VoiceUiState;
@@ -14,9 +15,12 @@ export function VoiceModeStage(props: {
   onEnd?: () => void;
   onMute?: () => void;
   muted?: boolean;
+  open?: boolean;
+  overlay?: boolean;
   children?: ReactNode;
   className?: string;
 }) {
+  if (props.open === false) return null;
   const level = props.level ?? (props.state === "idle" || props.state === "thinking" ? 0.12 : 0.55);
   const active = props.state === "listening" || props.state === "speaking" || props.state === "interrupted";
   const tone = props.state === "speaking" || props.state === "interrupted" ? "speaking" : props.state === "listening" ? "listening" : "idle";
@@ -31,7 +35,7 @@ export function VoiceModeStage(props: {
             ? "Interrupted"
             : "Voice mode";
 
-  return (
+  const stage = (
     <div
       className={`voice-mode-stage ${props.className ?? ""}`}
       data-voice-state={props.state}
@@ -63,4 +67,13 @@ export function VoiceModeStage(props: {
       {props.children}
     </div>
   );
+
+  if (props.overlay) {
+    return (
+      <div className="voice-mode-overlay-shell" data-testid="voice-overlay" role="presentation">
+        {stage}
+      </div>
+    );
+  }
+  return stage;
 }

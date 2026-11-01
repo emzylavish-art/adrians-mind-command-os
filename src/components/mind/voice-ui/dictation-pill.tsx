@@ -5,7 +5,6 @@ export type DictationUiState = "idle" | "recording" | "transcribing";
 /**
  * MIC-TO-SPEAK dictation affordance for the composer (input only — no orb / no speaking).
  * Contract: data-dictation="idle|recording|transcribing"
- * Props align with wiring: level 0..1, elapsedSec optional timer.
  */
 export function DictationPill(props: {
   state: DictationUiState;
@@ -14,7 +13,9 @@ export function DictationPill(props: {
   onStart?: () => void;
   onStop?: () => void;
   onConfirm?: () => void;
+  onCancel?: () => void;
   className?: string;
+  disabled?: boolean;
 }) {
   const recording = props.state === "recording";
   const transcribing = props.state === "transcribing";
@@ -29,8 +30,9 @@ export function DictationPill(props: {
         className={`dictation-mic ${props.className ?? ""}`}
         data-dictation="idle"
         data-testid="dictation-pill"
-        aria-label="Dictate"
+        aria-label="Dictate into composer"
         onClick={props.onStart}
+        disabled={props.disabled}
       >
         <span className="dictation-mic__icon" aria-hidden="true" />
       </button>
@@ -52,10 +54,15 @@ export function DictationPill(props: {
         Stop
       </button>
       {transcribing ? null : (
-        <button type="button" className="dictation-pill__confirm" onClick={props.onConfirm} aria-label="Use transcript" data-testid="dictation-confirm">
+        <button type="button" className="dictation-pill__confirm" onClick={props.onConfirm ?? props.onStop} aria-label="Use transcript" data-testid="dictation-confirm">
           Done
         </button>
       )}
+      {props.onCancel ? (
+        <button type="button" className="dictation-pill__stop" onClick={props.onCancel} aria-label="Cancel dictation" data-testid="dictation-cancel" disabled={transcribing}>
+          Cancel
+        </button>
+      ) : null}
     </div>
   );
 }
