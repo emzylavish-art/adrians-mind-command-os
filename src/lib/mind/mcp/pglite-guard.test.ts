@@ -192,3 +192,93 @@ describe("pglite_query guard: comment-strip / string-literal bypass (H12)", () =
   });
 });
 
+describe("pglite_query guard: CPU complexity (H15)", () => {
+  let db: PGlite;
+  let client: SqlLike;
+
+  before(async () => {
+    db = new PGlite();
+    await db.waitReady;
+    client = {
+      query: async (q, p = []) => (await db.query(q, p)).rows as Record<string, unknown>[],
+      exec: async (q) => {
+        await db.exec(q);
+      },
+      engine: "pglite",
+    };
+  });
+  after(async () => {
+    await db.close();
+  });
+
+  it("refuses recursive CTEs before they run", () => {
+    const sql = "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM t WHERE n < 1000000) SELECT * FROM t";
+    const checked = assertReadOnlySql(sql);
+    assert.equal(checked.ok, false);
+    if (!checked.ok) assert.match(checked.text, /recursive/i);
+  });
+
+  it("refuses oversized generate_series spans", () => {
+    const sql = "SELECT count(*)::int AS n FROM generate_series(1, 20000000)";
+    const checked = assertReadOnlySql(sql);
+    assert.equal(checked.ok, false);
+    if (!checked.ok) assert.match(checked.text, /generate_series|10000/i);
+  });
+
+  it("refuses multiple generate_series (cross-join bomb)", () => {
+    const sql = "SELECT * FROM generate_series(1, 100) a, generate_series(1, 100) b";
+    const checked = assertReadOnlySql(sql);
+    assert.equal(checked.ok, false);
+    if (!checked.ok) assert.match(checked.text, /at most one generate_series/i);
+  });
+
+  it("refuses generate_series with non-literal bounds", () => {
+    const sql = "SELECT * FROM generate_series(1, (SELECT 1000000))";
+    const checked = assertReadOnlySql(sql);
+    assert.equal(checked.ok, false);
+  });
+
+  it("allows a small generate_series and runs it without hanging the runner", async () => {
+    let ticks = 0;
+    const tick = setInterval(() => {
+      ticks += 1;
+    }, 20);
+    try {
+      const started = Date.now();
+      const result = await pgliteQuery({
+        sql: "SELECT count(*)::int AS n FROM generate_series(1, 100)",
+        sqlClient: client,
+        timeoutMs: 2000,
+      });
+      assert.equal(result.ok, true, result.text);
+      assert.ok(Date.now() - started < 2000);
+      assert.ok(ticks >= 0);
+    } finally {
+      clearInterval(tick);
+    }
+  });
+
+  it("hostile oversized series is rejected without freezing the event loop", async () => {
+    let ticks = 0;
+    const tick = setInterval(() => {
+      ticks += 1;
+    }, 20);
+    try {
+      const started = Date.now();
+      const result = await pgliteQuery({
+        sql: "SELECT count(*)::int AS n FROM generate_series(1, 30000000)",
+        sqlClient: client,
+        timeoutMs: 200,
+      });
+      const elapsed = Date.now() - started;
+      assert.equal(result.ok, false, result.text);
+      assert.match(result.text, /generate_series|10000|refuses/i);
+      assert.ok(elapsed < 500, `elapsed ${elapsed}ms — must not burn CPU`);
+      // Give the interval at least one shot
+      await new Promise((r) => setTimeout(r, 30));
+      assert.ok(ticks >= 1, `expected event-loop ticks, got ${ticks}`);
+    } finally {
+      clearInterval(tick);
+    }
+  });
+});
