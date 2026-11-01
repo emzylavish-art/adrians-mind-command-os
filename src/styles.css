@@ -8016,8 +8016,9 @@ aside nav button:not(.bg-accent):not([class*="bg-accent"]) {
   color: var(--text-tertiary) !important;
 }
 /* Library "No files yet." inside list */
-.main-stage aside.glow-card ul.mt-3.space-y-1 > li.text-muted:only-child,
-.main-stage aside.rounded-panel ul li.text-muted:only-child {
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted:only-child,
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted,
+aside.rounded-panel ul li.text-muted:only-child {
   text-align: center !important;
   min-height: 6.5rem !important;
   margin-top: 0.5rem !important;
@@ -8133,8 +8134,9 @@ aside nav button.text-muted:not(.bg-accent) {
     line-height: 1.15 !important;
   }
 }
-.main-stage aside.glow-card ul.mt-3.space-y-1 > li.text-muted:only-child,
-.main-stage aside.glow-card.rounded-panel ul > li.text-muted {
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted:only-child,
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted,
+aside.glow-card.rounded-panel ul > li.text-muted {
   border-radius: 1rem !important;
   border: 1px dashed rgb(255 255 255 / 0.14) !important;
   background: rgb(8 10 16 / 0.85) !important;
