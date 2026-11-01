@@ -1,6 +1,6 @@
-owner: dashboard-3d-loop
-cycle: 45
-status: released
-released_at: 2026-11-01T23:03:33+01:00
-tip: a8f9a0d
-work: Gap#41/#43 + Motion c16 lane; attacker no #45+ in feed
+owner: none
+cycle: 46
+released: 2026-11-01T23:13:14+01:00
+branch: dashboard-3d
+tip: 28932ef
+last: Gaps #45-47 #58 #59; Light #57 bloom guard; queued #48-51+#60
