@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { splitBlocks } from "@/lib/mind/blocks";
 import { InlineImage } from "@/components/mind/media/inline-image";
+import { MarkdownProse } from "@/components/mind/markdown-prose";
 import type { MsgImage } from "@/lib/mind/types";
 
 const MD_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+const HAS_MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)\s]+/;
 
 function TextWithImages({
   text,
@@ -94,7 +96,7 @@ export function MessageBody({
             </div>
             <code>{block.code}</code>
           </pre>
-        ) : (
+        ) : HAS_MARKDOWN_IMAGE.test(block.text) ? (
           <TextWithImages
             key={index}
             text={block.text}
@@ -102,6 +104,8 @@ export function MessageBody({
             onSaveImage={onSaveImage}
             onDownloadImage={onDownloadImage}
           />
+        ) : (
+          <MarkdownProse key={index} text={block.text} />
         ),
       )}
     </div>

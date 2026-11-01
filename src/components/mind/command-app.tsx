@@ -51,6 +51,15 @@ import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
+import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
+import {
+  ComposerBar,
+  type ComposerModelId,
+  DictationPill as PreviewDictationPill,
+  LiveSpeakControl,
+  LiveVoiceBar as PresentationalLiveVoiceBar,
+  VoiceModeStage,
+} from "@/components/mind/voice-ui";
 
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
@@ -5561,10 +5570,27 @@ function ChatPane({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [chromeNote, setChromeNote] = useState(
+    "Voice chrome preview. Dictate uses this chat’s microphone. Speak, the live bar, and voice mode do not connect a provider.",
+  );
+  const [dictationTick, setDictationTick] = useState(0);
+  const [previewModel, setPreviewModel] = useState<ComposerModelId>("heavy");
+  const [previewModelOpen, setPreviewModelOpen] = useState(false);
   useEffect(() => {
     setRenaming(false);
     setEditingId(null);
   }, [active?.id]);
+  useEffect(() => {
+    if (!voiceListening) {
+      setDictationTick(0);
+      return;
+    }
+    const id = window.setInterval(() => setDictationTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [voiceListening]);
+  const markPreview = (control: string) => {
+    setChromeNote(`${control} is preview only. No voice provider is connected.`);
+  };
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
@@ -5639,14 +5665,7 @@ function ChatPane({
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
           {(!active || active.messages.length === 0) && !busy && (
             <div className="grid min-h-64 place-items-center text-center">
-              <div>
-                <span className="mx-auto grid size-16 place-items-center rounded-full bg-accent/20 text-accent shadow-[0_0_28px_rgb(124_92_255/0.45)]">
-                  <Zap className="size-7" />
-                </span>
-                <p className="mt-4 text-2xl font-bold">Grok 4.5</p>
-                <p className="text-sm text-muted">How can I help you today?</p>
-                <p className="mt-1 text-xs text-muted">Nothing is sent until you press Send.</p>
-              </div>
+              <ChatEmptyHero />
             </div>
           )}
           {active?.messages.map((msg) => {
@@ -5859,6 +5878,82 @@ function ChatPane({
               {speaking ? "Speaking" : "Speak"}
             </button>
             <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+          </div>
+          <div className="composer-voice-chrome" data-testid="composer-voice-chrome">
+            <p className="text-xs text-muted" role="status">{chromeNote}</p>
+            <div className="composer-voice-chrome__row">
+              <PreviewDictationPill
+                state={voiceListening ? "recording" : "idle"}
+                level={voiceLevel}
+                elapsedSec={voiceListening ? dictationTick : 0}
+                onStart={() => {
+                  setChromeNote("Dictate uses this chat’s microphone. It does not start a live voice provider.");
+                  onListen();
+                }}
+                onStop={() => {
+                  setChromeNote("Dictation stopped. No voice provider is connected.");
+                  (onListenStop ?? onListen)();
+                }}
+                onCancel={() => {
+                  setChromeNote("Dictation cancelled. No voice provider is connected.");
+                  (onListenStop ?? onListen)();
+                }}
+              />
+              <ComposerBar
+                className="composer-voice-chrome__bar"
+                model={previewModel}
+                modelMenuOpen={previewModelOpen}
+                dictationState={voiceListening ? "recording" : "idle"}
+                speakState="off"
+                level={voiceListening ? voiceLevel : 0}
+                placeholder="Preview only — not a second composer"
+                askSlot={<span className="text-xs text-muted">Preview only. This chip does not change the chat model or send a message.</span>}
+                onPlus={() => markPreview("Add attachment")}
+                onModelToggle={() => setPreviewModelOpen((open) => !open)}
+                onModelSelect={(id) => {
+                  setPreviewModel(id);
+                  setPreviewModelOpen(false);
+                  markPreview("Model chip");
+                }}
+                onDictate={() => {
+                  setChromeNote("Dictate uses this chat’s microphone. Speak on this chrome does not start a provider.");
+                  onListen();
+                }}
+                onSpeak={() => markPreview("Speak")}
+              />
+              <LiveSpeakControl
+                state="off"
+                level={0}
+                label="Not connected"
+                onToggle={() => markPreview("Live speak")}
+                onMute={() => markPreview("Live speak mute")}
+                onEnd={() => markPreview("Live speak end")}
+              />
+            </div>
+            <VoiceModeStage
+              open
+              overlay={false}
+              state="idle"
+              level={0}
+              modeLabel="Preview only — no voice provider is connected."
+              muted={false}
+              onMute={() => markPreview("Voice mode mute")}
+              onEnd={() => markPreview("Voice mode end")}
+            />
+            <PresentationalLiveVoiceBar
+              state="off"
+              level={0}
+              placeholder="Preview only — not a live call"
+              askSlot={<span className="text-xs text-muted">Preview only. Not a connected voice session. Type in the composer above.</span>}
+              onMute={() => markPreview("Live bar mute")}
+              onEnd={() => markPreview("Live bar end")}
+              onSpeaker={() => markPreview("Speaker")}
+              onScreenShare={() => markPreview("Screen share")}
+              onSettings={() => markPreview("Voice settings")}
+              onPlus={() => markPreview("Add attachment")}
+              onPlusItem={(id) => markPreview(`Add ${id}`)}
+              onAskFocus={() => markPreview("Live bar ask")}
+            />
           </div>
         </form>
       </section>
