@@ -23,11 +23,15 @@ import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import { pollViewData } from "@/lib/mind/dashboard/status-poll";
+
+/** Gap#3: once we have painted a scene this session, never re-show the boot splash. */
+let dash3dStagePrimed = false;
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
   const { state, refresh } = useDashboardStatus();
   const viewData = useMemo(() => pollViewData(state), [state]);
+  if (viewData) dash3dStagePrimed = true;
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
@@ -107,10 +111,13 @@ export function DashboardApp() {
     const data = pollViewData(state);
     if (!data) return { available: false as const, reason: "no spend source yet" };
     const m = data.money;
+    const spend = data.spend;
+    // Gap #12: minimal payloads may omit spend/money — never throw on .available
     if (!m?.available) {
       const reason =
         m?.reason ||
-        (!data.spend.available ? data.spend.reason : null) ||
+        (spend && spend.available === false ? spend.reason : null) ||
+        (!spend ? "no spend source yet" : null) ||
         "no spend source yet";
       return { available: false as const, reason };
     }
@@ -175,7 +182,7 @@ export function DashboardApp() {
 
   const openNotion = (pageId: string) => {
     if (!viewData) return;
-    const page = viewData.notionGraph.pages.find((p) => p.id === pageId) ?? null;
+    const page = viewData.notionGraph?.pages?.find((p) => p.id === pageId) ?? null;
     setNotionPage(page);
     setSelected(null);
   };
@@ -236,7 +243,7 @@ export function DashboardApp() {
         </div>
       ) : null}
 
-      {state.status === "loading" && !viewData ? (
+      {state.status === "loading" && !viewData && !dash3dStagePrimed ? (
         <div className="dash3d-fallback">
           <div className="dash3d-glass">
             <h2>Adrian&apos;s Mind</h2>
@@ -279,8 +286,8 @@ export function DashboardApp() {
           ) : null}
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>System weather</h2>
-            <p className="dash3d-title">{viewData.weather.label}</p>
-            <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>{viewData.weather.summary}</p>
+            <p className="dash3d-title">{viewData.weather?.label ?? "—"}</p>
+            <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>{viewData.weather?.summary ?? ""}</p>
           </div>
           {perfHint ? (
             <div className="dash3d-glass dash3d-skybar-card" data-testid="perf-budget-hint" role="status">
@@ -291,13 +298,13 @@ export function DashboardApp() {
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Notion galaxy</h2>
             <p className="dash3d-title">
-              {viewData.notionGraph.available
-                ? `${viewData.notionGraph.stats.pages} pages · ${viewData.notionGraph.stats.edges} edges`
+              {viewData.notionGraph?.available
+                ? `${viewData.notionGraph?.stats?.pages ?? 0} pages · ${viewData.notionGraph?.stats?.edges ?? 0} edges`
                 : "Unavailable"}
             </p>
             <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
-              {viewData.notionGraph.mode}
-              {viewData.notionGraph.reason ? ` — ${viewData.notionGraph.reason.slice(0, 90)}` : ""}
+              {viewData.notionGraph?.mode ?? "—"}
+              {viewData.notionGraph?.reason ? ` — ${viewData.notionGraph?.reason.slice(0, 90)}` : ""}
             </p>
           </div>
           <MoneyPanel money={viewData.money} />
@@ -443,7 +450,7 @@ export function DashboardApp() {
         <OperatorConsole
           bots={viewData.bots}
           buildings={layoutForHud.buildings}
-          pages={viewData.notionGraph.pages}
+          pages={viewData.notionGraph?.pages ?? []}
           open={operatorOpen}
           onOpenChange={setOperatorOpen}
           prefs={operatorPrefs}

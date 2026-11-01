@@ -37,9 +37,21 @@ export function useDashboardStatus() {
       const data = (await res.json()) as StatusData & { error?: string };
       if (data.ok === false) throw new Error(data.error || "Status endpoint failed");
       if (!data || !Array.isArray(data.bots)) throw new Error("Malformed status payload");
-      lastGoodRef.current = data;
+      // Gap #12: normalize sparse section bags so UI optional chains stay honest.
+      const normalized = {
+        ...data,
+        bots: data.bots,
+        spend: data.spend ?? { available: false as const, reason: "no spend source yet" },
+        money: data.money ?? { available: false as const, reason: "no spend source yet", eventCount: 0 },
+        notionGraph: data.notionGraph ?? { available: false, mode: "empty", reason: "no notion graph", pages: [], edges: [], botPageMap: {}, stats: { pages: 0, edges: 0 } },
+        weather: data.weather ?? { label: "—", summary: "weather unavailable" },
+        skyFeed: data.skyFeed ?? [],
+        projects: data.projects ?? null,
+        timeline: data.timeline ?? { events: [], earliestMs: null, latestMs: null, droppedFuture: 0, droppedInvalid: 0, truncated: false },
+      } as StatusData;
+      lastGoodRef.current = normalized;
       failCountRef.current = 0;
-      setState((prev) => reducePoll(prev, { type: "success", seq, data }));
+      setState((prev) => reducePoll(prev, { type: "success", seq, data: normalized }));
     } catch (err) {
       const aborted = (err as Error)?.name === "AbortError";
       // Gap#9: React StrictMode / effect cleanup abort is not a user-facing error.

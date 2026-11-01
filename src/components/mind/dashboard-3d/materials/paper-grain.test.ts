@@ -33,7 +33,17 @@ import {
   setImagineNodeMap,
   setImagineNodePaperMap,
   tickImagineNodeMaterial,
+  sanitizeImagineImageTexture,
+  readTextureImageSize,
+  isPowerOfTwoSize,
+  IMAGINE_IMAGE_HARD_MAX,
 } from "./imagine-node.ts";
+import {
+  createLoreTextAtlas,
+  setLorePlaqueTextAtlas,
+  createLorePlaqueMaterial,
+  disposeLorePlaqueOwnedAtlas,
+} from "./lore-plaque.ts";
 import {
   createInkWashEdgeMaterial,
   setInkWashEdgeHealth,
@@ -187,6 +197,8 @@ describe("painter shader modules + lore plaque", () => {
     assert.ok(LorePlaqueShader.uniforms.uWash);
     assert.match(LorePlaqueShader.fragmentShader, /parchment/);
     assert.match(LorePlaqueShader.fragmentShader, /ink frame/);
+    assert.ok(LorePlaqueShader.uniforms.uHasText);
+    assert.match(LorePlaqueShader.fragmentShader, /uTextMap/);
     assert.ok(InkWashEdgeShader.uniforms.uHealth);
     assert.ok(InkWashEdgeShader.uniforms.uInk);
     assert.match(InkWashEdgeShader.fragmentShader, /paintFbm/);
@@ -372,7 +384,7 @@ describe("hacker pass c4: context-restore texture rebind", () => {
     const imagine = createImagineNodeMaterial();
     imagine.uniforms["uPaperMap"]!.value = oldPaper;
     imagine.uniforms["uHasPaper"]!.value = 1;
-    const fakeImage = { needsUpdate: false };
+    const fakeImage = { needsUpdate: false, image: { width: 64, height: 64 } };
     setImagineNodeMap(imagine, fakeImage as never);
 
     const kit = {
@@ -474,7 +486,7 @@ describe("painter c4: Imagine node card material", () => {
     assert.equal(m.name, "ImagineNodeMaterial");
     assert.equal(m.uniforms["uHasImage"]!.value, 0);
     assert.equal(m.uniforms["uHasPaper"]!.value, 0);
-    const fake = { needsUpdate: false };
+    const fake = { needsUpdate: false, image: { width: 64, height: 64 }, dispose() {} };
     setImagineNodeMap(m, fake as never);
     assert.equal(m.uniforms["uHasImage"]!.value, 1);
     assert.equal(m.uniforms["uImage"]!.value, fake);
@@ -532,5 +544,110 @@ describe("painter c4: Imagine node card material", () => {
     assert.equal(painterlyKitResourceCounts(kit).materials, 0);
     assert.equal(painterlyKitResourceCounts(kit).bindings, 0);
     disposePainterlyKit(kit);
+  });
+});
+
+
+describe("hacker pass c5: Imagine texture dims / NPOT / MAX_TEXTURE_SIZE / taint", () => {
+  function fakeTex(w: number, h: number, extra: Record<string, unknown> = {}) {
+    return {
+      image: { width: w, height: h },
+      needsUpdate: false,
+      generateMipmaps: true,
+      minFilter: 1008,
+      magFilter: 1008,
+      wrapS: 1000,
+      wrapT: 1000,
+      colorSpace: "srgb",
+      dispose() {},
+      ...extra,
+    } as unknown as import("three").Texture;
+  }
+
+  it("sanitizeImagineImageTexture rejects missing / zero / NaN / hard-max dims with explicit reason", () => {
+    assert.equal(sanitizeImagineImageTexture(null).reason, "missing");
+    assert.equal(sanitizeImagineImageTexture(fakeTex(0, 10)).reason, "invalid-dimensions");
+    assert.equal(sanitizeImagineImageTexture(fakeTex(NaN, 64)).reason, "invalid-dimensions");
+    const huge = sanitizeImagineImageTexture(fakeTex(IMAGINE_IMAGE_HARD_MAX + 1, 64));
+    assert.equal(huge.ok, false);
+    assert.equal(huge.reason, "dimensions-exceed-hard-max");
+  });
+
+  it("exceeds MAX_TEXTURE_SIZE without downscale → wash path reason, not silent ok", () => {
+    const r = sanitizeImagineImageTexture(fakeTex(2048, 2048), {
+      maxTextureSize: 512,
+      allowDownscale: false,
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, "exceeds-max-texture-size");
+    assert.equal(r.width, 2048);
+  });
+
+  it("NPOT textures get mipmaps disabled + clamp wrap when accepted", () => {
+    const tex = fakeTex(300, 200); // NPOT
+    const r = sanitizeImagineImageTexture(tex, { maxTextureSize: 1024, allowDownscale: false });
+    assert.equal(r.ok, true);
+    assert.equal(r.npot, true);
+    assert.equal(tex.generateMipmaps, false);
+    assert.ok(isPowerOfTwoSize(256));
+    assert.equal(isPowerOfTwoSize(300), false);
+    assert.deepEqual(readTextureImageSize(tex), { width: 300, height: 200 });
+  });
+
+  it("setImagineNodeMap records imagineMapError on reject (fallback must not hide load errors)", () => {
+    const m = createImagineNodeMaterial({ maxTextureSize: 256 });
+    const bad = fakeTex(4096, 4096);
+    const r = setImagineNodeMap(m, bad, { maxTextureSize: 256, allowDownscale: false });
+    assert.equal(r.ok, false);
+    assert.equal(m.uniforms["uHasImage"]!.value, 0);
+    assert.equal((m.userData as { imagineMapError: string }).imagineMapError, "exceeds-max-texture-size");
+    // valid bind clears error
+    const ok = setImagineNodeMap(m, fakeTex(128, 128), { maxTextureSize: 256 });
+    assert.equal(ok.ok, true);
+    assert.equal(m.uniforms["uHasImage"]!.value, 1);
+    assert.equal((m.userData as { imagineMapError: string | null }).imagineMapError, null);
+    m.dispose();
+  });
+});
+
+describe("painter c5: lore plaque text atlas", () => {
+  it("createLoreTextAtlas handles empty, long, and unicode notes safely", () => {
+    const empty = createLoreTextAtlas([]);
+    assert.equal(empty.empty, true);
+    assert.ok(empty.width >= 64);
+    empty.dispose();
+    empty.dispose(); // idempotent
+
+    const long = "字".repeat(500) + " — " + "lock note ".repeat(40);
+    const atlas = createLoreTextAtlas([long, "ok ✅ café", null, "\u0000bad"], {
+      width: 256,
+      height: 256,
+      maxTextureSize: 512,
+    });
+    assert.ok(atlas.noteCount >= 1 && atlas.noteCount <= 8);
+    assert.ok(atlas.truncatedCount >= 1);
+    // lineCount is painted in DOM; in node we still expose noteCount/truncated
+    assert.ok(atlas.lineCount >= 0);
+    if (typeof document !== "undefined") assert.ok(atlas.lineCount >= 1);
+    atlas.dispose();
+  });
+
+  it("hostile atlas sizes clamp; setLorePlaqueTextAtlas owns and disposes", () => {
+    const atlas = createLoreTextAtlas(["hello"], { width: 1e9, height: NaN, maxTextureSize: 128 });
+    assert.ok(atlas.width <= 128);
+    assert.ok(atlas.height <= 128);
+    const mat = createLorePlaqueMaterial();
+    setLorePlaqueTextAtlas(mat, atlas, { owned: true });
+    assert.equal(mat.uniforms["uHasText"]!.value, 1);
+    assert.ok(mat.uniforms["uTextMap"]!.value);
+    disposeLorePlaqueOwnedAtlas(mat);
+    assert.equal(mat.uniforms["uHasText"]!.value, 0);
+    mat.dispose();
+  });
+
+  it("shader samples uTextMap when uHasText and stays mediump-safe", () => {
+    assert.match(LorePlaqueShader.fragmentShader, /uHasText/);
+    assert.match(LorePlaqueShader.fragmentShader, /uTextMap/);
+    assert.doesNotMatch(LorePlaqueShader.fragmentShader, /dFdx|dFdy|fwidth/);
   });
 });

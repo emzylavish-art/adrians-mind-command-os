@@ -1,6 +1,6 @@
 import { GLSL_HASH_NOISE } from "./glsl-noise.ts";
 
-/** Watercolor parchment plaque for constellation lore cards. */
+/** Watercolor parchment plaque for constellation lore cards (+ optional text atlas). */
 export const LorePlaqueShader = {
   name: "LorePlaqueShader",
   uniforms: {
@@ -10,6 +10,8 @@ export const LorePlaqueShader = {
     uTime: { value: 0 },
     uPaper: { value: 0.22 },
     uWash: { value: 0.45 },
+    uTextMap: { value: null as unknown },
+    uHasText: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -27,6 +29,8 @@ export const LorePlaqueShader = {
     uniform float uTime;
     uniform float uPaper;
     uniform float uWash;
+    uniform sampler2D uTextMap;
+    uniform float uHasText;
     varying vec2 vUv;
     varying vec3 vNormalW;
     ${GLSL_HASH_NOISE}
@@ -45,6 +49,13 @@ export const LorePlaqueShader = {
       // title band
       float band = smoothstep(0.78, 0.82, vUv.y) * smoothstep(0.96, 0.90, vUv.y);
       parchment = mix(parchment, mix(parchment, uInk * 0.15 + uAccent * 0.35, 0.55), band);
+      // procedural canvas glyph atlas (painterly ink) — body text region
+      if (uHasText > 0.5) {
+        vec4 inkSample = texture2D(uTextMap, vUv);
+        float inkA = clamp(inkSample.a, 0.0, 1.0);
+        vec3 inkCol = mix(uInk * 0.35 + uAccent * 0.15, inkSample.rgb, 0.85);
+        parchment = mix(parchment, inkCol, inkA * 0.92);
+      }
       float alpha = 0.94;
       gl_FragColor = vec4(parchment, alpha);
     }

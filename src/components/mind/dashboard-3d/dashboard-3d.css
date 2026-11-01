@@ -850,3 +850,11 @@
 .dash3d-feed-glyph.is-alert {
   border-color: rgba(251, 113, 133, 0.55);
 }
+
+/* Gap #3 — last WebGL frame freeze (context-loss / remount) */
+.dash3d-canvas-wrap {
+  position: relative;
+}
+.dash3d-canvas-wrap img[data-dash3d-last-frame] {
+  background: #050814;
+}

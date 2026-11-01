@@ -7,11 +7,18 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { evaluatePerfBudget, nextEmaFrameMs } from "@/lib/mind/dashboard/perf-budget";
 import {
+  captureCanvasFrame,
+  hideLastFrameFreeze,
+  showLastFrameFreeze,
+} from "@/lib/mind/dashboard/last-frame-freeze";
+import {
   createPainterlyKit,
   tickPainterlyKit,
   disposePainterlyKit,
   attachPainterlyContextHandlers,
   setImagineNodeMap,
+  createLoreTextAtlas,
+  setLorePlaqueTextAtlas,
   releasePainterlyMaterial,
   type PainterlyKit,
 } from "./materials";
@@ -240,6 +247,15 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   return tex;
 }
 
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
 export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const dataRef = useRef(data);
@@ -273,13 +289,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     camera.position.set(...UNIVERSE_HIGH.position);
     camera.lookAt(...UNIVERSE_HIGH.lookAt);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance", preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.setClearColor(0x050814, 1);
+    const maxTexSize = renderer.capabilities.maxTextureSize || 2048;
+
     mount.appendChild(renderer.domElement);
+    // Gap#3: keep prior freeze visible until first successful frame after (re)mount.
+    let freezePendingClear = true;
+
 
     const labelRenderer = new CSS2DRenderer();
     labelRenderer.setSize(width, height);
@@ -437,8 +458,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botGroup.add(person);
         const applyPortrait = (tex: THREE.Texture) => {
           tex.colorSpace = THREE.SRGBColorSpace;
-          setImagineNodeMap(cardMat, tex);
-          setImagineNodeMap(personMat, tex);
+          const r1 = setImagineNodeMap(cardMat, tex, { maxTextureSize: maxTexSize });
+          const r2 = setImagineNodeMap(personMat, tex, { maxTextureSize: maxTexSize });
+          // Painter c5: surface sanitize failures honestly (wash stays; never silent).
+          cardPlane.userData.imagineMapError = (cardMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r1.ok ? null : r1.reason);
+          person.userData.imagineMapError = (personMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r2.ok ? null : r2.reason);
         };
         loader.load(
           portraitUrl,
@@ -459,6 +483,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
         botGroup.add(glow);
+
+        // Painter c5: lore plaque text atlas from real lock notes (honest empty if none).
+        {
+          const notesRaw = bot.lock?.notes || bot.notes || "";
+          const loreMat = kit.createLorePlaqueMaterial({ accent: color });
+          const atlas = createLoreTextAtlas(notesRaw, { maxTextureSize: maxTexSize, seed: hashStr(bot.id) });
+          setLorePlaqueTextAtlas(loreMat, atlas, { owned: true });
+          const lore = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), loreMat);
+          lore.position.copy(pos).add(new THREE.Vector3(-1.2, 0.85, 0.15));
+          lore.userData.botId = bot.id;
+          lore.userData.kind = "lore";
+          lore.userData.loreEmpty = atlas.empty;
+          botGroup.add(lore);
+        }
 
         const el = document.createElement("div");
         el.className = "dash3d-label";
@@ -495,7 +533,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         art.url,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
-          setImagineNodeMap(mat, tex);
+          const r = setImagineNodeMap(mat, tex, { maxTextureSize: maxTexSize });
+          plane.userData.imagineMapError = (mat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r.ok ? null : r.reason);
         },
         undefined,
         () => { /* missing art — wash fallback stays */ },
@@ -1101,7 +1140,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
       layoutSig = ""; // force GPU resources to re-upload after restore
       syncCity();
+      freezePendingClear = true; // clear freeze after first post-restore frame
     });
+    // Gap#3: snapshot last frame on context lost so the stage does not flash splash/black.
+    const onCtxLostFreeze = () => {
+      const url = captureCanvasFrame(renderer.domElement);
+      if (url) showLastFrameFreeze(mount, url);
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onCtxLostFreeze, false);
 
     let last = performance.now();
     let perfEma = 16.7;
@@ -1225,6 +1271,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (composer) composer.render();
       else renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
+      if (freezePendingClear) {
+        freezePendingClear = false;
+        hideLastFrameFreeze(mount);
+      }
 
       if (now - sync > 5000) {
         sync = now;
@@ -1317,6 +1367,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);
+      renderer.domElement.removeEventListener("webglcontextlost", onCtxLostFreeze, false);
+      // Gap#3: snapshot before teardown so remount keeps last frame (no splash flash).
+      const lastUrl = captureCanvasFrame(renderer.domElement);
+      if (lastUrl) showLastFrameFreeze(mount, lastUrl);
       detachContext();
       city.dispose();
       renderer.domElement.removeEventListener("wheel", onWheel);
