@@ -15,6 +15,7 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
@@ -80,6 +81,11 @@ const MemoryRoute = MemoryRouteImport.update({
 const PersonasRoute = PersonasRouteImport.update({
   id: '/personas',
   path: '/personas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -279,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -323,6 +330,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -368,6 +376,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -414,6 +423,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -458,6 +468,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -502,6 +513,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -547,6 +559,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MemoryRoute: typeof MemoryRoute
   PersonasRoute: typeof PersonasRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
@@ -627,6 +640,13 @@ declare module '@tanstack/react-router' {
       path: '/personas'
       fullPath: '/personas'
       preLoaderRoute: typeof PersonasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -891,6 +911,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MemoryRoute: MemoryRoute,
   PersonasRoute: PersonasRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
@@ -931,12 +952,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
