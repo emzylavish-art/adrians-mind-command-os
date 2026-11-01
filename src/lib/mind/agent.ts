@@ -99,15 +99,24 @@ export function readAgentMessage(payload: unknown): { text: string; toolCalls: A
   return { text, toolCalls };
 }
 
-export function buildAgentModelBody(messages: AgentMessage[]) {
+export function buildAgentModelBody(
+  messages: AgentMessage[],
+  options: {
+    model?: string;
+    temperature?: number;
+    max_tokens?: number;
+    reasoning_effort?: "low" | "medium" | "high" | "xhigh";
+  } = {},
+) {
   return {
-    model: "grok-4.5",
+    model: options.model ?? "grok-4.5",
     messages: toProviderMessages(messages),
     tools: AGENT_TOOLS.map((tool) => ({ type: "function", function: tool })),
-    tool_choice: "auto",
-    max_tokens: 500,
-    temperature: 0.2,
-    stream: false,
+    tool_choice: "auto" as const,
+    max_tokens: options.max_tokens ?? 500,
+    temperature: options.temperature ?? 0.2,
+    stream: false as const,
+    ...(options.reasoning_effort ? { reasoning_effort: options.reasoning_effort } : {}),
   };
 }
 
