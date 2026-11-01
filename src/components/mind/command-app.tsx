@@ -49,6 +49,8 @@ import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
+import { DictationPill } from "@/components/mind/dictation-pill";
+import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
@@ -84,6 +86,48 @@ import {
 } from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
+import { appendDictationText } from "@/lib/mind/voice/dictation";
+import {
+  createDictationMachine,
+  DICTATION_SILENCE_PEAK,
+  reduceDictation,
+  type DictationAction,
+  type DictationMachineState,
+} from "@/lib/mind/voice/dictation-machine";
+import { dictationTranscriptForTestAudio } from "@/lib/mind/voice/test-audio";
+import {
+  createVoiceConnectState,
+  enterStage,
+  failStage,
+  normalizeVoiceConnectError,
+  stageTimeoutMessage,
+  VOICE_STAGE_TIMEOUT_MS,
+  type VoiceConnectStage,
+} from "@/lib/mind/voice/connection-stages";
+import {
+  createBargeInState,
+  reduceBargeIn,
+  shouldCutPlayback,
+  SPEAKING_MIN_VISIBLE_MS,
+  type BargeInAction,
+} from "@/lib/mind/voice/barge-in";
+import {
+  allowCancel,
+  beginFlight,
+  completeSpeak,
+  createCancelBudget,
+  createFlightGate,
+  createSpeakQueue,
+  createTranscriptDedupe,
+  endFlight,
+  enqueueSpeak,
+  nextMuteState,
+  secretNeedsRemint,
+  shouldAcceptTranscript,
+  toggleMute,
+} from "@/lib/mind/voice/spam-guard";
+import { buildVoiceChatTurn } from "@/lib/mind/voice/voice-chat-turn";
+import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -329,6 +373,27 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type BrowserSpeechRec = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  abort?: () => void;
+  onresult: ((event: { results: ArrayLike<{ isFinal?: boolean; 0?: { transcript?: string } }> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+
+function browserSpeechCtor(): (new () => BrowserSpeechRec) | null {
+  if (typeof window === "undefined") return null;
+  const host = window as Window & {
+    SpeechRecognition?: new () => BrowserSpeechRec;
+    webkitSpeechRecognition?: new () => BrowserSpeechRec;
+  };
+  return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
+}
+
 export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
@@ -359,6 +424,38 @@ export function CommandApp() {
   const speakGenRef = useRef(0);
   const listenGuardRef = useRef(createListenGuard());
   const voiceReconnectRef = useRef(0);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const [dictation, setDictation] = useState<DictationMachineState>(() => createDictationMachine(""));
+  const dictationRef = useRef(dictation);
+  dictationRef.current = dictation;
+  const dictationRecRef = useRef<BrowserSpeechRec | null>(null);
+  const dictationBufferRef = useRef("");
+  const userStoppedDictationRef = useRef(false);
+  const [dictationElapsed, setDictationElapsed] = useState(0);
+  const [dictationLevel, setDictationLevel] = useState(0);
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
+  const overlayOpenRef = useRef(false);
+  overlayOpenRef.current = voiceOverlayOpen;
+  const [overlayPhase, setOverlayPhase] = useState<VoiceOverlayPhase>("idle");
+  const [overlayError, setOverlayError] = useState<string | null>(null);
+  const [overlayNotice, setOverlayNotice] = useState<string | null>(null);
+  const connectStateRef = useRef(createVoiceConnectState());
+  const bargeRef = useRef(createBargeInState());
+  const holdInterruptedRef = useRef(false);
+  const lastLevelAtRef = useRef(0);
+  const lastSessionStatusRef = useRef<string>("idle");
+  const transcriptDedupeRef = useRef(createTranscriptDedupe());
+  const speakQueueRef = useRef(createSpeakQueue());
+  const flightGateRef = useRef(createFlightGate());
+  const voiceCancelBudgetRef = useRef(createCancelBudget());
+  const voiceMutedRef = useRef(false);
+  voiceMutedRef.current = voiceMuted;
+  const stageTimerRef = useRef(0);
+  const stageGenRef = useRef(0);
+  const voiceActiveRef = useRef(false);
+  const closeVoiceOverlayRef = useRef<() => void>(() => undefined);
+  const cancelDictationRef = useRef<(announce?: boolean) => void>(() => undefined);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -426,7 +523,6 @@ export function CommandApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
-  const [listening, setListening] = useState(false);
 
   useEffect(() => {
     // Single store: hydrate from localStorage once; every badge reads the same snapshot.
@@ -440,6 +536,19 @@ export function CommandApp() {
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
+
+  useEffect(() => {
+    if (dictation.phase !== "recording") {
+      setDictationElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    setDictationElapsed(0);
+    const id = window.setInterval(() => {
+      setDictationElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [dictation.phase]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -513,6 +622,14 @@ export function CommandApp() {
       setVoiceLiveTranscript("");
       setSpeaking(false);
       listenGuardRef.current.end();
+      clearStageTimeout();
+      voiceActiveRef.current = false;
+      speakQueueRef.current.active = null;
+      speakQueueRef.current.pending = null;
+      cancelDictationRef.current(false);
+      overlayOpenRef.current = false;
+      setVoiceOverlayOpen(false);
+      setOverlayPhase("idle");
     };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") releaseVoice();
@@ -657,7 +774,14 @@ export function CommandApp() {
         setPaletteOpen(true);
         searchRef.current?.focus();
       }
-      if (event.key === "Escape") setPaletteOpen(false);
+      if (event.key === "Escape") {
+        if (overlayOpenRef.current) {
+          event.preventDefault();
+          closeVoiceOverlayRef.current();
+          return;
+        }
+        setPaletteOpen(false);
+      }
       if (matchesVoiceToggleShortcut(event) && shouldToggleVoiceShortcut(event, document)) {
         event.preventDefault();
         void listenRef.current({ mode: "toggle" });
@@ -2110,6 +2234,11 @@ export function CommandApp() {
   }
 
     function stopVoiceSession() {
+    clearStageTimeout();
+    voiceActiveRef.current = false;
+    speakQueueRef.current.active = null;
+    speakQueueRef.current.pending = null;
+    voiceMutedRef.current = false;
     interruptSpeakPlayback();
     listenMintAbortRef.current?.abort();
     listenMintAbortRef.current = null;
@@ -2120,25 +2249,42 @@ export function CommandApp() {
     setVoiceLevel(0);
     setVoiceLiveTranscript("");
     listenGuardRef.current.end();
+    bargeRef.current = createBargeInState();
+    holdInterruptedRef.current = false;
   }
 
   function toggleVoiceMute() {
-    const next = !voiceMuted;
-    setVoiceMuted(next);
-    voiceSession.current?.setMuted(next);
-    setNotice(next ? "Microphone muted. Listening session stays open." : "Microphone unmuted.");
+    const desired = toggleMute(voiceMutedRef.current);
+    const decided = nextMuteState(voiceMutedRef.current, desired);
+    if (!decided.changed) return;
+    voiceMutedRef.current = decided.muted;
+    setVoiceMuted(decided.muted);
+    voiceSession.current?.setMuted(decided.muted);
+    const message = decided.muted ? "Microphone muted. Listening session stays open." : "Microphone unmuted.";
+    setNotice(message);
+    if (overlayOpenRef.current) setOverlayNotice(message);
   }
 
   async function handleVoiceTranscript(transcript: string) {
+    if (!shouldAcceptTranscript(transcriptDedupeRef.current, transcript)) return;
     const sanitized = sanitizeVoiceTranscript(transcript);
     if (!sanitized.ok) {
       setNotice(sanitized.error);
       return;
     }
     const text = sanitized.text;
-    setDraft(text);
-    voiceNext.current = true;
-    setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
+    if (overlayOpenRef.current) {
+      const routed = routeVoiceModeTranscript(text);
+      setVoiceLiveTranscript(clampLiveTranscript(routed.overlayTranscript));
+      // Empty composerDraft means the transcript stays out of the composer. Do not wipe text the user already typed.
+      if (routed.composerDraft) setDraft(routed.composerDraft);
+      if (!routed.sendAsChatTurn) return;
+      setOverlayNotice("Heard you. This realtime turn goes to chat, not the composer.");
+    } else {
+      setDraft(text);
+      voiceNext.current = true;
+      setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
+    }
     if (voiceModeRef.current === "orchestrator") {
       setBusy(true);
       const conducted = await runOllamaConductor(text, {
@@ -2151,61 +2297,370 @@ export function CommandApp() {
         return;
       }
       if (active) {
-        const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
-        const assistantMsg = {
-          id: crypto.randomUUID(),
-          role: "assistant" as const,
-          content: conducted.text,
-          at: new Date().toISOString(),
+        const turn = buildVoiceChatTurn({
+          userText: text,
+          assistantText: conducted.text,
           model: conducted.model,
-        };
-        setWs((prev) =>
-          pushAudit(
-            {
-              ...prev,
-              chats: prev.chats.map((item) =>
-                item.id === active.id ? { ...item, messages: [...item.messages, userMsg, assistantMsg] } : item,
-              ),
-            },
-            "message_sent",
-            active.id,
-            conducted.model,
-          ),
-        );
+        });
+        if (turn) {
+          setWs((prev) =>
+            pushAudit(
+              {
+                ...prev,
+                chats: prev.chats.map((item) =>
+                  item.id === active.id ? { ...item, messages: [...item.messages, turn.user, turn.assistant] } : item,
+                ),
+              },
+              "message_sent",
+              active.id,
+              conducted.model,
+            ),
+          );
+        }
       }
-      if (voiceSession.current?.isOpen) voiceSession.current.speakText(conducted.text);
-      else void speak(conducted.text);
+      speakOnOpenSession(conducted.text);
       return;
     }
     if (!active) {
       setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
+      if (overlayOpenRef.current) {
+        setOverlayNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
+      }
       return;
     }
     if (ws.halted || busy) return;
     const reply = await deliver(active, text, ws);
-    if (reply) {
-      if (voiceSession.current?.isOpen) voiceSession.current.speakText(reply);
-      else void speak(reply);
+    if (reply) speakOnOpenSession(reply);
+  }
+
+  function clearStageTimeout() {
+    stageGenRef.current += 1;
+    if (stageTimerRef.current) {
+      window.clearTimeout(stageTimerRef.current);
+      stageTimerRef.current = 0;
     }
+  }
+
+  function armStageTimeout(stage: Exclude<VoiceConnectStage, "error" | "idle" | "listening">) {
+    const gen = ++stageGenRef.current;
+    if (stageTimerRef.current) window.clearTimeout(stageTimerRef.current);
+    if (!overlayOpenRef.current) return;
+    stageTimerRef.current = window.setTimeout(() => {
+      if (gen !== stageGenRef.current) return;
+      if (!overlayOpenRef.current) return;
+      const message = stageTimeoutMessage(stage);
+      const failed = failStage(stage, message);
+      connectStateRef.current = failed;
+      setOverlayPhase("error");
+      setOverlayError(failed.error);
+      setError(message);
+      stopVoiceSession();
+    }, VOICE_STAGE_TIMEOUT_MS);
+  }
+
+  function publishConnectStage(stage: Exclude<VoiceConnectStage, "error">) {
+    const entered = enterStage(stage);
+    connectStateRef.current = entered;
+    if (!overlayOpenRef.current) return;
+    if (stage === "listening" || stage === "idle") {
+      clearStageTimeout();
+      setOverlayError(null);
+      setOverlayPhase(stage === "listening" ? "listening" : "idle");
+      return;
+    }
+    setOverlayPhase(stage);
+    armStageTimeout(stage);
+  }
+
+  function noteConnectFailure(stage: VoiceConnectStage, message: string) {
+    clearStageTimeout();
+    voiceActiveRef.current = false;
+    const normalized = normalizeVoiceConnectError(new Error(message));
+    const shown = /sign in/i.test(normalized) ? normalized : message;
+    const failed = failStage(stage, shown);
+    connectStateRef.current = failed;
+    setError(shown);
+    setVoiceListening(false);
+    if (overlayOpenRef.current) {
+      setOverlayPhase("error");
+      setOverlayError(failed.error);
+    }
+  }
+
+  function pushBarge(action: BargeInAction) {
+    const prev = bargeRef.current;
+    const next = reduceBargeIn(prev, action);
+    bargeRef.current = next;
+    if (!shouldCutPlayback(prev, next)) return next;
+    interruptSpeakPlayback();
+    voiceSession.current?.interruptPlayback();
+    holdInterruptedRef.current = true;
+    if (overlayOpenRef.current) setOverlayPhase("interrupted");
+    window.setTimeout(() => {
+      if (!holdInterruptedRef.current) return;
+      holdInterruptedRef.current = false;
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "resume_listening" });
+      if (overlayOpenRef.current && voiceSession.current?.isOpen) setOverlayPhase("listening");
+    }, SPEAKING_MIN_VISIBLE_MS);
+    return next;
+  }
+
+  function speakOnOpenSession(text: string) {
+    const session = voiceSession.current;
+    if (!session?.isOpen) {
+      void speak(text);
+      return;
+    }
+    const decision = enqueueSpeak(speakQueueRef.current, text);
+    if (decision === "start") session.speakText(text);
+  }
+
+  function commitDictation(action: DictationAction, announce = true) {
+    const prev = { ...dictationRef.current, draft: draftRef.current };
+    let next = reduceDictation(prev, action);
+    if (action.type === "stop_inserted") {
+      next = { ...next, draft: appendDictationText(draftRef.current, action.text) };
+    }
+    dictationRef.current = next;
+    setDictation(next);
+    if (next.draft !== draftRef.current) {
+      draftRef.current = next.draft;
+      setDraft(next.draft);
+    }
+    if (announce && next.status && next.status !== prev.status) {
+      setNotice(`${next.status} Browser speech, not a realtime voice session.`);
+    }
+    return next;
+  }
+
+  function cancelBrowserDictation(announce = true) {
+    const rec = dictationRecRef.current;
+    dictationRecRef.current = null;
+    dictationBufferRef.current = "";
+    userStoppedDictationRef.current = true;
+    try {
+      rec?.abort?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      rec?.stop();
+    } catch {
+      /* ignore */
+    }
+    if (dictationRef.current.phase !== "idle") commitDictation({ type: "cancel" }, announce);
+    setDictationLevel(0);
+  }
+
+  function stopBrowserDictation() {
+    if (dictationRef.current.phase !== "recording") return;
+    userStoppedDictationRef.current = true;
+    const rec = dictationRecRef.current;
+    dictationRecRef.current = null;
+    try {
+      rec?.stop();
+    } catch {
+      /* ignore */
+    }
+    commitDictation({ type: "stop_begin" }, false);
+    window.setTimeout(() => {
+      if (dictationRef.current.phase !== "transcribing") return;
+      const text = dictationBufferRef.current.trim();
+      dictationBufferRef.current = "";
+      const peak = dictationRef.current.peakLevel;
+      setDictationLevel(0);
+      if (!text && peak < DICTATION_SILENCE_PEAK) {
+        commitDictation({ type: "stop_silent" });
+        return;
+      }
+      if (!text) {
+        commitDictation({ type: "stop_empty" });
+        return;
+      }
+      commitDictation({ type: "stop_inserted", text });
+    }, 220);
+  }
+
+  function startBrowserDictation() {
+    // Browser SpeechRecognition only. Recorder capture in dictation.ts and server stt.ts stay unwired:
+    // no transcribe server fn exists, and a new xAI STT call would be a live provider call.
+    if (wsRef.current.halted) {
+      setError("Emergency stop is on. Dictation was not started.");
+      return;
+    }
+    if (
+      overlayOpenRef.current ||
+      voiceActiveRef.current ||
+      voiceSession.current?.isOpen ||
+      voiceSession.current?.isCapturing ||
+      isLiveVoiceOccupied()
+    ) {
+      setNotice("End live voice before dictation. Dictation is browser speech, not a realtime voice session.");
+      return;
+    }
+    if (dictationRef.current.phase !== "idle") return;
+    const testText = dictationTranscriptForTestAudio(new URLSearchParams(window.location.search).get("voiceTestAudio"));
+    if (testText) {
+      commitDictation({ type: "stop_inserted", text: testText });
+      setDictationLevel(0);
+      setNotice("Test clip inserted into the composer. Browser speech path, not a realtime voice provider. Nothing was sent.");
+      return;
+    }
+    const Ctor = browserSpeechCtor();
+    if (!Ctor) {
+      commitDictation({
+        type: "stop_error",
+        message: "This browser has no speech recognition. Nothing was transcribed. This is browser speech, not a realtime voice provider.",
+      });
+      setDictationLevel(0);
+      return;
+    }
+    commitDictation({ type: "start" });
+    setDictationLevel(0.2);
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
+    dictationBufferRef.current = "";
+    userStoppedDictationRef.current = false;
+    rec.onresult = (event) => {
+      let finalText = "";
+      let interim = "";
+      const results = event.results;
+      for (let i = 0; i < results.length; i++) {
+        const row = results[i];
+        const transcript = row?.[0]?.transcript ?? "";
+        if (row?.isFinal) finalText += transcript;
+        else interim += transcript;
+      }
+      dictationBufferRef.current = `${finalText} ${interim}`.trim();
+      if (dictationBufferRef.current) {
+        setDictationLevel(0.45);
+        commitDictation({ type: "level", level: 0.45 }, false);
+      }
+    };
+    rec.onerror = (event) => {
+      const code = event.error || "";
+      if (code === "no-speech" || code === "aborted") return;
+      userStoppedDictationRef.current = true;
+      dictationRecRef.current = null;
+      setDictationLevel(0);
+      commitDictation({
+        type: "stop_error",
+        message: "Browser speech failed. Nothing was inserted. This is not a realtime voice provider.",
+      });
+    };
+    rec.onend = () => {
+      if (userStoppedDictationRef.current) return;
+      if (dictationRef.current.phase !== "recording") return;
+      stopBrowserDictation();
+    };
+    dictationRecRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      dictationRecRef.current = null;
+      setDictationLevel(0);
+      commitDictation({
+        type: "stop_error",
+        message: "Browser speech could not start. Nothing was transcribed. This is not a realtime voice provider.",
+      });
+    }
+  }
+
+  function onDictationMic() {
+    if (dictationRef.current.phase === "recording") {
+      stopBrowserDictation();
+      return;
+    }
+    if (dictationRef.current.phase === "transcribing") return;
+    startBrowserDictation();
+  }
+
+  function closeVoiceOverlay() {
+    overlayOpenRef.current = false;
+    setVoiceOverlayOpen(false);
+    setOverlayPhase("idle");
+    setOverlayError(null);
+    setOverlayNotice(null);
+    holdInterruptedRef.current = false;
+    clearStageTimeout();
+    bargeRef.current = createBargeInState();
+    stopVoiceSession();
+    setNotice("Voice mode closed. Realtime session stopped.");
+  }
+
+  function interruptVoiceOverlay() {
+    pushBarge({ type: "manual_interrupt" });
+  }
+
+  async function openVoiceOverlay() {
+    if (isLiveVoiceOccupied()) {
+      setNotice(LIVE_VOICE_BUSY_MESSAGE);
+      return;
+    }
+    cancelBrowserDictation(false);
+    overlayOpenRef.current = true;
+    setVoiceOverlayOpen(true);
+    setOverlayError(null);
+    if (voiceSession.current?.isOpen || voiceActiveRef.current || listenMintAbortRef.current) {
+      setOverlayPhase(bargeRef.current.phase === "speaking" ? "speaking" : "listening");
+      setOverlayNotice("Realtime voice session. Not browser dictation.");
+      return;
+    }
+    if (!allowCancel(voiceCancelBudgetRef.current)) {
+      setOverlayNotice("Too many voice mode starts. Wait a moment.");
+      setNotice("Too many voice mode starts. Wait a moment.");
+      return;
+    }
+    setOverlayNotice("Realtime voice session. Not browser dictation.");
+    setOverlayPhase("idle");
+    holdInterruptedRef.current = false;
+    bargeRef.current = createBargeInState();
+    await listen({ mode: "start" });
+  }
+
+  async function retryVoiceOverlay() {
+    if (!allowCancel(voiceCancelBudgetRef.current)) {
+      setOverlayNotice("Too many voice retries. Wait a moment.");
+      return;
+    }
+    if (isLiveVoiceOccupied()) {
+      setOverlayNotice(LIVE_VOICE_BUSY_MESSAGE);
+      return;
+    }
+    stopVoiceSession();
+    overlayOpenRef.current = true;
+    setVoiceOverlayOpen(true);
+    setOverlayError(null);
+    setOverlayPhase("idle");
+    holdInterruptedRef.current = false;
+    bargeRef.current = createBargeInState();
+    await listen({ mode: "start" });
   }
 
   async function listen(opts?: { mode?: "toggle" | "start" | "stop" }) {
     const mode = opts?.mode ?? "toggle";
-    const active = Boolean(
-      voiceListening ||
+    const sessionBusy = Boolean(
+      voiceActiveRef.current ||
         voiceSession.current?.isOpen ||
         voiceSession.current?.isCapturing ||
         listenMintAbortRef.current,
     );
-    const action = resolveListenAction(mode, active);
+    const action = resolveListenAction(mode, sessionBusy);
     if (action === "start" && isLiveVoiceOccupied()) {
       setNotice(LIVE_VOICE_BUSY_MESSAGE);
+      if (overlayOpenRef.current) setOverlayNotice(LIVE_VOICE_BUSY_MESSAGE);
       return;
     }
     if (action === "stop") {
       stopVoiceSession();
       listenGuardRef.current.end();
       setNotice("Voice capture stopped.");
+      if (overlayOpenRef.current) {
+        setOverlayPhase("idle");
+        setOverlayNotice("Voice capture stopped.");
+      }
       return;
     }
     if (action === "ignore") {
@@ -2216,18 +2671,50 @@ export function CommandApp() {
       setNotice("Voice is already starting. Wait a moment.");
       return;
     }
+    const flight = beginFlight(flightGateRef.current);
+    if (!flight) {
+      listenGuardRef.current.end();
+      setNotice("Voice is already starting. Wait a moment.");
+      return;
+    }
     // Cut message-level Speak / TTS / browser speech before opening the mic.
     interruptSpeakPlayback();
     if (ws.halted) {
+      endFlight(flightGateRef.current, flight.generation);
       listenGuardRef.current.end();
-      setError("Emergency stop is on. Voice was not started.");
+      const haltedMessage = "Emergency stop is on. Voice was not started.";
+      setError(haltedMessage);
+      if (overlayOpenRef.current) {
+        const failed = failStage("idle", haltedMessage);
+        connectStateRef.current = failed;
+        setOverlayPhase("error");
+        setOverlayError(failed.error);
+      }
       return;
     }
     setError(null);
     setNotice(null);
+    if (overlayOpenRef.current) setOverlayError(null);
     // Close any stale session before minting a new secret (spam / race).
     voiceSession.current?.close();
     voiceSession.current = null;
+    voiceActiveRef.current = true;
+
+    const markCanceled = () => {
+      if (connectStateRef.current.stage === "error") {
+        voiceActiveRef.current = false;
+        setVoiceListening(false);
+        return;
+      }
+      clearStageTimeout();
+      voiceActiveRef.current = false;
+      setNotice("Voice start canceled.");
+      setVoiceListening(false);
+      if (overlayOpenRef.current) {
+        setOverlayPhase("idle");
+        setOverlayNotice("Voice start canceled.");
+      }
+    };
 
     try {
       if (voiceModeRef.current === "orchestrator") {
@@ -2236,12 +2723,12 @@ export function CommandApp() {
           model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
         });
         if (!probe.ok) {
-          setError(probe.error);
-          setVoiceListening(false);
+          noteConnectFailure("getting_session", probe.error);
           return;
         }
       }
 
+      publishConnectStage("getting_session");
       listenMintAbortRef.current?.abort();
       const mintAbort = new AbortController();
       listenMintAbortRef.current = mintAbort;
@@ -2251,36 +2738,51 @@ export function CommandApp() {
       try {
         secret = await createVoiceClientSecret();
         if (mintAbort.signal.aborted) {
-          setNotice("Voice start canceled.");
-          setVoiceListening(false);
+          markCanceled();
           return;
         }
       } catch (caught) {
         if (mintAbort.signal.aborted) {
-          setNotice("Voice start canceled.");
-          setVoiceListening(false);
+          markCanceled();
           return;
         }
-        setError(formatVoiceClientError(caught));
-        setVoiceListening(false);
+        noteConnectFailure("getting_session", normalizeVoiceConnectError(caught) || formatVoiceClientError(caught));
         return;
       }
       if (!secret || typeof secret !== "object" || !("ok" in secret)) {
-        setError(formatVoiceClientError(secret));
-        setVoiceListening(false);
+        noteConnectFailure("getting_session", formatVoiceClientError(secret));
+        return;
+      }
+      if (secret.ok) {
+        const expiresAt = "expiresAt" in secret && typeof secret.expiresAt === "number" ? secret.expiresAt : 0;
+        if (expiresAt > 0 && secretNeedsRemint(expiresAt) && !mintAbort.signal.aborted) {
+          setNotice("Voice secret is near expiry. Minting a fresh session…");
+          try {
+            secret = await createVoiceClientSecret();
+          } catch (caught) {
+            if (mintAbort.signal.aborted) {
+              markCanceled();
+              return;
+            }
+            noteConnectFailure("getting_session", normalizeVoiceConnectError(caught) || formatVoiceClientError(caught));
+            return;
+          }
+        }
+      }
+      if (mintAbort.signal.aborted) {
+        markCanceled();
+        return;
+      }
+      if (!secret || typeof secret !== "object" || !("ok" in secret)) {
+        noteConnectFailure("getting_session", formatVoiceClientError(secret));
         return;
       }
       if (!secret.ok) {
-        setError(formatVoiceClientError(secret));
-        setVoiceListening(false);
-        return;
-      }
-      if (mintAbort.signal.aborted) {
-        setNotice("Voice start canceled.");
-        setVoiceListening(false);
+        noteConnectFailure("getting_session", formatVoiceClientError(secret));
         return;
       }
 
+      publishConnectStage("connecting");
       const session = new RealtimeVoiceSession(
         {
           onTranscript: (text) => {
@@ -2291,11 +2793,26 @@ export function CommandApp() {
             setVoiceLiveTranscript(clampLiveTranscript(text));
           },
           onSpeechStarted: () => {
+            if (overlayOpenRef.current) {
+              pushBarge({ type: "speech_started" });
+              return;
+            }
             interruptSpeakPlayback();
             session.interruptPlayback();
           },
-          onError: (message) => setError(message || "Voice realtime error."),
+          onError: (message) => {
+            const shown = message || "Voice realtime error.";
+            setError(shown);
+            if (overlayOpenRef.current) {
+              const failed = failStage(connectStateRef.current.stage, shown);
+              connectStateRef.current = failed;
+              setOverlayPhase("error");
+              setOverlayError(failed.error);
+            }
+          },
           onStatus: (status) => {
+            const previous = lastSessionStatusRef.current;
+            lastSessionStatusRef.current = status;
             setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
             if (status === "speaking") setSpeaking(true);
             if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
@@ -2303,9 +2820,44 @@ export function CommandApp() {
               setVoiceLevel(0);
               if (status === "closed") setVoiceLiveTranscript("");
             }
+            if (overlayOpenRef.current) {
+              if (status === "speaking") {
+                holdInterruptedRef.current = false;
+                if (bargeRef.current.phase !== "speaking") pushBarge({ type: "session_speaking" });
+                setOverlayPhase("speaking");
+              } else if (status === "processing") {
+                setOverlayPhase((phase) => (phase === "speaking" || phase === "interrupted" ? phase : "processing"));
+              } else if (status === "connecting") {
+                setOverlayPhase("connecting");
+              } else if (status === "listening") {
+                if (!holdInterruptedRef.current) {
+                  if (bargeRef.current.phase !== "listening") pushBarge({ type: "session_listening" });
+                  setOverlayPhase("listening");
+                }
+              } else if (status === "idle" || status === "closed") {
+                pushBarge({ type: "session_idle" });
+              }
+            }
+            if (previous === "speaking" && status !== "speaking") {
+              const nextSpeak = completeSpeak(speakQueueRef.current);
+              if (nextSpeak && voiceSession.current?.isOpen && status !== "closed" && status !== "idle") {
+                voiceSession.current.speakText(nextSpeak);
+              } else if (nextSpeak) {
+                speakQueueRef.current.active = null;
+              }
+            }
           },
-          onLevel: (level) => setVoiceLevel(level),
+          onLevel: (level) => {
+            setVoiceLevel(level);
+            if (!overlayOpenRef.current) return;
+            const now = performance.now();
+            const dt = lastLevelAtRef.current ? now - lastLevelAtRef.current : 0;
+            lastLevelAtRef.current = now;
+            pushBarge({ type: "local_rms", level, dtMs: dt });
+          },
           onUnexpectedClose: () => {
+            clearStageTimeout();
+            voiceActiveRef.current = false;
             listenGuardRef.current.end();
             setVoiceListening(false);
             setVoiceLevel(0);
@@ -2313,13 +2865,18 @@ export function CommandApp() {
             setSpeaking(false);
             setError(VOICE_CONNECTION_DROPPED);
             setNotice(VOICE_CONNECTION_DROPPED);
-            // Optional single reconnect attempt.
+            if (overlayOpenRef.current) {
+              const failed = failStage("connecting", VOICE_CONNECTION_DROPPED);
+              connectStateRef.current = failed;
+              setOverlayPhase("error");
+              setOverlayError(failed.error ?? VOICE_CONNECTION_DROPPED);
+            }
             if (voiceReconnectRef.current < 1) {
               voiceReconnectRef.current += 1;
               setNotice("Voice connection dropped. Reconnecting once…");
               window.setTimeout(() => {
-              void listenRef.current({ mode: "start" });
-            }, 400);
+                void listenRef.current({ mode: "start" });
+              }, 400);
             }
           },
         },
@@ -2332,59 +2889,42 @@ export function CommandApp() {
       if (mintAbort.signal.aborted) {
         session.close();
         voiceSession.current = null;
-        setVoiceListening(false);
-        setNotice("Voice start canceled.");
+        markCanceled();
         return;
       }
+      publishConnectStage("requesting_mic");
       await session.startCapture();
+      publishConnectStage("listening");
       setVoiceListening(true);
       voiceReconnectRef.current = 0;
       listenMintAbortRef.current = null;
-      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Hold Space or press mic to stop.`);
+      const modeLabel = voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct";
+      setNotice(`Realtime voice listening (${modeLabel}). Hold Space or press mic to stop.`);
+      if (overlayOpenRef.current) setOverlayNotice(`Realtime voice listening (${modeLabel}).`);
     } catch (caught) {
       stopVoiceSession();
+      const normalized = normalizeVoiceConnectError(caught);
       const mic = formatMicCaptureError(caught);
-      setError(mic || formatVoiceClientError(caught));
+      const message = /sign in/i.test(normalized) ? normalized : mic || normalized || formatVoiceClientError(caught);
+      const stage = connectStateRef.current.stage === "idle" ? "connecting" : connectStateRef.current.stage;
+      const failed = failStage(stage, message);
+      connectStateRef.current = failed;
+      setError(message);
+      if (overlayOpenRef.current) {
+        setOverlayPhase("error");
+        setOverlayError(failed.error);
+      }
     } finally {
-      // Keep guard held while listening; release when idle/stop/error.
-      if (!voiceSession.current?.isOpen) listenGuardRef.current.end();
+      endFlight(flightGateRef.current, flight.generation);
+      if (!voiceSession.current?.isOpen) {
+        voiceActiveRef.current = false;
+        listenGuardRef.current.end();
+      }
     }
   }
   listenRef.current = (opts) => {
     void listen(opts);
   };
-
-  function listenBrowserFallback() {
-    setListening(true);
-    window.setTimeout(() => setListening(false), 6000);
-    const host = window as Window & {
-      SpeechRecognition?: new () => {
-        lang: string;
-        start: () => void;
-        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-      };
-      webkitSpeechRecognition?: new () => {
-        lang: string;
-        start: () => void;
-        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-      };
-    };
-    const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
-    if (!Ctor) {
-      setNotice("This browser has no speech recognition. Nothing was transcribed. This is not a realtime voice provider.");
-      return;
-    }
-    const rec = new Ctor();
-    rec.lang = "en-US";
-    rec.onresult = (event) => {
-      setListening(false);
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      setDraft(transcript);
-      voiceNext.current = Boolean(transcript);
-      setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
-    };
-    rec.start();
-  }
 
   async function checkRea() {
     setReaBusy(true);
@@ -2430,6 +2970,9 @@ export function CommandApp() {
     return item.text.toLowerCase().includes(memoryQuery.trim().toLowerCase());
   });
   const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
+  closeVoiceOverlayRef.current = closeVoiceOverlay;
+  cancelDictationRef.current = cancelBrowserDictation;
+  const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
@@ -2670,15 +3213,18 @@ export function CommandApp() {
               lastModel={lastModelUsed}
             />
           </div>
-          <div className={`voice-zone ${listening || speaking ? "is-live" : ""}`} aria-label="Voice controls">
-            <button
-              type="button"
-              className={`focus-ring grid size-9 place-items-center rounded-full ${listening ? "mic-pulse text-glow" : "text-muted"}`}
-              aria-label="Dictate (browser speech fallback)"
-              onClick={listenBrowserFallback}
-            >
-              <Mic className="size-4" />
-            </button>
+          <div className={`voice-zone ${dictation.phase === "recording" || speaking ? "is-live" : ""}`} aria-label="Voice controls">
+            <BrowserDictationControl
+              compact
+              state={dictation.phase}
+              level={dictationLevel}
+              elapsedSec={dictationElapsed}
+              disabled={dictationDisabled}
+              onMicClick={onDictationMic}
+              onStop={stopBrowserDictation}
+              onCancel={() => cancelBrowserDictation(true)}
+            />
+            <VoiceModeButton compact pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
             <span className="waveform" aria-hidden="true">
               <span /><span /><span /><span /><span /><span /><span />
             </span>
@@ -2946,6 +3492,16 @@ export function CommandApp() {
                       <Folder className="size-4" /> Projects
                     </button>
                     <VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" />
+                    <BrowserDictationControl
+                      state={dictation.phase}
+                      level={dictationLevel}
+                      elapsedSec={dictationElapsed}
+                      disabled={dictationDisabled}
+                      onMicClick={onDictationMic}
+                      onStop={stopBrowserDictation}
+                      onCancel={() => cancelBrowserDictation(true)}
+                    />
+                    <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
                     <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
                     <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
@@ -3052,15 +3608,16 @@ export function CommandApp() {
                 >
                   {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
                 </button>
-                <button
-                  type="button"
-                  className="grid size-9 place-items-center rounded-panel border border-line text-muted"
-                  onClick={listenBrowserFallback}
-                  aria-label="Browser speech fallback"
-                  title="Browser speech recognition fallback"
-                >
-                  <Mic className="size-4" />
-                </button>
+                <BrowserDictationControl
+                  state={dictation.phase}
+                  level={dictationLevel}
+                  elapsedSec={dictationElapsed}
+                  disabled={dictationDisabled}
+                  onMicClick={onDictationMic}
+                  onStop={stopBrowserDictation}
+                  onCancel={() => cancelBrowserDictation(true)}
+                />
+                <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
               </div>
 
               {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
@@ -3104,7 +3661,7 @@ export function CommandApp() {
                 <Panel title="System Status" action="Details" onAction={() => setView("integrations")}>
                   <StatusRow icon={Database} name="Memory" detail={memoryChoice === "on" ? "On for the next command" : "Off for the next command"} pill={memoryChoice === "on" ? "On" : "Off"} tone={memoryChoice === "on" ? "ok" : "muted"} />
                   <StatusRow icon={Database} name="Database" detail={databaseDetail} pill={databasePill} tone={databasePill === "Refused" ? "danger" : "muted"} />
-                  <StatusRow icon={Bot} name="Voice" detail="Browser speech when this browser has it. Not a realtime voice session. Nothing is spoken until you press speak." pill="Not realtime" tone="muted" />
+                  <StatusRow icon={Bot} name="Voice" detail="Dictate uses browser speech and inserts text. It is not a realtime session. Voice mode opens the realtime session." pill={voiceOverlayOpen ? "Voice mode" : "Browser speech"} tone="muted" />
                   <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
                   <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>
@@ -3214,6 +3771,15 @@ export function CommandApp() {
               voiceLevel={voiceLevel}
               onToggleMute={toggleVoiceMute}
               onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+              dictationState={dictation.phase}
+              dictationLevel={dictationLevel}
+              dictationElapsed={dictationElapsed}
+              dictationDisabled={dictationDisabled}
+              onDictationMic={onDictationMic}
+              onDictationStop={stopBrowserDictation}
+              onDictationCancel={() => cancelBrowserDictation(true)}
+              onOpenVoiceMode={() => void openVoiceOverlay()}
+              voiceOverlayOpen={voiceOverlayOpen}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
@@ -4212,10 +4778,25 @@ export function CommandApp() {
         </button>
       </nav>
 
+      <VoiceModeOverlay
+        open={voiceOverlayOpen}
+        phase={overlayPhase}
+        level={voiceLevel}
+        muted={voiceMuted}
+        mode={voiceMode}
+        transcript={voiceLiveTranscript}
+        notice={overlayNotice}
+        error={overlayError}
+        onMute={toggleVoiceMute}
+        onClose={closeVoiceOverlay}
+        onInterrupt={interruptVoiceOverlay}
+        onRetry={() => void retryVoiceOverlay()}
+      />
       <LiveVoiceBar
         isOverlayMicOpen={() =>
           Boolean(
-            voiceListening ||
+            overlayOpenRef.current ||
+              voiceListening ||
               voiceSession.current?.isOpen ||
               voiceSession.current?.isCapturing ||
               listenMintAbortRef.current,
@@ -4244,6 +4825,57 @@ export function CommandApp() {
         }}
       />
     </div>
+  );
+}
+
+function BrowserDictationControl(props: {
+  state: DictationMachineState["phase"];
+  level: number;
+  elapsedSec: number;
+  disabled?: boolean;
+  compact?: boolean;
+  onMicClick: () => void;
+  onStop: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="inline-flex flex-wrap items-center gap-2" data-testid="browser-dictation" title="Browser speech, not a realtime voice session">
+      <DictationPill
+        state={props.state}
+        level={props.level}
+        elapsedSec={props.elapsedSec}
+        disabled={props.disabled}
+        onMicClick={props.onMicClick}
+        onStop={props.onStop}
+        onCancel={props.onCancel}
+      />
+      {props.compact ? (
+        <span className="sr-only">Browser speech, not a realtime voice session.</span>
+      ) : (
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Browser speech</span>
+      )}
+    </div>
+  );
+}
+
+function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compact?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={
+        props.compact
+          ? `focus-ring grid size-9 place-items-center rounded-full ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+          : `inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+      }
+      onClick={props.onClick}
+      aria-label="Open voice mode"
+      aria-pressed={props.pressed ?? false}
+      data-testid="open-voice-mode"
+      title="Realtime voice session. Not browser dictation."
+    >
+      <Mic className="size-4" />
+      {props.compact ? <span className="sr-only">Voice mode</span> : "Voice mode"}
+    </button>
   );
 }
 
@@ -4386,6 +5018,15 @@ function ChatPane({
   voiceLevel,
   onToggleMute,
   onToggleVoiceMode,
+  dictationState,
+  dictationLevel,
+  dictationElapsed,
+  dictationDisabled,
+  onDictationMic,
+  onDictationStop,
+  onDictationCancel,
+  onOpenVoiceMode,
+  voiceOverlayOpen,
   memoryChoice,
   mode,
   onComposerMemory,
@@ -4454,6 +5095,15 @@ function ChatPane({
   voiceLevel: number;
   onToggleMute: () => void;
   onToggleVoiceMode: () => void;
+  dictationState: DictationMachineState["phase"];
+  dictationLevel: number;
+  dictationElapsed: number;
+  dictationDisabled: boolean;
+  onDictationMic: () => void;
+  onDictationStop: () => void;
+  onDictationCancel: () => void;
+  onOpenVoiceMode: () => void;
+  voiceOverlayOpen: boolean;
   memoryChoice: "off" | "on";
   mode: Autonomy;
   onComposerMemory: () => void;
@@ -4769,6 +5419,16 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
             <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+            <BrowserDictationControl
+              state={dictationState}
+              level={dictationLevel}
+              elapsedSec={dictationElapsed}
+              disabled={dictationDisabled}
+              onMicClick={onDictationMic}
+              onStop={onDictationStop}
+              onCancel={onDictationCancel}
+            />
+            <VoiceModeButton pressed={voiceOverlayOpen} onClick={onOpenVoiceMode} />
             <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
             <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
               {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
@@ -4858,7 +5518,7 @@ function ChatPane({
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
         <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
-          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label="Dictate">
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)}>
             <Mic className="size-4" />
           </button>
           <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
