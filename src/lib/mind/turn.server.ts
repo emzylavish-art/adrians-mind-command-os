@@ -4,7 +4,7 @@ import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
 import { sanitizeAttachments, type ImageAttachment } from "./media";
 import type { ChatContent } from "./media/types";
-import { resolveXaiInferenceApiKey } from "./media/xai-key";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import type { HistoryInputMessage } from "./media/history";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
@@ -117,8 +117,9 @@ export async function completeModelReply(prepared: {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
   }
-  const apiKey = resolveXaiInferenceApiKey(process.env);
-  if (!apiKey) return { ok: false as const, error: "Grok is not configured on the server." };
+  const keyed = resolveXaiInferenceApiKey(process.env);
+  if (!keyed.ok) return { ok: false as const, error: keyed.error };
+  const apiKey = keyed.key;
   let res: Response;
   try {
     res = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -242,8 +243,9 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
-  const apiKey = resolveXaiInferenceApiKey(process.env);
-  if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
+  const keyed = resolveXaiInferenceApiKey(process.env);
+  if (!keyed.ok) return json({ ok: false, error: keyed.error });
+  const apiKey = keyed.key;
   let memorySaved = false;
   let savedMemoryId: string | null = null;
   const { shouldPersistTurnMemory, memorySignalFromSave } = await import("./memory/signal");

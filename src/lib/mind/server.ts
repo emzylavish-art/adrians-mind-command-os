@@ -7,6 +7,7 @@ import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
 
 const MODEL = "grok-4.5";
 
@@ -54,7 +55,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const mindUrl = process.env.MIND_SUPABASE_URL;
   return {
     ok: true as const,
-    grok: process.env.XAI_API_KEY ? ("configured" as const) : ("unconfigured" as const),
+    grok: resolveXaiInferenceApiKey(process.env).ok ? ("configured" as const) : ("unconfigured" as const),
     model: MODEL,
     modelTiers: modelTierCatalog(process.env),
     database: mindUrl
