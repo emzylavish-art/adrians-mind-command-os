@@ -57,11 +57,24 @@ import {
   GLSL_MEDIUMP_GUARD,
   PAINTER_SHADER_VERSION,
   PainterlyPassShader,
+  PainterlyPassFallbackShader,
   WatercolorStarShader,
   BrushBuildingShader,
   LorePlaqueShader,
   InkWashEdgeShader,
   ImagineNodeShader,
+  createPainterlyPass,
+  tickPainterlyPass,
+  disposePainterlyPass,
+  resizePainterlyPass,
+  safePainterlyPassSize,
+  painterlyAmountFromHealth,
+  setPainterlyPassHealth,
+  painterlyPassResizeStats,
+  PAINTER_PASS_MAX_EDGE,
+  PAINTER_PASS_MAX_DPR,
+  PAINTER_AMOUNT_MIN,
+  PAINTER_AMOUNT_MAX,
 } from "../shaders/index.ts";
 
 describe("painter paper grain", () => {
@@ -649,5 +662,96 @@ describe("painter c5: lore plaque text atlas", () => {
     assert.match(LorePlaqueShader.fragmentShader, /uHasText/);
     assert.match(LorePlaqueShader.fragmentShader, /uTextMap/);
     assert.doesNotMatch(LorePlaqueShader.fragmentShader, /dFdx|dFdy|fwidth/);
+  });
+});
+
+
+describe("hacker pass c6: painterly post-pass resize / DPR / RT thrash / fallback", () => {
+  it("safePainterlyPassSize clamps 0/NaN/huge DPR to sane drawing buffers", () => {
+    const z = safePainterlyPassSize(0, 0, 2);
+    assert.ok(z.drawingWidth >= 1 && z.drawingHeight >= 1);
+    const nan = safePainterlyPassSize(NaN, Infinity, NaN);
+    assert.ok(nan.drawingWidth >= 1 && nan.drawingHeight >= 1);
+    assert.ok(Number.isFinite(nan.dpr));
+    const huge = safePainterlyPassSize(8000, 8000, 4);
+    assert.ok(huge.drawingWidth <= PAINTER_PASS_MAX_EDGE);
+    assert.ok(huge.drawingHeight <= PAINTER_PASS_MAX_EDGE);
+    assert.ok(huge.dpr <= PAINTER_PASS_MAX_DPR);
+  });
+
+  it("resizePainterlyPass skips identical drawing size (no RT thrash) and is safe after dispose", () => {
+    const pass = createPainterlyPass({ amount: 0.4 });
+    resizePainterlyPass(pass, 1280, 720, 1);
+    const a = painterlyPassResizeStats(pass);
+    assert.equal(a.resizeCount, 1);
+    resizePainterlyPass(pass, 1280, 720, 1);
+    resizePainterlyPass(pass, 1280, 720, 1);
+    const b = painterlyPassResizeStats(pass);
+    assert.equal(b.resizeCount, 1);
+    assert.ok(b.skippedResize >= 2);
+    // distinct drawing buffer (800x450 ≠ 1280x720)
+    resizePainterlyPass(pass, 800, 450, 1);
+    assert.ok(painterlyPassResizeStats(pass).resizeCount >= 2);
+    disposePainterlyPass(pass);
+    assert.doesNotThrow(() => resizePainterlyPass(pass, 1920 * 3, 1080 * 3, 3));
+    assert.equal(painterlyPassResizeStats(pass).disposed, true);
+  });
+
+  it("forceFallback creates identity pass with compileError recorded (not silent black)", () => {
+    const pass = createPainterlyPass({ forceFallback: true });
+    const st = painterlyPassResizeStats(pass);
+    assert.equal(st.fallback, true);
+    assert.ok(st.compileError);
+    assert.ok(PainterlyPassFallbackShader.fragmentShader.includes("tDiffuse"));
+    assert.doesNotMatch(PainterlyPassFallbackShader.fragmentShader, /paintFbm/);
+    disposePainterlyPass(pass);
+    disposePainterlyPass(pass); // idempotent
+  });
+
+  it("tickPainterlyPass does not allocate — only numeric uniform writes; safe when disposed", () => {
+    const pass = createPainterlyPass();
+    const before = pass.uniforms["time"]!.value;
+    tickPainterlyPass(pass, 12.5);
+    assert.equal(pass.uniforms["time"]!.value, 12.5);
+    tickPainterlyPass(pass, 86400 * 2);
+    assert.ok((pass.uniforms["time"]!.value as number) < 600);
+    disposePainterlyPass(pass);
+    const t0 = pass.uniforms["time"]!.value;
+    tickPainterlyPass(pass, 99);
+    assert.equal(pass.uniforms["time"]!.value, t0);
+    void before;
+  });
+});
+
+describe("painter c6: post-pass amount from constellation health", () => {
+  it("painterlyAmountFromHealth uses real healthy/total with sane clamps (no fabricated nodes)", () => {
+    assert.equal(painterlyAmountFromHealth({ healthy: 0, total: 0 }), PAINTER_AMOUNT_MIN);
+    assert.equal(painterlyAmountFromHealth({ healthy: NaN, total: 10 }), PAINTER_AMOUNT_MIN);
+    assert.equal(painterlyAmountFromHealth({ healthy: 5, total: -1 }), PAINTER_AMOUNT_MIN);
+    assert.equal(painterlyAmountFromHealth({ healthy: 8, total: 8, reducedMotion: true }), PAINTER_AMOUNT_MIN);
+    const mid = painterlyAmountFromHealth({ healthy: 4, total: 8, baseAmount: 0.7 });
+    const full = painterlyAmountFromHealth({ healthy: 8, total: 8, baseAmount: 0.7 });
+    assert.ok(mid > PAINTER_AMOUNT_MIN && mid < full);
+    assert.ok(full <= PAINTER_AMOUNT_MAX && full >= PAINTER_AMOUNT_MIN);
+    // over-count healthy still clamps ratio to 1
+    const over = painterlyAmountFromHealth({ healthy: 99, total: 10, baseAmount: 0.7 });
+    assert.ok(Math.abs(over - full) < 1e-9);
+  });
+
+  it("setPainterlyPassHealth updates amount uniform without fabricating data", () => {
+    const pass = createPainterlyPass({ amount: 0.42 });
+    const a0 = setPainterlyPassHealth(pass, { healthy: 0, total: 12 });
+    assert.equal(a0, PAINTER_AMOUNT_MIN);
+    assert.equal(pass.uniforms["amount"]!.value, PAINTER_AMOUNT_MIN);
+    const a1 = setPainterlyPassHealth(pass, { healthy: 12, total: 12, baseAmount: 0.6 });
+    assert.ok(a1 > a0);
+    assert.equal(pass.uniforms["amount"]!.value, a1);
+    disposePainterlyPass(pass);
+    assert.equal(setPainterlyPassHealth(pass, { healthy: 12, total: 12 }), 0);
+  });
+
+  it("PainterlyPassShader still exposes amount/grain/wash; version bumped", () => {
+    assert.ok(PainterlyPassShader.uniforms.amount);
+    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.5/);
   });
 });

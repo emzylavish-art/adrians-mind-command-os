@@ -125,5 +125,37 @@ export function createMotionClock(opts: MotionClockOpts = {}): MotionClock {
   return clock;
 }
 
-/** One clock shared by every motion/particle module so all samplers stay phase-locked. */
-export const sharedMotionClock: MotionClock = createMotionClock();
+/**
+ * Process-wide clock so every sampler stays phase-locked.
+ * Hacker c7: `reset()` is a **no-op** on the shared singleton. Resetting it from one
+ * UniverseScene mount / HMR teardown (or a second canvas) snaps lagged motion time back
+ * to raw wall time and teleports stars/orbits/dust still ticking on another mount.
+ * Use `createMotionClock()` when you need a private, resettable clock (tests, isolated scenes).
+ */
+const _sharedMotionClockInner: MotionClock = createMotionClock();
+export const sharedMotionClock: MotionClock = {
+  map: (wallSeconds: number) => _sharedMotionClockInner.map(wallSeconds),
+  get time() {
+    return _sharedMotionClockInner.time;
+  },
+  get lastWallDt() {
+    return _sharedMotionClockInner.lastWallDt;
+  },
+  get anchorCount() {
+    return _sharedMotionClockInner.anchorCount;
+  },
+  reset() {
+    /* intentionally empty — see comment above */
+  },
+};
+
+/**
+ * Explicit hard reset of the process-wide shared clock.
+ * Prefer `createMotionClock()` for production isolation. Use this only in tests or a
+ * deliberate full-dashboard teardown when you accept a one-frame phase snap for every
+ * sampler still reading `sharedMotionClock`.
+ * Grep of origin/dashboard-3d (c8): nothing calls `sharedMotionClock.reset()` for effect.
+ */
+export function hardResetSharedMotionClockForTests(): void {
+  _sharedMotionClockInner.reset();
+}

@@ -1,5 +1,5 @@
 owner: dashboard-3d-loop
-cycle: 34
-heartbeat: 2026-11-01T21:54:02+01:00
+cycle: 35
+heartbeat: 2026-11-01T21:59:50+01:00
 branch: dashboard-3d
-work: Gap#4 hover tooltip
+work: feedback-loop + motion 31ef623 + painter c6 + #27

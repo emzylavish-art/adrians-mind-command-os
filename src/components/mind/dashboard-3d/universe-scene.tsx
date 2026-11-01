@@ -6,6 +6,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { evaluatePerfBudget, nextEmaFrameMs } from "@/lib/mind/dashboard/perf-budget";
+import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
 import {
   captureCanvasFrame,
   hideLastFrameFreeze,
@@ -59,6 +60,11 @@ import {
   applyFocusPulse,
   applyFocusDrift,
   type FocusEaseState,
+  createMotionPoseBag,
+  captureFocusPose,
+  restoreFocusPose,
+  createFocusPoseHold,
+  sanitizeMotionPoseBag,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
@@ -256,6 +262,9 @@ function hashStr(s: string): number {
   return (h >>> 0) / 4294967295;
 }
 
+/** Motion c9 — survive UniverseScene remount / pan context-loss without easing snap. */
+const motionPoseBag = createMotionPoseBag();
+
 export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const dataRef = useRef(data);
@@ -384,6 +393,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const PORTRAIT_FALLBACK = "/dashboard-3d/art/portrait-dashboard.webp";
     let fallbackPortraitTex: THREE.Texture | null = null;
     const focusEase = new Map<string, FocusEaseState>();
+    sanitizeMotionPoseBag(motionPoseBag);
+
     let pendingFocusBotId: string | null = null;
 
     function disposeBotMaterial(mat: THREE.Material) {
@@ -788,6 +799,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
+    let graphFilter: GraphFilterState = { ...DEFAULT_GRAPH_FILTER };
+    let graphVisibleIds: Set<string> | null = null; // null = no graph filter active
+
     let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
@@ -1277,7 +1291,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const wallT = now * 0.001;
       const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
-        const show = starHealthFilter === "all" || n.health === starHealthFilter;
+        const healthOk = starHealthFilter === "all" || n.health === starHealthFilter;
+        const graphOk = !graphVisibleIds || graphVisibleIds.has(n.id);
+        const show = healthOk && graphOk;
         n.mesh.visible = show;
         n.glow.visible = show;
         n.label.visible = show && labelsOn && fly.level === "universe" && !labelsPaused;
@@ -1287,6 +1303,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         let st = focusEase.get(n.id);
         if (!st) {
           st = createFocusEaseState();
+          const held = motionPoseBag.focusById[n.id];
+          if (held) restoreFocusPose(st, held);
           focusEase.set(n.id, st);
         }
         stepFocusEase(st, n.id, rig.subjectId, dt, reducedMotion);
@@ -1336,6 +1354,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
         tickPainterlyKit(kit, t);
+        kit.setPassHealth({ healthy, total, reducedMotion });
         if (atm) atm.update(tone);
         liveBloom?.update(tone);
         liveGrade?.update(tone);
@@ -1374,6 +1393,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       labelRenderer.setSize(w, h);
       composer?.setSize(w, h);
       bloomHandle?.setSize?.(w, h);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      kit.resizePass(w, h, dpr);
       if (raysHandle && composer?.readBuffer?.depthTexture) {
         raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
       }
@@ -1431,6 +1452,37 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
     };
     document.addEventListener("dash3d-layers", onLayers);
+    const onGraphFilter = (ev: Event) => {
+      const d = (ev as CustomEvent<GraphFilterState>).detail;
+      if (!d || typeof d !== "object") return;
+      graphFilter = { ...DEFAULT_GRAPH_FILTER, ...d };
+      const active =
+        Boolean(graphFilter.query.trim()) ||
+        graphFilter.orphansOnly ||
+        graphFilter.health !== "all" ||
+        graphFilter.lane !== "all";
+      if (!active) {
+        graphVisibleIds = null;
+      } else {
+        graphVisibleIds = filterBotIds(
+          dataRef.current.bots,
+          dataRef.current.constellationEdges ?? [],
+          graphFilter,
+        );
+      }
+      // Also dim edges not touching a visible bot
+      for (const ch of edgeGroup.children) {
+        if (!(ch instanceof THREE.Line)) continue;
+        if (!graphVisibleIds) {
+          ch.visible = true;
+          continue;
+        }
+        const a = String(ch.userData.from || "");
+        const b = String(ch.userData.to || "");
+        ch.visible = graphVisibleIds.has(a) && graphVisibleIds.has(b);
+      }
+    };
+    document.addEventListener("dash3d-graph-filter", onGraphFilter);
 
 
     document.addEventListener("dash3d-sky", onSkyEvent);
@@ -1441,6 +1493,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
+      document.removeEventListener("dash3d-graph-filter", onGraphFilter);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);
@@ -1448,6 +1501,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       // Gap#3: snapshot before teardown so remount keeps last frame (no splash flash).
       const lastUrl = captureCanvasFrame(renderer.domElement);
       if (lastUrl) showLastFrameFreeze(mount, lastUrl);
+      // Motion c9 pose-hold: capture focus easing before state teardown.
+      for (const [id, st] of focusEase) {
+        motionPoseBag.focusById[id] ??= createFocusPoseHold();
+        captureFocusPose(motionPoseBag.focusById[id]!, st);
+      }
       detachContext();
       city.dispose();
       renderer.domElement.removeEventListener("wheel", onWheel);

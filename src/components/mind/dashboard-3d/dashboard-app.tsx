@@ -21,6 +21,7 @@ import {
 } from "./operator-console";
 import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
+import { GraphFiltersPanel } from "./graph-filters-panel";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import { pollViewData } from "@/lib/mind/dashboard/status-poll";
 
@@ -386,6 +387,7 @@ export function DashboardApp() {
 
       {viewData && !webglError ? (
         <FlyoverHud
+          focusBot={selected}
           fly={fly}
           layout={layoutForHud}
           lastNode={resolveLastNodeBreadcrumb({
@@ -436,7 +438,10 @@ export function DashboardApp() {
       ) : null}
 
       {viewData && sceneData && operatorPrefs.layers.feed ? (
-        <FeedPanel feed={sceneData.skyFeed ?? viewData.skyFeed} />
+        <>
+          <GraphFiltersPanel />
+          <FeedPanel feed={sceneData.skyFeed ?? viewData.skyFeed} />
+        </>
       ) : null}
       {viewData && sceneData?.charts && operatorPrefs.layers.charts ? (
         <ChartsPanel charts={sceneData.charts} />

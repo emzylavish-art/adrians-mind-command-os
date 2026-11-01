@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c34 — Gap#4 star hover tooltip (#26). Next: Gap#5 filters / #27.
+Last release: Dashboard c35 — WebGL feedback fix; Motion tip 31ef623; Painter c6; #27 filters. Next: #28 N-hop.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -37,7 +37,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 18 | **City night-shift windows** — per-floor window glow only for floors whose lock changed in last 30 min (real claimed_at/released_at); steady under reduced-motion | **done** | c25 — night-shift from lastActivityAt ≤30m; warm window floors; reduced-motion steady; hacker null/garbage timestamps |
 | 19 | **Feed severity pulse** — pulse sky-feed glyphs faster when Merge Gate / lock notes mention blocked/main (real text only) | **done** | c29 — feedSeverity from real text; alert pulseMul 2.2 + glyph is-alert |
 | 20 | **Imagine zone densify** — add 1–2 more character/scene billboards for under-art constellations (GenerateImage→webp≤300KB) | **done** | c26 — scene-merge-beacon + scene-collab-tower webp billboards |
-| 21 | **Star focus breadcrumb twin** — when a star is focused, mirror name+lane health beside last-palette crumb with Back to sky | queued | researched c9; complements #14 |
+| 21 | **Star focus breadcrumb twin** — when a star is focused, mirror name+lane health beside last-palette crumb with Back to sky | **done** | c35 — FlyoverHud focus crumb + motion breadcrumb-ease (c8) |
 | 22 | **Spend JSONL hook readiness** — document + adapter probe for future xAI usage append path (still honest empty until real USD events exist) | queued | researched c14; never invent numbers |
 
 | 23 | **Status-error last-good (Gap#1)** — keep last-good scene on status fail; calm stale chrome; backoff retry; never blank wipe | **done** | c27 — soft error overlay + lastData hydrate + exponential backoff; interior gated to fly.interior |
@@ -47,7 +47,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 33 | **Focus during flight (Gap#10)** — preserve latest selection; queue camera retarget until glide settles | **done** | c28 — onSelectBot always; pendingFocusBotId until acceptPointerPick |
 | 25 | **Pan/drag remount splash (Gap#3)** — keep last WebGL frame across context-loss/remount; no full splash on pan | **done** | c30 — preserveDrawingBuffer + last-frame freeze; splash suppressed after stage primed |
 | 26 | **Star hover tooltip + edge highlight (Gap#4)** — health/lane/branch/heartbeat tooltip; highlight constellation edges | **done** | c34 — dash3d-star-tooltip + edge opacity highlight on hover |
-| 27 | **Constellation Filters/Groups drawer (Gap#5)** — search, orphans, lane/health groups beyond Operator filter | queued | Obsidian Filters & Groups; Bloom Filter drawer |
+| 27 | **Constellation Filters/Groups drawer (Gap#5)** — search, orphans, lane/health groups beyond Operator filter | **done** | c35 — GraphFiltersPanel + dash3d-graph-filter → scene visibility |
 | 28 | **N-hop / expand neighbors (Gap#6)** — local graph depth around focused star | queued | Obsidian Local Graph; Bloom Expand |
 | 29 | **HUD focus mode / collapsible layers (Gap#7)** — one-gesture collapse Mirror/Feed/Charts/sky chrome | queued | Linear sidebar; Kepler layers; mobile chrome |
 | 30 | **Orientation minimap / compass (Gap#8)** — inset overview after zoom/pan | queued | Kepler map controls; Bloom overview |
