@@ -7253,3 +7253,35 @@ aside.rail nav,
   border-color: rgb(255 255 255 / 0.12) !important;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05) !important;
 }
+
+/* —— Evolution c109: depth elevation — masthead / stage / stacked cards —— */
+.main-stage .masthead {
+  background-color: rgb(12 14 20 / 0.5) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 50%),
+    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 280px 280px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 24px 56px rgb(0 0 0 / 0.5),
+    0 8px 20px rgb(0 0 0 / 0.28) !important;
+  transform: translateZ(0);
+}
+.main-stage .dense-card + .dense-card,
+.main-stage .glow-card + .glow-card {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 0 0 1px rgb(255 255 255 / 0.05),
+    0 14px 36px rgb(0 0 0 / 0.38) !important;
+}
+/* Stage sits behind elevated chrome */
+.main-stage {
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgb(255 255 255 / 0.04), transparent 55%) !important;
+}
+aside.rail {
+  box-shadow: 4px 0 32px rgb(0 0 0 / 0.35) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.08) !important;
+}
