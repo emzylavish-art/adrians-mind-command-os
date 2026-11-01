@@ -348,5 +348,6 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Merged origin/preview/integration @ 7f3e641 into error-banners as dd1e237 (nav Dashboard Link; no forbidden conflicts).
 - Fix: loadWorkerHealthStatus + WorkerHealthStatusRows (loading/ready/error); timeout 15s + stale generation; honest offline/local stays ready; load failures → red banner + onceListRetry + onFailure→reportFailure. failure-states worker_health_failed → network_failure.
 - Checks: typecheck pass; TS 806/808 (2 pre-existing: integration-security-c16 Imagine allowlist deferred; voice/ollama-conductor — present without H17 edits); lint our files 0e/2w hooks; build pass.
-- Notion: (pending append/child)
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281ffa97ddfb8c11cf266
+- Pushed origin/error-banners → 673b9ec72209959350994602f3389c4328200708 (ls-remote matches).
 - Lock releasing.
