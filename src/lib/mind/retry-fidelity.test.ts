@@ -39,7 +39,7 @@ describe("retry fidelity", () => {
 });
 
 import { commandSendPlan, onceRetry } from "./retry-fidelity.ts";
-import { mcpToolFailure } from "./failure-states.ts";
+import { mcpToolFailure, imageGenerationFailure, imagineRetryParams } from "./failure-states.ts";
 
 describe("retry after Clear stop", () => {
   it("uses live halt state: blocked while halted, sends after Clear stop", () => {
@@ -66,5 +66,36 @@ describe("MCP call-site failure banner", () => {
     assert.equal(f?.kind, "mcp_tool_failed");
     assert.match(f!.message, /boom/);
     assert.equal(f?.target, "mcp:pglite/mcp");
+  });
+});
+
+
+describe("Imagine call-site failure banner", () => {
+  it("maps a failed generate result to image_generation_failed with identical retry params", () => {
+    const f = imageGenerationFailure({
+      mode: "generate",
+      prompt: "lighthouse",
+      status: 502,
+      serverError: "upstream boom",
+      n: 1,
+    });
+    assert.equal(f.kind, "image_generation_failed");
+    assert.match(f.message, /image service failed|Image generation failed/i);
+    assert.deepEqual(imagineRetryParams(f), { mode: "generate", prompt: "lighthouse", n: 1 });
+  });
+
+  it("Retry guard fires exactly once for Imagine", () => {
+    let runs = 0;
+    const failure = imageGenerationFailure({ mode: "edit", prompt: "dusk", imageDataUrl: "data:image/png;base64,x", status: 500 });
+    const params = imagineRetryParams(failure);
+    const retry = onceRetry(() => {
+      runs += 1;
+      assert.equal(params.prompt, "dusk");
+      assert.equal(params.imageDataUrl, "data:image/png;base64,x");
+    });
+    retry?.();
+    retry?.();
+    retry?.();
+    assert.equal(runs, 1);
   });
 });

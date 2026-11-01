@@ -49,6 +49,9 @@ describe("failure banner markup contract", () => {
     ["auth_required", HONEST_FAILURE_MESSAGES.auth_required],
     ["forbidden_cross_site", HONEST_FAILURE_MESSAGES.forbidden_cross_site],
     ["rate_limited", "grok rate limited the request. Nothing was substituted."],
+    ["image_generation_failed", HONEST_FAILURE_MESSAGES.image_generation_failed],
+    ["image_generation_failed", HONEST_FAILURE_MESSAGES.image_generation_rate_limited],
+    ["image_generation_failed", "Imagine failed (HTTP 502)."],
   ] as const;
 
   for (const [kind, message] of cases) {

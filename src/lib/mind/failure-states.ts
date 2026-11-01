@@ -4,6 +4,8 @@
  * Banner 5 (mcp_tool_failed) matches the MCP integration copy in mcp.ts / mcp/registry.ts / mcp/tools.ts
  * (status "error", ok false, "Nothing was called." / "Nothing was invented.").
  * Top-5 gap kinds reuse CHAT_TIMEOUT_REPLY / CHAT_DISCONNECT_REPLY, auth, and provider-call copy.
+ * Banner 4 (image_generation_failed) mirrors media-lane mapImagineHttpError copy (harden.ts);
+ * media keeps request/HTTP mapping — this module only classifies and banners that copy.
  */
 
 export type HonestFailureKind =
@@ -15,7 +17,8 @@ export type HonestFailureKind =
   | "network_failure"
   | "auth_required"
   | "forbidden_cross_site"
-  | "rate_limited";
+  | "rate_limited"
+  | "image_generation_failed";
 
 /** Logic-wiring turn-timeouts copy (CHAT_TIMEOUT_REPLY) — recognized even when that module is not on this branch. */
 export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
@@ -39,6 +42,14 @@ export const HONEST_FAILURE_MESSAGES = {
   forbidden_cross_site: "Forbidden: cross-site request blocked",
   rate_limited: "The provider rate limited the request. Nothing was substituted.",
   mcp_list_failed: "The MCP server list could not be loaded.",
+  /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
+  image_generation_failed: "The image service failed. Nothing was saved as a success.",
+  image_generation_refused: "Image generation was refused (auth or permission).",
+  image_generation_rate_limited: "Image generation is rate-limited right now. Wait a minute and try again.",
+  image_generation_moderation: "The image request was refused by content moderation. Try a different prompt.",
+  image_generation_invalid: "That Imagine request was invalid. Check the prompt and images.",
+  image_generation_too_large: "That Imagine request was too large.",
+  image_generation_timeout: "Image generation timed out. Nothing was saved as a success.",
 } as const;
 
 export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
@@ -51,6 +62,7 @@ export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
   auth_required: "auth_required",
   forbidden_cross_site: "forbidden_cross_site",
   rate_limited: "rate_limited",
+  image_generation_failed: "image_generation_failed",
 };
 
 /** Copy the MCP integration code returns when a tool call fails (status "error"). */
@@ -101,6 +113,29 @@ const NETWORK_FAILURE_MARKERS = [
   "network request failed",
 ];
 
+
+/** Honest Imagine / Edit Imagine copy from media mapImagineHttpError (+ call-site fallbacks). */
+const IMAGE_GENERATION_FAILURE_MARKERS = [
+  HONEST_FAILURE_MESSAGES.image_generation_failed,
+  HONEST_FAILURE_MESSAGES.image_generation_refused,
+  HONEST_FAILURE_MESSAGES.image_generation_rate_limited,
+  HONEST_FAILURE_MESSAGES.image_generation_moderation,
+  HONEST_FAILURE_MESSAGES.image_generation_invalid,
+  HONEST_FAILURE_MESSAGES.image_generation_too_large,
+  HONEST_FAILURE_MESSAGES.image_generation_timeout,
+  "Image generation failed",
+  "Image generation returned",
+  "Image editing failed",
+  "Image editing returned",
+  "Imagine failed",
+  "Edit with Imagine failed",
+  "Imagine could not be reached",
+  "Edit with Imagine could not be reached",
+  "Could not reach the xAI image generation endpoint",
+  "Could not reach the xAI image edits endpoint",
+  "No xAI inference API key is available for image",
+];
+
 export function classifyHonestFailure(message: string): HonestFailureKind | null {
   const text = message.trim();
   if (!text) return null;
@@ -119,6 +154,9 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     /^Forbidden:\s*cross-site/i.test(text)
   ) {
     return "forbidden_cross_site";
+  }
+  if (IMAGE_GENERATION_FAILURE_MARKERS.some((marker) => text.includes(marker)) || /^Image generation failed \(HTTP /i.test(text)) {
+    return "image_generation_failed";
   }
   if (/rate limited/i.test(text) || /\b429\b/.test(text)) {
     return "rate_limited";
@@ -162,6 +200,8 @@ export function honestFailureDescription(kind: HonestFailureKind, message?: stri
       return HONEST_FAILURE_MESSAGES.forbidden_cross_site;
     case "rate_limited":
       return HONEST_FAILURE_MESSAGES.rate_limited;
+    case "image_generation_failed":
+      return HONEST_FAILURE_MESSAGES.image_generation_failed;
   }
 }
 
@@ -239,4 +279,90 @@ export function mcpToolFailure(outcome: McpToolCallOutcome): { kind: "mcp_tool_f
   const message = prefix ? `${prefix} ${body}` : classifyHonestFailure(body) === "mcp_tool_failed" ? body : `MCP tool failed. ${body}`;
   const target = outcome.serverId || tool ? `mcp:${outcome.serverId ?? "?"}/${tool ?? "?"}` : "mcp";
   return { kind: "mcp_tool_failed", message, target };
+}
+
+/**
+ * Banner-only mirror of media-lane mapImagineHttpError (harden.ts).
+ * Media owns request/HTTP sanitization; this keeps the red banner honest when
+ * the generate route has not yet merged that helper, and prefers server copy
+ * when it already matches Imagine failure markers.
+ */
+export function mapImagineHttpErrorCopy(status: number, message: string): string {
+  const raw = typeof message === "string" ? message : "";
+  if (status === 401 || status === 403) return HONEST_FAILURE_MESSAGES.image_generation_refused;
+  if (status === 429) return HONEST_FAILURE_MESSAGES.image_generation_rate_limited;
+  if (status === 400 && /moderat|unsafe|policy|content/i.test(raw)) {
+    return HONEST_FAILURE_MESSAGES.image_generation_moderation;
+  }
+  if (status === 400) return HONEST_FAILURE_MESSAGES.image_generation_invalid;
+  if (status === 413) return HONEST_FAILURE_MESSAGES.image_generation_too_large;
+  if (status >= 500) return HONEST_FAILURE_MESSAGES.image_generation_failed;
+  if (status === 408 || /timeout/i.test(raw)) return HONEST_FAILURE_MESSAGES.image_generation_timeout;
+  return `Image generation failed (HTTP ${status || "error"}).`;
+}
+
+export type ImageGenerationFailure = {
+  kind: "image_generation_failed";
+  message: string;
+  target: string;
+  mode: "generate" | "edit";
+  prompt: string;
+  imageDataUrl?: string;
+  n: number;
+};
+
+/** Build banner 4 state from an Imagine / Edit Imagine HTTP or thrown failure. */
+export function imageGenerationFailure(input: {
+  mode: "generate" | "edit";
+  prompt: string;
+  status?: number;
+  serverError?: string;
+  caughtMessage?: string;
+  imageDataUrl?: string;
+  n?: number;
+  target?: string;
+}): ImageGenerationFailure {
+  const server = oneLine(input.serverError || "");
+  const caught = oneLine(input.caughtMessage || "");
+  let message: string;
+  if (server && classifyHonestFailure(server) === "image_generation_failed") {
+    message = server;
+  } else if (typeof input.status === "number" && input.status > 0) {
+    message = mapImagineHttpErrorCopy(input.status, server || caught);
+  } else if (caught && classifyHonestFailure(caught) === "image_generation_failed") {
+    message = caught;
+  } else if (server) {
+    message = mapImagineHttpErrorCopy(0, server);
+  } else if (caught) {
+    message = caught.includes("Imagine") || caught.includes("Image")
+      ? caught
+      : HONEST_FAILURE_MESSAGES.image_generation_failed;
+  } else {
+    message = HONEST_FAILURE_MESSAGES.image_generation_failed;
+  }
+  message = oneLine(message);
+  return {
+    kind: "image_generation_failed",
+    message,
+    target: input.target || (input.mode === "edit" ? "imagine:edit" : "imagine:generate"),
+    mode: input.mode,
+    prompt: input.prompt,
+    imageDataUrl: input.imageDataUrl,
+    n: input.n ?? 1,
+  };
+}
+
+/** Retry fidelity: re-run Imagine with the same prompt/options/(edit) source image. */
+export function imagineRetryParams(failure: Pick<ImageGenerationFailure, "mode" | "prompt" | "imageDataUrl" | "n">): {
+  mode: "generate" | "edit";
+  prompt: string;
+  n: number;
+  imageDataUrl?: string;
+} {
+  return {
+    mode: failure.mode,
+    prompt: failure.prompt,
+    n: failure.n,
+    ...(failure.mode === "edit" && failure.imageDataUrl ? { imageDataUrl: failure.imageDataUrl } : {}),
+  };
 }

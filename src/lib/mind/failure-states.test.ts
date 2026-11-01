@@ -10,6 +10,9 @@ import {
   honestFailureDescription,
   mcpToolFailure,
   normalizeClientFailureMessage,
+  imageGenerationFailure,
+  imagineRetryParams,
+  mapImagineHttpErrorCopy,
 } from "./failure-states.ts";
 
 describe("honest failure states", () => {
@@ -167,5 +170,77 @@ describe("top-5 gap classifiers", () => {
     retry();
     retry();
     assert.deepEqual(calls, ["load", "load"]);
+  });
+});
+
+
+describe("banner 4 image_generation_failed", () => {
+  it("classifies mapImagineHttpError copy as image_generation_failed", () => {
+    for (const message of [
+      HONEST_FAILURE_MESSAGES.image_generation_failed,
+      HONEST_FAILURE_MESSAGES.image_generation_refused,
+      HONEST_FAILURE_MESSAGES.image_generation_rate_limited,
+      HONEST_FAILURE_MESSAGES.image_generation_moderation,
+      HONEST_FAILURE_MESSAGES.image_generation_invalid,
+      HONEST_FAILURE_MESSAGES.image_generation_too_large,
+      HONEST_FAILURE_MESSAGES.image_generation_timeout,
+      "Image generation failed (HTTP 502).",
+      "Imagine failed (HTTP 500).",
+      "Edit with Imagine failed (HTTP 503).",
+      "Imagine could not be reached.",
+    ]) {
+      assert.equal(classifyHonestFailure(message), "image_generation_failed", message);
+    }
+    assert.equal(honestFailureAuditAction("image_generation_failed"), "image_generation_failed");
+    assert.equal(honestFailureDescription("image_generation_failed"), HONEST_FAILURE_MESSAGES.image_generation_failed);
+  });
+
+  it("keeps one-line mapImagineHttpError copy for the banner description", () => {
+    assert.equal(mapImagineHttpErrorCopy(429, "slow down"), HONEST_FAILURE_MESSAGES.image_generation_rate_limited);
+    assert.equal(mapImagineHttpErrorCopy(400, "content moderation policy"), HONEST_FAILURE_MESSAGES.image_generation_moderation);
+    assert.equal(mapImagineHttpErrorCopy(503, ""), HONEST_FAILURE_MESSAGES.image_generation_failed);
+    assert.equal(mapImagineHttpErrorCopy(401, "nope"), HONEST_FAILURE_MESSAGES.image_generation_refused);
+    const built = imageGenerationFailure({
+      mode: "generate",
+      prompt: "a red lighthouse",
+      status: 503,
+      serverError: "internal stack trace secret",
+    });
+    assert.equal(built.kind, "image_generation_failed");
+    assert.equal(built.message, HONEST_FAILURE_MESSAGES.image_generation_failed);
+    assert.ok(!built.message.includes("\n"));
+    assert.ok(!built.message.includes("secret"));
+    assert.equal(built.prompt, "a red lighthouse");
+    assert.equal(built.n, 1);
+  });
+
+  it("Retry re-runs Imagine with identical prompt, options, and edit source image", () => {
+    const calls: Array<ReturnType<typeof imagineRetryParams>> = [];
+    const failure = imageGenerationFailure({
+      mode: "edit",
+      prompt: "make it dusk",
+      status: 500,
+      imageDataUrl: "data:image/png;base64,aaa",
+      n: 1,
+    });
+    const params = imagineRetryParams(failure);
+    const retry = bindRetry((p: typeof params) => {
+      calls.push(p);
+    }, [params] as [typeof params]);
+    retry();
+    retry();
+    assert.deepEqual(calls, [params, params]);
+    assert.equal(calls[0], params);
+    assert.equal(calls[0].prompt, "make it dusk");
+    assert.equal(calls[0].imageDataUrl, "data:image/png;base64,aaa");
+    assert.equal(calls[0].mode, "edit");
+    assert.equal(calls[0].n, 1);
+  });
+
+  it("generate Retry keeps identical prompt and n without inventing an image", () => {
+    const failure = imageGenerationFailure({ mode: "generate", prompt: "harbor at dawn", status: 429, serverError: "rate", n: 1 });
+    const params = imagineRetryParams(failure);
+    assert.deepEqual(params, { mode: "generate", prompt: "harbor at dawn", n: 1 });
+    assert.equal("imageDataUrl" in params, false);
   });
 });

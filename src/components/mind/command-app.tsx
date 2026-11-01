@@ -90,6 +90,7 @@ import {
   classifyHonestFailure,
   honestFailureAuditAction,
   HONEST_FAILURE_MESSAGES,
+  imageGenerationFailure,
   mcpToolFailure,
   normalizeClientFailureMessage,
 } from "@/lib/mind/failure-states";
@@ -1413,7 +1414,7 @@ export function CommandApp() {
       return;
     }
     setDraft("");
-    setError(null);
+    clearFailure();
     setBusy(true);
     setLiveText("");
     const token = getBearerToken();
@@ -1468,8 +1469,15 @@ export function CommandApp() {
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
       if (!response.ok || !payload.ok || !payload.images?.length) {
-        const message = payload.error || `Imagine failed (HTTP ${response.status}).`;
-        setError(message);
+        const failed = imageGenerationFailure({
+          mode: "generate",
+          prompt,
+          status: response.status,
+          serverError: payload.error,
+          n: 1,
+          target: chatId,
+        });
+        const message = failed.message;
         setWs((prev) => ({
           ...prev,
           chats: prev.chats.map((item) =>
@@ -1489,6 +1497,10 @@ export function CommandApp() {
               : item,
           ),
         }));
+        reportFailure(message, "image_generation_failed", failed.target, () => {
+          const live = wsRef.current.chats.find((item) => item.id === chatId) ?? { id: chatId } as Chat;
+          void runImagine(prompt, live);
+        });
         return;
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
@@ -1524,32 +1536,70 @@ export function CommandApp() {
         return pushAudit(next, "imagine_generate", chatId, model);
       });
     } catch (caught) {
-      const message =
+      const caughtMessage =
         caught instanceof Error && caught.message === "Unauthorized"
           ? "Sign in is required."
           : caught instanceof Error
             ? caught.message
             : "Imagine could not be reached.";
-      setError(message);
-      setWs((prev) => ({
-        ...prev,
-        chats: prev.chats.map((item) =>
-          item.id === chatId
-            ? {
-                ...item,
-                messages: [
-                  ...item.messages,
-                  {
-                    id: crypto.randomUUID(),
-                    role: "assistant" as const,
-                    content: message,
-                    at: new Date().toISOString(),
-                  },
-                ],
-              }
-            : item,
-        ),
-      }));
+      const authKind = classifyHonestFailure(caughtMessage);
+      if (authKind === "auth_required" || authKind === "forbidden_cross_site") {
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: caughtMessage,
+                      at: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+        reportFailure(caughtMessage, honestFailureAuditAction(authKind), chatId, () => {
+          const live = wsRef.current.chats.find((item) => item.id === chatId) ?? ({ id: chatId } as Chat);
+          void runImagine(prompt, live);
+        });
+      } else {
+        const failed = imageGenerationFailure({
+          mode: "generate",
+          prompt,
+          caughtMessage,
+          n: 1,
+          target: chatId,
+        });
+        const message = failed.message;
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: message,
+                      at: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+        reportFailure(message, "image_generation_failed", failed.target, () => {
+          const live = wsRef.current.chats.find((item) => item.id === chatId) ?? ({ id: chatId } as Chat);
+          void runImagine(prompt, live);
+        });
+      }
     } finally {
       setBusy(false);
       setLiveText("");
@@ -1568,7 +1618,7 @@ export function CommandApp() {
       return;
     }
     setDraft("");
-    setError(null);
+    clearFailure();
     setBusy(true);
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -1588,7 +1638,18 @@ export function CommandApp() {
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
       if (!response.ok || !payload.ok || !payload.images?.length) {
-        setError(payload.error || `Edit with Imagine failed (HTTP ${response.status}).`);
+        const failed = imageGenerationFailure({
+          mode: "edit",
+          prompt,
+          status: response.status,
+          serverError: payload.error,
+          imageDataUrl,
+          n: 1,
+          target: active?.id || "imagine:edit",
+        });
+        reportFailure(failed.message, "image_generation_failed", failed.target, () => {
+          void runImagineEdit(imageDataUrl, prompt);
+        });
         return;
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
@@ -1629,7 +1690,26 @@ export function CommandApp() {
         }));
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Edit with Imagine could not be reached.");
+      const caughtMessage = caught instanceof Error ? caught.message : "Edit with Imagine could not be reached.";
+      const authKind = classifyHonestFailure(caughtMessage === "Unauthorized" ? "Sign in is required." : caughtMessage);
+      const normalized = caughtMessage === "Unauthorized" ? "Sign in is required." : caughtMessage;
+      if (authKind === "auth_required" || authKind === "forbidden_cross_site") {
+        reportFailure(normalized, honestFailureAuditAction(authKind), active?.id || "imagine:edit", () => {
+          void runImagineEdit(imageDataUrl, prompt);
+        });
+      } else {
+        const failed = imageGenerationFailure({
+          mode: "edit",
+          prompt,
+          caughtMessage: normalized,
+          imageDataUrl,
+          n: 1,
+          target: active?.id || "imagine:edit",
+        });
+        reportFailure(failed.message, "image_generation_failed", failed.target, () => {
+          void runImagineEdit(imageDataUrl, prompt);
+        });
+      }
     } finally {
       setBusy(false);
     }
