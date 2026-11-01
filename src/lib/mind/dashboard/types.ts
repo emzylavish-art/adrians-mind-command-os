@@ -106,4 +106,6 @@ export type DashboardStatus = {
   money: import("./spend-core.ts").MoneyView;
   /** Real-data spark charts. */
   charts: import("./chart-series.ts").DashboardCharts;
+  /** Queue #9 — per-bot Notion stop-point freshness from snapshot. */
+  notionMirror: import("./notion-mirror.ts").NotionMirrorView;
 };

@@ -670,6 +670,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const dust = createDustField(scene, { count: 480, seed: 42 });
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+    let starHealthFilter: string = "all";
+    let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
 
@@ -1058,6 +1060,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const wallT = now * 0.001;
       const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
+        const show = starHealthFilter === "all" || n.health === starHealthFilter;
+        n.mesh.visible = show;
+        n.glow.visible = show;
+        n.label.visible = show && labelsOn && fly.level === "universe";
         const phase = pulsePhaseFromId(n.id);
         sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
         n.mesh.scale.setScalar(pulseOut.scale);
@@ -1068,7 +1074,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
-        n.label.visible = fly.level === "universe"; // star labels don't bleed into the city/interior
+        // label visibility owned above (health filter + labels layer + fly level)
       }
       if (!reducedMotion) {
         for (const fl of flowLines) {
@@ -1178,6 +1184,16 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       cbs.current.onSelectBot(bot);
     };
     document.addEventListener("dash3d-focus-bot", onFocusBot);
+    const onLayers = (ev: Event) => {
+      const d = (ev as CustomEvent<{ labels?: boolean; healthFilter?: string }>).detail || {};
+      if (typeof d.labels === "boolean") {
+        labelsOn = d.labels;
+        city.setLabelsVisible(labelsOn && fly.level === "city");
+      }
+      if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
+    };
+    document.addEventListener("dash3d-layers", onLayers);
+
 
     document.addEventListener("dash3d-sky", onSkyEvent);
 
@@ -1186,6 +1202,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     return () => {
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
+      document.removeEventListener("dash3d-layers", onLayers);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);
