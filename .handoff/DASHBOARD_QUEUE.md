@@ -127,6 +127,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 70 | **Gap#53 Canvas accessible name** — role=img + live aria-label from bot health/weather | **done** | c48 — dash3d-stage-canvas |
 | 71 | **Gap#34 re-check — hide tab money burn + clear gap** | **done** | c49 — warn on suppress; clear hiddenGapMs after 25s visible; tests |
 | 72 | **Surfaces — lock history + chart drilldown + fly focus crumb** | **done** | c49 — timeline lock history; chart→bot/scrub; fly focus name/task |
+| 73 | **Motion c17 — health-pulse-crossfade + star-batch harden** | **done** | c50 — land fc36a5e motion/; wire crossfade + STAR_BATCH_MAX/ORBIT_OPTS |
+| 74 | **Motion c18 — neighbor-drift-damp + alloc-budget** | **done** | c50 — neighbor damp after batch; alloc-budget via --expose-gc |
 
 
 

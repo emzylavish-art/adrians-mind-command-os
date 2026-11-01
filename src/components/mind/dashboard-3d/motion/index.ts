@@ -217,8 +217,31 @@ export {
   type FocusRingBreatheState,
 } from "./focus-ring-breathe.ts";
 export {
+  STAR_BATCH_MAX,
+  STAR_BATCH_ORBIT_OPTS,
+  createStarBatchScratch,
+  disposeStarBatchScratch,
   stepStarFieldBatch,
   type StarBatchOpts,
+  type StarBatchScratch,
   type StarBatchSlot,
 } from "./star-batch.ts";
+export {
+  HEALTH_XFADE_LAMBDA,
+  createHealthPulseCrossfadeState,
+  sampleStarPulseCrossfaded,
+  setHealthPulseTarget,
+  stepHealthPulseCrossfade,
+  type HealthPulseCrossfadeOpts,
+  type HealthPulseCrossfadeState,
+} from "./health-pulse-crossfade.ts";
 
+export {
+  NEIGHBOR_DRIFT_FLOOR,
+  NEIGHBOR_DRIFT_LAMBDA,
+  collectOneHopNeighbors,
+  neighborDriftTarget,
+  stepNeighborDriftDamp,
+  stepNeighborDriftDampBatch,
+  type NeighborDriftDampOpts,
+} from "./neighbor-drift-damp.ts";

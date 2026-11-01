@@ -56,7 +56,20 @@ import {
   sharedMotionClock,
   createFocusEaseState,
   stepStarFieldBatch,
+  STAR_BATCH_MAX,
+  STAR_BATCH_ORBIT_OPTS,
+  createHealthPulseCrossfadeState,
+  setHealthPulseTarget,
+  stepHealthPulseCrossfade,
+  sampleStarPulseCrossfaded,
+  collectOneHopNeighbors,
+  stepNeighborDriftDampBatch,
+  pulsePhaseFromId,
+  sampleOrbitDrift,
+  applyFocusPulse,
+  applyFocusDrift,
   type FocusEaseState,
+  type HealthPulseCrossfadeState,
   createMotionPoseBag,
   captureFocusPose,
   restoreFocusPose,
@@ -913,6 +926,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const starBatchFocus: ReturnType<typeof createFocusEaseState>[] = [];
     const starBatchPulse: Array<{ scale: number; glow: number; emissive: number }> = [];
     const starBatchPos: Array<{ x: number; y: number; z: number }> = [];
+    // Motion c17: health pulse crossfade state per bot (+ reusable sample temps).
+    const healthXfade = new Map<string, HealthPulseCrossfadeState>();
+    const pulseXfadeFrom = { scale: 1, glow: 2, emissive: 0.7 };
+    const pulseXfadeTo = { scale: 1, glow: 2, emissive: 0.7 };
+    // Motion c18: 1-hop neighbor drift damp (rebuild when focus/graph changes).
+    let neighborSet: Set<string> = new Set();
+    let neighborFocusKey = "";
+    let neighborEdgeKey = "";
+    const edgePairs: Array<[string, string]> = [];
 
     let composer: EffectComposer | null = null;
     let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
@@ -1537,6 +1559,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         starBatchFocus[bi] = st;
       }
+      // Motion c18: refresh one-hop neighbors when focus or edge set changes.
+      const focusKey = rig.subjectId ?? "";
+      const edgesNow = dataRef.current.constellationEdges ?? [];
+      const edgeKey = `${edgesNow.length}:${focusKey}`;
+      if (edgeKey !== neighborFocusKey + "|" + neighborEdgeKey || edgePairs.length !== edgesNow.length) {
+        edgePairs.length = 0;
+        for (const e of edgesNow) {
+          if (e?.from && e?.to) edgePairs.push([e.from, e.to]);
+        }
+        neighborSet = collectOneHopNeighbors(edgePairs, rig.subjectId);
+        neighborFocusKey = focusKey;
+        neighborEdgeKey = `${edgesNow.length}`;
+      } else if (focusKey !== neighborFocusKey) {
+        neighborSet = collectOneHopNeighbors(edgePairs, rig.subjectId);
+        neighborFocusKey = focusKey;
+      }
+      const batchCount = Math.min(botVis.length, STAR_BATCH_MAX);
+      // Touch STAR_BATCH_ORBIT_OPTS.clock so reused orbit opts stay phase-locked (c18 alloc).
+      STAR_BATCH_ORBIT_OPTS.clock = sharedMotionClock;
       stepStarFieldBatch(
         starBatchIds,
         starBatchHealths,
@@ -1548,9 +1589,63 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         wallT,
         dt,
         reducedMotion,
-        botVis.length,
+        batchCount,
         { clock: sharedMotionClock },
       );
+      // Motion c18: damp 1-hop neighbor orbit after batch focus-ease.
+      stepNeighborDriftDampBatch(
+        starBatchIds,
+        starBatchFocus,
+        rig.subjectId,
+        neighborSet,
+        dt,
+        reducedMotion,
+        batchCount,
+      );
+      // Re-sample orbit + apply updated driftMul (neighbor damp / focus) onto pos outs.
+      for (let bi = 0; bi < batchCount; bi++) {
+        const id = starBatchIds[bi];
+        const base = starBatchBases[bi];
+        const st = starBatchFocus[bi];
+        const pos = starBatchPos[bi];
+        if (id == null || id === "" || base == null || st == null || pos == null) continue;
+        sampleOrbitDrift(
+          pos,
+          base,
+          wallT,
+          pulsePhaseFromId(id),
+          reducedMotion,
+          STAR_BATCH_ORBIT_OPTS,
+        );
+        applyFocusDrift(pos, base, st.driftMul);
+      }
+      // Motion c17: crossfade pulse when health flips (real status changes).
+      for (let bi = 0; bi < batchCount; bi++) {
+        const id = starBatchIds[bi]!;
+        const health = starBatchHealths[bi]!;
+        let xf = healthXfade.get(id);
+        if (!xf) {
+          xf = createHealthPulseCrossfadeState(health);
+          healthXfade.set(id, xf);
+        }
+        setHealthPulseTarget(xf, health, reducedMotion);
+        stepHealthPulseCrossfade(xf, dt, reducedMotion);
+        if (xf.blend < 0.999 || xf.from !== xf.to) {
+          sampleStarPulseCrossfaded(
+            starBatchPulse[bi]!,
+            pulseXfadeFrom,
+            pulseXfadeTo,
+            xf,
+            wallT,
+            pulsePhaseFromId(id),
+            reducedMotion,
+            { clock: sharedMotionClock },
+          );
+          // Crossfade replaces pulse sample — re-apply focus pulse mul.
+          applyFocusPulse(starBatchPulse[bi]!, starBatchFocus[bi]!.pulseMul);
+        }
+      }
+
       for (let bi = 0; bi < botVis.length; bi++) {
         const n = botVis[bi]!;
         const healthOk = starHealthFilter === "all" || n.health === starHealthFilter;
