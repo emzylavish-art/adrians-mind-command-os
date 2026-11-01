@@ -102,7 +102,8 @@ describe("device emergency stop", () => {
       emergencyStopped: false,
       allowedRoots: [ROOT],
       autonomy: "automatic",
-    });
+        skipBindingForTests: true,
+      });
     assert.equal(verified.ok, false);
   });
 

@@ -8,6 +8,8 @@ import {
   type DeviceRecord,
 } from "./store.ts";
 import { DEVICE_SCOPES } from "./scope.ts";
+import { fingerprintPublicKey } from "./binding.ts";
+import { handshakeRateLimited, mintRateLimited, recordHandshakeAttempt } from "./rate-limit.ts";
 
 export const PAIRING_CODE_TTL_MS = 5 * 60 * 1000;
 export const DEVICE_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -22,6 +24,10 @@ export function mintPairingCode(userId: string, now = Date.now()):
   | { ok: false; error: string } {
   const key = readManagementKey();
   if (!key.ok) return key;
+  const mintLimit = mintRateLimited(userId, now);
+  if (mintLimit.limited) {
+    return { ok: false, error: "Too many pairing codes minted. Wait before requesting another." };
+  }
   const code = randomPairingCode();
   const expiresAt = new Date(now + PAIRING_CODE_TTL_MS).toISOString();
   const mac = codeMac(key.key, code, userId, expiresAt);
@@ -43,6 +49,8 @@ export function exchangePairingCode(input: {
   code: string;
   publicKeyPem: string;
   deviceName: string;
+  /** Client IP or stable rate-limit bucket (never a secret). */
+  attemptKey?: string;
   now?: number;
 }):
   | {
@@ -52,14 +60,25 @@ export function exchangePairingCode(input: {
       tokenId: string;
       scopes: string[];
       expiresAt: string;
+      publicKeyFingerprint: string;
     }
   | { ok: false; error: string } {
   const now = input.now ?? Date.now();
+  const attemptKey = input.attemptKey || "anon";
+  const limited = handshakeRateLimited(attemptKey, now);
+  if (limited.limited) {
+    return { ok: false, error: "Too many failed pairing attempts. Try again later." };
+  }
+
   const key = readManagementKey();
   if (!key.ok) return key;
   const code = input.code.trim().toUpperCase();
-  if (!code) return { ok: false, error: "Pairing code is required." };
+  if (!code) {
+    recordHandshakeAttempt(attemptKey, false, now);
+    return { ok: false, error: "Pairing code is required." };
+  }
   if (!input.publicKeyPem?.includes("PUBLIC KEY")) {
+    recordHandshakeAttempt(attemptKey, false, now);
     return { ok: false, error: "A device public key is required." };
   }
   const name = (input.deviceName || "HP EliteBook").trim().slice(0, 80);
@@ -77,7 +96,7 @@ export function exchangePairingCode(input: {
     }
   }
   if (!matched) {
-    // Distinguish expired/reused vs wrong without leaking which codes exist.
+    recordHandshakeAttempt(attemptKey, false, now);
     const anySameShape = store.codes.some((record) => {
       const mac = codeMac(key.key, code, record.userId, record.expiresAt);
       return safeEqualHex(sha256Hex(`${code}|${mac}`), record.codeHash);
@@ -98,11 +117,14 @@ export function exchangePairingCode(input: {
   const tokenId = newId("tok");
   const deviceId = newId("dev");
   const expiresAt = new Date(now + DEVICE_TOKEN_TTL_MS).toISOString();
+  const publicKeyPem = input.publicKeyPem.trim();
+  const publicKeyFingerprint = fingerprintPublicKey(publicKeyPem);
   const device: DeviceRecord = {
     id: deviceId,
     userId: matched.userId,
     name,
-    publicKeyPem: input.publicKeyPem.trim(),
+    publicKeyPem,
+    publicKeyFingerprint,
     tokenHash: sha256Hex(token),
     tokenId,
     scopes: [...DEVICE_SCOPES],
@@ -116,6 +138,7 @@ export function exchangePairingCode(input: {
   };
   store.devices.push(device);
   writePairingStore(store);
+  recordHandshakeAttempt(attemptKey, true, now);
   return {
     ok: true,
     deviceId,
@@ -123,6 +146,7 @@ export function exchangePairingCode(input: {
     tokenId,
     scopes: device.scopes,
     expiresAt,
+    publicKeyFingerprint,
   };
 }
 

@@ -12,6 +12,8 @@ import {
 } from "./emergency-stop.ts";
 import { pairingCardState, recordHeartbeat, pcCapabilityFromPairing } from "./status.ts";
 import { managementKeyLabel, readManagementKey } from "./management-key.ts";
+import { assertPinnedOrigin, agentMustUseTls } from "./transport.ts";
+import { mintRateLimited } from "./rate-limit.ts";
 import type { DeviceActionKind } from "./scope.ts";
 
 function json(data: unknown, status = 200) {
@@ -54,6 +56,8 @@ export async function handleMintPairingCode(request: Request) {
     const userId = await requireUserId(bearer(request));
     const key = readManagementKey();
     if (!key.ok) return json({ ok: false, error: key.error }, 503);
+    const mintLimit = mintRateLimited(userId);
+    if (mintLimit.limited) return json({ ok: false, error: "Too many pairing codes minted. Wait before requesting another." }, 429);
     const minted = mintPairingCode(userId);
     if (!minted.ok) return json(minted, 400);
     // Return the short-lived code to the signed-in owner only — never the management key.
@@ -69,8 +73,27 @@ export async function handleHandshake(request: Request) {
   const code = typeof body.code === "string" ? body.code : "";
   const publicKeyPem = typeof body.publicKeyPem === "string" ? body.publicKeyPem : "";
   const deviceName = typeof body.deviceName === "string" ? body.deviceName : "HP EliteBook";
-  const result = exchangePairingCode({ code, publicKeyPem, deviceName });
-  if (!result.ok) return json(result, 400);
+  const dashboardUrl = typeof body.dashboardUrl === "string" ? body.dashboardUrl : "";
+  if (dashboardUrl) {
+    const tls = agentMustUseTls(dashboardUrl);
+    if (!tls.ok) return json(tls, 400);
+    const pinned = assertPinnedOrigin({
+      dashboardUrl,
+      requestOrigin: request.headers.get("origin"),
+      allowLocalHttp: true,
+    });
+    // Origin header may be absent for non-browser agents; when present it must match.
+    if (request.headers.get("origin") && !pinned.ok) return json(pinned, 400);
+  }
+  const attemptKey =
+    (typeof body.attemptKey === "string" && body.attemptKey) ||
+    request.headers.get("x-forwarded-for") ||
+    "anon";
+  const result = exchangePairingCode({ code, publicKeyPem, deviceName, attemptKey });
+  if (!result.ok) {
+    const status = result.error.includes("Too many") ? 429 : 400;
+    return json(result, status);
+  }
   return json({
     ok: true,
     deviceId: result.deviceId,
@@ -78,13 +101,15 @@ export async function handleHandshake(request: Request) {
     tokenId: result.tokenId,
     scopes: result.scopes,
     expiresAt: result.expiresAt,
+    publicKeyFingerprint: result.publicKeyFingerprint,
   });
 }
 
 export async function handleHeartbeat(request: Request) {
   const body = await readJson(request);
   const token = typeof body.token === "string" ? body.token : bearer(request) || "";
-  const result = recordHeartbeat(token);
+  const fingerprint = typeof body.publicKeyFingerprint === "string" ? body.publicKeyFingerprint : undefined;
+  const result = recordHeartbeat(token, Date.now(), fingerprint);
   if (!result.ok) return json(result, 401);
   return json({ ok: true, lastHeartbeatAt: result.lastHeartbeatAt });
 }

@@ -16,6 +16,8 @@ export type DeviceRecord = {
   userId: string;
   name: string;
   publicKeyPem: string;
+  /** sha256 of normalized public key PEM — token is bound to this key */
+  publicKeyFingerprint: string;
   tokenHash: string;
   tokenId: string;
   scopes: string[];
@@ -40,11 +42,18 @@ export type ActionReport = {
 
 export type UsedNonce = { nonce: string; actionId: string; at: string };
 
+export type HandshakeAttempt = {
+  key: string;
+  at: string;
+  ok: boolean;
+};
+
 export type PairingStore = {
   codes: PairingCodeRecord[];
   devices: DeviceRecord[];
   reports: ActionReport[];
   usedNonces: UsedNonce[];
+  handshakeAttempts: HandshakeAttempt[];
 };
 
 let directory = join(process.cwd(), ".data", "mind-pairing");
@@ -62,7 +71,7 @@ function storePath() {
 }
 
 function emptyStore(): PairingStore {
-  return { codes: [], devices: [], reports: [], usedNonces: [] };
+  return { codes: [], devices: [], reports: [], usedNonces: [], handshakeAttempts: [] };
 }
 
 export function readPairingStore(): PairingStore {
@@ -74,6 +83,7 @@ export function readPairingStore(): PairingStore {
       devices: Array.isArray(parsed.devices) ? parsed.devices : [],
       reports: Array.isArray(parsed.reports) ? parsed.reports : [],
       usedNonces: Array.isArray(parsed.usedNonces) ? parsed.usedNonces : [],
+      handshakeAttempts: Array.isArray(parsed.handshakeAttempts) ? parsed.handshakeAttempts : [],
     };
   } catch {
     return emptyStore();
@@ -94,19 +104,19 @@ export function newId(prefix: string): string {
 
 export function pruneStore(store: PairingStore, now = Date.now()): PairingStore {
   const cutoff = now - 24 * 60 * 60 * 1000;
+  const attemptCutoff = now - 15 * 60 * 1000;
   return {
-    codes: store.codes.filter((c) => Date.parse(c.expiresAt) > now - 60_000 || (!c.usedAt && Date.parse(c.expiresAt) > cutoff)),
+    codes: store.codes.filter(
+      (c) => Date.parse(c.expiresAt) > now - 60_000 || (!c.usedAt && Date.parse(c.expiresAt) > cutoff),
+    ),
     devices: store.devices,
     reports: store.reports.slice(-500),
     usedNonces: store.usedNonces.filter((n) => Date.parse(n.at) > cutoff).slice(-2000),
+    handshakeAttempts: store.handshakeAttempts.filter((a) => Date.parse(a.at) > attemptCutoff).slice(-2000),
   };
 }
 
 export function resetPairingStoreForTests() {
-  if (existsSync(storePath())) {
-    writePairingStore(emptyStore());
-  } else {
-    mkdirSync(directory, { recursive: true });
-    writePairingStore(emptyStore());
-  }
+  mkdirSync(directory, { recursive: true });
+  writePairingStore(emptyStore());
 }

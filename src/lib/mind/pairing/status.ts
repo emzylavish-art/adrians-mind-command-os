@@ -33,13 +33,20 @@ function activeDevicesForUser(userId: string, now: number): DeviceRecord[] {
   );
 }
 
-export function recordHeartbeat(deviceToken: string, now = Date.now()):
+export function recordHeartbeat(
+  deviceToken: string,
+  now = Date.now(),
+  publicKeyFingerprint?: string,
+):
   | { ok: true; lastHeartbeatAt: string }
   | { ok: false; error: string } {
   const found = findDeviceByToken(deviceToken, now);
   if (!found.ok) return found;
   if (found.device.emergencyStopped) {
     return { ok: false, error: "Emergency stop is on." };
+  }
+  if (publicKeyFingerprint && publicKeyFingerprint !== found.device.publicKeyFingerprint) {
+    return { ok: false, error: "Device key fingerprint mismatch." };
   }
   const store = readPairingStore();
   const device = store.devices.find((d) => d.id === found.device.id);

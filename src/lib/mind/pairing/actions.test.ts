@@ -52,7 +52,8 @@ describe("action signing and scope", () => {
       emergencyStopped: false,
       allowedRoots: [ROOT],
       autonomy: "automatic",
-    });
+        skipBindingForTests: true,
+      });
     assert.equal(verified.ok, true);
   });
 
@@ -75,6 +76,7 @@ describe("action signing and scope", () => {
         emergencyStopped: false,
         allowedRoots: [ROOT],
         autonomy: "automatic",
+        skipBindingForTests: true,
       }).ok,
       false,
     );
@@ -86,6 +88,7 @@ describe("action signing and scope", () => {
         emergencyStopped: false,
         allowedRoots: [ROOT],
         autonomy: "automatic",
+        skipBindingForTests: true,
       }).ok,
       false,
     );
@@ -109,6 +112,7 @@ describe("action signing and scope", () => {
         emergencyStopped: false,
         allowedRoots: [ROOT],
         autonomy: "automatic",
+        skipBindingForTests: true,
       }).ok,
       true,
     );
@@ -118,7 +122,8 @@ describe("action signing and scope", () => {
       emergencyStopped: false,
       allowedRoots: [ROOT],
       autonomy: "automatic",
-    });
+        skipBindingForTests: true,
+      });
     assert.equal(replay.ok, false);
     if (!replay.ok) assert.match(replay.error, /replay/i);
   });
@@ -147,7 +152,8 @@ describe("action signing and scope", () => {
           emergencyStopped: false,
           allowedRoots: [ROOT],
           autonomy: "automatic",
-        });
+        skipBindingForTests: true,
+      });
         assert.equal(v.ok, false, path);
       } else {
         assert.match(signed.error, /traversal|outside|Path|protected|approve|Ask|Automatic/i, path);

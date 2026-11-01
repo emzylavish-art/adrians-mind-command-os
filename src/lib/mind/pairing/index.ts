@@ -16,7 +16,12 @@ export {
   DEVICE_TOKEN_TTL_MS,
   HEARTBEAT_FRESH_MS,
 } from "./handshake.ts";
-export { signDeviceAction, verifyAndAuthorizeAction, reportActionOutcome } from "./actions.ts";
+export {
+  signDeviceAction,
+  verifyAndAuthorizeAction,
+  reportActionOutcome,
+  deviceBindingHelpers,
+} from "./actions.ts";
 export {
   engageDeviceEmergencyStop,
   clearDeviceEmergencyStop,
@@ -34,3 +39,13 @@ export {
 export type { DeviceScope, DeviceActionKind } from "./scope.ts";
 export type { PairingCardState } from "./status.ts";
 export type { SignedAction } from "./actions.ts";
+export {
+  fingerprintPublicKey,
+  makeBindingChallenge,
+  hmacBindingProof,
+  verifyDeviceBinding,
+} from "./binding.ts";
+export { assertPinnedOrigin, agentMustUseTls } from "./transport.ts";
+export { redactSecretsFromOutput, safeLogLine } from "./redact.ts";
+export { verifyAgentFiles, localControlAuth, hashContent, loadManifestFromJson } from "./integrity.ts";
+export { handshakeRateLimited, mintRateLimited, recordHandshakeAttempt } from "./rate-limit.ts";

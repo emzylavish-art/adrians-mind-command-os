@@ -10,6 +10,12 @@ import {
 } from "./scope.ts";
 import { newId, readPairingStore, writePairingStore, type ActionReport } from "./store.ts";
 import type { Autonomy } from "../policy.ts";
+import {
+  makeBindingChallenge,
+  hmacBindingProof,
+  verifyDeviceBinding,
+} from "./binding.ts";
+import { redactSecretsFromOutput } from "./redact.ts";
 
 export type SignedAction = {
   actionId: string;
@@ -22,6 +28,8 @@ export type SignedAction = {
   expiresAt: string;
   signature: string;
   approvalToken?: string | null;
+  /** Binds the action to the registered device key fingerprint. */
+  publicKeyFingerprint: string;
 };
 
 const ACTION_TTL_MS = 60_000;
@@ -36,6 +44,7 @@ function payloadToSign(parts: {
   issuedAt: string;
   expiresAt: string;
   tokenId: string;
+  publicKeyFingerprint: string;
 }): string {
   return [
     parts.actionId,
@@ -47,10 +56,11 @@ function payloadToSign(parts: {
     parts.issuedAt,
     parts.expiresAt,
     parts.tokenId,
+    parts.publicKeyFingerprint,
   ].join("|");
 }
 
-/** Server mints a signed action for a paired device. Uses the raw device token as HMAC key. */
+/** Server mints a signed action. Model output cannot mint this — only the server can. */
 export function signDeviceAction(input: {
   deviceToken: string;
   kind: DeviceActionKind;
@@ -109,6 +119,7 @@ export function signDeviceAction(input: {
     issuedAt,
     expiresAt,
     tokenId: device.tokenId,
+    publicKeyFingerprint: device.publicKeyFingerprint,
   });
   const signature = hmacHex(input.deviceToken, message);
   return {
@@ -124,14 +135,19 @@ export function signDeviceAction(input: {
       expiresAt,
       signature,
       approvalToken: input.approvalToken ?? null,
+      publicKeyFingerprint: device.publicKeyFingerprint,
     },
   };
 }
 
 /**
- * Device-side verification (also used in unit tests).
- * Checks signature, expiry, replay nonce, emergency stop, and local allowlist.
- * Model output cannot skip this — call before every execute.
+ * Device-side verification. Requires:
+ * - valid HMAC signature from server
+ * - nonce not replayed
+ * - path/command allowlist
+ * - governance
+ * - device key binding proof (stolen token on another host fails)
+ * Model-authored "actions" without a server signature are always rejected.
  */
 export function verifyAndAuthorizeAction(input: {
   deviceToken: string;
@@ -140,6 +156,15 @@ export function verifyAndAuthorizeAction(input: {
   autonomy?: Autonomy;
   allowedRoots?: string[];
   now?: number;
+  /** Required: proves possession of the registered device key material. */
+  binding?: {
+    claimedFingerprint: string;
+    challenge: string;
+    hmacProof?: string;
+    rsaSignatureBase64?: string;
+  };
+  /** If true, skip binding (legacy tests only). Prefer always requiring binding. */
+  skipBindingForTests?: boolean;
 }): { ok: true } | { ok: false; error: string; outcome: "rejected" } {
   const now = input.now ?? Date.now();
   if (input.emergencyStopped) {
@@ -161,6 +186,25 @@ export function verifyAndAuthorizeAction(input: {
     return { ok: false, error: "Action issuedAt is in the future.", outcome: "rejected" };
   }
 
+  if (!input.skipBindingForTests) {
+    if (!input.binding) {
+      return { ok: false, error: "Device binding proof is required.", outcome: "rejected" };
+    }
+    const bound = verifyDeviceBinding({
+      device,
+      deviceToken: input.deviceToken,
+      claimedFingerprint: input.binding.claimedFingerprint,
+      challenge: input.binding.challenge,
+      hmacProof: input.binding.hmacProof,
+      rsaSignatureBase64: input.binding.rsaSignatureBase64,
+    });
+    if (!bound.ok) return { ok: false, error: bound.error, outcome: "rejected" };
+  }
+
+  if (input.action.publicKeyFingerprint !== device.publicKeyFingerprint) {
+    return { ok: false, error: "Action fingerprint does not match device key.", outcome: "rejected" };
+  }
+
   const message = payloadToSign({
     actionId: input.action.actionId,
     kind: input.action.kind,
@@ -171,6 +215,7 @@ export function verifyAndAuthorizeAction(input: {
     issuedAt: input.action.issuedAt,
     expiresAt: input.action.expiresAt,
     tokenId: device.tokenId,
+    publicKeyFingerprint: device.publicKeyFingerprint,
   });
   const expected = hmacHex(input.deviceToken, message);
   if (!safeEqualHex(expected, input.action.signature)) {
@@ -232,10 +277,23 @@ export function reportActionOutcome(input: {
     actionId: input.actionId,
     kind: input.kind,
     outcome: input.outcome,
-    detail: (input.detail || "").slice(0, 2000),
+    detail: redactSecretsFromOutput(input.detail || "").slice(0, 2000),
     at: new Date(now).toISOString(),
   };
   store.reports.push(report);
   writePairingStore(store);
   return { ok: true, report };
+}
+
+export function deviceBindingHelpers(deviceToken: string) {
+  const found = findDeviceByToken(deviceToken);
+  if (!found.ok) return found;
+  const challenge = makeBindingChallenge(found.device.id, found.device.tokenId);
+  const hmacProof = hmacBindingProof(deviceToken, found.device.publicKeyFingerprint, challenge);
+  return {
+    ok: true as const,
+    challenge,
+    hmacProof,
+    fingerprint: found.device.publicKeyFingerprint,
+  };
 }
