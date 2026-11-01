@@ -3113,3 +3113,45 @@ html[data-theme="light"] .composer-speak-live {
   background: #18181b !important;
   color: #fafafa !important;
 }
+
+/* —— Cycle 32 / item 4: monochrome icons (purple only .logo-mark) —— */
+.main-stage .text-info,
+.main-stage .text-warn,
+.main-stage .text-ok,
+.main-stage .text-danger,
+.main-stage .text-accent:not(button.bg-accent):not(.composer-speak-pill),
+aside nav .text-info,
+aside nav .text-warn,
+aside nav .text-ok,
+.rail .text-info,
+.rail .text-warn,
+nav.fixed .text-info,
+nav.fixed .text-warn {
+  color: #e4e4e7 !important;
+}
+.main-stage svg,
+.rail svg,
+nav.fixed svg,
+.topbar svg,
+header svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+/* neutralize utility washes */
+.main-stage .bg-info\/15,
+.main-stage .bg-warn\/15,
+.main-stage .bg-ok\/15,
+.main-stage .bg-danger\/15,
+.main-stage [class*="bg-info/"],
+.main-stage [class*="bg-warn/"],
+.main-stage [class*="bg-ok/"],
+.main-stage [class*="bg-danger/"] {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e4e4e7 !important;
+}
+.logo-mark,
+.logo-badge,
+aside span.grid.size-11.rounded-2xl {
+  color: #7c5cff !important;
+  filter: none !important;
+}
