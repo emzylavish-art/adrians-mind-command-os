@@ -508,7 +508,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         roughness: 0.5,
       });
       pageMesh = new THREE.InstancedMesh(pageGeo, mat, pages.length);
+      pageMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(pages.length * 3), 3);
       const dummy = new THREE.Object3D();
+      const baseCol = new THREE.Color(0x9bb7ff);
       pages.forEach((p, i) => {
         pageIdByIndex[i] = p.id;
         const [x, y, z] = positions[i]!;
@@ -516,8 +518,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         dummy.scale.setScalar(1);
         dummy.updateMatrix();
         pageMesh!.setMatrixAt(i, dummy.matrix);
+        pageMesh!.setColorAt(i, baseCol);
       });
       pageMesh.instanceMatrix.needsUpdate = true;
+      if (pageMesh.instanceColor) pageMesh.instanceColor.needsUpdate = true;
       pageGroup.add(pageMesh);
 
       // parent/child edges (cap for perf)
@@ -725,6 +729,35 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    let hoverPageId: string | null = null;
+    const pageIndexById = () => {
+      const m = new Map<string, number>();
+      pageIdByIndex.forEach((id, i) => m.set(id, i));
+      return m;
+    };
+    const tintNotionNeighbors = (focusId: string | null) => {
+      if (!pageMesh || !pageMesh.instanceColor) return;
+      const base = new THREE.Color(0x9bb7ff);
+      const hot = new THREE.Color(0xffe08a);
+      const dim = new THREE.Color(0x3a4566);
+      const idx = pageIndexById();
+      const neigh = new Set<string>();
+      if (focusId) {
+        neigh.add(focusId);
+        for (const e of dataRef.current.notionGraph.edges) {
+          if (e.from === focusId && !e.to.startsWith("bot:")) neigh.add(e.to);
+          if (e.to === focusId && !e.from.startsWith("bot:")) neigh.add(e.from);
+        }
+      }
+      for (let i = 0; i < pageIdByIndex.length; i++) {
+        const id = pageIdByIndex[i]!;
+        if (!focusId) pageMesh.setColorAt(i, base);
+        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x7c5cff));
+        else pageMesh.setColorAt(i, dim);
+      }
+      pageMesh.instanceColor.needsUpdate = true;
+    };
+
 
     function setFly(next: FlyState, fly2camera: boolean) {
       fly = next;
@@ -876,6 +909,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (pageHits[0] && pageHits[0].instanceId != null) {
           const pid = pageIdByIndex[pageHits[0].instanceId];
           if (pid) {
+            hoverPageId = pid;
+            tintNotionNeighbors(pid);
             cbs.current.onSelectNotion(pid);
             return;
           }
@@ -935,9 +970,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       camera.position.copy(freePos);
       camera.lookAt(lookAt);
     };
+    const onPointerHoverNotion = (ev: PointerEvent) => {
+      if (dragging || fly.level !== "universe" || !pageMesh) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObject(pageMesh, false);
+      const id = hits[0] && hits[0].instanceId != null ? pageIdByIndex[hits[0].instanceId] ?? null : null;
+      if (id !== hoverPageId) {
+        hoverPageId = id;
+        tintNotionNeighbors(id);
+      }
+    };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointermove", onPointerHoverNotion);
     renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
 
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
@@ -1089,6 +1138,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointermove", onPointerHoverNotion);
       cancelAnimationFrame(raf);
       dust.dispose();
       comets.dispose();
