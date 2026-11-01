@@ -82,9 +82,15 @@ export function useMindWorkspace() {
     const id = window.setTimeout(() => {
       void saveMindCopy({ data: { workspace: ws } })
         .then((result) => {
-          if (result.ok) savedJson.current = packed;
+          if (result.ok) {
+            savedJson.current = packed;
+            return;
+          }
+          setSyncNote(result.error || "The server copy could not be saved. The browser copy was kept.");
         })
-        .catch(() => undefined);
+        .catch(() => {
+          setSyncNote("The server copy could not be saved. The browser copy was kept.");
+        });
     }, 1500);
     return () => window.clearTimeout(id);
   }, [ready, ws]);

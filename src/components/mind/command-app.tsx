@@ -57,6 +57,11 @@ import { chosenProvider, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import {
+  classifyHonestFailure,
+  honestFailureAuditAction,
+  HONEST_FAILURE_MESSAGES,
+} from "@/lib/mind/failure-states";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
   addLocalFile,
@@ -210,6 +215,9 @@ function humanAction(action: string) {
     chat_failed: "Chat failed",
     open_page_failed: "Open page failed",
     research_failed: "Research failed",
+    model_unavailable: "Model unavailable",
+    database_write_failed: "Database write failed",
+    emergency_stop_active: "Emergency stop blocked an action",
     rea_doctor: "REA doctor ran",
     rea_inspect: "REA inspected a file",
   };
@@ -249,6 +257,8 @@ export function CommandApp() {
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null } | null>(null);
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
+  const wsRef = useRef(ws);
+  wsRef.current = ws;
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
@@ -672,10 +682,17 @@ export function CommandApp() {
   }
 
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
+    const latest = wsRef.current;
+    if (latest.halted || source.halted) {
+      reportEmergencyStop(chat.id, () => {
+        void deliver(chat, text, wsRef.current, resume);
+      });
+      return;
+    }
     const routed = chosenProvider(providerChoice, grokConfigured);
     if (!routed.ok) {
-      reportFailure(routed.error, "chat_failed", "provider", () => {
-        void deliver(chat, text, source, resume);
+      reportFailure(routed.error, "model_unavailable", "provider", () => {
+        void deliver(chat, text, wsRef.current, resume);
       });
       return;
     }
@@ -713,7 +730,7 @@ export function CommandApp() {
         body: {
           text,
           memory: chat.memory,
-          halted: source.halted,
+          halted: wsRef.current.halted,
           history,
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
@@ -729,8 +746,9 @@ export function CommandApp() {
       if (turnAbort.current === controller) turnAbort.current = null;
       if (!shouldStoreReply(result)) {
         const message = result.ok ? "Grok returned an empty reply." : result.error;
-        reportFailure(message, "chat_failed", chat.id, () => {
-          void deliver(chat, text, source, true);
+        const kind = classifyHonestFailure(message);
+        reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
+          void deliver(chat, text, wsRef.current, true);
         });
         return;
       }
@@ -781,9 +799,10 @@ export function CommandApp() {
           ? "Sign in is required."
           : caught instanceof Error
             ? caught.message
-            : "Grok could not be reached.";
-      reportFailure(message, "chat_failed", chat.id, () => {
-        void deliver(chat, text, source, resume);
+            : HONEST_FAILURE_MESSAGES.model_unreachable;
+      const kind = classifyHonestFailure(message);
+      reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
+        void deliver(chat, text, wsRef.current, resume);
       });
     }
   }
@@ -804,7 +823,11 @@ export function CommandApp() {
   }
 
   function editMessage(messageId: string, text: string) {
-    if (!active || busy || ws.halted) return;
+    if (!active || busy) return;
+    if (wsRef.current.halted) {
+      reportEmergencyStop(active.id, () => editMessage(messageId, text));
+      return;
+    }
     const revised = reviseUserTurn(ws, active.id, messageId, text);
     if ("error" in revised) {
       setError(revised.error);
@@ -815,7 +838,11 @@ export function CommandApp() {
   }
 
   function regenerate() {
-    if (!active || busy || ws.halted) return;
+    if (!active || busy) return;
+    if (wsRef.current.halted) {
+      reportEmergencyStop(active.id, () => regenerate());
+      return;
+    }
     const prepared = prepareRegenerate(ws, active.id);
     if ("error" in prepared) {
       setError(prepared.error);
@@ -826,7 +853,11 @@ export function CommandApp() {
   }
 
   function retryLast() {
-    if (!active || busy || ws.halted) return;
+    if (!active || busy) return;
+    if (wsRef.current.halted) {
+      reportEmergencyStop(active.id, () => retryLast());
+      return;
+    }
     const prepared = prepareRetry(ws, active.id);
     if ("error" in prepared) {
       setError(prepared.error);
@@ -870,10 +901,20 @@ export function CommandApp() {
   }
 
   async function sendCommand() {
-    if (busy || ws.halted) return;
+    if (busy) return;
     const text = draft.trim();
     if (!text) {
       setError("Write what you want to work on.");
+      return;
+    }
+    if (wsRef.current.halted) {
+      const snapshot = text;
+      const file = staged;
+      reportEmergencyStop("command", () => {
+        setDraft(snapshot);
+        if (file) setStaged(file);
+        void sendCommand();
+      });
       return;
     }
     const made = createChat(ws, {
@@ -903,8 +944,12 @@ export function CommandApp() {
   }
 
   async function startResearch() {
-    if (ws.halted) {
-      setError("Emergency stop is on. No new action can run.");
+    if (wsRef.current.halted) {
+      const query = researchText;
+      reportEmergencyStop("search", () => {
+        setResearchText(query);
+        void startResearch();
+      });
       return;
     }
     setResearchCitations([]);
@@ -976,9 +1021,20 @@ export function CommandApp() {
   }
 
   async function sendInChat() {
-    if (!active || busy || ws.halted) return;
+    if (!active || busy) return;
     const text = draft.trim();
     if (!text && !staged) return;
+    if (wsRef.current.halted) {
+      const snapshot = text;
+      const file = staged;
+      const chatId = active.id;
+      reportEmergencyStop(chatId, () => {
+        setDraft(snapshot);
+        if (file) setStaged(file);
+        void sendInChat();
+      });
+      return;
+    }
     const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || "Read the attached file."}${attached}`.slice(0, 8000);
@@ -1132,14 +1188,20 @@ export function CommandApp() {
   }
 
   function reportFailure(message: string, action: string, target: string, retry: (() => void) | null) {
+    const kind = classifyHonestFailure(message);
+    const auditAction = kind ? honestFailureAuditAction(kind) : action;
     const auditId = crypto.randomUUID();
     setWs((prev) => ({
       ...prev,
-      audit: [{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit].slice(0, 200),
+      audit: [{ id: auditId, at: new Date().toISOString(), action: auditAction, target, result: message }, ...prev.audit].slice(0, 200),
     }));
     setFailure({ message, auditId, retry });
     setError(message);
     setNotice(null);
+  }
+
+  function reportEmergencyStop(target: string, retry: () => void) {
+    reportFailure(HONEST_FAILURE_MESSAGES.emergency_stop_active, "emergency_stop_active", target, retry);
   }
 
   function openChat() {
@@ -2526,11 +2588,19 @@ export function CommandApp() {
                 <button
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
-                  onClick={() =>
-                    void publishServerCopy().then((result) => {
-                      if (!result.ok) setError(result.error);
-                    })
-                  }
+                  onClick={() => {
+                    const run = () =>
+                      void publishServerCopy().then((result) => {
+                        if (!result.ok) {
+                          reportFailure(result.error || HONEST_FAILURE_MESSAGES.database_write_failed, "database_write_failed", "server-copy", run);
+                          return;
+                        }
+                        clearFailure();
+                      }).catch(() => {
+                        reportFailure(HONEST_FAILURE_MESSAGES.database_write_failed, "database_write_failed", "server-copy", run);
+                      });
+                    run();
+                  }}
                 >
                   Save this browser copy over the server copy
                 </button>
