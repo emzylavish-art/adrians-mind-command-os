@@ -19,6 +19,22 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const FORBIDDEN_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
+/** True when any object key in the JSON tree is a prototype-pollution vector. */
+export function hasForbiddenPollutionKey(value: unknown, depth = 0): boolean {
+  if (depth > 64) return true; // fail closed on pathological depth
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) {
+    return value.some((item) => hasForbiddenPollutionKey(item, depth + 1));
+  }
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    if (FORBIDDEN_KEYS.has(key)) return true;
+    if (hasForbiddenPollutionKey((value as Record<string, unknown>)[key], depth + 1)) return true;
+  }
+  return false;
+}
+
 /** Parse a Request into a plain non-null, non-array JSON object with a byte cap. */
 export async function readJsonObjectBody(
   request: Request,
@@ -81,10 +97,14 @@ export async function readJsonObjectBody(
     return { ok: false, error: MIND_BODY_UNREADABLE, status: 400 };
   }
 
-  // Copy own enumerable string keys onto a fresh object; skip prototype-pollution keys.
+  // Reject — do not strip — any __proto__ / constructor / prototype key at any depth.
+  if (hasForbiddenPollutionKey(parsed)) {
+    return { ok: false, error: MIND_BODY_UNREADABLE, status: 400 };
+  }
+
+  // Fresh object copy (own enumerable string keys only).
   const body: Record<string, unknown> = {};
   for (const key of Object.keys(parsed)) {
-    if (key === "__proto__" || key === "prototype" || key === "constructor") continue;
     body[key] = parsed[key];
   }
   return { ok: true, body };

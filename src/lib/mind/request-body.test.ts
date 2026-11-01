@@ -79,9 +79,13 @@ describe("readJsonObjectBody (shared body guard)", () => {
     }
   });
 
-  it("does not let __proto__ in the body pollute Object.prototype", async () => {
+  it("rejects __proto__ instead of accepting a stripped body", async () => {
     const read = await readJsonObjectBody(post('{"__proto__":{"polluted":true},"text":"hi"}'), LIMIT);
-    assert.equal(read.ok, true);
+    assert.equal(read.ok, false);
+    if (!read.ok) {
+      assert.equal(read.status, 400);
+      assert.equal(read.error, MIND_BODY_UNREADABLE);
+    }
     assert.equal(({} as Record<string, unknown>).polluted, undefined);
   });
 });
@@ -131,4 +135,39 @@ describe("handlers use the shared guard (no raw JSON.parse of request bodies)", 
       assert.equal(/request\.text\(\)/.test(source), false, "unbounded request.text() buffers huge bodies");
     });
   }
+});
+
+
+describe("prototype-pollution keys are rejected (not stripped)", () => {
+  for (const [label, body] of [
+    ["top-level __proto__ with valid fields", '{"text":"hi","memory":"off","__proto__":{"x":1}}'],
+    ["top-level constructor", '{"text":"hi","constructor":{"prototype":{"x":1}}}'],
+    ["top-level prototype", '{"text":"hi","prototype":{"x":1}}'],
+    ["nested __proto__", '{"text":"hi","nested":{"__proto__":{"polluted":true}}}'],
+    ["nested constructor", '{"text":"hi","a":{"b":{"constructor":{"x":1}}}}'],
+    ["forbidden-key-only __proto__", '{"__proto__":{}}'],
+    ["forbidden-key-only constructor", '{"constructor":{"prototype":{}}}'],
+  ] as const) {
+    it(`rejects ${label} with 400 unreadable`, async () => {
+      const read = await readJsonObjectBody(post(body), LIMIT);
+      assert.equal(read.ok, false);
+      if (!read.ok) {
+        assert.equal(read.status, 400);
+        assert.equal(read.error, MIND_BODY_UNREADABLE);
+      }
+      assert.equal(({} as Record<string, unknown>).polluted, undefined);
+      assert.equal(({} as Record<string, unknown>).x, undefined);
+    });
+  }
+
+  it("treats Unicode lookalike keys as ordinary unknown keys (accepted, not pollution)", async () => {
+    // Fullwidth underscore lookalike — not the real __proto__ key.
+    const lookalike = '{"text":"hi","＿＿proto＿＿":{"x":1}}';
+    const read = await readJsonObjectBody(post(lookalike), LIMIT);
+    assert.equal(read.ok, true);
+    if (read.ok) {
+      assert.equal(read.body.text, "hi");
+      assert.equal(({} as Record<string, unknown>).x, undefined);
+    }
+  });
 });
