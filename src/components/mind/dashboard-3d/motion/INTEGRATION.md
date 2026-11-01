@@ -351,8 +351,16 @@ Motion lane **does not edit `package.json`**. Please add these lane test files t
 - `src/components/mind/dashboard-3d/motion/cpu-budget.test.ts`
 - `src/components/mind/dashboard-3d/motion/focus-ring-breathe.test.ts`
 - `src/components/mind/dashboard-3d/motion/star-batch.test.ts`
+- `src/components/mind/dashboard-3d/motion/health-pulse-crossfade.test.ts`
+- `src/components/mind/dashboard-3d/motion/alloc-budget.test.ts`
+- `src/components/mind/dashboard-3d/motion/neighbor-drift-damp.test.ts`
+- `src/components/mind/dashboard-3d/motion/health-xfade-flap.test.ts` (c19)
+- `src/components/mind/dashboard-3d/motion/neighbor-focus-fight.test.ts` (c19)
+- `src/components/mind/dashboard-3d/motion/star-batch-xfade.test.ts` (c19)
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
+
+`alloc-budget.test.ts` no longer needs `--expose-gc` (c19 enables gc at runtime via `v8.setFlagsFromString`), so it is safe in the plain strip-types chain. No new deps.
 
 Lane CI locally: `node --experimental-strip-types --test src/components/mind/dashboard-3d/motion/*.test.ts src/components/mind/dashboard-3d/particles/*.test.ts`
 
@@ -360,3 +368,88 @@ Lane CI locally: `node --experimental-strip-types --test src/components/mind/das
 - Node CPU-only 10k frames @ 500 stars / 2k dust / 20 comets / 50 travelers / 30 chars / 80 edges.
 - See `/workspace/audit/dashboard-3d/fleet/motion/c16/` for numbers (mean ≪ 2ms/frame).
 
+## Health pulse crossfade (c17)
+
+When bot health flips, ease pulse amp/speed instead of snapping:
+
+```ts
+import {
+  createHealthPulseCrossfadeState,
+  setHealthPulseTarget,
+  stepHealthPulseCrossfade,
+  sampleStarPulseCrossfaded,
+} from "./motion";
+
+const xf = createHealthPulseCrossfadeState(bot.health);
+// on status update:
+setHealthPulseTarget(xf, bot.health, reducedMotion);
+// each frame:
+stepHealthPulseCrossfade(xf, dt, reducedMotion);
+sampleStarPulseCrossfaded(pulseOut, tmpFrom, tmpTo, xf, t, phase, reducedMotion, { clock });
+```
+
+Works alongside `stepStarFieldBatch` (per-star xf state array) and focus-ring breathe.
+Reduced-motion → snap. Camera dolly remains Dashboard-owned.
+
+### Star-batch harden (c17 hacker)
+
+- `STAR_BATCH_MAX` (8192) hard-caps corrupt huge counts
+- Null/empty id holes skipped; lengths snapshotted at entry
+- `createStarBatchScratch` / `disposeStarBatchScratch` — Float32 packed bases/pos; reuse after dispose
+
+### Health pulse crossfade wiring (c17)
+- Keep one `HealthPulseCrossfadeState` per bot (parallel to focus-ease).
+- On status/health change call `setHealthPulseTarget`; each tick `step` + `sampleStarPulseCrossfaded` (or lerp after dual `sampleStarPulse`).
+- Register `health-pulse-crossfade.test.ts` in package.json test glob when landing (Motion lane does not edit package.json).
+
+## Neighbor drift damp (c18)
+
+After focus-ease / star-batch, soft-dampen 1-hop neighbors:
+
+```ts
+import {
+  collectOneHopNeighbors,
+  stepNeighborDriftDampBatch,
+} from "./motion";
+
+const neighbors = collectOneHopNeighbors(edgePairs, focusId); // rebuild when graph/focus changes
+stepNeighborDriftDampBatch(ids, focusStates, focusId, neighbors, dt, reducedMotion);
+// applyFocusDrift already uses focusStates[i].driftMul
+```
+
+Focused star stays fully pinned by `stepFocusEase`. Reduced-motion → neighbors get no extra damp.
+Camera dolly remains Dashboard-owned.
+
+### Alloc budget (c18 hacker)
+- `STAR_BATCH_ORBIT_OPTS` reused; no per-star `{ clock, radialAmp, bobAmp }`.
+- cpu-budget harness reuses opts; heapΔ budget 5MB (was ~14MB in c16).
+- Run alloc-budget tests with `node --expose-gc`.
+
+### Neighbor drift damp wiring (c18)
+- Build `edgePairs` from constellation edges; `collectOneHopNeighbors(edgePairs, rig.subjectId)` when focus/graph changes.
+- After star-batch / focus-ease, call `stepNeighborDriftDampBatch` so neighbor `driftMul` eases toward `NEIGHBOR_DRIFT_FLOOR`.
+- Register `alloc-budget.test.ts` + `neighbor-drift-damp.test.ts` in package.json test glob when landing (Motion lane does not edit package.json).
+
+## Star-batch xfade + neighbors (c19)
+
+One-call wiring for the c17 health crossfade and c18 neighbor damp (both opt-in;
+omit them and output is identical to c16):
+
+```ts
+import { stepStarFieldBatch, createHealthPulseCrossfadeState, collectOneHopNeighbors } from "./motion";
+
+const xfade = bots.map((b) => createHealthPulseCrossfadeState(b.health)); // keep per bot, like focus states
+const neighbors = collectOneHopNeighbors(edgePairs, focusId); // rebuild only when focus/graph changes
+
+stepStarFieldBatch(ids, healths, bases, focusStates, pulseOuts, posOuts,
+  focusId, tSeconds, dt, reducedMotion, ids.length, { clock, xfade, neighbors });
+```
+
+- Health changes are picked up from `healths[i]` each frame (no separate setter call needed).
+- Reduced-motion → crossfade snaps, neighbors keep full drift.
+- Hacker c19: crossfade flapping (A→B→A / A→B→C mid-blend) is now exactly continuous
+  (per-health weight vector; `from/to/blend` kept as derived fields).
+- Hacker c19: neighbor damp no longer fights `stepFocusEase` (settled ~0.71 instead of
+  the 0.35 floor); it owns driftMul for non-focused stars via `neighborMul`.
+- Star-batch no longer pins the caller's MotionClock in module scope after a frame.
+- Camera dolly stays Dashboard-owned.

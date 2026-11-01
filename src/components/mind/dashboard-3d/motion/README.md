@@ -82,3 +82,18 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - `star-batch.ts` — `stepStarFieldBatch` for N stars (pulse/focus/orbit)
 - `cpu-budget.test.ts` — 10k-frame CPU budget (mean < 2ms); camera dolly stays Dashboard-owned
 
+
+## Star-batch harden + health pulse crossfade (c17)
+
+- Hacker c17 on `star-batch`: count 0 / 100k→`STAR_BATCH_MAX`, NaN bases finite, id holes skipped, mid-frame shrink snapshot, `createStarBatchScratch` / `disposeStarBatchScratch` typed-array reuse
+- `health-pulse-crossfade.ts` — ease pulse amp/speed on health flip; reduced-motion snaps; star-batch + focus-ring APIs unchanged
+
+## Alloc budget + neighbor drift damp (c18)
+
+- Hacker c18: eliminate per-star orbit opts alloc in `stepStarFieldBatch` (`STAR_BATCH_ORBIT_OPTS`); cpu-budget harness reuses opts. Before ~14MB/10k (~1.4KB/frame, max~8.7ms) → after ~4MB, max~4.4ms; best bpf ~33 &lt; 64.
+- `neighbor-drift-damp.ts` — 1-hop soft drift floor when a star is focused; RM = no extra damp; star-batch / health-xfade APIs unchanged
+
+## Flap-safe crossfade + batch wiring (c19)
+
+- Hacker c19: health crossfade flapping pops (~10% scale) fixed with a per-health weight vector; neighbor damp vs focus-ease tug-of-war (0.71 vs 0.35 floor) fixed; alloc-budget test runs without `--expose-gc`; star-batch releases the caller clock after each frame
+- `stepStarFieldBatch(..., { clock, xfade, neighbors })` — opt-in crossfade + neighbor damp in the universe tick; zero-alloc (<128 B/frame @500 stars flapping)

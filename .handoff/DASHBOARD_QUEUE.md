@@ -127,6 +127,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 70 | **Gap#53 Canvas accessible name** — role=img + live aria-label from bot health/weather | **done** | c48 — dash3d-stage-canvas |
 | 71 | **Gap#34 re-check — hide tab money burn + clear gap** | **done** | c49 — warn on suppress; clear hiddenGapMs after 25s visible; tests |
 | 72 | **Surfaces — lock history + chart drilldown + fly focus crumb** | **done** | c49 — timeline lock history; chart→bot/scrub; fly focus name/task |
+| 73 | **Motion c19 — wire star-batch `{ xfade, neighbors }`** — per-bot HealthPulseCrossfadeState + `collectOneHopNeighbors(edges, focusId)` into the existing `stepStarFieldBatch` call; register c19 motion tests (see motion/INTEGRATION.md Requests) | queued | Motion lane c19 (flap-safe crossfade + neighbor damp fix); after Light #68; camera dolly stays Dashboard-owned |
 
 
 

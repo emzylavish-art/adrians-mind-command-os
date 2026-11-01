@@ -74,6 +74,8 @@ const EDGES = 80;
 const FRAMES = 10_000;
 const DT = 1 / 60;
 const MEAN_BUDGET_MS = 2.0;
+/** c18: after opts reuse, steady heapΔ should stay well under c16's ~14MB. */
+const HEAP_BUDGET_MB = 12.0; // fail only if back near/above c16 ~14MB
 
 type DustSeed = { x: number; y: number; z: number; phase: number; speed: number; amp: number };
 
@@ -116,6 +118,7 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
     let dustX = 0; // prevent DCE
 
     // Characters
+    const charIds = Array.from({ length: CHARS }, (_, i) => `char:${i}`);
     const charStates = Array.from({ length: CHARS }, () => createCharacterMotionState());
     const charOuts = Array.from({ length: CHARS }, () => createCharacterSample());
 
@@ -134,6 +137,8 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
     const launchOut = Array.from({ length: COMETS }, () => createCometLaunchSample());
 
     // Edges
+    const edgeFrom = Array.from({ length: EDGES }, (_, i) => `a${i}`);
+    const edgeTo = Array.from({ length: EDGES }, (_, i) => `b${i}`);
     const edgeSt = Array.from({ length: EDGES }, () => createEdgePulseState());
     const edgeOut = Array.from({ length: EDGES }, () => createEdgePulseSample());
 
@@ -158,7 +163,16 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
     const sceneOut = createSceneTransitionSample();
 
     const focusId = "bot:42";
+    // c18: reuse opts — per-frame `{ clock }` was ~162 allocs/frame in the harness alone.
+    const batchOpts = { clock };
+    const travOpts = { clock };
+    const charOptsWalk = { clock, speed: 1 };
+    const charOptsIdle = { clock, speed: 0 };
+    const edgeOpts = { clock };
+    const ringOpts = { clock };
     const times: number[] = [];
+    const g = (globalThis as { gc?: () => void }).gc;
+    if (typeof g === "function") { g(); g(); }
     const heap0 = process.memoryUsage().heapUsed;
 
     for (let f = 0; f < FRAMES; f++) {
@@ -168,7 +182,7 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
 
       stepStarFieldBatch(
         starIds, healthArr, bases, focusStates, pulseOuts, posOuts,
-        focusId, wall, DT, false, STARS, { clock },
+        focusId, wall, DT, false, STARS, batchOpts,
       );
 
       for (let i = 0; i < DUST; i++) {
@@ -178,14 +192,19 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
       }
 
       for (let i = 0; i < CHARS; i++) {
-        stepCharacterMotion(charStates[i]!, charOuts[i]!, `char:${i}`, wall, DT, false, {
-          clock,
-          speed: i % 3 === 0 ? 1 : 0,
-        });
+        stepCharacterMotion(
+          charStates[i]!,
+          charOuts[i]!,
+          charIds[i]!,
+          wall,
+          DT,
+          false,
+          i % 3 === 0 ? charOptsWalk : charOptsIdle,
+        );
       }
 
       for (let i = 0; i < TRAVELERS; i++) {
-        stepTravelerEase(travStates[i]!, travOuts[i]!, path, wall, DT, false, { clock });
+        stepTravelerEase(travStates[i]!, travOuts[i]!, path, wall, DT, false, travOpts);
       }
 
       stepCometLaunchEase(launch, launchOut, DT, false);
@@ -196,18 +215,18 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
           edgeSt[i]!,
           edgeOut[i]!,
           0.8,
-          `a${i}`,
-          `b${i}`,
+          edgeFrom[i]!,
+          edgeTo[i]!,
           focusId,
           wall,
           false,
-          { clock },
+          edgeOpts,
         );
       }
 
       stepHoverTooltip(hover, hoverOut, DT, false);
       stepBreadcrumbEase(bc, bcOut, DT, false);
-      stepFocusRingBreathe(ring, ringOut, wall, DT, false, { clock });
+      stepFocusRingBreathe(ring, ringOut, wall, DT, false, ringOpts);
       stepWindGust(gust, gustOut, DT, false);
       stepNodeOpen(node, nodeOut, DT, false);
       stepSceneTransition(sceneTx, sceneOut, DT, false);
@@ -233,6 +252,7 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
       p99Ms: percentile(sorted, 99),
       maxMs: sorted[sorted.length - 1],
       heapDeltaMB: (heap1 - heap0) / (1024 * 1024),
+      bytesPerFrame: (heap1 - heap0) / FRAMES,
       dustSink: dustX, // keep live
     };
     // eslint-disable-next-line no-console
@@ -240,5 +260,8 @@ describe("hacker c16 — CPU per-frame motion budget", () => {
 
     assert.ok(mean < MEAN_BUDGET_MS, `mean ${mean.toFixed(3)}ms >= ${MEAN_BUDGET_MS}ms budget`);
     assert.ok(Number.isFinite(report.p99Ms));
+    // HeapΔ is reported for c18 compare (c16 ~14MB). Hard bpf lock lives in alloc-budget.test.ts
+    // because heapUsed is noisy when this file runs after other suites.
+    void HEAP_BUDGET_MB;
   });
 });
