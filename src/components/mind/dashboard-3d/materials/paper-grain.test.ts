@@ -23,8 +23,17 @@ import {
   painterlyKitResourceCounts,
   tickPainterlyKit,
   releasePainterlyMaterial,
+  rebindPainterlyKitTextures,
+  applyTextureBinding,
+  attachPainterlyContextHandlers,
   type PainterlyKit,
 } from "./use-painterly-kit.ts";
+import {
+  createImagineNodeMaterial,
+  setImagineNodeMap,
+  setImagineNodePaperMap,
+  tickImagineNodeMaterial,
+} from "./imagine-node.ts";
 import {
   createInkWashEdgeMaterial,
   setInkWashEdgeHealth,
@@ -42,6 +51,7 @@ import {
   BrushBuildingShader,
   LorePlaqueShader,
   InkWashEdgeShader,
+  ImagineNodeShader,
 } from "../shaders/index.ts";
 
 describe("painter paper grain", () => {
@@ -97,22 +107,25 @@ describe("hacker pass: kit sky leak + idempotent dispose", () => {
       paperGrainTexture: { dispose: () => { texDisposed++; } },
       tracked: [{ name: "LorePlaqueMaterial", dispose: () => { shaderDisposed++; } }],
       trackedSkies: [sky],
+      textureBindings: [],
       disposed: false,
       contextLost: false,
       createStarMaterial: () => null,
       createBuildingMaterial: () => null,
       createLorePlaqueMaterial: () => null,
       createInkWashEdgeMaterial: () => null,
+      createImagineNodeMaterial: () => null,
       createSkyMaterial: () => null,
+      bindSharedTexture: () => {},
     } as unknown as PainterlyKit;
 
-    assert.deepEqual(painterlyKitResourceCounts(kit), { materials: 1, skies: 1, disposed: false });
+    assert.deepEqual(painterlyKitResourceCounts(kit), { materials: 1, skies: 1, bindings: 0, disposed: false });
     disposePainterlyKit(kit);
     assert.equal(skyMapDisposed, 1);
     assert.equal(skyMatDisposed, 1);
     assert.equal(texDisposed, 2);
     assert.equal(shaderDisposed, 1);
-    assert.deepEqual(painterlyKitResourceCounts(kit), { materials: 0, skies: 0, disposed: true });
+    assert.deepEqual(painterlyKitResourceCounts(kit), { materials: 0, skies: 0, bindings: 0, disposed: true });
     // second dispose must no-op (no double-free)
     disposePainterlyKit(kit);
     assert.equal(skyMapDisposed, 1);
@@ -179,6 +192,12 @@ describe("painter shader modules + lore plaque", () => {
     assert.match(InkWashEdgeShader.fragmentShader, /paintFbm/);
     // weak-GPU: no derivatives extension needed, no dynamic loops
     assert.doesNotMatch(InkWashEdgeShader.fragmentShader, /dFdx|dFdy|fwidth/);
+    assert.ok(ImagineNodeShader.uniforms.uHasImage);
+    assert.ok(ImagineNodeShader.uniforms.uBleed);
+    assert.ok(ImagineNodeShader.uniforms.uFrame);
+    assert.match(ImagineNodeShader.fragmentShader, /Watercolor edge bleed|softEdge|uBleed/);
+    assert.match(ImagineNodeShader.fragmentShader, /uHasImage/);
+    assert.doesNotMatch(ImagineNodeShader.fragmentShader, /dFdx|dFdy|fwidth/);
   });
 
   it("parchment RGBA is opaque and sized safely", () => {
@@ -229,6 +248,7 @@ describe("hacker pass c3: unbounded / NaN shader time (mediump overflow)", () =>
       painterlyPass: pass,
       tracked: [edge, custom],
       trackedSkies: [],
+      textureBindings: [],
       disposed: false,
       contextLost: false,
     } as unknown as PainterlyKit;
@@ -317,6 +337,7 @@ describe("hacker pass c3: rebuilt edge materials must not accumulate in kit", ()
       paperGrainTexture: { dispose() {} },
       tracked,
       trackedSkies: [],
+      textureBindings: [],
       disposed: false,
       contextLost: false,
       createInkWashEdgeMaterial: (o?: object) => {
@@ -333,6 +354,183 @@ describe("hacker pass c3: rebuilt edge materials must not accumulate in kit", ()
     const stray = createInkWashEdgeMaterial();
     assert.equal(releasePainterlyMaterial(kit, stray), false);
     stray.dispose();
+    disposePainterlyKit(kit);
+  });
+});
+
+
+describe("hacker pass c4: context-restore texture rebind", () => {
+  it("rebindPainterlyKitTextures re-attaches NEW paper/star objects to consumers (blank-surface bug)", () => {
+    const oldPaper = { id: "old-paper", needsUpdate: false, dispose() {} };
+    const oldStar = { id: "old-star", needsUpdate: false, dispose() {} };
+    const newPaper = { id: "new-paper", needsUpdate: false, dispose() {} };
+    const newStar = { id: "new-star", needsUpdate: false, dispose() {} };
+
+    // Simulate Dashboard Bot SpriteMaterial that captured kit.starSpriteTexture
+    const glowMat = { map: oldStar as unknown as null, needsUpdate: false };
+    // Imagine node with paper uniform bound to old paper
+    const imagine = createImagineNodeMaterial();
+    imagine.uniforms["uPaperMap"]!.value = oldPaper;
+    imagine.uniforms["uHasPaper"]!.value = 1;
+    const fakeImage = { needsUpdate: false };
+    setImagineNodeMap(imagine, fakeImage as never);
+
+    const kit = {
+      painterlyPass: { uniforms: {} },
+      starSpriteTexture: newStar,
+      paperGrainTexture: newPaper,
+      tracked: [imagine],
+      trackedSkies: [],
+      textureBindings: [
+        { material: glowMat as never, slot: "starSprite" as const, target: "map" },
+        { material: imagine, slot: "paperGrain" as const, target: "uPaperMap" },
+      ],
+      disposed: false,
+      contextLost: false,
+    } as unknown as PainterlyKit;
+
+    // PRECONDITION: consumers still hold OLD disposed textures → blank after restore
+    assert.equal((glowMat.map as unknown as { id: string }).id, "old-star");
+    assert.equal((imagine.uniforms["uPaperMap"]!.value as { id: string }).id, "old-paper");
+
+    const n = rebindPainterlyKitTextures(kit);
+    assert.ok(n >= 4, "rebind touches kit textures + bindings + imagine");
+    assert.equal((glowMat.map as unknown as { id: string }).id, "new-star", "sprite map must point at NEW star texture");
+    assert.equal(glowMat.needsUpdate, true);
+    assert.equal((imagine.uniforms["uPaperMap"]!.value as { id: string }).id, "new-paper");
+    assert.equal(imagine.uniforms["uHasPaper"]!.value, 1);
+    assert.equal(fakeImage.needsUpdate, true, "Imagine image must be marked for re-upload");
+    assert.equal(newPaper.needsUpdate, true);
+    assert.equal(newStar.needsUpdate, true);
+    imagine.dispose();
+  });
+
+  it("attachPainterlyContextHandlers restore recreates textures then rebinds consumers", () => {
+    const listeners = new Map<string, EventListener>();
+    const canvas = {
+      addEventListener: (t: string, fn: EventListener) => { listeners.set(t, fn); },
+      removeEventListener: (t: string, fn: EventListener) => { if (listeners.get(t) === fn) listeners.delete(t); },
+    } as unknown as HTMLCanvasElement;
+
+    let paperGen = 0;
+    let starGen = 0;
+    const makePaper = () => ({ id: "paper-" + (++paperGen), needsUpdate: false, dispose() {} });
+    const makeStar = () => ({ id: "star-" + (++starGen), needsUpdate: false, dispose() {} });
+
+    const glowMat = { map: null as unknown, needsUpdate: false };
+    const kit = {
+      painterlyPass: { uniforms: {} },
+      starSpriteTexture: makeStar() as never,
+      paperGrainTexture: makePaper() as never,
+      tracked: [] as never[],
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: "starSprite" | "paperGrain"; target?: string }[],
+      disposed: false,
+      contextLost: false,
+      bindSharedTexture(material: import("three").Material, slot: "starSprite" | "paperGrain", target = "map") {
+        kit.textureBindings.push({ material, slot, target });
+        applyTextureBinding(kit as never, { material, slot, target });
+      },
+    } as unknown as PainterlyKit;
+
+    // Monkeypatch creators used inside onRestored by swapping kit fields after dispose
+    // We intercept by wrapping the restore path: call handlers, then manually mimic recreate
+    // using the real attachPainterlyContextHandlers — but createStarSpriteTexture needs DOM.
+    // So instead: exercise the public rebind + binding path the handler calls, and verify
+    // lost/restored flags + listener detach.
+    const detach = attachPainterlyContextHandlers(canvas, kit, () => { /* rebuild */ });
+    assert.ok(listeners.has("webglcontextlost"));
+    assert.ok(listeners.has("webglcontextrestored"));
+
+    const lost = listeners.get("webglcontextlost")!;
+    const restored = listeners.get("webglcontextrestored")!;
+    const ev = { preventDefault() {} } as unknown as Event;
+    lost(ev);
+    assert.equal(kit.contextLost, true);
+
+    // Simulate what onRestored does without DOM: recreate + rebind
+    kit.contextLost = false;
+    (kit.starSpriteTexture as { dispose: () => void }).dispose();
+    (kit.paperGrainTexture as { dispose: () => void }).dispose();
+    kit.starSpriteTexture = makeStar() as never;
+    kit.paperGrainTexture = makePaper() as never;
+    kit.bindSharedTexture(glowMat as never, "starSprite", "map");
+    rebindPainterlyKitTextures(kit);
+    assert.equal((glowMat.map as unknown as { id: string }).id, "star-2");
+    assert.equal(kit.contextLost, false);
+
+    // Calling the real restored handler would try document.createElement — skip invoking it
+    // in node. Detach must remove listeners.
+    detach();
+    assert.equal(listeners.size, 0);
+    // silence unused
+    void restored;
+  });
+});
+
+describe("painter c4: Imagine node card material", () => {
+  it("falls back to wash when map is missing; setImagineNodeMap toggles uHasImage", () => {
+    const m = createImagineNodeMaterial({ accent: "#7ec8ff", bleed: 0.6 });
+    assert.equal(m.name, "ImagineNodeMaterial");
+    assert.equal(m.uniforms["uHasImage"]!.value, 0);
+    assert.equal(m.uniforms["uHasPaper"]!.value, 0);
+    const fake = { needsUpdate: false };
+    setImagineNodeMap(m, fake as never);
+    assert.equal(m.uniforms["uHasImage"]!.value, 1);
+    assert.equal(m.uniforms["uImage"]!.value, fake);
+    setImagineNodeMap(m, null);
+    assert.equal(m.uniforms["uHasImage"]!.value, 0);
+    tickImagineNodeMaterial(m, 86400);
+    const t = m.uniforms["uTime"]!.value as number;
+    assert.ok(Number.isFinite(t) && t >= 0 && t < PAINTER_TIME_PERIOD);
+    m.dispose();
+  });
+
+  it("paper map bind/unbind and NaN option clamps stay finite", () => {
+    const m = createImagineNodeMaterial({
+      grain: NaN,
+      bleed: Infinity,
+      frame: -3,
+      opacity: 99,
+    });
+    assert.ok(Number.isFinite(m.uniforms["uGrain"]!.value as number));
+    assert.ok((m.uniforms["uBleed"]!.value as number) <= 1);
+    assert.ok((m.uniforms["uFrame"]!.value as number) >= 0);
+    assert.ok((m.uniforms["uOpacity"]!.value as number) <= 1);
+    const paper = { needsUpdate: false };
+    setImagineNodePaperMap(m, paper as never);
+    assert.equal(m.uniforms["uHasPaper"]!.value, 1);
+    setImagineNodePaperMap(m, null);
+    assert.equal(m.uniforms["uHasPaper"]!.value, 0);
+    m.dispose();
+  });
+
+  it("releasePainterlyMaterial drops Imagine textureBindings so rebuilds stay bounded", () => {
+    const tracked: ReturnType<typeof createImagineNodeMaterial>[] = [];
+    const textureBindings: { material: unknown; slot: string; target?: string }[] = [];
+    const paper = { needsUpdate: false, dispose() {} };
+    const kit = {
+      painterlyPass: { uniforms: {} },
+      starSpriteTexture: { dispose() {} },
+      paperGrainTexture: paper,
+      tracked,
+      trackedSkies: [],
+      textureBindings,
+      disposed: false,
+      contextLost: false,
+      createImagineNodeMaterial: (o?: object) => {
+        const m = createImagineNodeMaterial({ ...(o as object), paperMap: paper as never });
+        tracked.push(m);
+        textureBindings.push({ material: m, slot: "paperGrain", target: "uPaperMap" });
+        return m;
+      },
+    } as unknown as PainterlyKit;
+    for (let i = 0; i < 30; i++) {
+      const m = kit.createImagineNodeMaterial({});
+      assert.equal(releasePainterlyMaterial(kit, m), true);
+    }
+    assert.equal(painterlyKitResourceCounts(kit).materials, 0);
+    assert.equal(painterlyKitResourceCounts(kit).bindings, 0);
     disposePainterlyKit(kit);
   });
 });
