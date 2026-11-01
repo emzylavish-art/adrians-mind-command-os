@@ -7759,3 +7759,53 @@ aside .text-\[10px\],
   letter-spacing: var(--tracking-meta) !important;
   font-weight: 600 !important;
 }
+
+/* —— Evolution c123: nav/rail icon stroke+size unify + active-row glow —— */
+aside.rail nav button svg,
+aside.rail nav a svg,
+aside.rail .nav-item svg,
+nav[aria-label="Primary"] button svg,
+nav.fixed[aria-label="Primary"] button svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+  stroke-width: 1.75px !important;
+}
+aside.rail nav button svg *,
+aside.rail nav a svg *,
+nav[aria-label="Primary"] button svg * {
+  stroke-width: 1.75px !important;
+}
+/* Active / current row: tonal pill + soft mono glow */
+aside.rail nav button[aria-current="page"],
+aside.rail nav button.bg-accent,
+aside.rail nav .nav-item.bg-accent,
+aside.rail nav button[aria-current="page"].nav-item {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 0 24px rgb(255 255 255 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.65) !important;
+}
+aside.rail nav button[aria-current="page"] svg,
+aside.rail nav button.bg-accent svg,
+aside.rail nav button[aria-current="page"] svg * {
+  color: #09090b !important;
+  stroke: currentColor !important;
+}
+/* Inactive tonal separation */
+aside.rail nav button:not([aria-current="page"]):not(.bg-accent) {
+  color: #b4bccb !important;
+  background: transparent !important;
+}
+aside.rail nav button:not([aria-current="page"]):not(.bg-accent):hover {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e8ecf5 !important;
+}
+nav.fixed[aria-label="Primary"] button[aria-current="page"],
+nav.fixed[aria-label="Primary"] button.bg-accent {
+  color: #f4f6fb !important;
+  text-shadow: 0 0 12px rgb(255 255 255 / 0.25);
+}
