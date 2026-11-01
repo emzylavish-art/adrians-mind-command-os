@@ -3155,3 +3155,61 @@ aside span.grid.size-11.rounded-2xl {
   color: #7c5cff !important;
   filter: none !important;
 }
+
+/* —— Cycle 32 / item 5: mono high-contrast warning / error cards —— */
+.main-stage [class*="border-danger"],
+.main-stage .text-danger,
+.glow-card.border-danger\/40,
+.service-setup,
+article.rounded-panel.border.border-line.bg-surface:has(.text-danger),
+.main-stage article:has(> .flex .text-danger) {
+  /* fallback below */
+}
+.main-stage p.text-danger,
+.main-stage .text-danger {
+  color: #f4f4f5 !important;
+}
+.main-stage [class*="bg-danger"],
+.main-stage .bg-danger\/15,
+.main-stage .border-danger\/40,
+.main-stage .rounded-panel.border-danger\/40 {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 55%),
+    rgb(24 24 27 / 0.95) !important;
+  border: 1px solid rgb(255 255 255 / 0.28) !important;
+  color: #fafafa !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+/* Connected / status pills that read as errors */
+.main-stage span.rounded-full.border-danger\/40,
+.main-stage span.text-danger {
+  border-color: rgb(255 255 255 / 0.35) !important;
+  color: #fafafa !important;
+  background: rgb(255 255 255 / 0.08) !important;
+}
+/* Neutral warning glyph via CSS on Setup coming-soon / error notices */
+.main-stage p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted,
+.main-stage p.text-sm.text-danger {
+  position: relative;
+  padding-left: 2.1rem !important;
+  border: 1px solid rgb(255 255 255 / 0.22) !important;
+  background: rgb(24 24 27 / 0.92) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted::before,
+.main-stage p.text-sm.text-danger::before {
+  content: "!";
+  position: absolute;
+  left: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.45);
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fafafa;
+}
