@@ -85,3 +85,32 @@ const sceneSample = createSceneTransitionSample();
 Interruptible: reversing mid-open or canceling a crossfade continues from the current amount.
 Reduced-motion snaps. `MotionClock` + `focus-ease` APIs unchanged.
 
+## Character idle / walk (c7)
+
+Imagine-zone characters are billboard planes (`userData.kind === "character"` on bot portraits,
+plus scene arts such as `scene-agents-walk.webp`). No skeletal rig yet — drive offset/yaw:
+
+```ts
+import {
+  createCharacterMotionState, createCharacterSample, stepCharacterMotion,
+} from "./motion";
+
+// once per character mesh:
+const charState = createCharacterMotionState();
+const charSample = createCharacterSample();
+
+// rAF — speed 0 idle / >0 walk; lookYaw toward camera or focus:
+stepCharacterMotion(charState, charSample, botId, wallT, dt, reducedMotion, {
+  speed: isWalking ? 1 : 0,
+  lookYaw: yawTowardCamera,
+});
+person.position.y = baseY + charSample.offsetY;
+person.position.x = baseX + charSample.offsetX;
+person.rotation.y = charSample.yaw;
+person.scale.y = charSample.scaleY;
+```
+
+Per-id phase desyncs a crowd. Reduced-motion → static pose. `MotionClock` / focus-ease /
+transition-ease APIs unchanged. **Note:** `sharedMotionClock.reset()` is a no-op (c7) — use
+`createMotionClock()` for private resettable clocks.
+

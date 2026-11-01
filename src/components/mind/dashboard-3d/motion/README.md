@@ -26,3 +26,9 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - `stepSceneTransition` — crossfade (`fadeOut`/`fadeIn`) + `dolly` progress; `begin`/`cancel`
 - Reduced-motion snaps. See INTEGRATION.md for UniverseScene wiring.
 
+## Character idle / walk (c7)
+
+- `stepCharacterMotion` — idle bob/breath + walk bounce/sway/stride, look-yaw damp, loco blend
+- `characterPhaseFromId` — stable crowd desync; reduced-motion = static pose
+- Targets Imagine-zone billboard characters (`kind: "character"`) and scene walk arts
+
