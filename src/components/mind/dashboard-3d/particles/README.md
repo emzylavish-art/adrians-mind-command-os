@@ -33,3 +33,10 @@ Feed real commits only. Respects prefers-reduced-motion (static dust, dimmed sta
 - `update()` is skipped while `document.hidden`.
 - New suites (`hacker-pass-c3.test.ts`, `motion-lod.test.ts`) are imported by `hacker-pass.test.ts`
   so they run in `npm test` without a package.json edit.
+
+## Comet tails (c4)
+
+Commit comets are additive `LineBasicMaterial` arcs with a baked vertex-color fade
+(`cometTailFade(u) = (1-u)^1.6`, bright head → black tail) plus a `Points` head using one shared
+radial sprite (refcounted; freed 2s after the last handle disposes — `flushCometHeadSprite()` frees now).
+The motion clock now keeps one anchor per time base (≤4) and caps stutters at 250ms.
