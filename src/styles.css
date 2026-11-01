@@ -4268,3 +4268,28 @@ aside.rail nav button:not(.bg-accent) svg * {
     display: none !important;
   }
 }
+
+/* —— Evolution c54: tablet overflow — clamp Speak bar; don't cover dock bottom —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    max-width: min(42rem, calc(100vw - 1.5rem)) !important;
+    width: min(42rem, calc(100vw - 1.5rem)) !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    bottom: 0.75rem !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* Prefer command dock on tablet; keep Speak reachable via dock voice controls */
+  body:has(section.composer-dock[data-composer="floating"]) .composer-bar.is-fixed {
+    opacity: 0.92;
+  }
+  .shell, .main-stage, html, body {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+}
