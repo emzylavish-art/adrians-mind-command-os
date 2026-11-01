@@ -44,8 +44,16 @@ import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
-import { runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
+import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
+import { formatVoiceClientError } from "@/lib/mind/voice/errors";
+import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import {
+  isEditableKeyboardTarget,
+  matchesVoiceToggleShortcut,
+  voiceMicAriaLabel,
+  VOICE_TOGGLE_SHORTCUT,
+} from "@/lib/mind/voice/shortcut";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
@@ -303,6 +311,7 @@ export function CommandApp() {
   const turnAbort = useRef<AbortController | null>(null);
   const voiceNext = useRef(false);
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
+  const listenRef = useRef<() => void>(() => undefined);
   const voiceModeRef = useRef<VoiceRoutingMode>("direct");
   const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
   const [voiceListening, setVoiceListening] = useState(false);
@@ -377,6 +386,8 @@ export function CommandApp() {
   const [listening, setListening] = useState(false);
 
   useEffect(() => {
+    // Hydrate is read-only. Never write the SSR default ("direct") from an effect —
+    // that race wiped Orchestrator after toggle+reload in live QA.
     const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
     setVoiceMode(mode);
     voiceModeRef.current = mode;
@@ -384,8 +395,14 @@ export function CommandApp() {
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
-    writeStoredVoiceMode(voiceMode, typeof localStorage === "undefined" ? null : localStorage);
   }, [voiceMode]);
+
+  function applyVoiceMode(next: VoiceRoutingMode) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const committed = commitVoiceMode(next, storage);
+    voiceModeRef.current = committed;
+    setVoiceMode(committed);
+  }
 
   useEffect(() => {
     return () => {
@@ -516,6 +533,11 @@ export function CommandApp() {
         searchRef.current?.focus();
       }
       if (event.key === "Escape") setPaletteOpen(false);
+      if (matchesVoiceToggleShortcut(event)) {
+        if (isEditableKeyboardTarget(event.target)) return;
+        event.preventDefault();
+        void listenRef.current();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1903,32 +1925,60 @@ export function CommandApp() {
       return;
     }
     setError(null);
+    setNotice(null);
     sharedAudioOutput.interrupt();
     voiceSession.current?.interruptPlayback();
-    const secret = await createVoiceClientSecret();
-    if (!secret.ok) {
-      setError(secret.error);
-      return;
-    }
-    const session = new RealtimeVoiceSession({
-      onTranscript: (text) => {
-        void handleVoiceTranscript(text);
-      },
-      onSpeechStarted: () => {
-        sharedAudioOutput.interrupt();
-        session.interruptPlayback();
-      },
-      onError: (message) => setError(message),
-      onLevel: (level) => setVoiceLevel(level),
-      onStatus: (status) => {
-        setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
-        if (status === "speaking") setSpeaking(true);
-        if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
-        if (status === "idle" || status === "closed") setVoiceLevel(0);
-      },
-    });
-    voiceSession.current = session;
+
     try {
+      if (voiceModeRef.current === "orchestrator") {
+        const probe = await probeOllamaConductor({
+          baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+          model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+        });
+        if (!probe.ok) {
+          setError(probe.error);
+          setVoiceListening(false);
+          return;
+        }
+      }
+
+      let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
+      try {
+        secret = await createVoiceClientSecret();
+      } catch (caught) {
+        setError(formatVoiceClientError(caught));
+        setVoiceListening(false);
+        return;
+      }
+      if (!secret || typeof secret !== "object" || !("ok" in secret)) {
+        setError(formatVoiceClientError(secret));
+        setVoiceListening(false);
+        return;
+      }
+      if (!secret.ok) {
+        setError(formatVoiceClientError(secret));
+        setVoiceListening(false);
+        return;
+      }
+
+      const session = new RealtimeVoiceSession({
+        onTranscript: (text) => {
+          void handleVoiceTranscript(text);
+        },
+        onSpeechStarted: () => {
+          sharedAudioOutput.interrupt();
+          session.interruptPlayback();
+        },
+        onError: (message) => setError(message || "Voice realtime error."),
+        onLevel: (level) => setVoiceLevel(level),
+        onStatus: (status) => {
+          setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
+          if (status === "speaking") setSpeaking(true);
+          if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+          if (status === "idle" || status === "closed") setVoiceLevel(0);
+        },
+      });
+      voiceSession.current = session;
       await session.connect(secret.value, { captureOnly: true });
       session.setMuted(voiceMuted);
       await session.startCapture();
@@ -1936,9 +1986,12 @@ export function CommandApp() {
       setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Press mic again to stop.`);
     } catch (caught) {
       stopVoiceSession();
-      setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
+      setError(formatVoiceClientError(caught));
     }
   }
+  listenRef.current = () => {
+    void listen();
+  };
 
   function listenBrowserFallback() {
     setListening(true);
@@ -2170,12 +2223,13 @@ export function CommandApp() {
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
           <div className="hidden shrink-0 md:block">
-            <VoiceModeBadge
-              mode={voiceMode}
-              listening={voiceListening}
-              onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
-            />
             <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+              <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+              <VoiceModeBadge
+                mode={voiceMode}
+                listening={voiceListening}
+                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+              />
               <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
               <button
                 type="button"
@@ -2521,8 +2575,9 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
+                    <VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" />
                     <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
-                    <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+                    <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
@@ -2608,34 +2663,35 @@ export function CommandApp() {
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
-              <VoiceModeBadge
-                mode={voiceMode}
-                listening={voiceListening}
-                onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
-              />
-            <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
-              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
-              <button
-                type="button"
-                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
-                onClick={toggleVoiceMute}
-                aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
-                aria-pressed={voiceMuted}
-                data-testid="voice-mute"
-                disabled={!voiceListening}
-              >
-                {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-              </button>
-              <button
-                type="button"
-                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
-                onClick={listenBrowserFallback}
-                aria-label="Browser speech fallback"
-                title="Browser speech recognition fallback"
-              >
-                <Mic className="size-4" />
-              </button>
-            </div>
+              <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+                <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+                <VoiceModeBadge
+                  mode={voiceMode}
+                  listening={voiceListening}
+                  onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+                />
+                <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+                <button
+                  type="button"
+                  className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                  onClick={toggleVoiceMute}
+                  aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
+                  aria-pressed={voiceMuted}
+                  data-testid="voice-mute"
+                  disabled={!voiceListening}
+                >
+                  {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                </button>
+                <button
+                  type="button"
+                  className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                  onClick={listenBrowserFallback}
+                  aria-label="Browser speech fallback"
+                  title="Browser speech recognition fallback"
+                >
+                  <Mic className="size-4" />
+                </button>
+              </div>
 
               {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="banner-error px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
@@ -2782,7 +2838,7 @@ export function CommandApp() {
               voiceMuted={voiceMuted}
               voiceLevel={voiceLevel}
               onToggleMute={toggleVoiceMute}
-              onToggleVoiceMode={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+              onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
@@ -4228,7 +4284,7 @@ function ChatPane({
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
-          <VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} />
+          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
         </div>
         <form
           className="floating-composer command-card m-3 p-3"
@@ -4295,8 +4351,9 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
             <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
-            <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+            <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
               {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
             </button>
             <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
