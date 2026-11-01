@@ -8,6 +8,7 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
+import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import {
   listRegistryServers,
   registerExternalServer,
@@ -38,6 +39,8 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
       },
       POST: async ({ request }) => {
         try {
+          const originCheck = assertSameOrigin(request);
+          if (!originCheck.ok) return json({ ok: false, error: originCheck.error }, 403);
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
