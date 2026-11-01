@@ -71,7 +71,10 @@ describe("GET /api/mind/mcp/servers anonymous auth (API keeps 401)", () => {
 
   it("mcpRegistryList soft-auth stays the quiet UI path (server.ts)", () => {
     const server = readFileSync(join(root, "lib/mind/server.ts"), "utf8");
+    const helper = readFileSync(join(root, "lib/mind/mcp-list-auth.ts"), "utf8");
     assert.match(server, /export const mcpRegistryList/);
-    assert.match(server, /status:\s*"unauthenticated"/);
+    assert.match(server, /getSessionUser/);
+    assert.match(server, /buildMcpRegistryListPayload/);
+    assert.match(helper, /status:\s*"unauthenticated"/);
   });
 });
