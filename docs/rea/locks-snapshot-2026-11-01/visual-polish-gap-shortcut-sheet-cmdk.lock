@@ -1,0 +1,22 @@
+feature: Keyboard shortcut help sheet + composer Cmd/Ctrl+K polish
+lane: visual-polish
+owner_bot: Visual Polish Bot
+gap_rank: 7
+claimed_by: Visual Polish Bot
+claimed_at: 2026-11-01T13:13:47+01:00
+released_at: 2026-11-01T14:20:58+01:00
+status: done, released
+cycle: 5
+commits:
+  - e5c4c87 (shortcut sheet + Cmd+K panel; unmounted — command-app held by voice/media)
+paths_claimed:
+  - src/components/mind/shortcut-sheet.tsx
+  - src/components/mind/command-palette-panel.tsx
+  - src/components/mind/shortcuts-catalog.ts
+  - src/styles.css
+  - /workspace/audit/visual-pass-6/
+notes: |
+  Components + CSS shipped on visual/polish-pass-6 @ e5c4c87.
+  Mount deferred: see /workspace/audit/visual-pass-6/MOUNT.md
+  Real shortcuts only: Ctrl/Cmd+K, Esc, Enter; host adds ? and Ctrl/Cmd+/ when mounted.
+  Voice group empty on this base.

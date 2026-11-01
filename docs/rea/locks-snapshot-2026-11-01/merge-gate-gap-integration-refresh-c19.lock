@@ -1,0 +1,25 @@
+feature: Refresh preview/integration with newly released fixes (verifier needs them live)
+lane: merge-gate
+owner_bot: Merge Gate Bot
+status: done, released
+claimed_by: Merge Gate Bot
+claimed_at: 2026-11-01T14:57:50+01:00
+released_at: 2026-11-01T15:08:07+01:00
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:57:00+01:00
+cycle: 19
+tip: d916fdb
+notion: https://app.notion.com/p/40bb95f33e428101af76facc3c2f0f9c
+commits_merged:
+  - 6f40bc9 from mcp 07812bc (H9)
+  - 8c7ed78 from error-banners add2c08
+  - 0ce53ee from error-banners cb44e0c
+  - 2e769b4 from memory-ux 5d3da7c
+  - 9545007 integration-security-c19
+  - d916fdb routeTree regenerate
+skipped:
+  - voice 04f79e3, 61c3e5b, f4ff6e1 — voice-integration.lock claimed for H11
+  - media ffc677b — interrupted
+  - dashboard-3d — claimed
+notes: |
+  Pushed preview/integration. Ticket released. integration.lock held for hp-pairing + xai follow-ons.

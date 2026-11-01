@@ -1,0 +1,14 @@
+feature: HARDENING (HIGH) — H9 pc_run_shell allowlist bypass via caller-supplied confirm:true
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: 
+claimed_at: 2026-11-01T14:45:51+01:00
+updated_at: 2026-11-01T14:52:35+01:00
+released_at: 2026-11-01T14:52:35+01:00
+status: released
+gap_rank: hardening H9 HIGH
+commit: 07812bc
+notion_stop_point: https://app.notion.com/p/40bb95f33e42812a880ed25ad2fd0223
+notes: |
+  Complete. confirm tool args ignored; human UI approval required.
+  Do not touch service-board.tsx or registry.ts (other locks).

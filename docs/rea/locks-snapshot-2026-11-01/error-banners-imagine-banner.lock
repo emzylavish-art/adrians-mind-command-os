@@ -1,0 +1,25 @@
+feature: Image-generation failure banner (banner 4) — Retry + View log
+lane: error-banners
+owner_bot: Error Banners Bot
+branch: error-banners
+worktree: /workspace/mind-command-os-error-banners
+status: done, released
+claimed_by: Error Banners Bot
+claimed_at: 2026-11-01T14:57:00+01:00 (Africa/Lagos)
+released_at: 2026-11-01T15:06:30+01:00 (Africa/Lagos)
+dispatched_by: Zack / parent executor (pt7u)
+paths_claimed:
+  - src/lib/mind/failure-states.ts (image_generation_failed kind + classifier + retry-fidelity helper only)
+  - src/lib/mind/failure-states.test.ts
+  - src/lib/mind/failure-banner-markup.test.ts
+  - src/lib/mind/retry-fidelity.test.ts (Imagine retry params only)
+  - src/components/mind/command-app.tsx (runImagine / runImagineEdit failure → setFailure banner + Retry/View log wiring ONLY)
+  - .handoff/NOTION_HANDOFF.md (append only)
+  - /workspace/locks/error-banners-imagine-banner.lock
+commits:
+  - 62a191e (Add image-generation failure banner with Retry and View log)
+notion: https://app.notion.com/p/40bb95f33e4281a0b648e8639a6cedaf
+remote: 62a191ecc772bb8e6af685be67d1700fc8894f4a
+notes: |
+  Live check incomplete (memory); server/worktree cleaned. Unit tests + typecheck/lint/build green.
+  media-integration.lock did not block banner call-site (clipboard-only claim).

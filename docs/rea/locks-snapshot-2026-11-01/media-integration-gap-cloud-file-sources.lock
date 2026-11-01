@@ -1,0 +1,33 @@
+feature: Cloud file sources (Drive / OneDrive / library attach)
+lane: media-integration
+owner_bot: Media Integration Bot
+source_platforms: Gemini, Manus, Perplexity, ChatGPT, Claude
+evidence:
+  - /workspace/rea-captures/gap-list-2026-11-01.md (rank 6)
+  - /workspace/rea-captures/gap-list-2026-11-01.json
+  - /workspace/audit/signed-in/findings-gemini.md
+  - /workspace/audit/signed-in/findings-manus.md
+  - /workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md
+  - /workspace/mind-command-os/src/components/mind/service-board.tsx (Google Drive Not connected)
+  - /workspace/mind-command-os-media/.handoff/MEDIA_HANDOFF.md (local attach/vision done; cloud not)
+acceptance_criteria:
+  - Composer/Library can browse and attach at least one cloud source (prefer Google Drive; OneDrive if feasible) when a connection record exists
+  - If Drive/OneDrive is Not connected, UI stays honest (prompt to Connected/ServiceBoard) — do NOT implement OAuth (MCP Integration Bot owns OAuth connectors gap)
+  - Attached cloud files enter the same staging/chip path as local attach (reuse media helpers); text/PDF extract where already supported
+  - No fake Connected state; no secrets in client UI
+  - Prefer new files under src/lib/mind/media/cloud/ or src/components/mind/media/; touch command-app composer wiring only as needed
+  - Avoid styles.css (visual-polish), voice/, mcp OAuth/connectors paths Logic is not on but MCP is, research search (logic busy)
+  - Do not redo finished multimodal vision attach/camera work
+  - typecheck + mind/src+media tests pass; append done to Notion mirror 40bb95f3…
+claimed_by: Gap Dispatcher
+timestamp: 2026-11-01T12:31:20+01:00 (Africa/Lagos)
+status: done (implemented on media-integration @ 332c1f4)
+cycle: 3
+notes: |
+  media-integration.lock is done/released (multimodal local attach + vision). Image generation
+  (gap rank 9, registry paid_required) deferred — lower impact than cloud attach; still open for later.
+  MCP cycle-2 owns OAuth Connect for ServiceBoard (incl. Drive); this lane owns post-connect file picker/attach only.
+  Chosen over image gen by gap-list impact (rank 6 > 9) with explicit non-overlap on OAuth and finished vision work.
+
+completed_by: Media Integration Bot
+completed_at: 2026-11-01T12:40:00+01:00

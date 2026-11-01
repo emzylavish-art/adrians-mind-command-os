@@ -1,0 +1,25 @@
+owner: Media Integration Bot
+feature: multi-account cloud storage rotation (Drive / Dropbox / OneDrive)
+branch: media-integration
+worktree: /workspace/mind-command-os-media
+status: done, released
+claimed_at: 2026-11-01T14:45:30+01:00
+released_at: 2026-11-01T14:51:57+01:00
+paths_claimed:
+  - src/lib/mind/media/storage/
+  - src/routes/api/mind/media/storage/
+  - .data/media-storage-accounts.example.json
+  - /workspace/audit/media-integration/STORAGE_ROTATION.md
+  - /workspace/locks/media-storage-rotation.lock
+  - src/routeTree.gen.ts (minimal: register storage routes only)
+notes: |
+  NEW files only under storage/ paths. Do not edit media-integration.lock claimed files
+  (package.json, index.ts, index.server.ts, command-app.tsx, cloud/*, etc.).
+  Wiring hook: export storeMedia() from storage/; document call sites in WIRING.md.
+  Never delete media to free space. No OAuth (MCP owns it). No Vercel/Oak Bridge/Bridgepoint.
+
+commits:
+  - 123f1fe
+
+collision_check: no Media Storage Fleet lock/branch/worktree; full rotation kept.
+notion: child page https://app.notion.com/p/40bb95f33e4281e3919afa437ed7021a under mirror 40bb95f33e42814aacf8c3281b4f528d (primary 40b1aa… 404)

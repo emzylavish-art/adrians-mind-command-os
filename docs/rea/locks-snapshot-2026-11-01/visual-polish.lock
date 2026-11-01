@@ -1,0 +1,21 @@
+owner: Visual Polish Bot
+branch: visual/polish-pass-9
+worktree: /workspace/mind-command-os-visual
+base: a6a1174 (origin/visual/polish-pass-8)
+status: claimed / in progress
+claimed_at: 2026-11-01T14:50:47+01:00
+released_at:
+paths_claimed:
+  - src/styles.css
+  - src/components/mind/ (presentational: perf-tier, shortcut/palette/empty/help/cards, markdown prose)
+  - src/lib/mind/ (presentational markdown renderer + tests; blocks display path)
+  - src/components/mind/command-app.tsx (mount + presentational only when free of exclusive holders)
+  - src/components/mind/service-board.tsx (Connected cards presentational when free)
+  - src/components/mind/message-body.tsx (safe markdown mount when free)
+  - /workspace/audit/visual-pass-9/
+  - /workspace/locks/visual-polish.lock
+updated_at: 2026-11-01T15:10:00+01:00
+notes: |
+  15:10 WAT executor resumed: command-app still co-held by grok-build-gap-memory-mount (in_progress) + media-integration (interrupted, clipboard only); voice-integration + error-banners released their command-app claims.
+  Pass 9: load-resilience lite tier + harness; mount ShortcutSheetHost/CommandPalettePanel/ChatEmptyHero when command-app free; markdown safe renderer; attach/settings/composer polish; Connected cards; sweep + screenshots.
+  command-app currently co-held by voice-integration (voice wiring) + error-banners-gap-top5 (banner/retry) — mount deferred until free; work other paths meanwhile.

@@ -1,0 +1,13 @@
+owner: Voice Wiring Bot
+branch: voice-wiring
+worktree: /workspace/mind-command-os-voice
+status: claimed (H14 PTT ARIA/modal guard)
+claimed_at: 2026-11-01T15:09:00+01:00
+paths_claimed:
+  - src/lib/mind/voice/hold-to-talk.ts
+  - src/lib/mind/voice/hold-to-talk.test.ts
+  - src/lib/mind/voice/shortcut.ts
+  - src/lib/mind/voice/shortcut.test.ts
+  - src/components/mind/command-app.tsx (voice shortcut/PTT modal guard only)
+notes: |
+  H14 gap lock. Do not bounce :8095. Voice-only.

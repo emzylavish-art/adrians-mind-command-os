@@ -1,0 +1,28 @@
+feature: HARDENING — ServiceBoard connector status stuck on "Checking connection…" (silent failure state)
+lane: error-banners
+owner_bot: Error Banners Bot
+branch: error-banners
+worktree: /workspace/mind-command-os-error-banners
+gap_rank: hardening (MED) — silent failure / never-resolving loading state
+status: done, released
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:31:00+01:00 (Africa/Lagos)
+cycle: 13
+found_on: preview/integration @ 27d2985 (preview :8120)
+claimed_by: Error Banners Bot
+claimed_at: 2026-11-01T14:31:30+01:00 (Africa/Lagos)
+released_at: 2026-11-01T14:45:30+01:00 (Africa/Lagos)
+paths_claimed:
+  - src/components/mind/service-board.tsx (status fetch + honest terminal states + Retry only)
+  - src/lib/mind/service-board-status.ts
+  - src/lib/mind/service-board-status.test.ts
+  - package.json (test list entry only)
+  - .handoff/NOTION_HANDOFF.md (append only)
+commits:
+  - eae5297 (fix ServiceBoard connector status hang: timeout, non-JSON, Retry)
+  - 0645264 (handoff)
+  - f481e58 (Notion child URL)
+notion: https://app.notion.com/p/40bb95f33e42811a969ee5efb98eae7a (child under 40bb95f33e42814aacf8c3281b4f528d)
+notes: |
+  Built on MCP 02b2703 honest terminal states. Added timeout, non-JSON text parse, in-flight Retry, Status unavailable + red Retry UI.
+  Not pushed. Trial merge with origin/mcp-integration verified (typecheck/build; TS flake in mcp/stdio re-ran clean).

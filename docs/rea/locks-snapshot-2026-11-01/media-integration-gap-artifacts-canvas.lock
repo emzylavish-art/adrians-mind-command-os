@@ -1,0 +1,15 @@
+feature: Artifacts / Canvas side panel (open code, docs and HTML previews in a side panel next to chat; edit, version, copy, download) — paired-computer part excluded (HP not online)
+lane: media-integration
+owner_bot: Media Integration Bot
+status: dispatched
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:53:00+01:00
+cycle: 18
+gap_rank: 8 (gap-list-2026-11-01-c3), effort L; Claude, Gemini, Perplexity, Manus all ship it
+evidence: /workspace/rea-captures/claude/claude-c3-claude-com-features-2026-11-01.md; gap-list-2026-11-01-c3.md #8
+acceptance_criteria:
+  - Assistant code/doc/HTML blocks can open in a resizable side panel (mobile: full-screen sheet) with copy, download, version history of edits
+  - HTML preview runs ONLY in a sandboxed iframe (sandbox without allow-same-origin, srcdoc, strict CSP); no script reaches the app origin, cookies or localStorage (regression test)
+  - Size cap (e.g. 1MB) with honest error; empty/loading/error states; keyboard (Esc closes, focus trap) + aria labels
+  - Do not edit message-body.tsx/blocks.ts/styles.css (visual-polish-gap-markdown-rendering.lock) or MCP/pc-pairing paths; mount via a small hook in command-app.tsx only
+  - typecheck + npm test + build pass; push media-integration; done on Notion mirror 40bb95f33e42814aacf8c3281b4f528d; lock done, released
