@@ -53,3 +53,35 @@ const comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
 dust.update(t, reducedMotion);
 comets.update(t, reducedMotion);
 ```
+
+## Node open/close + scene transition easing (c6)
+
+Pure helpers in `transition-ease.ts`. Wire from UniverseScene / detail card / flyover FSM
+(cannot edit those from this lane).
+
+```ts
+import {
+  createNodeOpenState, setNodeOpen, stepNodeOpen, createNodeOpenSample,
+  createSceneTransitionState, beginSceneTransition, cancelSceneTransition,
+  stepSceneTransition, createSceneTransitionSample,
+} from "./motion";
+
+// Node detail card (one state per openable node, reuse sample):
+const nodeOpen = createNodeOpenState(false);
+const nodeSample = createNodeOpenSample();
+// on select: setNodeOpen(nodeOpen, true); on dismiss: setNodeOpen(nodeOpen, false);
+// rAF: stepNodeOpen(nodeOpen, nodeSample, dt, reducedMotion);
+// apply nodeSample.scale / .opacity / .offsetY to the detail mesh/CSS2D.
+
+// Scene level change (universe↔city↔interior):
+const sceneTx = createSceneTransitionState();
+const sceneSample = createSceneTransitionSample();
+// on level change: beginSceneTransition(sceneTx, prevLevel, nextLevel);
+// on cancel / zoom-out interrupt: cancelSceneTransition(sceneTx);
+// rAF: stepSceneTransition(sceneTx, sceneSample, dt, reducedMotion);
+// fadeOut/fadeIn → layer opacities; dolly → camera mix factor.
+```
+
+Interruptible: reversing mid-open or canceling a crossfade continues from the current amount.
+Reduced-motion snaps. `MotionClock` + `focus-ease` APIs unchanged.
+

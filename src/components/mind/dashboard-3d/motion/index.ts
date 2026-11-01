@@ -46,4 +46,26 @@ export {
   stepFocusPulseMul,
   type FocusEaseState,
 } from "./focus-ease.ts";
+export {
+  NODE_OPEN_DURATION,
+  NODE_OPEN_OFFSET_Y,
+  NODE_OPEN_SCALE_FROM,
+  SCENE_TRANSITION_DURATION,
+  beginSceneTransition,
+  cancelSceneTransition,
+  createNodeOpenSample,
+  createNodeOpenState,
+  createSceneTransitionSample,
+  createSceneTransitionState,
+  normalizeSceneId,
+  setNodeOpen,
+  stepNodeOpen,
+  stepSceneTransition,
+  type NodeOpenOpts,
+  type NodeOpenSample,
+  type NodeOpenState,
+  type SceneTransitionOpts,
+  type SceneTransitionSample,
+  type SceneTransitionState,
+} from "./transition-ease.ts";
 
