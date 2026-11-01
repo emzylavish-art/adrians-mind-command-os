@@ -38,7 +38,12 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { analyzeImageFile, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
+import { runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
+import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -241,6 +246,10 @@ export function CommandApp() {
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
   const voiceNext = useRef(false);
+  const voiceSession = useRef<RealtimeVoiceSession | null>(null);
+  const voiceModeRef = useRef<VoiceRoutingMode>("direct");
+  const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
+  const [voiceListening, setVoiceListening] = useState(false);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -290,6 +299,27 @@ export function CommandApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
+
+  useEffect(() => {
+    const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
+    setVoiceMode(mode);
+    voiceModeRef.current = mode;
+  }, []);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+    writeStoredVoiceMode(voiceMode, typeof localStorage === "undefined" ? null : localStorage);
+  }, [voiceMode]);
+
+  useEffect(() => {
+    return () => {
+      voiceSession.current?.close();
+      voiceSession.current = null;
+      sharedAudioOutput.interrupt();
+    };
+  }, []);
+
+
   const [reaBusy, setReaBusy] = useState(false);
   const [reaReport, setReaReport] = useState<string | null>(null);
   const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
@@ -660,11 +690,11 @@ export function CommandApp() {
     }
   }
 
-  async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
+  async function deliver(chat: Chat, text: string, source: Workspace, resume = false): Promise<string | null> {
     const routed = chosenProvider(providerChoice, grokConfigured);
     if (!routed.ok) {
       setError(routed.error);
-      return;
+      return null;
     }
     const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const history = (resume ? chat.messages.slice(0, -1) : chat.messages).slice(-12);
@@ -709,13 +739,13 @@ export function CommandApp() {
           setLiveText((current) => current + chunk);
         },
       });
-      if (generation !== turnGen.current) return;
+      if (generation !== turnGen.current) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (!shouldStoreReply(result)) {
         setError(result.ok ? "Grok returned an empty reply." : result.error);
-        return;
+        return null;
       }
       setWs((prev) => {
         const next = {
@@ -754,12 +784,14 @@ export function CommandApp() {
           result.model,
         );
       });
+      return result.text;
     } catch (caught) {
-      if (generation !== turnGen.current) return;
+      if (generation !== turnGen.current) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       setError(caught instanceof Error && caught.message === "Unauthorized" ? "Sign in is required." : caught instanceof Error ? caught.message : "Grok could not be reached.");
+      return null;
     }
   }
 
@@ -1133,40 +1165,125 @@ export function CommandApp() {
       setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
       return;
     }
-    const binary = Uint8Array.from(atob(result.audio), (char) => char.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([binary], { type: result.mime }));
-    const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    await audio.play().catch(() => setError("The browser blocked playback."));
+    sharedAudioOutput.interrupt();
+    try {
+      await sharedAudioOutput.playMpegBase64(result.audio);
+    } catch {
+      setError("The browser blocked playback.");
+    } finally {
+      setSpeaking(false);
+    }
   }
 
-  function listen() {
-    const host = window as Window & {
-      SpeechRecognition?: new () => {
-        lang: string;
-        start: () => void;
-        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-      };
-      webkitSpeechRecognition?: new () => {
-        lang: string;
-        start: () => void;
-        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-      };
-    };
-    const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
-    if (!Ctor) {
-      setNotice("This browser has no speech recognition. Nothing was transcribed. This is not a realtime voice provider.");
+  function stopVoiceSession() {
+    voiceSession.current?.close();
+    voiceSession.current = null;
+    sharedAudioOutput.interrupt();
+    setVoiceListening(false);
+  }
+
+  async function handleVoiceTranscript(transcript: string) {
+    const text = transcript.trim();
+    if (!text) {
+      setNotice("No words were recognized. Nothing was sent.");
       return;
     }
-    const rec = new Ctor();
-    rec.lang = "en-US";
-    rec.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      setDraft(transcript);
-      voiceNext.current = Boolean(transcript);
-      setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
-    };
-    rec.start();
+    setDraft(text);
+    voiceNext.current = true;
+    setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
+    if (voiceModeRef.current === "orchestrator") {
+      setBusy(true);
+      const conducted = await runOllamaConductor(text, {
+        baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+        model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+      });
+      setBusy(false);
+      if (!conducted.ok) {
+        setError(conducted.error);
+        return;
+      }
+      if (active) {
+        const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
+        const assistantMsg = {
+          id: crypto.randomUUID(),
+          role: "assistant" as const,
+          content: conducted.text,
+          at: new Date().toISOString(),
+          model: conducted.model,
+        };
+        setWs((prev) =>
+          pushAudit(
+            {
+              ...prev,
+              chats: prev.chats.map((item) =>
+                item.id === active.id ? { ...item, messages: [...item.messages, userMsg, assistantMsg] } : item,
+              ),
+            },
+            "message_sent",
+            active.id,
+            conducted.model,
+          ),
+        );
+      }
+      if (voiceSession.current?.isOpen) voiceSession.current.speakText(conducted.text);
+      else void speak(conducted.text);
+      return;
+    }
+    if (!active) {
+      setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
+      return;
+    }
+    if (ws.halted || busy) return;
+    const reply = await deliver(active, text, ws);
+    if (reply) {
+      if (voiceSession.current?.isOpen) voiceSession.current.speakText(reply);
+      else void speak(reply);
+    }
+  }
+
+  async function listen() {
+    if (voiceListening) {
+      stopVoiceSession();
+      setNotice("Voice capture stopped.");
+      return;
+    }
+    if (ws.halted) {
+      setError("Emergency stop is on. Voice was not started.");
+      return;
+    }
+    setError(null);
+    sharedAudioOutput.interrupt();
+    voiceSession.current?.interruptPlayback();
+    const secret = await createVoiceClientSecret();
+    if (!secret.ok) {
+      setError(secret.error);
+      return;
+    }
+    const session = new RealtimeVoiceSession({
+      onTranscript: (text) => {
+        void handleVoiceTranscript(text);
+      },
+      onSpeechStarted: () => {
+        sharedAudioOutput.interrupt();
+        session.interruptPlayback();
+      },
+      onError: (message) => setError(message),
+      onStatus: (status) => {
+        setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
+        if (status === "speaking") setSpeaking(true);
+        if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+      },
+    });
+    voiceSession.current = session;
+    try {
+      await session.connect(secret.value);
+      await session.startCapture();
+      setVoiceListening(true);
+      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Press mic again to stop.`);
+    } catch (caught) {
+      stopVoiceSession();
+      setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
+    }
   }
 
   async function checkRea() {
@@ -1334,6 +1451,13 @@ export function CommandApp() {
             <Menu className="size-4" />
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
+          <div className="hidden shrink-0 md:block">
+            <VoiceModeBadge
+              mode={voiceMode}
+              listening={voiceListening}
+              onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+            />
+          </div>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -1572,8 +1696,8 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
-                      <Mic className="size-4" />
+                    <button type="button" className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+                      {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
@@ -1629,6 +1753,11 @@ export function CommandApp() {
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
+              <VoiceModeBadge
+                mode={voiceMode}
+                listening={voiceListening}
+                onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+              />
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="text-sm text-danger">{error}</p>}
               <ServiceBoard
@@ -1767,8 +1896,11 @@ export function CommandApp() {
               }}
               onNew={openChat}
               onSpeak={(text) => void speak(text)}
-              onListen={listen}
+              onListen={() => void listen()}
               speaking={speaking}
+              voiceMode={voiceMode}
+              voiceListening={voiceListening}
+              onToggleVoiceMode={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
@@ -2715,6 +2847,9 @@ function ChatPane({
   onSpeak,
   onListen,
   speaking,
+  voiceMode,
+  voiceListening,
+  onToggleVoiceMode,
   memoryChoice,
   mode,
   onComposerMemory,
@@ -2753,6 +2888,9 @@ function ChatPane({
   onSpeak: (text: string) => void;
   onListen: () => void;
   speaking: boolean;
+  voiceMode: VoiceRoutingMode;
+  voiceListening: boolean;
+  onToggleVoiceMode: () => void;
   memoryChoice: "off" | "on";
   mode: Autonomy;
   onComposerMemory: () => void;
@@ -2936,6 +3074,7 @@ function ChatPane({
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
+          <VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} />
         </div>
         <form
           className="command-card m-3 rounded-panel bg-surface p-3"
@@ -2966,8 +3105,8 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line" onClick={onListen} aria-label="Dictate">
-              <Mic className="size-4" />
+            <button type="button" className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+              {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
               {speaking ? "Speaking" : "Speak"}
