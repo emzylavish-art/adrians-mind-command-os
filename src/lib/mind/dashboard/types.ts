@@ -15,7 +15,10 @@ export type DashboardBotId =
   | "error-banners"
   | "xai-verification"
   | "hp-pairing"
-  | "dashboard";
+  | "dashboard"
+  | "cosmos-painter"
+  | "cosmos-light"
+  | "cosmos-motion";
 
 export type LockRecord = {
   file: string;
@@ -55,6 +58,12 @@ export type NotionStopPoint = {
   blockId?: string;
 };
 
+export type SystemWeather = {
+  label: string;
+  tone: Health;
+  summary: string;
+};
+
 export type DashboardStatus = {
   generatedAt: string;
   bots: BotNode[];
@@ -77,4 +86,9 @@ export type DashboardStatus = {
     locksOk: boolean;
     gitOk: boolean;
   };
+  /** Lane constellations for the universe view */
+  constellations: import("./constellations.ts").Constellation[];
+  constellationEdges: import("./constellations.ts").ConstellationEdge[];
+  weather: SystemWeather;
+  notionGraph: import("./notion-graph.ts").NotionGraph;
 };

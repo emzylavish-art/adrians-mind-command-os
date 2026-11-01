@@ -4,6 +4,8 @@ import { collectRecentCommits, latestCommitActivityForBranch, repoDirFromEnv } f
 import { classifyHealth } from "./health.ts";
 import { locksDirFromEnv, readLocksDir } from "./locks.ts";
 import { fetchNotionStopPoints } from "./notion.ts";
+import { buildConstellations, constellationEdges, systemWeather } from "./constellations.ts";
+import { loadNotionSnapshotFile } from "./notion-graph.ts";
 import type { BotNode, DashboardStatus, LockRecord } from "./types.ts";
 
 function pickPrimaryLock(locks: LockRecord[], fileRe: RegExp[], ownerRe: RegExp[]): LockRecord | null {
@@ -73,6 +75,11 @@ export async function buildDashboardStatus(
   }
 
   const notion = await fetchNotionStopPoints(env.NOTION_TOKEN);
+  const notionGraph = loadNotionSnapshotFile();
+  // Prefer live Notion when token works — snapshot remains the graph source until live crawl lands
+  if (notion.available) {
+    notionGraph.mode = notionGraph.available ? notionGraph.mode : "live";
+  }
 
   return {
     generatedAt: new Date(now).toISOString(),
@@ -89,5 +96,9 @@ export async function buildDashboardStatus(
       locksOk: locks.length > 0,
       gitOk,
     },
+    constellations: buildConstellations(bots),
+    constellationEdges: constellationEdges(bots),
+    weather: systemWeather(bots),
+    notionGraph,
   };
 }

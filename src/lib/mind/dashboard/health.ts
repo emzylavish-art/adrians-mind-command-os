@@ -71,6 +71,10 @@ export function classifyHealth(input: HealthInput): HealthResult {
     return { health: "healthy", reason: "Lock is done/released." };
   }
 
+  if (/^idle\b/i.test((lock.status ?? "").trim())) {
+    return { health: "idle", reason: "Lock explicitly idle." };
+  }
+
   const activityIso =
     input.lastActivityAt ||
     lock.released_at ||
