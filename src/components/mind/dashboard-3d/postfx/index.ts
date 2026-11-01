@@ -63,3 +63,4 @@ export {
   focusBandWeight,
   type FocusDepthHandle,
 } from "./focus-depth.ts";
+export { isDepthClobbered, liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";

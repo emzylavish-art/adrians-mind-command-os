@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";
 import { linearDepthOf, sunScreenUv } from "./god-rays.ts";
 
 /**
@@ -141,13 +142,16 @@ export function createFocusDepthPass(): FocusDepthHandle {
   const baseRender = pass.render.bind(pass);
   pass.render = ((renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
     if (disposed) return;
-    const live = (readBuffer && (readBuffer as THREE.WebGLRenderTarget).depthTexture) || depthTex;
+    // HACKER: after god-rays swaps, readBuffer depth is the quad's flat depth —
+    // never sample it (whole frame incl. focused card would mute). Radial instead.
+    const live = liveSceneDepth(renderer, readBuffer as THREE.WebGLRenderTarget, depthTex);
     u.tDepth.value = live;
     u.useDepth.value = live ? 1 : 0;
     const w = (readBuffer as THREE.WebGLRenderTarget | undefined)?.width ?? 1;
     const h = (readBuffer as THREE.WebGLRenderTarget | undefined)?.height ?? 1;
     u.aspect.value = w > 0 && h > 0 ? w / h : 1;
     baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+    if (!pass.renderToScreen) markDepthClobbered(renderer, writeBuffer);
     u.tDepth.value = null;
     u.useDepth.value = 0;
   }) as typeof pass.render;
