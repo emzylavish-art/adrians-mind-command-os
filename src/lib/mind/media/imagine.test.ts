@@ -37,7 +37,7 @@ describe("generateImagineImages", () => {
       },
     );
     assert.equal(result.ok, false);
-    if (!result.ok) assert.match(result.error, /API key/i);
+    if (!result.ok) assert.match(result.error, /not configured/i);
   });
 
   it("maps b64_json responses into persistent data URLs", async () => {
@@ -72,6 +72,7 @@ describe("generateImagineImages", () => {
       { prompt: "via url", responseFormat: "url" },
       {
         apiKey: "test-key",
+        lookup: async () => ["8.8.8.8"],
         fetchImpl: async (url) => {
           if (String(url).includes("images/generations")) {
             return new Response(JSON.stringify({ data: [{ url: "https://cdn.example/gen.png" }] }), {
@@ -105,7 +106,7 @@ describe("generateImagineImages", () => {
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 403);
-      assert.match(result.error, /denied/i);
+      assert.match(result.error, /refused|auth|permission/i);
     }
   });
 });

@@ -2,9 +2,17 @@ import { useState, type ReactNode } from "react";
 import { splitBlocks } from "@/lib/mind/blocks";
 import { InlineImage } from "@/components/mind/media/inline-image";
 import { isSafeImageSrc, sanitizeMediaLabel } from "@/lib/mind/media";
+
+function stripDangerousMarkup(text: string): string {
+  return text
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/<(?:iframe|object|embed|svg|math)[\s\S]*?>/gi, "");
+}
 import type { MsgImage } from "@/lib/mind/types";
 
-const MD_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+const MD_IMAGE = /!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+"[^"\n]*")?\)/g;
 
 function TextWithImages({
   text,
@@ -44,8 +52,8 @@ function TextWithImages({
     }
     last = match.index + match[0].length;
   }
-  if (last < text.length) nodes.push(text.slice(last));
-  return <p className="whitespace-pre-wrap">{nodes}</p>;
+  if (last < text.length) nodes.push(stripDangerousMarkup(text.slice(last)));
+  return <p className="whitespace-pre-wrap">{nodes.map((node) => (typeof node === "string" ? stripDangerousMarkup(node) : node))}</p>;
 }
 
 export function MessageBody({

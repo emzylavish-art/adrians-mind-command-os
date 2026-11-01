@@ -1,9 +1,11 @@
-import { isSafeRemoteImageUrl, mapImagineHttpError } from "./harden.ts";
+import { IMAGINE_MAX_N, mapImagineHttpError } from "./harden.ts";
+import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
 import { resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
 import {
   GROK_IMAGINE_MODEL,
   normalizeImaginePrompt,
+  resolveImagineModel,
   XAI_IMAGES_EDITS_URL,
   XAI_IMAGES_GENERATIONS_URL,
 } from "./imagine-shared.ts";
@@ -47,7 +49,7 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 function clampCount(n: unknown): number {
   const num = typeof n === "number" ? n : Number(n);
   if (!Number.isFinite(num) || num < 1) return 1;
-  return Math.min(MAX_IMAGES_PER_TURN, Math.floor(num));
+  return Math.min(IMAGINE_MAX_N, MAX_IMAGES_PER_TURN, Math.floor(num));
 }
 
 
@@ -81,23 +83,35 @@ function dataUrlFromB64(b64: string, mimeHint?: string): { ok: true; dataUrl: st
 async function downloadUrlToDataUrl(
   url: string,
   fetchImpl: FetchLike,
+  lookup?: LookupFn,
 ): Promise<{ ok: true; dataUrl: string; mime: string } | { ok: false; error: string }> {
-  if (!isSafeRemoteImageUrl(url)) {
-    return { ok: false, error: "Refusing to download that image URL (unsafe host or scheme)." };
+  const pinned = await resolveAndPinUrl(url, lookup);
+  if (!pinned.ok) return pinned;
+
+  // Production: connect to the pinned address (no redirects).
+  // Tests: after a successful pin check, a custom fetchImpl may supply bytes.
+  if (fetchImpl !== fetch) {
+    let response: Response;
+    try {
+      response = await fetchImpl(url, { method: "GET", redirect: "error" });
+    } catch {
+      return { ok: false, error: "Could not download the generated image URL." };
+    }
+    if (!response.ok) {
+      return { ok: false, error: `Downloading the generated image failed (HTTP ${response.status}).` };
+    }
+    const contentType = (response.headers.get("content-type") || "image/jpeg").split(";")[0]!.trim();
+    const buf = Buffer.from(await response.arrayBuffer());
+    if (buf.byteLength > Math.floor(MAX_DATA_URL_CHARS * 0.75)) {
+      return { ok: false, error: "Downloaded image exceeded the size cap." };
+    }
+    return dataUrlFromB64(buf.toString("base64"), contentType.startsWith("image/") ? contentType : "image/jpeg");
   }
-  let response: Response;
-  try {
-    response = await fetchImpl(url, { method: "GET", redirect: "error" });
-  } catch {
-    return { ok: false, error: "Could not download the generated image URL." };
-  }
-  if (!response.ok) {
-    return { ok: false, error: `Downloading the generated image failed (HTTP ${response.status}).` };
-  }
-  const contentType = (response.headers.get("content-type") || "image/jpeg").split(";")[0]!.trim();
-  const buf = Buffer.from(await response.arrayBuffer());
-  const b64 = buf.toString("base64");
-  return dataUrlFromB64(b64, contentType.startsWith("image/") ? contentType : "image/jpeg");
+
+  const downloaded = await fetchPinnedUrl(url, { lookup, maxBytes: Math.floor(MAX_DATA_URL_CHARS * 0.75) });
+  if (!downloaded.ok) return downloaded;
+  const b64 = downloaded.bytes.toString("base64");
+  return dataUrlFromB64(b64, downloaded.contentType.startsWith("image/") ? downloaded.contentType : "image/jpeg");
 }
 
 /**
@@ -110,6 +124,7 @@ export async function generateImagineImages(
     apiKey?: string;
     fetchImpl?: FetchLike;
     endpoint?: string;
+    lookup?: LookupFn;
   } = {},
 ): Promise<ImagineResult> {
   const normalized = normalizeImaginePrompt(input.prompt);
@@ -119,12 +134,12 @@ export async function generateImagineImages(
   if (!apiKey) {
     return {
       ok: false,
-      error: "No xAI inference API key is available for image generation. Check /home/box/.secrets/xai_inference.env.",
+      error: "Image generation is not configured on the server.",
       status: 503,
     };
   }
 
-  const model = (input.model || GROK_IMAGINE_MODEL).trim() || GROK_IMAGINE_MODEL;
+  const model = resolveImagineModel(input.model);
   const n = clampCount(input.n);
   const responseFormat = input.responseFormat ?? "b64_json";
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -188,7 +203,7 @@ export async function generateImagineImages(
       continue;
     }
     if (typeof row.url === "string" && row.url) {
-      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl);
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
       if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }
@@ -241,25 +256,31 @@ export async function editImagineImage(
     apiKey?: string;
     fetchImpl?: FetchLike;
     endpoint?: string;
+    lookup?: LookupFn;
   } = {},
 ): Promise<ImagineResult> {
   const normalized = normalizeImaginePrompt(input.prompt);
   if (!normalized.ok) return normalized;
   const imageUrls = collectEditImageUrls(input);
   if (imageUrls.length === 0) {
-    return { ok: false, error: "Edit with Imagine needs at least one image data URL as input." };
+    return { ok: false, error: "Edit with Imagine needs at least one image data URL as input.", status: 400 };
+  }
+  for (const imageUrl of imageUrls) {
+    if (imageUrl.length > MAX_DATA_URL_CHARS) {
+      return { ok: false, error: "That edit image is too large.", status: 413 };
+    }
   }
 
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
   if (!apiKey) {
     return {
       ok: false,
-      error: "No xAI inference API key is available for image editing. Check /home/box/.secrets/xai_inference.env.",
+      error: "Image editing is not configured on the server.",
       status: 503,
     };
   }
 
-  const model = (input.model || GROK_IMAGINE_MODEL).trim() || GROK_IMAGINE_MODEL;
+  const model = resolveImagineModel(input.model);
   const responseFormat = input.responseFormat ?? "b64_json";
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_EDITS_URL;
@@ -325,7 +346,7 @@ export async function editImagineImage(
       continue;
     }
     if (typeof row.url === "string" && row.url) {
-      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl);
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
       if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }

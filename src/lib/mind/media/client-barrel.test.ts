@@ -19,6 +19,11 @@ describe("client media barrel", () => {
     assert.doesNotMatch(joined, /["']\.\/imagine["']/);
     assert.doesNotMatch(joined, /cloud\/connection/);
     assert.doesNotMatch(joined, /node:/);
+    assert.doesNotMatch(joined, /ssrf/);
+    assert.doesNotMatch(joined, /rate-limit-store/);
+    assert.doesNotMatch(joined, /xai-key/);
+    assert.doesNotMatch(joined, /imagine-http/);
     assert.match(joined, /imagine-shared/);
+    assert.match(joined, /harden/);
   });
 });

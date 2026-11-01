@@ -21,13 +21,30 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
+async function loadImageBitmap(dataUrl: string): Promise<ImageBitmap | HTMLImageElement> {
+  // Prefer createImageBitmap so EXIF orientation is applied before we strip metadata via canvas.
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    if (typeof createImageBitmap === "function") {
+      return await createImageBitmap(blob, { imageOrientation: "from-image" } as ImageBitmapOptions);
+    }
+  } catch {
+    /* fall through */
+  }
+  return await new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("That image could not be decoded."));
     image.src = dataUrl;
   });
+}
+
+function bitmapSize(image: ImageBitmap | HTMLImageElement): { width: number; height: number } {
+  if ("naturalWidth" in image) {
+    return { width: image.naturalWidth || image.width, height: image.naturalHeight || image.height };
+  }
+  return { width: image.width, height: image.height };
 }
 
 /** Downscale a File or data-URL to max edge (default 2048) as JPEG/PNG data-URL. */
@@ -55,13 +72,13 @@ export async function dataUrlToDownscaled(
   name = "image.jpg",
   maxEdge = MAX_IMAGE_EDGE,
 ): Promise<DownscaleResult> {
-  const image = await loadImage(dataUrl);
-  const naturalW = image.naturalWidth || image.width;
-  const naturalH = image.naturalHeight || image.height;
+  const image = await loadImageBitmap(dataUrl);
+  const { width: naturalW, height: naturalH } = bitmapSize(image);
   if (dimensionsLookLikeBomb(naturalW, naturalH)) {
     throw new Error("That image is too large to decode safely (possible decompression bomb).");
   }
-  // Canvas redraw strips EXIF (orientation/GPS) — intentional privacy hardening.
+  // Canvas redraw strips EXIF GPS/metadata after orientation was applied via createImageBitmap.
+  // Animated GIF/APNG: drawImage paints the first frame only (intentional).
   let fitted = fitWithinBox(naturalW, naturalH, maxEdge);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -102,7 +119,7 @@ export async function dataUrlToDownscaled(
   let edge = Math.min(fitted.width, fitted.height, maxEdge);
   while (out.length > MAX_DATA_URL_CHARS && edge > 256) {
     edge = Math.floor(edge * 0.75);
-    fitted = fitWithinBox(image.naturalWidth || image.width, image.naturalHeight || image.height, edge);
+    fitted = fitWithinBox(naturalW, naturalH, edge);
     paint(fitted.width, fitted.height);
     scaled = true;
     out = canvas.toDataURL("image/jpeg", 0.7);
@@ -113,9 +130,17 @@ export async function dataUrlToDownscaled(
     throw new Error("That image is still too large after compression. Try a smaller photo.");
   }
 
+  if ("close" in image && typeof image.close === "function") {
+    try {
+      image.close();
+    } catch {
+      /* ignore */
+    }
+  }
+
   return {
     dataUrl: out,
-    name,
+    name: sanitizeMediaLabel(name) || name,
     mime,
     width: fitted.width,
     height: fitted.height,

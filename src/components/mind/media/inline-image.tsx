@@ -44,7 +44,7 @@ export function InlineImage({
         </button>
         <div className="flex flex-wrap gap-2">
           {onEditImagine && (
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onEditImagine(safeSrc)}>
+            <button type="button" data-testid="imagine-edit" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onEditImagine(safeSrc)}>
               Edit with Imagine
             </button>
           )}
@@ -54,12 +54,12 @@ export function InlineImage({
             </button>
           )}
           {onSave && (
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onSave(safeSrc, safeAlt)}>
+            <button type="button" data-testid="image-save" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onSave(safeSrc, safeAlt)}>
               Save
             </button>
           )}
           {onDownload && (
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onDownload(safeSrc, safeAlt)}>
+            <button type="button" data-testid="image-download" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onDownload(safeSrc, safeAlt)}>
               Download
             </button>
           )}

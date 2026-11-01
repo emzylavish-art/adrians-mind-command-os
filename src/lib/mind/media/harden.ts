@@ -105,38 +105,88 @@ export function sniffImageMimeFromBase64(base64: string): "image/png" | "image/j
 
 export function dimensionsLookLikeBomb(width: number, height: number, maxPixels = MAX_DECODE_PIXELS): boolean {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return true;
-  return width * height > maxPixels;
+  if (width * height > maxPixels) return true;
+  // 1×N / N×1 strip bombs: extreme aspect with a huge long edge.
+  const longest = Math.max(width, height);
+  const shortest = Math.min(width, height);
+  if (longest >= 8192 && longest / shortest >= 32) return true;
+  return false;
 }
 
 export function mapImagineHttpError(status: number, message: string): string {
-  if (status === 401 || status === 403) return message || "Image generation was refused (auth or permission).";
+  const raw = typeof message === "string" ? message : "";
+  // Never relay raw upstream/provider text to the client (H6).
+  if (status === 401 || status === 403) return "Image generation was refused (auth or permission).";
   if (status === 429) return "Image generation is rate-limited right now. Wait a minute and try again.";
-  if (status === 400 && /moderat|unsafe|policy|content/i.test(message)) {
+  if (status === 400 && /moderat|unsafe|policy|content/i.test(raw)) {
     return "The image request was refused by content moderation. Try a different prompt.";
   }
+  if (status === 400) return "That Imagine request was invalid. Check the prompt and images.";
+  if (status === 413) return "That Imagine request was too large.";
   if (status >= 500) return "The image service failed. Nothing was saved as a success.";
-  if (status === 408 || /timeout/i.test(message)) return "Image generation timed out. Nothing was saved as a success.";
-  return message || `Image generation failed (HTTP ${status}).`;
+  if (status === 408 || /timeout/i.test(raw)) return "Image generation timed out. Nothing was saved as a success.";
+  return `Image generation failed (HTTP ${status || "error"}).`;
 }
 
-/** Simple per-user sliding window to blunt cost abuse on /imagine. */
-const IMAGINE_WINDOW_MS = 60_000;
-const IMAGINE_MAX_PER_WINDOW = 8;
-const imagineHits = new Map<string, number[]>();
+/** Sliding window to blunt cost abuse on /imagine (pluggable store). */
+export const IMAGINE_WINDOW_MS = 60_000;
+export const IMAGINE_MAX_PER_WINDOW = 8;
+/** Hard cap on n (images per generate call) — cost control (H4). */
+export const IMAGINE_MAX_N = 2;
 
-export function checkImagineRateLimit(userId: string, now = Date.now()): { ok: true } | { ok: false; error: string; retryAfterSec: number } {
+export type ImagineRateLimitStore = {
+  get(key: string): number[];
+  set(key: string, hits: number[]): void;
+};
+
+export function createMemoryRateLimitStore(seed: Record<string, number[]> = {}): ImagineRateLimitStore {
+  const map = new Map<string, number[]>(Object.entries(seed).map(([k, v]) => [k, [...v]]));
+  return {
+    get(key) {
+      return [...(map.get(key) ?? [])];
+    },
+    set(key, hits) {
+      map.set(key, [...hits]);
+    },
+  };
+}
+
+let imagineRateStore: ImagineRateLimitStore = createMemoryRateLimitStore();
+
+export function setImagineRateLimitStore(store: ImagineRateLimitStore) {
+  imagineRateStore = store;
+}
+
+export function getImagineRateLimitStore(): ImagineRateLimitStore {
+  return imagineRateStore;
+}
+
+export function imagineRateLimitKey(parts: { ownerId?: string; userId?: string; sessionId?: string }): string {
+  const owner = (parts.ownerId || parts.userId || "anon").trim() || "anon";
+  const session = (parts.sessionId || "default").trim() || "default";
+  return `imagine:${owner}:${session}`;
+}
+
+export function checkImagineRateLimit(
+  userIdOrKey: string,
+  now = Date.now(),
+  sessionId?: string,
+): { ok: true } | { ok: false; error: string; retryAfterSec: number } {
+  const key = userIdOrKey.includes("imagine:")
+    ? userIdOrKey
+    : imagineRateLimitKey({ userId: userIdOrKey, sessionId });
   const cutoff = now - IMAGINE_WINDOW_MS;
-  const prior = (imagineHits.get(userId) ?? []).filter((t) => t > cutoff);
+  const prior = imagineRateStore.get(key).filter((t) => t > cutoff);
   if (prior.length >= IMAGINE_MAX_PER_WINDOW) {
     const retryAfterSec = Math.max(1, Math.ceil((prior[0]! + IMAGINE_WINDOW_MS - now) / 1000));
     return { ok: false, error: "Imagine is rate-limited. Wait a minute before generating more images.", retryAfterSec };
   }
   prior.push(now);
-  imagineHits.set(userId, prior);
+  imagineRateStore.set(key, prior);
   return { ok: true };
 }
 
-/** Test helper — clear rate-limit state between probes. */
+/** Test helper — reset to a fresh memory store. */
 export function resetImagineRateLimitForTests() {
-  imagineHits.clear();
+  imagineRateStore = createMemoryRateLimitStore();
 }

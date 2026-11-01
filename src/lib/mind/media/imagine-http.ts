@@ -1,8 +1,22 @@
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
-import { MAX_IMAGINE_BODY_CHARS, checkImagineRateLimit, mapImagineHttpError } from "./harden.ts";
+import {
+  MAX_IMAGINE_BODY_CHARS,
+  checkImagineRateLimit,
+  imagineRateLimitKey,
+  mapImagineHttpError,
+  setImagineRateLimitStore,
+} from "./harden.ts";
+import { createFileRateLimitStore, DEFAULT_IMAGINE_RATE_LIMIT_PATH } from "./rate-limit-store.ts";
 import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolveImagineModel } from "./imagine.ts";
 import { normalizeImageDataUrl } from "./data-url.ts";
+import { MAX_DATA_URL_CHARS } from "./types.ts";
+
+try {
+  setImagineRateLimitStore(createFileRateLimitStore(DEFAULT_IMAGINE_RATE_LIMIT_PATH));
+} catch {
+  /* memory store remains the default */
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -23,6 +37,16 @@ function guardSite(request: Request): Response | null {
     return json({ ok: false, error: "Forbidden: cross-site request blocked" }, 403);
   }
   return null;
+}
+
+function clientErrorStatus(result: { status?: number; error: string }): number {
+  if (result.status && result.status >= 400 && result.status < 500) return result.status;
+  // Known client-fault messages without status → 400 (H6)
+  if (/needs at least one image|Write a prompt|not a recognizable|too long|too large|invalid/i.test(result.error)) {
+    return 400;
+  }
+  if (result.status && result.status >= 500) return result.status;
+  return result.status && result.status >= 400 ? result.status : 502;
 }
 
 export async function handleImagineGenerate(request: Request): Promise<Response> {
@@ -64,7 +88,12 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     return json({ ok: false, error: "Request body must be JSON with a prompt." }, 400);
   }
 
-  const rate = checkImagineRateLimit(userId);
+  const sessionId =
+    request.headers.get("x-amcos-session") ||
+    request.headers.get("x-session-id") ||
+    "default";
+  const rateKey = imagineRateLimitKey({ ownerId: userId, sessionId });
+  const rate = checkImagineRateLimit(rateKey);
   if (!rate.ok) {
     return new Response(JSON.stringify({ ok: false, error: rate.error }), {
       status: 429,
@@ -81,8 +110,12 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   if (!normalized.ok) return json({ ok: false, error: normalized.error }, 400);
 
   const n = typeof record.n === "number" ? record.n : typeof record.count === "number" ? record.count : 1;
+  // H4: allowlist only — unknown models collapse to grok-imagine-image
   const model = resolveImagineModel(record.model);
   const rawImage = typeof record.image === "string" ? record.image : typeof record.imageDataUrl === "string" ? record.imageDataUrl : "";
+  if (rawImage && rawImage.length > MAX_DATA_URL_CHARS) {
+    return json({ ok: false, error: "That edit image is too large." }, 413);
+  }
   const imageDataUrl = rawImage ? normalizeImageDataUrl(rawImage) || "" : "";
   const imageDataUrls = (
     Array.isArray(record.images)
@@ -92,12 +125,18 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
         : []
   )
     .filter((item): item is string => typeof item === "string")
-    .map((item) => normalizeImageDataUrl(item))
+    .map((item) => {
+      if (item.length > MAX_DATA_URL_CHARS) return null;
+      return normalizeImageDataUrl(item);
+    })
     .filter((item): item is string => Boolean(item));
   if (rawImage && !imageDataUrl) {
     return json({ ok: false, error: "The edit image is not a recognizable PNG, JPEG, GIF, or WebP." }, 400);
   }
   const mode = record.mode === "edit" || imageDataUrl || imageDataUrls.length ? "edit" : "generate";
+  if (mode === "edit" && !imageDataUrl && imageDataUrls.length === 0) {
+    return json({ ok: false, error: "Edit with Imagine needs at least one image data URL as input." }, 400);
+  }
 
   const result =
     mode === "edit"
@@ -116,8 +155,9 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
         });
 
   if (!result.ok) {
-    const status = result.status && result.status >= 400 && result.status < 600 ? result.status : 502;
+    const status = clientErrorStatus(result);
     const error = mapImagineHttpError(status, result.error);
+    // Do not echo the requested arbitrary model id back when rejecting — return allowlisted model only.
     return json({ ok: false, error, model }, status);
   }
 

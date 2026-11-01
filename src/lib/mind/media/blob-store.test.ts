@@ -76,3 +76,28 @@ describe("adversarial: blob store degrade", () => {
     assert.equal(compacted[0]?.dataUrl, bigLocal);
   });
 });
+
+describe("adversarial: compact/hydrate races and reload", () => {
+  it("survives interleaved compact and hydrate on the same blobId", async () => {
+    const store = createMemoryBlobStore();
+    const bigLocal = `data:image/png;base64,${"c".repeat(INLINE_OFFLOAD_CHARS)}`;
+    const first = compactImageRefs([{ dataUrl: bigLocal, name: "race.png" }], store);
+    const second = compactImageRefs([{ dataUrl: bigLocal, name: "race.png" }], store);
+    const [a, b] = await Promise.all([first, second]);
+    assert.ok(a[0]?.blobId);
+    assert.ok(b[0]?.blobId);
+    const hydrated = await hydrateImageRefs([{ blobId: a[0]!.blobId!, name: "race.png" }], store);
+    assert.equal(hydrated[0]?.dataUrl, bigLocal);
+  });
+
+  it("reload simulation: compact, drop inline, hydrate again", async () => {
+    const store = createMemoryBlobStore();
+    const bigLocal = `data:image/png;base64,${"d".repeat(INLINE_OFFLOAD_CHARS)}`;
+    const compacted = await compactImageRefs([{ dataUrl: bigLocal, name: "reload.png" }], store);
+    // Simulate reload: only blobId persisted in workspace JSON
+    const persisted = [{ blobId: compacted[0]!.blobId!, name: "reload.png", mime: "image/png" }];
+    const hydrated = await hydrateImageRefs(persisted, store);
+    assert.equal(hydrated[0]?.dataUrl, bigLocal);
+    assert.equal(hydrated[0]?.name, "reload.png");
+  });
+});

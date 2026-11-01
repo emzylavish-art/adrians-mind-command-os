@@ -49,7 +49,7 @@ import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, historyTextForImages, parseImagineCommand, resolveImagineModel, toImageAttachments, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
+import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, createImagineTabLock, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -297,6 +297,8 @@ export function CommandApp() {
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
   const [imagineModel, setImagineModel] = useState<GrokImagineModel>(GROK_IMAGINE_MODEL);
+  const [imagineBusy, setImagineBusy] = useState(false);
+  const imagineTabLockRef = useRef(createImagineTabLock("composer"));
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -934,20 +936,44 @@ export function CommandApp() {
     void deliver(prepared.chat, prepared.text, ws, true, toImageAttachments(prepared.images));
   }
 
-  function exportActive() {
+  async function exportActive() {
     if (!active) return;
-    const packed = exportChat(ws, active.id);
-    if ("error" in packed) {
-      setError(packed.error);
-      return;
+    try {
+      const store = tryCreateIndexedDbBlobStore();
+      const chat = ws.chats.find((item) => item.id === active.id);
+      if (!chat) {
+        setError("That chat is gone.");
+        return;
+      }
+      // Hydrate blobIds → dataUrls before export so consumers are not left with empty refs.
+      const hydratedMessages: typeof chat.messages = [];
+      for (const msg of chat.messages) {
+        if (!msg.images?.length) {
+          hydratedMessages.push(msg);
+          continue;
+        }
+        const images = await imagesForExport(msg.images, store);
+        hydratedMessages.push({
+          ...msg,
+          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? undefined })),
+        });
+      }
+      const hydratedWs = { ...ws, chats: ws.chats.map((item) => (item.id === active.id ? { ...item, messages: hydratedMessages } : item)) };
+      const packed = exportChat(hydratedWs, active.id);
+      if ("error" in packed) {
+        setError(packed.error);
+        return;
+      }
+      const blob = new Blob([packed.json], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = packed.filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Export failed.");
     }
-    const blob = new Blob([packed.json], { type: "application/json" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = packed.filename;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
   }
 
   function runLookup(query: string) {
@@ -1132,15 +1158,20 @@ export function CommandApp() {
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active) {
-    if (busy || ws.halted) return;
+    if (busy || imagineBusy || ws.halted) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
       setError("Write a prompt for Imagine, or use /imagine <prompt>.");
       return;
     }
+    if (!imagineTabLockRef.current.tryAcquire()) {
+      setError("Imagine is already running in another tab. Wait for it to finish.");
+      return;
+    }
     setDraft("");
     setError(null);
     setBusy(true);
+    setImagineBusy(true);
     setLiveText("");
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -1278,13 +1309,15 @@ export function CommandApp() {
         ),
       }));
     } finally {
+      setImagineBusy(false);
+      imagineTabLockRef.current.release();
       setBusy(false);
       setLiveText("");
     }
   }
 
   async function runImagineEdit(imageDataUrl: string, promptRaw?: string, extraImages: string[] = []) {
-    if (busy || ws.halted) return;
+    if (busy || imagineBusy || ws.halted) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
       setError("Write an edit instruction in the composer, then press Edit with Imagine.");
@@ -1999,15 +2032,22 @@ export function CommandApp() {
                     </button>
                     <button
                       type="button"
+                      data-testid="imagine-generate"
+                      aria-label="Imagine"
+                      aria-busy={imagineBusy}
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                      disabled={busy || ws.halted}
+                      disabled={busy || imagineBusy || ws.halted}
                       onClick={() => {
                         const viaCmd = parseImagineCommand(draft);
                         const prompt = viaCmd !== null ? viaCmd : draft.trim();
-                        void runImagine(prompt || undefined, null);
+                        if (!(prompt || "").trim()) {
+                          setError("Write a prompt for Imagine, or use /imagine <prompt>.");
+                          return;
+                        }
+                        void runImagine(prompt, null);
                       }}
                     >
-                      Imagine
+                      {imagineBusy ? "Imagining…" : "Imagine"}
                     </button>
                     <button
                       type="button"
@@ -3606,7 +3646,7 @@ function ChatPane({
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCloud}>
               Drive
             </button>
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+            <button type="button" data-testid="imagine-generate" aria-label="Imagine" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
               Imagine
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL} onClick={onToggleImagineQuality}>
