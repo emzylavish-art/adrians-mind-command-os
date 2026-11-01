@@ -216,4 +216,9 @@ export {
   type FocusRingBreatheSample,
   type FocusRingBreatheState,
 } from "./focus-ring-breathe.ts";
+export {
+  stepStarFieldBatch,
+  type StarBatchOpts,
+  type StarBatchSlot,
+} from "./star-batch.ts";
 

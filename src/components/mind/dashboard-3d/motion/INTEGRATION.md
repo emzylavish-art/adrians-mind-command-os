@@ -325,21 +325,38 @@ stepFocusRingBreathe(ring, ringOut, tSeconds, dt, reducedMotion);
 Breathe phase uses MotionClock (survives tab freeze — see REA c15 capture).
 Reduced-motion → static base opacity, no breathe.
 
+## Star-field batch step (c16)
+
+Zero-alloc batch for N stars (pulse + focus-ease + orbit + focus apply):
+
+```ts
+import { stepStarFieldBatch, createFocusEaseState } from "./motion";
+
+stepStarFieldBatch(ids, healths, bases, focusStates, pulseOuts, posOuts,
+  focusId, tSeconds, dt, reducedMotion, ids.length, { clock });
+```
+
+### Camera dolly — not Motion lane
+
+Dashboard Bot owns camera fly/dolly (`src/lib/mind/dashboard/camera-rig.ts`
+`stepRigSmooth` / `dollyPose`, flyover FSM). Motion will not re-implement
+camera dolly ease; pair focus-ring breathe with Dashboard's existing glide.
+
 ## Requests for Dashboard Bot
 
 Motion lane **does not edit `package.json`**. Please add these lane test files to the
 `scripts.test` strip-types list on `origin/dashboard-3d` when landing motion/+particles/:
 
 - `src/components/mind/dashboard-3d/motion/comet-launch-ease.test.ts`
+- `src/components/mind/dashboard-3d/motion/cpu-budget.test.ts`
 - `src/components/mind/dashboard-3d/motion/focus-ring-breathe.test.ts`
-- `src/components/mind/dashboard-3d/motion/wind-gust.test.ts`
+- `src/components/mind/dashboard-3d/motion/star-batch.test.ts`
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
 
 Lane CI locally: `node --experimental-strip-types --test src/components/mind/dashboard-3d/motion/*.test.ts src/components/mind/dashboard-3d/particles/*.test.ts`
 
-### REA c15 (fleet/motion/c15)
-- Dev `:8112` + Playwright frame sequence + freeze/resume.
-- Measured ~1.6–2.2 fps headless SwiftShader; avg frame 450–620ms; heavy drops <30fps.
-- Hacker follow-up: `maxConcurrent=0` + 10k burst clamp (avoid scheduling cliffs).
+### CPU budget c16
+- Node CPU-only 10k frames @ 500 stars / 2k dust / 20 comets / 50 travelers / 30 chars / 80 edges.
+- See `/workspace/audit/dashboard-3d/fleet/motion/c16/` for numbers (mean ≪ 2ms/frame).
 
