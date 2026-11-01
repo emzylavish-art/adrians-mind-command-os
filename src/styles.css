@@ -6118,3 +6118,92 @@ main .logo-mark {
   .shell > .composer-bar.is-fixed,
   .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
 }
+
+/* —— Evolution c83: mono skeleton / shimmer + CLS-stable slots ——
+   One shimmer recipe; skeleton rows reserve content-like min-heights. */
+:root {
+  --glass-radius: 1.15rem;
+  --glass-radius-sm: 0.85rem;
+  --glass-border: 1px solid rgb(255 255 255 / 0.14);
+  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%), rgb(12 12 14 / 0.92);
+  --glass-shadow: 0 22px 56px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  --glass-blur: blur(22px) saturate(1.15);
+  --dim-backdrop: rgb(5 7 13 / 0.72);
+  --skel-h-line: 0.75rem;
+  --skel-h-title: 1.75rem;
+  --skel-h-card: 5.5rem;
+  --skel-gap: 0.65rem;
+}
+
+.skeleton,
+[data-loading="true"],
+.skeleton.h-3,
+.main-stage .skeleton {
+  position: relative !important;
+  overflow: hidden !important;
+  border-radius: var(--glass-radius-sm) !important;
+  background: rgb(255 255 255 / 0.055) !important;
+  background-image: none !important;
+  min-height: var(--skel-h-line) !important;
+  /* kill layout jump: fixed block formatting */
+  display: block !important;
+  flex-shrink: 0 !important;
+}
+.skeleton.h-3 { min-height: var(--skel-h-line) !important; height: var(--skel-h-line) !important; }
+.skeleton.h-4,
+.skeleton.h-5 { min-height: 1.1rem !important; }
+.skeleton.h-8,
+.skeleton.h-10,
+.skeleton.h-12 { min-height: 2.5rem !important; }
+.skeleton::after,
+[data-loading="true"]::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.04) 35%,
+    rgb(255 255 255 / 0.12) 50%,
+    rgb(255 255 255 / 0.04) 65%,
+    transparent 100%
+  ) !important;
+  background-size: 220% 100% !important;
+  animation: skel-mono-shimmer 1.35s ease-in-out infinite !important;
+  pointer-events: none !important;
+}
+@keyframes skel-mono-shimmer {
+  from { transform: translateX(-45%); }
+  to { transform: translateX(45%); }
+}
+/* Prefer transform-only shimmer (no background-position CLS) */
+.skeleton,
+[data-loading="true"] {
+  animation: none !important;
+}
+html[data-theme="light"] .skeleton,
+html[data-theme="light"] [data-loading="true"] {
+  background: rgb(15 23 42 / 0.06) !important;
+}
+html[data-theme="light"] .skeleton::after,
+html[data-theme="light"] [data-loading="true"]::after {
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(15 23 42 / 0.04) 35%,
+    rgb(15 23 42 / 0.1) 50%,
+    rgb(15 23 42 / 0.04) 65%,
+    transparent 100%
+  ) !important;
+}
+/* Chat loading block — match message bubble footprint */
+.main-stage .skeleton.h-3 + .skeleton.h-3 {
+  margin-top: var(--skel-gap) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after,
+  [data-loading="true"]::after {
+    animation: none !important;
+    opacity: 0.35 !important;
+  }
+}
