@@ -1297,3 +1297,2522 @@ html[data-theme="light"] .composer-voice-chrome .composer-bar__model-menu {
   color: var(--color-fg);
 }
 
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.rounded-panel.border.border-line.bg-surface.p-3 {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.05);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.rounded-panel.border.border-line.bg-surface.p-3::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article.rounded-panel.border.border-line.bg-surface {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article h3.font-semibold::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+}
+
+/* —— Cycle 25: empty-state rhythm (Research / Library / Runs / Activity) —— */
+/* Shared ChatGPT-like empty well for lone muted list rows */
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6 {
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  min-height: 9.5rem;
+  padding: 2rem 1.5rem !important;
+  letter-spacing: 0.01em;
+  color: var(--color-muted) !important;
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(255 255 255 / 0.05), transparent 65%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-surface) !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  position: relative;
+}
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li::before,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card::before,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6::before {
+  content: "";
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.85rem;
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.03)),
+    #141416;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 8px 20px rgb(0 0 0 / 0.35);
+}
+
+/* Research capability checklist as mono glass tiles */
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-2.text-sm > li.flex.items-center.justify-between {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 60%),
+    #0a0a0c !important;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  min-height: 2.85rem;
+}
+.min-h-0.flex-1.overflow-auto .masthead.glow-card {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.06), transparent 55%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 18px 40px rgb(0 0 0 / 0.35);
+}
+
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6 {
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(9 9 11 / 0.03), transparent 65%),
+    #fff !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.04);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li::before,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card::before,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff, 0 6px 14px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-2.text-sm > li.flex.items-center.justify-between {
+  background: #fafafa !important;
+  border-color: rgb(9 9 11 / 0.08);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .masthead.glow-card {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.06);
+}
+
+/* —— Cycle 26: GenerateImage mono textures (hero grain + frost card) —— */
+body {
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(180deg, rgb(5 5 7 / 0.82), rgb(5 5 7 / 0.92)),
+    url("/brand/textures/hero-mono-grain.jpg");
+  background-size: auto, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+  background-repeat: no-repeat;
+}
+html[data-theme="light"] body {
+  background-image:
+    linear-gradient(180deg, rgb(250 250 250 / 0.88), rgb(250 250 250 / 0.94)),
+    url("/brand/textures/hero-mono-grain.jpg");
+}
+
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg");
+  background-size: auto, 420px 420px;
+  background-blend-mode: soft-light, soft-light;
+}
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero {
+  background-color: rgb(12 12 14 / 0.78);
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+}
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] .glass-panel,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .settings-card,
+html[data-theme="light"] .page-hero {
+  background-color: rgb(255 255 255 / 0.86);
+  background-blend-mode: multiply, soft-light;
+}
+
+/* —— Cycle 27: topbar search glass (ChatGPT-like) —— */
+.topbar input.h-11.w-full.rounded-panel.border.border-line.bg-surface,
+header input.h-11.w-full.rounded-panel.border.border-line.bg-surface,
+input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02)),
+    rgb(12 12 14 / 0.72) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 8px 24px rgb(0 0 0 / 0.28);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  color: var(--color-fg);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.topbar input.h-11.w-full.rounded-panel.border.border-line.bg-surface:focus,
+header input.h-11.w-full.rounded-panel.border.border-line.bg-surface:focus,
+input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm:focus {
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 0 0 1px rgb(255 255 255 / 0.18),
+    0 12px 28px rgb(0 0 0 / 0.35);
+  outline: none;
+}
+.topbar,
+header.topbar,
+.flex.items-center.gap-3.border-b.border-line {
+  background: rgb(8 8 10 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border-bottom-color: rgb(255 255 255 / 0.08) !important;
+}
+html[data-theme="light"] input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm {
+  background: rgb(255 255 255 / 0.9) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.05);
+}
+html[data-theme="light"] .topbar,
+html[data-theme="light"] .flex.items-center.gap-3.border-b.border-line {
+  background: rgb(255 255 255 / 0.82) !important;
+  border-bottom-color: rgb(9 9 11 / 0.08) !important;
+}
+
+/* —— Cycle 28: Scheduled + Memory chrome (mono glass) —— */
+.min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2 {
+  padding: 0.85rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    rgb(12 12 14 / 0.75);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 14px 32px rgb(0 0 0 / 0.3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2 input,
+.min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2 select {
+  background: rgb(8 8 10 / 0.85) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.text-sm.text-muted {
+  text-align: center;
+  min-height: 7.5rem;
+  padding: 1.75rem 1.25rem;
+  border-radius: 1.1rem;
+  border: 1px dashed rgb(255 255 255 / 0.14);
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(255 255 255 / 0.05), transparent 65%),
+    var(--color-surface);
+  display: grid;
+  place-items: center;
+}
+
+.min-h-0.flex-1.overflow-auto .masthead {
+  padding: 1rem 1.1rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.06), transparent 55%),
+    rgb(12 12 14 / 0.8);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 16px 36px rgb(0 0 0 / 0.32);
+}
+.min-h-0.flex-1.overflow-auto .glow-card.mt-4.grid.gap-4 {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    rgb(12 12 14 / 0.82) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 16px 40px rgb(0 0 0 / 0.34);
+}
+.min-h-0.flex-1.overflow-auto .mt-4.flex.gap-2.overflow-x-auto > button {
+  border-radius: 999px !important;
+  backdrop-filter: blur(10px);
+}
+.min-h-0.flex-1.overflow-auto .mt-4.flex.gap-2.overflow-x-auto > button.border.border-line {
+  background: rgb(255 255 255 / 0.04);
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+.min-h-0.flex-1.overflow-auto .mt-4.grid.gap-3.md\:grid-cols-\[16rem_1fr\] > .glow-card {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .masthead,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .glow-card.mt-4.grid.gap-4 {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.text-sm.text-muted {
+  background: #fafafa;
+  border-color: rgb(9 9 11 / 0.14);
+}
+
+/* —— Cycle 29: charts / progress mono glass + mobile bottom-nav active —— */
+.dash3d-charts-panel.dash3d-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.82) !important;
+  background-size: auto, 360px 360px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+}
+.dash3d-charts-grid {
+  gap: 0.75rem !important;
+}
+.dash3d-chart-card {
+  position: relative;
+  padding: 0.75rem 0.8rem 0.65rem !important;
+  border-radius: 0.95rem !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    rgb(8 8 10 / 0.88) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 24px rgb(0 0 0 / 0.35) !important;
+  font-variant-numeric: tabular-nums;
+}
+.dash3d-chart-card h3 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.68rem !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: #e4e4e7 !important;
+  margin-bottom: 0.35rem !important;
+}
+.dash3d-chart-card svg {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+  background-size: 100% 12px, 18px 100%;
+  background-position: 0 0, 0 0;
+  border-radius: 0.35rem;
+}
+.dash3d-chart-card svg rect {
+  fill: rgb(244 244 245 / 0.78) !important;
+  transition: fill 120ms ease, opacity 120ms ease;
+}
+.dash3d-chart-card svg g:hover rect {
+  fill: #fff !important;
+}
+.dash3d-chart-card svg line {
+  stroke: rgb(255 255 255 / 0.22) !important;
+  stroke-width: 1px;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.dash3d-chart-card .dash3d-muted[data-testid="chart-empty"] {
+  min-height: 4.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  border: 1px dashed rgb(255 255 255 / 0.14);
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.03), rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.03));
+  background-size: 200% 100%;
+  animation: 1.4s ease-in-out infinite skeleton-shimmer;
+}
+
+.dash3d-progress {
+  background: rgb(255 255 255 / 0.08) !important;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  overflow: hidden;
+}
+.dash3d-progress-fill,
+.dash3d-progress-fill.healthy,
+.dash3d-progress-fill.stalled,
+.dash3d-progress-fill.blocked {
+  background: linear-gradient(90deg, #a1a1aa, #f4f4f5) !important;
+}
+aside .mt-3.h-1\.5.overflow-hidden.rounded-full.bg-line {
+  background: rgb(255 255 255 / 0.08) !important;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+aside .mt-3.h-1\.5.overflow-hidden.rounded-full.bg-line > .h-full.rounded-full.bg-accent {
+  background: linear-gradient(90deg, #71717a, #f4f4f5) !important;
+}
+
+/* Mobile bottom nav active pill */
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface {
+  background: rgb(8 8 10 / 0.88) !important;
+  border-top-color: rgb(255 255 255 / 0.1) !important;
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: 0 -12px 32px rgb(0 0 0 / 0.45);
+}
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button {
+  position: relative;
+  color: #a1a1aa !important;
+  transition: color 140ms ease, transform 120ms ease;
+}
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent {
+  color: #fafafa !important;
+}
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent::before {
+  content: "";
+  position: absolute;
+  top: 0.35rem;
+  left: 50%;
+  width: 1.65rem;
+  height: 0.2rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #f4f4f5;
+  box-shadow: 0 0 12px rgb(255 255 255 / 0.35);
+}
+html[data-theme="light"] .dash3d-chart-card {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg rect {
+  fill: rgb(24 24 27 / 0.78) !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface {
+  background: rgb(255 255 255 / 0.92) !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent {
+  color: #09090b !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent::before {
+  background: #18181b;
+  box-shadow: none;
+}
+
+/* —— Cycle 30: ChatGPT depth polish + dash HUD fallback glass —— */
+.dash3d-fallback {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 35%),
+    url("/brand/textures/hero-mono-grain.jpg"),
+    rgb(5 5 7 / 0.94) !important;
+  background-size: auto, cover, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 24px 64px rgb(0 0 0 / 0.55) !important;
+  backdrop-filter: blur(20px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.05) !important;
+}
+.dash3d-fallback .dash3d-title,
+.dash3d-fallback h1,
+.dash3d-fallback h2 {
+  letter-spacing: -0.03em !important;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.45);
+}
+.dash3d-flyhud,
+.dash3d-skybar-card {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 45%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.8) !important;
+  background-size: auto, 320px 320px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+}
+
+/* Global ChatGPT-like stage depth */
+.main-stage {
+  background:
+    radial-gradient(ellipse 55% 40% at 50% -10%, rgb(255 255 255 / 0.05), transparent 60%),
+    transparent !important;
+}
+.rail {
+  box-shadow:
+    inset -1px 0 0 rgb(255 255 255 / 0.05),
+    12px 0 40px rgb(0 0 0 / 0.45) !important;
+}
+.command-card,
+.floating-composer {
+  box-shadow:
+    0 28px 72px rgb(0 0 0 / 0.55),
+    0 0 0 1px rgb(255 255 255 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+aside nav button.bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.65),
+    0 8px 22px rgb(0 0 0 / 0.35) !important;
+}
+html[data-theme="light"] .dash3d-fallback,
+html[data-theme="light"] .dash3d-flyhud,
+html[data-theme="light"] .dash3d-skybar-card {
+  background: rgb(255 255 255 / 0.92) !important;
+  background-blend-mode: normal !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.08) !important;
+}
+html[data-theme="light"] aside nav button.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* —— Cycle 31: dead/empty clickable chrome + chart deepen (mono) —— */
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1);
+  box-shadow: none !important;
+  transform: none !important;
+}
+button.is-coming-soon:hover,
+.service-setup.is-coming-soon:hover,
+button.is-coming-soon:active,
+.service-setup.is-coming-soon:active {
+  opacity: 0.55 !important;
+  transform: none !important;
+  background: inherit !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after {
+  content: "Soon";
+  margin-left: 0.45rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  line-height: 1.2;
+}
+html[data-theme="light"] button.is-coming-soon::after,
+html[data-theme="light"] .service-setup.is-coming-soon::after {
+  color: #52525b;
+  border-color: rgb(9 9 11 / 0.14);
+}
+
+/* Press/hover feedback for remaining live controls (mono) */
+.main-stage button:not(:disabled):not(.is-coming-soon):not([aria-disabled="true"]),
+aside nav button:not(:disabled) {
+  transition: transform 120ms ease, box-shadow 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+.main-stage button:not(:disabled):not(.is-coming-soon):not([aria-disabled="true"]):hover {
+  border-color: rgb(255 255 255 / 0.22);
+}
+.main-stage button:not(:disabled):not(.is-coming-soon):not([aria-disabled="true"]):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* Empty wells — never blank glass */
+.glow-card:empty,
+.dash3d-chart-card:empty,
+.command-card:empty {
+  min-height: 5.5rem;
+  display: grid;
+  place-items: center;
+  border-style: dashed !important;
+  color: #a1a1aa;
+}
+.glow-card:empty::before,
+.dash3d-chart-card:empty::before,
+.command-card:empty::before {
+  content: "Nothing here yet";
+  font-size: 0.8rem;
+}
+
+/* Chart deepen: axis labels, tooltip chrome, metric tiles */
+.dash3d-chart-card svg text,
+.dash3d-charts-panel .dash3d-muted,
+.dash3d-chart-card .dash3d-muted {
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+  font-size: 0.62rem !important;
+  letter-spacing: 0.02em;
+}
+.dash3d-chart-card [role="tooltip"],
+.dash3d-charts-panel [role="tooltip"],
+.dash3d-chart-tooltip {
+  background: rgb(12 12 14 / 0.92) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.55rem !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-variant-numeric: tabular-nums;
+  padding: 0.35rem 0.55rem !important;
+}
+.dash3d-metric,
+.dash3d-kpi,
+[data-testid="metric-tile"],
+.dash3d-money-panel .dash3d-glass,
+.dash3d-node-detail {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(10 10 12 / 0.86) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 28px rgb(0 0 0 / 0.35) !important;
+}
+.dash3d-progress[aria-busy="true"]::after,
+.dash3d-chart-card[data-loading="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+  background-size: 200% 100%;
+  animation: 1.4s ease-in-out infinite skeleton-shimmer;
+  pointer-events: none;
+}
+.dash3d-chart-card {
+  isolation: isolate;
+}
+html[data-theme="light"] .dash3d-chart-card [role="tooltip"],
+html[data-theme="light"] .dash3d-chart-tooltip {
+  background: rgb(255 255 255 / 0.96) !important;
+  color: #18181b !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.1) !important;
+}
+html[data-theme="light"] .dash3d-metric,
+html[data-theme="light"] .dash3d-kpi,
+html[data-theme="light"] [data-testid="metric-tile"] {
+  background: rgb(255 255 255 / 0.94) !important;
+  background-blend-mode: normal !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+}
+
+/* Kill residual non-logo purple wash on live-ish hero date chips / active pills */
+.main-stage .rounded-panel.bg-info\/15,
+.main-stage [class*="bg-info/15"],
+.main-stage [class*="text-info"]:not(a):not(button.text-info) {
+  /* leave text-info links; neutralize purple washes */
+}
+.masthead [class*="from-"],
+.masthead [class*="to-accent"],
+.main-stage .bg-gradient-to-r {
+  filter: grayscale(1) contrast(1.05);
+}
+aside nav button.bg-accent,
+aside nav button[class*="bg-accent"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 22px rgb(0 0 0 / 0.35) !important;
+}
+/* Purple ONLY on logo mark */
+.logo-mark,
+aside span.grid.size-11.rounded-2xl {
+  filter: none !important;
+}
+
+/* —— Cycle 32 / item 1: solid glass composer + scroll clearance —— */
+.composer-dock,
+.command-card.composer-dock,
+.floating-composer,
+[data-composer="floating"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
+    rgb(10 10 12 / 0.94) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 22px 56px rgb(0 0 0 / 0.62),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+.composer-dock textarea,
+.command-card.composer-dock textarea,
+.floating-composer textarea {
+  background: rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+.main-stage {
+  padding-bottom: calc(7.5rem + env(safe-area-inset-bottom)) !important;
+}
+@media (min-width: 768px) {
+  .main-stage {
+    padding-bottom: 2.5rem !important;
+  }
+}
+html[data-theme="light"] .composer-dock,
+html[data-theme="light"] .command-card.composer-dock,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] [data-composer="floating"] {
+  background: rgb(255 255 255 / 0.94) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.12), inset 0 1px 0 #fff !important;
+}
+
+/* —— Cycle 32 / item 3: unified mobile glass dock (composer + slim tabs) —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+    min-height: 2.75rem !important;
+    height: auto !important;
+    padding-top: 0.15rem;
+    padding-bottom: calc(0.15rem + env(safe-area-inset-bottom)) !important;
+    background: rgb(8 8 10 / 0.92) !important;
+    border-top: 1px solid rgb(255 255 255 / 0.1) !important;
+    backdrop-filter: blur(22px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+    box-shadow: 0 -10px 28px rgb(0 0 0 / 0.45);
+    z-index: 40 !important;
+  }
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+    min-height: 2.55rem !important;
+    font-size: 0.62rem !important;
+    gap: 0.1rem;
+    color: #a1a1aa !important;
+  }
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button svg {
+    width: 0.95rem !important;
+    height: 0.95rem !important;
+  }
+  /* Seat hero composer as dock above slim tabs */
+  .main-stage > section.command-card.composer-dock,
+  .main-stage section.command-card.composer-dock {
+    position: sticky;
+    bottom: calc(2.75rem + env(safe-area-inset-bottom));
+    z-index: 35;
+    margin-bottom: 0.35rem;
+    border-radius: 1.15rem !important;
+  }
+  /* When composer focused, collapse tab labels into icon-only and dim */
+  body:has(.composer-dock:focus-within) nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+    font-size: 0 !important;
+    line-height: 0 !important;
+    min-height: 2.25rem !important;
+  }
+  body:has(.composer-dock:focus-within) nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button svg {
+    width: 1.05rem !important;
+    height: 1.05rem !important;
+  }
+  .main-stage {
+    padding-bottom: calc(11rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* —— Cycle 32 / item 2: ComposerBar layout hooks (from pass-10, mono) —— */
+:root {
+  --composer-speak-fg: #0a0a0b;
+  --composer-speak-bg: #f4f4f5;
+  --composer-bar-bg: #111113;
+  --composer-bar-border: rgb(255 255 255 / 0.1);
+  --composer-bar-ink: #f4f4f5;
+  --composer-bar-muted: rgb(255 255 255 / 0.45);
+}
+html[data-theme="light"] {
+  --composer-speak-fg: #0a0a0b;
+  --composer-speak-bg: #ffffff;
+  --composer-bar-bg: #f6f7f9;
+  --composer-bar-border: rgb(15 23 42 / 0.12);
+  --composer-bar-ink: #0f172a;
+  --composer-bar-muted: rgb(15 23 42 / 0.48);
+}
+
+.composer-bar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  width: 100%;
+  pointer-events: none;
+}
+.composer-bar__safe {
+  padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+.composer-bar__card {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: min(100%, 42rem);
+  margin: 0 auto;
+  padding: 0.85rem 0.9rem 0.75rem;
+  border-radius: 1.75rem; /* ~28px */
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 40%),
+    var(--composer-bar-bg);
+  border: 1px solid var(--composer-bar-border);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  color: var(--composer-bar-ink);
+}
+html[data-theme="light"] .composer-bar__card {
+  box-shadow:
+    0 14px 36px rgb(15 23 42 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+.composer-bar__ask {
+  min-height: 1.6rem;
+  padding: 0.15rem 0.35rem 0.1rem;
+}
+.composer-bar__ask-fake {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--composer-bar-muted);
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 450;
+  padding: 0.2rem 0;
+}
+
+.composer-bar__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+.composer-bar__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.composer-bar__plus {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.05);
+  color: var(--composer-bar-ink);
+  flex: 0 0 auto;
+}
+html[data-theme="light"] .composer-bar__plus {
+  border-color: rgb(15 23 42 / 0.12);
+  background: rgb(15 23 42 / 0.04);
+}
+.composer-bar__plus:focus-visible,
+.composer-bar__model:focus-visible,
+.composer-mic-dictation:focus-visible,
+.composer-speak-live:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--composer-bar-bg), 0 0 0 4px rgb(255 255 255 / 0.55);
+}
+.composer-bar__plus-glyph {
+  width: 0.85rem;
+  height: 0.85rem;
+  position: relative;
+  display: block;
+}
+.composer-bar__plus-glyph::before,
+.composer-bar__plus-glyph::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: currentColor;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+.composer-bar__plus-glyph::before { width: 1.7px; height: 100%; }
+.composer-bar__plus-glyph::after { width: 100%; height: 1.7px; }
+
+.composer-bar__model-wrap { position: relative; }
+.composer-bar__model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0 0.75rem 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.05);
+  color: var(--composer-bar-ink);
+  font-size: 0.88rem;
+  font-weight: 560;
+  white-space: nowrap;
+}
+html[data-theme="light"] .composer-bar__model {
+  border-color: rgb(15 23 42 / 0.12);
+  background: rgb(15 23 42 / 0.04);
+}
+.composer-bar__model-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 0.28rem;
+  background:
+    linear-gradient(135deg, #a78bfa, #60a5fa 55%, #34d399);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  flex: 0 0 auto;
+}
+.composer-bar__model-beta {
+  margin-left: 0.25rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0.12rem 0.28rem;
+  border-radius: 0.35rem;
+  background: rgb(251 191 36 / 0.18);
+  color: #fbbf24;
+  vertical-align: middle;
+}
+
+.composer-bar__model-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.55rem);
+  margin: 0;
+  padding: 0.4rem;
+  list-style: none;
+  min-width: 16.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--composer-bar-border);
+  background: rgb(18 18 22 / 0.96);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  z-index: 5;
+}
+html[data-theme="light"] .composer-bar__model-menu {
+  background: rgb(255 255 255 / 0.97);
+  box-shadow: 0 16px 36px rgb(15 23 42 / 0.16);
+}
+.composer-bar__model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--composer-bar-ink);
+  text-align: left;
+}
+.composer-bar__model-option:hover { background: rgb(255 255 255 / 0.06); }
+html[data-theme="light"] .composer-bar__model-option:hover { background: rgb(15 23 42 / 0.05); }
+.composer-bar__model-option.is-selected {
+  background: rgb(255 255 255 / 0.08);
+}
+html[data-theme="light"] .composer-bar__model-option.is-selected {
+  background: rgb(15 23 42 / 0.06);
+}
+.composer-bar__model-option-text { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
+.composer-bar__model-option-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.composer-bar__model-option-sub {
+  font-size: 0.72rem;
+  color: var(--composer-bar-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-bar__model-check {
+  width: 0.85rem;
+  height: 0.45rem;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  flex: 0 0 auto;
+  margin-right: 0.15rem;
+  opacity: 0.9;
+}
+
+/* Mic ≠ Speak */
+.composer-voice-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.composer-mic-dictation {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--composer-bar-ink);
+  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+html[data-theme="light"] .composer-mic-dictation {
+  border-color: rgb(15 23 42 / 0.14);
+  background: rgb(15 23 42 / 0.03);
+}
+.composer-mic-dictation:hover { border-color: rgb(255 255 255 / 0.28); }
+.composer-mic-dictation:active { transform: scale(0.96); }
+.composer-mic-dictation__glyph {
+  width: 0.62rem;
+  height: 0.88rem;
+  border-radius: 999px;
+  border: 1.7px solid currentColor;
+  position: relative;
+}
+.composer-mic-dictation__glyph::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.34rem;
+  width: 0.78rem;
+  height: 0.34rem;
+  border: 1.6px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 0.55rem 0.55rem;
+  transform: translateX(-50%);
+}
+.composer-mic-dictation__dot {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 0 rgb(239 68 68 / 0.45);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.composer-mic-dictation[data-state="recording"] {
+  border-color: rgb(239 68 68 / 0.45);
+  color: #fda4af;
+}
+.composer-mic-dictation[data-state="recording"] .composer-mic-dictation__dot {
+  opacity: 1;
+  transform: scale(1);
+  animation: composer-mic-pulse 1.2s ease-out infinite;
+}
+@keyframes composer-mic-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(239 68 68 / 0.5); }
+  100% { box-shadow: 0 0 0 8px rgb(239 68 68 / 0); }
+}
+
+.composer-speak-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.45rem;
+  padding: 0 0.95rem 0 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: var(--composer-speak-bg);
+  color: var(--composer-speak-fg);
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
+  transition: transform 120ms ease, box-shadow 160ms ease, filter 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.composer-speak-live:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.34), 0 0 18px rgb(255 255 255 / 0.08);
+}
+.composer-speak-live:active { transform: scale(0.97); }
+.composer-speak-live__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 0.85rem;
+}
+.composer-speak-live__bars i {
+  display: block;
+  width: 2.4px;
+  border-radius: 999px;
+  background: currentColor;
+  height: 40%;
+  transform-origin: center bottom;
+}
+.composer-speak-live__bars i:nth-child(1) { height: 42%; }
+.composer-speak-live__bars i:nth-child(2) { height: 72%; }
+.composer-speak-live__bars i:nth-child(3) { height: 95%; }
+.composer-speak-live__bars i:nth-child(4) { height: 58%; }
+
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i {
+  animation: composer-speak-breathe 1s ease-in-out infinite;
+}
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(2) { animation-delay: 0.08s; }
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(3) { animation-delay: 0.16s; }
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(4) { animation-delay: 0.24s; }
+
+.composer-speak-live[data-live-voice="listening"],
+.composer-speak-live[data-live-voice="user-speaking"],
+.composer-speak-live[data-live-voice="assistant-speaking"] {
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 0.32),
+    0 0 calc(10px + 14px * var(--live-level, 0)) rgb(167 139 250 / 0.28);
+}
+.composer-speak-live[data-live-voice="listening"] .composer-speak-live__bars i,
+.composer-speak-live[data-live-voice="user-speaking"] .composer-speak-live__bars i,
+.composer-speak-live[data-live-voice="assistant-speaking"] .composer-speak-live__bars i {
+
+/* Map existing tip composer controls toward Grok row */
+@media (max-width: 767.98px) {
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+    overflow-x: auto;
+    padding-top: 0.35rem;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button[aria-label="Dictate"] {
+    order: 8;
+    width: 2.65rem !important;
+    height: 2.65rem !important;
+    min-height: 2.65rem !important;
+    border-radius: 999px !important;
+    background: rgb(255 255 255 / 0.06) !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button[type="submit"] {
+    order: 9;
+    border-radius: 999px !important;
+    background: #f4f4f5 !important;
+    color: #09090b !important;
+    min-height: 2.65rem !important;
+    padding-inline: 1rem !important;
+    box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    /* Attach ≈ + */
+    width: 2.65rem !important;
+    min-height: 2.65rem !important;
+    border-radius: 999px !important;
+    padding-inline: 0 !important;
+    justify-content: center !important;
+  }
+}
+/* White Speak pill when present (live / Wiring mount) */
+.composer-speak-pill,
+.composer-speak-live,
+button.composer-speak-pill,
+button.composer-speak-live {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border-radius: 999px !important;
+  border: 1px solid rgb(255 255 255 / 0.2) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+  min-height: 2.65rem !important;
+  padding-inline: 0.95rem !important;
+  font-weight: 600 !important;
+}
+html[data-theme="light"] .composer-speak-pill,
+html[data-theme="light"] .composer-speak-live {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* —— Cycle 32 / item 4: monochrome icons (purple only .logo-mark) —— */
+.main-stage .text-info,
+.main-stage .text-warn,
+.main-stage .text-ok,
+.main-stage .text-danger,
+.main-stage .text-accent:not(button.bg-accent):not(.composer-speak-pill),
+aside nav .text-info,
+aside nav .text-warn,
+aside nav .text-ok,
+.rail .text-info,
+.rail .text-warn,
+nav.fixed .text-info,
+nav.fixed .text-warn {
+  color: #e4e4e7 !important;
+}
+.main-stage svg,
+.rail svg,
+nav.fixed svg,
+.topbar svg,
+header svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+/* neutralize utility washes */
+.main-stage .bg-info\/15,
+.main-stage .bg-warn\/15,
+.main-stage .bg-ok\/15,
+.main-stage .bg-danger\/15,
+.main-stage [class*="bg-info/"],
+.main-stage [class*="bg-warn/"],
+.main-stage [class*="bg-ok/"],
+.main-stage [class*="bg-danger/"] {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e4e4e7 !important;
+}
+.logo-mark,
+.logo-badge,
+aside span.grid.size-11.rounded-2xl {
+  color: #7c5cff !important;
+  filter: none !important;
+}
+
+/* —— Cycle 32 / item 5: mono high-contrast warning / error cards —— */
+.main-stage p.text-danger,
+.main-stage .text-danger {
+  color: #f4f4f5 !important;
+}
+.main-stage [class*="bg-danger"],
+.main-stage .bg-danger\/15,
+.main-stage .border-danger\/40,
+.main-stage .rounded-panel.border-danger\/40 {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 55%),
+    rgb(24 24 27 / 0.95) !important;
+  border: 1px solid rgb(255 255 255 / 0.28) !important;
+  color: #fafafa !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+/* Connected / status pills that read as errors */
+.main-stage span.rounded-full.border-danger\/40,
+.main-stage span.text-danger {
+  border-color: rgb(255 255 255 / 0.35) !important;
+  color: #fafafa !important;
+  background: rgb(255 255 255 / 0.08) !important;
+}
+/* Neutral warning glyph via CSS on Setup coming-soon / error notices */
+.main-stage p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted,
+.main-stage p.text-sm.text-danger {
+  position: relative;
+  padding-left: 2.1rem !important;
+  border: 1px solid rgb(255 255 255 / 0.22) !important;
+  background: rgb(24 24 27 / 0.92) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted::before,
+.main-stage p.text-sm.text-danger::before {
+  content: "!";
+  position: absolute;
+  left: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.45);
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fafafa;
+}
+
+/* —— Cycle 32 / items 6–8: voice chrome grid, end-call row, no double header —— */
+/* —— Pass 10b: LiveVoiceBar (Grok/GPT-like live voice chrome) —— */
+.live-voice-bar {
+  --lvb-bg: rgb(12 12 14 / 0.72);
+  --lvb-border: rgb(255 255 255 / 0.1);
+  --lvb-fill: rgb(255 255 255 / 0.06);
+  --lvb-ink: #f4f4f5;
+  --lvb-muted: rgb(255 255 255 / 0.55);
+  --lvb-end: #ef4444;
+  --lvb-end-ink: #fff;
+  --lvb-mic-glow: transparent;
+  --lvb-mic-ring: transparent;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(100%, 28rem);
+  padding: 0.85rem 0.9rem 0.95rem;
+  border-radius: 1.35rem;
+  color: var(--lvb-ink);
+  isolation: isolate;
+}
+.live-voice-bar__glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    var(--lvb-bg);
+  border: 1px solid var(--lvb-border);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 0 24px rgb(124 92 255 / 0.04);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  z-index: -1;
+  pointer-events: none;
+}
+html[data-theme="light"] .live-voice-bar {
+  --lvb-bg: rgb(255 255 255 / 0.78);
+  --lvb-border: rgb(15 23 42 / 0.1);
+  --lvb-fill: rgb(15 23 42 / 0.05);
+  --lvb-ink: #0f172a;
+  --lvb-muted: rgb(15 23 42 / 0.55);
+  --lvb-end: #dc2626;
+}
+html[data-theme="light"] .live-voice-bar__glass {
+  box-shadow:
+    0 16px 40px rgb(15 23 42 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    inset 0 0 20px rgb(124 92 255 / 0.04);
+}
+
+.live-voice-bar__controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.65rem;
+}
+.live-voice-bar__round {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background:
+    radial-gradient(circle at 50% 30%, rgb(255 255 255 / 0.08), transparent 65%),
+    var(--lvb-fill);
+  color: var(--lvb-ink);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 6px 16px rgb(0 0 0 / 0.25);
+  transition: transform 120ms cubic-bezier(.2,.8,.2,1), border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.live-voice-bar__round:hover { transform: translateY(-1px); border-color: rgb(255 255 255 / 0.22); }
+.live-voice-bar__round:active { transform: scale(0.96); }
+.live-voice-bar__round:focus-visible,
+.live-voice-bar__plus:focus-visible,
+.live-voice-bar__end:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg, #0a0a0b), 0 0 0 4px rgb(255 255 255 / 0.55);
+}
+
+.live-voice-bar__mic { overflow: visible; }
+.live-voice-bar__mic-ring {
+  position: absolute;
+  inset: calc(-4px - (10px * var(--live-level, 0)));
+  border-radius: 999px;
+  border: 2px solid var(--lvb-mic-ring);
+  box-shadow: 0 0 0 calc(4px + 10px * var(--live-level, 0)) var(--lvb-mic-glow);
+  opacity: 0;
+  pointer-events: none;
+  transition: inset 80ms linear, box-shadow 80ms linear, opacity 160ms ease;
+}
+.live-voice-bar__mic-dot {
+  position: absolute;
+  bottom: 0.22rem;
+  left: 50%;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: currentColor;
+  opacity: 0.35;
+}
+
+/* state skins on mic */
+.live-voice-bar[data-live-voice="connecting"] .live-voice-bar__mic {
+  border-color: rgb(167 139 250 / 0.45);
+}
+.live-voice-bar[data-live-voice="connecting"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  border-color: rgb(167 139 250 / 0.55);
+  animation: lvb-spin-ring 0.9s linear infinite;
+}
+.live-voice-bar[data-live-voice="listening"],
+.live-voice-bar[data-live-voice="user-speaking"] {
+  --lvb-mic-ring: var(--voice-listen);
+  --lvb-mic-glow: color-mix(in srgb, var(--voice-listen) 28%, transparent);
+}
+.live-voice-bar[data-live-voice="listening"] .live-voice-bar__mic,
+.live-voice-bar[data-live-voice="user-speaking"] .live-voice-bar__mic {
+  border-color: color-mix(in srgb, var(--voice-listen) 55%, transparent);
+  color: var(--voice-listen);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 0 calc(12px + 18px * var(--live-level, 0)) color-mix(in srgb, var(--voice-listen) 35%, transparent);
+}
+.live-voice-bar[data-live-voice="listening"] .live-voice-bar__mic-ring,
+.live-voice-bar[data-live-voice="user-speaking"] .live-voice-bar__mic-ring {
+  opacity: 1;
+}
+.live-voice-bar[data-live-voice="listening"] .live-voice-bar__mic-dot,
+.live-voice-bar[data-live-voice="user-speaking"] .live-voice-bar__mic-dot {
+  background: var(--voice-listen);
+  opacity: 1;
+  box-shadow: 0 0 8px var(--voice-listen);
+}
+.live-voice-bar[data-live-voice="assistant-speaking"] {
+  --lvb-mic-ring: var(--voice-speak);
+  --lvb-mic-glow: color-mix(in srgb, var(--voice-speak) 30%, transparent);
+}
+.live-voice-bar[data-live-voice="assistant-speaking"] .live-voice-bar__mic {
+  border-color: color-mix(in srgb, var(--voice-speak) 55%, transparent);
+  color: var(--voice-speak);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 0 calc(14px + 20px * var(--live-level, 0)) color-mix(in srgb, var(--voice-speak) 40%, transparent);
+}
+.live-voice-bar[data-live-voice="assistant-speaking"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  animation: lvb-pulse-ring 1.2s ease-out infinite;
+}
+.live-voice-bar[data-live-voice="interrupted"] {
+  --lvb-mic-ring: #fbbf24;
+  --lvb-mic-glow: rgb(251 191 36 / 0.28);
+}
+.live-voice-bar[data-live-voice="interrupted"] .live-voice-bar__mic {
+  border-color: rgb(251 191 36 / 0.55);
+  color: #fbbf24;
+}
+.live-voice-bar[data-live-voice="interrupted"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  animation: lvb-flash-ring 0.55s ease-in-out 2;
+}
+.live-voice-bar[data-live-voice="muted"] .live-voice-bar__mic {
+  border-color: rgb(251 113 133 / 0.45);
+  color: #fb7185;
+  background: rgb(251 113 133 / 0.1);
+}
+.live-voice-bar[data-live-voice="error"] .live-voice-bar__mic {
+  border-color: rgb(239 68 68 / 0.55);
+  color: #f87171;
+  background: rgb(239 68 68 / 0.12);
+}
+.live-voice-bar[data-live-voice="error"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 4px rgb(239 68 68 / 0.2);
+}
+
+@keyframes lvb-spin-ring {
+  to { transform: rotate(360deg); }
+}
+@keyframes lvb-pulse-ring {
+  0% { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+@keyframes lvb-flash-ring {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.live-voice-bar__composer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+.live-voice-bar__plus-wrap { position: relative; }
+.live-voice-bar__plus {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: var(--lvb-fill);
+  color: var(--lvb-ink);
+}
+.live-voice-bar__plus-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.45rem);
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  min-width: 9.5rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--lvb-border);
+  background: rgb(18 18 22 / 0.94);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(16px);
+  z-index: 3;
+}
+html[data-theme="light"] .live-voice-bar__plus-menu {
+  background: rgb(255 255 255 / 0.96);
+}
+.live-voice-bar__plus-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--lvb-ink);
+  font-size: 0.82rem;
+  text-align: left;
+}
+.live-voice-bar__plus-item:hover { background: rgb(124 92 255 / 0.14); }
+
+.live-voice-bar__ask {
+  min-height: 2.55rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(0 0 0 / 0.28);
+  display: flex;
+  align-items: center;
+  padding: 0 0.95rem;
+  overflow: hidden;
+}
+html[data-theme="light"] .live-voice-bar__ask {
+  background: rgb(15 23 42 / 0.04);
+  border-color: rgb(15 23 42 / 0.1);
+}
+.live-voice-bar__ask-fake {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--lvb-muted);
+  text-align: left;
+  font-size: 0.95rem;
+  padding: 0.55rem 0;
+}
+
+.live-voice-bar__end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.6rem;
+  height: 2.55rem;
+  padding: 0 1.05rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--lvb-end) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--lvb-end) 92%, #fff), var(--lvb-end));
+  color: var(--lvb-end-ink);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--lvb-end) 35%, transparent);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.live-voice-bar__end:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.live-voice-bar__end:active { transform: scale(0.97); }
+
+.live-voice-bar__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+.live-call-grid,
+.live-voice-bar__controls,
+.live-voice-bar .live-call-grid,
+[data-live-voice] .live-call-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.55rem !important;
+  align-items: center !important;
+  justify-items: center !important;
+}
+@media (max-width: 420px) {
+  .live-call-grid,
+  .live-voice-bar__controls,
+  [data-live-voice] .live-call-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+.live-call-end,
+.live-voice-bar__end,
+.live-voice-end,
+button.live-call-end,
+[data-testid="live-voice-end"],
+button[aria-label*="End call" i],
+button[aria-label="End"] {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 22rem;
+  margin: 0.75rem auto 0 !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-height: 2.75rem !important;
+  border-radius: 999px !important;
+  background: rgb(255 255 255 / 0.1) !important;
+  color: #fafafa !important;
+  border: 1px solid rgb(255 255 255 / 0.28) !important;
+  grid-column: 1 / -1 !important;
+}
+/* Kill staggered absolute children inside voice overlays */
+[data-live-voice] button,
+.live-voice-bar button,
+.voice-mode-stage button {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+}
+/* Double header under URL bar: hide duplicate floating icon strip if present */
+.voice-mode-stage__floating-header,
+[data-voice-header="duplicate"],
+.live-voice-bar + .live-voice-bar__header,
+header.voice-floating-icons {
+  display: none !important;
+}
+/* Align top voice icon cluster */
+.topbar .flex.items-center.gap-2,
+header .flex.items-center.gap-1,
+.topbar [aria-label*="Voice" i],
+.topbar .inline-flex.items-center {
+  align-items: center !important;
+}
+.topbar button,
+.topbar a,
+header button.grid {
+  vertical-align: middle;
+}
+
+/* —— Cycle 32 / item 9: expanded composer as keyboard-anchored bottom sheet —— */
+@media (max-width: 767.98px) {
+  .composer-dock:focus-within,
+  .composer-dock[data-expanded="true"],
+  .floating-composer:focus-within,
+  .floating-composer[data-expanded="true"],
+  [data-composer="floating"]:focus-within {
+    position: fixed !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    bottom: calc(2.75rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 45 !important;
+    max-height: min(58vh, 28rem) !important;
+    overflow: auto !important;
+    border-bottom-left-radius: 1.1rem !important;
+    border-bottom-right-radius: 1.1rem !important;
+    transform: translateY(0) !important;
+  }
+  .composer-dock:focus-within textarea,
+  .floating-composer:focus-within textarea {
+    min-height: 6.5rem !important;
+  }
+}
+
+/* —— Cycle 32 / items 10–15: contrast, glass depth, padding, crop, pills, top align —— */
+/* 10 — dark-on-dark actions */
+.main-stage button.text-accent,
+.main-stage button.block.min-h-11.text-left.text-accent,
+.main-stage .text-accent.underline,
+.main-stage button.min-h-11.text-xs.text-accent {
+  color: #fafafa !important;
+  text-decoration-color: rgb(255 255 255 / 0.45) !important;
+}
+.main-stage button.block.min-h-11.text-left.text-accent,
+.main-stage button.min-h-11.rounded-panel.border.border-line.px-3.text-sm {
+  background: rgb(255 255 255 / 0.05) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage button.block.min-h-11.text-left.text-accent:hover,
+.main-stage button.min-h-11.rounded-panel.border.border-line.px-3.text-sm:hover {
+  background: rgb(255 255 255 / 0.1) !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
+
+/* 11 — glass depth on cards */
+.glow-card,
+.dense-card,
+.settings-card,
+.main-stage article.rounded-panel,
+.main-stage section.rounded-panel.border,
+.main-stage li.rounded-panel.border {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 50%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.88) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 14px 36px rgb(0 0 0 / 0.4) !important;
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+}
+
+/* 12 — card padding */
+.command-card.composer-dock,
+.main-stage .command-card {
+  padding: 1rem !important;
+}
+.command-card .min-h-16 {
+  min-height: 4.25rem !important;
+  padding: 0.85rem 1rem !important;
+}
+.main-stage article.rounded-panel.border.border-line.bg-surface.p-3,
+.main-stage article.rounded-panel.border.border-line.bg-surface.p-4 {
+  padding: 1rem !important;
+}
+
+/* 13 — first dashboard/ASK card crop */
+.main-stage > .masthead,
+.main-stage > div.masthead,
+.main-stage section.command-card.composer-dock {
+  scroll-margin-bottom: 8rem;
+}
+@media (max-width: 767.98px) {
+  .main-stage section.command-card.composer-dock {
+    max-height: none;
+    overflow: visible;
+  }
+  .main-stage .command-card .grid.gap-2.md\:grid-cols-\[1fr_1fr_auto\] {
+    gap: 0.65rem !important;
+  }
+}
+
+/* 14 — pill cluster spacing */
+.command-card .mb-2.flex.flex-wrap.gap-2,
+.main-stage .flex.flex-wrap.gap-2,
+.main-stage .flex.gap-2.overflow-x-auto {
+  gap: 0.55rem !important;
+}
+.command-card .mb-2.flex.flex-wrap.gap-2 > button,
+.main-stage .flex.flex-wrap.gap-2 > button.rounded-full {
+  margin: 0 !important;
+  padding-inline: 0.9rem !important;
+}
+
+/* 15 — top floating icons vertical align */
+.topbar,
+header.topbar,
+.main-stage > header,
+aside + .flex.flex-1 .sticky.top-0 {
+  display: flex !important;
+  align-items: center !important;
+}
+.topbar > *,
+.sticky.top-0.z-20.flex,
+.sticky.top-0.flex.items-center {
+  align-items: center !important;
+}
+.topbar button,
+.sticky.top-0 button.grid,
+.sticky.top-0 .grid.size-9,
+.sticky.top-0 .grid.size-10,
+.sticky.top-0 .grid.size-11 {
+  display: grid !important;
+  place-items: center !important;
+  align-self: center !important;
+}
+
+/* Sidebar + New / storage footer polish (bonus from analysis) */
+aside button.bg-accent,
+.rail button.bg-accent {
+  border-radius: 999px !important;
+}
+aside .text-xs.text-muted,
+.rail .text-xs.text-muted {
+  opacity: 0.85;
+  letter-spacing: 0.01em;
+}
+
+}}
+
+/* —— Cycle 32 / item 1+3 harden: fixed mobile composer dock (sticky fails under overflow) —— */
+@media (max-width: 767.98px) {
+  .main-stage section.command-card.composer-dock,
+  .main-stage > section.command-card.composer-dock {
+    position: fixed !important;
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 35 !important;
+    max-height: min(52vh, 26rem) !important;
+    overflow: auto !important;
+    margin: 0 !important;
+  }
+  .composer-dock,
+  .command-card.composer-dock {
+    backdrop-filter: blur(28px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+    background: rgb(10 10 12 / 0.96) !important;
+  }
+}
+
+/* —— Cycle 32k: composer-dock fixed dock (correct ancestors) —— */
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock,
+  .command-card.composer-dock[data-composer="floating"],
+  form.composer-dock.command-card {
+    position: fixed !important;
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 45 !important;
+    max-height: min(52vh, 26rem) !important;
+    overflow: auto !important;
+    margin: 0 !important;
+    background: rgb(10 10 12 / 0.96) !important;
+    backdrop-filter: blur(28px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+  }
+  .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
+  }
+  .flex.min-h-0.min-w-0.flex-1.flex-col.pb-16 {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* —— Round e3b6ec4 / fix1: compact idle mobile composer (Grok slim bar) —— */
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock {
+    max-height: 10.75rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form > .mb-2.flex.flex-wrap.gap-2 {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form textarea {
+    min-height: 2.75rem !important;
+    max-height: 3.25rem !important;
+    rows: 1;
+  }
+  section.command-card.composer-dock:focus-within,
+  section.command-card.composer-dock:has(textarea:focus) {
+    max-height: min(58vh, 28rem) !important;
+  }
+  section.command-card.composer-dock:focus-within > .grid.gap-2,
+  section.command-card.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2 {
+    display: grid !important;
+  }
+  section.command-card.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2 {
+    display: flex !important;
+  }
+}
+
+/* —— Round e3b6ec4 / fix2: quick-action pills scroll, no clip —— */
+.main-stage .flex.gap-2.overflow-x-auto,
+.flex.gap-2.overflow-x-auto.pb-1,
+div.flex.gap-2.overflow-x-auto {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 0.55rem !important;
+  padding-bottom: 0.35rem !important;
+  margin-inline: 0 !important;
+  max-width: 100%;
+}
+.main-stage .flex.gap-2.overflow-x-auto::-webkit-scrollbar,
+div.flex.gap-2.overflow-x-auto::-webkit-scrollbar {
+  display: none;
+}
+.main-stage .flex.gap-2.overflow-x-auto > button,
+div.flex.gap-2.overflow-x-auto > button {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}
+
+/* —— Round e3b6ec4 / fix3: drawer above composer + glass drawer —— */
+@media (max-width: 767.98px) {
+  aside.fixed.inset-0.z-40.flex {
+    z-index: 50 !important;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 30%),
+      rgb(8 8 10 / 0.96) !important;
+    backdrop-filter: blur(22px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.1) !important;
+    box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.06);
+  }
+  body:has(aside.fixed.inset-0.z-40.flex) section.command-card.composer-dock,
+  body:has(aside.fixed.inset-0.z-40.flex) .composer-dock {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(12px) !important;
+  }
+  body:has(aside.fixed.inset-0.z-40.flex) nav.fixed[aria-label="Primary"] {
+    opacity: 0.35 !important;
+    pointer-events: none !important;
+  }
+  /* kill purple glow on active drawer/nav rows — mono only */
+  aside.fixed.inset-0 button.bg-accent,
+  aside button.bg-accent.text-white {
+    background: #f4f4f5 !important;
+    color: #09090b !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+  }
+}
+
+/* —— Round e3b6ec4 / fix4: glass depth fallbacks (opaque frost + grain) —— */
+section.command-card.composer-dock,
+.composer-dock,
+.floating-composer,
+.glow-card,
+.dense-card,
+aside.fixed.inset-0.z-40.flex {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 320px 320px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  /* solid base underneath so depth reads even if backdrop-filter is noop */
+  background-color: rgb(10 10 12 / 0.96) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 18px 48px rgb(0 0 0 / 0.55) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+}
+html[data-theme="light"] section.command-card.composer-dock,
+html[data-theme="light"] .composer-dock,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] aside.fixed.inset-0.z-40.flex {
+  background-image:
+    linear-gradient(180deg, #fff, rgb(244 244 245 / 0.92)) !important;
+  background-blend-mode: normal !important;
+  background-color: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.1), inset 0 1px 0 #fff !important;
+}
+
+/* —— Round e3b6ec4 / fix5: light-theme mobile dock + tabs parity —— */
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+  background: rgb(255 255 255 / 0.94) !important;
+  border-top: 1px solid rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 -10px 28px rgb(0 0 0 / 0.08) !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+  color: #52525b !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button.text-accent {
+  color: #09090b !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button.text-accent::before {
+  background: #18181b !important;
+}
+html[data-theme="light"] section.command-card.composer-dock textarea {
+  background: rgb(244 244 245 / 0.9) !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] section.command-card.composer-dock button.border-line {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  color: #18181b !important;
+}
+html[data-theme="light"] .masthead h1,
+html[data-theme="light"] .masthead h2,
+html[data-theme="light"] .masthead .font-display {
+  color: #09090b !important;
+  text-shadow: none !important;
+}
+
+/* —— Round e3b6ec4 / fix6: idle composer action row + mono active nav —— */
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock:not(:focus-within) {
+    padding: 0.65rem 0.75rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 0.4rem !important;
+  }
+  /* keep Attach (≈+) Dictate mic Send(white) visible; hide mid actions when idle */
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:not([aria-label="Dictate"]):not([type="submit"]):not(:first-child) {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    border-radius: 999px !important;
+    padding-inline: 0 !important;
+    justify-content: center !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child span,
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child :not(svg) {
+    /* keep icon; hide label text nodes via font-size on button text — icons stay */
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    font-size: 0 !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child svg {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+}
+/* Active nav purple glow kill (markup still has shadow-[0_0_18px_rgb(124_92_255...)]) */
+aside nav button.bg-accent,
+aside nav button[class*="shadow-[0_0_18px_rgb(124_92_255"],
+aside button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.3) !important;
+}
+html[data-theme="light"] aside nav button.bg-accent,
+html[data-theme="light"] aside nav button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.12) !important;
+}
+/* logo mark keeps purple */
+aside span.grid.size-11.rounded-2xl,
+.logo-mark,
+.logo-badge {
+  color: #fff !important;
+  background: #7c5cff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+  filter: none !important;
+}
+
+/* —— Integration dock dual-class safety (floating-composer + composer-dock) —— */
+/* Grok Build merge d8c8ce1 kept BOTH class sets on one <section>. Not two nodes,
+   but .floating-composer min-height/margin can fight .composer-dock compact rules. */
+section.floating-composer.composer-dock,
+.floating-composer.command-card.composer-dock,
+form.floating-composer.composer-dock,
+[data-composer="floating"].floating-composer.composer-dock {
+  margin: 0 !important;
+  min-height: 0 !important;
+  border-radius: 1.15rem !important;
+  z-index: 45 !important;
+  /* ensure glass when bg-surface / rounded-panel utilities were dropped in merge */
+  background-color: rgb(10 10 12 / 0.96) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+html[data-theme="light"] section.floating-composer.composer-dock,
+html[data-theme="light"] .floating-composer.command-card.composer-dock,
+html[data-theme="light"] form.floating-composer.composer-dock {
+  background-color: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+}
+
+@media (max-width: 767.98px) {
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock,
+  form.floating-composer.composer-dock {
+    position: fixed !important;
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    max-height: 10.75rem !important;
+    overflow: auto !important;
+  }
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    display: none !important;
+  }
+  section.floating-composer.composer-dock:not(:focus-within) form > .mb-2.flex.flex-wrap.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) form > .mb-2.flex.flex-wrap.gap-2 {
+    display: none !important;
+  }
+  section.floating-composer.composer-dock:focus-within,
+  section.floating-composer.composer-dock:has(textarea:focus),
+  .floating-composer.command-card.composer-dock:focus-within,
+  .floating-composer.command-card.composer-dock:has(textarea:focus) {
+    max-height: min(58vh, 28rem) !important;
+  }
+  section.floating-composer.composer-dock:focus-within > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:focus-within > .grid.gap-2 {
+    display: grid !important;
+  }
+  section.floating-composer.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2,
+  .floating-composer.command-card.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2 {
+    display: flex !important;
+  }
+  body:has(aside.fixed.inset-0.z-40.flex) section.floating-composer.composer-dock,
+  body:has(aside.fixed.inset-0.z-40.flex) .floating-composer.command-card.composer-dock {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
+/* —— Cycle 34: idle composer height — effort chips + autonomy compact (integration 34201e2) ——
+   Root cause (390×844): ASK/AUTO grid already display:none when idle; form still ~273px.
+   [data-testid=composer-effort] wraps min-h-11 chips → 132px; action row wraps to 68px;
+   .main-stage section… max-height:min(52vh,26rem) beats 10.75rem (specificity 0,3,1).
+   Tip ~147px lacked ComposerEffortControl; integration always mounts it. */
+@media (max-width: 767.98px) {
+  /* Win max-height over .main-stage section.command-card.composer-dock */
+  .main-stage section.command-card.composer-dock:not(:focus-within),
+  .main-stage section.floating-composer.composer-dock:not(:focus-within),
+  .main-stage .floating-composer.command-card.composer-dock:not(:focus-within),
+  section.floating-composer.command-card.composer-dock:not(:focus-within),
+  section.command-card.composer-dock:not(:focus-within) {
+    max-height: 10rem !important; /* 160px ceiling */
+  }
+  .main-stage section.command-card.composer-dock:focus-within,
+  .main-stage section.floating-composer.composer-dock:focus-within,
+  .main-stage .floating-composer.command-card.composer-dock:focus-within,
+  section.floating-composer.command-card.composer-dock:focus-within,
+  section.command-card.composer-dock:focus-within {
+    max-height: min(58vh, 28rem) !important;
+  }
+
+  /* ASK / AUTOMATIC / Memory → compact single row when idle (still tappable) */
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-height: 2.15rem !important;
+    margin: 0 !important;
+    scrollbar-width: none;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2::-webkit-scrollbar,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2::-webkit-scrollbar {
+    display: none;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    flex: 0 0 auto !important;
+    min-height: 2.05rem !important;
+    height: 2.05rem !important;
+    padding: 0 0.7rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+  }
+  /* Hide tile subtitles / memory helper copy when idle */
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs {
+    display: none !important;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-sm,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-sm,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-sm {
+    font-size: 0.72rem !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Effort chip cloud: hide when idle (restores on :focus-within). Mode pills already hidden. */
+  section.command-card.composer-dock:not(:focus-within) [data-testid="composer-effort"],
+  section.floating-composer.composer-dock:not(:focus-within) [data-testid="composer-effort"],
+  .floating-composer.command-card.composer-dock:not(:focus-within) [data-testid="composer-effort"],
+  [data-composer="floating"]:not(:focus-within) [data-testid="composer-effort"] {
+    display: none !important;
+  }
+  section.command-card.composer-dock:focus-within [data-testid="composer-effort"],
+  section.floating-composer.composer-dock:focus-within [data-testid="composer-effort"],
+  .floating-composer.command-card.composer-dock:focus-within [data-testid="composer-effort"] {
+    display: block !important;
+  }
+  /* Focused effort: prefer single scroll row over multi-wrap tower */
+  section.command-card.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap,
+  section.floating-composer.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    max-height: 2.75rem !important;
+    scrollbar-width: none;
+  }
+  section.command-card.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap > button,
+  section.floating-composer.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap > button {
+    flex: 0 0 auto !important;
+    min-height: 2.25rem !important;
+  }
+
+  /* Tighten form chrome when idle */
+  section.command-card.composer-dock:not(:focus-within) > form.mt-3,
+  section.floating-composer.composer-dock:not(:focus-within) > form.mt-3,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > form.mt-3 {
+    margin-top: 0.4rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form textarea,
+  section.floating-composer.composer-dock:not(:focus-within) form textarea,
+  .floating-composer.command-card.composer-dock:not(:focus-within) form textarea {
+    min-height: 2.5rem !important;
+    max-height: 2.75rem !important;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+  }
+
+  /* Action row: one line; drop waveform + tiny speech caption when idle */
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2,
+  section.floating-composer.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    max-height: 2.5rem !important;
+    overflow: hidden !important;
+    gap: 0.35rem !important;
+    margin-top: 0.35rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) [data-testid="voice-waveform"],
+  section.floating-composer.composer-dock:not(:focus-within) [data-testid="voice-waveform"],
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex .text-\[10px\],
+  section.floating-composer.composer-dock:not(:focus-within) form .mt-2.flex .text-\[10px\] {
+    display: none !important;
+  }
+}
+
+/* —— Cycle 35: desk main-stage crushed by .composer-bar width:100% flex sibling ——
+   LiveVoiceBar mounts `composer-bar is-fixed` as a .shell flex-row child. Base
+   `.composer-bar { position:sticky; width:100% }` made it ~1152px wide and stole
+   all free space from `.main-stage` (computed width 0 / inner column ~48px).
+   `is-fixed` had no CSS. Take the bar out of flow; restore main-stage flex. */
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed,
+.shell > [data-testid="composer-bar"].composer-bar {
+  position: fixed !important;
+  left: 0.75rem !important;
+  right: 0.75rem !important;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom)) !important;
+  top: auto !important;
+  width: auto !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  z-index: 46 !important;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .shell > [data-testid="composer-bar"].composer-bar {
+    left: calc(18rem + 1.25rem) !important; /* clear md:w-72 rail */
+    right: 1.5rem !important;
+    bottom: 1.5rem !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card,
+  .shell > .composer-bar.is-fixed .composer-bar__card {
+    width: min(100%, 42rem) !important;
+    margin-inline: auto !important;
+  }
+}
+.shell > .main-stage,
+.shell > .main-stage.flex-1,
+div.shell > div.main-stage {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+/* —— Cycle 36: force visible glass / backdrop-blur on every surface —— */
+.shell .rail,
+.shell aside.rail,
+.topbar,
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+.composer-dock,
+.floating-composer,
+[data-composer="floating"],
+.composer-bar__card,
+.masthead,
+.empty-state,
+.dash3d-glass,
+.dash3d-chart-card {
+  backdrop-filter: blur(22px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+}
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+article.rounded-panel.border.border-line,
+li.rounded-panel.border.border-line,
+.dash3d-chart-card,
+.empty-state {
+  background-color: rgb(12 12 14 / 0.72) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 320px 320px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 16px 40px rgb(0 0 0 / 0.45) !important;
+}
+.composer-dock,
+.floating-composer,
+[data-composer="floating"],
+.composer-bar__card {
+  background-color: rgb(10 10 12 / 0.78) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+}
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .rounded-panel.border.border-line.bg-surface,
+html[data-theme="light"] article.rounded-panel.border.border-line,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .empty-state {
+  background-color: rgb(255 255 255 / 0.82) !important;
+  background-image: linear-gradient(180deg, #fff, rgb(244 244 245 / 0.9)) !important;
+  background-blend-mode: normal !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.1), inset 0 1px 0 #fff !important;
+}
+html[data-theme="light"] .composer-dock,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.88) !important;
+}
+
+/* —— Cycle 37: mono shell — kill remaining color leaks (purple only .logo-mark) —— */
+aside.rail nav svg,
+aside.rail nav button svg,
+.main-stage svg:not(.logo-mark svg),
+.topbar svg,
+nav.fixed[aria-label="Primary"] svg,
+.composer-bar svg,
+.composer-dock svg {
+  color: #e4e4e7 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+aside.rail nav button.bg-accent svg,
+aside.rail nav button[aria-current="page"] svg {
+  color: #09090b !important;
+  stroke: currentColor !important;
+}
+.text-danger,
+.text-ok,
+.text-warn,
+.text-info,
+.main-stage .text-danger,
+.main-stage .text-ok,
+.main-stage .text-warn,
+.main-stage .text-info,
+p.text-sm.text-danger,
+span.text-danger,
+span.text-ok {
+  color: #e4e4e7 !important;
+}
+html[data-theme="light"] .text-danger,
+html[data-theme="light"] .text-ok,
+html[data-theme="light"] .text-warn,
+html[data-theme="light"] .text-info,
+html[data-theme="light"] p.text-sm.text-danger {
+  color: #27272a !important;
+}
+.composer-mic-dictation__dot,
+[class*="dictation__dot"],
+span.bg-danger,
+span.bg-red-500,
+.bg-\[\#ef4444\],
+.bg-red-500 {
+  background: #a1a1aa !important;
+  background-color: #a1a1aa !important;
+  box-shadow: none !important;
+}
+/* Active rail / Connected purple bloom → mono chip */
+aside.rail nav button.bg-accent,
+aside.rail nav button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+}
+/* Re-assert logo purple */
+.logo-mark,
+.logo-badge,
+aside span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent {
+  color: #fff !important;
+  background: #7c5cff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+  filter: none !important;
+}
+
+/* —— Cycle 38: spacing rhythm + contrast + empty/disabled wells —— */
+.main-stage .mx-auto.flex.max-w-6xl.flex-col.gap-4 {
+  gap: 1.15rem !important;
+}
+.main-stage .masthead {
+  padding: 1.15rem 1.25rem !important;
+  border-radius: 1.25rem !important;
+}
+/* Quick-action / suggestion pills — GPT-level contrast */
+.main-stage button.rounded-full.border,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage button.min-h-11.rounded-panel.border.border-line {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage button.rounded-full.border:hover,
+.main-stage .flex.flex-wrap.gap-2 > button:hover {
+  background: rgb(255 255 255 / 0.14) !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
+html[data-theme="light"] .main-stage button.rounded-full.border,
+html[data-theme="light"] .main-stage .flex.flex-wrap.gap-2 > button {
+  background: rgb(9 9 11 / 0.04) !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  color: #18181b !important;
+}
+/* Empty wells with texture */
+.empty-state,
+[data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted:only-child),
+.dash3d-chart-card [data-testid="chart-empty"] {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    url("/brand/textures/empty-well-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 280px 280px !important;
+  background-position: center, center, center !important;
+  min-height: 7.5rem !important;
+  padding: 1.25rem !important;
+}
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1) !important;
+  box-shadow: none !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after {
+  content: "Soon" !important;
+  letter-spacing: 0.04em;
+  font-size: 0.62rem !important;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+/* —— Cycle 39: chart mono gradients, grid, tooltips —— */
+.dash3d-charts-panel.dash3d-glass,
+.dash3d-charts-panel {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/chart-grid-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 300px 300px !important;
+  background-blend-mode: soft-light, multiply, soft-light !important;
+  padding: 1rem !important;
+  border-radius: 1.15rem !important;
+}
+.dash3d-chart-card {
+  border-radius: 1rem !important;
+  padding: 0.85rem 0.9rem !important;
+}
+.dash3d-chart-card svg {
+  filter: grayscale(1) contrast(1.05) !important;
+}
+.dash3d-chart-card svg rect,
+.dash3d-chart-card svg path,
+.dash3d-chart-card svg circle {
+  fill: #d4d4d8 !important;
+  stroke: #a1a1aa !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-chart-card svg .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.12) !important;
+  stroke-dasharray: 3 4 !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-chart-card .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+  font-size: 11px !important;
+}
+.dash3d-chart-card .recharts-tooltip-wrapper .recharts-default-tooltip,
+.dash3d-chart-card [class*="tooltip"] {
+  background: rgb(10 10 12 / 0.94) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.65rem !important;
+  color: #f4f4f5 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.5) !important;
+}
+.dash3d-progress,
+aside .mt-3.h-1\.5,
+.main-stage .h-1\.5.rounded-full.bg-surface-2 {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+}
+.dash3d-progress-fill,
+.dash3d-progress-fill-ok,
+.dash3d-progress > div,
+aside .mt-3.h-1\.5 > div {
+  background: linear-gradient(90deg, #71717a, #f4f4f5) !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg rect,
+html[data-theme="light"] .dash3d-chart-card svg path {
+  fill: #3f3f46 !important;
+  stroke: #52525b !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg line {
+  stroke: rgb(9 9 11 / 0.12) !important;
+}
+
+/* —— Cycle 40: brand Imagine textures mounted —— */
+.command-card,
+.glow-card,
+.dense-card,
+.composer-bar__card {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    url("/brand/textures/panel-noise-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 220px 220px, 320px 320px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+}
+
+/* —— Cycle 41: rail workspace icon mono (hardcoded fills / emoji-like marks) —— */
+aside.rail nav button,
+aside.rail nav a,
+aside.rail [class*="text-"] {
+  color: #d4d4d8 !important;
+}
+aside.rail nav button.bg-accent,
+aside.rail nav button.bg-accent * {
+  color: #09090b !important;
+}
+aside.rail nav svg *,
+aside.rail nav button svg * {
+  stroke: currentColor !important;
+  fill: currentColor !important;
+  color: inherit !important;
+}
+/* Prefer outline icons: if fill paints blobs, keep muted gray */
+aside.rail nav button:not(.bg-accent) svg *[fill]:not([fill="none"]) {
+  fill: #a1a1aa !important;
+  stroke: #a1a1aa !important;
+}
+aside.rail nav .text-info,
+aside.rail nav .text-ok,
+aside.rail nav .text-warn,
+aside.rail nav .text-danger,
+aside.rail nav .text-accent {
+  color: #d4d4d8 !important;
+}
+/* Logo exception */
+aside.rail .logo-mark,
+aside.rail .logo-badge,
+aside.rail span.grid.size-11.rounded-2xl,
+aside.rail span.grid.size-11.rounded-2xl * {
+  color: #fff !important;
+  fill: #fff !important;
+  background: #7c5cff !important;
+}

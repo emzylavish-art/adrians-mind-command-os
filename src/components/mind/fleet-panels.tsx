@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, workerHealth } from "@/lib/mind/server";
+import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -24,7 +24,40 @@ import {
   type ProviderConnection,
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
-import { McpListStatusRows, loadMcpList, onceListRetry, type McpListState } from "@/lib/mind/mcp-list-state";
+import {
+  MCP_LIST_LOAD_TIMEOUT_MS,
+  McpListStatusRows,
+  McpToolsListStatusRows,
+  PcApprovalsListStatusRows,
+  WorkerHealthStatusRows,
+  isCurrentListGeneration,
+  isListAuthRequiredNotice,
+  loadMcpList,
+  loadMcpToolsList,
+  loadPcApprovalsList,
+  loadWorkerHealthStatus,
+  nextListGeneration,
+  onceListRetry,
+  type FleetListState,
+  type McpListState,
+  type McpToolRow,
+  type PcApprovalRow,
+  type WorkerHealthState,
+} from "@/lib/mind/mcp-list-state";
+import {
+  PcApprovalActionStatusRows,
+  onceRetry,
+  runPcApprovalAction,
+  snapshotPcApprovalActionParams,
+  type PcApprovalActionState,
+} from "@/lib/mind/pc-approval-action";
+import {
+  McpCallActionStatusRows,
+  onceRetry as onceMcpCallRetry,
+  runMcpTrySelect,
+  snapshotMcpTrySelectParams,
+  type McpCallActionState,
+} from "@/lib/mind/mcp-call-action";
 
 
 function botAvatarSrc(name: string) {
@@ -67,69 +100,185 @@ export function FleetPanel({
   const [jobName, setJobName] = useState("");
   const [jobZone, setJobZone] = useState("America/Chicago");
   const [jobHour, setJobHour] = useState("");
-  const [workerNote, setWorkerNote] = useState("Checking the worker.");
+  const [workerHealthState, setWorkerHealthState] = useState<WorkerHealthState>({ status: "loading" });
+  const workerHealthInFlight = useRef(false);
+  const workerHealthGeneration = useRef(0);
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
   const [mcpListState, setMcpListState] = useState<McpListState>({ status: "loading" });
   const mcpListInFlight = useRef(false);
-  const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean; status?: string }[]>([]);
+  const mcpListGeneration = useRef(0);
+  const [mcpTools, setMcpTools] = useState<McpToolRow[]>([]);
+  const [mcpToolsState, setMcpToolsState] = useState<FleetListState<McpToolRow>>({ status: "loading" });
+  const mcpToolsInFlight = useRef(false);
+  const mcpToolsGeneration = useRef(0);
   const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
   const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
-  const [pcApprovals, setPcApprovals] = useState<
-    { id: string; token: string; command: string; agentId: string; agentLabel: string; expiresAt: string }[]
-  >([]);
+  const [mcpCallActionState, setMcpCallActionState] = useState<McpCallActionState>({ status: "idle" });
+  const [pcApprovals, setPcApprovals] = useState<PcApprovalRow[]>([]);
+  const [pcApprovalsState, setPcApprovalsState] = useState<FleetListState<PcApprovalRow>>({ status: "loading" });
+  const pcApprovalsInFlight = useRef(false);
+  const pcApprovalsGeneration = useRef(0);
   const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
+  const [pcApprovalActionState, setPcApprovalActionState] = useState<PcApprovalActionState>({ status: "idle" });
 
-  /** One MCP list load: loading → ready (maybe empty) or error banner. Retry re-runs this once. */
+  /** One MCP server list load: loading → ready (maybe empty) or error banner. Timeout + stale guard. */
   function loadMcpServers() {
     if (mcpListInFlight.current) return;
     mcpListInFlight.current = true;
+    const generation = nextListGeneration(mcpListGeneration.current);
+    mcpListGeneration.current = generation;
     setMcpListState({ status: "loading" });
-    void loadMcpList(() => mcpRegistryList()).then((next) => {
-      mcpListInFlight.current = false;
-      setMcpListState(next);
-      if (next.status === "ready") {
-        setMcpServers(next.servers);
-        return;
-      }
-      setMcpServers([]);
-      if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpServers));
-    });
+    void loadMcpList(() => mcpRegistryList(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, mcpListGeneration.current)) return;
+        setMcpListState(next);
+        if (next.status === "ready") {
+          setMcpServers(next.servers);
+          return;
+        }
+        setMcpServers([]);
+        // auth_required → local dismissible notice in McpListStatusRows; do not escalate to top red banner / Retry storm.
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadMcpServers));
+        }
+      })
+      .finally(() => {
+        if (generation === mcpListGeneration.current) mcpListInFlight.current = false;
+      });
   }
 
-  function refreshPcApprovals() {
-    void fetch("/api/mind/pc/approvals", { credentials: "include" })
-      .then(async (res) => {
-        const body = (await res.json().catch(() => null)) as
-          | { ok?: boolean; approvals?: typeof pcApprovals }
-          | null;
-        if (body?.ok && Array.isArray(body.approvals)) setPcApprovals(body.approvals);
-        else setPcApprovals([]);
+  /** One MCP tools list load — never swallows failures as []. */
+  function loadMcpTools() {
+    if (mcpToolsInFlight.current) return;
+    mcpToolsInFlight.current = true;
+    const generation = nextListGeneration(mcpToolsGeneration.current);
+    mcpToolsGeneration.current = generation;
+    setMcpToolsState({ status: "loading" });
+    void loadMcpToolsList(() => mcpRegistryTools(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, mcpToolsGeneration.current)) return;
+        setMcpToolsState(next);
+        if (next.status === "ready") {
+          setMcpTools(next.items);
+          return;
+        }
+        setMcpTools([]);
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadMcpTools));
+        }
       })
-      .catch(() => setPcApprovals([]));
+      .finally(() => {
+        if (generation === mcpToolsGeneration.current) mcpToolsInFlight.current = false;
+      });
+  }
+
+  /** One PC approvals list load — failed fetch must not look like "nothing pending". */
+  function refreshPcApprovals() {
+    if (pcApprovalsInFlight.current) return;
+    pcApprovalsInFlight.current = true;
+    const generation = nextListGeneration(pcApprovalsGeneration.current);
+    pcApprovalsGeneration.current = generation;
+    setPcApprovalsState({ status: "loading" });
+    void loadPcApprovalsList(async () => {
+      const res = await fetch("/api/mind/pc/approvals", { credentials: "include" });
+      if (!res.ok) {
+        throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+      }
+      return res.json();
+    }, { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, pcApprovalsGeneration.current)) return;
+        setPcApprovalsState(next);
+        if (next.status === "ready") {
+          setPcApprovals(next.items);
+          return;
+        }
+        setPcApprovals([]);
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(refreshPcApprovals));
+        }
+      })
+      .finally(() => {
+        if (generation === pcApprovalsGeneration.current) pcApprovalsInFlight.current = false;
+      });
   }
 
   useEffect(() => {
     if (mode !== "tools") return;
     loadMcpServers();
-    void mcpRegistryTools()
-      .then((result) => setMcpTools(result.tools))
-      .catch(() => setMcpTools([]));
+    loadMcpTools();
     refreshPcApprovals();
     const timer = window.setInterval(refreshPcApprovals, 15_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      // Invalidate in-flight responses when leaving tools mode.
+      mcpListGeneration.current = nextListGeneration(mcpListGeneration.current);
+      mcpToolsGeneration.current = nextListGeneration(mcpToolsGeneration.current);
+      pcApprovalsGeneration.current = nextListGeneration(pcApprovalsGeneration.current);
+      mcpListInFlight.current = false;
+      mcpToolsInFlight.current = false;
+      pcApprovalsInFlight.current = false;
+    };
   }, [mode]);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
   const active = ws.agents.find((agent) => agent.id === agentId && !agent.archived) ?? ws.agents.find((agent) => !agent.archived) ?? null;
 
+  /** One workerHealth probe: loading → ready (offline/local detail) or error banner. Timeout + stale guard. */
+  function loadWorkerHealth() {
+    if (workerHealthInFlight.current) return;
+    workerHealthInFlight.current = true;
+    const generation = nextListGeneration(workerHealthGeneration.current);
+    workerHealthGeneration.current = generation;
+    setWorkerHealthState({ status: "loading" });
+    void loadWorkerHealthStatus(() => workerHealth(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, workerHealthGeneration.current)) return;
+        setWorkerHealthState(next);
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadWorkerHealth));
+        }
+      })
+      .finally(() => {
+        if (generation === workerHealthGeneration.current) workerHealthInFlight.current = false;
+      });
+  }
+
+  // After sign-in, refetch MCP list so servers appear without a full reload (one quiet notice).
+  useEffect(() => {
+    if (mode !== "tools") return;
+    if (mcpListState.status !== "unauthenticated") return;
+    const refetchIfSignedIn = () => {
+      void mindStatus()
+        .then((status) => {
+          if (status.signedIn === true) loadMcpServers();
+        })
+        .catch(() => undefined);
+    };
+    const onFocus = () => refetchIfSignedIn();
+    const onVis = () => {
+      if (document.visibilityState === "visible") refetchIfSignedIn();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    const poll = window.setInterval(refetchIfSignedIn, 4_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(poll);
+    };
+  }, [mode, mcpListState.status]);
+
   useEffect(() => {
     if (mode !== "scheduled") return;
-    void workerHealth()
-      .then((health) => setWorkerNote(health.detail))
-      .catch(() => setWorkerNote("Worker status could not be read. Nothing is reported as online."));
+    loadWorkerHealth();
+    return () => {
+      workerHealthGeneration.current = nextListGeneration(workerHealthGeneration.current);
+      workerHealthInFlight.current = false;
+    };
   }, [mode]);
 
 
@@ -312,7 +461,7 @@ export function FleetPanel({
           <input value={mailLabel} onChange={(event) => setMailLabel(event.target.value)} placeholder="Mailbox label" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={mailAddress} onChange={(event) => setMailAddress(event.target.value)} placeholder="name@example.com" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addMailbox(ws, mailLabel, mailAddress))}>Add mailbox record</button>
-          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
+          <button type="button" className="is-coming-soon min-h-11 rounded-panel border border-line px-3 text-sm" title="Coming soon — Google OAuth is not started from this button" aria-disabled={true} onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
         </div>
         <ul className="mt-3 space-y-2">
           {ws.mailboxes.map((item) => (
@@ -325,9 +474,18 @@ export function FleetPanel({
   }
 
   if (mode === "scheduled") {
+    const workerDetail =
+      workerHealthState.status === "ready"
+        ? workerHealthState.health.detail
+        : workerHealthState.status === "loading"
+          ? "Checking the worker."
+          : null;
     return (
       <section className="page-shell">
-        <div className="page-hero mb-4"><h2 className="font-display text-3xl font-bold">Scheduled tasks</h2><p className="text-sm text-muted">{workerNote} This database is local. It is not hosted scheduling.</p></div>
+        <div className="page-hero mb-4"><h2 className="font-display text-3xl font-bold">Scheduled tasks</h2><p className="text-sm text-muted">{workerDetail ? `${workerDetail} ` : ""}This database is local. It is not hosted scheduling.</p></div>
+        <ul className="mb-2 space-y-2">
+          <WorkerHealthStatusRows state={workerHealthState} onRetry={onceListRetry(loadWorkerHealth)} />
+        </ul>
         <p className="mt-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
@@ -413,7 +571,8 @@ export function FleetPanel({
         <h3 className="font-semibold">PC shell approvals</h3>
         <p className="text-sm text-muted">Non-allowlisted pc_run_shell commands wait here. Approve or deny from this panel only — tool confirm args cannot authorize them.</p>
         <ul className="space-y-2 text-sm">
-          {pcApprovals.map((item) => (
+          {pcApprovalsState.status === "ready"
+            ? pcApprovals.map((item) => (
             <li key={item.id} className="rounded-panel border border-line bg-surface p-3">
               <p className="font-semibold">{item.command}</p>
               <p className="text-xs text-muted">Agent {item.agentLabel || item.agentId} · expires {item.expiresAt} · id {item.id}</p>
@@ -422,21 +581,34 @@ export function FleetPanel({
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() => {
-                    setPcApprovalNote(`approving ${item.id}`);
-                    void fetch("/api/mind/pc/approve", {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ approvalId: item.id, token: item.token, command: item.command }),
-                    })
-                      .then(async (res) => {
-                        const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; error?: string } | null;
-                        setPcApprovalNote(body?.ok ? `ok: ${body.text ?? "ran"}` : `error: ${body?.error ?? res.status}`);
-                        refreshPcApprovals();
-                      })
-                      .catch((error: unknown) => {
-                        setPcApprovalNote(error instanceof Error ? error.message : "Approve failed.");
+                    const params = snapshotPcApprovalActionParams({
+                      action: "approve",
+                      approvalId: item.id,
+                      token: item.token,
+                      command: item.command,
+                    });
+                    const run = () => {
+                      setPcApprovalActionState({ status: "running", action: "approve", approvalId: item.id });
+                      setPcApprovalNote(`approving ${item.id}`);
+                      void runPcApprovalAction(params, fetch).then((result) => {
+                        if (result.ok) {
+                          setPcApprovalActionState({ status: "ok", note: result.note });
+                          setPcApprovalNote(result.note);
+                          refreshPcApprovals();
+                          return;
+                        }
+                        setPcApprovalActionState({
+                          status: "error",
+                          kind: result.kind,
+                          message: result.message,
+                          params: result.params,
+                        });
+                        setPcApprovalNote(null);
+                        const retry = onceRetry(() => run());
+                        if (retry) onFailure?.(result.message, retry);
                       });
+                    };
+                    run();
                   }}
                 >
                   Approve
@@ -445,39 +617,83 @@ export function FleetPanel({
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() => {
-                    setPcApprovalNote(`denying ${item.id}`);
-                    void fetch("/api/mind/pc/deny", {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ approvalId: item.id, token: item.token }),
-                    })
-                      .then(async (res) => {
-                        const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-                        setPcApprovalNote(body?.ok ? `denied ${item.id}` : `error: ${body?.error ?? res.status}`);
-                        refreshPcApprovals();
-                      })
-                      .catch((error: unknown) => {
-                        setPcApprovalNote(error instanceof Error ? error.message : "Deny failed.");
+                    const params = snapshotPcApprovalActionParams({
+                      action: "deny",
+                      approvalId: item.id,
+                      token: item.token,
+                    });
+                    const run = () => {
+                      setPcApprovalActionState({ status: "running", action: "deny", approvalId: item.id });
+                      setPcApprovalNote(`denying ${item.id}`);
+                      void runPcApprovalAction(params, fetch).then((result) => {
+                        if (result.ok) {
+                          setPcApprovalActionState({ status: "ok", note: result.note });
+                          setPcApprovalNote(result.note);
+                          refreshPcApprovals();
+                          return;
+                        }
+                        setPcApprovalActionState({
+                          status: "error",
+                          kind: result.kind,
+                          message: result.message,
+                          params: result.params,
+                        });
+                        setPcApprovalNote(null);
+                        const retry = onceRetry(() => run());
+                        if (retry) onFailure?.(result.message, retry);
                       });
+                    };
+                    run();
                   }}
                 >
                   Deny
                 </button>
               </div>
             </li>
-          ))}
-          {pcApprovals.length === 0 ? <li className="text-sm text-muted">No pending PC shell approvals.</li> : null}
+              ))
+            : null}
+          <PcApprovalsListStatusRows state={pcApprovalsState} onRetry={onceListRetry(refreshPcApprovals)} />
         </ul>
-        {pcApprovalNote ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
+        <PcApprovalActionStatusRows
+          state={pcApprovalActionState}
+          onRetry={
+            pcApprovalActionState.status === "error"
+              ? onceRetry(() => {
+                  const params = pcApprovalActionState.params;
+                  const run = () => {
+                    setPcApprovalActionState({ status: "running", action: params.action, approvalId: params.approvalId });
+                    void runPcApprovalAction(params, fetch).then((result) => {
+                      if (result.ok) {
+                        setPcApprovalActionState({ status: "ok", note: result.note });
+                        setPcApprovalNote(result.note);
+                        refreshPcApprovals();
+                        return;
+                      }
+                      setPcApprovalActionState({
+                        status: "error",
+                        kind: result.kind,
+                        message: result.message,
+                        params: result.params,
+                      });
+                      setPcApprovalNote(null);
+                      const retry = onceRetry(() => run());
+                      if (retry) onFailure?.(result.message, retry);
+                    });
+                  };
+                  run();
+                }) ?? (() => undefined)
+              : () => undefined
+          }
+        />
+        {pcApprovalNote && pcApprovalActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
       </div>
 
       <div className="mt-6 space-y-3">
         <h3 className="font-semibold">MCP servers</h3>
         <p className="text-sm text-muted">Every registered server is listed. Disabled servers keep their tools visible but calls refuse honestly. Toggles persist on the server.</p>
         <ul className="space-y-2 text-sm">
-          {mcpServers.map((server) => {
-            const tools = mcpTools.filter((tool) => tool.serverId === server.id);
+          {mcpListState.status === "ready" ? mcpServers.map((server) => {
+            const tools = mcpToolsState.status === "ready" ? mcpTools.filter((tool) => tool.serverId === server.id) : [];
             return (
               <li key={server.id} className="rounded-panel border border-line bg-surface p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -491,7 +707,7 @@ export function FleetPanel({
                     onClick={() => {
                       void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
                         setMcpServers(result.servers);
-                        void mcpRegistryTools().then((listed) => setMcpTools(listed.tools)).catch(() => undefined);
+                        loadMcpTools();
                       });
                     }}
                   >
@@ -509,18 +725,31 @@ export function FleetPanel({
                           className="mt-1 min-h-11 rounded-panel border border-line px-3 text-sm"
                           disabled={mcpCallStatus === "running"}
                           onClick={() => {
-                            setMcpCallStatus("running");
-                            setMcpCallNote(`running: pglite_query on ${server.label} (enabled=${server.enabled})`);
-                            void mcpRegistryCall({ data: { serverId: server.id, tool: "pglite_query", args: { sql: "SELECT 1 AS n" } } })
-                              .then((result) => {
-                                const row = result as { status: string; text: string };
-                                setMcpCallStatus(row.status === "ok" ? "ok" : row.status === "timeout" ? "timeout" : "error");
-                                setMcpCallNote(`${row.status}: ${row.text}`);
-                              })
-                              .catch((error: unknown) => {
-                                setMcpCallStatus("error");
-                                setMcpCallNote(error instanceof Error ? error.message : "MCP call failed.");
+                            const params = snapshotMcpTrySelectParams({ serverId: server.id, serverLabel: server.label });
+                            const run = () => {
+                              setMcpCallStatus("running");
+                              setMcpCallActionState({ status: "running", params });
+                              setMcpCallNote(`running: pglite_query on ${server.label} (enabled=${server.enabled})`);
+                              void runMcpTrySelect(params, (input) => mcpRegistryCall(input)).then((result) => {
+                                if (result.ok) {
+                                  setMcpCallStatus("ok");
+                                  setMcpCallActionState({ status: "ok", note: result.note });
+                                  setMcpCallNote(result.note);
+                                  return;
+                                }
+                                setMcpCallStatus(result.kind === "network_failure" && /timed out|timeout/i.test(result.message) ? "timeout" : "error");
+                                setMcpCallActionState({
+                                  status: "error",
+                                  kind: result.kind,
+                                  message: result.message,
+                                  params: result.params,
+                                });
+                                setMcpCallNote(null);
+                                const retry = onceMcpCallRetry(() => run());
+                                if (retry) onFailure?.(result.message, retry);
                               });
+                            };
+                            run();
                           }}
                         >
                           Try SELECT 1
@@ -531,10 +760,44 @@ export function FleetPanel({
                 </ul>
               </li>
             );
-          })}
+          }) : null}
           <McpListStatusRows state={mcpListState} onRetry={onceListRetry(loadMcpServers)} />
+          <McpToolsListStatusRows state={mcpToolsState} onRetry={onceListRetry(loadMcpTools)} />
         </ul>
-        {mcpCallNote ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
+        <McpCallActionStatusRows
+          state={mcpCallActionState}
+          onRetry={
+            mcpCallActionState.status === "error"
+              ? onceMcpCallRetry(() => {
+                  const params = mcpCallActionState.params;
+                  const run = () => {
+                    setMcpCallStatus("running");
+                    setMcpCallActionState({ status: "running", params });
+                    void runMcpTrySelect(params, (input) => mcpRegistryCall(input)).then((result) => {
+                      if (result.ok) {
+                        setMcpCallStatus("ok");
+                        setMcpCallActionState({ status: "ok", note: result.note });
+                        setMcpCallNote(result.note);
+                        return;
+                      }
+                      setMcpCallStatus("error");
+                      setMcpCallActionState({
+                        status: "error",
+                        kind: result.kind,
+                        message: result.message,
+                        params: result.params,
+                      });
+                      setMcpCallNote(null);
+                      const retry = onceMcpCallRetry(() => run());
+                      if (retry) onFailure?.(result.message, retry);
+                    });
+                  };
+                  run();
+                }) ?? (() => undefined)
+              : () => undefined
+          }
+        />
+        {mcpCallNote && mcpCallActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
       </div>
 
       <ul className="mt-4 space-y-2 text-sm">

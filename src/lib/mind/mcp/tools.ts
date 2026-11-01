@@ -337,10 +337,6 @@ export async function pcRunShell(input: {
 }
 
 
-const WRITE_SQL =
-  /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|call|do|execute|merge|vacuum|reindex|cluster|comment|security|owner|refresh|listen|notify|set\s+role|reset\s+role|load|discard)\b/i;
-
-
 const WRITE_SQL_KEYWORDS = new Set(
   [
     "insert",
@@ -450,6 +446,7 @@ function isSideEffectFunctionName(name: string): boolean {
 
 type SqlTok =
   | { kind: "ident"; value: string }
+  | { kind: "number"; value: string }
   | { kind: "punct"; value: string }
   | { kind: "other" };
 
@@ -609,11 +606,11 @@ export function tokenizeSqlForGuard(sql: string): TokenizeResult {
       continue;
     }
 
-    // Numbers (skip for keyword checks)
+    // Numbers (bounds checks need the value; keyword checks ignore them)
     if (/[0-9]/.test(ch) || (ch === "." && /[0-9]/.test(peek(1)))) {
       let j = i + 1;
       while (j < n && /[0-9_.]/.test(sql[j])) j += 1;
-      tokens.push({ kind: "other" });
+      tokens.push({ kind: "number", value: sql.slice(i, j) });
       i = j;
       continue;
     }
@@ -743,7 +740,89 @@ export function assertReadOnlySql(sql: string): { ok: true; sql: string; explain
     }
   }
 
-  const explain = first === "explain";
+  // H15: refuse recursive CTEs — they can hang single-threaded PGLite forever.
+  for (const id of idents) {
+    if (id.value === "recursive") {
+      return {
+        ok: false,
+        text: "pglite_query refuses recursive CTEs (they can hang the server). Rewrite without RECURSIVE. Nothing was run.",
+      };
+    }
+  }
+
+  // H15: cap generate_series bounds (and refuse non-literal / multi-series bombs).
+  const GENERATE_SERIES_MAX = 10_000;
+  let generateSeriesCalls = 0;
+  for (let i = 0; i < tokens.length; i += 1) {
+    const tok = tokens[i];
+    if (tok.kind !== "ident" || tok.value.toLowerCase() !== "generate_series") continue;
+    let j = i + 1;
+    // optional schema. prefix already consumed when this ident is the function name
+    const open = nextNonOther(tokens, j);
+    if (!open || open.tok.kind !== "punct" || open.tok.value !== "(") continue;
+    generateSeriesCalls += 1;
+    if (generateSeriesCalls > 1) {
+      return {
+        ok: false,
+        text: "pglite_query allows at most one generate_series() call (cross joins can freeze the server). Nothing was run.",
+      };
+    }
+    const nums: number[] = [];
+    let depth = 0;
+    let sawNonLiteralArg = false;
+    for (let t = open.idx + 1; t < tokens.length; t += 1) {
+      const cur = tokens[t];
+      if (cur.kind === "punct" && cur.value === "(") {
+        depth += 1;
+        sawNonLiteralArg = true;
+        continue;
+      }
+      if (cur.kind === "punct" && cur.value === ")") {
+        if (depth === 0) break;
+        depth -= 1;
+        continue;
+      }
+      if (depth > 0) continue;
+      if (cur.kind === "punct" && (cur.value === "," || cur.value === "+") ) continue;
+      if (cur.kind === "number") {
+        const n = Number(cur.value);
+        if (Number.isFinite(n)) nums.push(n);
+        else sawNonLiteralArg = true;
+        continue;
+      }
+      if (cur.kind === "punct" && cur.value === "-") {
+        // negative bound handled if next is number — peek
+        const nxt = tokens[t + 1];
+        if (nxt?.kind === "number") {
+          const n = -Number(nxt.value);
+          if (Number.isFinite(n)) nums.push(n);
+          t += 1;
+          continue;
+        }
+      }
+      if (cur.kind === "ident" || cur.kind === "other") {
+        sawNonLiteralArg = true;
+      }
+    }
+    if (sawNonLiteralArg || nums.length < 2) {
+      return {
+        ok: false,
+        text: "pglite_query only allows generate_series(start, stop[, step]) with integer literals (max span 10000). Nothing was run.",
+      };
+    }
+    const start = nums[0]!;
+    const stop = nums[1]!;
+    const step = Math.abs(nums[2] ?? 1) || 1;
+    const span = Math.floor(Math.abs(stop - start) / step) + 1;
+    if (span > GENERATE_SERIES_MAX) {
+      return {
+        ok: false,
+        text: `pglite_query refuses generate_series spans over ${GENERATE_SERIES_MAX} rows (got ~${span}). Nothing was run.`,
+      };
+    }
+  }
+
+    const explain = first === "explain";
   if (explain) {
     for (const id of idents) {
       if (id.value === "analyze" || id.value === "analyse") {
@@ -755,13 +834,20 @@ export function assertReadOnlySql(sql: string): { ok: true; sql: string; explain
   return { ok: true, sql: trimmed, explain };
 }
 
-export const PGLITE_DEFAULT_ROW_LIMIT = 100;
-export const PGLITE_DEFAULT_TIMEOUT_MS = 5_000;
-
 export type SqlLike = {
   query: (text: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
   /** Optional non-result exec for BEGIN/ROLLBACK/RESET. Falls back to query(). */
   exec?: (text: string) => Promise<void>;
+  /**
+   * Actual engine in use (not inferred from env). PGLite gets pre-exec complexity
+   * limits; Postgres/Neon uses a dedicated client for SET LOCAL statement_timeout.
+   */
+  engine?: "pglite" | "postgres";
+  /**
+   * Neon/Postgres: run fn on a single pool.connect() client so SET LOCAL sticks,
+   * then release. When absent, fn runs against `this` (tests / PGLite).
+   */
+  withExclusiveClient?: <T>(fn: (client: SqlLike) => Promise<T>) => Promise<T>;
 };
 
 async function sqlExec(client: SqlLike, text: string): Promise<void> {
@@ -770,6 +856,71 @@ async function sqlExec(client: SqlLike, text: string): Promise<void> {
     return;
   }
   await client.query(text);
+}
+
+export const PGLITE_DEFAULT_ROW_LIMIT = 100;
+export const PGLITE_DEFAULT_TIMEOUT_MS = 5_000;
+/** Cap JSON payload size returned to the model/UI. */
+export const PGLITE_MAX_RESULT_CHARS = 8_000;
+
+async function runReadOnlyQueryOnClient(
+  client: SqlLike,
+  limitedSql: string,
+  params: unknown[],
+  timeoutMs: number,
+): Promise<Record<string, unknown>[]> {
+  try {
+    await sqlExec(client, "RESET ALL");
+  } catch {
+    try {
+      await sqlExec(client, "RESET search_path");
+    } catch {
+      /* ignore */
+    }
+  }
+  let began = false;
+  try {
+    await sqlExec(client, "BEGIN READ ONLY");
+    began = true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "BEGIN READ ONLY failed";
+    throw new Error(`BEGIN READ ONLY failed; refusing to run query: ${message}`);
+  }
+  try {
+    try {
+      await sqlExec(client, `SET LOCAL statement_timeout = ${timeoutMs}`);
+    } catch {
+      /* PGLite accepts but ignores; Postgres honors it. */
+    }
+    // Wall-clock race: effective for I/O-bound Postgres. For CPU-bound PGLite the
+    // pre-exec complexity guard is the real protection; this still reports honestly
+    // if the backend yields / aborts via statement_timeout.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const rows = await Promise.race([
+        client.query(limitedSql, params),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs}ms`)), timeoutMs);
+        }),
+      ]);
+      return rows;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  } finally {
+    if (began) {
+      try {
+        await sqlExec(client, "ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      await sqlExec(client, "RESET ALL");
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export async function pgliteQuery(input: {
@@ -783,67 +934,38 @@ export async function pgliteQuery(input: {
   if (!checked.ok) return { ok: false, status: "error", text: checked.text };
   const rowLimit = Math.min(Math.max(input.rowLimit ?? PGLITE_DEFAULT_ROW_LIMIT, 1), 500);
   const timeoutMs = Math.min(Math.max(input.timeoutMs ?? PGLITE_DEFAULT_TIMEOUT_MS, 100), 30_000);
-  // EXPLAIN cannot sit inside a subquery, so it runs as-is (its output is a short plan).
   const limitedSql = checked.explain ? checked.sql : `SELECT * FROM (${checked.sql}) AS _mind_q LIMIT ${rowLimit}`;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let began = false;
+  const params = input.params ?? [];
+  const client = input.sqlClient;
+
   try {
-    // Clean session state before the query so a prior set_config cannot hide tables
-    // or redirect schema resolution for this call.
-    try {
-      await sqlExec(input.sqlClient, "RESET ALL");
-    } catch {
-      try {
-        await sqlExec(input.sqlClient, "RESET search_path");
-      } catch {
-        /* ignore */
-      }
-    }
-    try {
-      await sqlExec(input.sqlClient, "BEGIN READ ONLY");
-      began = true;
-    } catch {
-      // Defense-in-depth: continue without a RO txn if the backend rejects it.
-      began = false;
-    }
-    const allRows = await Promise.race([
-      input.sqlClient.query(limitedSql, input.params ?? []),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs}ms`)), timeoutMs);
-      }),
-    ]);
+    const run = (c: SqlLike) => runReadOnlyQueryOnClient(c, limitedSql, params, timeoutMs);
+    const allRows =
+      client.engine === "postgres" && client.withExclusiveClient
+        ? await client.withExclusiveClient(run)
+        : await run(client);
     const rows = Array.isArray(allRows) ? allRows.slice(0, rowLimit) : [];
+    const payload = JSON.stringify({ rowCount: rows.length, rowLimit, rows }, null, 2);
+    if (payload.length > PGLITE_MAX_RESULT_CHARS) {
+      return {
+        ok: true,
+        status: "ok",
+        text: payload.slice(0, PGLITE_MAX_RESULT_CHARS) + "\n…(truncated)",
+        data: { rowCount: rows.length, rowLimit, rows, truncated: true },
+      };
+    }
     return {
       ok: true,
       status: "ok",
-      text: JSON.stringify({ rowCount: rows.length, rowLimit, rows }, null, 2).slice(0, 8000),
+      text: payload,
       data: { rowCount: rows.length, rowLimit, rows },
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Query failed.";
     return { ok: false, status: "error", text: `PGLite query error: ${message}` };
-  } finally {
-    if (timer) clearTimeout(timer);
-    if (began) {
-      try {
-        await sqlExec(input.sqlClient, "ROLLBACK");
-      } catch {
-        /* ignore */
-      }
-    }
-    try {
-      await sqlExec(input.sqlClient, "RESET ALL");
-    } catch {
-      try {
-        await sqlExec(input.sqlClient, "RESET search_path");
-      } catch {
-        /* ignore */
-      }
-    }
   }
 }
 
-/** List base tables/views in public schema (read-only helper). */
 export async function pgliteListSchema(input: { sqlClient: SqlLike }): Promise<ToolResult> {
   return pgliteQuery({
     sql: `SELECT table_schema, table_name, table_type

@@ -54,7 +54,22 @@ export type VerifiedUser = { id: string; email: string | null };
  * as a bearer token, which we present as `Authorization: Bearer …` (the `bearer`
  * plugin resolves it). When deployed no token is passed and the cookie is used.
  */
-export async function getSessionUser(
+async function readSupabaseSessionUser(): Promise<VerifiedUser | null> {
+  try {
+    const { readSupabaseEnv, createSupabaseServerClient } = await import(
+      "../supabase/server"
+    );
+    if (!readSupabaseEnv()) return null;
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user?.id) return null;
+    return { id: data.user.id, email: data.user.email ?? null };
+  } catch {
+    return null;
+  }
+}
+
+async function readBetterAuthSessionUser(
   bearerToken?: string,
 ): Promise<VerifiedUser | null> {
   if (!authConfigured && !gateIdentityEnabled()) return null;
@@ -66,8 +81,23 @@ export async function getSessionUser(
     headers.set("Authorization", `Bearer ${bearerToken}`);
   }
   const session = await auth.api.getSession({ headers });
-  if (!session?.user) return null;
+  if (!session?.user?.id) return null;
   return { id: session.user.id, email: session.user.email ?? null };
+}
+
+export async function getSessionUser(
+  bearerToken?: string,
+): Promise<VerifiedUser | null> {
+  const { pickSessionUser } = await import("./session-user");
+  const supabaseUser = await readSupabaseSessionUser();
+  // When Supabase Auth is configured and has a user, that is the owner session
+  // MCP list / turn / halt endpoints accept. Better Auth remains a fallback for
+  // existing broker sessions.
+  if (supabaseUser) {
+    return pickSessionUser({ supabaseUser, betterAuthUser: null });
+  }
+  const betterAuthUser = await readBetterAuthSessionUser(bearerToken);
+  return pickSessionUser({ supabaseUser: null, betterAuthUser });
 }
 
 /**

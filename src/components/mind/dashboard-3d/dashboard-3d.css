@@ -299,3 +299,385 @@
 .dash3d-stale {
   border-color: rgba(251, 191, 36, 0.55) !important;
 }
+
+.dash3d-portrait {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 0 18px rgba(124,92,255,0.25);
+  margin: 0 0 0.5rem;
+  background: rgba(8,12,28,0.8);
+}
+.dash3d-side .dash3d-glass {
+  max-height: min(92vh, 920px);
+  overflow: auto;
+}
+
+
+/* Queue #5 TIME scrubber */
+.dash3d-time-scrub {
+  min-width: 220px;
+  max-width: 320px;
+  padding: 0.55rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.dash3d-time-scrub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.dash3d-time-scrub-head h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.dash3d-time-live {
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: rgba(14, 24, 48, 0.65);
+  color: #e8eefc;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.55rem;
+  cursor: pointer;
+}
+.dash3d-time-live[aria-pressed="true"] {
+  background: rgba(61, 214, 140, 0.22);
+  border-color: rgba(61, 214, 140, 0.55);
+}
+.dash3d-time-range {
+  width: 100%;
+  accent-color: #7dd3fc;
+  cursor: pointer;
+}
+.dash3d-time-scrub[data-mode="before_history"] .dash3d-title {
+  color: #fbbf24;
+}
+
+
+/* Queue #6 FEED */
+.dash3d-feed-panel {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 4.5rem;
+  width: min(320px, 36vw);
+  max-height: min(42vh, 380px);
+  overflow: auto;
+  z-index: 6;
+  pointer-events: auto;
+  padding: 0.55rem 0.7rem 0.65rem;
+}
+.dash3d-feed-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.dash3d-feed-head h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dash3d-feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+.dash3d-feed-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background: rgba(10, 16, 32, 0.45);
+  color: #e8eefc;
+  border-radius: 0.55rem;
+  padding: 0.35rem 0.45rem;
+  cursor: pointer;
+}
+.dash3d-feed-row:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.dash3d-feed-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.dash3d-feed-kind {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.dash3d-feed-text {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash3d-feed-sources {
+  margin-top: 0.45rem;
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+.dash3d-feed-sources ul {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+.dash3d-feed-sources li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin: 0.15rem 0;
+}
+.dash3d-feed-sources li[data-missing="1"] .dash3d-mono {
+  color: #fbbf24;
+}
+.dash3d-feed-glyph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  filter: drop-shadow(0 0 10px rgba(125, 211, 252, 0.55));
+}
+.dash3d-feed-glyph-mark {
+  font-size: 1.05rem;
+  line-height: 1;
+  color: #9be7ff;
+  text-shadow: 0 0 12px rgba(125, 211, 252, 0.9);
+}
+.dash3d-feed-glyph-text {
+  max-width: 9rem;
+  font-size: 0.58rem;
+  color: #d7e6ff;
+  background: rgba(8, 14, 28, 0.55);
+  border: 1px solid rgba(125, 211, 252, 0.25);
+  border-radius: 0.4rem;
+  padding: 0.12rem 0.35rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash3d-feed-glyph[data-kind="gap"] .dash3d-feed-glyph-mark { color: #fbbf24; }
+.dash3d-feed-glyph[data-kind="lock"] .dash3d-feed-glyph-mark { color: #c4b5fd; }
+.dash3d-feed-glyph[data-kind="landing"] .dash3d-feed-glyph-mark { color: #86efac; }
+.dash3d-feed-glyph[data-kind="merge_gate"] .dash3d-feed-glyph-mark { color: #fda4af; }
+.dash3d-feed-glyph[data-kind="notion_stop"] .dash3d-feed-glyph-mark { color: #93c5fd; }
+
+
+/* Queue #7 MONEY */
+.dash3d-money {
+  min-width: 160px;
+  max-width: 240px;
+}
+.dash3d-money[data-available="0"] .dash3d-title {
+  color: #fbbf24;
+}
+.dash3d-money-warn {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  font-size: 0.68rem;
+}
+.dash3d-money-warn li[data-level="warn"] { color: #fbbf24; }
+.dash3d-money-warn li[data-level="crit"] { color: #fb7185; }
+
+
+/* Real-data charts */
+.dash3d-charts-panel {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 4.5rem;
+  width: min(280px, 34vw);
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  z-index: 6;
+  pointer-events: auto;
+  padding: 0.55rem 0.7rem 0.65rem;
+}
+.dash3d-charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.dash3d-chart-card h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+
+/* Queue #8 Operator */
+.dash3d-operator-root {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: start center;
+  padding-top: 12vh;
+  pointer-events: auto;
+}
+.dash3d-operator-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(4, 8, 18, 0.55);
+  cursor: pointer;
+}
+.dash3d-operator-panel {
+  position: relative;
+  width: min(520px, 92vw);
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 0.75rem 0.85rem 0.9rem;
+  z-index: 1;
+}
+.dash3d-operator-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+.dash3d-operator-head h2 { margin: 0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.dash3d-operator-input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: rgba(8, 14, 28, 0.85);
+  color: #e8eefc;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.9rem;
+}
+.dash3d-operator-list {
+  list-style: none;
+  margin: 0.45rem 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.dash3d-operator-row {
+  width: 100%;
+  display: flex;
+  gap: 0.5rem;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0.4rem 0.35rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+.dash3d-operator-row.is-active,
+.dash3d-operator-row:hover {
+  background: rgba(125, 211, 252, 0.12);
+}
+.dash3d-operator-row-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dash3d-operator-filters,
+.dash3d-operator-layers,
+.dash3d-operator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  align-items: center;
+}
+.dash3d-pill.is-on {
+  background: rgba(61, 214, 140, 0.22);
+  border-color: rgba(61, 214, 140, 0.5);
+}
+.dash3d-operator-layer {
+  font-size: 0.68rem;
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  text-transform: capitalize;
+}
+.dash3d-root[data-labels="0"] .dash3d-label, .dash3d-root[data-labels="0"] .dash3d-city-label {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Queue #9 Notion mirror */
+.dash3d-mirror-panel {
+  position: absolute;
+  left: 0.75rem;
+  top: 4.6rem;
+  width: min(300px, 34vw);
+  max-height: min(36vh, 320px);
+  overflow: auto;
+  z-index: 6;
+  pointer-events: auto;
+  padding: 0.55rem 0.7rem;
+}
+.dash3d-mirror-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.dash3d-mirror-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.05rem 0.4rem;
+  text-align: left;
+  border: 1px solid rgba(125, 211, 252, 0.12);
+  background: rgba(8, 14, 28, 0.4);
+  color: inherit;
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.4rem;
+  cursor: pointer;
+}
+.dash3d-mirror-row:disabled { cursor: default; opacity: 0.75; }
+.dash3d-mirror-bot { font-size: 0.72rem; font-weight: 600; }
+.dash3d-mirror-fresh { font-size: 0.62rem; color: #86efac; }
+.dash3d-mirror-fresh.is-stale { color: #fbbf24; }
+.dash3d-mirror-title {
+  grid-column: 1 / -1;
+  font-size: 0.65rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.dash3d-chart-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+}
+.dash3d-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}

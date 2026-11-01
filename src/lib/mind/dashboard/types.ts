@@ -85,6 +85,9 @@ export type DashboardStatus = {
     repoDir: string;
     locksOk: boolean;
     gitOk: boolean;
+    /** Where commits came from: live git, build-time snapshot, or none. */
+    commitsSource?: "git" | "snapshot" | "none";
+    commitsSnapshotAt?: string;
     /** Honest reason git data is missing (never silently green). */
     gitError?: string;
     /** Env override rejected by the path allowlist (fallback used). */
@@ -98,4 +101,14 @@ export type DashboardStatus = {
   notionGraph: import("./notion-graph.ts").NotionGraph;
   projects: import("./projects.ts").ProjectsDashboard;
   fleetPlan: import("./fleet-plan.ts").FleetPlan;
+  /** Queue #5 — real git+lock timeline for the TIME scrubber. */
+  timeline: import("./time-scrub.ts").Timeline;
+  /** Queue #6 — drifting sky feed + glass list (real sources only). */
+  skyFeed: import("./sky-feed.ts").SkyFeed;
+  /** Queue #7 — burn/today/warnings from real spend adapter only. */
+  money: import("./spend-core.ts").MoneyView;
+  /** Real-data spark charts. */
+  charts: import("./chart-series.ts").DashboardCharts;
+  /** Queue #9 — per-bot Notion stop-point freshness from snapshot. */
+  notionMirror: import("./notion-mirror.ts").NotionMirrorView;
 };

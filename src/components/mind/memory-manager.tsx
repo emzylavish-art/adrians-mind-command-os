@@ -1,7 +1,15 @@
 import { useMemo, useState } from "react";
 import type { MemoryItem, MemoryScope, Workspace } from "@/lib/mind/types";
 import { addMemory, deleteMemory, reviseMemory } from "@/lib/mind/workspace";
-import { MEMORY_TEXT_MAX, sanitizeMemoryText } from "@/lib/mind/memory";
+import { MEMORY_TEXT_MAX } from "@/lib/mind/memory";
+import {
+  MemoryActionFailureBanner,
+  onceRetry,
+  runMemoryAction,
+  snapshotMemoryActionParams,
+  type MemoryActionParams,
+  type MemoryActionState,
+} from "@/lib/mind/memory-action";
 import { MemoryChatToggle } from "./memory-chat-toggle";
 import { MemorySavedIndicator } from "./memory-saved-indicator";
 
@@ -18,18 +26,21 @@ export function MemoryManagerView({
   ws,
   setWs,
   demoSignal,
+  onFailure,
 }: {
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
   /** Optional demo of the in-thread indicator (no command-app mount). */
   demoSignal?: { memorySaved: boolean; savedMemoryId?: string | null };
+  /** Optional: reportFailure for top View log — mount wiring may live outside this lane. */
+  onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<MemoryScope>("global");
   const [draft, setDraft] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [actionState, setActionState] = useState<MemoryActionState>({ status: "idle" });
   const [lastSaved, setLastSaved] = useState<{ memorySaved: boolean; savedMemoryId: string | null }>({
     memorySaved: false,
     savedMemoryId: null,
@@ -45,48 +56,60 @@ export function MemoryManagerView({
       .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   }, [ws.memories, query]);
 
-  function saveNew() {
-    const text = sanitizeMemoryText(draft);
-    if (!text) {
-      setError("Write a note before saving.");
-      return;
-    }
-    let createdId: string | null = null;
-    setWs((prev) => {
-      const before = new Set(prev.memories.map((item) => item.id));
-      const next = addMemory(prev, {
-        scope,
-        text,
-        source: "owner",
-        projectId: null,
-        chatId: null,
+  function applyAction(params: MemoryActionParams) {
+    const snap = snapshotMemoryActionParams(params);
+    const run = () => {
+      let createdId: string | null = null;
+      const result = runMemoryAction(snap, {
+        saveNew: ({ text, scope: nextScope }) => {
+          setWs((prev) => {
+            const before = new Set(prev.memories.map((item) => item.id));
+            const next = addMemory(prev, {
+              scope: nextScope,
+              text,
+              source: "owner",
+              projectId: null,
+              chatId: null,
+            });
+            createdId = next.memories.find((item) => !before.has(item.id))?.id ?? null;
+            return next;
+          });
+          setDraft("");
+          setLastSaved({ memorySaved: true, savedMemoryId: createdId });
+        },
+        saveEdit: ({ id, text }) => {
+          setWs((prev) => reviseMemory(prev, id, text));
+          setEditId(null);
+          setLastSaved({ memorySaved: true, savedMemoryId: id });
+        },
+        remove: ({ id }) => {
+          setWs((prev) => deleteMemory(prev, id));
+          setLastSaved((prev) =>
+            prev.savedMemoryId === id ? { memorySaved: false, savedMemoryId: null } : prev,
+          );
+        },
       });
-      createdId = next.memories.find((item) => !before.has(item.id))?.id ?? null;
-      return next;
-    });
-    setDraft("");
-    setError(null);
-    setLastSaved({ memorySaved: true, savedMemoryId: createdId });
+      if (result.ok) {
+        setActionState({ status: "ok" });
+        return;
+      }
+      setActionState({ status: "error", message: result.message, params: result.params });
+      const retry = onceRetry(() => run());
+      if (retry) onFailure?.(result.message, retry);
+    };
+    run();
+  }
+
+  function saveNew() {
+    applyAction({ kind: "save_new", text: draft, scope });
   }
 
   function saveEdit(item: MemoryItem) {
-    const text = sanitizeMemoryText(editText);
-    if (!text) {
-      setError("Edited note cannot be empty.");
-      return;
-    }
-    setWs((prev) => reviseMemory(prev, item.id, text));
-    setEditId(null);
-    setError(null);
-    setLastSaved({ memorySaved: true, savedMemoryId: item.id });
+    applyAction({ kind: "save_edit", id: item.id, text: editText });
   }
 
   function remove(item: MemoryItem) {
-    setWs((prev) => deleteMemory(prev, item.id));
-    setError(null);
-    if (lastSaved.savedMemoryId === item.id) {
-      setLastSaved({ memorySaved: false, savedMemoryId: null });
-    }
+    applyAction({ kind: "delete", id: item.id });
   }
 
   const signal = demoSignal ?? lastSaved;
@@ -153,11 +176,14 @@ export function MemoryManagerView({
             Save note
           </button>
         </div>
-        {error ? (
-          <p className="text-sm text-danger" data-testid="memory-error" role="alert">
-            {error}
-          </p>
-        ) : null}
+        <MemoryActionFailureBanner
+          state={actionState}
+          onRetry={
+            actionState.status === "error"
+              ? onceRetry(() => applyAction(actionState.params)) ?? (() => undefined)
+              : () => undefined
+          }
+        />
       </div>
 
       <div className="mb-3">

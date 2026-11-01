@@ -1,6 +1,13 @@
 import { DASHBOARD_BOTS, matchBotForLock } from "./bots.ts";
 import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFromLocks } from "./feeds.ts";
-import { collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { loadMoneyView } from "./spend.ts";
+import { buildDashboardCharts } from "./chart-series.ts";
+import { buildNotionMirrorView } from "./notion-mirror.ts";
+import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { loadCommitsSnapshot } from "./commits-snapshot.ts";
+import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
+import { buildSkyFeed } from "./sky-feed.ts";
+import { readFileSync } from "node:fs";
 import { locksDirFromEnvSafe, repoDirFromEnvSafe } from "./safe-paths.ts";
 import { classifyHealth } from "./health.ts";
 import { readLocksDir } from "./locks.ts";
@@ -45,15 +52,31 @@ export async function buildDashboardStatus(
   let commits: DashboardStatus["commits"] = [];
   let gitOk = false;
   let gitError: string | undefined;
+  let commitsSource: "git" | "snapshot" | "none" = "none";
+  let commitsSnapshotAt: string | undefined;
   try {
-    const res = collectRecentCommitsResult(repoDir, 20);
+    const res = collectRecentCommitsResult(repoDir, 40);
     gitOk = res.ok;
     commits = res.commits;
     if (!res.ok) gitError = res.error;
+    if (res.ok && res.commits.length) commitsSource = "git";
   } catch (error) {
     gitOk = false;
     gitError = error instanceof Error ? error.message : String(error);
     commits = [];
+  }
+  // Vercel / hosts without .git: fall back to build-time snapshot (never invent).
+  if (!commits.length) {
+    const snap = loadCommitsSnapshot();
+    if (snap?.commits?.length) {
+      commits = snap.commits.slice(0, 40);
+      commitsSource = "snapshot";
+      commitsSnapshotAt = snap.generatedAt || undefined;
+      gitOk = true;
+      gitError = gitError
+        ? `${gitError}; using commits snapshot @ ${snap.generatedAt || "unknown"}`
+        : `git unavailable; using commits snapshot @ ${snap.generatedAt || "unknown"}`;
+    }
   }
 
   const bots: BotNode[] = DASHBOARD_BOTS.map((def) => {
@@ -94,9 +117,31 @@ export async function buildDashboardStatus(
   const gapDispatcher = loadGapDispatcherFeed("/workspace/rea-captures");
   const orchestrator = orchestratorFromLocks(locks);
   const spend = loadSpend();
+  const money = loadMoneyView({ nowMs: now });
+  // charts built after fleetPlan below
   const constellations = buildConstellations(bots);
   const edges = constellationEdges(bots);
   const weather = systemWeather(bots);
+
+  // Queue #5 TIME: fleet+dashboard commits + lock timestamps + transition log
+  let transitionText = "";
+  try {
+    transitionText = readFileSync("/workspace/audit/dashboard-3d/lock-transitions.log", "utf8");
+  } catch {
+    transitionText = "";
+  }
+  let fleetCommits = commits;
+  try {
+    fleetCommits = collectBranchCommits(repoDir, undefined, 80);
+  } catch {
+    fleetCommits = commits;
+  }
+  const timeline = buildTimeline({
+    commits: fleetCommits.length ? fleetCommits : commits,
+    locks,
+    transitions: parseLockTransitionLog(transitionText),
+    nowMs: now,
+  });
 
   const base = {
     generatedAt: new Date(now).toISOString(),
@@ -112,6 +157,8 @@ export async function buildDashboardStatus(
       repoDir,
       locksOk: locks.length > 0,
       gitOk,
+      commitsSource,
+      ...(commitsSnapshotAt ? { commitsSnapshotAt } : {}),
       ...(gitError ? { gitError } : {}),
       ...(locksSafe.rejected ? { locksRejected: locksSafe.rejected } : {}),
       ...(repoSafe.rejected ? { repoRejected: repoSafe.rejected } : {}),
@@ -120,11 +167,48 @@ export async function buildDashboardStatus(
     constellationEdges: edges,
     weather,
     notionGraph,
+    timeline,
+    money,
   };
+
+  const fleetPlan = buildFleetPlan(bots, env);
+  const skyFeed = buildSkyFeed({
+    conductor,
+    gapDispatcher,
+    locks,
+    lockTransitionText: transitionText,
+    commits: fleetCommits.length ? fleetCommits : commits,
+    fleetPlan,
+    notionGraph,
+    nowMs: now,
+  });
+  let charts;
+  try {
+    charts = buildDashboardCharts({
+      commits: fleetCommits.length ? fleetCommits : commits,
+      timeline: base.timeline,
+      landings: fleetPlan.landings,
+      money,
+      bots,
+      nowMs: now,
+    });
+  } catch {
+    charts = buildDashboardCharts({ nowMs: now });
+  }
+
+  let notionMirror;
+  try {
+    notionMirror = buildNotionMirrorView({ bots, graph: notionGraph, nowMs: now });
+  } catch {
+    notionMirror = buildNotionMirrorView({ bots: [], graph: null, nowMs: now });
+  }
 
   return {
     ...base,
     projects: buildProjectsDashboard(base),
-    fleetPlan: buildFleetPlan(bots, env),
+    fleetPlan,
+    skyFeed,
+    charts,
+    notionMirror,
   };
 }

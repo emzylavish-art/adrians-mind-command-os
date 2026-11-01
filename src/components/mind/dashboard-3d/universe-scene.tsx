@@ -13,7 +13,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -24,20 +24,30 @@ import {
   rebuildFleetLaneLines,
 } from "./fleet-plan-layer";
 import {
+  acceptFlyDispatch,
+  acceptPointerPick,
   createRig,
   dollyPose,
   flyTo,
   focusBotTarget,
-  stepRig,
+  stepRigSmooth,
   type CameraRigState,
 } from "@/lib/mind/dashboard/camera-rig";
+import {
+  lineFlowPhase,
+  samplePolylineTravel,
+  travelProgress,
+} from "@/lib/mind/dashboard/sky-flow";
 import {
   pulsePhaseFromId,
   sampleOrbitDrift,
   sampleStarPulse,
   sanitizeDt,
+  sharedMotionClock,
 } from "./motion";
+import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
+import { createFeedGlyphs } from "./feed-glyphs";
 import { createCityLayer } from "./city/city-layer";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
 import {
@@ -294,6 +304,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     skyMat.depthWrite = false;
     const sky = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), skyMat);
     scene.add(sky);
+    // Painted backdrop (Grok Imagine) — honest fallback keeps procedural sky if missing
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      "/dashboard-3d/art/backdrop-nebula.webp",
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const painted = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false });
+        sky.material = painted;
+        skyMat.dispose();
+      },
+      undefined,
+      () => { /* keep procedural sky — no source */ },
+    );
 
 
 
@@ -363,14 +386,43 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botGroup.add(mesh);
         botMeshes.push(mesh);
 
-        const glow = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: starTex,
-            color,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          }),
+        const glowMat = new THREE.SpriteMaterial({
+          map: starTex,
+          color,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const glow = new THREE.Sprite(glowMat);
+        // Portrait card + life-size character plane (Imagine art). Clickable via botId userData.
+        const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
+        loader.load(
+          portraitUrl,
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const card = new THREE.Sprite(
+              new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.95 }),
+            );
+            card.scale.set(1.8, 1.8, 1.8);
+            card.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
+            card.userData.botId = bot.id;
+            botGroup.add(card);
+            // Life-size billboard person/character in the constellation (reuses same Imagine portrait).
+            const personMat = new THREE.MeshBasicMaterial({
+              map: tex,
+              transparent: true,
+              depthWrite: false,
+              side: THREE.DoubleSide,
+              opacity: 0.9,
+            });
+            const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
+            person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
+            person.userData.botId = bot.id;
+            person.userData.kind = "character";
+            botGroup.add(person);
+          },
+          undefined,
+          () => { /* no portrait asset yet */ },
         );
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
@@ -387,6 +439,43 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     }
 
+
+    // Shared scene characters / environments (real Imagine assets already in public/).
+    const sceneArts = [
+      { url: "/dashboard-3d/art/backdrop-nebula.webp", pos: new THREE.Vector3(-10, 4.5, -8), scale: [6.5, 3.8] as const },
+      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
+      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
+      { url: "/dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
+      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
+    ];
+    for (const art of sceneArts) {
+      loader.load(
+        art.url,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const mat = new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            opacity: 0.55,
+          });
+          const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
+          plane.position.copy(art.pos);
+          plane.userData.kind = "scene";
+          botGroup.add(plane);
+        },
+        undefined,
+        () => { /* missing art — keep procedural sky */ },
+      );
+    }
+
+    type FlowLine = { line: THREE.Line; seed: number; speed: number; baseOpacity: number };
+    const flowLines: FlowLine[] = [];
+    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number };
+    const landingTrails: LandingTrail[] = [];
+    const travelerGeo = new THREE.SphereGeometry(0.16, 12, 12);
+
     function rebuildEdges(status: DashboardStatus) {
       while (edgeGroup.children.length) {
         const ch = edgeGroup.children[0]!;
@@ -396,22 +485,36 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           (ch.material as THREE.Material).dispose();
         }
       }
+      flowLines.length = 0;
       const posOf = (id: string) => {
         if (id === "grok-build") return sunMesh.position.clone();
         const v = botVis.find((b) => b.id === id);
         return v ? v.base.clone() : null;
       };
+      let ei = 0;
       for (const e of status.constellationEdges) {
         const a = posOf(e.from);
         const b = posOf(e.to);
         if (!a || !b) continue;
         const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-        const mat = new THREE.LineBasicMaterial({
+        // Animation #3: dashed flow along constellation edges (static under reducedMotion)
+        const mat = new THREE.LineDashedMaterial({
           color: HEALTH_COLOR[e.health],
           transparent: true,
-          opacity: e.kind === "hub" ? 0.35 : 0.55,
+          opacity: e.kind === "hub" ? 0.35 : 0.6,
+          dashSize: e.kind === "hub" ? 0.35 : 0.28,
+          gapSize: e.kind === "hub" ? 0.22 : 0.18,
         });
-        edgeGroup.add(new THREE.Line(geo, mat));
+        const line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        edgeGroup.add(line);
+        flowLines.push({
+          line,
+          seed: ei * 0.37,
+          speed: e.health === "blocked" ? 0.9 : e.health === "stalled" ? 0.35 : e.health === "healthy" ? 0.55 : 0.15,
+          baseOpacity: e.kind === "hub" ? 0.35 : 0.6,
+        });
+        ei += 1;
       }
     }
 
@@ -479,7 +582,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         roughness: 0.5,
       });
       pageMesh = new THREE.InstancedMesh(pageGeo, mat, pages.length);
+      pageMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(pages.length * 3), 3);
       const dummy = new THREE.Object3D();
+      const baseCol = new THREE.Color(0x9bb7ff);
       pages.forEach((p, i) => {
         pageIdByIndex[i] = p.id;
         const [x, y, z] = positions[i]!;
@@ -487,8 +592,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         dummy.scale.setScalar(1);
         dummy.updateMatrix();
         pageMesh!.setMatrixAt(i, dummy.matrix);
+        pageMesh!.setColorAt(i, baseCol);
       });
       pageMesh.instanceMatrix.needsUpdate = true;
+      if (pageMesh.instanceColor) pageMesh.instanceColor.needsUpdate = true;
       pageGroup.add(pageMesh);
 
       // parent/child edges (cap for perf)
@@ -553,6 +660,34 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const v = botVis.find((b) => b.id === id);
           return v ? v.base.clone() : null;
         });
+        // Animation #3: landing-trail travelers (one per lane path)
+        for (const tr of landingTrails) {
+          landingGroup.remove(tr.mesh);
+          (tr.mesh.material as THREE.Material).dispose();
+        }
+        landingTrails.length = 0;
+        const baseY = -1.5;
+        status.fleetPlan.landings.forEach((landing, li) => {
+          const z = -10 - li * 2.2;
+          const xs = [-6, -2, 2.5, 7];
+          const points = landing.hops.map((hop, i) => ({
+            x: xs[i] ?? i * 3,
+            y: baseY + 0.2,
+            z,
+          }));
+          if (points.length < 2) return;
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0xffe08a,
+            emissive: 0xffc14a,
+            emissiveIntensity: 0.9,
+            transparent: true,
+            opacity: 0.95,
+          });
+          const mesh = new THREE.Mesh(travelerGeo, mat);
+          mesh.position.set(points[0]!.x, points[0]!.y, points[0]!.z);
+          landingGroup.add(mesh);
+          landingTrails.push({ points, mesh, seed: li * 1.7 });
+        });
       }
     }
     rebuildAll();
@@ -578,29 +713,80 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const dust = createDustField(scene, { count: 480, seed: 42 });
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+    let starHealthFilter: string = "all";
+    let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
 
     let composer: EffectComposer | null = null;
     let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
     let gradeHandle: ReturnType<typeof createColorGradePass> | null = null;
-    if (!reducedMotion) {
-      composer = new EffectComposer(renderer);
+    let raysHandle: ReturnType<typeof createGodRayPass> | null = null;
+    // Light lane #12: idle until real weather arrives (not healthy-green before data)
+    let exposureRide = createExposureRide({ tone: "idle", reducedMotion });
+    exposureRide.apply(renderer);
+
+    const rebuildPostfxBundle = () => {
+      // Light #13: rebuild passes into the live composer after WebGL restore
+      if (!composer || reducedMotion) {
+        return { bloom: null, grade: null, godRays: null, exposure: exposureRide };
+      }
+      const w = Math.max(1, mount.clientWidth || width);
+      const h = Math.max(1, mount.clientHeight || height);
+      composer.passes.length = 0;
       composer.addPass(new RenderPass(scene, camera));
+      let nextRays: typeof raysHandle = null;
+      let nextBloom: typeof bloomHandle = null;
+      let nextGrade: typeof gradeHandle = null;
       try {
-        bloomHandle = createTunedBloomPass(new THREE.Vector2(width, height), "healthy");
-        composer.addPass(bloomHandle.pass);
+        nextRays = createGodRayPass({ healthy: 0, total: 0, reducedMotion: false });
+        if (composer.readBuffer?.depthTexture) {
+          nextRays.setDepthTexture(composer.readBuffer.depthTexture, camera);
+        }
+        composer.addPass(nextRays.pass);
       } catch {
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.62, 0.75, 0.22));
+        nextRays = null;
       }
       try {
-        gradeHandle = createColorGradePass("healthy");
-        composer.addPass(gradeHandle.pass);
+        nextBloom = createTunedBloomPass(new THREE.Vector2(w, h), "idle");
+        composer.addPass(nextBloom.pass);
       } catch {
-        /* optional */
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.62, 0.75, 0.22));
+      }
+      try {
+        nextGrade = createColorGradePass("idle");
+        composer.addPass(nextGrade.pass);
+      } catch {
+        nextGrade = null;
       }
       composer.addPass(kit.painterlyPass);
+      bloomHandle = nextBloom;
+      gradeHandle = nextGrade;
+      raysHandle = nextRays;
+      exposureRide = createExposureRide({ tone: "idle", reducedMotion });
+      exposureRide.apply(renderer);
+      return { bloom: nextBloom, grade: nextGrade, godRays: nextRays, exposure: exposureRide };
+    };
+
+    if (!reducedMotion) {
+      try {
+        const depthTex = new THREE.DepthTexture(Math.max(1, width), Math.max(1, height));
+        const rt = new THREE.WebGLRenderTarget(Math.max(1, width), Math.max(1, height), {
+          depthTexture: depthTex,
+        });
+        composer = new EffectComposer(renderer, rt);
+      } catch {
+        composer = new EffectComposer(renderer);
+      }
+      rebuildPostfxBundle();
     }
+
+    const postfxRecovery = createContextLossRecovery({
+      canvas: renderer.domElement,
+      initial: { bloom: bloomHandle, grade: gradeHandle, godRays: raysHandle, exposure: exposureRide },
+      factory: rebuildPostfxBundle,
+    });
 
     let rig: CameraRigState = createRig(UNIVERSE_HIGH);
     let lookAt = new THREE.Vector3(...UNIVERSE_HIGH.lookAt);
@@ -620,6 +806,35 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    let hoverPageId: string | null = null;
+    const pageIndexById = () => {
+      const m = new Map<string, number>();
+      pageIdByIndex.forEach((id, i) => m.set(id, i));
+      return m;
+    };
+    const tintNotionNeighbors = (focusId: string | null) => {
+      if (!pageMesh || !pageMesh.instanceColor) return;
+      const base = new THREE.Color(0x9bb7ff);
+      const hot = new THREE.Color(0xffe08a);
+      const dim = new THREE.Color(0x3a4566);
+      const idx = pageIndexById();
+      const neigh = new Set<string>();
+      if (focusId) {
+        neigh.add(focusId);
+        for (const e of dataRef.current.notionGraph.edges) {
+          if (e.from === focusId && !e.to.startsWith("bot:")) neigh.add(e.to);
+          if (e.to === focusId && !e.from.startsWith("bot:")) neigh.add(e.from);
+        }
+      }
+      for (let i = 0; i < pageIdByIndex.length; i++) {
+        const id = pageIdByIndex[i]!;
+        if (!focusId) pageMesh.setColorAt(i, base);
+        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x7c5cff));
+        else pageMesh.setColorAt(i, dim);
+      }
+      pageMesh.instanceColor.needsUpdate = true;
+    };
+
 
     function setFly(next: FlyState, fly2camera: boolean) {
       fly = next;
@@ -636,6 +851,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       cbs.current.onFlyoverChange?.(fly, layout);
     }
     const dispatchFly = (ev: FlyEvent) => {
+      if (!acceptFlyDispatch(rig, ev.type)) return;
       const next = reduceFlyover(fly, ev, knownIds());
       if (next === fly) return;
       setFly(next, true);
@@ -681,7 +897,27 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
+    // Click-and-zoom: pinch → same dolly path as wheel
+    const pinchPointers = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
+    const pinchDolly = (delta: number) => {
+      if (rig.t < 1) return;
+      const [minD, maxD] = dollyLimits(fly.level);
+      const cur: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z];
+      const look: [number, number, number] = [lookAt.x, lookAt.y, lookAt.z];
+      const next = dollyPose(cur, look, delta, minD, maxD);
+      freePos.set(...next);
+      camera.position.copy(freePos);
+      spherical.setFromVector3(freePos.clone().sub(lookAt));
+      rig = { ...rig, t: 1, to: { position: next, lookAt: look }, from: { position: next, lookAt: look } };
+    };
     const onPointerDown = (ev: PointerEvent) => {
+      try { renderer.domElement.setPointerCapture(ev.pointerId); } catch { /* optional */ }
+      pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (pinchPointers.size === 2) {
+        const pts = [...pinchPointers.values()];
+        pinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+      }
       dragging = true;
       lastX = ev.clientX;
       lastY = ev.clientY;
@@ -689,12 +925,17 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       dragStartY = ev.clientY;
     };
     const onPointerUp = (ev: PointerEvent) => {
+      pinchPointers.delete(ev.pointerId);
+      if (pinchPointers.size < 2) pinchDist = 0;
+      try { renderer.domElement.releasePointerCapture(ev.pointerId); } catch { /* optional */ }
       // measure from drag start (lastX is updated during moves, so drags looked like clicks)
       const dx = Math.abs(ev.clientX - dragStartX);
       const dy = Math.abs(ev.clientY - dragStartY);
       const wasDrag = dx > 4 || dy > 4;
       dragging = false;
       if (wasDrag) return;
+      // Hacker: ignore star/city picks while a camera glide is in flight
+      if (!acceptPointerPick(rig)) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -745,6 +986,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (pageHits[0] && pageHits[0].instanceId != null) {
           const pid = pageIdByIndex[pageHits[0].instanceId];
           if (pid) {
+            hoverPageId = pid;
+            tintNotionNeighbors(pid);
             cbs.current.onSelectNotion(pid);
             return;
           }
@@ -765,6 +1008,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let dragStartX = 0;
     let dragStartY = 0;
     const onPointerMove = (ev: PointerEvent) => {
+      if (pinchPointers.has(ev.pointerId)) {
+        pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      }
+      if (pinchPointers.size === 2) {
+        const pts = [...pinchPointers.values()];
+        const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        if (pinchDist > 0 && Number.isFinite(dist)) {
+          const delta = Math.max(-400, Math.min(400, (dist - pinchDist) * 3));
+          if (delta !== 0) pinchDolly(delta);
+        }
+        pinchDist = dist;
+        return;
+      }
       if (!dragging || rig.t < 1 || fly.level === "interior") return;
       const dx = ev.clientX - lastX;
       const dy = ev.clientY - lastY;
@@ -791,9 +1047,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       camera.position.copy(freePos);
       camera.lookAt(lookAt);
     };
+    const onPointerHoverNotion = (ev: PointerEvent) => {
+      if (dragging || fly.level !== "universe" || !pageMesh) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObject(pageMesh, false);
+      const id = hits[0] && hits[0].instanceId != null ? pageIdByIndex[hits[0].instanceId] ?? null : null;
+      if (id !== hoverPageId) {
+        hoverPageId = id;
+        tintNotionNeighbors(id);
+      }
+    };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointermove", onPointerHoverNotion);
     renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
 
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
@@ -804,14 +1074,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let last = performance.now();
     let raf = 0;
     let sync = 0;
+    const travelOut = { x: 0, y: 0, z: 0 };
+    const onVisibility = () => {
+      // Animation #3: pause the loop while hidden; MotionClock absorbs the resume gap.
+      if (!isDocumentHidden()) last = performance.now();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      if (kit.contextLost) return; // WebGL context lost: pause instead of throwing every frame
+      if (kit.contextLost || postfxRecovery.lost) return; // WebGL context lost: pause (painter kit + light #13)
+      if (isDocumentHidden()) {
+        last = now;
+        return;
+      }
       const dt = sanitizeDt((now - last) / 1000);
       last = now;
 
       if (rig.t < 1) {
-        const stepped = stepRig(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.15);
+        const stepped = stepRigSmooth(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.35);
         rig = stepped.rig;
         applyPose(stepped.position, stepped.lookAt);
       }
@@ -821,29 +1101,66 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         ch.lookAt(camera.position);
       }
 
-      const t = now * 0.001;
+      const wallT = now * 0.001;
+      const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
+        const show = starHealthFilter === "all" || n.health === starHealthFilter;
+        n.mesh.visible = show;
+        n.glow.visible = show;
+        n.label.visible = show && labelsOn && fly.level === "universe";
         const phase = pulsePhaseFromId(n.id);
-        sampleStarPulse(pulseOut, t, phase, n.health, reducedMotion);
+        sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
         n.mesh.scale.setScalar(pulseOut.scale);
         n.glow.scale.setScalar(pulseOut.glow);
-        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, t, phase, reducedMotion);
+        const mat = n.mesh.material as THREE.MeshStandardMaterial;
+        if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
+        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, wallT, phase, reducedMotion);
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
-        n.label.visible = fly.level === "universe"; // star labels don't bleed into the city/interior
+        // label visibility owned above (health filter + labels layer + fly level)
       }
-      city.tick(t, reducedMotion);
-      dust.update(t, reducedMotion);
-      comets.update(t, reducedMotion);
+      if (!reducedMotion) {
+        for (const fl of flowLines) {
+          const mat = fl.line.material as THREE.LineDashedMaterial;
+          // LineDashedMaterial has no dashOffset in this three build — pulse opacity as flowing energy
+          const phase = lineFlowPhase(t, fl.speed, fl.seed);
+          mat.opacity = fl.baseOpacity * (0.42 + 0.58 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
+        }
+        for (const tr of landingTrails) {
+          samplePolylineTravel(travelOut, tr.points, travelProgress(t, 7.5, tr.seed));
+          tr.mesh.position.set(travelOut.x, travelOut.y + 0.35, travelOut.z);
+          tr.mesh.visible = fly.level === "universe";
+        }
+      } else {
+        for (const tr of landingTrails) tr.mesh.visible = false;
+      }
+      city.tick(wallT, reducedMotion);
+      dust.update(wallT, reducedMotion);
+      comets.update(wallT, reducedMotion);
+      feedGlyphs.update(wallT, reducedMotion);
+      const botsNow = dataRef.current.bots;
+      const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
+      const healthy = botsNow.filter((b) => b.health === "healthy").length;
+      const total = botsNow.length;
+      const localHour = new Date().getHours(); // box clock = Africa/Lagos
+      exposureRide.setTarget({ tone, hour: localHour, reducedMotion });
+      exposureRide.tick(dt * 1000);
+      const liveBloom = postfxRecovery.bundle.bloom ?? bloomHandle;
+      const liveGrade = postfxRecovery.bundle.grade ?? gradeHandle;
+      const liveRays = postfxRecovery.bundle.godRays ?? raysHandle;
+      const liveExposure = postfxRecovery.bundle.exposure ?? exposureRide;
+      liveExposure.apply(renderer, liveBloom ?? undefined);
+
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
         tickPainterlyKit(kit, t);
-        if (atm) {
-          const tone = dataRef.current.weather?.tone ?? deriveFleetTone(dataRef.current.bots.map((b) => b.health));
-          atm.update(tone);
-          bloomHandle?.update(tone);
-          gradeHandle?.update(tone);
+        if (atm) atm.update(tone);
+        liveBloom?.update(tone);
+        liveGrade?.update(tone);
+        if (liveRays) {
+          liveRays.setSun(sunMesh.position, camera);
+          liveRays.update({ healthy, total, reducedMotion: false, tone: tone as never });
         }
       }
 
@@ -857,6 +1174,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+        feedGlyphs.dispose();
+        feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };
     tick(performance.now());
@@ -869,6 +1188,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.setSize(w, h);
       labelRenderer.setSize(w, h);
       composer?.setSize(w, h);
+      bloomHandle?.setSize?.(w, h);
+      if (raysHandle && composer?.readBuffer?.depthTexture) {
+        raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
+      }
     };
     
     const onSkyEvent = () => {
@@ -884,29 +1207,68 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       );
       cbs.current.onSkyView();
     };
+
+    const onFocusBot = (ev: Event) => {
+      const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
+      if (!botId) return;
+      const bot = dataRef.current.bots.find((b) => b.id === botId);
+      if (!bot) return;
+      const pos =
+        bot.id === "grok-build"
+          ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
+          : botWorldPosition(bot.id);
+      const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
+      if (!acceptPointerPick(rig)) return;
+      rig = flyTo(
+        rig,
+        target,
+        [camera.position.x, camera.position.y, camera.position.z],
+        [lookAt.x, lookAt.y, lookAt.z],
+      );
+      cbs.current.onSelectBot(bot);
+    };
+    document.addEventListener("dash3d-focus-bot", onFocusBot);
+    const onLayers = (ev: Event) => {
+      const d = (ev as CustomEvent<{ labels?: boolean; healthFilter?: string }>).detail || {};
+      if (typeof d.labels === "boolean") {
+        labelsOn = d.labels;
+        city.setLabelsVisible(labelsOn && fly.level === "city");
+      }
+      if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
+    };
+    document.addEventListener("dash3d-layers", onLayers);
+
+
     document.addEventListener("dash3d-sky", onSkyEvent);
 
     window.addEventListener("resize", onResize);
 
     return () => {
       window.removeEventListener("resize", onResize);
+      document.removeEventListener("dash3d-focus-bot", onFocusBot);
+      document.removeEventListener("dash3d-layers", onLayers);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
+      document.removeEventListener("visibilitychange", onVisibility);
       detachContext();
       city.dispose();
       renderer.domElement.removeEventListener("wheel", onWheel);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointermove", onPointerHoverNotion);
       cancelAnimationFrame(raf);
       dust.dispose();
       comets.dispose();
+      feedGlyphs.dispose();
       sphereGeo.dispose();
       pageGeo.dispose();
+      travelerGeo.dispose();
       starTex.dispose();
       skyMat.map?.dispose();
       skyMat.dispose();
       disposePainterlyKit(kit);
+      postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure
       renderer.dispose();
       composer?.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);

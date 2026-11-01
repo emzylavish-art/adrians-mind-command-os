@@ -115,3 +115,65 @@ export function latestCommitActivityForBranch(
   const hit = commits.find((c) => c.branch === branch || c.branch.endsWith(`/${branch}`));
   return hit?.date ?? null;
 }
+
+/** Fleet + dashboard branches used by the TIME scrubber (queue #5). */
+export const TIMELINE_GIT_BRANCHES = [
+  "dashboard-3d",
+  "dashboard-3d-visual-painter",
+  "dashboard-3d-visual-light",
+  "dashboard-3d-visual-motion",
+] as const;
+
+/**
+ * Commits from named branches only (local or origin/). Hacker: per-branch cap,
+ * skips missing refs, never throws — caller merges into the timeline builder.
+ */
+export function collectBranchCommits(
+  repo: string,
+  branches: readonly string[] = TIMELINE_GIT_BRANCHES,
+  limitPerBranch = 80,
+): GitCommit[] {
+  const per = Number.isFinite(limitPerBranch)
+    ? Math.min(500, Math.max(1, Math.floor(limitPerBranch)))
+    : 80;
+  const seen = new Set<string>();
+  const out: GitCommit[] = [];
+  for (const branch of branches) {
+    const short = branch.replace(/^origin\//, "");
+    const candidates = [short, `origin/${short}`];
+    let log = "";
+    for (const ref of candidates) {
+      try {
+        log = runGit(repo, [
+          "log",
+          ref,
+          `-n${per}`,
+          "--format=%h|%an|%aI|%s",
+        ]);
+        if (log.trim()) break;
+      } catch {
+        // try next ref
+      }
+    }
+    if (!log.trim()) continue;
+    for (const line of log.split("\n")) {
+      if (!line.trim()) continue;
+      const [sha, author, date, ...rest] = line.split("|");
+      if (!sha || seen.has(sha)) continue;
+      seen.add(sha);
+      out.push({
+        sha,
+        author: author ?? "",
+        date: date ?? "",
+        branch: short,
+        subject: rest.join("|"),
+      });
+    }
+  }
+  const ms = (d: string) => {
+    const v = Date.parse(d);
+    return Number.isFinite(v) ? v : 0;
+  };
+  out.sort((a, b) => ms(b.date) - ms(a.date));
+  return out;
+}

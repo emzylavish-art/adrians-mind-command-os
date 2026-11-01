@@ -5,7 +5,7 @@ import { initialPollState, reducePoll, type PollState } from "@/lib/mind/dashboa
 export type StatusData = DashboardStatus & { ok?: boolean };
 export type StatusState = PollState<StatusData>;
 
-const POLL_MS = 5000;
+const POLL_MS = 20_000;
 const FETCH_TIMEOUT_MS = 20_000;
 
 export function useDashboardStatus() {

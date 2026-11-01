@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
@@ -404,11 +404,44 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
     return mintRealtimeClientSecret({});
   });
+/**
+ * MCP server list for Tools. Soft-auth: always calls getSessionUser (Supabase
+ * HttpOnly cookies first, then Better Auth) via resolveMcpListUserId — same
+ * session helper as authMiddleware/requireUserId — but returns typed
+ * `unauthenticated` instead of throwing so Tools stays quiet when signed out.
+ */
 export const mcpRegistryList = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([
+    createMiddleware({ type: "function" })
+      .client(async ({ next }) => {
+        const { getBearerToken } = await import("../auth/client");
+        return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+      })
+      .server(async ({ next, context }) => {
+        const { assertSameSiteRequest } = await import("../auth/isolation.server");
+        assertSameSiteRequest();
+        return next({ context: { bearerToken: context.bearerToken as string | undefined } });
+      }),
+  ])
   .handler(async ({ context }) => {
+    const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
+    const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
+    const { resolveMcpListUserId, buildMcpRegistryListPayload } = await import("./mcp-list-auth");
+    // Always reuse getSessionUser (Supabase cookies first, then Better Auth) so a
+    // signed-in Supabase user is never short-circuited when Better Auth is off.
+    const sessionUser = await getSessionUser(context.bearerToken);
+    const userId = resolveMcpListUserId({
+      sessionUser,
+      authConfigured,
+      gateIdentityEnabled: gateIdentityEnabled(),
+      databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+      devUserId: DEV_USER_ID,
+    });
+    if (!userId) {
+      return buildMcpRegistryListPayload(null, []);
+    }
     const { listRegistryServers } = await import("./mcp/registry");
-    return { servers: listRegistryServers(context.userId) };
+    return buildMcpRegistryListPayload(userId, listRegistryServers(userId));
   });
 
 export const mcpRegistryToggle = createServerFn({ method: "POST" })

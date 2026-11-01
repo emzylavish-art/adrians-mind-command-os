@@ -102,6 +102,19 @@ export function BuildingInteriorPanel({
         ) : (
           <>
             <h2>{p.kind === "project" ? "Project building" : "Bot building"}{fly.part === "window" && fly.floor != null ? ` · floor ${fly.floor}` : ""}</h2>
+            {p.kind === "bot" || (p.bots && p.bots[0]) ? (
+              <img
+                className="dash3d-portrait"
+                src={`/dashboard-3d/art/portrait-${(p.id.startsWith("bot-") ? p.id.slice(4) : String(p.bots[0] || p.id)).toLowerCase().replace(/\s+/g, "-").replace(/-bot$/, "")}.webp`}
+                alt=""
+                width={72}
+                height={72}
+                loading="lazy"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : null}
             <p className="dash3d-title">{p.name}</p>
             <p>
               <span className={`dash3d-dot ${p.health}`} /> <strong>{p.health}</strong>

@@ -6,6 +6,8 @@
  * Top-5 gap kinds reuse CHAT_TIMEOUT_REPLY / CHAT_DISCONNECT_REPLY, auth, and provider-call copy.
  * Banner 4 (image_generation_failed) mirrors media-lane mapImagineHttpError copy (harden.ts);
  * media keeps request/HTTP mapping — this module only classifies and banners that copy.
+ * H22: intentional user Stop (STOPPED_REPLY) is classified as user_stopped — not chat_failed,
+ * and must not paint the red failure banner (see shouldShowFailureBanner / classifyHonestTurnOutcome).
  */
 
 export type HonestFailureKind =
@@ -24,6 +26,11 @@ export type HonestFailureKind =
 export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
 /** Logic-wiring disconnect copy (CHAT_DISCONNECT_REPLY). */
 export const CHAT_DISCONNECT_REPLY = "Connection to the model dropped";
+/**
+ * Intentional user Stop (live-turn / relay / agent note).
+ * Not a failure — do not paint the red failure banner or audit as chat_failed.
+ */
+export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 
 export const HONEST_FAILURE_MESSAGES = {
   model_unavailable: "That model is not available. Another provider is not substituted.",
@@ -42,6 +49,13 @@ export const HONEST_FAILURE_MESSAGES = {
   forbidden_cross_site: "Forbidden: cross-site request blocked",
   rate_limited: "The provider rate limited the request. Nothing was substituted.",
   mcp_list_failed: "The MCP server list could not be loaded.",
+  mcp_tools_list_failed: "The MCP tools list could not be loaded.",
+  pc_approvals_list_failed: "The PC shell approvals list could not be loaded.",
+  /** Scheduled panel: workerHealth() rejected / timed out / non-JSON — not the same as honest offline. */
+  worker_health_failed: "The worker status could not be read.",
+  pc_approve_failed: "The PC shell approval could not be completed.",
+  pc_deny_failed: "The PC shell denial could not be completed.",
+  mcp_try_select_failed: "The MCP Try SELECT 1 call failed.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -51,6 +65,10 @@ export const HONEST_FAILURE_MESSAGES = {
   image_generation_too_large: "That Imagine request was too large.",
   image_generation_timeout: "Image generation timed out. Nothing was saved as a success.",
 } as const;
+
+/** Non-blocking copy when MCP (or similar) list load hits 401 before sign-in. */
+export const MCP_AUTH_REQUIRED_NOTICE = "Sign in to load MCP servers.";
+
 
 export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
   model_unavailable: "model_unavailable",
@@ -113,6 +131,11 @@ const NETWORK_FAILURE_MARKERS = [
   "network request failed",
 ];
 
+/** Exact intentional-stop copy from live-turn/relay (not agent "Stopped after N tool steps"). */
+const USER_STOPPED_MARKERS = [
+  STOPPED_REPLY,
+];
+
 
 /** Honest Imagine / Edit Imagine copy from media mapImagineHttpError (+ call-site fallbacks). */
 const IMAGE_GENERATION_FAILURE_MARKERS = [
@@ -173,10 +196,97 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
   if (MODEL_UNAVAILABLE_MARKERS.some((marker) => text.includes(marker))) {
     return "model_unavailable";
   }
-  if (text === HONEST_FAILURE_MESSAGES.mcp_list_failed || text.includes("MCP server list could not be loaded")) {
+  if (
+    text === HONEST_FAILURE_MESSAGES.mcp_list_failed
+    || text.includes("MCP server list could not be loaded")
+    || text === HONEST_FAILURE_MESSAGES.mcp_tools_list_failed
+    || text.includes("MCP tools list could not be loaded")
+    || text === HONEST_FAILURE_MESSAGES.pc_approvals_list_failed
+    || text.includes("PC shell approvals list could not be loaded")
+    || text === HONEST_FAILURE_MESSAGES.worker_health_failed
+    || text.includes("worker status could not be read")
+    || text === HONEST_FAILURE_MESSAGES.pc_approve_failed
+    || text.includes("PC shell approval could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.pc_deny_failed
+    || text.includes("PC shell denial could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.mcp_try_select_failed
+    || text.includes("MCP Try SELECT 1 call failed")
+  ) {
     return "network_failure";
   }
   return null;
+}
+
+/**
+ * True when the message is an intentional user Stop (Stop this reply), not a timeout/disconnect/provider failure.
+ * Agent budget copy like "Stopped after N tool steps." is NOT a user stop.
+ */
+export function isUserStoppedReply(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  return USER_STOPPED_MARKERS.some((marker) => text === marker);
+}
+
+/** Turn outcome kinds: honest failures plus intentional user_stopped (not a failure). */
+export type HonestTurnOutcomeKind = HonestFailureKind | "user_stopped";
+
+/**
+ * Classify a turn/deliver error string for UI routing.
+ * user_stopped is distinct from null (unknown → historically audited as chat_failed) and from chat_timeout/network_failure.
+ */
+export function classifyHonestTurnOutcome(message: string): HonestTurnOutcomeKind | null {
+  if (isUserStoppedReply(message)) return "user_stopped";
+  return classifyHonestFailure(message);
+}
+
+/**
+ * Whether the red failure banner (Retry + View log) should be shown for this message.
+ * Intentional Stop → false. Pre-sign-in auth_required → false (use a dismissible notice instead).
+ * Timeouts, disconnects, and other honest failures → true.
+ * Unclassified messages stay true so existing chat_failed banner behavior is preserved until classified.
+ */
+export function shouldShowFailureBanner(message: string): boolean {
+  if (isUserStoppedReply(message)) return false;
+  if (classifyHonestFailure(message) === "auth_required") return false;
+  return true;
+}
+
+/** True when copy is the pre-sign-in auth gate (not a hard failure). */
+export function isAuthRequiredNotice(message: string): boolean {
+  return classifyHonestFailure(message) === "auth_required";
+}
+
+/**
+ * Audit action for a turn outcome. user_stopped → "user_stopped" (never "chat_failed").
+ * Unknown → null so the caller can keep its legacy "chat_failed" default if it still shows a banner.
+ */
+export function honestTurnAuditAction(message: string): string | null {
+  const outcome = classifyHonestTurnOutcome(message);
+  if (outcome === "user_stopped") return "user_stopped";
+  if (outcome) return honestFailureAuditAction(outcome);
+  return null;
+}
+
+/**
+ * MOUNT (command-app.tsx owning lane — do not edit command-app from error-banners):
+ *
+ * 1) loadMcpLists catch (≈ lines 603–606 and 610–613):
+ *    const message = normalizeClientFailureMessage(caught);
+ *    if (!shouldShowFailureBanner(message)) {
+ *      setNotice(isAuthRequiredNotice(message) ? "Sign in to load MCP servers." : message);
+ *      return;
+ *    }
+ *    reportFailureRef.current(message, "mcp_list_failed", "...", loadMcpLists);
+ *
+ * 2) After sign-in becomes available: call loadMcpLists() once more (auth signal is only in command-app).
+ * 3) Chat/Stop path: same shouldShowFailureBanner gate before reportFailure (H22).
+ *
+ * FleetPanel list rows already render auth_required as a local dismissible notice (mcp-list-state)
+ * and skip onFailure escalation — that part ships with this lane. The top red banner before sign-in
+ * is from command-app loadMcpLists above and needs the one-line gate from the owning lane.
+ */
+export function failureBannerMountHint(): string {
+  return "loadMcpLists catch: if (!shouldShowFailureBanner(message)) { setNotice(\"Sign in to load MCP servers.\"); return; } else reportFailureRef.current(...)";
 }
 
 export function honestFailureDescription(kind: HonestFailureKind, message?: string): string {
