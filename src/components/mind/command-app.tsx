@@ -45,6 +45,9 @@ import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/liv
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
+import { probeOllamaForBadge } from "@/lib/mind/voice-live/ollama-status";
+import { isInternalSessionPrompt } from "@/lib/mind/voice-live/session-context";
+import type { LiveVoiceUiAttr } from "@/lib/mind/voice-live/types";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
@@ -62,6 +65,7 @@ import {
 } from "@/components/mind/voice-ui";
 
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
+import { DICTATE_MINT_TIMEOUT_MS, withDictateTimeout } from "@/components/mind/live-voice-bar/dictate-timeout";
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
@@ -489,6 +493,10 @@ export function CommandApp() {
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
   const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
+  const [orchestratorDetail, setOrchestratorDetail] = useState<string | null>(null);
+  const [liveSessionActive, setLiveSessionActive] = useState(false);
+  const [liveSessionUiAttr, setLiveSessionUiAttr] = useState<LiveVoiceUiAttr | "off">("off");
+  const [orchestratorDetailTone, setOrchestratorDetailTone] = useState<"muted" | "warn" | "danger">("muted");
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
@@ -711,8 +719,25 @@ export function CommandApp() {
     // commitVoiceMode persists; setVoiceModeStore keeps every badge on the same value.
     const committed = setVoiceModeStore(commitVoiceMode(next, storage), storage);
     voiceModeRef.current = committed;
+    // Mode toggle always cuts local Speak / TTS immediately (live session also cancels via store subscribe).
+    interruptSpeakPlayback();
     if (shouldClearLiveTranscriptOnModeSwitch(previous, committed)) {
       setVoiceLiveTranscript("");
+    }
+    if (committed === "orchestrator") {
+      const model =
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || "qwen2.5:0.5b";
+      const baseUrl =
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) ||
+        "http://127.0.0.1:11434";
+      void probeOllamaForBadge({ model, baseUrl }).then((status) => {
+        setOrchestratorDetail(status.detail);
+        setOrchestratorDetailTone(status.detailTone);
+        if (!status.ok) setNotice(status.detail || "Ollama conductor unreachable.");
+      });
+    } else {
+      setOrchestratorDetail(null);
+      setOrchestratorDetailTone("muted");
     }
   }
 
@@ -2503,6 +2528,8 @@ export function CommandApp() {
   function appendLiveVoiceUser(text: string) {
     const clipped = text.trim();
     if (!clipped) return;
+    // Screen/camera session prompts must never land in Ask Anything / chat as user text.
+    if (isInternalSessionPrompt(clipped)) return;
     const targetId = activeId ?? active?.id ?? null;
     if (!targetId) {
       setDraft(clipped);
@@ -3248,6 +3275,34 @@ export function CommandApp() {
     void listen(opts);
   };
 
+  /** Dictation with hard mint/mic timeout — never leave "Minting…" forever. */
+  async function dictateWithTimeout() {
+    const already =
+      voiceListening ||
+      Boolean(voiceSession.current?.isOpen || voiceSession.current?.isCapturing || listenMintAbortRef.current);
+    if (already) {
+      void listen({ mode: "stop" });
+      return;
+    }
+    try {
+      await withDictateTimeout(
+        listen({ mode: "start" }),
+        DICTATE_MINT_TIMEOUT_MS,
+        "Dictation timed out waiting for the microphone or voice mint. Check permissions, then try again.",
+      );
+    } catch (caught) {
+      void listen({ mode: "stop" });
+      setVoiceListening(false);
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : "Dictation timed out. Check mic permission, then try again.";
+      setError(message);
+      setNotice(null);
+    }
+  }
+
+
   async function checkRea() {
     setReaBusy(true);
     setError(null);
@@ -3482,6 +3537,17 @@ export function CommandApp() {
             <Menu className="size-4" />
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
+          <div className="shrink-0">
+            <VoiceModeBadge
+              mode={voiceMode}
+              listening={voiceListening}
+              sessionActive={liveSessionActive}
+              sessionUiAttr={liveSessionUiAttr}
+              detail={voiceMode === "orchestrator" ? orchestratorDetail : null}
+              detailTone={orchestratorDetailTone}
+              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+            />
+          </div>
           <div className="hidden shrink-0 md:block">
             <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
               <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
@@ -3890,6 +3956,7 @@ export function CommandApp() {
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
+                    <button type="submit" tabIndex={-1} disabled={busy || ws.halted}>Send</button>
                   </div>
                 </form>
                 {contextOpen && (
@@ -4152,7 +4219,6 @@ export function CommandApp() {
               onLiveVoiceError={(message) => setError(message)}
               onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
-              voiceMode={voiceMode}
               voiceListening={voiceListening}
               voiceMuted={voiceMuted}
               voiceLevel={voiceLevel}
@@ -5257,17 +5323,63 @@ export function CommandApp() {
         onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
         onError={(message) => setError(message)}
         onNotice={(message) => setNotice(message)}
+        askValue={draft}
+        onAskChange={setDraft}
+        dictating={voiceListening}
+        onDictateToggle={() => {
+          const fake =
+            typeof window !== "undefined"
+              ? (window as Window & { __AMCOS_FAKE_DICTATION__?: string }).__AMCOS_FAKE_DICTATION__
+              : undefined;
+          if (typeof fake === "string" && fake.trim()) {
+            setDraft((prev) => (prev ? `${prev} ${fake.trim()}` : fake.trim()));
+            setNotice("Dictation (test stub) inserted into Ask Anything.");
+            return;
+          }
+          void dictateWithTimeout();
+        }}
+        onSessionStatusChange={(status) => {
+          setLiveSessionActive(status.active);
+          setLiveSessionUiAttr(status.uiAttr || "off");
+        }}
+        onAttachFileClick={() => fileRef.current?.click()}
+        modelPickerSlot={
+          <>
+            <span className="composer-bar__model-ico" aria-hidden="true" />
+            <span className="composer-bar__model-label">
+              {providerChoices(grokConfigured).find((item) => item.id === providerChoice)?.label ?? "Model"}
+            </span>
+          </>
+        }
         onChatSend={(text) => {
           const clipped = text.trim().slice(0, 8000);
           if (!clipped) return;
+          if (ws.halted) {
+            setError("Emergency stop is on. No new action can run.");
+            return;
+          }
           if (active) {
+            setView("chat");
             void deliver(active, clipped, ws);
             return;
           }
-          setDraft(clipped);
-          window.setTimeout(() => {
-            void sendCommand();
-          }, 0);
+          const made = createChat(ws, {
+            memory: memoryChoice,
+            autonomy,
+            temporary,
+            projectId: projectChoice || chatProjectId || null,
+          });
+          setActiveId(made.chat.id);
+          setView("chat");
+          setWs((prev) =>
+            pushAudit(
+              { ...prev, chats: [made.chat, ...prev.chats] },
+              "create_chat",
+              made.chat.id,
+              `ask-anything; memory ${made.chat.memory}`,
+            ),
+          );
+          void deliver(made.chat, clipped, { ...ws, chats: [made.chat, ...ws.chats] });
         }}
         onChatAttachText={(text, name) => {
           setDraft((prev) => (prev ? `${prev}\n\n${text}` : text));
@@ -5468,7 +5580,6 @@ function ChatPane({
   onLiveVoiceError,
   onLiveVoiceNotice,
   speaking,
-  voiceMode,
   voiceListening,
   voiceMuted,
   voiceLevel,
@@ -5547,7 +5658,6 @@ function ChatPane({
   onLiveVoiceError?: (message: string) => void;
   onLiveVoiceNotice?: (message: string) => void;
   speaking: boolean;
-  voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
   voiceMuted: boolean;
   voiceLevel: number;
@@ -5821,7 +5931,6 @@ function ChatPane({
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
-          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
         </div>
         <form
           className="floating-composer command-card composer-dock m-3 p-3" data-composer="floating"

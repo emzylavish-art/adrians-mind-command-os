@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createVoiceClientSecret } from "../server.ts";
-import { getVoiceMode } from "../voice/mode-store.ts";
+import { getVoiceMode, subscribeVoiceMode } from "../voice/mode-store.ts";
 import { readStoredVoiceChoice } from "../voice/voices.ts";
 import { formatVoiceClientError } from "../voice/errors.ts";
 import { LiveVoiceSession, type LiveSessionDeps, type MintSecretResult } from "./live-session.ts";
@@ -129,10 +129,21 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     [ensureSession],
   );
 
+  const sendSessionContext = useCallback(
+    (text: string) => {
+      const session = ensureSession();
+      if (!session.isActive) return false;
+      return session.sendSessionContext(text);
+    },
+    [ensureSession],
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (!sessionRef.current?.isActive && !isLiveVoiceOccupied()) return;
+      // Settings / any modal open → do not end the call (popover owns Esc).
+      if (document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest?.('[role="dialog"], [aria-modal="true"], dialog')) return;
       event.preventDefault();
@@ -141,6 +152,13 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
   }, [end]);
+
+  // Keep live routing + badge in sync with header toggles (including rapid fire).
+  useEffect(() => {
+    return subscribeVoiceMode(() => {
+      sessionRef.current?.notifyModeChange();
+    });
+  }, []);
 
   useEffect(() => {
     const onVis = () => {
@@ -175,6 +193,7 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     toggleSpeaker,
     setOutputVolume,
     sendText,
+    sendSessionContext,
     sessionRef,
     lastTranscript: () => sessionRef.current?.lastTranscript ?? "",
   };
