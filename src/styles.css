@@ -5147,3 +5147,90 @@ html[data-theme="light"] main.grid.min-h-screen.place-items-center > div[class*=
     inset 0 1px 0 rgb(255 255 255 / 0.08),
     0 14px 36px rgb(0 0 0 / 0.4) !important;
 }
+
+/* —— Evolution c69: charts/viz consistency (dash3d + any main-stage SVG) —— */
+.dash3d-chart-card,
+.dash3d-charts-panel .dash3d-chart-card,
+.main-stage [data-testid="charts-panel"] .rounded-panel,
+.main-stage .recharts-wrapper,
+.main-stage svg.chart,
+.main-stage [data-testid="chart-empty"] {
+  border-radius: 1rem !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-charts-panel svg text,
+.main-stage svg text.axis,
+.main-stage .recharts-cartesian-axis-tick text,
+.main-stage .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  font-size: 0.65rem !important;
+  font-family: var(--font-sans), system-ui, sans-serif !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-charts-panel svg .domain,
+.main-stage .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.1) !important;
+}
+.dash3d-chart-card [role="tooltip"],
+.dash3d-chart-tooltip,
+.main-stage .recharts-default-tooltip,
+.main-stage [role="tooltip"].chart-tooltip {
+  background: rgb(10 10 12 / 0.92) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.55rem !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  font-size: 0.75rem !important;
+  padding: 0.4rem 0.6rem !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.main-stage [data-testid="chart-empty"],
+.dash3d-charts-panel [data-empty="true"] {
+  min-height: 8.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  text-align: center !important;
+  color: #a1a1aa !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 50%),
+    url("/brand/textures/chart-grid-mono.jpg") !important;
+  background-size: auto, cover !important;
+  border: 1px dashed rgb(255 255 255 / 0.12) !important;
+  border-radius: 0.85rem !important;
+  padding: 1.25rem !important;
+}
+.dash3d-charts-panel .dash3d-muted,
+.dash3d-chart-card h3 {
+  color: #d4d4d8 !important;
+  letter-spacing: -0.01em;
+}
+/* Legend mono chips */
+.dash3d-charts-panel .legend,
+.main-stage .recharts-legend-wrapper {
+  color: #a1a1aa !important;
+  font-size: 0.72rem !important;
+}
+
+/* —— Evolution c70: guard fa50cf6 a11y hit targets (do not regress) —— */
+[data-testid="alerts-toggle"],
+button[aria-label="Alerts"],
+[data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center button.min-h-10 {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
