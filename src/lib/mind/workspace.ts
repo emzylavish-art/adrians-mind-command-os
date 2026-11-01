@@ -250,6 +250,11 @@ export function addMemory(
   return { ...ws, memories: [item, ...ws.memories] };
 }
 
+export function deleteMemory(ws: Workspace, id: string): Workspace {
+  if (!id) return ws;
+  return { ...ws, memories: ws.memories.filter((item) => item.id !== id) };
+}
+
 export function reviseMemory(ws: Workspace, id: string, text: string): Workspace {
   const next = text.trim().slice(0, 2000);
   if (!next) return ws;

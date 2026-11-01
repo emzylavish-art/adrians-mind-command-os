@@ -157,3 +157,10 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Google: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_*_REDIRECT_URI` (or `GOOGLE_OAUTH_REDIRECT_URI`)
 - Slack: `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`, `SLACK_OAUTH_REDIRECT_URI`
 - GitHub: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`
+
+# 2026-11-01 (Africa/Lagos) — Grok Build: Memory UX depth
+- Branch: preview/memory-ux (worktree /workspace/mind-command-os-memory)
+- Base: origin/preview/integration @ 7c73ba3
+- Real: /memory manager (list/edit/delete/empty/add + localStorage persist); owner-scoped server list/edit/delete/create; turn SSE memorySaved signal; per-chat skip helpers + tests
+- Pending mount: MemorySavedIndicator + MemoryChatToggle into command-app.tsx (claimed by other lanes) — see /workspace/audit/mind-os/memory-ux/MOUNT.md
+- Notion: do NOT write from this lane; mirror at /workspace/audit/mind-os/memory-ux/
