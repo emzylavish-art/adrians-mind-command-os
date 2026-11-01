@@ -79,3 +79,27 @@ See `/workspace/locks/media-integration.lock`.
 - typecheck pass; mind/media tests **232/232**; build pass.
 - Did not edit styles.css, voice/, connectors OAuth, research search, error banners, or xai-adapter.
 - Shared `command-app.tsx` edits limited to Drive/cloud picker wiring (voice-integration also claims voice wiring there).
+
+---
+
+## Verification gap fixes (2026-11-01) — build step
+
+**Commit:** `57c20a9`  
+**Source:** `/workspace/audit/media-integration/VERIFY_REPORT.md`
+
+### Fixed
+1. **HIGH** Retry/regenerate retain `Msg.images` (`prepareRetry` / `prepareRegenerate` + `deliver(..., images)`).
+2. **HIGH** Follow-up history sends multimodal parts for prior user images (`buildHistoryMessages`, max 3 images / ~2.7M chars budget).
+3. **HIGH/ops** Live script + turn/agent key resolution prefer `/home/box/.secrets/xai_inference.env` over a stale `XAI_API_KEY` (`resolveXaiInferenceApiKey`). Did **not** edit `server.ts` (voice claim); `mindStatus` may still reflect process env until that lane adopts the helper.
+5. **MED** Client downscale recompresses/rejects past `MAX_DATA_URL_CHARS` with a clear composer error.
+6. **MED** `checkTurnSize` counts current + history image data-URL chars.
+7. **MED** Non-Grok provider branch returns an honest “cannot see images” error instead of silently dropping them.
+
+### Deferred
+4. **MED** Persist/export strategy for full data-URLs in workspace (storage bloat) — not in this step; still useful later.
+- `xai-adapter.ts` / error banners / model picker untouched by request.
+- Library copy lightly clarified (images can go to vision models in chat).
+
+### Verification this step
+- typecheck pass; mind/media tests **237/237**; build pass
+- live script with `XAI_API_KEY=invalid-...` still replied **red** via secrets file
