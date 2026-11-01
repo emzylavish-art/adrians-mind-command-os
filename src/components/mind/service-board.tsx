@@ -50,7 +50,7 @@ export function ServiceBoard({
   return (
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {[grok, ...services].map((service) => (
-        <article key={service.name} className="rounded-panel border border-line bg-surface p-3">
+        <article key={service.name} className="dense-card card-texture p-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-semibold">{service.name}</h3>
             <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>

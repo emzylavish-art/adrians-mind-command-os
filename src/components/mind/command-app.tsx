@@ -23,6 +23,7 @@ import {
   Square,
   Video,
   CalendarClock,
+  ChevronDown,
   CircleHelp,
   Link2,
   ListTree,
@@ -30,6 +31,7 @@ import {
   PanelLeft,
   Pin,
   Terminal,
+  Volume2,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -116,6 +118,30 @@ const EXTERNAL = [
 ];
 
 type Staged = { name: string; text: string };
+
+const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build"] as const;
+type ModelTier = (typeof MODEL_TIERS)[number];
+
+const NAV_ICON_SRC: Partial<Record<View, string>> = {
+  command: "/icons/chat.svg",
+  agents: "/icons/bots.svg",
+  build: "/icons/build.svg",
+  projects: "/icons/projects.svg",
+  research: "/icons/research.svg",
+  files: "/icons/library.svg",
+  chat: "/icons/thread.svg",
+  runs: "/icons/runs.svg",
+  connected: "/icons/systems.svg",
+  tools: "/icons/systems.svg",
+  scheduled: "/icons/systems.svg",
+  skills: "/icons/systems.svg",
+  memory: "/icons/library.svg",
+  activity: "/icons/runs.svg",
+  settings: "/icons/systems.svg",
+  help: "/icons/systems.svg",
+  integrations: "/icons/systems.svg",
+};
+
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
@@ -290,6 +316,9 @@ export function CommandApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
   const [reaReport, setReaReport] = useState<string | null>(null);
   const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
@@ -420,6 +449,7 @@ export function CommandApp() {
     setAccountOpen(false);
     setContextOpen(false);
     setToolsOpen(false);
+      setModelMenuOpen(false);
   }
 
   function requestProtected(kind: string, id: string, label: string, detail: string, confirm: string, run: () => void) {
@@ -1141,6 +1171,8 @@ export function CommandApp() {
   }
 
   function listen() {
+    setListening(true);
+    window.setTimeout(() => setListening(false), 6000);
     const host = window as Window & {
       SpeechRecognition?: new () => {
         lang: string;
@@ -1161,6 +1193,7 @@ export function CommandApp() {
     const rec = new Ctor();
     rec.lang = "en-US";
     rec.onresult = (event) => {
+      setListening(false);
       const transcript = event.results[0]?.[0]?.transcript ?? "";
       setDraft(transcript);
       voiceNext.current = Boolean(transcript);
@@ -1215,11 +1248,11 @@ export function CommandApp() {
   const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
 
   return (
-    <div className="flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col bg-surface md:static md:flex md:h-dvh ${railCollapsed ? "md:w-16" : "md:w-64"} md:shrink-0 md:border-r md:border-line`}>
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
+      <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
-            A
+          <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
+            <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
           </span>
           {!railCollapsed && (
             <div className="min-w-0 flex-1">
@@ -1234,10 +1267,26 @@ export function CommandApp() {
             <PanelLeft className="size-4" />
           </button>
         </div>
+        <div className={`px-3 pb-2 ${railCollapsed ? "flex justify-center" : ""}`}>
+          <button
+            type="button"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            aria-label="Search workspace"
+            onClick={() => {
+              setPaletteOpen(true);
+              setNavOpen(false);
+              window.setTimeout(() => searchRef.current?.focus(), 0);
+            }}
+          >
+            <Search className="size-4 shrink-0" />
+            {!railCollapsed && <span>Search</span>}
+          </button>
+        </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
           {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-3">
-              {!railCollapsed && <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">{group.label.toUpperCase()}</p>}
+            <div key={group.label} className="mb-4">
+              {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
+              <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const on = view === item.id;
@@ -1251,13 +1300,14 @@ export function CommandApp() {
                       setNavOpen(false);
                       closeMenus();
                     }}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "bg-accent text-white shadow-[0_0_18px_rgb(124_92_255/0.45)]" : "text-muted"}`}
+                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"}`}
                   >
-                    <Icon className="size-4 shrink-0" />
+                    {NAV_ICON_SRC[item.id] ? <img src={NAV_ICON_SRC[item.id]} alt="" className="nav-icon-img" /> : <Icon className="size-4 shrink-0 opacity-90" />}
                     {!railCollapsed && item.label}
                   </button>
                 );
               })}
+              </div>
             </div>
           ))}
           {ws.pins.length > 0 && !railCollapsed && (
@@ -1315,21 +1365,36 @@ export function CommandApp() {
             </div>
           )}
         </nav>
-        {!railCollapsed && (
-          <div className="border-t border-line p-4">
-            <p className="text-sm font-semibold">Adrian (Personal)</p>
-            <p className="text-xs text-muted">Only workspace on this device.</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+        <div className={`border-t border-line/70 p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
+          <button
+            type="button"
+            className={`sidebar-plus inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-accent px-3 text-sm font-semibold text-accent-ink ${railCollapsed ? "size-11 px-0" : "w-full"}`}
+            aria-label="New chat"
+            onClick={() => {
+              openChat();
+              setView("chat");
+              setNavOpen(false);
+            }}
+          >
+            <Plus className="size-4" />
+            {!railCollapsed && "New"}
+          </button>
+          {!railCollapsed && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold">Adrian (Personal)</p>
+              <p className="text-xs text-muted">Only workspace on this device.</p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full bg-glow" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
+              <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
             </div>
-            <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
-            <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
-        <header className="flex items-center gap-2 border-b border-line px-3 py-3 md:gap-3 md:px-5">
+      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
+        <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
           </button>
@@ -1345,7 +1410,7 @@ export function CommandApp() {
               }}
               onFocus={() => setPaletteOpen(true)}
               placeholder="Search or jump…"
-              className="h-11 w-full rounded-panel border border-line bg-surface pr-14 pl-10 text-sm"
+              className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
               aria-label="Search"
               aria-keyshortcuts="Control+K Meta+K"
               aria-expanded={paletteOpen}
@@ -1353,7 +1418,7 @@ export function CommandApp() {
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="absolute z-30 mt-2 max-h-80 w-full overflow-auto rounded-panel border border-line bg-surface p-2 shadow-panel">
+              <div id="command-palette" className="floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
                 {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
                 {hits.map((hit) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
@@ -1384,13 +1449,75 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex ${headerTone}`}>
+          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}>
             <span className="size-2 rounded-full bg-current" />
             {headerState}
           </span>
+          <div className="relative hidden md:block">
+            <button
+              type="button"
+              className="model-chip inline-flex h-11 items-center gap-2 px-3 text-sm font-medium"
+              aria-haspopup="menu"
+              aria-expanded={modelMenuOpen}
+              onClick={() => {
+                setModelMenuOpen((open) => !open);
+                setBellOpen(false);
+                setAccountOpen(false);
+              }}
+            >
+              {modelTier}
+              <ChevronDown className="size-3.5 opacity-70" />
+            </button>
+            {modelMenuOpen && (
+              <div className="floating-menu absolute right-0 z-40 mt-2 w-56 p-2" role="menu">
+                <p className="px-2 pb-2 text-[10px] font-semibold tracking-[0.16em] text-muted">MODEL</p>
+                {MODEL_TIERS.map((tier) => (
+                  <button
+                    key={tier}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={modelTier === tier}
+                    className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${modelTier === tier ? "model-option-active" : "text-muted hover:bg-white/5"}`}
+                    onClick={() => {
+                      setModelTier(tier);
+                      setModelMenuOpen(false);
+                    }}
+                  >
+                    {tier}
+                  </button>
+                ))}
+                <p className="mt-2 border-t border-line/60 px-2 pt-2 text-[11px] text-muted">Display preference only. Send still uses the configured provider rules.</p>
+              </div>
+            )}
+          </div>
+          <div className={`voice-zone ${listening || speaking ? "is-live" : ""}`} aria-label="Voice controls">
+            <button
+              type="button"
+              className={`focus-ring grid size-9 place-items-center rounded-full ${listening ? "mic-pulse text-glow" : "text-muted"}`}
+              aria-label="Dictate"
+              onClick={() => listen()}
+            >
+              <Mic className="size-4" />
+            </button>
+            <span className="waveform" aria-hidden="true">
+              <span /><span /><span /><span /><span /><span /><span />
+            </span>
+            <button
+              type="button"
+              className="focus-ring grid size-9 place-items-center rounded-full text-muted"
+              aria-label="Speak last reply"
+              disabled={speaking}
+              onClick={() => {
+                const last = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
+                if (last) void speak(last.content);
+              }}
+            >
+              <Volume2 className="size-4" />
+            </button>
+          </div>
           <button
             type="button"
-            className="grid size-11 place-items-center rounded-full border border-line"
+            className="grid size-11 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Alerts"
             onClick={() => {
               setBellOpen((open) => !open);
@@ -1448,7 +1575,7 @@ export function CommandApp() {
           </div>
         )}
         {ws.halted && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2">
+          <div className="banner-error mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 px-4 py-2 md:mx-5">
             <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
               Clear stop
@@ -1476,13 +1603,13 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+              <section className="floating-composer command-card p-3 md:p-4">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
                     <span className="block text-xs">Review and approve before action</span>
                   </button>
-                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">AUTOMATIC</span>
                     <span className="block text-xs">Deletes and replacements still ask you</span>
                   </button>
@@ -1525,7 +1652,7 @@ export function CommandApp() {
                       <button
                         key={id}
                         type="button"
-                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}
+                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
                         onClick={() => setCommandMode(id)}
                       >
                         {label}
@@ -1537,13 +1664,13 @@ export function CommandApp() {
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
                     rows={3}
-                    className="w-full resize-none rounded-panel border border-line bg-bg px-3 py-3 text-sm"
+                    className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
                       <Paperclip className="size-4" /> Attach
                     </button>
                     <button
@@ -1572,10 +1699,7 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
-                      <Mic className="size-4" />
-                    </button>
-                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                    <button type="submit" disabled={busy || ws.halted} className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
                   </div>
@@ -1620,6 +1744,11 @@ export function CommandApp() {
                 )}
               </section>
 
+              <div className="flex flex-wrap gap-2 pb-1">
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("Summarize my projects on this device")}>Summarize my projects</button>
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
+                <button type="button" className="suggestion-chip" onClick={() => setView("connected")}>Review connected services</button>
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
                 <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
@@ -1629,8 +1758,8 @@ export function CommandApp() {
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
-              {error && <p className="text-sm text-danger">{error}</p>}
+              {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
+              {error && <p className="banner-error px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -1817,10 +1946,10 @@ export function CommandApp() {
           )}
 
           {view === "projects" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card flex flex-wrap items-center justify-between gap-3 rounded-panel border border-line bg-surface px-4 py-4">
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-12 place-items-center rounded-2xl bg-accent/20 text-accent"><Folder className="size-5" /></span>
+                  <img src="/icons/projects.svg" alt="" className="size-10" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
                     <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
@@ -1836,9 +1965,10 @@ export function CommandApp() {
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 {ws.projects.length === 0 && (
-                  <article className="glow-card rounded-panel border border-line bg-surface p-4 lg:col-span-2">
+                  <article className="empty-state lg:col-span-2">
+                    <img src="/empty/empty-folder.svg" alt="" />
                     <p className="font-semibold">No projects on this device yet.</p>
-                    <p className="mt-1 text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
+                    <p className="text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
                   </article>
                 )}
                 {ws.projects.map((project) => {
@@ -1846,7 +1976,7 @@ export function CommandApp() {
                   const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
                   return (
-                    <article key={project.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={project.id} className="dense-card card-texture p-4">
                       <div className="flex items-start gap-3">
                         <span className="grid size-11 place-items-center rounded-2xl bg-accent/15 text-accent"><Folder className="size-5" /></span>
                         <div className="min-w-0 flex-1">
@@ -2109,9 +2239,8 @@ export function CommandApp() {
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
           {view === "connected" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Connected</h2>
-              <p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex items-center gap-3"><img src="/icons/systems.svg" alt="" className="size-8" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -2202,30 +2331,56 @@ export function CommandApp() {
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
           {view === "build" && (
-            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Build</h2>
-              <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
-              <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">Edit files, run tests, and use git. Not available. No files were changed.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">HP EliteBook and iPhone control. Not paired.</li>
+            <section className="page-shell space-y-4">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/build.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Build</h2>
+                    <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="promo-banner text-sm">
+                <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Local Companion not paired</p>
+                  <p className="text-muted">Pair a computer to unlock file edits, tests, and git. Nothing runs until then.</p>
+                </div>
+              </div>
+              <ul className="dense-grid space-y-0 text-sm">
+                <li className="dense-card dense-row">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
+                <li className="dense-card dense-row">Edit files, run tests, and use git. Not available. No files were changed.</li>
+                <li className="dense-card dense-row">HP EliteBook and iPhone control. Not paired.</li>
               </ul>
             </section>
           )}
           {view === "research" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
-                <h2 className="font-display text-3xl font-bold">Research</h2>
-                <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
-                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+            <section className="page-shell">
+              <div className="page-hero card-texture">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/research.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Research</h2>
+                    <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
+                  </div>
+                </div>
+                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
                   Check research
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
+                {researchCitations.length === 0 && !researchNote ? (
+                  <div className="empty-state mt-4">
+                    <img src="/empty/empty-search.svg" alt="" />
+                    <p className="font-semibold">No citations yet</p>
+                    <p className="text-sm text-muted">Run a check when a search provider is configured.</p>
+                  </div>
+                ) : null}
                 {researchCitations.length > 0 && (
                   <ul className="mt-3 space-y-2 text-sm">
                     {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
-                      <li key={item.url}>
+                      <li key={item.url} className="dense-row">
                         <a className="text-accent underline" href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
                       </li>
                     ))}
@@ -2245,15 +2400,15 @@ export function CommandApp() {
             </section>
           )}
           {view === "skills" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Skills</h2>
-              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p>
+            <section className="page-shell space-y-4">
+              <div className="page-hero"><h2 className="font-display text-3xl font-bold">Skills</h2>
+              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p></div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <div className="grid gap-3 md:grid-cols-2">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
                   const on = skill.kind === "built-in" && enabledSkills[skill.id] !== false;
                   return (
-                    <article key={skill.id} className="rounded-panel border border-line bg-surface p-3">
+                    <article key={skill.id} className="dense-card p-3">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-semibold">{skill.name}</h3>
                         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "built-in" ? (on ? "On" : "Off") : "Not installed"}</span>
@@ -2294,31 +2449,45 @@ export function CommandApp() {
             </section>
           )}
           {view === "files" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-3xl font-bold">Library</h2>
-                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/library.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Library</h2>
+                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+                  </div>
                 </div>
                 <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
-                <aside className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
+                <aside className="dense-card card-texture p-3 text-sm">
                   <p className="font-semibold">Text copies</p>
                   <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
                   <ul className="mt-3 space-y-1">
-                    {ws.files.length === 0 && <li className="text-muted">No files yet.</li>}
+                    {ws.files.length === 0 && (
+                      <li className="empty-state py-6">
+                        <img src="/empty/empty-folder.svg" alt="" />
+                        <p className="text-muted">No files yet.</p>
+                      </li>
+                    )}
                     {ws.files.map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`min-h-11 w-full rounded-panel px-2 text-left ${openFileId === file.id ? "bg-accent text-white" : ""}`}>
+                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
                           {file.name}
                         </button>
                       </li>
                     ))}
                   </ul>
                 </aside>
-                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
-                  {!ws.files.find((file) => file.id === openFileId) && <p className="text-muted">Select a file to read the text copy. Upload text from the button above, or attach a file on Command.</p>}
+                <div className="dense-card p-4 text-sm">
+                  {!ws.files.find((file) => file.id === openFileId) && (
+                    <div className="empty-state">
+                      <img src="/empty/empty-folder.svg" alt="" />
+                      <p className="font-semibold">Select a file</p>
+                      <p className="text-muted">Upload text from the button above, or attach a file on Command.</p>
+                    </div>
+                  )}
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold">{file.name}</p>
@@ -2347,8 +2516,8 @@ export function CommandApp() {
             </section>
           )}
           {view === "integrations" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
+            <section className="page-shell">
+              <div className="page-hero">
                 <h2 className="font-display text-3xl font-bold">Integrations</h2>
                 <p className="text-sm text-muted">{system}</p>
                 <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
@@ -2357,7 +2526,7 @@ export function CommandApp() {
                 {CAPABILITIES.map((item) => {
                   const live = isVerifiedCapability(item.status);
                   return (
-                    <article key={item.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={item.id} className="dense-card card-texture p-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold">{item.name}</h3>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
@@ -2372,19 +2541,30 @@ export function CommandApp() {
             </section>
           )}
           {view === "activity" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
-                <h2 className="font-display text-3xl font-bold">Activity</h2>
-                <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+            <section className="page-shell">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/runs.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Activity</h2>
+                    <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+                  </div>
+                </div>
               </div>
-              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="mt-4 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" aria-label="Filter activity" />
+              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="input-glow mt-4 min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm" aria-label="Filter activity" />
               <ul className="mt-4 space-y-2">
-                {ws.audit.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No events yet.</li>}
+                {ws.audit.length === 0 && (
+                  <li className="empty-state">
+                    <img src="/empty/empty-activity.svg" alt="" />
+                    <p className="font-semibold">No events yet</p>
+                    <p className="text-sm text-muted">Actions you take will appear here.</p>
+                  </li>
+                )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).length === 0 && ws.audit.length > 0 && (
                   <li className="text-sm text-muted">No events match that filter.</li>
                 )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).map((entry) => (
-                  <li key={entry.id} className="glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface p-3 text-sm">
+                  <li key={entry.id} className="dense-card dense-row flex-wrap justify-between text-sm">
                     <div>
                       <p className="font-semibold">{humanAction(entry.action)}</p>
                       <p className="text-muted">{entry.result}</p>
@@ -2400,28 +2580,42 @@ export function CommandApp() {
               <h2 className="font-display text-3xl font-bold">Help</h2>
               <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
               <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
               </ul>
             </section>
           )}
           {view === "settings" && (
-            <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Settings</h2>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
-                <p className="font-semibold">Appearance</p>
-                <p className="mt-1 text-muted">The theme is saved in this browser. It does not change a server setting.</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(["dark", "light", "system"] as const).map((choice) => (
-                    <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink" : "border-line"}`} onClick={() => setTheme(choice)}>
-                      {choice}
-                    </button>
-                  ))}
+            <section className="page-shell mx-auto max-w-3xl space-y-4">
+              <div className="page-hero">
+                <h2 className="font-display text-3xl font-bold">Settings</h2>
+                <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+              </div>
+              <div className="settings-card card-texture rounded-panel p-4 text-sm">
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Appearance</p>
+                    <p className="text-muted">Theme for the app UI. Saved in this browser only.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["dark", "light", "system"] as const).map((choice) => (
+                      <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Provider failover</p>
+                    <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
+                  </div>
+                  <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
                 </div>
               </div>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="settings-card rounded-panel p-4 text-sm hidden">
                 <p className="font-semibold">Provider failover</p>
                 <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
               </div>
@@ -2567,12 +2761,30 @@ export function CommandApp() {
           </div>
         </Overlay>
       )}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Primary">
-        {NAV.filter((item) => item.id === "command" || item.id === "agents" || item.id === "build" || item.id === "projects").map((item) => {
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
+        {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
           return (
-            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-accent" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+              <Icon className="size-4" />
+              {item.label}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className="sidebar-plus relative -mt-3 flex size-14 flex-col items-center justify-center rounded-full bg-accent text-accent-ink"
+          aria-label="New chat"
+          onClick={() => { openChat(); setView("chat"); setNavOpen(false); }}
+        >
+          <Plus className="size-5" />
+        </button>
+        {NAV.filter((item) => item.id === "build" || item.id === "projects").map((item) => {
+          const Icon = item.icon;
+          const on = view === item.id;
+          return (
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
               <Icon className="size-4" />
               {item.label}
             </button>
@@ -2589,7 +2801,7 @@ export function CommandApp() {
 
 function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm">
+    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line/80 bg-surface/80 px-3 text-sm shadow-[0_8px_24px_rgb(0_0_0/0.25)] backdrop-blur">
       <Icon className={`size-4 ${tone}`} />
       {label}
     </button>
@@ -2598,7 +2810,7 @@ function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: type
 
 function Panel({ title, action, onAction, children }: { title: string; action: string; onAction: () => void; children: ReactNode }) {
   return (
-    <section className="rounded-panel border border-line bg-surface p-4 shadow-panel">
+    <section className="glow-card rounded-panel border border-line/80 p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">{title}</h2>
         <button type="button" className="text-sm text-info" onClick={onAction}>{action}</button>
@@ -2636,8 +2848,8 @@ function StatusRow({
 
 function Overlay({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-40 grid place-items-end bg-bg/80 p-4 md:place-items-center">
-      <div className="w-full max-w-md rounded-panel border border-line bg-surface p-4 shadow-panel">{children}</div>
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center">
+      <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
     </div>
   );
 }
@@ -2664,7 +2876,7 @@ function ReaPanel({
         <p className="mt-2 max-w-2xl text-sm text-muted">{lead}</p>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_18rem]">
-        <div className="glow-card rounded-panel border border-line bg-surface p-4">
+        <div className="dense-card card-texture p-4">
           <p className="text-sm font-semibold">What can run</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA doctor</span><span className="text-xs text-muted">Live check</span></li>
@@ -2861,7 +3073,7 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-surface-2" : "bg-surface"}`}>
+            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "ml-auto bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -2927,7 +3139,14 @@ function ChatPane({
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
-          {busy && !liveText && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {busy && !liveText && (
+            <div className="max-w-3xl space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
+              <p className="text-xs text-muted">Waiting for Grok.</p>
+              <div className="skeleton h-3" style={{ width: "75%" }} />
+              <div className="skeleton h-3" style={{ width: "50%" }} />
+              <div className="skeleton h-3" style={{ width: "66%" }} />
+            </div>
+          )}
           {busy && (
             <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
           )}
@@ -2938,13 +3157,13 @@ function ChatPane({
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
         </div>
         <form
-          className="command-card m-3 rounded-panel bg-surface p-3"
+          className="floating-composer command-card m-3 p-3"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
           }}
         >
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="min-h-11 w-full bg-transparent text-sm outline-none" />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none" />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -2959,42 +3178,45 @@ function ChatPane({
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttach}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
               <Paperclip className="size-4" /> Attach
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line" onClick={onListen} aria-label="Dictate">
-              <Mic className="size-4" />
-            </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
-              {speaking ? "Speaking" : "Speak"}
-            </button>
-            <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <button type="submit" disabled={busy || halted || !active} className="ml-auto min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
         </form>
       </section>
-      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
-        <section className="rounded-panel border border-line bg-surface p-3">
+      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line/70 p-3 xl:flex">
+        <section className="glass-panel rounded-panel p-3">
           <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
-          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>
-          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Automatic</button>
+        <section className="glass-panel rounded-panel p-3">
+          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
+          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
+        <section className="glass-panel rounded-panel p-3">
           <button type="button" role="switch" aria-checked={memoryChoice === "on"} onClick={onComposerMemory} className="flex min-h-11 w-full items-center justify-between text-sm">
             Memory: {memoryChoice === "on" ? "ON" : "OFF"}
             <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
           </button>
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3 text-sm">
+        <section className="glass-panel rounded-panel p-3 text-sm">
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
+        <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label="Dictate">
+            <Mic className="size-4" />
+          </button>
+          <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
+            <Volume2 className="size-4" />
+          </button>
+        </div>
       </aside>
     </div>
   );
@@ -3013,9 +3235,12 @@ function ProviderPicker({
 }) {
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold">Model</legend>
+      <legend className="text-sm font-semibold">Provider</legend>
       {choices.map((item) => (
-        <label key={item.id} className="flex items-start gap-2 text-sm">
+        <label
+          key={item.id}
+          className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : "hover:bg-white/5"} ${!item.enabled ? "opacity-60" : ""}`}
+        >
           <input
             type="radio"
             name={name}
