@@ -1,3 +1,11 @@
+/**
+ * MCP registry HTTP API.
+ *
+ * Anonymous GET returns 401 "Sign in is required." — correct for this REST
+ * surface. The in-app Tools UI does NOT call this route; it uses the soft-auth
+ * mcpRegistryList server function (typed `unauthenticated`, quiet sign-in
+ * notice). Only live verify scripts probe this path. Keep the 401.
+ */
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import {

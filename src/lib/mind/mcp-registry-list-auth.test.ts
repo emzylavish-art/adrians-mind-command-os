@@ -31,3 +31,47 @@ describe("mcpRegistryList signed-out UI contract", () => {
     assert.equal(mcpListUiState({ status: "ok", servers: [] }), "empty");
   });
 });
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * Item 2 (loose ends): anonymous GET /api/mind/mcp/servers returns 401
+ * "Sign in is required." That is correct for a REST API.
+ *
+ * Case that applies: nothing in the UI calls GET /api/mind/mcp/servers.
+ * The Tools panel and command-app use the soft-auth mcpRegistryList server
+ * function, which returns typed `unauthenticated` (quiet notice, no red banner).
+ * Only scripts/mcp/verify-live.mjs probes the REST path for live checks.
+ * Keep the 401; do not soften the API.
+ */
+describe("GET /api/mind/mcp/servers anonymous auth (API keeps 401)", () => {
+  const root = join(import.meta.dirname, "../..");
+
+  it("UI callers use mcpRegistryList, not fetch('/api/mind/mcp/servers')", () => {
+    const fleet = readFileSync(join(root, "components/mind/fleet-panels.tsx"), "utf8");
+    const command = readFileSync(join(root, "components/mind/command-app.tsx"), "utf8");
+    assert.match(fleet, /mcpRegistryList/);
+    assert.match(command, /mcpRegistryList/);
+    assert.doesNotMatch(fleet, /fetch\([^)]*\/api\/mind\/mcp\/servers/);
+    assert.doesNotMatch(command, /fetch\([^)]*\/api\/mind\/mcp\/servers/);
+    // Soft-auth path: loadMcpList + unauthenticated quiet state
+    assert.match(fleet, /loadMcpList/);
+    assert.match(fleet, /unauthenticated/);
+  });
+
+  it("REST route requires requireUserId and maps Unauthorized to 401 Sign in is required", () => {
+    const route = readFileSync(join(root, "routes/api/mind/mcp/servers.ts"), "utf8");
+    assert.match(route, /requireUserId/);
+    assert.match(route, /Sign in is required\./);
+    assert.match(route, /401/);
+    // Soft-auth unauthenticated payload must NOT be on this REST route
+    assert.doesNotMatch(route, /status:\s*["']unauthenticated["']/);
+  });
+
+  it("mcpRegistryList soft-auth stays the quiet UI path (server.ts)", () => {
+    const server = readFileSync(join(root, "lib/mind/server.ts"), "utf8");
+    assert.match(server, /export const mcpRegistryList/);
+    assert.match(server, /status:\s*"unauthenticated"/);
+  });
+});
