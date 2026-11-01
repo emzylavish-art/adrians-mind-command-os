@@ -18,6 +18,10 @@ import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/bui
 import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
+import { Route as ApiMindOauthNotionCallbackRouteImport } from './routes/api/mind/oauth/notion/callback'
+import { Route as ApiMindOauthNotionDisconnectRouteImport } from './routes/api/mind/oauth/notion/disconnect'
+import { Route as ApiMindOauthNotionStartRouteImport } from './routes/api/mind/oauth/notion/start'
+import { Route as ApiMindOauthNotionStatusRouteImport } from './routes/api/mind/oauth/notion/status'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +68,29 @@ const ApiMindMcpToolsRoute = ApiMindMcpToolsRouteImport.update({
   path: '/api/mind/mcp/tools',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindOauthNotionCallbackRoute =
+  ApiMindOauthNotionCallbackRouteImport.update({
+    id: '/api/mind/oauth/notion/callback',
+    path: '/api/mind/oauth/notion/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindOauthNotionDisconnectRoute =
+  ApiMindOauthNotionDisconnectRouteImport.update({
+    id: '/api/mind/oauth/notion/disconnect',
+    path: '/api/mind/oauth/notion/disconnect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindOauthNotionStartRoute = ApiMindOauthNotionStartRouteImport.update({
+  id: '/api/mind/oauth/notion/start',
+  path: '/api/mind/oauth/notion/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindOauthNotionStatusRoute =
+  ApiMindOauthNotionStatusRouteImport.update({
+    id: '/api/mind/oauth/notion/status',
+    path: '/api/mind/oauth/notion/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +102,10 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
+  '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
+  '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
+  '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +117,10 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
+  '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
+  '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
+  '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +133,10 @@ export interface FileRoutesById {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
+  '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
+  '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
+  '/api/mind/oauth/notion/status': typeof ApiMindOauthNotionStatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +150,10 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/oauth/notion/callback'
+    | '/api/mind/oauth/notion/disconnect'
+    | '/api/mind/oauth/notion/start'
+    | '/api/mind/oauth/notion/status'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +165,10 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/oauth/notion/callback'
+    | '/api/mind/oauth/notion/disconnect'
+    | '/api/mind/oauth/notion/start'
+    | '/api/mind/oauth/notion/status'
   id:
     | '__root__'
     | '/'
@@ -133,6 +180,10 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/oauth/notion/callback'
+    | '/api/mind/oauth/notion/disconnect'
+    | '/api/mind/oauth/notion/start'
+    | '/api/mind/oauth/notion/status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +196,10 @@ export interface RootRouteChildren {
   ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
   ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
+  ApiMindOauthNotionCallbackRoute: typeof ApiMindOauthNotionCallbackRoute
+  ApiMindOauthNotionDisconnectRoute: typeof ApiMindOauthNotionDisconnectRoute
+  ApiMindOauthNotionStartRoute: typeof ApiMindOauthNotionStartRoute
+  ApiMindOauthNotionStatusRoute: typeof ApiMindOauthNotionStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -212,6 +267,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMcpToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/oauth/notion/callback': {
+      id: '/api/mind/oauth/notion/callback'
+      path: '/api/mind/oauth/notion/callback'
+      fullPath: '/api/mind/oauth/notion/callback'
+      preLoaderRoute: typeof ApiMindOauthNotionCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/oauth/notion/disconnect': {
+      id: '/api/mind/oauth/notion/disconnect'
+      path: '/api/mind/oauth/notion/disconnect'
+      fullPath: '/api/mind/oauth/notion/disconnect'
+      preLoaderRoute: typeof ApiMindOauthNotionDisconnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/oauth/notion/start': {
+      id: '/api/mind/oauth/notion/start'
+      path: '/api/mind/oauth/notion/start'
+      fullPath: '/api/mind/oauth/notion/start'
+      preLoaderRoute: typeof ApiMindOauthNotionStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/oauth/notion/status': {
+      id: '/api/mind/oauth/notion/status'
+      path: '/api/mind/oauth/notion/status'
+      fullPath: '/api/mind/oauth/notion/status'
+      preLoaderRoute: typeof ApiMindOauthNotionStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -225,6 +308,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMcpCallRoute: ApiMindMcpCallRoute,
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
   ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
+  ApiMindOauthNotionCallbackRoute: ApiMindOauthNotionCallbackRoute,
+  ApiMindOauthNotionDisconnectRoute: ApiMindOauthNotionDisconnectRoute,
+  ApiMindOauthNotionStartRoute: ApiMindOauthNotionStartRoute,
+  ApiMindOauthNotionStatusRoute: ApiMindOauthNotionStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
