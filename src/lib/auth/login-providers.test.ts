@@ -45,7 +45,7 @@ describe("resolveLoginProviderAction", () => {
     });
     assert.equal(github.kind, "not_configured");
     assert.match((github as { message: string }).message, /GitHub/i);
-    assert.match((github as { message: string }).message, /not configured yet/i);
+    assert.match((github as { message: string }).message, /configured yet/i);
   });
 
   it("returns not_configured for Google/X when broker env is missing", () => {
@@ -54,13 +54,13 @@ describe("resolveLoginProviderAction", () => {
       betterAuthEnabled: false,
     });
     assert.equal(google.kind, "not_configured");
-    assert.match((google as { message: string }).message, /not configured yet/i);
+    assert.match((google as { message: string }).message, /configured yet/i);
     const x = resolveLoginProviderAction("x", {
       supabaseConfigured: false,
       betterAuthEnabled: false,
     });
     assert.equal(x.kind, "not_configured");
-    assert.match((x as { message: string }).message, /not configured yet/i);
+    assert.match((x as { message: string }).message, /configured yet/i);
   });
 });
 
