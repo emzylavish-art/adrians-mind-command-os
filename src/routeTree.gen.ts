@@ -10,12 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
 import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/builtin'
 import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
@@ -40,6 +42,11 @@ import { Route as ApiMindOauthNotionStatusRouteImport } from './routes/api/mind/
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExploreRoute = ExploreRouteImport.update({
@@ -70,6 +77,11 @@ const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   id: '/api/mind/turn',
   path: '/api/mind/turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindDashboardStatusRoute = ApiMindDashboardStatusRouteImport.update({
+  id: '/api/mind/dashboard/status',
+  path: '/api/mind/dashboard/status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindMcpBuiltinRoute = ApiMindMcpBuiltinRouteImport.update({
@@ -182,12 +194,14 @@ const ApiMindOauthNotionStatusRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
   '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
@@ -211,12 +225,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
   '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
@@ -241,12 +257,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
   '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
@@ -272,12 +290,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/dashboard'
     | '/explore'
     | '/login'
     | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
@@ -301,12 +321,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/dashboard'
     | '/explore'
     | '/login'
     | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
@@ -330,12 +352,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/dashboard'
     | '/explore'
     | '/login'
     | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
@@ -360,12 +384,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRoute
   ExploreRoute: typeof ExploreRoute
   LoginRoute: typeof LoginRoute
   PersonasRoute: typeof PersonasRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
   ApiMindMcpBuiltinRoute: typeof ApiMindMcpBuiltinRoute
   ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
@@ -395,6 +421,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/explore': {
@@ -437,6 +470,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/turn'
       fullPath: '/api/mind/turn'
       preLoaderRoute: typeof ApiMindTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/dashboard/status': {
+      id: '/api/mind/dashboard/status'
+      path: '/api/mind/dashboard/status'
+      fullPath: '/api/mind/dashboard/status'
+      preLoaderRoute: typeof ApiMindDashboardStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/mcp/builtin': {
@@ -584,12 +624,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRoute,
   ExploreRoute: ExploreRoute,
   LoginRoute: LoginRoute,
   PersonasRoute: PersonasRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,
   ApiMindMcpBuiltinRoute: ApiMindMcpBuiltinRoute,
   ApiMindMcpCallRoute: ApiMindMcpCallRoute,
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
@@ -614,12 +656,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
