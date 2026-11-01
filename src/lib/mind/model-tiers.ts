@@ -162,3 +162,25 @@ export function allowedModelIds(env: Record<string, string | undefined> = {}): S
   const models = parseModelTierEnv(env);
   return new Set(Object.values(models));
 }
+
+
+/** Header chip / picker label: selected tier, plus Auto→resolved after a turn. */
+export function chipLabelForTier(input: {
+  selected: ModelTier;
+  lastResolved?: ConcreteModelTier | null;
+  lastModel?: string | null;
+}): string {
+  if (input.selected === "Auto" && input.lastResolved) {
+    const modelBit = input.lastModel ? ` · ${input.lastModel}` : "";
+    return `Auto→${input.lastResolved}${modelBit}`;
+  }
+  if (input.lastModel && input.selected !== "Auto") {
+    return `${input.selected} · ${input.lastModel}`;
+  }
+  return input.selected;
+}
+
+/** Shared select handler so chip and Mode picker stay one source of truth. */
+export function selectModelTier(next: ModelTier): ModelTier {
+  return isModelTier(next) ? next : "Auto";
+}
