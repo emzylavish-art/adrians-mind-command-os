@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   OAUTH_STATUS_FETCH_TIMEOUT_MS,
-  STATUS_UNAVAILABLE_DETAIL,
-  STATUS_UNAVAILABLE_SIGNIN_DETAIL,
+  fetchOauthStatusPayload,
   isStatusUnavailable,
+  type OauthStatusPayload,
 } from "@/lib/mind/service-board-status";
 
 type Service = {
@@ -31,13 +31,7 @@ const SERVICES: Service[] = [
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
 ];
 
-type OauthStatus = {
-  state: "connected" | "not_configured" | "not_connected" | string;
-  detail: string;
-  workspaceName?: string;
-  accountLabel?: string;
-  connectedAt?: string;
-};
+type OauthStatus = OauthStatusPayload;
 
 /** ServiceBoard row name → OAuth API connector id (Notion keeps dedicated routes). */
 const OAUTH_BOARD: Record<string, { connector: string; path: string; messageType: string }> = {
@@ -110,48 +104,13 @@ export function ServiceBoard({
     if (inFlight.current.has(name)) return;
     inFlight.current.add(name);
     setRefreshing(name);
-    void fetch(`/api/mind/oauth/${meta.path}/status`, {
-      credentials: "include",
-      signal: AbortSignal.timeout(OAUTH_STATUS_FETCH_TIMEOUT_MS),
+    // Always resolves: 401/403/5xx, network, non-JSON, and a hung probe become a terminal unavailable status.
+    void fetchOauthStatusPayload(`/api/mind/oauth/${meta.path}/status`, {
+      timeoutMs: OAUTH_STATUS_FETCH_TIMEOUT_MS,
     })
-      .then(async (res) => {
-        const text = await res.text().catch(() => "");
-        let body: (OauthStatus & { ok?: boolean; error?: string }) | null = null;
-        if (text) {
-          try {
-            body = JSON.parse(text) as OauthStatus & { ok?: boolean; error?: string };
-          } catch {
-            body = null;
-          }
-        }
-        if (!res.ok || !body) {
-          const detail =
-            res.status === 401 || res.status === 403
-              ? STATUS_UNAVAILABLE_SIGNIN_DETAIL
-              : STATUS_UNAVAILABLE_DETAIL;
-          setOauthByName((prev) => ({
-            ...prev,
-            [name]: { state: "not_connected", detail },
-          }));
-          return;
-        }
-        setOauthByName((prev) => ({
-          ...prev,
-          [name]: {
-            state: body.state,
-            detail: body.detail,
-            workspaceName: body.workspaceName,
-            accountLabel: body.accountLabel,
-            connectedAt: body.connectedAt,
-          },
-        }));
+      .then((status) => {
+        setOauthByName((prev) => ({ ...prev, [name]: status }));
       })
-      .catch(() =>
-        setOauthByName((prev) => ({
-          ...prev,
-          [name]: { state: "not_connected", detail: STATUS_UNAVAILABLE_DETAIL },
-        })),
-      )
       .finally(() => {
         inFlight.current.delete(name);
         setRefreshing((current) => (current === name ? null : current));

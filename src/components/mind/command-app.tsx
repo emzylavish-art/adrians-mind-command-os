@@ -41,7 +41,7 @@ import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
+import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
@@ -84,7 +84,7 @@ import {
 } from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
-import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
+import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
@@ -126,9 +126,21 @@ import {
   classifyHonestFailure,
   honestFailureAuditAction,
   HONEST_FAILURE_MESSAGES,
+  imageGenerationFailure,
+  imagineRetryParams,
   mcpToolFailure,
   normalizeClientFailureMessage,
+  type HonestFailureKind,
 } from "@/lib/mind/failure-states";
+import {
+  commandSendPlan,
+  historyForDeliver,
+  onceRetry,
+  resolveChatMessages,
+  shouldBlockForEmergencyStop,
+  snapshotImages,
+} from "@/lib/mind/retry-fidelity";
+import { McpListStatusRows, loadMcpList, onceListRetry, type McpListServer, type McpListState } from "@/lib/mind/mcp-list-state";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
   addLocalFile,
@@ -329,6 +341,42 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type SavedMcpServer = {
+  id: string;
+  label: string;
+  host: string;
+  state: "unchecked" | "connected" | "failed";
+  tools: { name: string; description: string }[];
+  error: string;
+};
+
+function isSavedMcpServer(server: unknown): server is SavedMcpServer {
+  if (!server || typeof server !== "object") return false;
+  const row = server as Partial<SavedMcpServer>;
+  return (
+    typeof row.id === "string" &&
+    typeof row.label === "string" &&
+    typeof row.host === "string" &&
+    (row.state === "unchecked" || row.state === "connected" || row.state === "failed") &&
+    Array.isArray(row.tools) &&
+    typeof row.error === "string"
+  );
+}
+
+/** Live transcript for Retry: keep a flushed user turn, but do not resurrect a reply the caller just removed. */
+function selectRetryMessages(passed: Msg[], live: Msg[]): Msg[] {
+  if (live.length === passed.length) {
+    const passedLast = passed.at(-1);
+    const liveLast = live.at(-1);
+    if (passedLast?.role === "user" && liveLast?.role === "user" && passedLast.content !== liveLast.content) return passed;
+    return live;
+  }
+  if (live.length === passed.length + 1 && live.at(-1)?.role === "user") return live;
+  if (passed.length + 1 === live.length && passed.at(-1)?.role === "user" && live.at(-1)?.role === "assistant") return passed;
+  if (passed.length < live.length && passed.at(-1)?.role === "user") return passed;
+  return live.length >= passed.length ? live : passed;
+}
+
 export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
@@ -360,9 +408,12 @@ export function CommandApp() {
   const listenGuardRef = useRef(createListenGuard());
   const voiceReconnectRef = useRef(0);
   const turnGen = useRef(0);
+  const turnInFlight = useRef(false);
+  const imagineInFlight = useRef(false);
+  const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null } | null>(null);
+  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null } | null>(null);
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
   const [timelineTickMs, setTimelineTickMs] = useState(0);
@@ -532,8 +583,12 @@ export function CommandApp() {
   const [notionQuery, setNotionQuery] = useState("");
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
-  const [mcpServers, setMcpServers] = useState<{ id: string; label: string; host: string; state: "unchecked" | "connected" | "failed"; tools: { name: string; description: string }[]; error: string }[]>([]);
+  const [mcpServers, setMcpServers] = useState<SavedMcpServer[]>([]);
   const [mcpRegistry, setMcpRegistry] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [mcpRegistryListState, setMcpRegistryListState] = useState<McpListState>({ status: "loading" });
+  const [mcpSavedListState, setMcpSavedListState] = useState<McpListState>({ status: "loading" });
+  const mcpRegistryRetryRef = useRef<(() => void) | null>(null);
+  const mcpSavedRetryRef = useRef<(() => void) | null>(null);
   const [toolResultStatus, setToolResultStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
@@ -589,20 +644,54 @@ export function CommandApp() {
       .then((status) => setNotion(status))
       .catch(() => setNotion({ state: "unconfigured", detail: "Notion status could not be read. Nothing was searched or updated." }));
     const loadMcpLists = () => {
-      mcpList()
-        .then((result) => setMcpServers(result.servers))
-        .catch((caught) => {
-          setMcpServers([]);
-          const message = normalizeClientFailureMessage(caught);
-          reportFailureRef.current(message, "mcp_list_failed", "mcp:list", loadMcpLists);
-        });
-      mcpRegistryList()
-        .then((result) => setMcpRegistry(result.servers))
-        .catch((caught) => {
+      const loadRegistry = () => {
+        setMcpRegistryListState({ status: "loading" });
+        void loadMcpList(() => mcpRegistryList()).then((next) => {
+          setMcpRegistryListState(next);
+          if (next.status === "ready") {
+            setMcpRegistry(next.servers);
+            mcpRegistryRetryRef.current = null;
+            return;
+          }
           setMcpRegistry([]);
-          const message = normalizeClientFailureMessage(caught);
-          reportFailureRef.current(message, "mcp_list_failed", "mcp:registry", loadMcpLists);
+          if (next.status !== "error") return;
+          const retry = onceListRetry(loadRegistry);
+          mcpRegistryRetryRef.current = retry;
+          reportFailureRef.current(next.message, next.kind, "mcp:registry", retry);
         });
+      };
+      const loadSaved = () => {
+        setMcpSavedListState({ status: "loading" });
+        void loadMcpList(() => mcpList()).then((next) => {
+          if (next.status === "ready" && next.servers.every(isSavedMcpServer)) {
+            setMcpSavedListState(next);
+            setMcpServers(next.servers as unknown as SavedMcpServer[]);
+            mcpSavedRetryRef.current = null;
+            return;
+          }
+          if (next.status === "ready") {
+            const failed = {
+              status: "error" as const,
+              kind: "network_failure" as const,
+              message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)`,
+            };
+            setMcpSavedListState(failed);
+            setMcpServers([]);
+            const retry = onceListRetry(loadSaved);
+            mcpSavedRetryRef.current = retry;
+            reportFailureRef.current(failed.message, failed.kind, "mcp:list", retry);
+            return;
+          }
+          setMcpSavedListState(next);
+          setMcpServers([]);
+          if (next.status !== "error") return;
+          const retry = onceListRetry(loadSaved);
+          mcpSavedRetryRef.current = retry;
+          reportFailureRef.current(next.message, next.kind, "mcp:list", retry);
+        });
+      };
+      loadRegistry();
+      loadSaved();
     };
     loadMcpLists();
     try {
@@ -1014,6 +1103,8 @@ export function CommandApp() {
   }
 
   async function askMcp(chat: Chat, text: string, confirmed = false) {
+    if (mcpInFlight.current) return;
+    mcpInFlight.current = true;
     setBusy(true);
     setError(null);
     clearFailure();
@@ -1021,7 +1112,13 @@ export function CommandApp() {
     try {
       const result = await mcpCommand({ data: { text, confirmed } });
       setBusy(false);
-      setMcpServers(result.servers);
+      if (result.servers.every(isSavedMcpServer)) {
+        setMcpServers(result.servers);
+        setMcpSavedListState({
+          status: "ready",
+          servers: result.servers.map((server) => ({ id: server.id, label: server.label, kind: "saved", enabled: server.state !== "failed" })),
+        });
+      }
       if (result.needsConfirmation) {
         setToolResultStatus("idle");
         setPending({
@@ -1059,14 +1156,17 @@ export function CommandApp() {
       reportFailure(message, "mcp_tool_failed", "mcp", () => {
         void askMcp(chat, text, confirmed);
       });
+    } finally {
+      mcpInFlight.current = false;
     }
   }
 
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []): Promise<string | null> {
-    const latest = wsRef.current;
-    if (latest.halted || source.halted) {
+    if (turnInFlight.current) return null;
+    const snapped = snapshotImages(images);
+    if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
       reportEmergencyStop(chat.id, () => {
-        void deliver(chat, text, wsRef.current, resume, images);
+        void deliver(chat, text, wsRef.current, resume, snapped);
       });
       return null;
     }
@@ -1080,20 +1180,30 @@ export function CommandApp() {
     }
     if (!routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
-        void deliver(chat, text, wsRef.current, resume);
+        void deliver(chat, text, wsRef.current, resume, snapped);
       });
       return null;
     }
-    const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
-    const history = (resume ? chat.messages.slice(0, -1) : chat.messages).slice(-12);
+    const live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    const messages = selectRetryMessages(chat.messages, live);
+    if (resume && messages.at(-1)?.role === "assistant") return null;
+    const history = historyForDeliver(messages, resume);
+    const retryThisTurn = () => {
+      if (turnInFlight.current) return;
+      const liveNow = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+      const chosen = selectRetryMessages(chat.messages, liveNow);
+      if (chosen.at(-1)?.role === "assistant") return;
+      void deliver(chat, text, wsRef.current, true, snapped);
+    };
+    const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     if (!resume) {
-      const displayText = historyTextForImages(text, images);
+      const displayText = historyTextForImages(text, snapped);
       const userMsg = {
         id: crypto.randomUUID(),
         role: "user" as const,
         content: displayText,
         at: new Date().toISOString(),
-        images: images.length ? images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
+        images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
       };
       setWs((prev) => ({
         ...prev,
@@ -1115,6 +1225,7 @@ export function CommandApp() {
     const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    turnInFlight.current = true;
     try {
       const result = await consumeMindTurn({
         url: `${prefix}/api/mind/turn`,
@@ -1137,7 +1248,7 @@ export function CommandApp() {
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
           modelTier,
-          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         },
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
@@ -1150,10 +1261,12 @@ export function CommandApp() {
       if (turnAbort.current === controller) turnAbort.current = null;
       if (!shouldStoreReply(result)) {
         const message = result.ok ? "Grok returned an empty reply." : result.error;
+        if (message === STOPPED_REPLY) {
+          setError(message);
+          return null;
+        }
         const kind = classifyHonestFailure(message);
-        reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, () => {
-          void deliver(chat, text, wsRef.current, true, images);
-        });
+        reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
         return null;
       }
       setWs((prev) => {
@@ -1211,17 +1324,16 @@ export function CommandApp() {
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
-      const message =
-        caught instanceof Error && caught.message === "Unauthorized"
-          ? "Sign in is required."
-          : caught instanceof Error
-            ? caught.message
-            : HONEST_FAILURE_MESSAGES.model_unreachable;
+      if (controller.signal.aborted) {
+        setError(STOPPED_REPLY);
+        return null;
+      }
+      const message = normalizeClientFailureMessage(caught);
       const kind = classifyHonestFailure(message);
-      reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, () => {
-        void deliver(chat, text, wsRef.current, resume, images);
-      });
+      reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
       return null;
+    } finally {
+      turnInFlight.current = false;
     }
   }
 
@@ -1265,48 +1377,49 @@ export function CommandApp() {
   }
 
   function editMessage(messageId: string, text: string) {
-    if (!active || busy) return;
-    if (wsRef.current.halted) {
+    if (!active || busy || turnInFlight.current) return;
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
       reportEmergencyStop(active.id, () => editMessage(messageId, text));
       return;
     }
-    const revised = reviseUserTurn(ws, active.id, messageId, text);
+    const revised = reviseUserTurn(wsRef.current, active.id, messageId, text);
     if ("error" in revised) {
       setError(revised.error);
       return;
     }
     setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true, toImageAttachments(revised.images));
+    void deliver(revised.chat, revised.text, revised.ws, true, snapshotImages(toImageAttachments(revised.images)));
   }
 
   function regenerate() {
-    if (!active || busy) return;
-    if (wsRef.current.halted) {
+    if (!active || busy || turnInFlight.current) return;
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
       reportEmergencyStop(active.id, () => regenerate());
       return;
     }
-    const prepared = prepareRegenerate(ws, active.id);
+    const prepared = prepareRegenerate(wsRef.current, active.id);
     if ("error" in prepared) {
       setError(prepared.error);
       return;
     }
     setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true, toImageAttachments(prepared.images));
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, snapshotImages(toImageAttachments(prepared.images)));
   }
 
   function retryLast() {
-    if (!active || busy) return;
-    if (wsRef.current.halted) {
+    if (!active || busy || turnInFlight.current) return;
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
       reportEmergencyStop(active.id, () => retryLast());
       return;
     }
-    const prepared = prepareRetry(ws, active.id);
+    const prepared = prepareRetry(wsRef.current, active.id);
     if ("error" in prepared) {
       setError(prepared.error);
       return;
     }
+    if (prepared.chat.messages.at(-1)?.role !== "user") return;
     setError(null);
-    void deliver(prepared.chat, prepared.text, ws, true, toImageAttachments(prepared.images));
+    void deliver(prepared.chat, prepared.text, wsRef.current, true, snapshotImages(toImageAttachments(prepared.images)));
   }
 
   function exportActive() {
@@ -1343,7 +1456,7 @@ export function CommandApp() {
   }
 
   async function sendCommand() {
-    if (busy) return;
+    if (busy || turnInFlight.current) return;
     const text = draft.trim();
     const imaginePrompt = parseImagineCommand(text);
     if (imaginePrompt !== null) {
@@ -1354,17 +1467,24 @@ export function CommandApp() {
       await runImagine(imaginePrompt, null);
       return;
     }
-    const images = pendingImages;
-    if (!text && images.length === 0) {
+    const images = snapshotImages(pendingImages);
+    const plan = commandSendPlan({
+      liveHalted: wsRef.current.halted,
+      text,
+      imageCount: images.length,
+    });
+    if (plan === "empty") {
       setError("Write what you want to work on.");
       return;
     }
-    if (wsRef.current.halted) {
+    if (plan === "blocked") {
       const snapshot = text;
       const file = staged;
+      const imageSnapshot = images;
       reportEmergencyStop("command", () => {
         setDraft(snapshot);
         if (file) setStaged(file);
+        setPendingImages(imageSnapshot);
         void sendCommand();
       });
       return;
@@ -1502,7 +1622,7 @@ export function CommandApp() {
   }
 
   async function sendInChat() {
-    if (!active || busy) return;
+    if (!active || busy || turnInFlight.current) return;
     const text = draft.trim();
     const imaginePrompt = parseImagineCommand(text);
     if (imaginePrompt !== null) {
@@ -1513,9 +1633,14 @@ export function CommandApp() {
       await runImagine(imaginePrompt, active);
       return;
     }
-    const images = pendingImages;
-    if (!text && !staged && images.length === 0) return;
-    if (wsRef.current.halted) {
+    const images = snapshotImages(pendingImages);
+    const plan = commandSendPlan({
+      liveHalted: wsRef.current.halted,
+      text: text || (staged ? staged.name : ""),
+      imageCount: images.length,
+    });
+    if (plan === "empty") return;
+    if (plan === "blocked") {
       const snapshot = text;
       const file = staged;
       const chatId = active.id;
@@ -1547,14 +1672,20 @@ export function CommandApp() {
     await deliver(active, full, ws, false, images);
   }
 
-  async function runImagine(promptRaw?: string, targetChat: Chat | null = active) {
-    if (busy || ws.halted) return;
+  async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
+    if (imagineInFlight.current || busy) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
       setError("Write a prompt for Imagine, or use /imagine <prompt>.");
       return;
     }
-    setDraft("");
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop("imagine", () => {
+        void runImagine(prompt, targetChat, opts);
+      });
+      return;
+    }
+    if (!opts?.retry) setDraft("");
     setError(null);
     setBusy(true);
     setLiveText("");
@@ -1562,6 +1693,10 @@ export function CommandApp() {
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     let chat = targetChat;
     if (!chat) {
+      if (opts?.retry) {
+        setBusy(false);
+        return;
+      }
       const made = createChat(ws, {
         memory: memoryChoice,
         autonomy,
@@ -1576,24 +1711,53 @@ export function CommandApp() {
       );
     }
     const chatId = chat.id;
-    const userMsg = {
-      id: crypto.randomUUID(),
-      role: "user" as const,
-      content: `/imagine ${prompt}`,
-      at: new Date().toISOString(),
+    if (!opts?.retry) {
+      const userMsg = {
+        id: crypto.randomUUID(),
+        role: "user" as const,
+        content: `/imagine ${prompt}`,
+        at: new Date().toISOString(),
+      };
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
+                messages: [...item.messages, userMsg],
+              }
+            : item,
+        ),
+      }));
+    }
+    const rememberImagineFailure = (failure: ReturnType<typeof imageGenerationFailure>) => {
+      const params = imagineRetryParams(failure);
+      reportFailure(failure.message, failure.kind, failure.target, () => {
+        const again = wsRef.current.chats.find((item) => item.id === chatId) ?? chat;
+        void runImagine(params.prompt, again, { retry: true });
+      });
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                messages: [
+                  ...item.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant" as const,
+                    content: failure.message,
+                    at: new Date().toISOString(),
+                  },
+                ],
+              }
+            : item,
+        ),
+      }));
     };
-    setWs((prev) => ({
-      ...prev,
-      chats: prev.chats.map((item) =>
-        item.id === chatId
-          ? {
-              ...item,
-              title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
-              messages: [...item.messages, userMsg],
-            }
-          : item,
-      ),
-    }));
+    imagineInFlight.current = true;
     try {
       const response = await fetch(`${prefix}/api/mind/media/generate`, {
         method: "POST",
@@ -1610,27 +1774,16 @@ export function CommandApp() {
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
       if (!response.ok || !payload.ok || !payload.images?.length) {
-        const message = payload.error || `Imagine failed (HTTP ${response.status}).`;
-        setError(message);
-        setWs((prev) => ({
-          ...prev,
-          chats: prev.chats.map((item) =>
-            item.id === chatId
-              ? {
-                  ...item,
-                  messages: [
-                    ...item.messages,
-                    {
-                      id: crypto.randomUUID(),
-                      role: "assistant" as const,
-                      content: message,
-                      at: new Date().toISOString(),
-                    },
-                  ],
-                }
-              : item,
-          ),
-        }));
+        rememberImagineFailure(
+          imageGenerationFailure({
+            mode: "generate",
+            prompt,
+            status: response.status,
+            serverError: payload.error || "",
+            n: 1,
+            target: `imagine:${chatId}`,
+          }),
+        );
         return;
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
@@ -1641,6 +1794,7 @@ export function CommandApp() {
       const model = payload.model || "grok-imagine-image";
       setPendingImages(images);
       setNotice(`Imagine (${model}). Attached for a follow-up vision turn — Send or Agent to reuse.`);
+      clearFailure();
       setWs((prev) => {
         const next = {
           ...prev,
@@ -1666,40 +1820,33 @@ export function CommandApp() {
         return pushAudit(next, "imagine_generate", chatId, model);
       });
     } catch (caught) {
-      const message =
-        caught instanceof Error && caught.message === "Unauthorized"
-          ? "Sign in is required."
-          : caught instanceof Error
-            ? caught.message
-            : "Imagine could not be reached.";
-      setError(message);
-      setWs((prev) => ({
-        ...prev,
-        chats: prev.chats.map((item) =>
-          item.id === chatId
-            ? {
-                ...item,
-                messages: [
-                  ...item.messages,
-                  {
-                    id: crypto.randomUUID(),
-                    role: "assistant" as const,
-                    content: message,
-                    at: new Date().toISOString(),
-                  },
-                ],
-              }
-            : item,
-        ),
-      }));
+      const normalized = normalizeClientFailureMessage(caught);
+      const kind = classifyHonestFailure(normalized);
+      if (kind === "auth_required" || kind === "forbidden_cross_site" || kind === "rate_limited") {
+        reportFailure(normalized, honestFailureAuditAction(kind), `imagine:${chatId}`, () => {
+          const again = wsRef.current.chats.find((item) => item.id === chatId) ?? chat;
+          void runImagine(prompt, again, { retry: true });
+        });
+        return;
+      }
+      rememberImagineFailure(
+        imageGenerationFailure({
+          mode: "generate",
+          prompt,
+          caughtMessage: normalized,
+          n: 1,
+          target: `imagine:${chatId}`,
+        }),
+      );
     } finally {
+      imagineInFlight.current = false;
       setBusy(false);
       setLiveText("");
     }
   }
 
-  async function runImagineEdit(imageDataUrl: string, promptRaw?: string) {
-    if (busy || ws.halted) return;
+  async function runImagineEdit(imageDataUrl: string, promptRaw?: string, opts?: { retry?: boolean }) {
+    if (imagineInFlight.current || busy) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
       setError("Write an edit instruction in the composer, then press Edit with Imagine.");
@@ -1709,11 +1856,18 @@ export function CommandApp() {
       setError("Edit with Imagine only works on images kept as data URLs in this chat.");
       return;
     }
-    setDraft("");
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop("imagine:edit", () => {
+        void runImagineEdit(imageDataUrl, prompt, opts);
+      });
+      return;
+    }
+    if (!opts?.retry) setDraft("");
     setError(null);
     setBusy(true);
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    imagineInFlight.current = true;
     try {
       const response = await fetch(`${prefix}/api/mind/media/generate`, {
         method: "POST",
@@ -1730,7 +1884,19 @@ export function CommandApp() {
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
       if (!response.ok || !payload.ok || !payload.images?.length) {
-        setError(payload.error || `Edit with Imagine failed (HTTP ${response.status}).`);
+        const failure = imageGenerationFailure({
+          mode: "edit",
+          prompt,
+          status: response.status,
+          serverError: payload.error || "",
+          imageDataUrl,
+          n: 1,
+        });
+        const params = imagineRetryParams(failure);
+        reportFailure(failure.message, failure.kind, failure.target, () => {
+          if (!params.imageDataUrl) return;
+          void runImagineEdit(params.imageDataUrl, params.prompt, { retry: true });
+        });
         return;
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
@@ -1740,7 +1906,8 @@ export function CommandApp() {
       }));
       setPendingImages(images);
       setNotice(`Edited with ${payload.model || "grok-imagine-image"}. Staged for Send / Agent.`);
-      if (active) {
+      clearFailure();
+      if (active && !opts?.retry) {
         const chatId = active.id;
         setWs((prev) => ({
           ...prev,
@@ -1769,14 +1936,50 @@ export function CommandApp() {
               : item,
           ),
         }));
+      } else if (active) {
+        const chatId = active.id;
+        const model = payload.model || "grok-imagine-image";
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Edited with ${model}.`,
+                      at: new Date().toISOString(),
+                      model,
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Edit with Imagine could not be reached.");
+      const normalized = normalizeClientFailureMessage(caught);
+      const failure = imageGenerationFailure({
+        mode: "edit",
+        prompt,
+        caughtMessage: normalized,
+        imageDataUrl,
+        n: 1,
+      });
+      const params = imagineRetryParams(failure);
+      reportFailure(failure.message, failure.kind, failure.target, () => {
+        if (!params.imageDataUrl) return;
+        void runImagineEdit(params.imageDataUrl, params.prompt, { retry: true });
+      });
     } finally {
+      imagineInFlight.current = false;
       setBusy(false);
     }
   }
-
   function enableMemory() {
     if (armMemory === "composer") {
       setMemoryChoice("on");
@@ -1965,7 +2168,7 @@ export function CommandApp() {
       ...prev,
       audit: [{ id: auditId, at: new Date().toISOString(), action: auditAction, target, result: message }, ...prev.audit].slice(0, 200),
     }));
-    setFailure({ message, auditId, retry });
+    setFailure({ message, auditId, retry: onceRetry(retry), kind });
     setError(message);
     setNotice(null);
   }
@@ -2430,6 +2633,14 @@ export function CommandApp() {
     return item.text.toLowerCase().includes(memoryQuery.trim().toLowerCase());
   });
   const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
+  const mcpBoard =
+    mcpSavedListState.status === "loading"
+      ? { state: "Checking", detail: "Loading MCP servers…" }
+      : mcpSavedListState.status === "error"
+        ? { state: "Unavailable", detail: mcpSavedListState.message }
+        : mcpServers.some((server) => server.state === "connected")
+          ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
+          : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." };
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
@@ -2762,38 +2973,47 @@ export function CommandApp() {
             </button>
           </div>
         )}
-        {(failure || error) && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2" role="alert" data-testid="failure-banner">
-            <p className="text-sm text-danger">{failure?.message ?? error}</p>
+        {failure && (
+          <div
+            className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2"
+            role="alert"
+            data-testid="failure-banner"
+            data-failure-kind={failure.kind ?? "unknown"}
+          >
+            <p className="text-sm text-danger">{failure.message}</p>
             <div className="flex flex-wrap gap-2">
-              {failure?.retry ? (
-                <button
-                  type="button"
-                  className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
-                  onClick={() => {
-                    const retry = failure.retry;
-                    clearFailure();
-                    retry?.();
-                  }}
-                >
-                  Retry
-                </button>
-              ) : null}
-              {failure?.auditId ? (
-                <button
-                  type="button"
-                  className="inline-flex min-h-11 items-center justify-center rounded-panel border border-danger/40 px-4 text-sm text-danger"
-                  onClick={() => {
-                    setView("activity");
-                    setFocusAuditId(failure.auditId);
-                    setActivityQuery("");
-                    setNavOpen(false);
-                  }}
-                >
-                  View log
-                </button>
-              ) : null}
-              <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm" onClick={() => clearFailure()}>
+              <button
+                type="button"
+                data-testid="failure-retry"
+                className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50"
+                disabled={!failure.retry}
+                onClick={() => {
+                  const retry = failure.retry;
+                  clearFailure();
+                  retry?.();
+                }}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                data-testid="failure-view-log"
+                className="inline-flex min-h-11 items-center justify-center rounded-panel border border-danger/40 px-4 text-sm text-danger"
+                onClick={() => {
+                  setView("activity");
+                  setFocusAuditId(failure.auditId);
+                  setActivityQuery("");
+                  setNavOpen(false);
+                }}
+              >
+                View log
+              </button>
+              <button
+                type="button"
+                data-testid="failure-dismiss"
+                className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm"
+                onClick={() => clearFailure()}
+              >
                 Dismiss
               </button>
             </div>
@@ -2989,7 +3209,7 @@ export function CommandApp() {
                     <li>
                       <p className="font-semibold">MCP servers</p>
                       <ul className="mt-2 space-y-2">
-                        {mcpRegistry.map((server) => (
+                        {mcpRegistryListState.status === "ready" && mcpRegistry.map((server) => (
                           <li key={server.id} className="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line px-3 py-2">
                             <span>{server.label} · {server.kind} · {server.enabled ? "On" : "Off"}</span>
                             <button
@@ -3003,7 +3223,15 @@ export function CommandApp() {
                             </button>
                           </li>
                         ))}
-                        {mcpRegistry.length === 0 && <li className="text-muted">No MCP registry loaded.</li>}
+                        <McpListStatusRows
+                          state={mcpRegistryListState}
+                          onRetry={() => mcpRegistryRetryRef.current?.()}
+                          onViewLog={() => {
+                            setView("activity");
+                            setActivityQuery("");
+                            setNavOpen(false);
+                          }}
+                        />
                       </ul>
                       <button type="button" className="mt-2 min-h-11 text-accent" onClick={() => setView("tools")}>
                         Open Tools panel
@@ -3068,9 +3296,7 @@ export function CommandApp() {
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
-                mcp={mcpServers.some((server) => server.state === "connected")
-                  ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
-                  : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
+                mcp={mcpBoard}
                 onSetup={(message) => setNotice(message)}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
@@ -3606,9 +3832,7 @@ export function CommandApp() {
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
-                mcp={mcpServers.some((server) => server.state === "connected")
-                  ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
-                  : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
+                mcp={mcpBoard}
                 onSetup={(message) => setNotice(message)}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
@@ -3654,6 +3878,15 @@ export function CommandApp() {
                       return;
                     }
                     setMcpServers(result.servers);
+                    setMcpSavedListState({
+                      status: "ready",
+                      servers: result.servers.map((server) => ({
+                        id: server.id,
+                        label: server.label,
+                        kind: "saved",
+                        enabled: server.state !== "failed",
+                      })),
+                    });
                     setMcpLabel("");
                     setMcpUrl("");
                     const connected = result.servers.some((server) => server.state === "connected");
@@ -3668,7 +3901,7 @@ export function CommandApp() {
                 <input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" placeholder="Token, optional" autoComplete="off" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
                 <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || !mcpUrl.trim()}>Test and save</button>
                 <ul className="mt-3 space-y-2">
-                  {mcpServers.map((server) => (
+                  {mcpSavedListState.status === "ready" && mcpServers.map((server) => (
                     <li key={server.id} className="rounded-panel border border-line px-3 py-2 text-sm">
                       <span className="font-semibold">{server.label}</span>
                       <span className="ml-2 text-muted">{server.host} · {server.state}</span>
@@ -3677,13 +3910,33 @@ export function CommandApp() {
                         type="button"
                         className="mt-2 min-h-11 rounded-panel border border-line px-3"
                         onClick={() => {
-                          void mcpRemove({ data: { id: server.id } }).then((result) => setMcpServers(result.servers));
+                          void mcpRemove({ data: { id: server.id } }).then((result) => {
+                            setMcpServers(result.servers);
+                            setMcpSavedListState({
+                              status: "ready",
+                              servers: result.servers.map((item) => ({
+                                id: item.id,
+                                label: item.label,
+                                kind: "saved",
+                                enabled: item.state !== "failed",
+                              })),
+                            });
+                          });
                         }}
                       >
                         Remove
                       </button>
                     </li>
                   ))}
+                  <McpListStatusRows
+                    state={mcpSavedListState}
+                    onRetry={() => mcpSavedRetryRef.current?.()}
+                    onViewLog={() => {
+                      setView("activity");
+                      setActivityQuery("");
+                      setNavOpen(false);
+                    }}
+                  />
                 </ul>
               </form>
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
