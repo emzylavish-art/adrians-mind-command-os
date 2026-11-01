@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { BrushBuildingShader } from "../shaders/brush-building.ts";
-import { sanitizeFinite } from "./paper-grain.ts";
+import { sanitizeFinite, sanitizeShaderTime } from "./paper-grain.ts";
 
 export type BuildingSurfaceOptions = {
   base?: THREE.ColorRepresentation;
@@ -41,7 +41,7 @@ export function createBuildingBrushMaterial(
 
 export function tickBuildingMaterial(mat: THREE.ShaderMaterial, timeSeconds: number): void {
   if (mat.uniforms["uTime"]) {
-    mat.uniforms["uTime"].value = sanitizeFinite(timeSeconds, 0);
+    mat.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
   }
 }
 

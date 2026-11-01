@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { sanitizeShaderTime } from "./paper-grain.ts";
 import { WatercolorStarShader } from "../shaders/watercolor-star.ts";
 
 export type StarSurfaceOptions = {
@@ -66,5 +67,5 @@ export function createStarSpriteTexture(size = 128): THREE.CanvasTexture {
 }
 
 export function tickStarMaterial(mat: THREE.ShaderMaterial, timeSeconds: number): void {
-  if (mat.uniforms["uTime"]) mat.uniforms["uTime"].value = timeSeconds;
+  if (mat.uniforms["uTime"]) mat.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
 }
