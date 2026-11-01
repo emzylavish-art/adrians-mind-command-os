@@ -40,7 +40,8 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
-import { runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
+import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
+import { formatVoiceClientError, shouldPersistVoiceMode } from "@/lib/mind/voice/errors";
 import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
@@ -249,6 +250,7 @@ export function CommandApp() {
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
   const voiceModeRef = useRef<VoiceRoutingMode>("direct");
   const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
+  const [voiceModeHydrated, setVoiceModeHydrated] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
@@ -304,12 +306,14 @@ export function CommandApp() {
     const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
     setVoiceMode(mode);
     voiceModeRef.current = mode;
+    setVoiceModeHydrated(true);
   }, []);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
+    if (!shouldPersistVoiceMode(voiceModeHydrated)) return;
     writeStoredVoiceMode(voiceMode, typeof localStorage === "undefined" ? null : localStorage);
-  }, [voiceMode]);
+  }, [voiceMode, voiceModeHydrated]);
 
   useEffect(() => {
     return () => {
@@ -1252,37 +1256,65 @@ export function CommandApp() {
       return;
     }
     setError(null);
+    setNotice(null);
     sharedAudioOutput.interrupt();
     voiceSession.current?.interruptPlayback();
-    const secret = await createVoiceClientSecret();
-    if (!secret.ok) {
-      setError(secret.error);
-      return;
-    }
-    const session = new RealtimeVoiceSession({
-      onTranscript: (text) => {
-        void handleVoiceTranscript(text);
-      },
-      onSpeechStarted: () => {
-        sharedAudioOutput.interrupt();
-        session.interruptPlayback();
-      },
-      onError: (message) => setError(message),
-      onStatus: (status) => {
-        setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
-        if (status === "speaking") setSpeaking(true);
-        if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
-      },
-    });
-    voiceSession.current = session;
+
     try {
+      if (voiceModeRef.current === "orchestrator") {
+        const probe = await probeOllamaConductor({
+          baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+          model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+        });
+        if (!probe.ok) {
+          setError(probe.error);
+          setVoiceListening(false);
+          return;
+        }
+      }
+
+      let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
+      try {
+        secret = await createVoiceClientSecret();
+      } catch (caught) {
+        setError(formatVoiceClientError(caught));
+        setVoiceListening(false);
+        return;
+      }
+      if (!secret || typeof secret !== "object" || !("ok" in secret)) {
+        setError(formatVoiceClientError(secret));
+        setVoiceListening(false);
+        return;
+      }
+      if (!secret.ok) {
+        setError(formatVoiceClientError(secret));
+        setVoiceListening(false);
+        return;
+      }
+
+      const session = new RealtimeVoiceSession({
+        onTranscript: (text) => {
+          void handleVoiceTranscript(text);
+        },
+        onSpeechStarted: () => {
+          sharedAudioOutput.interrupt();
+          session.interruptPlayback();
+        },
+        onError: (message) => setError(message || "Voice realtime error."),
+        onStatus: (status) => {
+          setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
+          if (status === "speaking") setSpeaking(true);
+          if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+        },
+      });
+      voiceSession.current = session;
       await session.connect(secret.value);
       await session.startCapture();
       setVoiceListening(true);
       setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Press mic again to stop.`);
     } catch (caught) {
       stopVoiceSession();
-      setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
+      setError(formatVoiceClientError(caught));
     }
   }
 
