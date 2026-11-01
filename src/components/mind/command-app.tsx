@@ -41,6 +41,8 @@ import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
+import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
+import { VoicePicker } from "@/components/mind/voice-picker";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
 import { toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
@@ -61,6 +63,14 @@ import {
   voiceMicAriaLabel,
   VOICE_TOGGLE_SHORTCUT,
 } from "@/lib/mind/voice/shortcut";
+import { createHoldToTalkController } from "@/lib/mind/voice/hold-to-talk";
+import { clampLiveTranscript, shouldClearLiveTranscriptOnModeSwitch } from "@/lib/mind/voice/live-transcript";
+import {
+  DEFAULT_XAI_VOICE,
+  type XaiBuiltinVoice,
+  readStoredVoiceChoice,
+  writeStoredVoiceChoice,
+} from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
@@ -272,6 +282,9 @@ export function CommandApp() {
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
   const [voiceLiveTranscript, setVoiceLiveTranscript] = useState("");
+  const [voiceChoice, setVoiceChoice] = useState<XaiBuiltinVoice>(DEFAULT_XAI_VOICE);
+  const voiceChoiceRef = useRef<XaiBuiltinVoice>(DEFAULT_XAI_VOICE);
+  const listenMintAbortRef = useRef<AbortController | null>(null);
   const speakAbortRef = useRef<AbortController | null>(null);
   const speakGenRef = useRef(0);
   const listenGuardRef = useRef(createListenGuard());
@@ -328,17 +341,60 @@ export function CommandApp() {
 
   useEffect(() => {
     // Single store: hydrate from localStorage once; every badge reads the same snapshot.
-    hydrateVoiceModeStore(typeof localStorage === "undefined" ? null : localStorage);
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    hydrateVoiceModeStore(storage);
+    const choice = readStoredVoiceChoice(storage);
+    voiceChoiceRef.current = choice;
+    setVoiceChoice(choice);
   }, []);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "amcos.voice.choice.v1") return;
+      const next = readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage);
+      voiceChoiceRef.current = next;
+      setVoiceChoice(next);
+      voiceSession.current?.setVoice(next);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : null;
+    if (!devices || typeof devices.addEventListener !== "function") return;
+    const onDeviceChange = () => {
+      const session = voiceSession.current;
+      if (!session?.isCapturing) return;
+      // Mic unplugged / device change while listening — stop cleanly, no stuck Listening.
+      stopVoiceSession();
+      setError("The microphone changed or was removed. Voice capture stopped.");
+      setNotice("The microphone changed or was removed. Voice capture stopped.");
+    };
+    devices.addEventListener("devicechange", onDeviceChange);
+    return () => devices.removeEventListener("devicechange", onDeviceChange);
+  }, []);
+
   function applyVoiceMode(next: VoiceRoutingMode) {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const previous = voiceModeRef.current;
     const committed = setVoiceModeStore(next, storage);
     voiceModeRef.current = committed;
+    if (shouldClearLiveTranscriptOnModeSwitch(previous, committed)) {
+      setVoiceLiveTranscript("");
+    }
+  }
+
+  function applyVoiceChoice(next: XaiBuiltinVoice) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const committed = writeStoredVoiceChoice(next, storage);
+    voiceChoiceRef.current = committed;
+    setVoiceChoice(committed);
+    voiceSession.current?.setVoice(committed);
   }
 
   function interruptSpeakPlayback() {
@@ -358,10 +414,13 @@ export function CommandApp() {
         abortSpeak: speakAbortRef.current,
         speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
       });
+      listenMintAbortRef.current?.abort();
+      listenMintAbortRef.current = null;
       voiceSession.current?.close();
       voiceSession.current = null;
       setVoiceListening(false);
       setVoiceLevel(0);
+      setVoiceLiveTranscript("");
       setSpeaking(false);
       listenGuardRef.current.end();
     };
@@ -473,6 +532,39 @@ export function CommandApp() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const hold = createHoldToTalkController({
+      start: () => {
+        if (voiceSession.current?.isOpen || voiceSession.current?.isCapturing) return;
+        void listenRef.current();
+      },
+      stop: () => {
+        stopVoiceSession();
+        setNotice("Voice capture stopped.");
+      },
+      isListening: () => Boolean(voiceSession.current?.isOpen || voiceSession.current?.isCapturing),
+    });
+    // stopVoiceSession is stable enough via refs; hold controller owns blur/hide.
+    const onDown = (event: KeyboardEvent) => hold.onKeyDown(event);
+    const onUp = (event: KeyboardEvent) => hold.onKeyUp(event);
+    const onBlur = () => hold.onBlurOrHide();
+    const onVis = () => {
+      if (document.visibilityState === "hidden") hold.onBlurOrHide();
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVis);
+      hold.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hold wired once; listenRef/stopVoiceSession use refs
   }, []);
 
   useEffect(() => {
@@ -1215,7 +1307,7 @@ export function CommandApp() {
     setError(null);
     let result: Awaited<ReturnType<typeof speakText>>;
     try {
-      result = await speakText({ data: { text: clipped } });
+      result = await speakText({ data: { text: clipped, voiceId: voiceChoiceRef.current } });
     } catch (caught) {
       if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
       setSpeaking(false);
@@ -1263,6 +1355,8 @@ export function CommandApp() {
 
   function stopVoiceSession() {
     interruptSpeakPlayback();
+    listenMintAbortRef.current?.abort();
+    listenMintAbortRef.current = null;
     voiceSession.current?.close();
     voiceSession.current = null;
     setVoiceListening(false);
@@ -1368,10 +1462,25 @@ export function CommandApp() {
         }
       }
 
+      listenMintAbortRef.current?.abort();
+      const mintAbort = new AbortController();
+      listenMintAbortRef.current = mintAbort;
+      setNotice("Minting voice session… (press mic or release Space to cancel)");
+
       let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
       try {
         secret = await createVoiceClientSecret();
+        if (mintAbort.signal.aborted) {
+          setNotice("Voice start canceled.");
+          setVoiceListening(false);
+          return;
+        }
       } catch (caught) {
+        if (mintAbort.signal.aborted) {
+          setNotice("Voice start canceled.");
+          setVoiceListening(false);
+          return;
+        }
         setError(formatVoiceClientError(caught));
         setVoiceListening(false);
         return;
@@ -1386,47 +1495,72 @@ export function CommandApp() {
         setVoiceListening(false);
         return;
       }
+      if (mintAbort.signal.aborted) {
+        setNotice("Voice start canceled.");
+        setVoiceListening(false);
+        return;
+      }
 
-      const session = new RealtimeVoiceSession({
-        onTranscript: (text) => {
-          setVoiceLiveTranscript(text.trim().slice(0, 240));
-          void handleVoiceTranscript(text);
+      const session = new RealtimeVoiceSession(
+        {
+          onTranscript: (text) => {
+            setVoiceLiveTranscript(clampLiveTranscript(text));
+            void handleVoiceTranscript(text);
+          },
+          onPartialTranscript: (text) => {
+            setVoiceLiveTranscript(clampLiveTranscript(text));
+          },
+          onSpeechStarted: () => {
+            interruptSpeakPlayback();
+            session.interruptPlayback();
+          },
+          onError: (message) => setError(message || "Voice realtime error."),
+          onStatus: (status) => {
+            setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
+            if (status === "speaking") setSpeaking(true);
+            if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+            if (status === "idle" || status === "closed") {
+              setVoiceLevel(0);
+              if (status === "closed") setVoiceLiveTranscript("");
+            }
+          },
+          onLevel: (level) => setVoiceLevel(level),
+          onUnexpectedClose: () => {
+            listenGuardRef.current.end();
+            setVoiceListening(false);
+            setVoiceLevel(0);
+            setVoiceLiveTranscript("");
+            setSpeaking(false);
+            setError(VOICE_CONNECTION_DROPPED);
+            setNotice(VOICE_CONNECTION_DROPPED);
+            // Optional single reconnect attempt.
+            if (voiceReconnectRef.current < 1) {
+              voiceReconnectRef.current += 1;
+              setNotice("Voice connection dropped. Reconnecting once…");
+              window.setTimeout(() => {
+                void listenRef.current();
+              }, 400);
+            }
+          },
         },
-        onSpeechStarted: () => {
-          interruptSpeakPlayback();
-          session.interruptPlayback();
-        },
-        onError: (message) => setError(message || "Voice realtime error."),
-        onStatus: (status) => {
-          setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
-          if (status === "speaking") setSpeaking(true);
-          if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
-          if (status === "idle" || status === "closed") setVoiceLevel(0);
-        },
-        onLevel: (level) => setVoiceLevel(level),
-        onUnexpectedClose: () => {
-          listenGuardRef.current.end();
-          setVoiceListening(false);
-          setVoiceLevel(0);
-          setSpeaking(false);
-          setError(VOICE_CONNECTION_DROPPED);
-          setNotice(VOICE_CONNECTION_DROPPED);
-          // Optional single reconnect attempt.
-          if (voiceReconnectRef.current < 1) {
-            voiceReconnectRef.current += 1;
-            setNotice("Voice connection dropped. Reconnecting once…");
-            window.setTimeout(() => {
-              void listenRef.current();
-            }, 400);
-          }
-        },
-      });
+        sharedAudioOutput,
+        undefined,
+        { voice: voiceChoiceRef.current },
+      );
       voiceSession.current = session;
       await session.connect(secret.value);
+      if (mintAbort.signal.aborted) {
+        session.close();
+        voiceSession.current = null;
+        setVoiceListening(false);
+        setNotice("Voice start canceled.");
+        return;
+      }
       await session.startCapture();
       setVoiceListening(true);
       voiceReconnectRef.current = 0;
-      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Press mic again to stop.`);
+      listenMintAbortRef.current = null;
+      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Hold Space or press mic to stop.`);
     } catch (caught) {
       stopVoiceSession();
       const mic = formatMicCaptureError(caught);
@@ -1613,11 +1747,8 @@ export function CommandApp() {
                 listening={voiceListening}
                 onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               />
-              {voiceLiveTranscript ? (
-                <p className="max-w-[14rem] truncate text-xs text-muted" data-testid="voice-live-transcript" title={voiceLiveTranscript}>
-                  Heard: {voiceLiveTranscript}
-                </p>
-              ) : null}
+              <VoiceLiveTranscript text={voiceLiveTranscript} />
+              <VoicePicker value={voiceChoice} onChange={applyVoiceChoice} disabled={voiceListening} />
             </div>
           </div>
           <div className="relative min-w-0 flex-1">
