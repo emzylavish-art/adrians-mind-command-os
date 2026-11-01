@@ -33,6 +33,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
+- **Motion: wire dust + commit comets + shared pulse/orbit into UniverseScene** — Dashboard Bot scene should import `createDustField` / `createCommitComets` / `sampleStarPulse` / `sampleOrbitDrift` from motion+particles lanes; gate on prefers-reduced-motion; verify 60fps with REA frame sequence (Cosmos Motion Bot follow-up after universe lands).
 - **Painter — constellation lore plaques** — watercolor plaque ShaderMaterial + procedural parchment; readable mid-dolly with last 3 lock notes + health reason (next painter cycle).
 - **Painter kit wire-up** — Dashboard Bot imports `createPainterlyKit` into `universe-scene.tsx`; replace inlined PainterlyShader / canvas helpers.
 - **Depth-aware god-ray shafts** (next light-lane) — soft volumetric shafts from orchestrator sun, intensity tied to healthy count; honest off when WebGL/reduced-motion.

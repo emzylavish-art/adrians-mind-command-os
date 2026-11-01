@@ -1,2 +1,13 @@
-/** Motion lane particle systems — fleet fills this in. */
-export const MOTION_PARTICLES = {} as const;
+/** particles/ — Cosmos Motion Bot lane (instanced dust + commit comets). */
+export {
+  createDustField,
+  seedDustParticles,
+  type CreateDustFieldOpts,
+  type DustFieldHandle,
+} from "./dust-field";
+export {
+  createCommitComets,
+  type CommitCometsHandle,
+  type CommitTrailInput,
+  type CreateCommitCometsOpts,
+} from "./commit-comets";
