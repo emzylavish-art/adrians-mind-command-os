@@ -4643,3 +4643,57 @@ body:has([data-testid="login-password-submit"]) button:focus-visible,
 body:has([data-testid="login-password-submit"]) input:focus-visible {
   outline-offset: 2px;
 }
+
+/* —— Evolution c60: a11y hit-target overrides beating idle-dock crush (2.05rem / 2.5rem) —— */
+@media (max-width: 767.98px) {
+  /* ASK / AUTOMATIC / Memory idle tiles — raise above prior 2.05rem + unlock row max-height */
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    max-height: 3rem !important;
+    min-height: 2.75rem !important;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    min-height: 2.75rem !important;
+    height: 2.75rem !important;
+    min-width: 2.75rem !important;
+  }
+  /* Attach idle circle was 2.5rem / font-size 0 */
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child,
+  section.floating-composer.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    height: 2.75rem !important;
+  }
+}
+
+/* Mono focus rings — kill residual purple Pass-8 glow on early Tab (/login /memory /explore /shell) */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+aside.rail nav button:focus-visible,
+.sidebar-plus:focus-visible,
+[data-testid="login-oauth-google"]:focus-visible,
+[data-testid="login-oauth-github"]:focus-visible,
+[data-testid="login-password-submit"]:focus-visible,
+[data-testid="login-back-home"]:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] [role="button"]:focus-visible {
+  outline: 2px solid #18181b !important;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #18181b !important;
+}
