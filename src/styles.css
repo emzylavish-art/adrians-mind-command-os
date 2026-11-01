@@ -8199,3 +8199,52 @@ aside.glow-card.rounded-panel ul > li.text-muted {
 [data-testid="error-banner"] * {
   /* do not override danger inside error banners */
 }
+
+/* —— Evolution c137: stray-color sweep — neutralize residual chroma (logo + error exempt) —— */
+:root {
+  --text-tertiary: #8a8a8a; /* was #7a8499 (cool blue); true gray, AA on #05070d ~5.5 */
+  --color-info: #c8c8c8;
+  --color-ok: #d4d4d8;
+  --color-warn: #d4d4d8;
+  --color-glow: #c8c8c8;
+}
+html:not([data-theme="light"]) .text-\[10px\],
+html:not([data-theme="light"]) .meta-label,
+html:not([data-theme="light"]) aside .text-\[10px\],
+html:not([data-theme="light"]) .main-stage .text-xs.text-muted,
+html:not([data-theme="light"]) span.rounded-full.border.border-line.text-xs {
+  color: var(--text-tertiary) !important;
+}
+/* dash3d purple inset / cyan wash → mono */
+.dash3d-glass,
+.dash3d-pill,
+.dash3d-skip-link,
+.dash3d-hud-focus-toggle {
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+.dash3d-root.dash3d-universe {
+  /* keep deep stage; strip blue cast without touching canvas */
+  background-color: #07070a !important;
+}
+.dash3d-skip-link {
+  border-color: rgb(255 255 255 / 0.35) !important;
+}
+/* Any remaining utility purple blooms outside logo */
+[class*="124_92_255"]:not(.logo-mark):not(.logo-badge),
+[class*="7c5cff"]:not(.logo-mark):not(.logo-badge),
+[class*="49_194_255"] {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 8px 22px rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  outline-color: rgb(232 236 245 / 0.85) !important;
+}
+.logo-mark,
+.logo-badge,
+.logo-mark *,
+.logo-badge * {
+  /* purple allowed — restore intentional bloom if a broad rule hit */
+}
