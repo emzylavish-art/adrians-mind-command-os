@@ -16,6 +16,7 @@ export function readVoiceTestAudioParam(
 
 export function resolveVoiceTestAudioUrl(raw: string): string {
   if (raw === "hello") return "/voice-test/hello.wav";
+  if (raw === "question") return "/voice-test/question.wav";
   if (raw === "tone") return "tone:440";
   if (raw.startsWith("/") || raw.startsWith("http://") || raw.startsWith("https://")) return raw;
   return `/voice-test/${raw.replace(/^\.?\/?/, "")}`;
@@ -102,15 +103,21 @@ export function resampleLinear(input: Float32Array, fromRate: number, toRate: nu
  * Dev dictation shortcut: map ?voiceTestAudio= kind to an insertable transcript
  * when the MediaRecorder path would only capture silence (fake mic / no device).
  */
-export function dictationTranscriptForTestAudio(raw: string | null | undefined): string | null {
+/** Honest named-clip transcripts shared by dictation + realtime testAudio. */
+export function expectedTranscriptForTestAudio(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const key = raw.trim().toLowerCase();
   if (key === "hello") return "hello";
+  if (key === "question") return "What time is it?";
   if (key === "tone") return "tone";
-  // Custom path/filename without extension → use basename as a stand-in label
   const base = key.split("/").pop() || key;
   const stem = base.replace(/\.wav$/i, "").trim();
   return stem || null;
+}
+
+/** @deprecated alias — use expectedTranscriptForTestAudio */
+export function dictationTranscriptForTestAudio(raw: string | null | undefined): string | null {
+  return expectedTranscriptForTestAudio(raw);
 }
 
 /** Fetch bundled test WAV as a Blob for STT when available; null if tone: or fetch fails. */

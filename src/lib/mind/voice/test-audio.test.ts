@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   dictationTranscriptForTestAudio,
+  expectedTranscriptForTestAudio,
   readVoiceTestAudioParam,
   resolveVoiceTestAudioUrl,
   synthesizeTone,
@@ -18,6 +19,7 @@ describe("voice test audio", () => {
 
   it("maps dictation insert transcript for hello test audio", () => {
     assert.equal(dictationTranscriptForTestAudio("hello"), "hello");
+    assert.equal(dictationTranscriptForTestAudio("question"), "What time is it?");
     assert.equal(dictationTranscriptForTestAudio(null), null);
   });
 });

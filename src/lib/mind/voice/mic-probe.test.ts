@@ -20,9 +20,15 @@ describe("mic probe", () => {
   });
 
   it("maps NotAllowedError / NotFoundError / NotReadableError", () => {
-    assert.match(mapGetUserMediaError({ name: "NotAllowedError", message: "denied" }).error, /permission was denied/i);
-    assert.match(mapGetUserMediaError({ name: "NotFoundError", message: "x" }).error, /No microphone found/i);
-    assert.match(mapGetUserMediaError({ name: "NotReadableError", message: "busy" }).error, /busy or unreadable/i);
+    const denied = mapGetUserMediaError({ name: "NotAllowedError", message: "denied" });
+    assert.equal(denied.ok, false);
+    if (!denied.ok) assert.match(denied.error, /permission was denied/i);
+    const missing = mapGetUserMediaError({ name: "NotFoundError", message: "x" });
+    assert.equal(missing.ok, false);
+    if (!missing.ok) assert.match(missing.error, /No microphone found/i);
+    const busy = mapGetUserMediaError({ name: "NotReadableError", message: "busy" });
+    assert.equal(busy.ok, false);
+    if (!busy.ok) assert.match(busy.error, /busy or unreadable/i);
   });
 
   it("returns ok when a device exists and getUserMedia resolves", async () => {

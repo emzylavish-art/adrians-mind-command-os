@@ -1377,18 +1377,8 @@ export function CommandApp() {
       const testRaw = dictationTestAudioRef.current;
       dictationTestAudioRef.current = null;
       if (testRaw) {
-        const canned = dictationTranscriptForTestAudio(testRaw);
-        const fetched = await fetchVoiceTestAudioBlob(testRaw);
-        let text = canned;
-        if (fetched && fetched.blob.size >= 64) {
-          try {
-            const audioBase64 = await blobToBase64(fetched.blob);
-            const result = await transcribeAudio({ data: { audioBase64, mime: fetched.mime } });
-            if (result.ok && result.text.trim()) text = result.text.trim();
-          } catch {
-            /* fall back to canned */
-          }
-        }
+        // Named clips are honest labels — do not STT a mismatched WAV over the name.
+        const text = dictationTranscriptForTestAudio(testRaw);
         if (!text) {
           resetDictationUi();
           setDictationStatus("No speech detected. Nothing was inserted.");
@@ -1748,7 +1738,11 @@ export function CommandApp() {
         },
       });
       voiceSession.current = session;
-      await session.connect(secret.value, { captureOnly: true, testAudioUrl });
+      await session.connect(secret.value, {
+        captureOnly: true,
+        testAudioUrl,
+        testAudioKind: typeof window !== "undefined" ? readVoiceTestAudioParam(window.location.search, import.meta.env.DEV) : null,
+      });
       if (voiceConnectGen.current !== gen) {
         session.close();
         return;

@@ -24,9 +24,9 @@ export type BargeInAction =
 export const BARGE_IN_RMS_THRESHOLD = 0.12;
 export const BARGE_IN_HOLD_MS = 150;
 /** Ignore mic/VAD barge-in briefly so TTS echo cannot cut itself off. */
-export const BARGE_IN_ECHO_GUARD_MS = 450;
+export const BARGE_IN_ECHO_GUARD_MS = 900;
 /** Keep Speaking visible long enough for testers to hit Interrupt. */
-export const SPEAKING_MIN_VISIBLE_MS = 600;
+export const SPEAKING_MIN_VISIBLE_MS = 900;
 
 export function createBargeInState(): BargeInState {
   return { phase: "idle", status: "Voice mode", hotMs: 0, speakingElapsedMs: 0 };

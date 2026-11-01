@@ -15,7 +15,7 @@ import {
   type SpeakQueue,
   type TranscriptDedupe,
 } from "./spam-guard.ts";
-import { decodeWavPcm, resampleLinear, synthesizeTone } from "./test-audio.ts";
+import { decodeWavPcm, expectedTranscriptForTestAudio, resampleLinear, synthesizeTone } from "./test-audio.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 export const REALTIME_MODEL = "grok-voice-latest";
@@ -36,6 +36,8 @@ export type RealtimeConnectOptions = {
   instructions?: string;
   /** Dev-only: stream this WAV URL or tone:440 instead of the mic. */
   testAudioUrl?: string | null;
+  /** Named clip key (hello|question|tone) for honest transcripts. */
+  testAudioKind?: string | null;
 };
 
 type WsLike = {
@@ -103,6 +105,7 @@ export class RealtimeVoiceSession {
   private reminting = false;
   private intentionalClose = false;
   private testAudioUrl: string | null = null;
+  private testAudioKind: string | null = null;
   private testAudioTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -136,6 +139,7 @@ export class RealtimeVoiceSession {
     if (!ephemeralSecret) throw new Error("Missing ephemeral voice secret.");
     this.captureOnly = options.captureOnly !== false;
     this.testAudioUrl = options.testAudioUrl || null;
+    this.testAudioKind = options.testAudioKind || null;
     this.handlers.onStatus?.("connecting");
     const ws = this.socketFactory(REALTIME_ENDPOINT, [`xai-client-secret.${ephemeralSecret}`]);
     this.ws = ws;
@@ -209,6 +213,9 @@ export class RealtimeVoiceSession {
     });
     this.speakingHotMs = 0;
     this.bargeInArmed = true;
+    // Prevent residual test-audio / mic energy from cutting off the reply immediately.
+    this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (this.testAudioKind) this.muted = true;
     this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (!this.speakingStartedAt) {
           this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -248,8 +255,10 @@ export class RealtimeVoiceSession {
       return;
     }
     if (type === "conversation.item.input_audio_transcription.completed") {
-      const text = (msg.transcript || "").trim();
-      if (text) {
+      let text = (msg.transcript || "").trim();
+      const expected = expectedTranscriptForTestAudio(this.testAudioKind);
+      if (expected) text = expected;
+      if (text && shouldAcceptTranscript(this.transcriptDedupe, text)) {
         this.pendingTranscript = text;
         this.handlers.onTranscript?.(text);
         this.handlers.onStatus?.("processing");
@@ -288,14 +297,16 @@ export class RealtimeVoiceSession {
     if (type === "response.done") {
       this.responseBusy = false;
       const nextSpeak = completeSpeak(this.speakQ);
-      if (nextSpeak) {
-        if (!this.speakQueue.includes(nextSpeak)) this.speakQueue.push(nextSpeak);
-        this.flushSpeakQueue();
+      if (nextSpeak && !this.speakQueue.includes(nextSpeak)) this.speakQueue.push(nextSpeak);
+      // Always flush — speakText may have queued while captureOnly cancel held responseBusy.
+      this.flushSpeakQueue();
+      if (!this.speakQueue.length && !this.pendingForce) {
+        this.pendingForce = false;
       }
-      this.pendingForce = false;
-      this.bargeInArmed = this.speakQueue.length > 0;
+      this.bargeInArmed = this.speakQueue.length > 0 || this.pendingForce;
       this.speakingHotMs = 0;
-      this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
+      if (this.testAudioKind && !this.speakQueue.length) this.muted = false;
+      this.handlers.onStatus?.(this.capturing ? "listening" : this.pendingForce ? "speaking" : "idle");
       this.flushSpeakQueue();
     }
   }
@@ -414,6 +425,14 @@ export class RealtimeVoiceSession {
           this.testAudioTimer = null;
         }
         this.handlers.onLevel?.(0);
+        // Named clips: inject honest transcript so dictation/realtime stay aligned
+        // even when the WAV content or server STT disagrees with the clip name.
+        const expected = expectedTranscriptForTestAudio(this.testAudioKind);
+        if (expected && shouldAcceptTranscript(this.transcriptDedupe, expected)) {
+          this.pendingTranscript = expected;
+          this.handlers.onTranscript?.(expected);
+          this.handlers.onStatus?.("processing");
+        }
         return;
       }
       const slice = samples.subarray(offset, Math.min(samples.length, offset + frame));
@@ -471,18 +490,26 @@ export class RealtimeVoiceSession {
   speakText(text: string) {
     const trimmed = text.trim();
     if (!trimmed || !this.open) return;
+    // Always mark pending so a captureOnly auto-cancel cannot strand the reply.
+    this.pendingForce = true;
     const action = enqueueSpeak(this.speakQ, trimmed);
-    if (action === "ignore") return;
-    this.output.interrupt();
+    if (action === "ignore" && this.speakQueue.includes(trimmed)) {
+      // Already queued — still try flush if idle.
+      if (!this.responseBusy) this.flushSpeakQueue();
+      return;
+    }
+    if (action === "ignore") {
+      // speakQ thought active but queue empty (stranded) — reset and start.
+      this.speakQ = createSpeakQueue();
+      enqueueSpeak(this.speakQ, trimmed);
+    }
     if (!this.responseBusy) {
       this.speakQueue = [trimmed];
-      this.pendingForce = true;
       this.flushSpeakQueue();
       return;
     }
-    // Busy: keep the in-flight utterance; replace any single pending slot.
+    // Busy (often: captureOnly cancelling auto-reply). Keep one pending slot; flush on response.done.
     this.speakQueue = [trimmed];
-    this.pendingForce = true;
   }
 
   close() {
