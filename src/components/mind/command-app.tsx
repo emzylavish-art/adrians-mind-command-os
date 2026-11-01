@@ -53,7 +53,8 @@ import { databaseMode } from "@/lib/mind/persistence";
 import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
-import { chosenProvider, providerChoices } from "@/lib/mind/providers";
+import { MODEL_TIERS, type ModelTier } from "@/lib/mind/model-tiers";
+import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
@@ -249,6 +250,8 @@ export function CommandApp() {
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
+  const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [agentGoal, setAgentGoal] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
@@ -348,6 +351,10 @@ export function CommandApp() {
   useEffect(() => {
     try {
       if (localStorage.getItem("amcos.provider.v1") === "grok") setProviderChoice("grok");
+      const tier = localStorage.getItem("amcos.modelTier.v1");
+      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) setModelTier(tier as ModelTier);
+      const fail = localStorage.getItem("amcos.failover.v1");
+      if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
     } catch {
       /* a private browser can refuse storage */
     }
@@ -361,6 +368,15 @@ export function CommandApp() {
       /* a private browser can refuse storage */
     }
   }, [providerChoice]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("amcos.modelTier.v1", modelTier);
+      localStorage.setItem("amcos.failover.v1", failoverPolicy);
+    } catch {
+      /* a private browser can refuse storage */
+    }
+  }, [modelTier, failoverPolicy]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -661,7 +677,14 @@ export function CommandApp() {
   }
 
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
-    const routed = chosenProvider(providerChoice, grokConfigured);
+    let routed = chosenProvider(providerChoice, grokConfigured);
+    if (!routed.ok) {
+      const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
+      if (switched.provider === "grok") {
+        routed = chosenProvider("grok", grokConfigured);
+        if (routed.ok) setNotice(switched.note);
+      }
+    }
     if (!routed.ok) {
       setError(routed.error);
       return;
@@ -703,6 +726,7 @@ export function CommandApp() {
           history,
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
+          modelTier,
         },
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
@@ -739,6 +763,14 @@ export function CommandApp() {
               : item,
           ),
         };
+        const autoBit =
+          result.resolvedTier && (result.modelTier === "Auto" || (!result.modelTier && modelTier === "Auto"))
+            ? `→${result.resolvedTier}`
+            : "";
+        const tierLabel = result.model
+          ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
+          : result.model;
+        setNotice(`Ran ${tierLabel}.`);
         return pushAudit(
           pushUsage(next, {
             id: crypto.randomUUID(),
@@ -751,7 +783,7 @@ export function CommandApp() {
           }),
           "message_sent",
           chat.id,
-          result.model,
+          tierLabel,
         );
       });
     } catch (caught) {
@@ -920,12 +952,22 @@ export function CommandApp() {
           projects: ws.projects.map((project) => project.name),
           chats: ws.chats.map((chat) => chat.title),
           notes: ws.memories.filter((note) => !note.archived).map((note) => note.text),
+          modelTier,
         }),
       });
-      const payload = (await response.json()) as { ok?: boolean; text?: string; error?: string; log?: { step: number; tool: string; ok: boolean; detail: string }[] };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        text?: string;
+        error?: string;
+        log?: { step: number; tool: string; ok: boolean; detail: string }[];
+        model?: string;
+        modelTier?: string;
+        resolvedTier?: string;
+      };
       if (controller.signal.aborted) return;
       setAgentLog(payload.log ?? []);
-      setAgentNote(payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.");
+      const modelBit = payload.model ? ` Model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? modelTier}→${payload.resolvedTier})` : ""}.` : "";
+      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : ""));
       setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? "finished" : "stopped"));
     } catch {
       if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
@@ -1813,6 +1855,8 @@ export function CommandApp() {
               onProvider={(id) => {
                 if (id === "grok") setProviderChoice("grok");
               }}
+              modelTier={modelTier}
+              onModelTier={setModelTier}
             />
           )}
 
@@ -2423,7 +2467,21 @@ export function CommandApp() {
               </div>
               <div className="rounded-panel border border-line bg-surface p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>
-                <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
+                <p className="mt-1 text-muted">
+                  {failoverPolicy === "none"
+                    ? "Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present."
+                    : "On. If the selected provider cannot run, chat may switch to Grok when that key is present. The switch is recorded in the notice."}
+                </p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={failoverPolicy === "grok"}
+                  className={`mt-3 flex min-h-11 w-full items-center justify-between rounded-panel border border-line px-3 ${failoverPolicy === "grok" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
+                  onClick={() => setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"))}
+                >
+                  Allow switch to Grok
+                  <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
+                </button>
               </div>
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
@@ -2726,6 +2784,8 @@ function ChatPane({
   providerChoices: choices,
   providerChoice,
   onProvider,
+  modelTier,
+  onModelTier,
 }: {
   active: Chat | null;
   chats: Chat[];
@@ -2764,6 +2824,8 @@ function ChatPane({
   providerChoices: { id: string; label: string; enabled: boolean; reason: string }[];
   providerChoice: string;
   onProvider: (id: string) => void;
+  modelTier: ModelTier;
+  onModelTier: (tier: ModelTier) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -2843,6 +2905,9 @@ function ChatPane({
           <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
           <div className="mt-3 xl:hidden">
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
+            <div className="mt-3">
+              <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} />
+            </div>
           </div>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
@@ -2923,7 +2988,7 @@ function ChatPane({
           })}
           {busy && liveText && (
             <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
-              <p className="mb-1 text-xs text-muted">Grok 4.5 · writing</p>
+              <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
@@ -2944,7 +3009,7 @@ function ChatPane({
             onSend();
           }}
         >
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="min-h-11 w-full bg-transparent text-sm outline-none" />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message (${modelTier})...`} className="min-h-11 w-full bg-transparent text-sm outline-none" />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -2981,6 +3046,9 @@ function ChatPane({
           <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
         </section>
         <section className="rounded-panel border border-line bg-surface p-3">
+          <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} />
+        </section>
+        <section className="rounded-panel border border-line bg-surface p-3">
           <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>
           <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Automatic</button>
         </section>
@@ -3000,6 +3068,29 @@ function ChatPane({
   );
 }
 
+function ModelTierPicker({
+  name,
+  tier,
+  onChoose,
+}: {
+  name: string;
+  tier: ModelTier;
+  onChoose: (tier: ModelTier) => void;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-semibold">Mode</legend>
+      <p className="text-xs text-muted">Chooses which Grok model runs. Auto routes from the prompt.</p>
+      {MODEL_TIERS.map((item) => (
+        <label key={item} className="flex items-start gap-2 text-sm">
+          <input type="radio" name={name} checked={tier === item} onChange={() => onChoose(item)} className="mt-1" />
+          <span className="font-medium">{item}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 function ProviderPicker({
   name,
   choices,
@@ -3013,7 +3104,7 @@ function ProviderPicker({
 }) {
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold">Model</legend>
+      <legend className="text-sm font-semibold">Provider</legend>
       {choices.map((item) => (
         <label key={item.id} className="flex items-start gap-2 text-sm">
           <input
