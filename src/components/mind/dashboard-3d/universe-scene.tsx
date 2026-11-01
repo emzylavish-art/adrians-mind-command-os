@@ -413,6 +413,28 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const MAX_SCENE_BOTS = 48; // Gap#11: hard cap so a spiked payload cannot kill the tab
     const PORTRAIT_FALLBACK = "/dashboard-3d/art/portrait-dashboard.webp";
     let fallbackPortraitTex: THREE.Texture | null = null;
+    // Gap#41/#43: queue portrait TextureLoader work so cold load doesn't open N parallel 512px fetches.
+    type PortraitJob = () => void;
+    const portraitLoadQueue: PortraitJob[] = [];
+    let portraitPumpScheduled = false;
+    const schedulePortraitPump = () => {
+      if (portraitPumpScheduled) return;
+      portraitPumpScheduled = true;
+      const run = () => {
+        portraitPumpScheduled = false;
+        const job = portraitLoadQueue.shift();
+        if (!job) return;
+        job();
+        if (portraitLoadQueue.length) schedulePortraitPump();
+      };
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+      if (typeof ric === "function") ric(run, { timeout: 900 });
+      else window.setTimeout(run, 50);
+    };
+    const enqueuePortraitLoad = (job: PortraitJob) => {
+      portraitLoadQueue.push(job);
+      schedulePortraitPump();
+    };
     const focusEase = new Map<string, FocusEaseState>();
     sanitizeMotionPoseBag(motionPoseBag);
 
@@ -483,21 +505,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           cardPlane.userData.imagineMapError = (cardMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r1.ok ? null : r1.reason);
           person.userData.imagineMapError = (personMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r2.ok ? null : r2.reason);
         };
-        loader.load(
-          portraitUrl,
-          applyPortrait,
-          undefined,
-          () => {
-            if (fallbackPortraitTex) {
-              applyPortrait(fallbackPortraitTex);
-              return;
-            }
-            loader.load(PORTRAIT_FALLBACK, (tex) => {
-              fallbackPortraitTex = tex;
-              applyPortrait(tex);
-            });
-          },
-        );
+        enqueuePortraitLoad(() => {
+          loader.load(
+            portraitUrl,
+            applyPortrait,
+            undefined,
+            () => {
+              if (fallbackPortraitTex) {
+                applyPortrait(fallbackPortraitTex);
+                return;
+              }
+              loader.load(PORTRAIT_FALLBACK, (tex) => {
+                fallbackPortraitTex = tex;
+                applyPortrait(tex);
+              });
+            },
+          );
+        });
         void card; // keep lint calm if Sprite unused
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
@@ -529,20 +553,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     }
 
 
-    // Shared scene characters / environments (real Imagine assets already in public/).
-    const sceneArts = [
-      { url: "/dashboard-3d/art/backdrop-nebula.webp", pos: new THREE.Vector3(-10, 4.5, -8), scale: [6.5, 3.8] as const },
-      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
-      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
+    // Gap#43: only a tiny universe set loads immediately; Dive/city art waits for ensureDiveArt;
+    // remaining scene plates schedule via idle callback to cut cold-load request storms + long tasks.
+    const sceneArtsEager = [
       { url: "/dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
-      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
       { url: "/dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
+    ];
+    const sceneArtsDeferred = [
+      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
       { url: "/dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
-      { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
       { url: "/dashboard-3d/art/scene-merge-beacon.webp", pos: new THREE.Vector3(-11.5, 2.8, -2.5), scale: [5.0, 2.8] as const },
       { url: "/dashboard-3d/art/scene-collab-tower.webp", pos: new THREE.Vector3(10.2, -0.2, 3.8), scale: [4.8, 2.7] as const },
     ];
-    for (const art of sceneArts) {
+    // backdrop-city / backdrop-interior / scene-city-street: Dive-only (city layer + fly level)
+    const sceneArtsDive = [
+      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
+      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
+      { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
+    ];
+    const mountSceneArt = (art: { url: string; pos: THREE.Vector3; scale: readonly [number, number] }) => {
       const mat = kit.createImagineNodeMaterial({});
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
       plane.position.copy(art.pos);
@@ -553,12 +582,37 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
           const r = setImagineNodeMap(mat, tex, { maxTextureSize: maxTexSize });
-          plane.userData.imagineMapError = (mat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r.ok ? null : r.reason);
+          plane.userData.imagineMapError =
+            (mat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r.ok ? null : r.reason);
         },
         undefined,
         () => { /* missing art — wash fallback stays */ },
       );
-    }
+    };
+    for (const art of sceneArtsEager) mountSceneArt(art);
+    let deferredSceneStarted = false;
+    const startDeferredSceneArts = () => {
+      if (deferredSceneStarted) return;
+      deferredSceneStarted = true;
+      let i = 0;
+      const pump = () => {
+        if (i >= sceneArtsDeferred.length) return;
+        mountSceneArt(sceneArtsDeferred[i++]!);
+        const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+        if (typeof ric === "function") ric(pump, { timeout: 1200 });
+        else window.setTimeout(pump, 120);
+      };
+      pump();
+    };
+    window.setTimeout(startDeferredSceneArts, 500);
+    let diveSceneMounted = false;
+    let ensureDiveArtFn: (() => void) | null = null;
+    const mountDiveSceneArts = () => {
+      if (diveSceneMounted) return;
+      diveSceneMounted = true;
+      ensureDiveArtFn?.();
+      for (const art of sceneArtsDive) mountSceneArt(art);
+    };
 
     // Gap#26: declare filter sets BEFORE applyEdgeVisibilityFilter / rebuildEdges (avoid TDZ)
     let graphFilter: GraphFilterState = { ...DEFAULT_GRAPH_FILTER };
@@ -787,6 +841,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     // --- Projects city (flyover queue #1) ---
     const city = createCityLayer(scene);
+    ensureDiveArtFn = () => city.ensureDiveArt();
     let layout: CityLayout = buildCityLayout(dataRef.current.projects);
     let layoutSig = "";
     let fly: FlyState = { ...FLY_HOME };
@@ -810,7 +865,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       const reconciled = reconcileFlyover(fly, knownIds());
       if (reconciled !== fly) setFly(reconciled, true);
-      else city.setInterior(fly.level === "interior" ? fly.buildingId : null);
+      else {
+        city.setInterior(fly.level === "interior" ? fly.buildingId : null);
+        if (fly.level === "city" || fly.level === "interior") mountDiveSceneArts();
+      }
     };
 
     const dust = createDustField(scene, { count: 480, seed: 42 });
@@ -1031,6 +1089,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       fly = next;
       city.setInterior(fly.level === "interior" ? fly.buildingId : null);
       city.setLabelsVisible(fly.level === "city");
+      if (fly.level === "city" || fly.level === "interior") mountDiveSceneArts();
       if (fly2camera) {
         rig = flyTo(
           rig,

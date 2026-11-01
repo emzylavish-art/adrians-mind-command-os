@@ -77,3 +77,8 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - Hacker c15 (from REA): comet-launch `maxConcurrent=0` + 10k burst clamp; multi-system clock resume finite
 - package.json owned by Dashboard Bot — see INTEGRATION Requests
 
+## Star-field batch + CPU budget (c16)
+
+- `star-batch.ts` — `stepStarFieldBatch` for N stars (pulse/focus/orbit)
+- `cpu-budget.test.ts` — 10k-frame CPU budget (mean < 2ms); camera dolly stays Dashboard-owned
+
