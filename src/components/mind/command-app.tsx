@@ -1476,7 +1476,7 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+              <section className="command-card composer-dock rounded-panel bg-surface p-3 md:p-4" data-composer="floating">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
@@ -2944,7 +2944,7 @@ function ChatPane({
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
         </div>
         <form
-          className="command-card m-3 rounded-panel bg-surface p-3"
+          className="command-card composer-dock m-3 rounded-panel bg-surface p-3" data-composer="floating"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
