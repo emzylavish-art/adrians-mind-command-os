@@ -144,5 +144,6 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     modelTier: tier.selected,
     resolvedTier: tier.resolved,
     tierReason: tier.reason,
+    images: result.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name, mime: image.mime })) ?? [],
   });
 }

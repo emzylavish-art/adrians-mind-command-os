@@ -47,6 +47,7 @@ import { MessageBody } from "@/components/mind/message-body";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
+import { InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
 import { historyTextForImages, parseImagineCommand, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
@@ -263,6 +264,7 @@ export function CommandApp() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
   const [agentLog, setAgentLog] = useState<{ step: number; tool: string; ok: boolean; detail: string }[]>([]);
+  const [agentImages, setAgentImages] = useState<ImageAttachment[]>([]);
   const agentAbort = useRef<AbortController | null>(null);
   const [system, setSystem] = useState("Checking isolation.");
   const [checkedAt, setCheckedAt] = useState("");
@@ -973,6 +975,7 @@ export function CommandApp() {
     setAgentBusy(true);
     setAgentNote(null);
     setAgentLog([]);
+    setAgentImages([]);
     const plannerImages = pendingImages;
     setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -999,12 +1002,26 @@ export function CommandApp() {
         model?: string;
         modelTier?: string;
         resolvedTier?: string;
+        images?: { dataUrl: string; name?: string; mime?: string }[];
       };
       if (controller.signal.aborted) return;
       setAgentLog(payload.log ?? []);
       const modelBit = payload.model ? ` Model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? modelTier}→${payload.resolvedTier})` : ""}.` : "";
-      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : ""));
-      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? "finished" : "stopped"));
+      const agentImages = (payload.images ?? [])
+        .filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+        .map((image, index) => ({
+          dataUrl: image.dataUrl,
+          name: image.name || `imagine-${index + 1}.jpg`,
+          mime: image.mime,
+        }));
+      if (agentImages.length) {
+        setPendingImages(agentImages);
+        setAgentImages(agentImages);
+      } else {
+        setAgentImages([]);
+      }
+      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : "") + (agentImages.length ? ` · ${agentImages.length} image staged for follow-up.` : ""));
+      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? (agentImages.length ? "finished+imagine" : "finished") : "stopped"));
     } catch {
       if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
       else setAgentNote("The planner did not finish. Nothing was marked finished.");
@@ -2403,6 +2420,13 @@ export function CommandApp() {
                 </button>
               </div>
               {agentNote ? <p className="mt-3 text-sm text-muted">{agentNote}</p> : null}
+              {agentImages.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {agentImages.map((image, index) => (
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} />
+                  ))}
+                </div>
+              )}
               {agentLog.length > 0 && (
                 <ol className="mt-3 space-y-1 text-sm">
                   {agentLog.map((entry) => (

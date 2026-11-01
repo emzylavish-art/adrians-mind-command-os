@@ -136,3 +136,12 @@ See `/workspace/locks/media-integration.lock`.
 ### Verification this step
 - typecheck pass; mind/media tests **237/237**; build pass
 - live script with `XAI_API_KEY=invalid-...` still replied **red** via secrets file
+
+## Upgrade A: Orchestrator native `imagine` tool — 2026-11-01T13:30 Africa/Lagos
+
+- Registered `imagine` in `AGENT_TOOLS` (`agent.ts`); validates `prompt`; default executor calls `generateImagineImages`.
+- `runBoundedAgent` returns `images[]` for inline client render; `agent-run.server.ts` includes them in JSON.
+- Agents panel shows `InlineImage` results and stages into `pendingImages` for follow-up vision.
+- Did not touch `model-tiers.ts` or picker UI.
+- Tests: agent.test imagine cases + registry includes four tools.
+
