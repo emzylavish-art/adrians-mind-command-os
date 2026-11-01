@@ -1998,3 +1998,182 @@ html[data-theme="light"] .min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols
   background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
   border-color: rgb(9 9 11 / 0.12);
 }
+
+/* —— Cycle 25: empty-state rhythm (Research / Library / Runs / Activity) —— */
+/* Shared ChatGPT-like empty well for lone muted list rows */
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6 {
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  min-height: 9.5rem;
+  padding: 2rem 1.5rem !important;
+  letter-spacing: 0.01em;
+  color: var(--color-muted) !important;
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(255 255 255 / 0.05), transparent 65%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-surface) !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  position: relative;
+}
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li::before,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card::before,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6::before {
+  content: "";
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.85rem;
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.03)),
+    #141416;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 8px 20px rgb(0 0 0 / 0.35);
+}
+
+/* Research capability checklist as mono glass tiles */
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-2.text-sm > li.flex.items-center.justify-between {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 60%),
+    #0a0a0c !important;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  min-height: 2.85rem;
+}
+.min-h-0.flex-1.overflow-auto .masthead.glow-card {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.06), transparent 55%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 18px 40px rgb(0 0 0 / 0.35);
+}
+
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6 {
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(9 9 11 / 0.03), transparent 65%),
+    #fff !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.04);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li::before,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card::before,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff, 0 6px 14px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-2.text-sm > li.flex.items-center.justify-between {
+  background: #fafafa !important;
+  border-color: rgb(9 9 11 / 0.08);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .masthead.glow-card {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.06);
+}
+
+/* —— Cycle 26: GenerateImage mono textures (hero grain + frost card) —— */
+body {
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(180deg, rgb(5 5 7 / 0.82), rgb(5 5 7 / 0.92)),
+    url("/brand/textures/hero-mono-grain.jpg");
+  background-size: auto, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+  background-repeat: no-repeat;
+}
+html[data-theme="light"] body {
+  background-image:
+    linear-gradient(180deg, rgb(250 250 250 / 0.88), rgb(250 250 250 / 0.94)),
+    url("/brand/textures/hero-mono-grain.jpg");
+}
+
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg");
+  background-size: auto, 420px 420px;
+  background-blend-mode: soft-light, soft-light;
+}
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero {
+  background-color: rgb(12 12 14 / 0.78);
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+}
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] .glass-panel,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .settings-card,
+html[data-theme="light"] .page-hero {
+  background-color: rgb(255 255 255 / 0.86);
+  background-blend-mode: multiply, soft-light;
+}
+
+/* —— Cycle 27: topbar search glass (ChatGPT-like) —— */
+.topbar input.h-11.w-full.rounded-panel.border.border-line.bg-surface,
+header input.h-11.w-full.rounded-panel.border.border-line.bg-surface,
+input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02)),
+    rgb(12 12 14 / 0.72) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 8px 24px rgb(0 0 0 / 0.28);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  color: var(--color-fg);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.topbar input.h-11.w-full.rounded-panel.border.border-line.bg-surface:focus,
+header input.h-11.w-full.rounded-panel.border.border-line.bg-surface:focus,
+input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm:focus {
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 0 0 1px rgb(255 255 255 / 0.18),
+    0 12px 28px rgb(0 0 0 / 0.35);
+  outline: none;
+}
+.topbar,
+header.topbar,
+.flex.items-center.gap-3.border-b.border-line {
+  background: rgb(8 8 10 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border-bottom-color: rgb(255 255 255 / 0.08) !important;
+}
+html[data-theme="light"] input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm {
+  background: rgb(255 255 255 / 0.9) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.05);
+}
+html[data-theme="light"] .topbar,
+html[data-theme="light"] .flex.items-center.gap-3.border-b.border-line {
+  background: rgb(255 255 255 / 0.82) !important;
+  border-bottom-color: rgb(9 9 11 / 0.08) !important;
+}
