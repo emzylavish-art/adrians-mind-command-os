@@ -26,7 +26,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, projectedRadiusUv } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -56,7 +56,20 @@ import {
   sharedMotionClock,
   createFocusEaseState,
   stepStarFieldBatch,
+  STAR_BATCH_MAX,
+  STAR_BATCH_ORBIT_OPTS,
+  createHealthPulseCrossfadeState,
+  setHealthPulseTarget,
+  stepHealthPulseCrossfade,
+  sampleStarPulseCrossfaded,
+  collectOneHopNeighbors,
+  stepNeighborDriftDampBatch,
+  pulsePhaseFromId,
+  sampleOrbitDrift,
+  applyFocusPulse,
+  applyFocusDrift,
   type FocusEaseState,
+  type HealthPulseCrossfadeState,
   createMotionPoseBag,
   captureFocusPose,
   restoreFocusPose,
@@ -323,6 +336,26 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const maxTexSize = renderer.capabilities.maxTextureSize || 2048;
 
     mount.appendChild(renderer.domElement);
+    // Gap#53: name the main stage for assistive tech (updated each tick from live bots).
+    const canvasEl = renderer.domElement;
+    canvasEl.setAttribute("role", "img");
+    canvasEl.setAttribute("data-testid", "dash3d-stage-canvas");
+    const syncCanvasAria = () => {
+      const bots = dataRef.current.bots ?? [];
+      let healthy = 0, stalled = 0, blocked = 0, idle = 0;
+      for (const b of bots) {
+        if (b.health === "healthy") healthy += 1;
+        else if (b.health === "stalled") stalled += 1;
+        else if (b.health === "blocked") blocked += 1;
+        else idle += 1;
+      }
+      const weather = dataRef.current.weather?.label || dataRef.current.weather?.tone || "weather unknown";
+      canvasEl.setAttribute(
+        "aria-label",
+        `Mind Command 3D stage — ${bots.length} bots, ${healthy} healthy, ${stalled} stalled, ${blocked} blocked, ${idle} idle — ${weather}`,
+      );
+    };
+    syncCanvasAria();
     // Gap#3: keep prior freeze visible until first successful frame after (re)mount.
     let freezePendingClear = true;
 
@@ -893,6 +926,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const starBatchFocus: ReturnType<typeof createFocusEaseState>[] = [];
     const starBatchPulse: Array<{ scale: number; glow: number; emissive: number }> = [];
     const starBatchPos: Array<{ x: number; y: number; z: number }> = [];
+    // Motion c17: health pulse crossfade state per bot (+ reusable sample temps).
+    const healthXfade = new Map<string, HealthPulseCrossfadeState>();
+    const pulseXfadeFrom = { scale: 1, glow: 2, emissive: 0.7 };
+    const pulseXfadeTo = { scale: 1, glow: 2, emissive: 0.7 };
+    // Motion c18: 1-hop neighbor drift damp (rebuild when focus/graph changes).
+    let neighborSet: Set<string> = new Set();
+    let neighborFocusKey = "";
+    let neighborEdgeKey = "";
+    const edgePairs: Array<[string, string]> = [];
 
     let composer: EffectComposer | null = null;
     let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
@@ -1517,6 +1559,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         starBatchFocus[bi] = st;
       }
+      // Motion c18: refresh one-hop neighbors when focus or edge set changes.
+      const focusKey = rig.subjectId ?? "";
+      const edgesNow = dataRef.current.constellationEdges ?? [];
+      const edgeKey = `${edgesNow.length}:${focusKey}`;
+      if (edgeKey !== neighborFocusKey + "|" + neighborEdgeKey || edgePairs.length !== edgesNow.length) {
+        edgePairs.length = 0;
+        for (const e of edgesNow) {
+          if (e?.from && e?.to) edgePairs.push([e.from, e.to]);
+        }
+        neighborSet = collectOneHopNeighbors(edgePairs, rig.subjectId);
+        neighborFocusKey = focusKey;
+        neighborEdgeKey = `${edgesNow.length}`;
+      } else if (focusKey !== neighborFocusKey) {
+        neighborSet = collectOneHopNeighbors(edgePairs, rig.subjectId);
+        neighborFocusKey = focusKey;
+      }
+      const batchCount = Math.min(botVis.length, STAR_BATCH_MAX);
+      // Touch STAR_BATCH_ORBIT_OPTS.clock so reused orbit opts stay phase-locked (c18 alloc).
+      STAR_BATCH_ORBIT_OPTS.clock = sharedMotionClock;
       stepStarFieldBatch(
         starBatchIds,
         starBatchHealths,
@@ -1528,9 +1589,63 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         wallT,
         dt,
         reducedMotion,
-        botVis.length,
+        batchCount,
         { clock: sharedMotionClock },
       );
+      // Motion c18: damp 1-hop neighbor orbit after batch focus-ease.
+      stepNeighborDriftDampBatch(
+        starBatchIds,
+        starBatchFocus,
+        rig.subjectId,
+        neighborSet,
+        dt,
+        reducedMotion,
+        batchCount,
+      );
+      // Re-sample orbit + apply updated driftMul (neighbor damp / focus) onto pos outs.
+      for (let bi = 0; bi < batchCount; bi++) {
+        const id = starBatchIds[bi];
+        const base = starBatchBases[bi];
+        const st = starBatchFocus[bi];
+        const pos = starBatchPos[bi];
+        if (id == null || id === "" || base == null || st == null || pos == null) continue;
+        sampleOrbitDrift(
+          pos,
+          base,
+          wallT,
+          pulsePhaseFromId(id),
+          reducedMotion,
+          STAR_BATCH_ORBIT_OPTS,
+        );
+        applyFocusDrift(pos, base, st.driftMul);
+      }
+      // Motion c17: crossfade pulse when health flips (real status changes).
+      for (let bi = 0; bi < batchCount; bi++) {
+        const id = starBatchIds[bi]!;
+        const health = starBatchHealths[bi]!;
+        let xf = healthXfade.get(id);
+        if (!xf) {
+          xf = createHealthPulseCrossfadeState(health);
+          healthXfade.set(id, xf);
+        }
+        setHealthPulseTarget(xf, health, reducedMotion);
+        stepHealthPulseCrossfade(xf, dt, reducedMotion);
+        if (xf.blend < 0.999 || xf.from !== xf.to) {
+          sampleStarPulseCrossfaded(
+            starBatchPulse[bi]!,
+            pulseXfadeFrom,
+            pulseXfadeTo,
+            xf,
+            wallT,
+            pulsePhaseFromId(id),
+            reducedMotion,
+            { clock: sharedMotionClock },
+          );
+          // Crossfade replaces pulse sample — re-apply focus pulse mul.
+          applyFocusPulse(starBatchPulse[bi]!, starBatchFocus[bi]!.pulseMul);
+        }
+      }
+
       for (let bi = 0; bi < botVis.length; bi++) {
         const n = botVis[bi]!;
         const healthOk = starHealthFilter === "all" || n.health === starHealthFilter;
@@ -1638,6 +1753,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
+      syncCanvasAria();
       const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
       const healthy = botsNow.filter((b) => b.health === "healthy").length;
       const total = botsNow.length;
@@ -1713,7 +1829,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (composer?.readBuffer?.depthTexture) {
           liveBloomGuard?.setDepthTexture(composer.readBuffer.depthTexture);
         }
-        // Gap#67: dim nebula behind open detail / charts (CSS px → DPR-safe); hole keeps portrait undimmed.
+        // Gap#67/#68: dim nebula behind open detail / charts; measured WCAG dim when text colour known.
         if (liveDetailDim) {
           const vp = renderer.domElement.getBoundingClientRect();
           const detailEl = document.querySelector<HTMLElement>(".dash3d-node-detail.is-open");
@@ -1722,6 +1838,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             Boolean,
           ) as DOMRect[];
           liveDetailDim.setRects(rects, vp, { reducedMotion });
+          const sampleEl = detailEl ?? chartEl;
+          if (sampleEl) {
+            const cs = getComputedStyle(sampleEl);
+            const text = parseCssColor(cs.color);
+            const bg = parseCssColor(cs.backgroundColor);
+            liveDetailDim.setContrastTarget(
+              text ? { textRgb: text.rgb, cardRgb: bg?.rgb, cardAlpha: bg?.alpha } : null,
+            );
+          } else {
+            liveDetailDim.setContrastTarget(null);
+          }
+          liveDetailDim.setHidden(document.hidden);
         }
         focusLight.tick(dt * 1000);
         liveFocusDepth?.tick(dt * 1000);
@@ -1763,15 +1891,22 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
     tick(performance.now());
 
+    // Gap#52: size from the host's client box (ResizeObserver), never first-load aspect.
+    let lastResizeW = 0;
+    let lastResizeH = 0;
     const onResize = () => {
-      const w = Math.max(1, mount.clientWidth || window.innerWidth || 1);
-      const h = Math.max(1, mount.clientHeight || window.innerHeight || 1);
-      camera.aspect = w / h;
+      const w = Math.max(1, mount.clientWidth || 1);
+      const h = Math.max(1, mount.clientHeight || 1);
+      if (w === lastResizeW && h === lastResizeH) return;
+      lastResizeW = w;
+      lastResizeH = h;
+      camera.aspect = w / Math.max(1, h);
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      renderer.setSize(w, h, false);
       labelRenderer.setSize(w, h);
       composer?.setSize(w, h);
       const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      renderer.setPixelRatio(dpr);
       bloomHandle?.setSize?.(w, h, dpr);
       kit.resizePass(w, h, dpr);
       if (raysHandle && composer?.readBuffer?.depthTexture) {
@@ -1781,6 +1916,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         focusDepthHandle.setDepthTexture(composer.readBuffer.depthTexture);
       }
     };
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            onResize();
+          })
+        : null;
+    resizeObserver?.observe(mount);
     
     const onSkyEvent = () => {
       if (fly.level !== "universe") {
@@ -1877,6 +2019,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     return () => {
       window.removeEventListener("resize", onResize);
+      resizeObserver?.disconnect();
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
       document.removeEventListener("dash3d-graph-filter", onGraphFilter);

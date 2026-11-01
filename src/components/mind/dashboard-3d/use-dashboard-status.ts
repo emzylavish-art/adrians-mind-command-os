@@ -148,6 +148,8 @@ export function useDashboardStatus() {
         hiddenSinceRef.current = null;
       }
       // Visible again: immediate fetch, then resume schedule.
+      // After one visible poll window, drop the gap so burn can return from fresh data.
+      window.setTimeout(() => setHiddenGapMs(0), 25_000);
       void refresh().finally(scheduleNext);
     };
     document.addEventListener("visibilitychange", onVis);

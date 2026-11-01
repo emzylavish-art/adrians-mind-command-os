@@ -612,6 +612,18 @@ export function DashboardApp() {
               ? `Charts at ${formatWat(scrubView.scrubMs)} (health/commits/locks clipped to scrub)`
               : null
           }
+          onSelectBotId={(id) => {
+            const bot = viewData.bots.find((b) => b.id === id || b.id.startsWith(id) || id.startsWith(b.id));
+            if (!bot) return;
+            setSelected(bot);
+            document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId: bot.id } }));
+          }}
+          onScrubRatio={(ratio) => {
+            const tl = viewData.timeline;
+            if (!tl?.earliestMs || !tl.latestMs) return;
+            const span = Math.max(1, tl.latestMs - tl.earliestMs);
+            setScrubMs(tl.earliestMs + ratio * span);
+          }}
         />
       ) : null}
       {viewData ? (

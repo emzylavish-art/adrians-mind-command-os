@@ -2,7 +2,13 @@ import type { ChartSeries, DashboardCharts } from "@/lib/mind/dashboard/chart-se
 import { NO_CHART_SOURCE } from "@/lib/mind/dashboard/chart-series";
 import { chartTickLabel } from "@/lib/mind/dashboard/chart-tick-label";
 
-function SparkBars({ series }: { series: ChartSeries }) {
+function SparkBars({
+  series,
+  onActivate,
+}: {
+  series: ChartSeries;
+  onActivate?: (point: { label: string; value: number; index: number }) => void;
+}) {
   const max = Math.max(
     1,
     ...series.points.map((p) => Math.max(p.value, p.altValue ?? 0)),
@@ -57,6 +63,14 @@ function SparkBars({ series }: { series: ChartSeries }) {
             role="listitem"
             aria-label={aria}
             data-testid={`chart-mark-${series.id}-${i}`}
+            style={{ cursor: onActivate ? "pointer" : undefined }}
+            onClick={() => onActivate?.({ label: p.label, value: p.value, index: i })}
+            onKeyDown={(ev) => {
+              if (ev.key === "Enter" || ev.key === " ") {
+                ev.preventDefault();
+                onActivate?.({ label: p.label, value: p.value, index: i });
+              }
+            }}
           >
             <rect x={x} y={y} width={half} height={bh || 0.01} rx={2} fill="rgba(125,211,252,0.75)" />
             {p.altValue != null ? (
@@ -101,10 +115,16 @@ function SparkBars({ series }: { series: ChartSeries }) {
 export function ChartsPanel({
   charts,
   scrubNote,
+  onSelectBotId,
+  onScrubRatio,
 }: {
   charts: DashboardCharts;
   /** Gap#48 — when scrubbing, honest note if series follow scrub or stay Live. */
   scrubNote?: string | null;
+  /** c49 visual: drill bot-health / commits-per-bot marks into that star. */
+  onSelectBotId?: (botId: string) => void;
+  /** c49 visual: drill lock-hour marks toward that scrub ratio 0..1. */
+  onScrubRatio?: (ratio: number) => void;
 }) {
   const seriesList = [
     charts.botHealth,
@@ -138,7 +158,25 @@ export function ChartsPanel({
         {seriesList.map((s) => (
           <section key={s.id} className="dash3d-chart-card">
             <h3>{s.title}</h3>
-            <SparkBars series={s} />
+            <SparkBars
+              series={s}
+              onActivate={
+                onSelectBotId || onScrubRatio
+                  ? (pt) => {
+                      // Bot health / commits-per-bot: label is a bot id or initials-expanded id.
+                      if (s.id === "bot-health" || s.id === "commits-per-bot" || s.id.includes("commits-per-bot")) {
+                        const id = pt.label.split(/\s|·/)[0]!.toLowerCase();
+                        if (id && onSelectBotId) onSelectBotId(id);
+                        return;
+                      }
+                      if (s.id === "lock-health-share" && onScrubRatio) {
+                        const n = Math.max(1, s.points.length);
+                        onScrubRatio(pt.index / Math.max(1, n - 1));
+                      }
+                    }
+                  : undefined
+              }
+            />
             <p className="dash3d-mono dash3d-muted" style={{ fontSize: "0.58rem" }}>
               {s.source}
             </p>

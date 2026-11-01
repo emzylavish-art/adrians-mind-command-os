@@ -82,10 +82,25 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
       </ul>
 
       <h3 style={{ marginTop: "1rem" }}>Lock commits</h3>
-      <ul className="dash3d-list">
+      <ul className="dash3d-list" data-testid="detail-lock-commits">
         {detail.lockCommits.length ? (
           detail.lockCommits.map((c) => (
             <li key={c} className="dash3d-mono">{c}</li>
+          ))
+        ) : (
+          <li className="dash3d-muted">{NO_SOURCE}</li>
+        )}
+      </ul>
+
+      <h3 style={{ marginTop: "1rem" }}>Lock history</h3>
+      <ul className="dash3d-list" data-testid="detail-lock-history">
+        {detail.lockHistory.length ? (
+          detail.lockHistory.map((h) => (
+            <li key={`${h.kind}-${h.atMs}-${h.label}`} className="dash3d-mono">
+              {h.kind.replace("lock_", "")} · {h.label}
+              <br />
+              <span className="dash3d-muted">{formatWat(h.atIso)}</span>
+            </li>
           ))
         ) : (
           <li className="dash3d-muted">{NO_SOURCE}</li>

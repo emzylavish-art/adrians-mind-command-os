@@ -122,8 +122,17 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 65 | **Gap#50 Lock claims vs releases chart drops empty hours / claims-only bars** | **done** | c47 — zero-fill hours; cyan claims + amber releases altValue |
 | 66 | **Gap#51 Compass minimap overlaps Charts at 1280×800** | **done** | c47 — charts bottom above minimap (calc +158px) |
 | 67 | **Light — Imagine portrait colour bounce + detail-card backdrop dim (#60)** | **done** | c47 — land e65a052 atmosphere/postfx; wire createPortraitBounce + createDetailBackdropDimPass; ctx-loss harden+scene retry co-exist |
-| 68 | **Light — measured-luminance backdrop dim + WCAG contrast check** | built in light lane @096dbfb, needs Dashboard Bot wiring | `liveDetailDim.setContrastTarget({ textRgb, cardRgb, cardAlpha })` from `parseCssColor(getComputedStyle(detailEl).color/backgroundColor)` on open/theme change (null → #67 static dim); `setHidden(document.hidden)` on visibilitychange. Pass reads back its own input (8×8/rect RGBA8, every 500 ms, async) → p90 luminance → smallest dim ≤0.7 reaching WCAG 4.5:1; dark backdrop → 0 dim (Imagine art stays vivid). No/failed/stale read → static, `contrast.lastError`. Register tests: postfx/{wcag-contrast,backdrop-meter,detail-dim-measured}.test.ts, atmosphere/bounce-stale-error.test.ts. Same-cycle hacker fix (live, no wiring): portrait-bounce `lastSampleError` tracks current focus (was sticky after one tainted portrait). See postfx/README #68 |
-| 69 | **Light — per-rect measured dim (card vs chart) + chart-line 3:1 target** — #68 drives ONE strength from the worst rect, so a bright nebula behind Charts over-dims the scene behind the detail card too; split strength per rect (uniform array, ≤2) and let charts use `WCAG_GRAPHIC_AA` for lines with 4.5 for tick text, from real measured stats only | queued | Light lane next; builds on #68 meter perRect stats |
+| 68 | **Light — measured-luminance backdrop dim** | **done** | c50 — land c57e111; wire setContrastTarget/setHidden; portrait lastSampleError stickiness; tests registered |
+| 69 | **Gap#52 Canvas resize/rotation keeps first aspect** — host 100dvh + ResizeObserver client box | **done** | c48 — CSS absolute fill; removed relative wrap override; RO on mount |
+| 70 | **Gap#53 Canvas accessible name** — role=img + live aria-label from bot health/weather | **done** | c48 — dash3d-stage-canvas |
+| 71 | **Gap#34 re-check — hide tab money burn + clear gap** | **done** | c49 — warn on suppress; clear hiddenGapMs after 25s visible; tests |
+| 72 | **Surfaces — lock history + chart drilldown + fly focus crumb** | **done** | c49 — timeline lock history; chart→bot/scrub; fly focus name/task |
+| 73 | **Motion c17 — health-pulse-crossfade + star-batch harden** | **done** | c50 — land fc36a5e motion/; wire crossfade + STAR_BATCH_MAX/ORBIT_OPTS |
+| 74 | **Motion c18 — neighbor-drift-damp + alloc-budget** | **done** | c50 — neighbor damp after batch; alloc-budget via --expose-gc |
+| 75 | **Gap#10 focus mid-flight** — queue focus requests while camera flies; latest wins; unknown bot clears stale detail | **queued** | REA re-check 23:25 still reproduces; Star Detail focus | 
+| 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **queued** | gap-feed captures-20261101-172519 |
+| 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **queued** | gap-feed |
+| 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **queued** | gap-feed |
 
 
 
@@ -134,6 +143,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
+
+- **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
 - ~~**Real-data charts panel**~~ — **done c15**: SVG sparks for commits/bot, lock claims/hour, landings/lane, spend (honest empty).
 - **Spend JSONL writer in xAI adapter** (researched c14) — when live usage returns cost/USD, append allowlisted `/workspace/audit/dashboard-3d/spend.jsonl` so Money panel lights up without inventing numbers.
