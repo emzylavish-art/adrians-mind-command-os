@@ -6,6 +6,7 @@ import {
   notionAppendSection,
   notionReadPage,
   pcRunShell,
+  pgliteListSchema,
   pgliteQuery,
   type BuiltinToolName,
   type SqlLike,
@@ -322,6 +323,7 @@ async function callBuiltin(
       return pcRunShell({
         command: String(args.command ?? ""),
         confirm: args.confirm === true,
+        ownerId: deps.ownerId,
       });
     case "pglite_query": {
       const sqlClient = await deps.getSql();
@@ -330,6 +332,10 @@ async function callBuiltin(
         params: Array.isArray(args.params) ? args.params : undefined,
         sqlClient,
       });
+    }
+    case "pglite_list_schema": {
+      const sqlClient = await deps.getSql();
+      return pgliteListSchema({ sqlClient });
     }
     default:
       return { ok: false, status: "error", text: `Unknown built-in tool “${name}”. Nothing was called.` };

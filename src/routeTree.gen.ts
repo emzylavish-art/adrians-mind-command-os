@@ -18,9 +18,17 @@ import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/bui
 import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
+import { Route as ApiMindPcJobsRouteImport } from './routes/api/mind/pc/jobs'
+import { Route as ApiMindPcRegisterRouteImport } from './routes/api/mind/pc/register'
+import { Route as ApiMindPcResultRouteImport } from './routes/api/mind/pc/result'
+import { Route as ApiMindPcStatusRouteImport } from './routes/api/mind/pc/status'
 import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
 import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
 import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
+import { Route as ApiMindOauthConnectorCallbackRouteImport } from './routes/api/mind/oauth/$connector/callback'
+import { Route as ApiMindOauthConnectorDisconnectRouteImport } from './routes/api/mind/oauth/$connector/disconnect'
+import { Route as ApiMindOauthConnectorStartRouteImport } from './routes/api/mind/oauth/$connector/start'
+import { Route as ApiMindOauthConnectorStatusRouteImport } from './routes/api/mind/oauth/$connector/status'
 import { Route as ApiMindOauthNotionCallbackRouteImport } from './routes/api/mind/oauth/notion/callback'
 import { Route as ApiMindOauthNotionDisconnectRouteImport } from './routes/api/mind/oauth/notion/disconnect'
 import { Route as ApiMindOauthNotionStartRouteImport } from './routes/api/mind/oauth/notion/start'
@@ -71,6 +79,26 @@ const ApiMindMcpToolsRoute = ApiMindMcpToolsRouteImport.update({
   path: '/api/mind/mcp/tools',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindPcJobsRoute = ApiMindPcJobsRouteImport.update({
+  id: '/api/mind/pc/jobs',
+  path: '/api/mind/pc/jobs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPcRegisterRoute = ApiMindPcRegisterRouteImport.update({
+  id: '/api/mind/pc/register',
+  path: '/api/mind/pc/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPcResultRoute = ApiMindPcResultRouteImport.update({
+  id: '/api/mind/pc/result',
+  path: '/api/mind/pc/result',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPcStatusRoute = ApiMindPcStatusRouteImport.update({
+  id: '/api/mind/pc/status',
+  path: '/api/mind/pc/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindMediaCloudFetchRoute = ApiMindMediaCloudFetchRouteImport.update({
   id: '/api/mind/media/cloud/fetch',
   path: '/api/mind/media/cloud/fetch',
@@ -86,6 +114,30 @@ const ApiMindMediaCloudStatusRoute = ApiMindMediaCloudStatusRouteImport.update({
   path: '/api/mind/media/cloud/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindOauthConnectorCallbackRoute =
+  ApiMindOauthConnectorCallbackRouteImport.update({
+    id: '/api/mind/oauth/$connector/callback',
+    path: '/api/mind/oauth/$connector/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindOauthConnectorDisconnectRoute =
+  ApiMindOauthConnectorDisconnectRouteImport.update({
+    id: '/api/mind/oauth/$connector/disconnect',
+    path: '/api/mind/oauth/$connector/disconnect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindOauthConnectorStartRoute =
+  ApiMindOauthConnectorStartRouteImport.update({
+    id: '/api/mind/oauth/$connector/start',
+    path: '/api/mind/oauth/$connector/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindOauthConnectorStatusRoute =
+  ApiMindOauthConnectorStatusRouteImport.update({
+    id: '/api/mind/oauth/$connector/status',
+    path: '/api/mind/oauth/$connector/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiMindOauthNotionCallbackRoute =
   ApiMindOauthNotionCallbackRouteImport.update({
     id: '/api/mind/oauth/notion/callback',
@@ -120,9 +172,17 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/pc/jobs': typeof ApiMindPcJobsRoute
+  '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
+  '/api/mind/pc/result': typeof ApiMindPcResultRoute
+  '/api/mind/pc/status': typeof ApiMindPcStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
+  '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
+  '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
+  '/api/mind/oauth/$connector/status': typeof ApiMindOauthConnectorStatusRoute
   '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
@@ -138,9 +198,17 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/pc/jobs': typeof ApiMindPcJobsRoute
+  '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
+  '/api/mind/pc/result': typeof ApiMindPcResultRoute
+  '/api/mind/pc/status': typeof ApiMindPcStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
+  '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
+  '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
+  '/api/mind/oauth/$connector/status': typeof ApiMindOauthConnectorStatusRoute
   '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
@@ -157,9 +225,17 @@ export interface FileRoutesById {
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
+  '/api/mind/pc/jobs': typeof ApiMindPcJobsRoute
+  '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
+  '/api/mind/pc/result': typeof ApiMindPcResultRoute
+  '/api/mind/pc/status': typeof ApiMindPcStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
+  '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
+  '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
+  '/api/mind/oauth/$connector/status': typeof ApiMindOauthConnectorStatusRoute
   '/api/mind/oauth/notion/callback': typeof ApiMindOauthNotionCallbackRoute
   '/api/mind/oauth/notion/disconnect': typeof ApiMindOauthNotionDisconnectRoute
   '/api/mind/oauth/notion/start': typeof ApiMindOauthNotionStartRoute
@@ -177,9 +253,17 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/pc/jobs'
+    | '/api/mind/pc/register'
+    | '/api/mind/pc/result'
+    | '/api/mind/pc/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/oauth/$connector/callback'
+    | '/api/mind/oauth/$connector/disconnect'
+    | '/api/mind/oauth/$connector/start'
+    | '/api/mind/oauth/$connector/status'
     | '/api/mind/oauth/notion/callback'
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
@@ -195,9 +279,17 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/pc/jobs'
+    | '/api/mind/pc/register'
+    | '/api/mind/pc/result'
+    | '/api/mind/pc/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/oauth/$connector/callback'
+    | '/api/mind/oauth/$connector/disconnect'
+    | '/api/mind/oauth/$connector/start'
+    | '/api/mind/oauth/$connector/status'
     | '/api/mind/oauth/notion/callback'
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
@@ -213,9 +305,17 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/call'
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
+    | '/api/mind/pc/jobs'
+    | '/api/mind/pc/register'
+    | '/api/mind/pc/result'
+    | '/api/mind/pc/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/oauth/$connector/callback'
+    | '/api/mind/oauth/$connector/disconnect'
+    | '/api/mind/oauth/$connector/start'
+    | '/api/mind/oauth/$connector/status'
     | '/api/mind/oauth/notion/callback'
     | '/api/mind/oauth/notion/disconnect'
     | '/api/mind/oauth/notion/start'
@@ -232,9 +332,17 @@ export interface RootRouteChildren {
   ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
   ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
+  ApiMindPcJobsRoute: typeof ApiMindPcJobsRoute
+  ApiMindPcRegisterRoute: typeof ApiMindPcRegisterRoute
+  ApiMindPcResultRoute: typeof ApiMindPcResultRoute
+  ApiMindPcStatusRoute: typeof ApiMindPcStatusRoute
   ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
   ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
   ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
+  ApiMindOauthConnectorCallbackRoute: typeof ApiMindOauthConnectorCallbackRoute
+  ApiMindOauthConnectorDisconnectRoute: typeof ApiMindOauthConnectorDisconnectRoute
+  ApiMindOauthConnectorStartRoute: typeof ApiMindOauthConnectorStartRoute
+  ApiMindOauthConnectorStatusRoute: typeof ApiMindOauthConnectorStatusRoute
   ApiMindOauthNotionCallbackRoute: typeof ApiMindOauthNotionCallbackRoute
   ApiMindOauthNotionDisconnectRoute: typeof ApiMindOauthNotionDisconnectRoute
   ApiMindOauthNotionStartRoute: typeof ApiMindOauthNotionStartRoute
@@ -306,6 +414,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMcpToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/pc/jobs': {
+      id: '/api/mind/pc/jobs'
+      path: '/api/mind/pc/jobs'
+      fullPath: '/api/mind/pc/jobs'
+      preLoaderRoute: typeof ApiMindPcJobsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pc/register': {
+      id: '/api/mind/pc/register'
+      path: '/api/mind/pc/register'
+      fullPath: '/api/mind/pc/register'
+      preLoaderRoute: typeof ApiMindPcRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pc/result': {
+      id: '/api/mind/pc/result'
+      path: '/api/mind/pc/result'
+      fullPath: '/api/mind/pc/result'
+      preLoaderRoute: typeof ApiMindPcResultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pc/status': {
+      id: '/api/mind/pc/status'
+      path: '/api/mind/pc/status'
+      fullPath: '/api/mind/pc/status'
+      preLoaderRoute: typeof ApiMindPcStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/media/cloud/fetch': {
       id: '/api/mind/media/cloud/fetch'
       path: '/api/mind/media/cloud/fetch'
@@ -325,6 +461,34 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/media/cloud/status'
       fullPath: '/api/mind/media/cloud/status'
       preLoaderRoute: typeof ApiMindMediaCloudStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/oauth/$connector/callback': {
+      id: '/api/mind/oauth/$connector/callback'
+      path: '/api/mind/oauth/$connector/callback'
+      fullPath: '/api/mind/oauth/$connector/callback'
+      preLoaderRoute: typeof ApiMindOauthConnectorCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/oauth/$connector/disconnect': {
+      id: '/api/mind/oauth/$connector/disconnect'
+      path: '/api/mind/oauth/$connector/disconnect'
+      fullPath: '/api/mind/oauth/$connector/disconnect'
+      preLoaderRoute: typeof ApiMindOauthConnectorDisconnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/oauth/$connector/start': {
+      id: '/api/mind/oauth/$connector/start'
+      path: '/api/mind/oauth/$connector/start'
+      fullPath: '/api/mind/oauth/$connector/start'
+      preLoaderRoute: typeof ApiMindOauthConnectorStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/oauth/$connector/status': {
+      id: '/api/mind/oauth/$connector/status'
+      path: '/api/mind/oauth/$connector/status'
+      fullPath: '/api/mind/oauth/$connector/status'
+      preLoaderRoute: typeof ApiMindOauthConnectorStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/oauth/notion/callback': {
@@ -368,9 +532,17 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMcpCallRoute: ApiMindMcpCallRoute,
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
   ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
+  ApiMindPcJobsRoute: ApiMindPcJobsRoute,
+  ApiMindPcRegisterRoute: ApiMindPcRegisterRoute,
+  ApiMindPcResultRoute: ApiMindPcResultRoute,
+  ApiMindPcStatusRoute: ApiMindPcStatusRoute,
   ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
   ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,
   ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
+  ApiMindOauthConnectorCallbackRoute: ApiMindOauthConnectorCallbackRoute,
+  ApiMindOauthConnectorDisconnectRoute: ApiMindOauthConnectorDisconnectRoute,
+  ApiMindOauthConnectorStartRoute: ApiMindOauthConnectorStartRoute,
+  ApiMindOauthConnectorStatusRoute: ApiMindOauthConnectorStatusRoute,
   ApiMindOauthNotionCallbackRoute: ApiMindOauthNotionCallbackRoute,
   ApiMindOauthNotionDisconnectRoute: ApiMindOauthNotionDisconnectRoute,
   ApiMindOauthNotionStartRoute: ApiMindOauthNotionStartRoute,

@@ -56,6 +56,8 @@ describe("mcp tools", () => {
     assert.equal(assertReadOnlySql("WITH x AS (SELECT 1) SELECT * FROM x").ok, true);
     assert.equal(assertReadOnlySql("DELETE FROM mind_chat").ok, false);
     assert.equal(assertReadOnlySql("DROP TABLE mind_chat").ok, false);
+    assert.equal(assertReadOnlySql("SELECT 1; DELETE FROM mind_chat").ok, false);
+    assert.equal(assertReadOnlySql("WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x").ok, false);
   });
 
   it("runs a read-only query through the sql client", async () => {

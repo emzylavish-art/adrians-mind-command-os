@@ -3,7 +3,29 @@ import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "
 import { join } from "node:path";
 import { decryptSecret, encryptSecret } from "./crypto.ts";
 
-export type ConnectorId = "notion";
+export const CONNECTOR_IDS = [
+  "notion",
+  "gmail",
+  "google_calendar",
+  "google_drive",
+  "slack",
+  "github",
+] as const;
+
+export type ConnectorId = (typeof CONNECTOR_IDS)[number];
+
+export function isConnectorId(value: string): value is ConnectorId {
+  return (CONNECTOR_IDS as readonly string[]).includes(value);
+}
+
+export const CONNECTOR_DISPLAY_NAMES: Record<ConnectorId, string> = {
+  notion: "Notion",
+  gmail: "Gmail",
+  google_calendar: "Google Calendar",
+  google_drive: "Google Drive",
+  slack: "Slack",
+  github: "GitHub",
+};
 
 export type StoredConnection = {
   connector: ConnectorId;
@@ -16,6 +38,7 @@ export type StoredConnection = {
   accountLabel?: string;
   connectedAt: string;
   tokenType?: string;
+  scopes?: string;
 };
 
 export type ConnectionPublic = {
@@ -34,12 +57,17 @@ export type PendingOAuth = {
   codeVerifier: string;
   redirectUri: string;
   createdAt: string;
+  scopes?: string;
 };
 
 let directory = join(process.cwd(), ".data", "mind-connectors");
 
 export function setConnectorDirectory(next: string) {
   directory = next;
+}
+
+export function connectorDirectory() {
+  return directory;
 }
 
 function ownerFile(ownerId: string, name: string) {
@@ -87,6 +115,7 @@ export function storeAccessToken(input: {
   botId?: string;
   accountLabel?: string;
   tokenType?: string;
+  scopes?: string;
 }): StoredConnection {
   const access = encryptSecret(input.accessToken);
   const refresh = input.refreshToken ? encryptSecret(input.refreshToken) : undefined;
@@ -101,6 +130,7 @@ export function storeAccessToken(input: {
     accountLabel: input.accountLabel,
     connectedAt: new Date().toISOString(),
     tokenType: input.tokenType,
+    scopes: input.scopes,
   };
   saveConnection(conn);
   return conn;
@@ -130,24 +160,29 @@ export function newOAuthState(): { state: string; codeVerifier: string; codeChal
   return { state, codeVerifier, codeChallenge };
 }
 
-export function toPublic(conn: StoredConnection | null, configured: boolean): ConnectionPublic {
+export function toPublic(
+  connector: ConnectorId,
+  conn: StoredConnection | null,
+  configured: boolean,
+): ConnectionPublic {
+  const name = CONNECTOR_DISPLAY_NAMES[connector];
   if (!configured) {
     return {
-      connector: "notion",
+      connector,
       state: "not_configured",
-      detail: "Notion OAuth is not configured. Set NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, and NOTION_OAUTH_REDIRECT_URI on the server. Nothing was connected.",
+      detail: `${name} OAuth is not configured on the server. Set the required client id, client secret, and redirect URI env vars. Nothing was connected.`,
     };
   }
   if (!conn) {
     return {
-      connector: "notion",
+      connector,
       state: "not_connected",
-      detail: "Notion is not connected. Press Connect to start OAuth. No token is stored.",
+      detail: `${name} is not connected. Press Connect to start OAuth. No token is stored.`,
     };
   }
-  const label = conn.workspaceName || conn.accountLabel || "Notion workspace";
+  const label = conn.workspaceName || conn.accountLabel || name;
   return {
-    connector: "notion",
+    connector,
     state: "connected",
     detail: `Connected to ${label}${conn.connectedAt ? ` · since ${conn.connectedAt}` : ""}. Tokens stay on the server.`,
     workspaceName: conn.workspaceName,

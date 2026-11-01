@@ -107,3 +107,53 @@ Live provider connect **unverified** — no `NOTION_OAUTH_CLIENT_*` on box env
 Avoided `command-app.tsx` / `server.ts` / `styles.css` / voice / media / research.
 
 Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
+
+## Hardening pass (2026-11-01, Africa/Lagos)
+
+1. PC pairing contract + pc_run_shell (8749cbd)
+2. pglite_query harden + pglite_list_schema (befbaa6)
+3. Tools UI nested servers/tools + toggle gate (823ee77)
+4. Live verify script against vite :8083 (see /workspace/audit/mcp-integration/live-verify.log)
+   - Auth-gated UI routes return honest 401 without session
+   - `/api/mind/mcp/builtin` initialize + tools/call work without session
+
+## Gap done: OAuth beyond Notion (2026-11-01 Africa/Lagos)
+
+**Status:** done (typecheck + mind/src tests + build passed; live provider connects UNVERIFIED — no real client creds in env)
+
+### Providers shipped
+- **Google** (one OAuth client): Gmail, Google Calendar, Google Drive — separate ServiceBoard rows + connector ids `gmail` / `google_calendar` / `google_drive` with per-service scopes
+- **Slack** (`slack`)
+- **GitHub** (`github`)
+- Notion unchanged via shared provider core (dedicated routes kept)
+
+### Pattern
+- Shared `oauth-provider.ts` + `providers.ts` registry
+- Start (state + PKCE where supported) → server callback exchange → AES-GCM encrypted tokens in `.data/mind-connectors`
+- Status honest: `not_configured` / `not_connected` / `connected` (never fake Connected)
+- Disconnect + revoke where supported (Google form revoke, Slack auth.revoke, GitHub DELETE applications token)
+- Drive: `resolveGoogleDriveAccessToken` + `google_drive.json` record for media connection-status contract
+
+### Routes
+- `/api/mind/oauth/$connector/{start,callback,status,disconnect}` for dynamic connectors
+- Notion routes unchanged under `/api/mind/oauth/notion/*`
+
+### Commits
+- `b64b7cf` Generalize connector OAuth into a shared provider abstraction.
+- `10337ba` Add dynamic OAuth start/callback/status/disconnect routes per connector.
+- `dabf74f` Wire ServiceBoard Connect and Disconnect for Google, Slack, and GitHub.
+- `2ecc791` Add unit tests and mock e2e for OAuth providers beyond Notion.
+- `a5d46b2` Document Google, Slack, and GitHub OAuth env var names in .env.example.
+
+### Checks
+- typecheck: pass
+- mind/src tests: 246 pass (incl. 20 OAuth unit tests)
+- build: pass
+- e2e mock: PASS → `/workspace/audit/mcp-integration/oauth-beyond-notion-e2e.log`
+- live: UNVERIFIED (GOOGLE_/SLACK_/GITHUB_OAUTH_CLIENT_ID absent)
+
+### Env needed for live connect
+- `CONNECTOR_TOKEN_SECRET`
+- Google: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_*_REDIRECT_URI` (or `GOOGLE_OAUTH_REDIRECT_URI`)
+- Slack: `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`, `SLACK_OAUTH_REDIRECT_URI`
+- GitHub: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`
