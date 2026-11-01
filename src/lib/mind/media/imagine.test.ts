@@ -30,6 +30,7 @@ describe("generateImagineImages", () => {
     const result = await generateImagineImages(
       { prompt: "a red circle" },
       {
+        skipSpendControls: true,
         apiKey: "",
         fetchImpl: async () => {
           throw new Error("should not fetch");
@@ -44,6 +45,7 @@ describe("generateImagineImages", () => {
     const result = await generateImagineImages(
       { prompt: "tiny", n: 1 },
       {
+        skipSpendControls: true,
         apiKey: "test-key",
         fetchImpl: async (_url, init) => {
           const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string; response_format?: string };
@@ -71,6 +73,7 @@ describe("generateImagineImages", () => {
     const result = await generateImagineImages(
       { prompt: "via url", responseFormat: "url" },
       {
+        skipSpendControls: true,
         apiKey: "test-key",
         lookup: async () => ["8.8.8.8"],
         fetchImpl: async (url) => {
@@ -95,6 +98,7 @@ describe("generateImagineImages", () => {
     const result = await generateImagineImages(
       { prompt: "denied" },
       {
+        skipSpendControls: true,
         apiKey: "test-key",
         fetchImpl: async () =>
           new Response(JSON.stringify({ error: "Access to the image endpoint is denied." }), {
@@ -122,6 +126,7 @@ describe("editImagineImage", () => {
     const result = await editImagineImage(
       { prompt: "make it blue", imageDataUrl: input },
       {
+        skipSpendControls: true,
         apiKey: "test-key",
         fetchImpl: async (url, init) => {
           seenUrl = String(url);
@@ -144,7 +149,7 @@ describe("editImagineImage", () => {
     const { editImagineImage } = await import("./imagine.ts");
     const result = await editImagineImage(
       { prompt: "blue", imageDataUrl: "https://example.com/a.png" },
-      { apiKey: "test-key", fetchImpl: async () => new Response("{}") },
+      { skipSpendControls: true, apiKey: "test-key", fetchImpl: async () => new Response("{}") },
     );
     assert.equal(result.ok, false);
   });
@@ -160,6 +165,7 @@ describe("multi-image editImagineImage", () => {
     const result = await editImagineImage(
       { prompt: "combine", imageDataUrls: [a, b] },
       {
+        skipSpendControls: true,
         apiKey: "test-key",
         fetchImpl: async (_url, init) => {
           seen = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
@@ -195,6 +201,7 @@ describe("adversarial: imagine download SSRF", () => {
     const result = await generateImagineImages(
       { prompt: "ssrf", n: 1, responseFormat: "url" },
       {
+        skipSpendControls: true,
         apiKey: "test-key",
         fetchImpl: async (input, init) => {
           if (String(input).includes("/images/generations")) {

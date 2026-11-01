@@ -49,7 +49,7 @@ import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
+import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, collectClipboardImageFiles, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -937,6 +937,12 @@ export function CommandApp() {
   }
 
   function onComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const imageFiles = collectClipboardImageFiles(event.clipboardData, 4);
+    if (imageFiles.length) {
+      event.preventDefault();
+      for (const file of imageFiles) void addImageAttachment(file);
+      return;
+    }
     const html = event.clipboardData?.getData("text/html") || "";
     const text = event.clipboardData?.getData("text/plain") || "";
     const safeImg = extractSafeImageSrcFromHtml(html) || sanitizePastedImageCandidate(text);
@@ -3636,14 +3642,10 @@ function ChatPane({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onPaste={(event) => {
-              const items = Array.from(event.clipboardData?.items ?? []);
-              const imageItems = items.filter((item) => item.type.startsWith("image/"));
-              if (imageItems.length === 0) return;
+              const imageFiles = collectClipboardImageFiles(event.clipboardData, 4);
+              if (imageFiles.length === 0) return;
               event.preventDefault();
-              for (const item of imageItems.slice(0, 4)) {
-                const file = item.getAsFile();
-                if (file) onAddImageFile(file);
-              }
+              for (const file of imageFiles) onAddImageFile(file);
             }}
             placeholder={`Message (${modelTier})...`}
             className="min-h-11 w-full bg-transparent text-sm outline-none"

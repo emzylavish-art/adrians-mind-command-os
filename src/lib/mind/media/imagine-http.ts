@@ -2,12 +2,16 @@ import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
 import {
   MAX_IMAGINE_BODY_CHARS,
-  checkImagineRateLimit,
-  imagineRateLimitKey,
   mapImagineHttpError,
   setImagineRateLimitStore,
 } from "./harden.ts";
 import { createFileRateLimitStore, DEFAULT_IMAGINE_RATE_LIMIT_PATH } from "./rate-limit-store.ts";
+import {
+  createFileSpendLedger,
+  DEFAULT_SPEND_LEDGER_PATH,
+  getImagineSpendLedger,
+  setImagineSpendLedger,
+} from "./spend-ledger.ts";
 import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolveImagineModel } from "./imagine.ts";
 import { normalizeImageDataUrl } from "./data-url.ts";
 import { MAX_DATA_URL_CHARS } from "./types.ts";
@@ -16,6 +20,11 @@ try {
   setImagineRateLimitStore(createFileRateLimitStore(DEFAULT_IMAGINE_RATE_LIMIT_PATH));
 } catch {
   /* memory store remains the default */
+}
+try {
+  setImagineSpendLedger(createFileSpendLedger(DEFAULT_SPEND_LEDGER_PATH));
+} catch {
+  /* memory ledger remains the default */
 }
 
 function json(body: unknown, status = 200) {
@@ -92,18 +101,8 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     request.headers.get("x-amcos-session") ||
     request.headers.get("x-session-id") ||
     "default";
-  const rateKey = imagineRateLimitKey({ ownerId: userId, sessionId });
-  const rate = checkImagineRateLimit(rateKey);
-  if (!rate.ok) {
-    return new Response(JSON.stringify({ ok: false, error: rate.error }), {
-      status: 429,
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "no-store",
-        "retry-after": String(rate.retryAfterSec),
-      },
-    });
-  }
+  // Rate limit + daily spend cap are enforced inside generateImagineImages / editImagineImage
+  // via meter.ownerId so custom execute paths cannot bypass.
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const normalized = normalizeImaginePrompt(record.prompt);
@@ -138,21 +137,28 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     return json({ ok: false, error: "Edit with Imagine needs at least one image data URL as input." }, 400);
   }
 
+  const meter = { ownerId: userId, sessionId };
   const result =
     mode === "edit"
-      ? await editImagineImage({
-          prompt: normalized.prompt,
-          imageDataUrl: imageDataUrl || undefined,
-          imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
-          model,
-          responseFormat: "b64_json",
-        })
-      : await generateImagineImages({
-          prompt: normalized.prompt,
-          n,
-          model,
-          responseFormat: "b64_json",
-        });
+      ? await editImagineImage(
+          {
+            prompt: normalized.prompt,
+            imageDataUrl: imageDataUrl || undefined,
+            imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
+            model,
+            responseFormat: "b64_json",
+          },
+          { meter },
+        )
+      : await generateImagineImages(
+          {
+            prompt: normalized.prompt,
+            n,
+            model,
+            responseFormat: "b64_json",
+          },
+          { meter },
+        );
 
   if (!result.ok) {
     const status = clientErrorStatus(result);
@@ -169,5 +175,35 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
       mime: image.mime,
       name: `imagine-${index + 1}.${image.mime === "image/png" ? "png" : image.mime === "image/webp" ? "webp" : "jpg"}`,
     })),
+  });
+}
+
+export async function handleImagineStatus(request: Request): Promise<Response> {
+  const blocked = guardSite(request);
+  if (blocked) return blocked;
+
+  let userId: string;
+  try {
+    const authorization = request.headers.get("authorization");
+    const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
+    userId = await requireUserId(bearer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    return json(
+      { ok: false, error: message === "Unauthorized" ? "Sign in is required." : message },
+      message === "Unauthorized" ? 401 : 403,
+    );
+  }
+
+  const summary = getImagineSpendLedger().summary(userId);
+  return json({
+    ok: true,
+    ownerId: summary.ownerId,
+    day: summary.day,
+    count: summary.count,
+    byModel: summary.byModel,
+    estimatedCostUsd: summary.estimatedCostUsd,
+    dailyCap: summary.dailyCap,
+    remaining: summary.remaining,
   });
 }

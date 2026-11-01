@@ -1,4 +1,5 @@
-import { IMAGINE_MAX_N, mapImagineHttpError } from "./harden.ts";
+import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
+import { assertImagineSpendAllowed, getImagineSpendLedger } from "./spend-ledger.ts";
 import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
 import { resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
@@ -125,10 +126,32 @@ export async function generateImagineImages(
     fetchImpl?: FetchLike;
     endpoint?: string;
     lookup?: LookupFn;
+    /** Required for production spend controls (rate limit + daily ledger). */
+    meter?: { ownerId: string; sessionId?: string };
+    /** Test-only escape hatch — never set from HTTP/agent routes. */
+    skipSpendControls?: boolean;
   } = {},
 ): Promise<ImagineResult> {
   const normalized = normalizeImaginePrompt(input.prompt);
   if (!normalized.ok) return normalized;
+
+  const model = resolveImagineModel(input.model);
+  const n = clampCount(input.n);
+
+  if (!options.skipSpendControls) {
+    const ownerId = options.meter?.ownerId?.trim() ?? "";
+    if (!ownerId) {
+      return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
+    }
+    const allowed = assertImagineSpendAllowed({
+      ownerId,
+      sessionId: options.meter?.sessionId,
+      n,
+      checkRateLimit: checkImagineRateLimit,
+      rateLimitKey: imagineRateLimitKey,
+    });
+    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
+  }
 
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
   if (!apiKey) {
@@ -138,9 +161,6 @@ export async function generateImagineImages(
       status: 503,
     };
   }
-
-  const model = resolveImagineModel(input.model);
-  const n = clampCount(input.n);
   const responseFormat = input.responseFormat ?? "b64_json";
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_GENERATIONS_URL;
@@ -213,9 +233,13 @@ export async function generateImagineImages(
     return { ok: false, error: "Image generation returned no usable image payloads.", status: response.status };
   }
 
+  const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
+  if (!options.skipSpendControls && options.meter?.ownerId) {
+    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || n });
+  }
   return {
     ok: true,
-    model: typeof record.model === "string" && record.model ? record.model : model,
+    model: resolvedModel,
     images,
     usage: record.usage,
   };
@@ -257,6 +281,8 @@ export async function editImagineImage(
     fetchImpl?: FetchLike;
     endpoint?: string;
     lookup?: LookupFn;
+    meter?: { ownerId: string; sessionId?: string };
+    skipSpendControls?: boolean;
   } = {},
 ): Promise<ImagineResult> {
   const normalized = normalizeImaginePrompt(input.prompt);
@@ -269,6 +295,21 @@ export async function editImagineImage(
     if (imageUrl.length > MAX_DATA_URL_CHARS) {
       return { ok: false, error: "That edit image is too large.", status: 413 };
     }
+  }
+
+  if (!options.skipSpendControls) {
+    const ownerId = options.meter?.ownerId?.trim() ?? "";
+    if (!ownerId) {
+      return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
+    }
+    const allowed = assertImagineSpendAllowed({
+      ownerId,
+      sessionId: options.meter?.sessionId,
+      n: 1,
+      checkRateLimit: checkImagineRateLimit,
+      rateLimitKey: imagineRateLimitKey,
+    });
+    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
   }
 
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
@@ -356,9 +397,13 @@ export async function editImagineImage(
     return { ok: false, error: "Image editing returned no usable image payloads.", status: response.status };
   }
 
+  const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
+  if (!options.skipSpendControls && options.meter?.ownerId) {
+    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || 1 });
+  }
   return {
     ok: true,
-    model: typeof record.model === "string" && record.model ? record.model : model,
+    model: resolvedModel,
     images,
     usage: record.usage,
   };

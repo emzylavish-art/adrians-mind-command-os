@@ -318,3 +318,25 @@ describe("adversarial: agent imagine cost metering", () => {
     resetImagineRateLimitForTests();
   });
 });
+
+
+describe("adversarial: agent imagine spend owner required", () => {
+  it("refuses default imagine execute without imagineOwnerId", async () => {
+    const model: AgentModel = async () => ({
+      text: "",
+      toolCalls: [{ id: "1", name: "imagine", arguments: { prompt: "a lake" } }],
+    });
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw a lake",
+      model,
+      signal: signal(),
+      autonomy: "automatic",
+      halted: false,
+      approved: true,
+      // no imagineOwnerId
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error || "", /owner/i);
+  });
+});

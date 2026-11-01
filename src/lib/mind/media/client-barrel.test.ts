@@ -23,6 +23,7 @@ describe("client media barrel", () => {
     assert.doesNotMatch(joined, /rate-limit-store/);
     assert.doesNotMatch(joined, /xai-key/);
     assert.doesNotMatch(joined, /imagine-http/);
+    assert.doesNotMatch(joined, /spend-ledger/);
     assert.match(joined, /imagine-shared/);
     assert.match(joined, /harden/);
   });

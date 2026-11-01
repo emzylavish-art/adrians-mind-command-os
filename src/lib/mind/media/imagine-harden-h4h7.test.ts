@@ -23,6 +23,7 @@ describe("H4: model allowlist + n clamp + rate limit keys", () => {
     await generateImagineImages(
       { prompt: "x", n: 99 },
       {
+        skipSpendControls: true,
         apiKey: "k",
         fetchImpl: async (_url, init) => {
           seenN = JSON.parse(String(init?.body)).n;
@@ -50,7 +51,7 @@ describe("H4: model allowlist + n clamp + rate limit keys", () => {
 describe("H5: edit image size cap", () => {
   it("rejects oversized edit data URLs with 413", async () => {
     const huge = `data:image/png;base64,${"a".repeat(2_000_000)}`;
-    const result = await editImagineImage({ prompt: "x", imageDataUrl: huge }, { apiKey: "k" });
+    const result = await editImagineImage({ prompt: "x", imageDataUrl: huge }, { skipSpendControls: true, apiKey: "k" });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 413);
@@ -61,7 +62,7 @@ describe("H5: edit image size cap", () => {
 
 describe("H6: client errors are 400 and provider text is sanitized", () => {
   it("returns status 400 when edit has no image", async () => {
-    const result = await editImagineImage({ prompt: "x" }, { apiKey: "k" });
+    const result = await editImagineImage({ prompt: "x" }, { skipSpendControls: true, apiKey: "k" });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 400);

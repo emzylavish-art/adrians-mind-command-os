@@ -1,5 +1,5 @@
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
-import { checkImagineRateLimit, imagineRateLimitKey, IMAGINE_MAX_N, sanitizeImaginePrompt } from "./media/harden.ts";
+import { IMAGINE_MAX_N, sanitizeImaginePrompt } from "./media/harden.ts";
 import { generateImagineImages, GROK_IMAGINE_MODEL, resolveImagineModel } from "./media/imagine.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
 import type { Autonomy } from "./policy.ts";
@@ -153,16 +153,20 @@ async function defaultExecuteToolUnmetered(
   ws: Workspace,
   tool: AgentToolName,
   args: AgentToolArgs,
-  meter: { ownerId: string; sessionId: string } = { ownerId: "anon", sessionId: "agent" },
+  meter: { ownerId: string; sessionId: string } = { ownerId: "", sessionId: "agent" },
 ): Promise<AgentToolResult> {
   if (tool === "imagine") {
     const normalized = sanitizeImaginePrompt(args.prompt ?? "");
     if (!normalized.ok) return { ok: false, lines: [`imagine: ${normalized.error}`] };
-    const rateKey = imagineRateLimitKey({ ownerId: meter.ownerId, sessionId: meter.sessionId });
-    const rate = checkImagineRateLimit(rateKey);
-    if (!rate.ok) return { ok: false, lines: [`imagine: ${rate.error}`] };
+    if (!meter.ownerId || meter.ownerId === "anon") {
+      return { ok: false, lines: ["imagine: Imagine requires an owner id for spend controls."] };
+    }
     const model = resolveImagineModel(GROK_IMAGINE_MODEL);
-    const generated = await generateImagineImages({ prompt: normalized.prompt, n: Math.min(1, IMAGINE_MAX_N), model });
+    // Rate limit + daily spend ledger enforced inside generateImagineImages via meter.
+    const generated = await generateImagineImages(
+      { prompt: normalized.prompt, n: Math.min(1, IMAGINE_MAX_N), model },
+      { meter: { ownerId: meter.ownerId, sessionId: meter.sessionId } },
+    );
     if (!generated.ok) return { ok: false, lines: [`imagine: ${generated.error}`] };
     const images: ImageAttachment[] = generated.images.map((image, index) => ({
       dataUrl: image.dataUrl,
@@ -212,7 +216,7 @@ export async function runBoundedAgent(input: {
 }): Promise<AgentRunResult> {
   const maxSteps = input.maxSteps ?? AGENT_MAX_STEPS;
   const maxImaginePerRun = input.maxImaginePerRun ?? AGENT_MAX_IMAGINE_PER_RUN;
-  const imagineOwnerId = (input.imagineOwnerId || "anon").trim() || "anon";
+  const imagineOwnerId = (input.imagineOwnerId || "").trim();
   const imagineSessionId = (input.imagineSessionId || "agent").trim() || "agent";
   const started = (input.now ?? Date.now)();
   const deadline = started + (input.deadlineMs ?? AGENT_DEADLINE_MS);

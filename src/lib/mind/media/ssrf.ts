@@ -71,8 +71,22 @@ export function isUnsafeResolvedAddress(address: string): boolean {
     }
   }
   if (addr.includes(":")) {
-    // Unique local fc00::/7, link-local fe80::/10, multicast ff00::/8
-    if (addr.startsWith("fc") || addr.startsWith("fd") || addr.startsWith("fe80") || addr.startsWith("ff")) return true;
+    // Unique local fc00::/7, link-local fe80::/10, multicast ff00::/8, loopback/unspecified
+    if (
+      addr.startsWith("fc")
+      || addr.startsWith("fd")
+      || addr.startsWith("fe8")
+      || addr.startsWith("fe9")
+      || addr.startsWith("fea")
+      || addr.startsWith("feb")
+      || addr.startsWith("ff")
+    ) {
+      return true;
+    }
+    // Documentation 2001:db8::/32 — refuse as a fetch target
+    if (addr === "2001:db8::" || addr.startsWith("2001:db8:")) return true;
+    // IPv4-mapped already handled; other ::ffff: forms without dotted quad stay opaque → refuse
+    if (addr.startsWith("::ffff:")) return true;
     return false;
   }
   const octets = parseIpv4Literal(addr);
@@ -117,7 +131,14 @@ export async function resolveAndPinUrl(raw: string, lookup: LookupFn = defaultLo
     }
     return { ok: true, hostname: host, pinnedAddress: literal.join("."), url };
   }
-  if (host.includes(":") || isUnsafeResolvedAddress(host)) {
+  // Bracketed / literal IPv6 hostname
+  if (host.includes(":")) {
+    if (isUnsafeResolvedAddress(host)) {
+      return { ok: false, error: "Refusing to download that image URL (resolved to a private address)." };
+    }
+    return { ok: true, hostname: host, pinnedAddress: normalizeIpString(host), url };
+  }
+  if (isUnsafeResolvedAddress(host)) {
     return { ok: false, error: "Refusing to download that image URL (resolved to a private address)." };
   }
   let addresses: string[];
