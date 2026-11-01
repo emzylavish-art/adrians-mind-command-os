@@ -24,19 +24,28 @@ import {
   rebuildFleetLaneLines,
 } from "./fleet-plan-layer";
 import {
+  acceptFlyDispatch,
+  acceptPointerPick,
   createRig,
   dollyPose,
   flyTo,
   focusBotTarget,
-  stepRig,
+  stepRigSmooth,
   type CameraRigState,
 } from "@/lib/mind/dashboard/camera-rig";
+import {
+  lineFlowPhase,
+  samplePolylineTravel,
+  travelProgress,
+} from "@/lib/mind/dashboard/sky-flow";
 import {
   pulsePhaseFromId,
   sampleOrbitDrift,
   sampleStarPulse,
   sanitizeDt,
+  sharedMotionClock,
 } from "./motion";
+import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
 import { createCityLayer } from "./city/city-layer";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -387,6 +396,12 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     }
 
+    type FlowLine = { line: THREE.Line; seed: number; speed: number; baseOpacity: number };
+    const flowLines: FlowLine[] = [];
+    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number };
+    const landingTrails: LandingTrail[] = [];
+    const travelerGeo = new THREE.SphereGeometry(0.16, 12, 12);
+
     function rebuildEdges(status: DashboardStatus) {
       while (edgeGroup.children.length) {
         const ch = edgeGroup.children[0]!;
@@ -396,22 +411,36 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           (ch.material as THREE.Material).dispose();
         }
       }
+      flowLines.length = 0;
       const posOf = (id: string) => {
         if (id === "grok-build") return sunMesh.position.clone();
         const v = botVis.find((b) => b.id === id);
         return v ? v.base.clone() : null;
       };
+      let ei = 0;
       for (const e of status.constellationEdges) {
         const a = posOf(e.from);
         const b = posOf(e.to);
         if (!a || !b) continue;
         const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-        const mat = new THREE.LineBasicMaterial({
+        // Animation #3: dashed flow along constellation edges (static under reducedMotion)
+        const mat = new THREE.LineDashedMaterial({
           color: HEALTH_COLOR[e.health],
           transparent: true,
-          opacity: e.kind === "hub" ? 0.35 : 0.55,
+          opacity: e.kind === "hub" ? 0.35 : 0.6,
+          dashSize: e.kind === "hub" ? 0.35 : 0.28,
+          gapSize: e.kind === "hub" ? 0.22 : 0.18,
         });
-        edgeGroup.add(new THREE.Line(geo, mat));
+        const line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        edgeGroup.add(line);
+        flowLines.push({
+          line,
+          seed: ei * 0.37,
+          speed: e.health === "blocked" ? 0.9 : e.health === "stalled" ? 0.35 : e.health === "healthy" ? 0.55 : 0.15,
+          baseOpacity: e.kind === "hub" ? 0.35 : 0.6,
+        });
+        ei += 1;
       }
     }
 
@@ -553,6 +582,34 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const v = botVis.find((b) => b.id === id);
           return v ? v.base.clone() : null;
         });
+        // Animation #3: landing-trail travelers (one per lane path)
+        for (const tr of landingTrails) {
+          landingGroup.remove(tr.mesh);
+          (tr.mesh.material as THREE.Material).dispose();
+        }
+        landingTrails.length = 0;
+        const baseY = -1.5;
+        status.fleetPlan.landings.forEach((landing, li) => {
+          const z = -10 - li * 2.2;
+          const xs = [-6, -2, 2.5, 7];
+          const points = landing.hops.map((hop, i) => ({
+            x: xs[i] ?? i * 3,
+            y: baseY + 0.2,
+            z,
+          }));
+          if (points.length < 2) return;
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0xffe08a,
+            emissive: 0xffc14a,
+            emissiveIntensity: 0.9,
+            transparent: true,
+            opacity: 0.95,
+          });
+          const mesh = new THREE.Mesh(travelerGeo, mat);
+          mesh.position.set(points[0]!.x, points[0]!.y, points[0]!.z);
+          landingGroup.add(mesh);
+          landingTrails.push({ points, mesh, seed: li * 1.7 });
+        });
       }
     }
     rebuildAll();
@@ -636,6 +693,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       cbs.current.onFlyoverChange?.(fly, layout);
     }
     const dispatchFly = (ev: FlyEvent) => {
+      if (!acceptFlyDispatch(rig, ev.type)) return;
       const next = reduceFlyover(fly, ev, knownIds());
       if (next === fly) return;
       setFly(next, true);
@@ -681,7 +739,27 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
+    // Click-and-zoom: pinch → same dolly path as wheel
+    const pinchPointers = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
+    const pinchDolly = (delta: number) => {
+      if (rig.t < 1) return;
+      const [minD, maxD] = dollyLimits(fly.level);
+      const cur: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z];
+      const look: [number, number, number] = [lookAt.x, lookAt.y, lookAt.z];
+      const next = dollyPose(cur, look, delta, minD, maxD);
+      freePos.set(...next);
+      camera.position.copy(freePos);
+      spherical.setFromVector3(freePos.clone().sub(lookAt));
+      rig = { ...rig, t: 1, to: { position: next, lookAt: look }, from: { position: next, lookAt: look } };
+    };
     const onPointerDown = (ev: PointerEvent) => {
+      try { renderer.domElement.setPointerCapture(ev.pointerId); } catch { /* optional */ }
+      pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (pinchPointers.size === 2) {
+        const pts = [...pinchPointers.values()];
+        pinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+      }
       dragging = true;
       lastX = ev.clientX;
       lastY = ev.clientY;
@@ -689,12 +767,17 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       dragStartY = ev.clientY;
     };
     const onPointerUp = (ev: PointerEvent) => {
+      pinchPointers.delete(ev.pointerId);
+      if (pinchPointers.size < 2) pinchDist = 0;
+      try { renderer.domElement.releasePointerCapture(ev.pointerId); } catch { /* optional */ }
       // measure from drag start (lastX is updated during moves, so drags looked like clicks)
       const dx = Math.abs(ev.clientX - dragStartX);
       const dy = Math.abs(ev.clientY - dragStartY);
       const wasDrag = dx > 4 || dy > 4;
       dragging = false;
       if (wasDrag) return;
+      // Hacker: ignore star/city picks while a camera glide is in flight
+      if (!acceptPointerPick(rig)) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -765,6 +848,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let dragStartX = 0;
     let dragStartY = 0;
     const onPointerMove = (ev: PointerEvent) => {
+      if (pinchPointers.has(ev.pointerId)) {
+        pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      }
+      if (pinchPointers.size === 2) {
+        const pts = [...pinchPointers.values()];
+        const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        if (pinchDist > 0 && Number.isFinite(dist)) {
+          const delta = Math.max(-400, Math.min(400, (dist - pinchDist) * 3));
+          if (delta !== 0) pinchDolly(delta);
+        }
+        pinchDist = dist;
+        return;
+      }
       if (!dragging || rig.t < 1 || fly.level === "interior") return;
       const dx = ev.clientX - lastX;
       const dy = ev.clientY - lastY;
@@ -804,14 +900,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let last = performance.now();
     let raf = 0;
     let sync = 0;
+    const travelOut = { x: 0, y: 0, z: 0 };
+    const onVisibility = () => {
+      // Animation #3: pause the loop while hidden; MotionClock absorbs the resume gap.
+      if (!isDocumentHidden()) last = performance.now();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
       if (kit.contextLost) return; // WebGL context lost: pause instead of throwing every frame
+      if (isDocumentHidden()) {
+        last = now;
+        return;
+      }
       const dt = sanitizeDt((now - last) / 1000);
       last = now;
 
       if (rig.t < 1) {
-        const stepped = stepRig(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.15);
+        const stepped = stepRigSmooth(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.35);
         rig = stepped.rig;
         applyPose(stepped.position, stepped.lookAt);
       }
@@ -821,21 +927,39 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         ch.lookAt(camera.position);
       }
 
-      const t = now * 0.001;
+      const wallT = now * 0.001;
+      const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
         const phase = pulsePhaseFromId(n.id);
-        sampleStarPulse(pulseOut, t, phase, n.health, reducedMotion);
+        sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
         n.mesh.scale.setScalar(pulseOut.scale);
         n.glow.scale.setScalar(pulseOut.glow);
-        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, t, phase, reducedMotion);
+        const mat = n.mesh.material as THREE.MeshStandardMaterial;
+        if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
+        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, wallT, phase, reducedMotion);
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
         n.label.visible = fly.level === "universe"; // star labels don't bleed into the city/interior
       }
-      city.tick(t, reducedMotion);
-      dust.update(t, reducedMotion);
-      comets.update(t, reducedMotion);
+      if (!reducedMotion) {
+        for (const fl of flowLines) {
+          const mat = fl.line.material as THREE.LineDashedMaterial;
+          // LineDashedMaterial has no dashOffset in this three build — pulse opacity as flowing energy
+          const phase = lineFlowPhase(t, fl.speed, fl.seed);
+          mat.opacity = fl.baseOpacity * (0.42 + 0.58 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
+        }
+        for (const tr of landingTrails) {
+          samplePolylineTravel(travelOut, tr.points, travelProgress(t, 7.5, tr.seed));
+          tr.mesh.position.set(travelOut.x, travelOut.y + 0.35, travelOut.z);
+          tr.mesh.visible = fly.level === "universe";
+        }
+      } else {
+        for (const tr of landingTrails) tr.mesh.visible = false;
+      }
+      city.tick(wallT, reducedMotion);
+      dust.update(wallT, reducedMotion);
+      comets.update(wallT, reducedMotion);
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
         tickPainterlyKit(kit, t);
@@ -892,6 +1016,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
+      document.removeEventListener("visibilitychange", onVisibility);
       detachContext();
       city.dispose();
       renderer.domElement.removeEventListener("wheel", onWheel);
@@ -903,6 +1028,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       comets.dispose();
       sphereGeo.dispose();
       pageGeo.dispose();
+      travelerGeo.dispose();
       starTex.dispose();
       skyMat.map?.dispose();
       skyMat.dispose();
