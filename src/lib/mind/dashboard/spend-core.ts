@@ -305,5 +305,18 @@ export function adjustBurnForHiddenGap<T extends MoneyView>(
   if (!money?.available || money.burnPerHourUsd == null) return money;
   const gap = Number.isFinite(hiddenGapMs) ? Math.max(0, hiddenGapMs) : 0;
   if (gap < burnWindowMs * 0.5) return money;
-  return { ...money, burnPerHourUsd: null };
+  // Keep todayTotal; clear burn and surface why (no invented burn after lunch tab).
+  return {
+    ...money,
+    burnPerHourUsd: null,
+    warnings: [
+      ...money.warnings,
+      {
+        level: "warn" as const,
+        message: `Burn paused — tab was hidden ~${Math.round(gap / 60000)}m (Gap#34)`,
+        thresholdUsd: burnWindowMs,
+        observedUsd: gap,
+      },
+    ],
+  };
 }

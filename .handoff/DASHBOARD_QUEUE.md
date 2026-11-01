@@ -125,6 +125,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 68 | **Light — measured-luminance backdrop dim** | queued | Light lane next after e65a052; builds on #67 dim |
 | 69 | **Gap#52 Canvas resize/rotation keeps first aspect** — host 100dvh + ResizeObserver client box | **done** | c48 — CSS absolute fill; removed relative wrap override; RO on mount |
 | 70 | **Gap#53 Canvas accessible name** — role=img + live aria-label from bot health/weather | **done** | c48 — dash3d-stage-canvas |
+| 71 | **Gap#34 re-check — hide tab money burn + clear gap** | **done** | c49 — warn on suppress; clear hiddenGapMs after 25s visible; tests |
+| 72 | **Surfaces — lock history + chart drilldown + fly focus crumb** | **done** | c49 — timeline lock history; chart→bot/scrub; fly focus name/task |
 
 
 

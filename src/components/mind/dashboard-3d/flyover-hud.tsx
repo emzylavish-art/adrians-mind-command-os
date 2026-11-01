@@ -96,13 +96,13 @@ export function FlyoverHud({
           hidden={!focusBot}
         >
           <p className="dash3d-muted" style={{ fontSize: "0.68rem", margin: "0.35rem 0 0.15rem" }}>
-            Focus · {focusBot?.health ?? "—"}
+            Focus · {focusBot ? focusBot.health : "none"}
           </p>
-          <p className="dash3d-title" style={{ fontSize: "0.85rem" }}>
-            {focusBot?.name ?? ""}
+          <p className="dash3d-title" style={{ fontSize: "0.85rem" }} data-testid="fly-focus-name">
+            {focusBot?.name || focusBot?.id || "no source yet"}
           </p>
           <p className="dash3d-muted" style={{ fontSize: "0.62rem" }}>
-            {focusBot?.branch || focusBot?.id || ""}
+            {[focusBot?.branch, focusBot?.lock?.task || focusBot?.reason].filter(Boolean).join(" · ") || focusBot?.id || ""}
           </p>
           {focusBot ? (
             <button

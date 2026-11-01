@@ -7,6 +7,7 @@ import type { FleetPlan } from "./fleet-plan.ts";
 import type { QueueItem } from "./queue-parse.ts";
 import type { NotionGraph, NotionSnapPage } from "./notion-graph-core.ts";
 import type { BotNode, DashboardBotId, GitCommit, Health } from "./types.ts";
+import type { Timeline, TimelineEvent } from "./time-scrub.ts";
 
 export const NO_SOURCE = "no source yet";
 
@@ -33,6 +34,8 @@ export type BotDetailView = {
   worktree: string | null;
   /** Commits listed on the lock file (often short notes). */
   lockCommits: string[];
+  /** Timeline lock claim/release/heartbeat for this bot. */
+  lockHistory: LockHistoryRow[];
   /** Recent git commits on the bot's branch from the real git log (may be empty). */
   branchCommits: GitCommit[];
   /** Queue rows whose title/detail mention this bot or its lane (honest empty). */
@@ -135,8 +138,44 @@ export function commitsForBranch(
   return out;
 }
 
+
+export type LockHistoryRow = {
+  atMs: number;
+  atIso: string;
+  kind: TimelineEvent["kind"];
+  label: string;
+  lockFile?: string;
+};
+
+/** Real lock claim/release/heartbeat rows for a bot from the timeline (honest empty). */
+export function lockHistoryFromTimeline(
+  timeline: Timeline | null | undefined,
+  botId: DashboardBotId,
+  limit = 12,
+): LockHistoryRow[] {
+  const events = timeline?.events ?? [];
+  if (!events.length) return [];
+  const out: LockHistoryRow[] = [];
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]!;
+    if (e.botId !== botId) continue;
+    if (e.kind !== "lock_claim" && e.kind !== "lock_release" && e.kind !== "lock_heartbeat") continue;
+    out.push({
+      atMs: e.atMs,
+      atIso: e.atIso,
+      kind: e.kind,
+      label: e.label,
+      lockFile: e.lockFile,
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** Match queue + optional gap-feed titles that mention this bot (real text only). */
 export function queueItemsForBot(queue: readonly QueueItem[], bot: BotNode, laneName: string | null): QueueItem[] {
-  const needles = [bot.id, bot.name, laneName ?? "", bot.branch ?? ""]
+  const nameRoot = bot.name.replace(/\s+bot$/i, "").trim();
+  const needles = [bot.id, bot.name, nameRoot, laneName ?? "", bot.branch ?? "", bot.lock?.file ?? ""]
     .map((s) => s.toLowerCase())
     .filter((s) => s.length > 2);
   if (!needles.length || !queue.length) return [];
@@ -206,6 +245,8 @@ export function buildBotDetailView(input: {
   constellationEdges: readonly ConstellationEdge[];
   notionGraph: NotionGraph;
   fleetPlan: FleetPlan | null | undefined;
+  timeline?: Timeline | null;
+  gapFeedTitles?: readonly string[] | null;
 }): BotDetailView {
   const { bot } = input;
   const lane = input.constellations.find((c) => c.botIds.includes(bot.id)) ?? null;
@@ -226,8 +267,27 @@ export function buildBotDetailView(input: {
     branch: bot.branch,
     worktree: bot.lock?.worktree ?? null, // already public-label when API-publicized
     lockCommits: bot.commits ?? [],
+    lockHistory: lockHistoryFromTimeline(input.timeline, bot.id, 12),
     branchCommits: commitsForBranch(input.commits, bot.branch, 8, bot.id),
-    queueItems: queueItemsForBot(input.fleetPlan?.queue ?? [], bot, laneName),
+    queueItems: (() => {
+      const fromQueue = queueItemsForBot(input.fleetPlan?.queue ?? [], bot, laneName);
+      if (fromQueue.length || !(input.gapFeedTitles?.length)) return fromQueue;
+      // Promote gap-feed titles that mention this bot into honest queue-like rows (index -1).
+      const extra = input.gapFeedTitles
+        .filter((title) => {
+          const hay = title.toLowerCase();
+          const nameRoot = bot.name.replace(/\s+bot$/i, "").trim().toLowerCase();
+          return hay.includes(bot.id) || (nameRoot.length > 2 && hay.includes(nameRoot));
+        })
+        .slice(0, 4)
+        .map((title, i) => ({
+          index: -(i + 1),
+          title,
+          status: "feed",
+          detail: "from gap-feed.md",
+        }));
+      return extra as import("./queue-parse.ts").QueueItem[];
+    })(),
     notionPages: notionPagesForBot(input.notionGraph, bot.id),
     connections: connectionsForBot(bot, input.constellationEdges, input.bots, input.notionGraph),
     notes: bot.notes || "",
