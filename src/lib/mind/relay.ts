@@ -1,5 +1,6 @@
 import { createSseFeed, pushSse, type ModelUsage } from "./stream.ts";
-import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
+import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
+export { CHAT_DISCONNECT_REPLY };
 import type { ChatContent } from "./media/types.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
@@ -180,10 +181,13 @@ export function relayModelStream(input: {
           ...(input.meta ?? {}),
         });
         finish();
-      } catch {
+      } catch (caught) {
         if (linked.signal.aborted) await stopped();
         else {
-          send("error", { error: CHAT_TIMEOUT_REPLY });
+          // Network / mid-stream drop — never mislabel as a turn timeout.
+          const msg = caught instanceof Error ? caught.message : "";
+          void msg;
+          send("error", { error: CHAT_DISCONNECT_REPLY });
           finish();
         }
       } finally {

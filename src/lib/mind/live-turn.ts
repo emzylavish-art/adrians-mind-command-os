@@ -1,10 +1,10 @@
 import { pullMindEvents, type ModelUsage } from "./stream.ts";
 
 import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
-import { CHAT_TIMEOUT_REPLY, isTimeoutAbort } from "./turn-timeouts.ts";
+import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, isTimeoutAbort } from "./turn-timeouts.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
-export { CHAT_TIMEOUT_REPLY };
+export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
   | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string }
@@ -68,7 +68,7 @@ export async function consumeMindTurn(input: {
     }
     return {
       ok: false,
-      error: input.signal.aborted ? STOPPED_REPLY : CHAT_TIMEOUT_REPLY,
+      error: input.signal.aborted ? STOPPED_REPLY : CHAT_DISCONNECT_REPLY,
     };
   }
   const type = response.headers.get("content-type") ?? "";
@@ -96,16 +96,14 @@ export async function consumeMindTurn(input: {
     let step: ReadableStreamReadResult<Uint8Array>;
     try {
       step = await readOrAbort(reader, input.signal);
-    } catch {
+    } catch (caught) {
       await reader.cancel().catch(() => undefined);
+      if (isTimeoutAbort(input.signal, caught) || isTimeoutAbort(input.signal, input.signal.reason)) {
+        return { ok: false, error: CHAT_TIMEOUT_REPLY };
+      }
       return {
         ok: false,
-        error:
-          isTimeoutAbort(input.signal, input.signal.reason) || isTimeoutAbort(input.signal, undefined)
-            ? CHAT_TIMEOUT_REPLY
-            : input.signal.aborted
-              ? STOPPED_REPLY
-              : CHAT_TIMEOUT_REPLY,
+        error: input.signal.aborted ? STOPPED_REPLY : CHAT_DISCONNECT_REPLY,
       };
     }
     if (input.signal.aborted) return stop();

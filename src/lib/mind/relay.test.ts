@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { decide } from "./policy.ts";
 import { resolveModelTier } from "./model-tiers.ts";
-import { buildRelayModelBody, relayModelStream, STOPPED_REPLY } from "./relay.ts";
+import { buildRelayModelBody, CHAT_DISCONNECT_REPLY, relayModelStream, STOPPED_REPLY } from "./relay.ts";
+import { CHAT_TIMEOUT_REPLY } from "./turn-timeouts.ts";
 import { pullMindEvents } from "./stream.ts";
 
 const encoder = new TextEncoder();
@@ -234,3 +235,52 @@ describe("relay multimodal body", () => {
   });
 });
 
+
+
+describe("relay disconnect vs timeout", () => {
+  it("mid-stream provider disconnect is not labeled as a timeout", async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"part"}}]}\n\n'));
+        queueMicrotask(() => controller.error(new TypeError("terminated")));
+      },
+    });
+    const raw = await readAll(
+      relayModelStream({
+        apiKey: "test-key",
+        model: "grok-4.5",
+        messages: [{ role: "user", content: "hi" }],
+        usedIds: [],
+        requestSignal: new AbortController().signal,
+        timeoutMs: 5_000,
+        fetchImpl: (async () => new Response(body, { status: 200 })) as typeof fetch,
+      }),
+    );
+    assert.equal(raw.includes("event: done"), false);
+    assert.equal(raw.includes(CHAT_TIMEOUT_REPLY), false);
+    assert.match(raw, /Connection to the model dropped/);
+    assert.equal(raw.includes(CHAT_DISCONNECT_REPLY), true);
+  });
+
+  it("a network failure before any reply is not a timeout and never echoes the key", async () => {
+    const secret = "xai-SUPERSECRET-0123456789abcdef";
+    const raw = await readAll(
+      relayModelStream({
+        apiKey: secret,
+        model: "grok-4.5",
+        messages: [{ role: "user", content: "hi" }],
+        usedIds: [],
+        requestSignal: new AbortController().signal,
+        timeoutMs: 5_000,
+        fetchImpl: (async () => {
+          throw new TypeError(`fetch failed Authorization: Bearer ${secret}`);
+        }) as typeof fetch,
+      }),
+    );
+    assert.equal(raw.includes(CHAT_TIMEOUT_REPLY), false);
+    assert.equal(raw.includes(CHAT_DISCONNECT_REPLY), true);
+    assert.equal(raw.includes(secret), false);
+    assert.match(raw, /Connection to the model dropped|could not be reached/i);
+  });
+});
