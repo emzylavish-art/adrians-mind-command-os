@@ -141,6 +141,8 @@ import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
+import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
+import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
@@ -1495,6 +1497,12 @@ export function CommandApp() {
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      ...(result.memorySaved === true
+                        ? {
+                            memorySaved: true as const,
+                            savedMemoryId: result.savedMemoryId ?? null,
+                          }
+                        : {}),
                     },
                   ],
                   retrievalLog: [{ at: new Date().toISOString(), ids: result.usedIds }, ...item.retrievalLog].slice(0, 20),
@@ -4114,21 +4122,6 @@ export function CommandApp() {
                   setActiveId(null);
                 });
               }}
-              onMemory={() => {
-                if (!active) return;
-                if (active.memory === "off") {
-                  setArmMemory(active.id);
-                  return;
-                }
-                setWs((prev) =>
-                  pushAudit(
-                    { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
-                    "memory_off",
-                    active.id,
-                    "retrieval stopped",
-                  ),
-                );
-              }}
               onSave={(content) => {
                 if (!active || active.memory !== "on") {
                   setError("Memory is off for this chat, so the note was not saved.");
@@ -4169,21 +4162,19 @@ export function CommandApp() {
               voiceOverlayOpen={voiceOverlayOpen}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
-              onComposerMemory={() => {
-                if ((active?.memory ?? memoryChoice) === "on") {
-                  if (active) {
-                    setWs((prev) =>
-                      pushAudit(
-                        { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
-                        "memory_off",
-                        active.id,
-                        "retrieval stopped",
-                      ),
-                    );
-                  } else setMemoryChoice("off");
+              onMemoryChange={(next) => {
+                if (!active) {
+                  setMemoryChoice(next);
                   return;
                 }
-                setArmMemory(active?.id ?? "composer");
+                setWs((prev) =>
+                  pushAudit(
+                    { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: next } : chat)) },
+                    next === "on" ? "memory_on" : "memory_off",
+                    active.id,
+                    next === "on" ? "owner enabled retrieval" : "retrieval stopped",
+                  ),
+                );
               }}
               onComposerMode={(next) => {
                 setAutonomy(next);
@@ -5457,7 +5448,6 @@ function ChatPane({
   onRetry,
   onExport,
   onDelete,
-  onMemory,
   onSave,
   onNew,
   onSpeak,
@@ -5485,7 +5475,7 @@ function ChatPane({
   voiceOverlayOpen,
   memoryChoice,
   mode,
-  onComposerMemory,
+  onMemoryChange,
   onComposerMode,
   composerEffort,
   onComposerEffort,
@@ -5536,7 +5526,6 @@ function ChatPane({
   onRetry: () => void;
   onExport: () => void;
   onDelete: () => void;
-  onMemory: () => void;
   onSave: (content: string) => void;
   onNew: () => void;
   onSpeak: (text: string) => void;
@@ -5564,7 +5553,7 @@ function ChatPane({
   voiceOverlayOpen: boolean;
   memoryChoice: "off" | "on";
   mode: Autonomy;
-  onComposerMemory: () => void;
+  onMemoryChange: (next: "off" | "on") => void;
   onComposerMode: (mode: Autonomy) => void;
   composerEffort: ComposerModeId;
   onComposerEffort: (mode: ComposerModeId) => void;
@@ -5688,6 +5677,11 @@ function ChatPane({
             </form>
           )}
           <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
+          {active && (
+            <div className="mt-3 max-w-md" data-testid="memory-chat-toggle-header">
+              <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
+            </div>
+          )}
           <div className="mt-3 xl:hidden">
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
             <div className="mt-3">
@@ -5761,6 +5755,11 @@ function ChatPane({
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSave(msg.content)}>Save as chat memory</button>
                 )}
               </div>
+              {msg.role === "assistant" && msg.memorySaved === true ? (
+                <div className="mt-2">
+                  <MemorySavedIndicator memorySaved={true} savedMemoryId={msg.savedMemoryId} />
+                </div>
+              ) : null}
             </article>
             );
           })}
@@ -5888,7 +5887,7 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
             <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
             <BrowserDictationControl
               state={dictationState}
@@ -6001,11 +6000,8 @@ function ChatPane({
           <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
           <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
         </section>
-        <section className="glass-panel rounded-panel p-3">
-          <button type="button" role="switch" aria-checked={memoryChoice === "on"} onClick={onComposerMemory} className="flex min-h-11 w-full items-center justify-between text-sm">
-            Memory: {memoryChoice === "on" ? "ON" : "OFF"}
-            <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
-          </button>
+        <section className="glass-panel rounded-panel p-3" data-testid="memory-chat-toggle-rail">
+          <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={!active || busy || halted} />
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
         </section>
         <section className="glass-panel rounded-panel p-3 text-sm" data-testid="agent-activity-live">

@@ -5,7 +5,7 @@ import { test } from "node:test";
 test("hosted worker does nothing without a dedicated database", () => {
   const result = spawnSync(process.execPath, ["scripts/mind-worker.mjs"], {
     cwd: new URL("..", import.meta.url),
-    env: { ...process.env, DATABASE_URL: "" },
+    env: { ...process.env, DATABASE_URL: "", POSTGRES_URL: "", POSTGRES_URL_NON_POOLING: "" },
     encoding: "utf8",
   });
   assert.equal(result.status, 2);

@@ -8,12 +8,13 @@ import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 const MODEL = "grok-4.5";
 
 function envCheck() {
   return guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
@@ -33,7 +34,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   } catch {
     signedIn = false;
   }
-  const described = describePersistence(process.env.DATABASE_URL);
+  const described = describePersistence(resolveDatabaseUrl(process.env));
   const persistence = described.note;
   const databaseBackend = described.backend;
   if (!gate.ok) {

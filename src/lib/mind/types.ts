@@ -31,6 +31,9 @@ export type Msg = {
   model?: string;
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
   images?: MsgImage[];
+  /** Set when this assistant turn's SSE done reported a real memory save. */
+  memorySaved?: boolean;
+  savedMemoryId?: string | null;
 };
 
 export type Retrieval = { at: string; ids: string[] };

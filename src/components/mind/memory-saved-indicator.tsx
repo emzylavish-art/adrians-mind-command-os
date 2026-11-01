@@ -1,4 +1,4 @@
-/** In-thread chip when a turn result reports memorySaved. Mount pending in command-app if claimed. */
+/** In-thread chip when a turn result reports memorySaved. Mounted in ChatPane under assistant bubbles. */
 export function MemorySavedIndicator({
   memorySaved,
   savedMemoryId,
