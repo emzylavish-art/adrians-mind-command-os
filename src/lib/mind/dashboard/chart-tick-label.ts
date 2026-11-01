@@ -2,7 +2,8 @@
 export function chartTickLabel(label: string, dense: boolean): string {
   const raw = String(label || "").trim();
   if (!raw) return "—";
-  const hour = raw.match(/(?:^|\s)(\d{1,2})h$/i);
+  // Gap#49: labels look like "01/11 15h ·c5/r17" — match hour anywhere, not only at EOL.
+  const hour = raw.match(/(?:^|\s)(\d{1,2})h(?:\b|\s|·|$)/i) || raw.match(/(\d{1,2})h/i);
   if (hour) return `${hour[1]}h`;
   if (raw.includes("-")) {
     const initials = raw

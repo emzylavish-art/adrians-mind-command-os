@@ -94,15 +94,8 @@ export function createContextLossRecovery(opts: CreateContextLossOpts = {}): Con
     bundle = { bloom: null, grade: null, godRays: null, exposure: null, focusDepth: null, focusBloomGuard: null };
   };
 
-  const onRestored = () => {
-    if (disposed) return;
-    // Always dispose any stale refs before rebuild (idempotent).
-    disposeBundle(bundle);
-    bundle = { bloom: null, grade: null, godRays: null, exposure: null, focusDepth: null, focusBloomGuard: null };
-    if (!factory) {
-      lost = false;
-      return;
-    }
+  const applyFactoryOnce = (): boolean => {
+    if (!factory) return false;
     const next = factory();
     bundle = {
       bloom: next.bloom ?? null,
@@ -112,7 +105,31 @@ export function createContextLossRecovery(opts: CreateContextLossOpts = {}): Con
       focusDepth: next.focusDepth ?? null,
       focusBloomGuard: next.focusBloomGuard ?? null,
     };
-    lost = false;
+    return true;
+  };
+
+  const onRestored = () => {
+    if (disposed) return;
+    // Always dispose any stale refs before rebuild (idempotent).
+    disposeBundle(bundle);
+    bundle = { bloom: null, grade: null, godRays: null, exposure: null, focusDepth: null, focusBloomGuard: null };
+    if (!factory) {
+      lost = false;
+      return;
+    }
+    // Scene-side rebuild retry: factory can throw on a half-restored GL context.
+    // Catch, clear `lost` so the RAF loop can run, retry once, then accept nulls.
+    try {
+      applyFactoryOnce();
+      lost = false;
+    } catch {
+      lost = false;
+      try {
+        applyFactoryOnce();
+      } catch {
+        bundle = { bloom: null, grade: null, godRays: null, exposure: null, focusDepth: null, focusBloomGuard: null };
+      }
+    }
   };
 
   const canvas = opts.canvas ?? null;

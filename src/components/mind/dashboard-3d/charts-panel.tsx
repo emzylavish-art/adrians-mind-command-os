@@ -3,12 +3,16 @@ import { NO_CHART_SOURCE } from "@/lib/mind/dashboard/chart-series";
 import { chartTickLabel } from "@/lib/mind/dashboard/chart-tick-label";
 
 function SparkBars({ series }: { series: ChartSeries }) {
-  const max = Math.max(1, ...series.points.map((p) => p.value));
+  const max = Math.max(
+    1,
+    ...series.points.map((p) => Math.max(p.value, p.altValue ?? 0)),
+  );
   const w = 220;
   const h = 84;
   const gap = 3;
   const n = Math.max(1, series.points.length);
   const dense = n >= 7;
+  const paired = series.points.some((p) => p.altValue != null);
   const barW = Math.max(4, (w - gap * (n + 1)) / n);
   if (!series.points.length) {
     return (
@@ -34,12 +38,18 @@ function SparkBars({ series }: { series: ChartSeries }) {
       data-testid={`chart-${series.id}`}
     >
       {series.points.map((p, i) => {
-        const bh = Math.max(4, (p.value / max) * (h - 28));
+        const bh = Math.max(p.value > 0 ? 4 : 0, (p.value / max) * (h - 28));
         const x = gap + i * (barW + gap);
         const y = h - 14 - bh;
         const tick = chartTickLabel(p.label, dense);
         const showValue = !dense || i === topIdx || n <= 6;
-        const aria = `${p.label}: ${p.value} ${series.unit}`;
+        const aria =
+          p.altValue != null
+            ? `${p.label}: ${p.value} claims, ${p.altValue} releases`
+            : `${p.label}: ${p.value} ${series.unit}`;
+        const half = paired ? Math.max(2, (barW - 1) / 2) : barW;
+        const altH = p.altValue != null ? Math.max(p.altValue > 0 ? 4 : 0, (p.altValue / max) * (h - 28)) : 0;
+        const altY = h - 14 - altH;
         return (
           <g
             key={`${p.label}-${i}`}
@@ -48,22 +58,38 @@ function SparkBars({ series }: { series: ChartSeries }) {
             aria-label={aria}
             data-testid={`chart-mark-${series.id}-${i}`}
           >
-            <rect x={x} y={y} width={barW} height={bh} rx={2} fill="rgba(125,211,252,0.75)" />
+            <rect x={x} y={y} width={half} height={bh || 0.01} rx={2} fill="rgba(125,211,252,0.75)" />
+            {p.altValue != null ? (
+              <rect
+                x={x + half + 1}
+                y={altY}
+                width={half}
+                height={altH || 0.01}
+                rx={2}
+                fill="rgba(251,191,36,0.7)"
+              />
+            ) : null}
             {showValue ? (
               <text
                 x={x + barW / 2}
-                y={Math.max(10, y - 3)}
+                y={Math.max(10, Math.min(y, altY) - 3)}
                 textAnchor="middle"
                 fill="rgba(226,232,240,0.95)"
                 fontSize="8"
               >
-                {p.value}
+                {p.altValue != null ? `${p.value}/${p.altValue}` : p.value}
               </text>
             ) : null}
             <text x={x + barW / 2} y={h - 2} textAnchor="middle" fill="rgba(226,232,240,0.85)" fontSize="8">
               {tick}
             </text>
+            {/* Gap#49: real tooltip text for keyboard/touch focus (not empty). */}
             <title>{aria}</title>
+            <foreignObject x={x} y={0} width={barW} height={1} style={{ overflow: "visible" }}>
+              <span role="tooltip" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>
+                {aria}
+              </span>
+            </foreignObject>
           </g>
         );
       })}
@@ -72,7 +98,14 @@ function SparkBars({ series }: { series: ChartSeries }) {
   );
 }
 
-export function ChartsPanel({ charts }: { charts: DashboardCharts }) {
+export function ChartsPanel({
+  charts,
+  scrubNote,
+}: {
+  charts: DashboardCharts;
+  /** Gap#48 — when scrubbing, honest note if series follow scrub or stay Live. */
+  scrubNote?: string | null;
+}) {
   const seriesList = [
     charts.botHealth,
     charts.commitsPerBotHour,
@@ -81,6 +114,7 @@ export function ChartsPanel({ charts }: { charts: DashboardCharts }) {
     charts.landingsPerLane,
     charts.spend,
   ].filter(Boolean);
+  const showLaneLegend = seriesList.some((s) => s.id === "commits-per-bot" || s.id.includes("bot"));
   return (
     <aside className="dash3d-charts-panel dash3d-glass" data-testid="charts-panel" aria-label="Real-data charts">
       <div className="dash3d-feed-head">
@@ -89,6 +123,17 @@ export function ChartsPanel({ charts }: { charts: DashboardCharts }) {
           health · commits · activity · spend
         </p>
       </div>
+      {scrubNote ? (
+        <p className="dash3d-muted" data-testid="charts-scrub-note" style={{ fontSize: "0.65rem", margin: "0 0 0.35rem" }}>
+          {scrubNote}
+        </p>
+      ) : null}
+      {showLaneLegend ? (
+        <p className="dash3d-muted" data-testid="charts-lane-legend" style={{ fontSize: "0.58rem", margin: "0 0 0.35rem" }}>
+          Lane initials on bot bars (cp=cosmos-painter, cl=cosmos-light, cm=cosmos-motion, …). Lock chart: cyan=claims,
+          amber=releases.
+        </p>
+      ) : null}
       <div className="dash3d-charts-grid">
         {seriesList.map((s) => (
           <section key={s.id} className="dash3d-chart-card">

@@ -1,14 +1,14 @@
 import type { MoneyView } from "@/lib/mind/dashboard/spend-core";
 import { NO_SPEND_SOURCE } from "@/lib/mind/dashboard/spend-core";
 
-type Props = { money: MoneyView };
+type Props = { money: MoneyView; scrubNote?: string | null };
 
 function fmtUsd(n: number | null): string {
   if (n == null || !Number.isFinite(n)) return "—";
   return `$${n.toFixed(2)}`;
 }
 
-export function MoneyPanel({ money }: Props) {
+export function MoneyPanel({ money, scrubNote }: Props) {
   const empty = !money.available;
   return (
     <div
@@ -18,6 +18,11 @@ export function MoneyPanel({ money }: Props) {
       data-stale={money.stale ? "1" : "0"}
     >
       <h2>Money</h2>
+      {scrubNote ? (
+        <p className="dash3d-muted" data-testid="money-scrub-note" style={{ fontSize: "0.65rem" }}>
+          {scrubNote}
+        </p>
+      ) : null}
       {empty ? (
         <>
           <p className="dash3d-title" data-testid="money-empty">

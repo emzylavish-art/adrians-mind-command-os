@@ -117,10 +117,10 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 60 | **Gap#45 Mirror over Time + zoomout flex slabs** — skybar z-index above mirror; zoomout pills `align-self:flex-start` max 2.75rem | **done** | c46 — CSS only; elementFromPoint Time should hit scrubber |
 | 61 | **Gap#46 Star Detail dialog a11y + skybar live region** — role=dialog, focus close on open; drop skybar aria-live | **done** | c46 — node-detail-panel + dashboard-app |
 | 62 | **Gap#47 Portrait texture dispose on rebuild** — track owned Imagine maps; dispose on rebuild/unmount | **done** | c46 — ownedPortraitTextures in universe-scene |
-| 63 | **Gap#48 Time scrubber drives Charts/Money/Forever (or honest Live note) + aria-valuetext** | queued | feed captures-20261101-230352; after Light f2df35a + context-loss/#57 |
-| 64 | **Gap#49 Chart labels/tooltips still truncated (Gap#15 re-check)** | queued | feed 230352; after #63 |
-| 65 | **Gap#50 Lock claims vs releases chart drops empty hours / claims-only bars** | queued | feed 230352; after #64 |
-| 66 | **Gap#51 Compass minimap overlaps Charts at 1280×800** | queued | feed 230352; after #65 |
+| 63 | **Gap#48 Time scrubber drives Charts/Money/Forever (or honest Live note) + aria-valuetext** | **done** | c47 — aria-valuetext; charts rebuild at scrubMs; Money/Forever Live note |
+| 64 | **Gap#49 Chart labels/tooltips still truncated (Gap#15 re-check)** | **done** | c47 — hour tick through ·c/r; role=tooltip text; lane legend |
+| 65 | **Gap#50 Lock claims vs releases chart drops empty hours / claims-only bars** | **done** | c47 — zero-fill hours; cyan claims + amber releases altValue |
+| 66 | **Gap#51 Compass minimap overlaps Charts at 1280×800** | **done** | c47 — charts bottom above minimap (calc +158px) |
 | 67 | **Light — Imagine portrait colour bounce + detail-card backdrop dim (#60)** | queued | Light lane next after #57; real average colour from texture; never invent |
 
 

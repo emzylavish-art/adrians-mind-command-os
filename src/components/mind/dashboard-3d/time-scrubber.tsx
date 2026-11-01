@@ -59,6 +59,7 @@ export function TimeScrubber({ timeline, scrubMs, nowMs, message, mode, onScrubM
         step={1}
         value={Math.round(value * 1000)}
         aria-label="Timeline scrubber"
+        aria-valuetext={label}
         disabled={!timeline.events.length}
         onChange={(e) => {
           const ratio = Number(e.target.value) / 1000;

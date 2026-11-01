@@ -1,8 +1,8 @@
 import type { ForeverContractGuard } from "@/lib/mind/dashboard/forever-contract";
 
-type Props = { guard: ForeverContractGuard };
+type Props = { guard: ForeverContractGuard; scrubNote?: string | null };
 
-export function ForeverContractPanel({ guard }: Props) {
+export function ForeverContractPanel({ guard, scrubNote }: Props) {
   return (
     <aside
       className="dash3d-glass dash3d-skybar-card dash3d-forever"
@@ -11,6 +11,11 @@ export function ForeverContractPanel({ guard }: Props) {
       aria-label="Forever-contract queue health"
     >
       <h2>Forever contract</h2>
+      {scrubNote ? (
+        <p className="dash3d-muted" data-testid="forever-scrub-note" style={{ fontSize: "0.65rem" }}>
+          {scrubNote}
+        </p>
+      ) : null}
       <p className="dash3d-title" data-testid="forever-tone">
         <span className="dash3d-forever-dot" aria-hidden />
         {guard.label}

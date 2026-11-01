@@ -1,6 +1,5 @@
-owner: none
-cycle: 46
-released: 2026-11-01T23:13:14+01:00
+owner: dashboard-3d-loop
+cycle: 47
+heartbeat: 2026-11-01T23:17:50+01:00
 branch: dashboard-3d
-tip: 28932ef
-last: Gaps #45-47 #58 #59; Light #57 bloom guard; queued #48-51+#60
+work: ctx-loss retry; #63-66 Gap#48-51; attacker; Light #60 wait

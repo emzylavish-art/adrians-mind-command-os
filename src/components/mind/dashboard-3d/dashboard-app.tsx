@@ -8,7 +8,8 @@ import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
 import { createHealthSound, type SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
-import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
+import { applyScrubToBots, formatWat, scrubAt } from "@/lib/mind/dashboard/time-scrub";
+import { buildDashboardCharts } from "@/lib/mind/dashboard/chart-series";
 import { TimeScrubber } from "./time-scrubber";
 import { FeedPanel } from "./feed-panel";
 import { MoneyPanel } from "./money-panel";
@@ -252,6 +253,24 @@ export function DashboardApp() {
   }, [viewData, scrubMs, nowMs]);
 
   const sceneData = scrubView.data;
+  // Gap#48: Charts follow scrub via rebuild-at-scrubMs; Money/Forever stay Live with an honest note.
+  const scrubPanelNote =
+    scrubView.mode !== "live" && scrubView.scrubMs != null
+      ? `Showing Live ledger/queue — not ${formatWat(scrubView.scrubMs)}`
+      : null;
+  const chartsForScrub = (() => {
+    if (!viewData?.charts) return null;
+    if (scrubView.mode === "live" || scrubView.scrubMs == null || !sceneData) return viewData.charts;
+    return buildDashboardCharts({
+      commits: viewData.commits,
+      timeline: viewData.timeline,
+      landings: viewData.fleetPlan?.landings ?? null,
+      money: viewData.money,
+      bots: sceneData.bots,
+      nowMs: scrubView.scrubMs,
+    });
+  })();
+
 
   // Gap#40 — one retry wave when connectivity returns (no request storm while offline).
   useEffect(() => {
@@ -452,7 +471,7 @@ export function DashboardApp() {
               {viewData.notionGraph?.reason ? ` — ${viewData.notionGraph?.reason.slice(0, 90)}` : ""}
             </p>
           </div>
-          <MoneyPanel money={adjustBurnForHiddenGap(viewData.money, hiddenGapMs ?? 0)} />
+          <MoneyPanel money={adjustBurnForHiddenGap(viewData.money, hiddenGapMs ?? 0)} scrubNote={scrubPanelNote} />
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Fleet plan</h2>
             <p className="dash3d-title">
@@ -466,7 +485,7 @@ export function DashboardApp() {
               {(viewData.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
             </p>
           </div>
-          {viewData.foreverContract ? <ForeverContractPanel guard={viewData.foreverContract} /> : null}
+          {viewData.foreverContract ? <ForeverContractPanel guard={viewData.foreverContract} scrubNote={scrubPanelNote} /> : null}
           {operatorPrefs.layers.time ? (
           <TimeScrubber
             timeline={viewData.timeline ?? {
@@ -585,8 +604,15 @@ export function DashboardApp() {
           <FeedPanel feed={sceneData.skyFeed ?? viewData.skyFeed} />
         </>
       ) : null}
-      {viewData && sceneData?.charts && operatorPrefs.layers.charts ? (
-        <ChartsPanel charts={sceneData.charts} />
+      {viewData && chartsForScrub && operatorPrefs.layers.charts ? (
+        <ChartsPanel
+          charts={chartsForScrub}
+          scrubNote={
+            scrubView.mode !== "live" && scrubView.scrubMs != null
+              ? `Charts at ${formatWat(scrubView.scrubMs)} (health/commits/locks clipped to scrub)`
+              : null
+          }
+        />
       ) : null}
       {viewData ? (
         <NotionMirrorPanel

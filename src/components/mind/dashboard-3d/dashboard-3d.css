@@ -1141,3 +1141,15 @@ button.dash3d-zoomout.dash3d-glass,
   padding: 0.45rem 0.85rem;
   line-height: 1.2;
 }
+
+
+/* Gap #51 — Compass must not cover Charts at 1280×800 */
+.dash3d-charts-panel {
+  bottom: calc(0.75rem + 158px);
+  max-height: min(42vh, 360px);
+  z-index: 6;
+}
+.dash3d-minimap {
+  z-index: 5;
+  /* stay in the bottom-right under the charts stack */
+}
