@@ -10,11 +10,13 @@ function TextWithImages({
   onEditImagine,
   onSaveImage,
   onDownloadImage,
+  onUseAsAgentInput,
 }: {
   text: string;
   onEditImagine?: (src: string) => void;
   onSaveImage?: (src: string, alt: string) => void;
   onDownloadImage?: (src: string, alt: string) => void;
+  onUseAsAgentInput?: (src: string, alt: string) => void;
 }) {
   const nodes: ReactNode[] = [];
   let last = 0;
@@ -33,6 +35,7 @@ function TextWithImages({
           onEditImagine={src.startsWith("data:image/") ? onEditImagine : undefined}
           onSave={onSaveImage}
           onDownload={onDownloadImage}
+          onUseAsAgentInput={onUseAsAgentInput}
         />,
       );
     } else {
@@ -50,12 +53,14 @@ export function MessageBody({
   onEditImagine,
   onSaveImage,
   onDownloadImage,
+  onUseAsAgentInput,
 }: {
   text: string;
   images?: MsgImage[];
   onEditImagine?: (src: string) => void;
   onSaveImage?: (src: string, alt: string) => void;
   onDownloadImage?: (src: string, alt: string) => void;
+  onUseAsAgentInput?: (src: string, alt: string) => void;
 }) {
   const blocks = splitBlocks(text);
   const [copied, setCopied] = useState<number | null>(null);
@@ -70,6 +75,7 @@ export function MessageBody({
             onEditImagine={onEditImagine}
             onSave={onSaveImage}
             onDownload={onDownloadImage}
+            onUseAsAgentInput={onUseAsAgentInput}
           />
         ) : image.blobId ? (
           <p key={`attach-${index}`} className="text-xs text-muted">
@@ -101,6 +107,7 @@ export function MessageBody({
             onEditImagine={onEditImagine}
             onSaveImage={onSaveImage}
             onDownloadImage={onDownloadImage}
+            onUseAsAgentInput={onUseAsAgentInput}
           />
         ),
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
@@ -47,7 +47,7 @@ import { MessageBody } from "@/components/mind/message-body";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
-import { InlineImage } from "@/components/mind/media/inline-image";
+import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
 import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, historyTextForImages, parseImagineCommand, resolveImagineModel, toImageAttachments, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
@@ -837,6 +837,46 @@ export function CommandApp() {
     setError(null);
   }
 
+
+
+  function useImageAsAgentInput(src: string, alt: string) {
+    if (!src.startsWith("data:image/")) {
+      setError("Only in-chat data URLs can be used as Agent vision input.");
+      return;
+    }
+    setPendingImages((prev) => {
+      if (prev.some((image) => image.dataUrl === src)) return prev;
+      if (prev.length >= 4) {
+        setError("You can attach up to 4 images per message.");
+        return prev;
+      }
+      return [...prev, { dataUrl: src, name: alt || `agent-input-${prev.length + 1}.jpg` }];
+    });
+    setView("agents");
+    setNotice("Image staged for Agent vision. Add a goal and run the planner.");
+  }
+
+  function acceptAgentImageDrop(event: DragEvent) {
+    event.preventDefault();
+    const raw = event.dataTransfer.getData(AMCOS_IMAGE_DRAG_TYPE);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { dataUrl?: string; name?: string };
+        if (typeof parsed.dataUrl === "string") {
+          useImageAsAgentInput(parsed.dataUrl, parsed.name || "dragged-image");
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    const files = Array.from(event.dataTransfer.files ?? []).filter((file) => (file.type || "").startsWith("image/"));
+    for (const file of files.slice(0, 4)) void addImageAttachment(file);
+    if (files.length) {
+      setView("agents");
+      setNotice("Dropped image staged for Agent vision.");
+    }
+  }
 
   function downloadImageDataUrl(src: string, alt: string) {
     const link = document.createElement("a");
@@ -2267,6 +2307,7 @@ export function CommandApp() {
               }
               onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
               onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
+              onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -2553,7 +2594,20 @@ export function CommandApp() {
             >
               <p className="font-semibold">Bounded planner</p>
               <p className="mt-1 text-sm text-muted">Grok may call only three local reads: projects, chats, and notes. It stops after four steps or twenty seconds. It cannot use a shell, the network, or files. A live tool call was not verified in the last test. Run spends a model request.</p>
-              <textarea value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} placeholder="What should the planner look up?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+              <textarea
+                value={agentGoal}
+                onChange={(event) => setAgentGoal(event.target.value)}
+                placeholder="What should the planner look up? Drop an image here for vision."
+                rows={3}
+                className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm"
+                onDragOver={(event) => {
+                  if (event.dataTransfer?.types?.includes(AMCOS_IMAGE_DRAG_TYPE) || event.dataTransfer?.types?.includes("Files")) event.preventDefault();
+                }}
+                onDrop={(event) => acceptAgentImageDrop(event)}
+              />
+              {pendingImages.length > 0 && (
+                <p className="mt-2 text-xs text-muted">{pendingImages.length} image(s) staged for Agent vision. Run the planner to send them.</p>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || agentBusy}>Run planner</button>
                 <button
@@ -2572,7 +2626,7 @@ export function CommandApp() {
               {agentImages.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {agentImages.map((image, index) => (
-                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} />
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)} />
                   ))}
                 </div>
               )}
@@ -3254,6 +3308,7 @@ function ChatPane({
   onEditImagine,
   onSaveImage,
   onDownloadImage,
+  onUseAsAgentInput,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -3306,6 +3361,7 @@ function ChatPane({
   onEditImagine: (src: string) => void;
   onSaveImage: (src: string, alt: string) => void;
   onDownloadImage: (src: string, alt: string) => void;
+  onUseAsAgentInput: (src: string, alt: string) => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -3432,7 +3488,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
+                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onUseAsAgentInput={onUseAsAgentInput} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
