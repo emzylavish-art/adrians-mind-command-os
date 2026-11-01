@@ -5,6 +5,7 @@
  * Staggers starts, caps concurrent live launches, ease-out opacity/scale.
  * Interruptible clear mid-burst. Reduced-motion → static marks (amount=1, no stagger).
  * Particles/commit-comets owns meshes; Dashboard wires schedule → slot opacity.
+ * c15: maxConcurrent=0 schedules nothing; huge burst counts clamp (REA fps cliff).
  */
 import { clamp01, easeOutQuint, lerp } from "./ease.ts";
 import { finiteOr, sanitizeDt, clampInt } from "./sanitize.ts";
@@ -76,18 +77,24 @@ export function scheduleCometLaunchBurst(
 ): number {
   const o = opts ?? EMPTY_LAUNCH_OPTS;
   const stagger = Math.max(0, finiteOr(o.stagger ?? COMET_LAUNCH_STAGGER, COMET_LAUNCH_STAGGER));
-  const maxConc = clampInt(
-    o.maxConcurrent ?? COMET_LAUNCH_MAX_CONCURRENT,
-    1,
-    COMET_LAUNCH_MAX_BURST,
-    COMET_LAUNCH_MAX_CONCURRENT,
-  );
+  // Hacker c15: explicit maxConcurrent=0 means no new launches (REA: unbounded bursts hurt fps).
+  // Non-finite / omitted → default. Negative → 0.
+  let maxConc: number;
+  if (o.maxConcurrent === undefined || o.maxConcurrent === null) {
+    maxConc = COMET_LAUNCH_MAX_CONCURRENT;
+  } else if (!Number.isFinite(o.maxConcurrent as number) || (o.maxConcurrent as number) < 0) {
+    maxConc = 0;
+  } else if ((o.maxConcurrent as number) === 0) {
+    maxConc = 0;
+  } else {
+    maxConc = clampInt(o.maxConcurrent as number, 1, COMET_LAUNCH_MAX_BURST, COMET_LAUNCH_MAX_CONCURRENT);
+  }
+  // Huge burst counts clamp — never walk 10k times.
   const want = clampInt(count, 0, COMET_LAUNCH_MAX_BURST, 0);
   if (want <= 0) return 0;
 
   let live = 0;
   for (const s of state.slots) if (s.live) live++;
-  // Cap concurrent live launches; caller re-schedules when slots finish.
   const room = reducedMotion
     ? state.slots.length - live
     : Math.max(0, Math.min(maxConc - live, state.slots.length - live));
