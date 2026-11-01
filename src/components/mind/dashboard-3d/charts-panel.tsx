@@ -37,6 +37,9 @@ function SparkBars({ series }: { series: ChartSeries }) {
         return (
           <g key={`${p.label}-${i}`}>
             <rect x={x} y={y} width={barW} height={bh} rx={2} fill="rgba(125,211,252,0.75)" />
+            <text x={x + barW / 2} y={h - 2} textAnchor="middle" fill="rgba(226,232,240,0.85)" fontSize="8">
+              {p.label.length > 8 ? p.label.slice(0, 7) + "…" : p.label}
+            </text>
             <title>{`${p.label}: ${p.value} ${series.unit}`}</title>
           </g>
         );

@@ -339,6 +339,7 @@ export function DashboardApp() {
         <BuildingInteriorPanel
           fly={fly}
           projects={state.data.projects}
+          bots={state.data.bots}
           onClose={() => sendFly({ type: "ZOOM_OUT" })}
         />
       ) : null}

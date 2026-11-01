@@ -79,4 +79,36 @@ describe("notion-mirror (queue #9)", () => {
     assert.equal(cond.freshLabel, NO_MIRROR_SOURCE);
     assert.equal(freshnessLabel(30 * 60_000, false).includes("m"), true);
   });
+  it("lock fallback fills unmapped cosmos rows with real lock notes", () => {
+    const graph: NotionGraph = {
+      available: true,
+      mode: "snapshot",
+      generatedAt: "t",
+      pages: [],
+      edges: [],
+      botPageMap: {},
+      stats: { pages: 0, edges: 0, botsMapped: 0 },
+    };
+    const painter = bot("cosmos-painter", "Cosmos Painter Bot");
+    painter.lock = {
+      file: "dashboard-3d-visual-painter.lock",
+      owner: "Cosmos Painter Bot",
+      branch: "dashboard-3d-visual-painter",
+      status: "claimed",
+      claimed_at: "2026-11-01T19:20:19+01:00",
+      released_at: null,
+      commits: ["7a6e24f"],
+      notes: "Paused by user order",
+      worktree: "/workspace/mind-command-os-dashboard-painter",
+      raw: { heartbeat_at: "2026-11-01T19:20:19+01:00", task: "cycle paused" },
+    };
+    painter.notes = "Paused by user order";
+    const v = buildNotionMirrorView({ bots: [painter], graph, nowMs: NOW });
+    const row = v.rows[0]!;
+    assert.equal(row.pageId, null);
+    assert.equal(row.source, "lock");
+    assert.ok(row.freshLabel.startsWith("lock ·"));
+    assert.ok((row.title || "").includes("cycle paused") || (row.excerpt || "").includes("Paused"));
+  });
+
 });
