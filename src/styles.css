@@ -7761,9 +7761,11 @@ aside .text-\[10px\],
 }
 
 /* —— Evolution c123: nav/rail icon stroke+size unify + active-row glow —— */
-aside.rail nav button svg,
-aside.rail nav a svg,
-aside.rail .nav-item svg,
+/* Note: desktop sidebar is <aside> without .rail class; target aside nav + Primary. */
+aside nav button svg,
+aside nav a svg,
+aside .nav-item svg,
+aside.md\:w-64 nav button svg,
 nav[aria-label="Primary"] button svg,
 nav.fixed[aria-label="Primary"] button svg {
   width: 1rem !important;
@@ -7772,35 +7774,47 @@ nav.fixed[aria-label="Primary"] button svg {
   min-height: 1rem !important;
   stroke-width: 1.75px !important;
 }
-aside.rail nav button svg *,
-aside.rail nav a svg *,
-nav[aria-label="Primary"] button svg * {
+aside nav button svg *,
+aside nav a svg *,
+aside nav button svg path,
+aside nav button svg line,
+aside nav button svg circle,
+aside nav button svg polyline,
+aside nav button svg rect,
+nav[aria-label="Primary"] button svg *,
+nav[aria-label="Primary"] button svg path {
   stroke-width: 1.75px !important;
 }
-/* Active / current row: tonal pill + soft mono glow */
-aside.rail nav button[aria-current="page"],
-aside.rail nav button.bg-accent,
-aside.rail nav .nav-item.bg-accent,
-aside.rail nav button[aria-current="page"].nav-item {
+/* Active / current row: tonal pill + soft mono glow (beats purple-glow strippers) */
+aside nav button[aria-current="page"],
+aside nav button.bg-accent,
+aside nav button[class*="bg-accent"],
+aside nav .nav-item.bg-accent,
+aside nav button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
   background: #f4f4f5 !important;
   color: #09090b !important;
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.08),
-    0 0 24px rgb(255 255 255 / 0.12),
+    0 0 24px rgb(255 255 255 / 0.14),
+    0 0 40px rgb(255 255 255 / 0.06),
     inset 0 1px 0 rgb(255 255 255 / 0.65) !important;
 }
-aside.rail nav button[aria-current="page"] svg,
-aside.rail nav button.bg-accent svg,
-aside.rail nav button[aria-current="page"] svg * {
+aside nav button[aria-current="page"] svg,
+aside nav button.bg-accent svg,
+aside nav button[class*="bg-accent"] svg,
+aside nav button[aria-current="page"] svg *,
+aside nav button.bg-accent svg * {
   color: #09090b !important;
   stroke: currentColor !important;
+  stroke-width: 1.75px !important;
 }
 /* Inactive tonal separation */
-aside.rail nav button:not([aria-current="page"]):not(.bg-accent) {
+aside nav button:not([aria-current="page"]):not(.bg-accent):not([class*="bg-accent"]) {
   color: #b4bccb !important;
   background: transparent !important;
+  box-shadow: none !important;
 }
-aside.rail nav button:not([aria-current="page"]):not(.bg-accent):hover {
+aside nav button:not([aria-current="page"]):not(.bg-accent):not([class*="bg-accent"]):hover {
   background: rgb(255 255 255 / 0.06) !important;
   color: #e8ecf5 !important;
 }
@@ -7838,25 +7852,29 @@ nav.fixed[aria-label="Primary"] button.bg-accent {
 }
 
 /* —— Evolution c125: Systems rail block tonal separation —— */
-aside.rail .text-\[10px\].uppercase,
-aside.rail p.text-\[10px\],
-aside.rail span.text-\[10px\].font-semibold {
+aside .text-\[10px\].uppercase,
+aside p.text-\[10px\],
+aside span.text-\[10px\].font-semibold,
+aside .text-\[10px\].font-semibold {
   color: #9aa3b5 !important;
   letter-spacing: 0.08em !important;
   margin-top: 0.85rem !important;
   margin-bottom: 0.35rem !important;
 }
-aside.rail nav {
+aside nav {
   gap: 0.15rem !important;
 }
-aside.rail {
+aside.md\:flex,
+aside.md\:w-64,
+aside.fixed.inset-0 {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 28%),
     rgb(8 10 14 / 0.92) !important;
   border-right: 1px solid rgb(255 255 255 / 0.08) !important;
 }
-/* Bottom Primary icons already 16/1.75 — reinforce Systems set labels via shared nav buttons */
-nav.fixed[aria-label="Primary"] button svg {
+/* Bottom Primary icons already 16/1.75 — reinforce */
+nav.fixed[aria-label="Primary"] button svg,
+nav.fixed[aria-label="Primary"] button svg * {
   width: 1rem !important;
   height: 1rem !important;
   stroke-width: 1.75px !important;
