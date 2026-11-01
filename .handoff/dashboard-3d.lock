@@ -1,5 +1,6 @@
-owner: none
-cycle: 51
-released: 2026-11-01T23:46:38+01:00
+owner: 
+cycle: 52
+released: 2026-11-01T23:58:10+01:00
 branch: dashboard-3d
-note: hydration + Light#80 + Motion c19/c20; og skip; Gap#10-56 earlier
+tip: da340ef
+work: released after Gap#58/#57 GD#59-61 Light#83 full tests Notion
