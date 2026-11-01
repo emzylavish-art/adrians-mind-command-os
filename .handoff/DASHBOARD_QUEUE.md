@@ -143,10 +143,15 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 89 | **Gap Dispatcher #60 — Focus stage chip covers System weather** — reserve skybar padding; chip stays clear of title | **done** | c52 — .dash3d-skybar padding-right 9.5rem |
 | 90 | **Gap Dispatcher #61 — Compass dots clumped** — deterministic spread by real lane/bot data | **done** | c52 — minimap auto-span + lane/id de-overlap |
 | 91 | **Light #83 — Imagine key lift + meter badge wired** — createSceneKeyLiftPass after detailDim; badge behind ?dash3dDebug=1; hidden-tab suspend from 4496632 | **done** | c52 land postfx from 4496632 + universe-scene wire; tests registered |
-| 92 | **Light #84 — meter focused Imagine card rect** (reader maxRects 2→3) | **queued** | Light tip e74d051 next; needs Light lane then wire |
+| 92 | **Light #84/#92 — meter focused Imagine card rect + liftBackdrop** — setCardProbe(true) in rebuild; liftBackdrop prefers card; bf1ca41 target align | **done** | c53 land e046153 postfx + universe-scene wire; card-probe + dim-target-align tests |
 | 93 | **Motion c21 traveler trails wired** — stepTravelerTrails + focus-churn resume; register tests | **done** | c53 land ab17f6f + universe-scene wire |
 | 94 | **Bot surfaces: Recent/Lock commits + Queue + Notes from real sources** — known branches git log (cached); lane INTEGRATION queue; notion titles | **done** | c53 bot-branches + status enrich; attacker on git/queue |
 | 95 | **Hostile Notion title sanitize in Star Detail** (was #86) | **queued** | attacker follow-up |
+| 96 | **Gap Dispatcher #62 — Charts trust raw values** — coerce finite ≥0; compact labels; no NaN SVG | **done** | c53 SparkBars finiteChartValue + formatCompact |
+| 97 | **Gap Dispatcher #63 — Dense chart series overflow** — window last 28 visible marks; no invisible Tab stops | **done** | c53 CHART_VISIBLE_MAX window |
+| 98 | **Gap Dispatcher #64 — Chart focus tooltip** — shared visible tip on :focus-visible (not 1×1 foreignObject) | **done** | c53 chart-focus-tip |
+| 99 | **Perf — dynamic import shell** — lazy DashboardApp / UniverseScene / ChartsPanel; deferred health-sound; glass Suspense shell | **done** | c53; no vite.config / vercel.json edits (Grok Build owns) |
+| 100 | **Light #93 — card edge separation** | **queued** | Light tip e046153 follow-up |
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |

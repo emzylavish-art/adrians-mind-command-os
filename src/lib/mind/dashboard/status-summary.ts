@@ -14,8 +14,8 @@ export const STATUS_SUMMARY_MARK = "summary" as const;
 
 const MAX_TIMELINE_EVENTS = 48;
 const MAX_SKY_FEED = 24;
-const MAX_COMMITS = 72;
-const MAX_QUEUE = 64;
+export const MAX_COMMITS = 72;
+export const MAX_QUEUE = 64;
 const MAX_NOTE = 160;
 const MAX_PAGE_TITLE = 96;
 

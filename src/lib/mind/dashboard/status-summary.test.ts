@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { botDetailFromStatus, slimDashboardStatusForPoll } from "./status-summary.ts";
+import { MAX_COMMITS, MAX_QUEUE, botDetailFromStatus, slimDashboardStatusForPoll } from "./status-summary.ts";
 
 describe("status-summary Gap#59", () => {
   it("strips notion excerpts, caps timeline/commits/queue, keeps bot ids", () => {
@@ -53,8 +53,8 @@ describe("status-summary Gap#59", () => {
     };
     assert.equal(view.notionGraph.pages[0]!.excerpt, "");
     assert.ok((view.timeline?.events.length ?? 0) <= 48);
-    assert.ok(view.commits.length <= 24);
-    assert.ok((view.fleetPlan?.queue.length ?? 0) <= 16);
+    assert.ok(view.commits.length <= MAX_COMMITS);
+    assert.ok((view.fleetPlan?.queue.length ?? 0) <= MAX_QUEUE);
     assert.equal(view.bots[0]!.id, "logic");
     assert.ok(JSON.stringify(slim).length < JSON.stringify(fat).length);
   });
