@@ -2,6 +2,23 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
+## Status vs origin/dashboard-3d (verified cycle 11)
+
+| API | Status | Evidence |
+|-----|--------|----------|
+| `createPainterlyKit` + `painterlyPass` | **done** | `universe-scene` creates kit, `composer.addPass` |
+| `createSkyMaterial` | **done** | sky mesh (may swap to Imagine backdrop) |
+| `createBotStar` | **done** | `rebuildBots` |
+| `createImagineNodeMaterial` / `setImagineNodeMap` | **done** | portraits, characters, scene arts |
+| `createLorePlaqueMaterial` + text atlas | **done** | lock notes plaques |
+| `createInkEdges` | **done** | `rebuildEdges` (Dashboard Bot wired) |
+| `createLaneNebulae` | **done** | `rebuildNebulae` (Dashboard Bot wired) |
+| `setPassHealth` / `resizePass` | **done** | frame loop + `onResize` |
+| `createBuildingBrushMaterial` (+ c10 `uWindowGlow`) | **done** | `city-layer` rebuild with real `lit/floors` |
+| `tickPainterlyKit(kit, t, { reducedMotion })` | **pending** | scene calls `tickPainterlyKit(kit, t)` only inside `if (!reducedMotion)` — opts API unused |
+| `setBuildingProgress` / `setBuildingWindowGlow` | **pending** | city sets progress only at material create; no live setter |
+| `attachPainterlyContextHandlers` | check scene | confirm detach on unmount |
+
 ```ts
 import {
   createPainterlyKit,
@@ -14,17 +31,10 @@ import {
 const kit = createPainterlyKit({ pass: { amount: 0.42 } });
 composer.addPass(kit.painterlyPass);
 const detachCtx = attachPainterlyContextHandlers(renderer.domElement, kit);
-// stars: kit.createStarMaterial({ color: healthColor })
-// sky: kit.createSkyMaterial()  // tracked + disposed
-// lore: kit.createLorePlaqueMaterial({ accent: healthColor })
-// edges: kit.createInkEdges(edges)  // batched ink-wash ribbons (≤4 draws); or createInkWashEdgeMaterial
-// Imagine people/characters/scenes (replace MeshBasicMaterial/SpriteMaterial on portraits):
-//   const mat = kit.createImagineNodeMaterial({ accent: healthColor }); // wash fallback until loaded
-//   loader.load(url, (tex) => { tex.colorSpace = SRGB; setImagineNodeMap(mat, tex); });
-//   // glow sprites that use kit.starSpriteTexture MUST register:
-//   glowMat.map = kit.starSpriteTexture; kit.bindSharedTexture(glowMat, "starSprite");
-// buildings: kit.createBuildingMaterial({ floors, progress })
-// animate: tickPainterlyKit(kit, t)
+// WIRED: stars kit.createBotStar; sky kit.createSkyMaterial; lore; Imagine; inkEdges; laneNebulae
+// WIRED: kit.setPassHealth({ healthy, total, reducedMotion }); kit.resizePass(w,h,dpr)
+// PENDING: tickPainterlyKit(kit, t, { reducedMotion }); // freeze clocks without skipping tick
+// PENDING: setBuildingProgress(mat, lit/floors) for live city updates without full rebuild
 // cleanup: detachCtx(); disposePainterlyKit(kit);
 ```
 
@@ -116,28 +126,16 @@ edgeGroup.add(ink.group);
 - Batches by health tone → **≤4 draw calls** (not one mesh per edge).
 - Skips zero-length / coincident / NaN-sanitized degenerates; truncates at `INK_EDGES_MAX` (512).
 - Do **not** call `createInkWashEdgeMaterial` per edge when using `createInkEdges`.
-- WebGL feedback-loop on `/dashboard` is **not** painter-lane (god-ray/depth RT) — see audit `c8-feedback-loop-evidence.md`.
+- ~~Wire `createInkEdges`~~ — **done on origin/dashboard-3d**. WebGL feedback-loop evidence remains for god-ray/depth RT.
 
 
 ## c9 — texture budget + Imagine race + lane nebulae
 
-```ts
-// GPU budget (no fabricated dims — unknown sizes count as 0):
-const report = kit.textureBudget(); // { bytes, budget, overBudget, items }
-// Late TextureLoader after rebuild: releasePainterlyMaterial marks Imagine released;
-// setImagineNodeMap → reason "material-released" (no owned downscale leak).
+~~Wire `createLaneNebulae` in `rebuildNebulae`~~ — **done on origin/dashboard-3d**.
 
-// rebuildNebulae — replace MeshBasicMaterial tint spheres:
-const neb = kit.createLaneNebulae(
-  status.constellations.map((l) => ({
-    health: l.health,
-    center: l.center,
-    id: l.id,
-  })),
-);
-nebulaGroup.clear(); // after prior neb.dispose()
-nebulaGroup.add(neb.group);
-// on poll: neb.update(...); cleanup: neb.dispose();
+```ts
+const report = kit.textureBudget(); // { bytes, budget, overBudget, items }
+// Late TextureLoader: setImagineNodeMap → "material-released" after releasePainterlyMaterial
 ```
 
 

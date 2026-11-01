@@ -266,7 +266,8 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       return setPainterlyPassHealth(kit.painterlyPass, input);
     },
     resizePass(width, height, dpr = 1) {
-      if (kit.disposed) return;
+      // HACKER (c11): mid context-loss resize must not thrash pass RTs
+      if (kit.disposed || kit.contextLost) return;
       resizePainterlyPass(kit.painterlyPass, width, height, dpr);
     },
     createBotStar(starOpts) {
