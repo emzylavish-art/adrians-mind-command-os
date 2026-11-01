@@ -1739,3 +1739,39 @@ html[data-theme="light"] .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article s
   background: rgb(9 9 11 / 0.05);
   color: #3f3f46 !important;
 }
+
+/* —— Cycle 20: chat command hero integration strip density (mono) —— */
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 {
+  gap: 1.1rem !important;
+}
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 > .grid.gap-2 {
+  margin-top: 0.15rem;
+}
+/* Notice toast sits above board — keep strip visually grouped */
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 > .flex.gap-2.overflow-x-auto.pb-1 {
+  padding-bottom: 0.35rem;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article {
+  min-height: 8.5rem;
+}
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article > p.mt-2.text-sm.text-muted {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Soft section label before board via first article group feel */
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 > .grid.gap-2.sm\:grid-cols-2::before {
+  content: "Services";
+  grid-column: 1 / -1;
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  margin-bottom: 0.15rem;
+}
+html[data-theme="light"] .mx-auto.flex.max-w-6xl.flex-col.gap-4 > .grid.gap-2.sm\:grid-cols-2::before {
+  color: #52525b;
+}
