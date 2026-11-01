@@ -28,3 +28,14 @@ Notion page https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d used (Erro
 - User error: Orchestrator needs Ollama running locally; not reachable at <url>. Switch Voice mode to Direct, or start Ollama and try again.
 - Unblock: install + ollama serve on :11434, ollama pull llama3.2 (or set model), then use Orchestrator; until then use Direct
 - Notion: appended to page 40bb95f3-3e42-814a-acf8-c3281b4f528d
+
+## 2026-11-01T12:43:00+01:00 — Voice Integration Bot — click-test fixes + barge-in (NOT complete)
+- Commits: 6ae7ce1, 412074d, 060cde8 (pushed)
+- Dev: http://127.0.0.1:8091/ restarted; curl 200
+- Dictation: immediate pill with Stop/Cancel; mic toggle-stop; overlay cancels dictation; No speech detected; dictation-status isolated from overlay
+- Waveform: dictation RMS labels; levels→bars test
+- Orchestrator: probe on toggle + overlay; voice-mode-hint "Ollama not reachable"
+- Barge-in: speech_started / RMS 150ms / voice-interrupt → Interrupted — listening
+- Tests: typecheck; 239/239; build; no styles.css/voice-ui
+- Tester barge-in: voice-overlay-open → get TTS speaking → voice-interrupt or talk over → Interrupted — listening
+- Notion: page 40bb95f3-3e42-814a-acf8-c3281b4f528d
