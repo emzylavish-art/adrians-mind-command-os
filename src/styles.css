@@ -7117,3 +7117,48 @@ aside.rail nav,
   overscroll-behavior: contain !important;
   -webkit-overflow-scrolling: touch !important;
 }
+
+/* —— Evolution c105: phone landscape safe areas —— */
+@media (max-height: 480px) and (orientation: landscape) {
+  .shell,
+  .main-stage,
+  .page-shell {
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+  }
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    padding-left: max(0.35rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.35rem, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: max(0.15rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+    bottom: max(0.35rem, env(safe-area-inset-bottom, 0px)) !important;
+    width: auto !important;
+  }
+  .floating-composer,
+  .composer-dock {
+    margin-left: max(0px, env(safe-area-inset-left, 0px));
+    margin-right: max(0px, env(safe-area-inset-right, 0px));
+  }
+  .topbar {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+    padding-top: max(0.35rem, env(safe-area-inset-top, 0px)) !important;
+  }
+}
+/* Portrait phone: ensure left/right safe areas on fixed chrome too */
+@media (max-width: 767.98px) {
+  .topbar {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+  }
+  .floating-composer,
+  section[data-composer="floating"] {
+    margin-left: max(0.5rem, env(safe-area-inset-left, 0px));
+    margin-right: max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+}
