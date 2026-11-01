@@ -39,6 +39,11 @@ export const DIM_PAD_PX = 10;
 export const DIM_LUM_LO = 0.12;
 export const DIM_LUM_HI = 0.55;
 export const DIM_MAX_RECTS = 2;
+/**
+ * Hacker (cycle after #83): caller rect lists (and index-aligned contrast
+ * targets) may be longer than DIM_MAX_RECTS before junk rects are dropped.
+ */
+export const DIM_MAX_CALLER_RECTS = 8;
 /** #68: measured mode may dim harder than the static window when WCAG needs it. */
 export const DIM_MEASURED_MAX = 0.7;
 /** Time constant for easing between static / measured strengths. */
@@ -83,6 +88,13 @@ export type ContrastReport = {
   perRectStrength: number[];
   /** #80: meter readback cost back-off (real begin→resolve timings). */
   backoff: MeterBackoff;
+  /**
+   * Hacker (cycle after #83): caller index (into the list given to setRects /
+   * setContrastTarget) of each ACTIVE rect. perRect / perRectPlans /
+   * perRectStrength are indexed by active rect; junk / off-canvas / zero-area
+   * caller rects are dropped, so active ≠ caller index in general.
+   */
+  rectSource: number[];
 };
 
 /**
@@ -281,6 +293,8 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
   u.holeUv.value = new THREE.Vector2(0.5, 0.5);
   let disposed = false;
   let uvRects: UvRect[] = [];
+  /** Caller index of each active uvRect (targets are caller-aligned). */
+  let rectSrc: number[] = [];
   let level = 0;
   let target = 0;
   let from = 0;
@@ -304,6 +318,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     perRectPlans: [],
     perRectStrength: [],
     backoff: meter.backoff,
+    rectSource: [],
   };
 
   /** Plan for one rect from its own measured stats (text, and lines if given). */
@@ -344,7 +359,9 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     const plans: (ContrastPlan | null)[] = [];
     const strengths: number[] = [];
     for (let i = 0; i < Math.max(1, uvRects.length); i++) {
-      const t = contrastTarget?.[i] ?? null;
+      // Targets are aligned to the CALLER's list; a dropped rect must not
+      // shift the next rect onto its neighbour's target (hacker, after #83).
+      const t = contrastTarget?.[rectSrc[i] ?? i] ?? null;
       const st = m?.perRect[i] ?? null;
       const plan = t && st ? planFor(t, st.p90) : null;
       plans.push(plan);
@@ -366,6 +383,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       perRectPlans: plans,
       perRectStrength: strengths,
       backoff: meter.backoff,
+      rectSource: rectSrc.slice(),
     };
     return strengths;
   };
@@ -442,13 +460,16 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     setRects(rects, viewport, opts = {}) {
       if (disposed) return;
       reduced = !!opts.reducedMotion;
-      const next = (rects ?? [])
-        .map((r) => (viewport ? rectToUv(r, viewport) : null))
-        .filter((r): r is UvRect => !!r)
+      const kept = (rects ?? [])
+        .slice(0, DIM_MAX_CALLER_RECTS)
+        .map((r, src) => ({ uv: viewport ? rectToUv(r, viewport) : null, src }))
+        .filter((e): e is { uv: UvRect; src: number } => !!e.uv)
         .slice(0, DIM_MAX_RECTS);
+      const next = kept.map((e) => e.uv);
       if (next.length) {
         // Keep the previous rects while fading out; only overwrite with real ones.
         uvRects = next;
+        rectSrc = kept.map((e) => e.src);
         next.forEach((r, i) => u.rects.value[i]!.set(r[0], r[1], r[2], r[3]));
         u.rectCount.value = next.length;
         u.feather.value.set(DIM_FEATHER_PX / viewport.width, DIM_FEATHER_PX / viewport.height);
@@ -465,6 +486,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       }
       if (!next.length && level <= 0.001) {
         uvRects = [];
+        rectSrc = [];
         u.rectCount.value = 0;
       }
       apply();
@@ -496,9 +518,9 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
         return okLines || !t.lines ? t : { ...t, lines: null }; // junk line colour → text-only, never guessed
       };
       const list = Array.isArray(next)
-        ? (next as readonly (ContrastTarget | null | undefined)[]).slice(0, DIM_MAX_RECTS).map(valid)
+        ? (next as readonly (ContrastTarget | null | undefined)[]).slice(0, DIM_MAX_CALLER_RECTS).map(valid)
         : next
-          ? Array.from({ length: DIM_MAX_RECTS }, () => valid(next as ContrastTarget))
+          ? Array.from({ length: DIM_MAX_CALLER_RECTS }, () => valid(next as ContrastTarget))
           : [];
       contrastTarget = list.some(Boolean) ? list : null;
       if (!contrastTarget) meter.reset();
@@ -526,6 +548,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       }
       if (target === 0 && level <= 0.001) {
         uvRects = [];
+        rectSrc = [];
         u.rectCount.value = 0;
       }
       apply(dt);
@@ -537,6 +560,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       level = 0;
       target = 0;
       uvRects = [];
+      rectSrc = [];
       u.rectCount.value = 0;
       contrastTarget = null;
       meter.reset();
