@@ -1,23 +1,27 @@
 import * as THREE from "three";
+import { clampInt, finiteOr, sanitizeTime } from "../motion/sanitize.ts";
+
+export const COMET_SEGMENTS_MIN = 2;
+export const COMET_SEGMENTS_DEFAULT = 24;
+export const COMET_MAX_DEFAULT = 6;
+export const COMET_MAX_HARD = 24;
 
 export type CommitTrailInput = {
-  sha: string;
+  sha?: string | null;
   subject?: string;
 };
 
 export type CommitCometsHandle = {
   group: THREE.Group;
   count: number;
+  disposed: boolean;
   update: (tSeconds: number, reducedMotion: boolean) => void;
   dispose: () => void;
 };
 
 export type CreateCommitCometsOpts = {
-  /** Max comets (LOD). Default 6. */
   max?: number;
-  /** Arc radius. */
   radius?: number;
-  /** Trail point count per comet. */
   segments?: number;
 };
 
@@ -38,29 +42,41 @@ function hashHue(sha: string): number {
 }
 
 /**
- * Commit → comet trails. Thin Line geometries with preallocated position buffers.
- * Prefer feeding real `status.commits` — never fabricate SHAs.
+ * Commit → comet trails. segments clamped ≥2 (avoids /0 → NaN arcs).
+ * dispose() idempotent; update() after dispose is a no-op.
+ * Skips commits with empty/missing sha rather than fabricating.
  */
 export function createCommitComets(
   scene: THREE.Scene,
-  commits: readonly CommitTrailInput[],
+  commits: readonly CommitTrailInput[] | null | undefined,
   opts: CreateCommitCometsOpts = {},
 ): CommitCometsHandle {
-  const max = opts.max ?? 6;
-  const radius = opts.radius ?? 14;
-  const segments = opts.segments ?? 24;
+  const max = clampInt(opts.max ?? COMET_MAX_DEFAULT, 0, COMET_MAX_HARD, COMET_MAX_DEFAULT);
+  const radius = Math.max(0.01, finiteOr(opts.radius ?? 14, 14));
+  const segments = clampInt(opts.segments ?? COMET_SEGMENTS_DEFAULT, COMET_SEGMENTS_MIN, 128, COMET_SEGMENTS_DEFAULT);
   const group = new THREE.Group();
   group.name = "motion-commit-comets";
   scene.add(group);
 
-  const list = commits.slice(0, max);
+  const raw = Array.isArray(commits) ? commits : [];
+  const list = raw
+    .filter((c) => c && typeof c.sha === "string" && c.sha.length > 0)
+    .slice(0, max);
+
   const comets: CometState[] = [];
+  const handle: CommitCometsHandle = {
+    group,
+    count: 0,
+    disposed: false,
+    update: () => {},
+    dispose: () => {},
+  };
 
   list.forEach((c, i) => {
     const positions = new Float32Array(segments * 3);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const hue = hashHue(c.sha || String(i));
+    const hue = hashHue(c.sha!);
     const color = new THREE.Color(`hsl(${hue}, 70%, 65%)`);
     const mat = new THREE.LineBasicMaterial({
       color,
@@ -80,11 +96,13 @@ export function createCommitComets(
       positions,
     });
   });
+  handle.count = comets.length;
 
   const writeArc = (c: CometState, head: number) => {
     const pos = c.positions;
+    const denom = segments - 1; // >= 1 by clamp
     for (let s = 0; s < segments; s++) {
-      const u = s / (segments - 1);
+      const u = s / denom;
       const ang = head - u * 0.85;
       const r = radius * (0.85 + 0.15 * Math.sin(ang * 0.5 + c.phase));
       const x = Math.cos(ang + c.yaw) * r;
@@ -99,30 +117,34 @@ export function createCommitComets(
     attr.needsUpdate = true;
   };
 
-  // Initial static pose
   for (const c of comets) writeArc(c, c.phase);
 
-  const update = (tSeconds: number, reducedMotion: boolean) => {
+  handle.update = (tSeconds: number, reducedMotion: boolean) => {
+    if (handle.disposed) return;
     if (reducedMotion) {
       for (const c of comets) {
         (c.line.material as THREE.LineBasicMaterial).opacity = 0.28;
       }
       return;
     }
+    const t = sanitizeTime(tSeconds);
     for (const c of comets) {
       (c.line.material as THREE.LineBasicMaterial).opacity = 0.55;
-      writeArc(c, tSeconds * c.speed + c.phase);
+      writeArc(c, t * c.speed + c.phase);
     }
   };
 
-  const dispose = () => {
+  handle.dispose = () => {
+    if (handle.disposed) return;
+    handle.disposed = true;
     for (const c of comets) {
       group.remove(c.line);
       c.line.geometry.dispose();
       (c.line.material as THREE.Material).dispose();
     }
+    comets.length = 0;
     scene.remove(group);
   };
 
-  return { group, count: comets.length, update, dispose };
+  return handle;
 }

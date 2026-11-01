@@ -1,7 +1,9 @@
 /** Shared transition / camera-adjacent easing (zero-alloc friendly). */
+import { finiteOr, sanitizeDt } from "./sanitize.ts";
 
 export function clamp01(t: number): number {
-  return t < 0 ? 0 : t > 1 ? 1 : t;
+  const x = finiteOr(t, 0);
+  return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
 export function easeInOutCubic(t: number): number {
@@ -19,11 +21,16 @@ export function smootherstep(t: number): number {
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 
-/** Framerate-independent exponential damp toward target. */
+/** Framerate-independent exponential damp toward target. Caps dt for tab resume. */
 export function damp(current: number, target: number, lambda: number, dt: number): number {
-  return target + (current - target) * Math.exp(-lambda * Math.max(0, dt));
+  const c = finiteOr(current, 0);
+  const tgt = finiteOr(target, c);
+  const lam = finiteOr(lambda, 0);
+  if (lam <= 0) return tgt;
+  const d = sanitizeDt(dt, 0.05);
+  return tgt + (c - tgt) * Math.exp(-lam * d);
 }
 
 export function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * clamp01(t);
+  return finiteOr(a, 0) + (finiteOr(b, 0) - finiteOr(a, 0)) * clamp01(t);
 }

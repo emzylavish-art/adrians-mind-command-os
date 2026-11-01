@@ -1,4 +1,5 @@
 /** Health-aware star pulse math — no allocations in the hot path. */
+import { finiteOr, sanitizeTime } from "./sanitize.ts";
 
 export type PulseHealth = "healthy" | "stalled" | "blocked" | "idle";
 
@@ -44,32 +45,43 @@ const EMISSIVE_AMP: Record<PulseHealth, number> = {
   idle: 0,
 };
 
+const HEALTHS: ReadonlySet<string> = new Set(["healthy", "stalled", "blocked", "idle"]);
+
+export function normalizePulseHealth(health: string | null | undefined): PulseHealth {
+  if (health && HEALTHS.has(health)) return health as PulseHealth;
+  return "idle";
+}
+
 /** Sample pulse into a reusable out object (callers keep one PulseSample). */
 export function sampleStarPulse(
   out: PulseSample,
   tSeconds: number,
   phase: number,
-  health: PulseHealth,
+  health: PulseHealth | string,
   reducedMotion: boolean,
 ): PulseSample {
-  if (reducedMotion || health === "idle") {
+  const h = normalizePulseHealth(health);
+  if (reducedMotion || h === "idle") {
     out.scale = 1;
-    out.glow = health === "idle" ? 1.6 : GLOW_BASE;
-    out.emissive = EMISSIVE_BASE[health];
+    out.glow = h === "idle" ? 1.6 : GLOW_BASE;
+    out.emissive = EMISSIVE_BASE[h];
     return out;
   }
-  const speed = SPEED[health];
-  const wave = Math.sin(tSeconds * speed + phase);
-  out.scale = 1 + wave * AMP[health];
-  out.glow = GLOW_BASE + wave * GLOW_AMP[health];
-  out.emissive = EMISSIVE_BASE[health] + Math.sin(tSeconds * (speed + 0.8) + phase) * EMISSIVE_AMP[health];
+  const t = sanitizeTime(tSeconds);
+  const ph = finiteOr(phase, 0);
+  const speed = SPEED[h];
+  const wave = Math.sin(t * speed + ph);
+  out.scale = 1 + wave * AMP[h];
+  out.glow = GLOW_BASE + wave * GLOW_AMP[h];
+  out.emissive = EMISSIVE_BASE[h] + Math.sin(t * (speed + 0.8) + ph) * EMISSIVE_AMP[h];
   return out;
 }
 
-export function pulsePhaseFromId(id: string): number {
+export function pulsePhaseFromId(id: string | null | undefined): number {
+  const s = id ?? "";
   let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   const u = (h >>> 0) / 4294967296;

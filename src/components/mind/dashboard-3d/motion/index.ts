@@ -6,16 +6,24 @@ export {
   easeOutQuint,
   lerp,
   smootherstep,
-} from "./ease";
+} from "./ease.ts";
 export {
+  normalizePulseHealth,
   pulsePhaseFromId,
   sampleStarPulse,
   type PulseHealth,
   type PulseSample,
-} from "./star-pulse";
+} from "./star-pulse.ts";
 export {
   sampleOrbitDrift,
   type OrbitDriftOpts,
   type Xyz,
-} from "./orbit-drift";
-export { motionScale, prefersReducedMotion } from "./reduced-motion";
+} from "./orbit-drift.ts";
+export { motionScale, prefersReducedMotion } from "./reduced-motion.ts";
+export {
+  clampInt,
+  finiteOr,
+  finiteXyz,
+  sanitizeDt,
+  sanitizeTime,
+} from "./sanitize.ts";
