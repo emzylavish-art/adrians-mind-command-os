@@ -4461,3 +4461,41 @@ html[data-theme="light"] .dash3d-chart-card svg line {
   background-size: auto, 220px 220px, 320px 320px !important;
   background-blend-mode: soft-light, soft-light, soft-light !important;
 }
+
+/* —— Cycle 41: rail workspace icon mono (hardcoded fills / emoji-like marks) —— */
+aside.rail nav button,
+aside.rail nav a,
+aside.rail [class*="text-"] {
+  color: #d4d4d8 !important;
+}
+aside.rail nav button.bg-accent,
+aside.rail nav button.bg-accent * {
+  color: #09090b !important;
+}
+aside.rail nav svg *,
+aside.rail nav button svg * {
+  stroke: currentColor !important;
+  fill: currentColor !important;
+  color: inherit !important;
+}
+/* Prefer outline icons: if fill paints blobs, keep muted gray */
+aside.rail nav button:not(.bg-accent) svg *[fill]:not([fill="none"]) {
+  fill: #a1a1aa !important;
+  stroke: #a1a1aa !important;
+}
+aside.rail nav .text-info,
+aside.rail nav .text-ok,
+aside.rail nav .text-warn,
+aside.rail nav .text-danger,
+aside.rail nav .text-accent {
+  color: #d4d4d8 !important;
+}
+/* Logo exception */
+aside.rail .logo-mark,
+aside.rail .logo-badge,
+aside.rail span.grid.size-11.rounded-2xl,
+aside.rail span.grid.size-11.rounded-2xl * {
+  color: #fff !important;
+  fill: #fff !important;
+  background: #7c5cff !important;
+}
