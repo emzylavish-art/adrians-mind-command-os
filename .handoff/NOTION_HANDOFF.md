@@ -386,5 +386,6 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Lock: error-banners-gap-memory-manager.lock; memory-ux locks done/released.
 - Fix: memory-action.ts; MemoryActionFailureBanner + onceRetry of identical save_new/save_edit/delete params; optional onFailure (command-app mount still forbidden).
 - Checks: typecheck pass; TS 823/825 (2 pre-existing); lint 0e; build pass.
-- Notion: (pending)
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e4281ba9ee0c9041e792007
+- Pushed origin/error-banners → 464fe8f9ffbbcd700e649ed7e565dc9351e8b524
 - Lock releasing.
