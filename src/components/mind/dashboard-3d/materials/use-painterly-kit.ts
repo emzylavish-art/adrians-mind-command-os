@@ -32,6 +32,7 @@ import {
 import {
   createLorePlaqueMaterial as createLorePlaqueMaterialImpl,
   tickLorePlaqueMaterial,
+  disposeLorePlaqueOwnedAtlas,
   type LorePlaqueOptions,
 } from "./lore-plaque.ts";
 import {
@@ -43,6 +44,7 @@ import {
   createImagineNodeMaterial as createImagineNodeMaterialImpl,
   tickImagineNodeMaterial,
   setImagineNodePaperMap,
+  disposeImagineNodeOwnedMaps,
   type ImagineNodeOptions,
 } from "./imagine-node.ts";
 import { createNebulaSkyMaterial, createNebulaTexture, type NebulaTextureOptions } from "./nebula-sky.ts";
@@ -259,7 +261,11 @@ export function disposePainterlyKit(kit: PainterlyKit): void {
   kit.disposed = true;
   kit.starSpriteTexture.dispose();
   kit.paperGrainTexture.dispose();
-  for (const m of kit.tracked) m.dispose();
+  for (const m of kit.tracked) {
+    if (m.name === "ImagineNodeMaterial") disposeImagineNodeOwnedMaps(m);
+    if (m.name === "LorePlaqueMaterial") disposeLorePlaqueOwnedAtlas(m);
+    m.dispose();
+  }
   kit.tracked.length = 0;
   for (const sky of kit.trackedSkies) {
     sky.map?.dispose();
@@ -284,6 +290,12 @@ export function releasePainterlyMaterial(
     // Drop texture bindings for this material
     for (let b = kit.textureBindings.length - 1; b >= 0; b--) {
       if (kit.textureBindings[b]!.material === mat) kit.textureBindings.splice(b, 1);
+    }
+    if ((mat as THREE.ShaderMaterial).name === "ImagineNodeMaterial") {
+      disposeImagineNodeOwnedMaps(mat as THREE.ShaderMaterial);
+    }
+    if ((mat as THREE.ShaderMaterial).name === "LorePlaqueMaterial") {
+      disposeLorePlaqueOwnedAtlas(mat as THREE.ShaderMaterial);
     }
     mat.dispose();
     return true;
