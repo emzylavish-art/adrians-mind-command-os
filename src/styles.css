@@ -7412,3 +7412,21 @@ span[class*="124_92_255"]:not(.logo-mark):not(.logo-badge) {
   border: 1px solid rgb(255 255 255 / 0.14) !important;
   background: rgb(255 255 255 / 0.06) !important;
 }
+
+/* —— Evolution c114: mobile focused composer stays bottom-anchored (owner-video #9) —— */
+@media (max-width: 767.98px) {
+  .floating-composer:focus-within,
+  .composer-dock:focus-within,
+  section[data-composer="floating"]:focus-within {
+    position: fixed !important;
+    left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    margin: 0 !important;
+    max-height: min(70vh, 28rem) !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    z-index: 47 !important;
+  }
+}
