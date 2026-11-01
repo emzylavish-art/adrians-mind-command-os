@@ -494,3 +494,29 @@
 }
 .dash3d-money-warn li[data-level="warn"] { color: #fbbf24; }
 .dash3d-money-warn li[data-level="crit"] { color: #fb7185; }
+
+
+/* Real-data charts */
+.dash3d-charts-panel {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 4.5rem;
+  width: min(280px, 34vw);
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  z-index: 6;
+  pointer-events: auto;
+  padding: 0.55rem 0.7rem 0.65rem;
+}
+.dash3d-charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.dash3d-chart-card h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
