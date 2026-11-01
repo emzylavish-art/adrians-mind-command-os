@@ -3901,3 +3901,36 @@ button.grid.size-11,
     height: 44px !important;
   }
 }
+
+/* —— Blueprint c44: focus-visible rings + safe-area on fixed chrome —— */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.composer-bar__plus:focus-visible,
+.composer-bar__model:focus-visible,
+.composer-speak-pill:focus-visible,
+aside.rail nav button:focus-visible {
+  outline: 2px solid rgb(255 255 255 / 0.9) !important;
+  outline-offset: 2px !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] [role="button"]:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] textarea:focus-visible {
+  outline-color: rgb(9 9 11 / 0.9) !important;
+}
+.composer-bar.is-fixed,
+.composer-bar.is-fixed .composer-bar__safe,
+.composer-bar.is-fixed .composer-bar__card,
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+section.composer-dock {
+  padding-left: max(0px, env(safe-area-inset-left)) !important;
+  padding-right: max(0px, env(safe-area-inset-right)) !important;
+}
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+  padding-bottom: max(0.15rem, env(safe-area-inset-bottom)) !important;
+}
