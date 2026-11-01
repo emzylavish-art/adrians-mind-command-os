@@ -63,7 +63,7 @@ export function resumeTraveler(state: TravelerEaseState): void {
   state.paused = false;
 }
 
-/** Pure polyline sample (mirrors dashboard sky-flow; kept in-lane). */
+/** Pure polyline sample (mirrors dashboard sky-flow; kept in-lane). O(1), no alloc. */
 export function sampleTravelerPolyline(
   out: TravelerXyz,
   points: ReadonlyArray<Readonly<TravelerXyz>>,
@@ -96,9 +96,16 @@ export function sampleTravelerPolyline(
   const ax = finiteOr(a.x, 0);
   const ay = finiteOr(a.y, 0);
   const az = finiteOr(a.z, 0);
-  const bx = finiteOr(b.x, ax);
-  const by = finiteOr(b.y, ay);
-  const bz = finiteOr(b.z, az);
+  let bx = finiteOr(b.x, ax);
+  let by = finiteOr(b.y, ay);
+  let bz = finiteOr(b.z, az);
+  // Hacker c13: zero-length / duplicate consecutive → park on A (no NaN lerp).
+  if (Math.abs(bx - ax) < 1e-12 && Math.abs(by - ay) < 1e-12 && Math.abs(bz - az) < 1e-12) {
+    out.x = ax;
+    out.y = ay;
+    out.z = az;
+    return out;
+  }
   out.x = lerp(ax, bx, local);
   out.y = lerp(ay, by, local);
   out.z = lerp(az, bz, local);
