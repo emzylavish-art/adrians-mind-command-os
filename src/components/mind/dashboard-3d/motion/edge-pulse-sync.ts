@@ -112,7 +112,12 @@ export function stepEdgePulseSync(
     return out;
   }
 
-  if (reducedMotion) {
+  // Hacker c12: self-loop / missing endpoints = zero-length edge → static mid highlight.
+  const from = normalizeId(fromId);
+  const to = normalizeId(toId);
+  const degenerate = from == null || to == null || from === to;
+
+  if (reducedMotion || degenerate) {
     state.travel = 0;
     out.travel = 0.5;
     out.pulse = 1;
@@ -122,9 +127,9 @@ export function stepEdgePulseSync(
   }
 
   const t = clock.map(tSeconds);
-  const towardTo = edgeTravelTowardTo(fromId, toId, focusId);
+  const towardTo = edgeTravelTowardTo(from, to, focusId);
   // Phase from the destination endpoint so wave locks to that star's pulse phase.
-  const destId = towardTo ? toId : fromId;
+  const destId = towardTo ? to : from;
   const phase = characterPhaseFromId(destId);
   const wave = Math.sin(t * pulseSpeed + phase);
   out.pulse = 1 + wave * amp;

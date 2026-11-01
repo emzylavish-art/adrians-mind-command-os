@@ -133,17 +133,23 @@ export function createMotionClock(opts: MotionClockOpts = {}): MotionClock {
  * to raw wall time and teleports stars/orbits/dust still ticking on another mount.
  * Use `createMotionClock()` when you need a private, resettable clock (tests, isolated scenes).
  */
-const _sharedMotionClockInner: MotionClock = createMotionClock();
+// Hacker c12: lazy singleton — importing motion-clock / star-pulse must not construct
+// a clock until first map()/hardReset (tree-shaking / no eager side effect).
+let _sharedMotionClockInner: MotionClock | null = null;
+function sharedInner(): MotionClock {
+  if (_sharedMotionClockInner == null) _sharedMotionClockInner = createMotionClock();
+  return _sharedMotionClockInner;
+}
 export const sharedMotionClock: MotionClock = {
-  map: (wallSeconds: number) => _sharedMotionClockInner.map(wallSeconds),
+  map: (wallSeconds: number) => sharedInner().map(wallSeconds),
   get time() {
-    return _sharedMotionClockInner.time;
+    return sharedInner().time;
   },
   get lastWallDt() {
-    return _sharedMotionClockInner.lastWallDt;
+    return sharedInner().lastWallDt;
   },
   get anchorCount() {
-    return _sharedMotionClockInner.anchorCount;
+    return sharedInner().anchorCount;
   },
   reset() {
     /* intentionally empty — see comment above */
@@ -158,5 +164,5 @@ export const sharedMotionClock: MotionClock = {
  * Grep of origin/dashboard-3d (c8): nothing calls `sharedMotionClock.reset()` for effect.
  */
 export function hardResetSharedMotionClockForTests(): void {
-  _sharedMotionClockInner.reset();
+  sharedInner().reset();
 }

@@ -74,6 +74,13 @@ import {
   createEdgePulseState,
   createEdgePulseSample,
   stepEdgePulseSync,
+  createTravelerEaseState,
+  createTravelerEaseSample,
+  stepTravelerEase,
+  pauseTraveler,
+  resumeTraveler,
+  type TravelerEaseState,
+  type TravelerEaseSample,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
@@ -556,7 +563,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     type EdgeRec = { from: string; to: string; health: string; kind: string; fromPos: [number, number, number]; toPos: [number, number, number] };
     let edgeRecs: EdgeRec[] = [];
     let inkEdges: ReturnType<typeof kit.createInkEdges> | null = null;
-    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number };
+    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number; ease: TravelerEaseState; sample: TravelerEaseSample };
     const landingTrails: LandingTrail[] = [];
     const travelerGeo = new THREE.SphereGeometry(0.16, 12, 12);
 
@@ -708,27 +715,21 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     }
 
-    // Lane nebula tints
+    // Painter c9: batched lane nebulae (replace MeshBasicMaterial tint spheres)
     const nebulaGroup = new THREE.Group();
     scene.add(nebulaGroup);
+    let laneNebulae: ReturnType<typeof kit.createLaneNebulae> | null = null;
     function rebuildNebulae(status: DashboardStatus) {
-      while (nebulaGroup.children.length) {
-        const ch = nebulaGroup.children[0]!;
-        nebulaGroup.remove(ch);
-        (ch as THREE.Mesh).geometry.dispose();
-        ((ch as THREE.Mesh).material as THREE.Material).dispose();
-      }
-      for (const lane of status.constellations) {
-        const color = HEALTH_COLOR[lane.health];
-        const mat = new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: lane.health === "idle" ? 0.04 : 0.09,
-          depthWrite: false,
-        });
-        const mesh = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 16), mat);
-        mesh.position.set(...lane.center);
-        nebulaGroup.add(mesh);
+      const lanes = status.constellations.map((l) => ({
+        health: l.health,
+        center: l.center,
+        id: l.id,
+      }));
+      if (!laneNebulae) {
+        laneNebulae = kit.createLaneNebulae(lanes);
+        nebulaGroup.add(laneNebulae.group);
+      } else {
+        laneNebulae.update(lanes);
       }
     }
 
@@ -773,7 +774,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const mesh = new THREE.Mesh(travelerGeo, mat);
           mesh.position.set(points[0]!.x, points[0]!.y, points[0]!.z);
           landingGroup.add(mesh);
-          landingTrails.push({ points, mesh, seed: li * 1.7 });
+          landingTrails.push({ points, mesh, seed: li * 1.7, ease: createTravelerEaseState(li * 1.7), sample: createTravelerEaseSample() });
         });
       }
     }
@@ -1384,8 +1385,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           }
         }
         for (const tr of landingTrails) {
-          samplePolylineTravel(travelOut, tr.points, travelProgress(t, 7.5, tr.seed));
-          tr.mesh.position.set(travelOut.x, travelOut.y + 0.35, travelOut.z);
+          stepTravelerEase(tr.ease, tr.sample, tr.points, t, dt, reducedMotion);
+          tr.mesh.position.set(tr.sample.x, tr.sample.y + 0.35, tr.sample.z);
+          (tr.mesh.material as THREE.MeshStandardMaterial).opacity = tr.sample.opacity;
           tr.mesh.visible = fly.level === "universe";
         }
       } else {
@@ -1445,6 +1447,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         feedGlyphs.dispose();
       inkEdges?.dispose();
       inkEdges = null;
+      laneNebulae?.dispose();
+      laneNebulae = null;
         feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };

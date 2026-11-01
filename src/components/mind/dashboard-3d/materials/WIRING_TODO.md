@@ -117,3 +117,25 @@ edgeGroup.add(ink.group);
 - Skips zero-length / coincident / NaN-sanitized degenerates; truncates at `INK_EDGES_MAX` (512).
 - Do **not** call `createInkWashEdgeMaterial` per edge when using `createInkEdges`.
 - WebGL feedback-loop on `/dashboard` is **not** painter-lane (god-ray/depth RT) — see audit `c8-feedback-loop-evidence.md`.
+
+
+## c9 — texture budget + Imagine race + lane nebulae
+
+```ts
+// GPU budget (no fabricated dims — unknown sizes count as 0):
+const report = kit.textureBudget(); // { bytes, budget, overBudget, items }
+// Late TextureLoader after rebuild: releasePainterlyMaterial marks Imagine released;
+// setImagineNodeMap → reason "material-released" (no owned downscale leak).
+
+// rebuildNebulae — replace MeshBasicMaterial tint spheres:
+const neb = kit.createLaneNebulae(
+  status.constellations.map((l) => ({
+    health: l.health,
+    center: l.center,
+    id: l.id,
+  })),
+);
+nebulaGroup.clear(); // after prior neb.dispose()
+nebulaGroup.add(neb.group);
+// on poll: neb.update(...); cleanup: neb.dispose();
+```

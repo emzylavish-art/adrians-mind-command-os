@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c41 Gap#26 TDZ fix (pending push). Next: #27 Filters layout, Motion traveler (a65cd9a motion/-only), feedback capture.
+Last release: Dashboard c41 — Gap#26 TDZ + Painter c9 createLaneNebulae + Motion traveler (motion/-only from a65cd9a; package.json skipped) + Gap#27 Filters dock + :8102 capture clean. Next: #29 status redact / #28 status cache.
 
 ## Gap Dispatcher 20261101-220802 ranked into queue (c41)
 

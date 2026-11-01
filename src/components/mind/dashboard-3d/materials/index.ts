@@ -7,6 +7,7 @@ export const PAINTER_MATERIALS = {
   imagineNode: "ImagineNodeMaterial",
   botStar: "PainterlyBotStarBundle",
   inkWashEdgesBatched: "PainterlyInkEdgesHandle",
+  laneNebula: "LaneNebulaMaterial",
   paperGrain: "PaperGrainTexture",
   parchment: "ParchmentTexture",
   nebulaSky: "NebulaSkyMaterial",
@@ -88,6 +89,25 @@ export {
   type PainterlyInkEdgesHandle,
 } from "./painterly-ink-edges.ts";
 export {
+  createLaneNebulaMaterial,
+  tickLaneNebulaMaterial,
+  setLaneNebulaHealth,
+  createPainterlyLaneNebulae,
+  type LaneNebulaOptions,
+  type LaneNebulaInput,
+  type PainterlyLaneNebulaeHandle,
+} from "./lane-nebula.ts";
+export {
+  estimateTextureBytes,
+  pushBudgetItem,
+  sanitizeTextureBudgetBytes,
+  PAINTER_TEXTURE_BUDGET_BYTES,
+  PAINTER_TEXTURE_BUDGET_MIN,
+  PAINTER_TEXTURE_BUDGET_MAX,
+  type PainterlyTextureBudgetItem,
+  type PainterlyTextureBudgetReport,
+} from "./painter-texture-budget.ts";
+export {
   createImagineNodeMaterial,
   setImagineNodeMap,
   setImagineNodePaperMap,
@@ -97,6 +117,8 @@ export {
   isPowerOfTwoSize,
   isImageSourceTainted,
   disposeImagineNodeOwnedMaps,
+  isImagineNodeReleased,
+  markImagineNodeReleased,
   IMAGINE_IMAGE_HARD_MAX,
   type ImagineNodeOptions,
   type ImagineTextureSanitizeOptions,
@@ -117,6 +139,7 @@ export {
   rebindPainterlyKitTextures,
   applyTextureBinding,
   painterlyKitResourceCounts,
+  painterlyKitTextureBudget,
   releasePainterlyMaterial,
   usePainterlyKitFactory,
   type PainterlyKit,

@@ -7,7 +7,7 @@
  * 3. Stars: kit.createStarMaterial({ color }); Buildings: kit.createBuildingMaterial({...});
  * 4. Lore plaques: kit.createLorePlaqueMaterial({ accent }); edges: kit.createInkEdges(edges) (batched) or kit.createInkWashEdgeMaterial;
  * 5. Imagine cards/sprites: kit.createImagineNodeMaterial({ map }); setImagineNodeMap when load completes
- * 6. Sky: kit.createSkyMaterial();
+ * 6. Sky: kit.createSkyMaterial(); lane clouds: kit.createLaneNebulae(lanes);
  * 7. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
  * 8. Each frame: tickPainterlyKit(kit, t); kit.setPassHealth({ healthy, total }) from real status.
  * 9. On resize: kit.resizePass(cssW, cssH, dpr); on unmount: disposePainterlyKit(kit).
@@ -65,10 +65,28 @@ import {
   type PainterlyInkEdgesOptions,
   type PainterlyInkEdgesHandle,
 } from "./painterly-ink-edges.ts";
+import {
+  createPainterlyLaneNebulae,
+  createLaneNebulaMaterial as createLaneNebulaMaterialImpl,
+  tickLaneNebulaMaterial,
+  type LaneNebulaInput,
+  type LaneNebulaOptions,
+  type PainterlyLaneNebulaeHandle,
+} from "./lane-nebula.ts";
+import {
+  estimateTextureBytes,
+  pushBudgetItem,
+  sanitizeTextureBudgetBytes,
+  PAINTER_TEXTURE_BUDGET_BYTES,
+  type PainterlyTextureBudgetReport,
+} from "./painter-texture-budget.ts";
+import { markImagineNodeReleased } from "./imagine-node.ts";
 
 export type PainterlyKitOptions = {
   pass?: PainterlyPassOptions;
   nebula?: NebulaTextureOptions;
+  /** Soft cap for painter-owned texture bytes (default 48MiB). */
+  textureBudgetBytes?: number;
 };
 
 /** Shared kit texture slots that survive context restore via rebind. */
@@ -131,6 +149,15 @@ export type PainterlyKit = {
     edges?: PainterlyInkEdgeInput[],
     opts?: PainterlyInkEdgesOptions,
   ) => PainterlyInkEdgesHandle;
+  createLaneNebulaMaterial: (opts?: LaneNebulaOptions) => THREE.ShaderMaterial;
+  /**
+   * One-line constellation lane nebulae (replaces MeshBasicMaterial tint spheres).
+   */
+  createLaneNebulae: (lanes?: LaneNebulaInput[]) => PainterlyLaneNebulaeHandle;
+  /** Soft GPU texture budget in bytes (sanitized). */
+  textureBudgetBytes: number;
+  /** Report estimated texture bytes across kit-owned / tracked maps. */
+  textureBudget: () => PainterlyTextureBudgetReport;
   /** Detach context listeners (set by attachPainterlyContextHandlers). */
   detachContext: (() => void) | null;
   /** Last per-material tick error message (null if healthy). Never throws out of tick. */
@@ -162,6 +189,9 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
   const tracked: THREE.ShaderMaterial[] = [];
   const trackedSkies: THREE.MeshBasicMaterial[] = [];
   const textureBindings: PainterlyTextureBinding[] = [];
+  const textureBudgetBytes = sanitizeTextureBudgetBytes(
+    opts.textureBudgetBytes ?? PAINTER_TEXTURE_BUDGET_BYTES,
+  );
   const kit: PainterlyKit = {
     painterlyPass: createPainterlyPass(opts.pass),
     starSpriteTexture: createStarSpriteTexture(),
@@ -174,6 +204,7 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     detachContext: null,
     lastTickError: null,
     lastTickErrorCount: 0,
+    textureBudgetBytes,
     createStarMaterial(starOpts) {
       const m = createStarWatercolorMaterial(starOpts);
       tracked.push(m);
@@ -231,6 +262,17 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     },
     createInkEdges(edges = [], eOpts) {
       return createPainterlyInkEdges(kit, edges, eOpts);
+    },
+    createLaneNebulaMaterial(nOpts) {
+      const m = createLaneNebulaMaterialImpl(nOpts);
+      tracked.push(m);
+      return m;
+    },
+    createLaneNebulae(lanes = []) {
+      return createPainterlyLaneNebulae(kit, lanes);
+    },
+    textureBudget() {
+      return painterlyKitTextureBudget(kit);
     },
   };
   LIVE_PAINTER_KITS.add(kit);
@@ -331,6 +373,7 @@ export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
       else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, timeSeconds);
       else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, timeSeconds);
       else if (m.name === "ImagineNodeMaterial") tickImagineNodeMaterial(m, timeSeconds);
+      else if (m.name === "LaneNebulaMaterial") tickLaneNebulaMaterial(m, timeSeconds);
       else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
     } catch (err) {
       // HACKER (c7): one bad material must not abort the whole frame / freeze the dashboard
@@ -390,6 +433,8 @@ export function releasePainterlyMaterial(
       if (kit.textureBindings[b]!.material === mat) kit.textureBindings.splice(b, 1);
     }
     if ((mat as THREE.ShaderMaterial).name === "ImagineNodeMaterial") {
+      // HACKER (c9): mark released BEFORE dispose so in-flight TextureLoader callbacks no-op
+      markImagineNodeReleased(mat as THREE.ShaderMaterial);
       disposeImagineNodeOwnedMaps(mat as THREE.ShaderMaterial);
     }
     if ((mat as THREE.ShaderMaterial).name === "LorePlaqueMaterial") {
@@ -406,6 +451,58 @@ export function releasePainterlyMaterial(
     return true;
   }
   return false;
+}
+
+/**
+ * HACKER (c9): estimate total texture bytes across paper/star/sky/lore atlases/
+ * Imagine owned downscales. Reports overBudget vs kit.textureBudgetBytes.
+ * Does not fabricate dims — unknown sizes contribute 0.
+ */
+export function painterlyKitTextureBudget(kit: PainterlyKit): PainterlyTextureBudgetReport {
+  const items: PainterlyTextureBudgetReport["items"] = [];
+  let bytes = 0;
+  bytes += pushBudgetItem(items, "paperGrain", kit.paperGrainTexture);
+  bytes += pushBudgetItem(items, "starSprite", kit.starSpriteTexture);
+  for (let i = 0; i < kit.trackedSkies.length; i++) {
+    bytes += pushBudgetItem(items, `sky[${i}]`, kit.trackedSkies[i]!.map);
+  }
+  for (let i = 0; i < kit.tracked.length; i++) {
+    const m = kit.tracked[i]!;
+    if (m.name === "ImagineNodeMaterial") {
+      const owned = (m.userData as Record<string, unknown>).imagineOwnedMap as THREE.Texture | null;
+      const img = (m.uniforms?.["uImage"]?.value as THREE.Texture | null) ?? null;
+      bytes += pushBudgetItem(items, `imagineOwned[${i}]`, owned);
+      if (img && img !== owned && img !== kit.paperGrainTexture) {
+        bytes += pushBudgetItem(items, `imagineImage[${i}]`, img);
+      }
+    }
+    if (m.name === "LorePlaqueMaterial") {
+      const atlas = (m.userData as Record<string, unknown>).loreOwnedAtlas as
+        | { texture?: THREE.Texture }
+        | THREE.Texture
+        | null
+        | undefined;
+      const tex =
+        atlas && typeof atlas === "object" && "texture" in atlas
+          ? (atlas.texture as THREE.Texture | undefined)
+          : atlas && (atlas as THREE.Texture).isTexture
+            ? (atlas as THREE.Texture)
+            : (m.uniforms?.["uTextMap"]?.value as THREE.Texture | null);
+      bytes += pushBudgetItem(items, `loreAtlas[${i}]`, tex ?? null);
+      const parch = m.uniforms?.["uPaperMap"]?.value as THREE.Texture | null;
+      if (parch && parch !== kit.paperGrainTexture) {
+        bytes += pushBudgetItem(items, `loreParchment[${i}]`, parch);
+      }
+    }
+  }
+  const budget = kit.textureBudgetBytes ?? PAINTER_TEXTURE_BUDGET_BYTES;
+  return {
+    bytes,
+    budget,
+    overBudget: bytes > budget,
+    remaining: Math.max(0, budget - bytes),
+    items,
+  };
 }
 
 /** Pure helper for tests: count outstanding disposables before/after dispose. */

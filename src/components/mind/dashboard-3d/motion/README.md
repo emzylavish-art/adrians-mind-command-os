@@ -54,3 +54,8 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - `edge-pulse-sync.ts` — phase-lock edge highlight to MotionClock / star pulse; travel toward focus; neighbor damp; reduced-motion static
 - Hacker c11: hover 1kHz thrash; pose-hold 100k-id for-in cap; `lastWallDt >= 0` on backwards wall
 
+## Landing-trail traveler ease (c12)
+
+- `traveler-ease.ts` — MotionClock-phased polyline travel; pause/resume; reduced-motion static
+- Hacker c12: edge-pulse self-loop/null endpoints; step* determinism; lazy shared clock (tree-shake)
+
