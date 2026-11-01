@@ -12,8 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as MemoryRouteImport } from './routes/memory'
+import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
@@ -56,12 +56,14 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PersonasRoute = PersonasRouteImport.update({
-  id: '/personas',
-  path: '/personas',
 const MemoryRoute = MemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PersonasRoute = PersonasRouteImport.update({
+  id: '/personas',
+  path: '/personas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -102,6 +104,8 @@ const ApiMindMcpToolsRoute = ApiMindMcpToolsRouteImport.update({
 const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
   id: '/api/mind/media/generate',
   path: '/api/mind/media/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindPcApprovalsRoute = ApiMindPcApprovalsRouteImport.update({
   id: '/api/mind/pc/approvals',
   path: '/api/mind/pc/approvals',
@@ -204,8 +208,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
-  '/personas': typeof PersonasRoute
   '/memory': typeof MemoryRoute
+  '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -237,8 +241,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
-  '/personas': typeof PersonasRoute
   '/memory': typeof MemoryRoute
+  '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -271,8 +275,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
-  '/personas': typeof PersonasRoute
   '/memory': typeof MemoryRoute
+  '/personas': typeof PersonasRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -306,8 +310,8 @@ export interface FileRouteTypes {
     | '/'
     | '/explore'
     | '/login'
-    | '/personas'
     | '/memory'
+    | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -339,8 +343,8 @@ export interface FileRouteTypes {
     | '/'
     | '/explore'
     | '/login'
-    | '/personas'
     | '/memory'
+    | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -372,8 +376,8 @@ export interface FileRouteTypes {
     | '/'
     | '/explore'
     | '/login'
-    | '/personas'
     | '/memory'
+    | '/personas'
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
@@ -406,8 +410,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ExploreRoute: typeof ExploreRoute
   LoginRoute: typeof LoginRoute
-  PersonasRoute: typeof PersonasRoute
   MemoryRoute: typeof MemoryRoute
+  PersonasRoute: typeof PersonasRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
@@ -459,16 +463,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/personas': {
-      id: '/personas'
-      path: '/personas'
-      fullPath: '/personas'
-      preLoaderRoute: typeof PersonasRouteImport
     '/memory': {
       id: '/memory'
       path: '/memory'
       fullPath: '/memory'
       preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/personas': {
+      id: '/personas'
+      path: '/personas'
+      fullPath: '/personas'
+      preLoaderRoute: typeof PersonasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -525,6 +531,8 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/media/generate'
       fullPath: '/api/mind/media/generate'
       preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/pc/approvals': {
       id: '/api/mind/pc/approvals'
       path: '/api/mind/pc/approvals'
@@ -658,8 +666,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ExploreRoute: ExploreRoute,
   LoginRoute: LoginRoute,
-  PersonasRoute: PersonasRoute,
   MemoryRoute: MemoryRoute,
+  PersonasRoute: PersonasRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
