@@ -157,6 +157,36 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  // Perf (mcp-integration-perf): Rolldown ignores output.manualChunks when
+  // codeSplitting is set (Nitro server). Configure CLIENT groups explicitly so
+  // three.js and the dashboard-3d scene stream as separate chunks.
+  // Does not touch dashboard-3d sources (Dashboard/Cosmos) or media storage.
+  environments: {
+    client: {
+      build: {
+        rollupOptions: {
+          output: {
+            codeSplitting: {
+              groups: [
+                {
+                  name: "three",
+                  test: /[\\/]node_modules[\\/]three[\\/]/,
+                  priority: 40,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "dashboard-3d",
+                  test: /[\\/]src[\\/]components[\\/]mind[\\/]dashboard-3d[\\/]/,
+                  priority: 30,
+                  includeDependenciesRecursively: false,
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
