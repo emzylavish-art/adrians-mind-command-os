@@ -3340,3 +3340,131 @@ html[data-theme="light"] form.floating-composer.composer-dock {
     pointer-events: none !important;
   }
 }
+
+/* —— Cycle 34: idle composer height — effort chips + autonomy compact (integration 34201e2) ——
+   Root cause (390×844): ASK/AUTO grid already display:none when idle; form still ~273px.
+   [data-testid=composer-effort] wraps min-h-11 chips → 132px; action row wraps to 68px;
+   .main-stage section… max-height:min(52vh,26rem) beats 10.75rem (specificity 0,3,1).
+   Tip ~147px lacked ComposerEffortControl; integration always mounts it. */
+@media (max-width: 767.98px) {
+  /* Win max-height over .main-stage section.command-card.composer-dock */
+  .main-stage section.command-card.composer-dock:not(:focus-within),
+  .main-stage section.floating-composer.composer-dock:not(:focus-within),
+  .main-stage .floating-composer.command-card.composer-dock:not(:focus-within),
+  section.floating-composer.command-card.composer-dock:not(:focus-within),
+  section.command-card.composer-dock:not(:focus-within) {
+    max-height: 10rem !important; /* 160px ceiling */
+  }
+  .main-stage section.command-card.composer-dock:focus-within,
+  .main-stage section.floating-composer.composer-dock:focus-within,
+  .main-stage .floating-composer.command-card.composer-dock:focus-within,
+  section.floating-composer.command-card.composer-dock:focus-within,
+  section.command-card.composer-dock:focus-within {
+    max-height: min(58vh, 28rem) !important;
+  }
+
+  /* ASK / AUTOMATIC / Memory → compact single row when idle (still tappable) */
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-height: 2.15rem !important;
+    margin: 0 !important;
+    scrollbar-width: none;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2::-webkit-scrollbar,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2::-webkit-scrollbar {
+    display: none;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    flex: 0 0 auto !important;
+    min-height: 2.05rem !important;
+    height: 2.05rem !important;
+    padding: 0 0.7rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+  }
+  /* Hide tile subtitles / memory helper copy when idle */
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-xs {
+    display: none !important;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-sm,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-sm,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button .text-sm {
+    font-size: 0.72rem !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Effort chip cloud: hide when idle (restores on :focus-within). Mode pills already hidden. */
+  section.command-card.composer-dock:not(:focus-within) [data-testid="composer-effort"],
+  section.floating-composer.composer-dock:not(:focus-within) [data-testid="composer-effort"],
+  .floating-composer.command-card.composer-dock:not(:focus-within) [data-testid="composer-effort"],
+  [data-composer="floating"]:not(:focus-within) [data-testid="composer-effort"] {
+    display: none !important;
+  }
+  section.command-card.composer-dock:focus-within [data-testid="composer-effort"],
+  section.floating-composer.composer-dock:focus-within [data-testid="composer-effort"],
+  .floating-composer.command-card.composer-dock:focus-within [data-testid="composer-effort"] {
+    display: block !important;
+  }
+  /* Focused effort: prefer single scroll row over multi-wrap tower */
+  section.command-card.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap,
+  section.floating-composer.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    max-height: 2.75rem !important;
+    scrollbar-width: none;
+  }
+  section.command-card.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap > button,
+  section.floating-composer.composer-dock:focus-within [data-testid="composer-effort"] > .flex.flex-wrap > button {
+    flex: 0 0 auto !important;
+    min-height: 2.25rem !important;
+  }
+
+  /* Tighten form chrome when idle */
+  section.command-card.composer-dock:not(:focus-within) > form.mt-3,
+  section.floating-composer.composer-dock:not(:focus-within) > form.mt-3,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > form.mt-3 {
+    margin-top: 0.4rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form textarea,
+  section.floating-composer.composer-dock:not(:focus-within) form textarea,
+  .floating-composer.command-card.composer-dock:not(:focus-within) form textarea {
+    min-height: 2.5rem !important;
+    max-height: 2.75rem !important;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+  }
+
+  /* Action row: one line; drop waveform + tiny speech caption when idle */
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2,
+  section.floating-composer.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    max-height: 2.5rem !important;
+    overflow: hidden !important;
+    gap: 0.35rem !important;
+    margin-top: 0.35rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) [data-testid="voice-waveform"],
+  section.floating-composer.composer-dock:not(:focus-within) [data-testid="voice-waveform"],
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex .text-\[10px\],
+  section.floating-composer.composer-dock:not(:focus-within) form .mt-2.flex .text-\[10px\] {
+    display: none !important;
+  }
+}
