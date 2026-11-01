@@ -4438,3 +4438,20 @@ html[data-theme="light"] .tool-card {
   background-image: linear-gradient(180deg, #fff, rgb(244 244 245 / 0.9)) !important;
   background-blend-mode: normal !important;
 }
+
+/* —— Evolution c58: 375 / 430 edge viewport rhythm —— */
+@media (max-width: 379.98px) {
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col { gap: 0.95rem !important; padding-inline: 0.85rem !important; }
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.45rem !important; }
+  .main-stage button.rounded-full { min-height: 2.6rem !important; font-size: 0.78rem !important; }
+  section.composer-dock:not(:focus-within) { padding: 0.55rem 0.65rem !important; }
+}
+@media (min-width: 380px) and (max-width: 429.98px) {
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.55rem !important; }
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col { gap: 1.05rem !important; }
+}
+@media (min-width: 430px) and (max-width: 767.98px) {
+  .main-stage .masthead { padding: 1.25rem 1.15rem !important; }
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.75rem !important; }
+  .main-stage button.rounded-full { min-height: 2.85rem !important; padding-inline: 1.05rem !important; }
+}
