@@ -13,9 +13,9 @@ export type ComposerMode = {
 
 export const COMPOSER_MODES: ComposerMode[] = [
   { id: "auto", label: "Auto", detail: "Direct single-model path with Ask autonomy.", wired: true },
-  { id: "fast", label: "Fast", detail: "Same Direct path. No separate fast model is configured.", wired: true },
-  { id: "expert", label: "Expert", detail: "Same Direct path. No separate expert model is configured.", wired: true },
-  { id: "heavy", label: "Heavy", detail: "Same Direct path. No separate heavy model is configured.", wired: true },
+  { id: "fast", label: "Fast", detail: "Routes send to the Fast model tier.", wired: true },
+  { id: "expert", label: "Expert", detail: "Routes send to the Expert model tier.", wired: true },
+  { id: "heavy", label: "Heavy", detail: "Routes send to the Heavy model tier.", wired: true },
   {
     id: "build",
     label: "Build",
@@ -30,6 +30,27 @@ export const COMPOSER_MODES: ComposerMode[] = [
     notice: "Orchestrator fan-out is not wired. Send stays on Direct. Nothing was fanned out.",
   },
 ];
+
+
+/** Map composer effort ids onto MODEL_TIERS labels used in the send body. */
+export function effortToModelTier(mode: ComposerModeId): "Auto" | "Fast" | "Expert" | "Heavy" | "Build" | "Orchestrator" {
+  switch (mode) {
+    case "auto":
+      return "Auto";
+    case "fast":
+      return "Fast";
+    case "expert":
+      return "Expert";
+    case "heavy":
+      return "Heavy";
+    case "build":
+      return "Build";
+    case "orchestrator":
+      return "Orchestrator";
+    default:
+      return "Auto";
+  }
+}
 
 export type SendPath = "direct" | "blocked-orchestrator";
 

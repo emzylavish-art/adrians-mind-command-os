@@ -192,7 +192,7 @@ import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers"
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
-import { COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { effortToModelTier, COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import {
@@ -490,11 +490,15 @@ function browserSpeechCtor(): (new () => BrowserSpeechRec) | null {
   return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
 }
 
-export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types").Workspace | null } = {}) {
+export function CommandApp(props: {
+  serverWorkspace?: import("@/lib/mind/types").Workspace | null;
+  initialView?: import("@/lib/mind/deep-link-views").CommandDeepLinkView | "command" | "chat" | "projects" | "files" | "connected" | "tools" | "settings" | "integrations" | "help" | "agents" | "runs" | "research" | "build" | "scheduled" | "activity" | "skills" | "memory" | "dashboard";
+} = {}) {
   const serverWorkspace = props.serverWorkspace ?? null;
+  const initialView = (props.initialView ?? "command") as View;
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, cloudHydrating } = useMindWorkspace(serverWorkspace);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const [view, setView] = useState<View>("command");
+  const [view, setView] = useState<View>(initialView);
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
@@ -774,9 +778,9 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     const storage = typeof localStorage === "undefined" ? null : localStorage;
     saveComposerEffort(storage, mode);
     setComposerEffort(mode);
+    setModelTier(effortToModelTier(mode));
     const resolved = resolveSendPath(mode);
     if (resolved.notice) setNotice(resolved.notice);
-    // Effort does not change modelTier. The server model stays on the Direct path.
     if (mode === "build") setView("build");
   }
 
@@ -5034,8 +5038,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 <p className="text-sm text-muted">No build is running. Suggestion cards do not run anything just by appearing.</p>
                 <p className="text-sm font-semibold">{pcAgentOnline ? "PC agent online" : "Not paired"}</p>
                 <p className="text-sm text-muted">{pcAgentDetail}</p>
-                <p className="text-xs text-muted">Build effort is not wired to a different model. Send stays on Direct.</p>
-              </div>
+                              </div>
               <div className="flex flex-wrap gap-2">
                 {BUILD_SUGGESTIONS.map((item) => (
                   <button
@@ -6514,7 +6517,7 @@ function ComposerEffortControl({
         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{resolved.badge}</span>
       </div>
       <p className="mt-1 text-xs text-muted">
-        {current?.detail} This effort is not wired to a different model.
+        {current?.detail}
         {resolved.notice ? ` ${resolved.notice}` : ""}
       </p>
     </div>

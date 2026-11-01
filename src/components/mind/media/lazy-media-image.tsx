@@ -63,9 +63,13 @@ export function LazyMediaImage({
       return;
     }
     let cancel = false;
-    void getAssetUrl(key).then((url) => {
-      if (!cancel) setResolved(url);
-    });
+    void getAssetUrl(key)
+      .then((url) => {
+        if (!cancel) setResolved(url);
+      })
+      .catch(() => {
+        if (!cancel) setResolved(`/${key.replace(/^\/+/, "")}`);
+      });
     return () => {
       cancel = true;
     };
