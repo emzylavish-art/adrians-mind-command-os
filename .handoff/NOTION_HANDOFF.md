@@ -75,3 +75,13 @@ Full local write-up: `MEDIA_HANDOFF.md`.
 - Locks: logic-wiring.lock + logic-wiring-gap-forged-execution-records.lock → done, released
 - Notion mirror: https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d
 
+## 2026-11-01T22:44:48+01:00 (Africa/Lagos) — Logic Bot — Orchestrator tier + preview deploy
+- Branch tip: fd613cc on origin/logic-wiring
+- Orchestrator: default `grok-4.7` (reasoning_effort high, max_tokens 1200); override `MIND_MODEL_ORCHESTRATOR`; Auto never selects it; resolveModelTier → turn.server + agent-run.server
+- Live check: requested `grok-4.7` returned `grok-4.7` — **pass**
+- Counts: typecheck pass; mind 351 pass; scripts 198 pass / 4 skipped; build pass
+- Preview: blocked — Vercel hobby 24h deployment cap (402 api-deployments-young-hobby-team-24h); MCP lacks adrian-8a30; no dpl for logic-wiring@fd613cc
+- Production waits on Merge Gate
+- Still open: H13 independent verification; live search (no MIND_SEARCH keys); mobile header chip / command-app.tsx locked
+- Notion child: https://app.notion.com/p/40bb95f33e4281429484c3d7179ee7f6
+- Lock: logic-wiring.lock → done, released
