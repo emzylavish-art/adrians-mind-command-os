@@ -9,7 +9,6 @@ import {
   Database,
   FileText,
   Folder,
-  Globe,
   Home,
   Image,
   Lock,
@@ -152,6 +151,7 @@ import {
   reviseMemory,
   unpackWorkspace,
 } from "@/lib/mind/workspace";
+import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 
 type View =
   | "command"
@@ -226,7 +226,6 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     label: "Workspace",
     items: [
       { id: "command", label: "Chat", icon: MessageSquare },
-      { id: "dashboard", label: "Dashboard", icon: Globe },
       { id: "agents", label: "Bots & Agents", icon: Bot },
       { id: "build", label: "Build", icon: Terminal },
       { id: "projects", label: "Projects", icon: Folder },
@@ -2591,25 +2590,51 @@ export function CommandApp() {
             <div key={group.label} className="mb-4">
               {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
               <div className="space-y-1">
-              {group.items.map((item) => {
+              {group.items.map((item, itemIndex) => {
                 const Icon = item.icon;
                 const on = view === item.id;
-                return (
+                const button = (
                   <button
                     key={item.id}
                     type="button"
                     title={item.label}
+                    aria-label={item.label}
+                    aria-current={on ? "page" : undefined}
                     onClick={() => {
                       setView(item.id);
                       setNavOpen(false);
                       closeMenus();
                     }}
-                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"}`}
+                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                   >
                     {NAV_ICON_SRC[item.id] ? <img src={NAV_ICON_SRC[item.id]} alt="" className="nav-icon-img" /> : <Icon className="size-4 shrink-0 opacity-90" />}
                     {!railCollapsed && item.label}
                   </button>
                 );
+                if (group.label === "Workspace" && itemIndex === 0) {
+                  return (
+                    <div key={`workspace-head-${item.id}`} className="contents">
+                      {button}
+                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => (
+                        <Link
+                          key={routeItem.id}
+                          to={routeItem.href}
+                          title={routeItem.label}
+                          aria-label={routeItem.label}
+                          onClick={() => {
+                            setNavOpen(false);
+                            closeMenus();
+                          }}
+                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
+                        >
+                          <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
+                          {!railCollapsed && routeItem.label}
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                }
+                return button;
               })}
               </div>
             </div>
