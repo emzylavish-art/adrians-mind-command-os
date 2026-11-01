@@ -41,6 +41,8 @@ export type NodeOpenOpts = {
   scaleFrom?: number;
 };
 
+const EMPTY_NODE_OPEN_OPTS: NodeOpenOpts = Object.freeze({});
+
 const nodeOpenScratch: NodeOpenSample = {
   scale: NODE_OPEN_SCALE_FROM,
   opacity: 0,
@@ -71,7 +73,7 @@ export function stepNodeOpen(
   out: NodeOpenSample,
   dt: number,
   reducedMotion: boolean,
-  opts: NodeOpenOpts = {},
+  opts: NodeOpenOpts = EMPTY_NODE_OPEN_OPTS,
 ): NodeOpenSample {
   const duration = Math.max(1e-4, finiteOr(opts.duration ?? NODE_OPEN_DURATION, NODE_OPEN_DURATION));
   const offsetY = finiteOr(opts.openOffsetY ?? NODE_OPEN_OFFSET_Y, NODE_OPEN_OFFSET_Y);
@@ -127,6 +129,8 @@ export type SceneTransitionSample = {
 export type SceneTransitionOpts = {
   duration?: number;
 };
+
+const EMPTY_SCENE_TX_OPTS: SceneTransitionOpts = Object.freeze({});
 
 const sceneTxScratch: SceneTransitionSample = {
   linear: 0,
@@ -208,7 +212,7 @@ export function stepSceneTransition(
   out: SceneTransitionSample,
   dt: number,
   reducedMotion: boolean,
-  opts: SceneTransitionOpts = {},
+  opts: SceneTransitionOpts = EMPTY_SCENE_TX_OPTS,
 ): SceneTransitionSample {
   const duration = Math.max(1e-4, finiteOr(opts.duration ?? SCENE_TRANSITION_DURATION, SCENE_TRANSITION_DURATION));
   let target = finiteOr(state.target, 0);

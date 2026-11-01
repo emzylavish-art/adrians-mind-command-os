@@ -29,6 +29,7 @@ export {
 } from "./sanitize.ts";
 export {
   createMotionClock,
+  hardResetSharedMotionClockForTests,
   sharedMotionClock,
   type MotionClock,
   type MotionClockOpts,
@@ -69,6 +70,8 @@ export {
   type SceneTransitionState,
 } from "./transition-ease.ts";
 export {
+  CHAR_PHASE_ID_MAX,
+  sanitizeCharacterSpeed,
   CHAR_IDLE_BOB_AMP,
   CHAR_IDLE_BOB_SPEED,
   CHAR_IDLE_BREATH_AMP,
@@ -86,4 +89,15 @@ export {
   type CharacterMotionState,
   type CharacterSample,
 } from "./character-motion.ts";
-
+export {
+  BREADCRUMB_DURATION,
+  BREADCRUMB_SLIDE_PX,
+  clearBreadcrumbFocus,
+  createBreadcrumbEaseSample,
+  createBreadcrumbEaseState,
+  setBreadcrumbFocus,
+  stepBreadcrumbEase,
+  type BreadcrumbEaseOpts,
+  type BreadcrumbEaseSample,
+  type BreadcrumbEaseState,
+} from "./breadcrumb-ease.ts";

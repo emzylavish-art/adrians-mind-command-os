@@ -32,3 +32,9 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - `characterPhaseFromId` — stable crowd desync; reduced-motion = static pose
 - Targets Imagine-zone billboard characters (`kind: "character"`) and scene walk arts
 
+## Star focus breadcrumb ease (c8)
+
+- `stepBreadcrumbEase` — interruptible slide+fade for Flyover HUD focus crumb (`rig.subjectId`)
+- Complements Dashboard queue #21; markup/styles not owned here
+- Hacker c8: hot-path `opts = {}` → frozen empty (no per-frame alloc); `+Infinity` walk speed; `hardResetSharedMotionClockForTests`
+
