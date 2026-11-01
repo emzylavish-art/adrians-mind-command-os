@@ -57,6 +57,7 @@ import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutin
 import { probeMicrophone } from "@/lib/mind/voice/mic-probe";
 import { BARGE_IN_ECHO_GUARD_MS, SPEAKING_MIN_VISIBLE_MS } from "@/lib/mind/voice/barge-in";
 import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
+import { buildVoiceChatTurn } from "@/lib/mind/voice/voice-chat-turn";
 
 import { beginFlight, createFlightGate, endFlight, nextMuteState, secretNeedsRemint } from "@/lib/mind/voice/spam-guard";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
@@ -1504,9 +1505,50 @@ export function CommandApp() {
     setDraft(routed.composerDraft);
     voiceNext.current = true;
     setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
-    // Dev test-audio shortcut: speak a canned reply so headless can reach Speaking without a live chat turn.
+    // Dev test-audio: still use a canned spoken reply, but always persist user+assistant chat turns.
     if (readDevTestAudioUrl() && voiceModeRef.current === "direct") {
       const reply = "It is about noon.";
+      setVoicePhase("processing");
+      let chat = active;
+      if (!chat) {
+        const made = createChat(ws, {
+          memory: memoryChoice,
+          autonomy,
+          temporary,
+          projectId: chatProjectId || projectChoice || null,
+        });
+        chat = made.chat;
+        setWs((prev) =>
+          pushAudit(
+            { ...prev, chats: [made.chat, ...prev.chats] },
+            "create_chat",
+            made.chat.id,
+            `voice test; ${made.chat.autonomy}`,
+          ),
+        );
+        setActiveId(made.chat.id);
+      }
+      const turn = buildVoiceChatTurn({ userText: text, assistantText: reply, model: "voice-test" });
+      if (turn && chat) {
+        const chatId = chat.id;
+        setWs((prev) =>
+          pushAudit(
+            {
+              ...prev,
+              chats: prev.chats.map((item) =>
+                item.id === chatId
+                  ? { ...item, messages: [...item.messages, turn.user, turn.assistant] }
+                  : item,
+              ),
+            },
+            "message_sent",
+            chatId,
+            "voice-test",
+          ),
+        );
+        setView("chat");
+      }
+      setVoicePhase("speaking");
       if (voiceSession.current?.isOpen) voiceSession.current.speakText(reply);
       else void speak(reply);
       return;
@@ -1706,6 +1748,9 @@ export function CommandApp() {
           );
         },
         onLevel: (level) => setVoiceLevel(level),
+        onReplyAudioDuration: (info) => {
+          setNotice(`Voice reply audio ~${info.durationMs}ms (${info.pcmBytes} PCM @ ${info.sampleRate} Hz).`);
+        },
         onStatus: (status) => {
           setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
           if (status === "speaking") {
@@ -1719,28 +1764,19 @@ export function CommandApp() {
               speakingMinTimerRef.current = null;
             }, SPEAKING_MIN_VISIBLE_MS);
           } else if (status === "processing") {
-            setSpeaking(false);
+            // Never regress Speaking → Thinking; processing must precede the reply turn.
+            if (speakingRef.current) return;
             setVoicePhase("processing");
           } else if (status === "listening" || status === "connecting") {
-            const elapsed =
-              typeof performance !== "undefined"
-                ? performance.now() - speakingStartedAtRef.current
-                : Date.now() - speakingStartedAtRef.current;
-            // Keep Speaking visible briefly so Interrupt is clickable for testers.
-            if (speakingRef.current && elapsed < SPEAKING_MIN_VISIBLE_MS && status === "listening") {
-              const remain = SPEAKING_MIN_VISIBLE_MS - elapsed;
-              if (speakingMinTimerRef.current) clearTimeout(speakingMinTimerRef.current);
-              speakingMinTimerRef.current = setTimeout(() => {
-                speakingMinTimerRef.current = null;
-                speakingRef.current = false;
-                setSpeaking(false);
-                setVoicePhase((prev) => (prev === "interrupted" ? "interrupted" : "listening"));
-              }, remain);
+            // No Listening gap while a reply is speaking / about to speak.
+            if (speakingRef.current && status === "listening") return;
+            if (status === "connecting") {
+              setVoicePhase("connecting");
               return;
             }
             speakingRef.current = false;
             setSpeaking(false);
-            setVoicePhase((prev) => (prev === "interrupted" ? "interrupted" : status === "connecting" ? "connecting" : "listening"));
+            setVoicePhase((prev) => (prev === "interrupted" ? "interrupted" : "listening"));
           } else if (status === "closed") {
             speakingRef.current = false;
             setSpeaking(false);

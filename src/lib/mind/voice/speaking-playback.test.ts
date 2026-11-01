@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { RealtimeVoiceSession, REALTIME_ENDPOINT } from "./realtime-session.ts";
 import { SharedAudioOutput } from "./audio-output.ts";
+import { pcm16MonoDurationMs } from "./voice-chat-turn.ts";
 
 class FakeSocket {
   readyState = 0;
@@ -28,7 +29,6 @@ class FakeSocket {
   }
 }
 
-/** Stub output that stays "playing" until end() is called. */
 class StickyOutput extends SharedAudioOutput {
   private stuck = false;
   private ended: (() => void) | null = null;
@@ -69,7 +69,6 @@ describe("speaking until playback ends", () => {
     const socket = created as FakeSocket;
     session.speakText("Hello there.");
     assert.ok(statuses.includes("speaking"));
-    // Simulate PCM chunk then server done while local buffer still draining.
     socket.emitMessage({
       type: "response.output_audio.delta",
       delta: Buffer.from(new Int16Array(480).buffer).toString("base64"),
@@ -78,6 +77,71 @@ describe("speaking until playback ends", () => {
     assert.equal(statuses.at(-1), "speaking", "must not drop to listening on request end");
     output.end();
     assert.equal(statuses.at(-1), "listening");
+    session.close();
+  });
+
+  it("does not insert Listening between Thinking and Speaking", async () => {
+    let created: FakeSocket | undefined;
+    const statuses: string[] = [];
+    const output = new StickyOutput();
+    const session = new RealtimeVoiceSession(
+      {
+        onStatus: (s) => statuses.push(s),
+        onTranscript: () => {
+          session.speakText("It is about noon.");
+        },
+      },
+      output,
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created;
+      },
+    );
+    await session.connect("ephemeral-test", { captureOnly: true });
+    const socket = created as FakeSocket;
+    // Auto-reply busy so speakText queues, then cancel done flushes.
+    socket.emitMessage({ type: "response.created" });
+    socket.emitMessage({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "What time is it?",
+    });
+    assert.equal(statuses.includes("processing"), true);
+    // Cancel of auto-reply completes — must not leave a Listening gap before Speaking.
+    socket.emitMessage({ type: "response.done" });
+    const proc = statuses.indexOf("processing");
+    const speak = statuses.indexOf("speaking", proc);
+    assert.ok(speak > proc, `statuses=${statuses.join(">")}`);
+    const slice = statuses.slice(proc, speak + 1);
+    assert.equal(slice.includes("listening"), false, `gap in ${slice.join(">")}`);
+    session.close();
+  });
+
+  it("reports PCM duration matching byte count / sample rate", async () => {
+    let created: FakeSocket | undefined;
+    let seen: { durationMs: number; pcmBytes: number; sampleRate: number } | null = null;
+    const output = new StickyOutput();
+    const session = new RealtimeVoiceSession(
+      { onReplyAudioDuration: (info) => { seen = info; } },
+      output,
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created;
+      },
+    );
+    await session.connect("ephemeral-test", { captureOnly: true });
+    const socket = created as FakeSocket;
+    session.speakText("It is about noon.");
+    // 0.8s @ 24kHz mono PCM16 = 38400 bytes
+    const bytes = 38400;
+    const delta = Buffer.alloc(bytes).toString("base64");
+    socket.emitMessage({ type: "response.output_audio.delta", delta });
+    socket.emitMessage({ type: "response.done" });
+    output.end();
+    assert.ok(seen);
+    assert.equal(seen!.durationMs, pcm16MonoDurationMs(bytes, 24000));
+    assert.equal(seen!.durationMs, 800);
     session.close();
   });
 });

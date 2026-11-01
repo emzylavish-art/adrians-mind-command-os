@@ -16,6 +16,7 @@ import {
   type TranscriptDedupe,
 } from "./spam-guard.ts";
 import { decodeWavPcm, expectedTranscriptForTestAudio, resampleLinear, synthesizeTone } from "./test-audio.ts";
+import { pcm16MonoDurationMs } from "./voice-chat-turn.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 export const REALTIME_MODEL = "grok-voice-latest";
@@ -27,6 +28,8 @@ export type RealtimeHandlers = {
   onError?: (message: string) => void;
   onStatus?: (status: "connecting" | "listening" | "processing" | "speaking" | "idle" | "closed") => void;
   onLevel?: (level: number) => void;
+  /** Fires when a spoken reply's PCM duration is known (playback-end or response.done). */
+  onReplyAudioDuration?: (info: { durationMs: number; pcmBytes: number; sampleRate: number }) => void;
 };
 
 export type RealtimeConnectOptions = {
@@ -111,6 +114,10 @@ export class RealtimeVoiceSession {
   private awaitingPlaybackEnd = false;
   /** Server finished the current response; local audio may still be playing. */
   private serverResponseComplete = true;
+  /** App-owned reply (force_message) in flight — suppress Listening gaps before Speaking. */
+  private replyInFlight = false;
+  private replyPcmBytes = 0;
+  private lastReplyAudioDurationMsValue = 0;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -132,6 +139,11 @@ export class RealtimeVoiceSession {
 
   get isMuted() {
     return this.muted;
+  }
+
+  /** Last measured force_message / TTS PCM duration in ms (0 if none). */
+  get lastReplyAudioDurationMs() {
+    return this.lastReplyAudioDurationMsValue;
   }
 
   setMuted(muted: boolean) {
@@ -200,13 +212,58 @@ export class RealtimeVoiceSession {
     this.ws.send(JSON.stringify(payload));
   }
 
+
+  private emitListeningOrIdle() {
+    if (this.replyInFlight || this.speakQueue.length > 0 || this.pendingForce || this.awaitingPlaybackEnd || this.output.isPlaying) {
+      // Keep Thinking/Speaking — never insert a Listening gap before the reply plays.
+      if (this.awaitingPlaybackEnd || this.output.isPlaying || this.pendingForce) {
+        this.handlers.onStatus?.("speaking");
+      } else {
+        this.handlers.onStatus?.("processing");
+      }
+      return;
+    }
+    this.handlers.onStatus?.(this.capturing || this.open ? "listening" : "idle");
+  }
+
+  private noteReplyPcmBytes(deltaB64: string) {
+    try {
+      // atob length === decoded bytes for standard base64 (ignore pad for estimate)
+      const pad = (deltaB64.endsWith("==") ? 2 : deltaB64.endsWith("=") ? 1 : 0);
+      const bytes = Math.max(0, Math.floor((deltaB64.length * 3) / 4) - pad);
+      this.replyPcmBytes += bytes;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private publishReplyDuration() {
+    const durationMs = pcm16MonoDurationMs(this.replyPcmBytes, REALTIME_SAMPLE_RATE);
+    this.lastReplyAudioDurationMsValue = durationMs;
+    if (durationMs > 0) {
+      this.handlers.onReplyAudioDuration?.({
+        durationMs,
+        pcmBytes: this.replyPcmBytes,
+        sampleRate: REALTIME_SAMPLE_RATE,
+      });
+      if (typeof console !== "undefined" && console.debug) {
+        console.debug(
+          `[voice] reply audio duration ${durationMs}ms (${this.replyPcmBytes} PCM bytes @ ${REALTIME_SAMPLE_RATE} Hz)`,
+        );
+      }
+    }
+  }
+
   private flushSpeakQueue() {
     if (this.responseBusy || !this.speakQueue.length) return;
     const next = this.speakQueue.shift();
     if (!next) return;
     this.responseBusy = true;
     this.pendingForce = true;
-    this.awaitingPlaybackEnd = false;
+    this.replyInFlight = true;
+    this.replyPcmBytes = 0;
+    // Expect TTS audio for this force_message — do not drop to Listening before deltas/playback.
+    this.awaitingPlaybackEnd = true;
     this.serverResponseComplete = false;
     this.send({
       type: "conversation.item.create",
@@ -233,9 +290,11 @@ export class RealtimeVoiceSession {
       if (!this.serverResponseComplete || this.responseBusy || this.speakQueue.length > 0) return;
       this.awaitingPlaybackEnd = false;
       this.pendingForce = false;
+      this.replyInFlight = false;
       this.bargeInArmed = false;
+      this.publishReplyDuration();
       if (this.testAudioKind) this.muted = false;
-      this.handlers.onStatus?.(this.capturing || this.open ? "listening" : "idle");
+      this.emitListeningOrIdle();
     });
   }
 
@@ -247,13 +306,20 @@ export class RealtimeVoiceSession {
     if (this.output.isPlaying || this.awaitingPlaybackEnd) {
       this.handlers.onStatus?.("speaking");
       this.armPlaybackEndWatch();
+      // If server is done and nothing is actually playing, duration is already final.
+      if (this.serverResponseComplete && !this.output.isPlaying && this.replyPcmBytes > 0) {
+        // Still awaiting trailing buffer start — keep Speaking; publish duration early for logs.
+        this.publishReplyDuration();
+      }
       return;
     }
     this.awaitingPlaybackEnd = false;
     this.pendingForce = false;
+    this.replyInFlight = false;
     this.bargeInArmed = false;
+    this.publishReplyDuration();
     if (this.testAudioKind) this.muted = false;
-    this.handlers.onStatus?.(this.capturing || this.open ? "listening" : "idle");
+    this.emitListeningOrIdle();
   }
 
   private onMessage(event: MessageEvent) {
@@ -293,8 +359,8 @@ export class RealtimeVoiceSession {
       if (expected) text = expected;
       if (text && shouldAcceptTranscript(this.transcriptDedupe, text)) {
         this.pendingTranscript = text;
-        this.handlers.onTranscript?.(text);
         this.handlers.onStatus?.("processing");
+        this.handlers.onTranscript?.(text);
       }
       return;
     }
@@ -310,6 +376,7 @@ export class RealtimeVoiceSession {
       if (msg.delta) {
         this.serverResponseComplete = false;
         this.awaitingPlaybackEnd = true;
+        this.noteReplyPcmBytes(msg.delta);
         this.handlers.onStatus?.("speaking");
         this.armPlaybackEndWatch();
         void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE }).then(() => {
@@ -349,6 +416,7 @@ export class RealtimeVoiceSession {
     const wasSpeaking = this.responseBusy || this.pendingForce || this.speakQueue.length > 0 || this.awaitingPlaybackEnd || this.output.isPlaying;
     this.awaitingPlaybackEnd = false;
     this.serverResponseComplete = true;
+    this.replyInFlight = false;
     this.output.setEndedListener?.(null);
     this.output.interrupt();
     this.speakQueue = [];
@@ -359,7 +427,7 @@ export class RealtimeVoiceSession {
     this.bargeInArmed = false;
     this.send({ type: "response.cancel" });
     if (wasSpeaking && options?.reason && options.reason !== "stop") {
-      this.handlers.onStatus?.("listening");
+      this.emitListeningOrIdle();
     }
   }
 
@@ -466,8 +534,8 @@ export class RealtimeVoiceSession {
         const expected = expectedTranscriptForTestAudio(this.testAudioKind);
         if (expected && shouldAcceptTranscript(this.transcriptDedupe, expected)) {
           this.pendingTranscript = expected;
-          this.handlers.onTranscript?.(expected);
           this.handlers.onStatus?.("processing");
+          this.handlers.onTranscript?.(expected);
         }
         return;
       }
@@ -527,6 +595,7 @@ export class RealtimeVoiceSession {
     const trimmed = text.trim();
     if (!trimmed || !this.open) return;
     // Always mark pending so a captureOnly auto-cancel cannot strand the reply.
+    this.replyInFlight = true;
     this.pendingForce = true;
     const action = enqueueSpeak(this.speakQ, trimmed);
     if (action === "ignore" && this.speakQueue.includes(trimmed)) {
