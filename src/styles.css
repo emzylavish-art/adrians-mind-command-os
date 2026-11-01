@@ -5233,6 +5233,7 @@ textarea:focus-visible,
   outline: 2px solid #f4f4f5 !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
 
 /* —— Nav flake fix: composer-bar__card (z 46, pointer-events:auto) sat on top of
    mobile Primary tabs (z 40) and stole More/Build/Tools drawer clicks in headless.
@@ -5250,3 +5251,4 @@ textarea:focus-visible,
   body:has(section.composer-dock) .composer-bar.is-fixed[data-testid="composer-bar"] {
     bottom: calc(2.9rem + env(safe-area-inset-bottom, 0px)) !important;
   }
+}
