@@ -22,6 +22,7 @@ import {
 import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
 import { GraphFiltersPanel } from "./graph-filters-panel";
+import { MinimapPanel } from "./minimap-panel";
 import { portraitUrlForBot } from "@/lib/mind/dashboard/portrait-resolve";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import { pollViewData } from "@/lib/mind/dashboard/status-poll";
@@ -461,6 +462,7 @@ export function DashboardApp() {
         />
       ) : null}
 
+      {viewData ? <MinimapPanel bots={viewData.bots} focusId={selected?.id} /> : null}
       {viewData && sceneData && operatorPrefs.layers.feed ? (
         <>
           <GraphFiltersPanel />

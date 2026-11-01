@@ -945,3 +945,47 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+
+.dash3d-minimap {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 5;
+  width: 140px;
+  padding: 0.4rem 0.5rem;
+}
+.dash3d-minimap-map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-top: 0.25rem;
+  border-radius: 8px;
+  background: rgba(8,12,24,0.75);
+  border: 1px solid rgba(148,163,184,0.3);
+  overflow: hidden;
+}
+.dash3d-minimap-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: #7dd3fc;
+  cursor: pointer;
+}
+.dash3d-minimap-dot[data-health="stalled"] { background: #fbbf24; }
+.dash3d-minimap-dot[data-health="blocked"] { background: #fb7185; }
+.dash3d-minimap-dot[data-health="idle"] { background: #94a3b8; }
+.dash3d-minimap-dot.is-focus { box-shadow: 0 0 0 2px #fff; }
+.dash3d-minimap-home {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 1px solid rgba(255,255,255,0.7);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.dash3d-root[data-hud-focus="1"] .dash3d-minimap { opacity: 0; pointer-events: none; visibility: hidden; }

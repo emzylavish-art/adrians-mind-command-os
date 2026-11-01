@@ -1365,6 +1365,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         hideLastFrameFreeze(mount);
       }
 
+      if (Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
+        document.dispatchEvent(
+          new CustomEvent("dash3d-camera", {
+            detail: { lookAt: [lookAt.x, lookAt.y, lookAt.z] as [number, number, number] },
+          }),
+        );
+      }
       if (now - sync > 5000) {
         sync = now;
         rebuildAll();
