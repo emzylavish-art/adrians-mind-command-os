@@ -159,4 +159,18 @@ export {
   type EdgePulseSample,
   type EdgePulseState,
 } from "./edge-pulse-sync.ts";
+export {
+  TRAVELER_DURATION,
+  TRAVELER_OPACITY,
+  createTravelerEaseSample,
+  createTravelerEaseState,
+  pauseTraveler,
+  resumeTraveler,
+  sampleTravelerPolyline,
+  stepTravelerEase,
+  type TravelerEaseOpts,
+  type TravelerEaseSample,
+  type TravelerEaseState,
+  type TravelerXyz,
+} from "./traveler-ease.ts";
 

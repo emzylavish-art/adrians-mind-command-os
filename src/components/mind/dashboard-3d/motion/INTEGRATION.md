@@ -240,3 +240,31 @@ stepEdgePulseSync(
 Reduced-motion → static mid-edge highlight, pulse=1. Hacker c11: `lastWallDt` never
 negative on backwards worker clocks; pose-hold for-in early-break on huge id maps.
 
+## Landing-trail traveler ease (c12)
+
+Complements Dashboard animation #3 / `sky-flow` travelers. Pure motion only —
+mesh/material stay with Dashboard Bot.
+
+```ts
+import {
+  createTravelerEaseState, createTravelerEaseSample,
+  stepTravelerEase, pauseTraveler, resumeTraveler,
+} from "./motion";
+
+const st = createTravelerEaseState(seed);
+const out = createTravelerEaseSample();
+
+// each frame:
+stepTravelerEase(st, out, trailPoints, tSeconds, dt, reducedMotion);
+mesh.position.set(out.x, out.y, out.z);
+(mesh.material as THREE.Material).opacity = out.opacity;
+
+// interrupt (flyover / panel open):
+pauseTraveler(st);
+// …later
+resumeTraveler(st);
+```
+
+Uses MotionClock so tab-resume does not teleport. Reduced-motion → static seed pose.
+Hacker c12: edge-pulse self-loop parks travel; shared clock is lazy (no import side effect).
+
