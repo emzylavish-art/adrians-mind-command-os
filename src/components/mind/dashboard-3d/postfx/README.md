@@ -258,3 +258,21 @@ Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (m
   // badge: formatMeterBadge(liveDetailDim.contrast, lift.report, edge.report) → "edge 1.08:1 rim +0.29 (light)" / "edge 2.40:1 ok" / "edge no reading"
   ```
 - Register tests: `postfx/{card-edge,probe-radius-honest}.test.ts` (plus the #84 list: `card-probe`, `dim-target-align`, and the #83 list).
+
+## #102 — Charts depth plate from the measured backdrop spread; hacker: projectedRadiusUv returns the real radius
+
+- **Hacker (live, no wiring):** `projectedRadiusUv()` ran `clampGuardRadius()` and returned values clamped to [0.04, 0.45]. That undid the #93 "real radius only" probe fix in the wired scene, because universe-scene feeds `projectedRadiusUv(...)` straight into `setHole`. Far, tiny Imagine cards were metered at 0.04: up to about 4× their real radius and about 16× the area, mostly backdrop. That reading was reported as `contrast.card` and drove the #83/#84 key lift. On close-up cards above 0.45, the #93 rim would be drawn across the card face. `projectedRadiusUv` now returns the real padded radius. Every guard, hole, and key-lift consumer already runs `clampGuardRadius` itself, so their behaviour is unchanged. Test: `postfx/projected-radius-real.test.ts` (failed 4/5 before the fix).
+- **`charts-depth-plate.ts`:** `createChartsDepthPlatePass()` puts a soft "frosted plate" under the Charts rect only. It applies a small 17-tap blur (3 CSS px rings) and compresses highlights above the measured mean (`PLATE_FLATTEN` 0.55). It also adds a faint contact shadow 6 px below the panel. Strength comes only from the measured spread (`max − mean`) of the #69 per-rect reading for that caller rect: 0 at ≤0.04, full `PLATE_MAX` 0.85 at ≥0.18. Any of these leaves the pass disabled and the frame byte-identical: no, stale, or other-layout reading, rect dropped, Charts not in the list, junk viewport. There is no extra readback. Blur, feather and shadow are in CSS px from the caller viewport, so DPR and composer `setSize` don't change the look. Eases over 240 ms. Reduced motion snaps the change.
+- `plateStatsFor(report, rects, callerIndex)` maps the CALLER index through `contrast.rectSource`, so if the detail card is off-canvas and gets dropped, Charts never ends up on the detail card's reading.
+- Wiring (Dashboard Bot, universe-scene, in the Gap#67/#68/#79 block and after the #83/#93 passes):
+  ```ts
+  // rebuildPostfxBundle, AFTER nextKeyLift (and after the #93 edge pass if wired), before kit.painterlyPass:
+  const plate = createChartsDepthPlatePass(); composer.addPass(plate.pass); // dispose with the bundle / on unmount like sceneKeyLiftHandle
+  // per frame, in the per-rect dim block: remember the Charts caller index when pushing it
+  let chartsIdx = -1; if (chartEl) { chartsIdx = rects.length; rects.push(chartEl.getBoundingClientRect()); /* …targets.push as today */ }
+  // after liveDetailDim.tick(dt * 1000):
+  plate.setPlate(liveDetailDim?.contrast ?? null, liveDetailDim?.rects ?? null, chartsIdx, vp, { reducedMotion });
+  plate.tick(dt * 1000);
+  // badge: formatMeterBadge(liveDetailDim.contrast, lift.report, edge?.report ?? null, plate.report) → "plate spread 0.21 +0.85" / "plate spread 0.02 ok" / "plate no reading"
+  ```
+- Register tests: `postfx/{charts-depth-plate,projected-radius-real}.test.ts` (plus the #93 list `card-edge`, `probe-radius-honest` if not yet registered).
