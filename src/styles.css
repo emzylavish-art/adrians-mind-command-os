@@ -7001,3 +7001,23 @@ html:not([data-theme="light"]) .floating-composer textarea::placeholder {
   color: #9aa3b5 !important;
   opacity: 1 !important;
 }
+
+/* —— Evolution c100: glass readability polish — login + empty wells —— */
+.login-card,
+main.grid.min-h-screen.place-items-center .rounded-panel {
+  background-color: rgb(10 10 12 / 0.66) !important;
+  backdrop-filter: blur(28px) saturate(1.22) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.22) !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 24px 56px rgb(0 0 0 / 0.5) !important;
+}
+.main-stage [data-testid="chat-empty"],
+.main-stage .empty-state,
+.main-stage [data-empty="true"] {
+  background-color: rgb(10 10 12 / 0.5) !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+}
