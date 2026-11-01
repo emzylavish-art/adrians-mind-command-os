@@ -1,5 +1,5 @@
-owner: released
-cycle: 40
-released: 2026-11-01T22:17:29+01:00
+owner: dashboard-3d-loop
+cycle: 41
+heartbeat: 2026-11-01T22:19:24+01:00
 branch: dashboard-3d
-last: c40 Painter c8 + Motion c10/c11 + #39/#21-25 + feedback confirm @ b4b61c4
+work: Gap#26 TDZ fix push; then capture + Motion traveler + #27

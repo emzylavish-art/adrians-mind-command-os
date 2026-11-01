@@ -6,6 +6,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { evaluatePerfBudget, nextEmaFrameMs } from "@/lib/mind/dashboard/perf-budget";
+import { filterEdgeRecsByVisibility } from "@/lib/mind/dashboard/edge-visibility";
 import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
 import { nhopBotIds } from "@/lib/mind/dashboard/nhop";
 import {
@@ -547,6 +548,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       );
     }
 
+    // Gap#26: declare filter sets BEFORE applyEdgeVisibilityFilter / rebuildEdges (avoid TDZ)
+    let graphFilter: GraphFilterState = { ...DEFAULT_GRAPH_FILTER };
+    let graphVisibleIds: Set<string> | null = null; // null = no graph filter active
+    let nhopVisibleIds: Set<string> | null = null; // Gap#6 local graph isolate
+
     type EdgeRec = { from: string; to: string; health: string; kind: string; fromPos: [number, number, number]; toPos: [number, number, number] };
     let edgeRecs: EdgeRec[] = [];
     let inkEdges: ReturnType<typeof kit.createInkEdges> | null = null;
@@ -571,12 +577,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const applyEdgeVisibilityFilter = () => {
       if (!inkEdges) return;
-      let recs = edgeRecs;
-      if (nhopVisibleIds) {
-        recs = recs.filter((e) => nhopVisibleIds!.has(e.from) && nhopVisibleIds!.has(e.to));
-      } else if (graphVisibleIds) {
-        recs = recs.filter((e) => graphVisibleIds!.has(e.from) && graphVisibleIds!.has(e.to));
-      }
+      const recs = filterEdgeRecsByVisibility(edgeRecs, nhopVisibleIds, graphVisibleIds);
       inkEdges.update(mapInkInput(recs));
     };
 
@@ -801,9 +802,6 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
-    let graphFilter: GraphFilterState = { ...DEFAULT_GRAPH_FILTER };
-    let graphVisibleIds: Set<string> | null = null; // null = no graph filter active
-    let nhopVisibleIds: Set<string> | null = null; // Gap#6 local graph isolate
 
     let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
