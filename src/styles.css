@@ -7073,3 +7073,24 @@ main.grid.min-h-screen.place-items-center .rounded-panel {
   backdrop-filter: blur(24px) saturate(1.2) !important;
   -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
 }
+
+/* —— Evolution c103: phone feel — tap highlight + touch-action (no 300ms) —— */
+html, body {
+  -webkit-tap-highlight-color: transparent !important;
+  tap-highlight-color: transparent !important;
+}
+button, a, [role="button"], [role="menuitem"],
+.nav-item, .sidebar-plus, .composer-bar button, .floating-composer button,
+nav.fixed[aria-label="Primary"] button {
+  -webkit-tap-highlight-color: rgb(255 255 255 / 0.08) !important;
+  touch-action: manipulation !important;
+}
+/* Keep pan-y on primary scroll surfaces so lists still fling */
+.main-stage,
+.main-stage .overflow-auto,
+.main-stage .overflow-y-auto,
+.min-h-0.flex-1.overflow-auto,
+.chat-stream,
+aside.rail nav {
+  touch-action: pan-y !important;
+}
