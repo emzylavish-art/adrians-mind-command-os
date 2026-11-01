@@ -322,6 +322,7 @@ async function callBuiltin(
       return pcRunShell({
         command: String(args.command ?? ""),
         confirm: args.confirm === true,
+        ownerId: deps.ownerId,
       });
     case "pglite_query": {
       const sqlClient = await deps.getSql();
