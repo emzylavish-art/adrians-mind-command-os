@@ -6970,3 +6970,34 @@ aside.rail nav button.nav-item svg {
   flex-shrink: 0 !important;
   translate: 0 0.5px;
 }
+
+/* —— Evolution c99: dark-mode secondary/tertiary AA floor on glass (measured) —— */
+html:not([data-theme="light"]) {
+  --color-muted: #b4bccb;
+}
+html:not([data-theme="light"]) .text-muted,
+html:not([data-theme="light"]) .main-stage .text-muted,
+html:not([data-theme="light"]) .page-shell .text-muted,
+html:not([data-theme="light"]) .masthead .text-muted,
+html:not([data-theme="light"]) aside .text-muted,
+html:not([data-theme="light"]) aside .text-xs.text-muted {
+  color: #b4bccb !important;
+}
+html:not([data-theme="light"]) .meta-label,
+html:not([data-theme="light"]) .main-stage .text-\[10px\],
+html:not([data-theme="light"]) .main-stage .text-xs:not(.font-bold):not(.font-semibold) {
+  color: #a8b0c0 !important;
+}
+html:not([data-theme="light"]) .main-stage .dense-card .text-muted,
+html:not([data-theme="light"]) .main-stage .glow-card .text-muted,
+html:not([data-theme="light"]) .main-stage .rounded-panel .text-muted,
+html:not([data-theme="light"]) .login-card .text-muted {
+  color: #c0c7d6 !important;
+}
+html:not([data-theme="light"]) .main-stage input::placeholder,
+html:not([data-theme="light"]) .main-stage textarea::placeholder,
+html:not([data-theme="light"]) .composer-bar textarea::placeholder,
+html:not([data-theme="light"]) .floating-composer textarea::placeholder {
+  color: #9aa3b5 !important;
+  opacity: 1 !important;
+}
