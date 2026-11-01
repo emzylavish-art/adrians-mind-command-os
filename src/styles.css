@@ -7386,3 +7386,29 @@ aside.rail [class*="shadow-[0_0_18px_rgb(124_92_255"],
 span[class*="124_92_255"]:not(.logo-mark):not(.logo-badge) {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 14px rgb(255 255 255 / 0.06) !important;
 }
+
+/* —— Evolution c113: tool / action pill margin rhythm (owner-video #14) —— */
+.main-stage .flex.flex-wrap.items-center.gap-2 > button,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage .flex.flex-wrap.gap-3 > button,
+.composer-dock .flex.flex-wrap.items-center.gap-2 > button,
+.floating-composer .flex.flex-wrap.items-center.gap-2 > button {
+  margin: 0 !important;
+}
+.main-stage .flex.flex-wrap.items-center.gap-2,
+.main-stage .flex.flex-wrap.gap-2,
+.composer-dock .mt-2.flex.flex-wrap.items-center.gap-2 {
+  gap: 0.5rem !important;
+  row-gap: 0.5rem !important;
+  column-gap: 0.5rem !important;
+}
+/* Tool-name chips if present */
+.main-stage [data-testid*="tool"],
+.main-stage .tool-chip,
+.main-stage code.tool-pill {
+  margin: 0.15rem 0.25rem !important;
+  padding: 0.25rem 0.55rem !important;
+  border-radius: 999px !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background: rgb(255 255 255 / 0.06) !important;
+}
