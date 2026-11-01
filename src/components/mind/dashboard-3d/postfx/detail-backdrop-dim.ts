@@ -613,7 +613,13 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       const cam = camera as THREE.PerspectiveCamera;
       u.aspect.value = cam.isPerspectiveCamera && Number.isFinite(cam.aspect) && cam.aspect > 0 ? cam.aspect : 1;
       probeCenter = [s.uv[0], s.uv[1]];
-      probeCandidate = cardProbeRect(probeCenter, u.holeRadius.value, u.aspect.value);
+      // Hacker (cycle after #84): size the probe from the REAL projected
+      // radius only. The hole radius above is guard-clamped (0.16 default when
+      // projectedRadiusUv() returned null, ≥0.04 for tiny cards), which made
+      // the probe meter a guessed region and report it as the card's reading.
+      const realR = typeof radiusUv === "number" && Number.isFinite(radiusUv) && radiusUv > 0 ? radiusUv : null;
+      probeCandidate = realR === null ? null : cardProbeRect(probeCenter, realR, u.aspect.value);
+      if (!probeCandidate) probeCenter = null;
       apply();
     },
     setCardProbe(on) {
