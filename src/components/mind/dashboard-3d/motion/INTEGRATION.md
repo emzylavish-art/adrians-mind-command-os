@@ -176,3 +176,39 @@ restoreFocusPose(newFocusState, bag.focusById[id]);
 
 Do **not** call `hardResetSharedMotionClockForTests()` on remount — shared clock already survives.
 
+## Star hover tooltip motion (c10)
+
+Complements Dashboard #26 / Gap#4 tooltip + edge highlight. Pure motion only —
+HUD markup/CSS stay with Dashboard Bot.
+
+```ts
+import {
+  createHoverTooltipState, createHoverTooltipSample,
+  setHoverTooltipTarget, clearHoverTooltip, stepHoverTooltip,
+} from "./motion";
+
+const hover = createHoverTooltipState();
+const hoverOut = createHoverTooltipSample();
+
+// on pointer pick (star id or null when miss):
+setHoverTooltipTarget(hover, pickedStarId);
+
+// each frame:
+stepHoverTooltip(hover, hoverOut, dt, reducedMotion);
+// apply hoverOut.opacity / offsetY / scale to tooltip DOM;
+// apply hoverOut.edge to constellation edge highlight strength;
+// show label for hoverOut.hoverId (null while intent-delaying or fully hidden)
+
+// on fly/focus open:
+clearHoverTooltip(hover);
+```
+
+Intent delay (`HOVER_INTENT_DELAY` ≈ 90ms) prevents edge-skim flicker. Leaving
+hides immediately (no delay). Reduced-motion snaps.
+
+### Pose-hold harden (c10)
+
+- `parseMotionPoseBag(sessionText)` — never throws on tampered JSON
+- `sanitizeMotionPoseBag` rebuilds a clean bag (strips `__proto__` / `constructor`, caps ids)
+- `restoreFocusPosesForKnownIds` / `restoreCharacterPosesForKnownIds` — skip stale ids
+
