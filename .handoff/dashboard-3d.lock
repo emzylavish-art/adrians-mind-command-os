@@ -1,5 +1,5 @@
-owner: dashboard-3d-loop
+owner: released
 cycle: 40
-heartbeat: 2026-11-01T22:16:49+01:00
+released: 2026-11-01T22:17:29+01:00
 branch: dashboard-3d
-work: Painter c8 inkEdges + Motion c10/c11 + #39/#21-25 + feedback confirm
+last: c40 Painter c8 + Motion c10/c11 + #39/#21-25 + feedback confirm @ b4b61c4
