@@ -98,7 +98,9 @@ export type ColorGradeHandle = {
 
 export function createColorGradePass(tone: HealthTone = "idle"): ColorGradeHandle {
   const pass = new ShaderPass(ColorGradeShader);
+  let disposed = false;
   const apply = (next: HealthTone) => {
+    if (disposed) return;
     const g = GRADE_BY_TONE[normalizeHealthTone(next)];
     const u = pass.uniforms as {
       tint: { value: [number, number, number] };
@@ -112,5 +114,13 @@ export function createColorGradePass(tone: HealthTone = "idle"): ColorGradeHandl
     u.vignette.value = g.vignette;
   };
   apply(tone);
-  return { pass, update: apply, dispose: () => pass.dispose() };
+  return {
+    pass,
+    update: apply,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      pass.dispose();
+    },
+  };
 }
