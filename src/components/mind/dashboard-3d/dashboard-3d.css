@@ -843,3 +843,10 @@
 .dash3d-status-overlay.is-soft .dash3d-status-card {
   max-width: 280px;
 }
+
+.dash3d-feed-glyph.is-alert .dash3d-feed-glyph-mark {
+  box-shadow: 0 0 10px rgba(251, 113, 133, 0.75);
+}
+.dash3d-feed-glyph.is-alert {
+  border-color: rgba(251, 113, 133, 0.55);
+}
