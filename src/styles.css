@@ -1836,3 +1836,46 @@ html[data-theme="light"] .min-h-0.flex-1.overflow-auto span.bg-accent\/20 {
   background: rgb(9 9 11 / 0.06) !important;
   color: #18181b !important;
 }
+
+/* —— Cycle 22: Agents list rows as mono avatar tiles —— */
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg {
+  padding: 0.7rem 0.85rem !important;
+  background: rgb(255 255 255 / 0.03) !important;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg::before {
+  content: "";
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: linear-gradient(145deg, #3f3f46, #18181b);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 14px rgb(255 255 255 / 0.06);
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg:hover {
+  background: rgb(255 255 255 / 0.055) !important;
+  border-color: rgb(255 255 255 / 0.16);
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg > span:first-of-type {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg > span.text-xs.text-muted {
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  padding: 0.2rem 0.55rem;
+  background: rgb(255 255 255 / 0.04);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg {
+  background: rgb(9 9 11 / 0.03) !important;
+  border-color: rgb(9 9 11 / 0.1);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg::before {
+  background: linear-gradient(145deg, #e4e4e7, #a1a1aa);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff;
+}
