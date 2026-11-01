@@ -149,3 +149,18 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 ### Commits
 - `2595ba7` Harden OAuth connectors…
 - (routes/ServiceBoard/pairing + tests follow)
+
+## Gap done: stdio MCP servers (2026-11-01 Africa/Lagos)
+
+**Status:** done (stdio unit + e2e PASS; typecheck/build previously green on tip)
+
+### Shipped
+- Execute registered command MCP servers: initialize, tools/list, tools/call with connect/call timeouts and child cleanup
+- Operator allowlist `MIND_MCP_STDIO_ALLOW` required before any spawn (deny by default)
+- Block LD_PRELOAD/NODE_OPTIONS/PATH override etc. from server env
+- Tools UI timeout/error status; e2e script `scripts/mcp/stdio-e2e.mjs`
+
+### Commits
+- `cf3bc07` Execute registered stdio MCP servers…
+- `8d46376` Tools UI timeout/error status for stdio…
+- (allowlist commit on tip)
