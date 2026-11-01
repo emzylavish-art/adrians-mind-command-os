@@ -663,3 +663,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+.dash3d-chart-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+}
+.dash3d-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}

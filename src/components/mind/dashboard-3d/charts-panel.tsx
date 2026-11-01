@@ -10,9 +10,15 @@ function SparkBars({ series }: { series: ChartSeries }) {
   const barW = Math.max(4, (w - gap * (n + 1)) / n);
   if (!series.points.length) {
     return (
-      <p className="dash3d-muted" style={{ fontSize: "0.68rem" }} data-testid="chart-empty">
-        {series.emptyReason || NO_CHART_SOURCE}
-      </p>
+      <div className="dash3d-chart-empty" data-testid="chart-empty">
+        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
+          <rect x={1} y={1} width={w - 2} height={h - 14} rx={6} fill="rgba(148,163,184,0.06)" stroke="rgba(148,163,184,0.22)" />
+          <line x1={12} y1={h - 22} x2={w - 12} y2={h - 22} stroke="rgba(148,163,184,0.25)" strokeDasharray="4 4" />
+        </svg>
+        <p className="dash3d-muted" style={{ fontSize: "0.68rem", margin: 0 }}>
+          {series.emptyReason || NO_CHART_SOURCE}
+        </p>
+      </div>
     );
   }
   return (
@@ -25,7 +31,7 @@ function SparkBars({ series }: { series: ChartSeries }) {
       data-testid={`chart-${series.id}`}
     >
       {series.points.map((p, i) => {
-        const bh = Math.max(1, (p.value / max) * (h - 16));
+        const bh = Math.max(4, (p.value / max) * (h - 16));
         const x = gap + i * (barW + gap);
         const y = h - 12 - bh;
         return (
@@ -42,17 +48,19 @@ function SparkBars({ series }: { series: ChartSeries }) {
 
 export function ChartsPanel({ charts }: { charts: DashboardCharts }) {
   const seriesList = [
+    charts.botHealth,
     charts.commitsPerBotHour,
+    charts.commitsPerDay,
     charts.lockHealthShare,
     charts.landingsPerLane,
     charts.spend,
-  ];
+  ].filter(Boolean);
   return (
     <aside className="dash3d-charts-panel dash3d-glass" data-testid="charts-panel" aria-label="Real-data charts">
       <div className="dash3d-feed-head">
         <h2>Charts</h2>
         <p className="dash3d-muted" style={{ fontSize: "0.62rem" }}>
-          git · locks · landings · spend
+          health · commits · activity · spend
         </p>
       </div>
       <div className="dash3d-charts-grid">

@@ -85,6 +85,9 @@ export type DashboardStatus = {
     repoDir: string;
     locksOk: boolean;
     gitOk: boolean;
+    /** Where commits came from: live git, build-time snapshot, or none. */
+    commitsSource?: "git" | "snapshot" | "none";
+    commitsSnapshotAt?: string;
     /** Honest reason git data is missing (never silently green). */
     gitError?: string;
     /** Env override rejected by the path allowlist (fallback used). */
