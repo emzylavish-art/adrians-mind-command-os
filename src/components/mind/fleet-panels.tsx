@@ -25,6 +25,14 @@ import {
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
 
+
+function botAvatarClass(name: string) {
+  const accents = ["bot-avatar-pink", "bot-avatar-teal", "bot-avatar-amber", "bot-avatar-violet", "bot-avatar-sky"] as const;
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash + name.charCodeAt(i) * (i + 1)) % accents.length;
+  return accents[hash];
+}
+
 export function FleetPanel({
   mode,
   ws,
@@ -70,12 +78,13 @@ export function FleetPanel({
 
   if (mode === "agents") {
     return (
-      <section className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6">
+      <section className="glow-card mx-4 mb-6 rounded-panel border border-line/80 p-4 md:mx-6">
         <h3 className="font-semibold">Agent directory</h3>
         <p className="mt-1 text-sm text-muted">Templates are definitions. A saved agent is not deployed. Local ready means the Run worker button in this app can execute it. Hosted stays external until a worker process exists.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {AGENT_TEMPLATES.map((template) => (
-            <button key={template.name} type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addAgentFromTemplate(ws, template.name))}>
+            <button key={template.name} type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => apply(addAgentFromTemplate(ws, template.name))}>
+              <span className={`bot-avatar size-8 text-xs ${botAvatarClass(template.name)}`} aria-hidden="true">{template.name.trim().charAt(0).toUpperCase()}</span>
               Add {template.name}
             </button>
           ))}
@@ -113,11 +122,16 @@ export function FleetPanel({
           {ws.agents.filter((agent) => !agent.archived).map((agent) => {
             const deployment = ws.deployments.find((item) => item.agentId === agent.id);
             return (
-              <li key={agent.id} className="rounded-panel border border-line p-3 text-sm">
+              <li key={agent.id} className="glow-card rounded-panel border border-line/80 p-3 text-sm">
+                <div className="flex items-start gap-3">
+                  <span className={`bot-avatar ${botAvatarClass(agent.name)}`} aria-hidden="true">{agent.name.trim().charAt(0).toUpperCase() || "A"}</span>
+                  <div className="min-w-0 flex-1">
                 <p className="font-semibold">{agent.name}</p>
                 <p className="text-muted">{agent.description}</p>
                 <p className="mt-1 text-xs text-muted">Tools: {agent.tools.join(", ") || "none"}. Version {agent.version}. {deployment ? `${deployment.target} · ${deployment.state}` : "Not deployed"}.</p>
                 {deployment?.error ? <p className="text-xs text-muted">{deployment.error}</p> : null}
+                  </div>
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "local-worker"))}>Arm local worker</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "hosted-worker"))}>Record hosted target</button>

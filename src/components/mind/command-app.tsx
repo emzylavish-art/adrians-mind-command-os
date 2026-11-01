@@ -23,6 +23,7 @@ import {
   Square,
   Video,
   CalendarClock,
+  ChevronDown,
   CircleHelp,
   Link2,
   ListTree,
@@ -30,6 +31,7 @@ import {
   PanelLeft,
   Pin,
   Terminal,
+  Volume2,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -116,6 +118,10 @@ const EXTERNAL = [
 ];
 
 type Staged = { name: string; text: string };
+
+const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build"] as const;
+type ModelTier = (typeof MODEL_TIERS)[number];
+
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
@@ -290,6 +296,9 @@ export function CommandApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
   const [reaReport, setReaReport] = useState<string | null>(null);
   const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
@@ -420,6 +429,7 @@ export function CommandApp() {
     setAccountOpen(false);
     setContextOpen(false);
     setToolsOpen(false);
+      setModelMenuOpen(false);
   }
 
   function requestProtected(kind: string, id: string, label: string, detail: string, confirm: string, run: () => void) {
@@ -1141,6 +1151,8 @@ export function CommandApp() {
   }
 
   function listen() {
+    setListening(true);
+    window.setTimeout(() => setListening(false), 6000);
     const host = window as Window & {
       SpeechRecognition?: new () => {
         lang: string;
@@ -1161,6 +1173,7 @@ export function CommandApp() {
     const rec = new Ctor();
     rec.lang = "en-US";
     rec.onresult = (event) => {
+      setListening(false);
       const transcript = event.results[0]?.[0]?.transcript ?? "";
       setDraft(transcript);
       voiceNext.current = Boolean(transcript);
@@ -1215,11 +1228,11 @@ export function CommandApp() {
   const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
 
   return (
-    <div className="flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col bg-surface md:static md:flex md:h-dvh ${railCollapsed ? "md:w-16" : "md:w-64"} md:shrink-0 md:border-r md:border-line`}>
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
+      <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
-            A
+          <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
+            <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
           </span>
           {!railCollapsed && (
             <div className="min-w-0 flex-1">
@@ -1234,10 +1247,26 @@ export function CommandApp() {
             <PanelLeft className="size-4" />
           </button>
         </div>
+        <div className={`px-3 pb-2 ${railCollapsed ? "flex justify-center" : ""}`}>
+          <button
+            type="button"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            aria-label="Search workspace"
+            onClick={() => {
+              setPaletteOpen(true);
+              setNavOpen(false);
+              window.setTimeout(() => searchRef.current?.focus(), 0);
+            }}
+          >
+            <Search className="size-4 shrink-0" />
+            {!railCollapsed && <span>Search</span>}
+          </button>
+        </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
           {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-3">
-              {!railCollapsed && <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">{group.label.toUpperCase()}</p>}
+            <div key={group.label} className="mb-4">
+              {!railCollapsed && <p className="px-3 pb-2 text-[10px] font-semibold tracking-[0.18em] text-muted">{group.label.toUpperCase()}</p>}
+              <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const on = view === item.id;
@@ -1251,13 +1280,14 @@ export function CommandApp() {
                       setNavOpen(false);
                       closeMenus();
                     }}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "bg-accent text-white shadow-[0_0_18px_rgb(124_92_255/0.45)]" : "text-muted"}`}
+                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"}`}
                   >
-                    <Icon className="size-4 shrink-0" />
+                    <Icon className="size-4 shrink-0 opacity-90" />
                     {!railCollapsed && item.label}
                   </button>
                 );
               })}
+              </div>
             </div>
           ))}
           {ws.pins.length > 0 && !railCollapsed && (
@@ -1315,21 +1345,36 @@ export function CommandApp() {
             </div>
           )}
         </nav>
-        {!railCollapsed && (
-          <div className="border-t border-line p-4">
-            <p className="text-sm font-semibold">Adrian (Personal)</p>
-            <p className="text-xs text-muted">Only workspace on this device.</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+        <div className={`border-t border-line/70 p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
+          <button
+            type="button"
+            className={`sidebar-plus inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-accent px-3 text-sm font-semibold text-accent-ink ${railCollapsed ? "size-11 px-0" : "w-full"}`}
+            aria-label="New chat"
+            onClick={() => {
+              openChat();
+              setView("chat");
+              setNavOpen(false);
+            }}
+          >
+            <Plus className="size-4" />
+            {!railCollapsed && "New"}
+          </button>
+          {!railCollapsed && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold">Adrian (Personal)</p>
+              <p className="text-xs text-muted">Only workspace on this device.</p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full bg-glow" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
+              <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
             </div>
-            <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
-            <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
-        <header className="flex items-center gap-2 border-b border-line px-3 py-3 md:gap-3 md:px-5">
+      <div className="main-stage flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
+        <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
           </button>
@@ -1345,7 +1390,7 @@ export function CommandApp() {
               }}
               onFocus={() => setPaletteOpen(true)}
               placeholder="Search or jump…"
-              className="h-11 w-full rounded-panel border border-line bg-surface pr-14 pl-10 text-sm"
+              className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
               aria-label="Search"
               aria-keyshortcuts="Control+K Meta+K"
               aria-expanded={paletteOpen}
@@ -1353,7 +1398,7 @@ export function CommandApp() {
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="absolute z-30 mt-2 max-h-80 w-full overflow-auto rounded-panel border border-line bg-surface p-2 shadow-panel">
+              <div id="command-palette" className="floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
                 {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
                 {hits.map((hit) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
@@ -1384,13 +1429,77 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex ${headerTone}`}>
+          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}>
             <span className="size-2 rounded-full bg-current" />
             {headerState}
           </span>
+          <div className="relative hidden md:block">
+            <button
+              type="button"
+              className="model-chip inline-flex h-11 items-center gap-2 px-3 text-sm font-medium"
+              aria-haspopup="menu"
+              aria-expanded={modelMenuOpen}
+              onClick={() => {
+                setModelMenuOpen((open) => !open);
+                setBellOpen(false);
+                setAccountOpen(false);
+              }}
+            >
+              {modelTier}
+              <ChevronDown className="size-3.5 opacity-70" />
+            </button>
+            {modelMenuOpen && (
+              <div className="floating-menu absolute right-0 z-40 mt-2 w-56 p-2" role="menu">
+                <p className="px-2 pb-2 text-[10px] font-semibold tracking-[0.16em] text-muted">MODEL</p>
+                {MODEL_TIERS.map((tier) => (
+                  <button
+                    key={tier}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={modelTier === tier}
+                    className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${modelTier === tier ? "model-option-active" : "text-muted hover:bg-white/5"}`}
+                    onClick={() => {
+                      setModelTier(tier);
+                      setModelMenuOpen(false);
+                    }}
+                  >
+                    {tier}
+                  </button>
+                ))}
+                <p className="mt-2 border-t border-line/60 px-2 pt-2 text-[11px] text-muted">Display preference only. Send still uses the configured provider rules.</p>
+              </div>
+            )}
+          </div>
+          <div className="voice-zone" aria-label="Voice controls">
+            <button
+              type="button"
+              className={`grid size-9 place-items-center rounded-full ${listening ? "mic-pulse text-glow" : "text-muted"}`}
+              aria-label="Dictate"
+              onClick={() => listen()}
+            >
+              <Mic className="size-4" />
+            </button>
+            {listening ? (
+              <span className="waveform px-1" aria-hidden="true">
+                <span /><span /><span /><span /><span />
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="grid size-9 place-items-center rounded-full text-muted"
+              aria-label="Speak last reply"
+              disabled={speaking}
+              onClick={() => {
+                const last = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
+                if (last) void speak(last.content);
+              }}
+            >
+              <Volume2 className="size-4" />
+            </button>
+          </div>
           <button
             type="button"
-            className="grid size-11 place-items-center rounded-full border border-line"
+            className="grid size-11 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Alerts"
             onClick={() => {
               setBellOpen((open) => !open);
@@ -1476,13 +1585,13 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+              <section className="floating-composer command-card p-3 md:p-4">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
                     <span className="block text-xs">Review and approve before action</span>
                   </button>
-                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">AUTOMATIC</span>
                     <span className="block text-xs">Deletes and replacements still ask you</span>
                   </button>
@@ -1525,7 +1634,7 @@ export function CommandApp() {
                       <button
                         key={id}
                         type="button"
-                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}
+                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
                         onClick={() => setCommandMode(id)}
                       >
                         {label}
@@ -1537,13 +1646,13 @@ export function CommandApp() {
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
                     rows={3}
-                    className="w-full resize-none rounded-panel border border-line bg-bg px-3 py-3 text-sm"
+                    className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
                       <Paperclip className="size-4" /> Attach
                     </button>
                     <button
@@ -1572,10 +1681,7 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
-                      <Mic className="size-4" />
-                    </button>
-                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                    <button type="submit" disabled={busy || ws.halted} className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
                   </div>
@@ -2410,7 +2516,7 @@ export function CommandApp() {
           {view === "settings" && (
             <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
               <h2 className="font-display text-3xl font-bold">Settings</h2>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Appearance</p>
                 <p className="mt-1 text-muted">The theme is saved in this browser. It does not change a server setting.</p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -2421,7 +2527,7 @@ export function CommandApp() {
                   ))}
                 </div>
               </div>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>
                 <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
               </div>
@@ -2567,12 +2673,30 @@ export function CommandApp() {
           </div>
         </Overlay>
       )}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Primary">
-        {NAV.filter((item) => item.id === "command" || item.id === "agents" || item.id === "build" || item.id === "projects").map((item) => {
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
+        {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
           return (
-            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-accent" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+              <Icon className="size-4" />
+              {item.label}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className="sidebar-plus relative -mt-3 flex size-14 flex-col items-center justify-center rounded-full bg-accent text-accent-ink"
+          aria-label="New chat"
+          onClick={() => { openChat(); setView("chat"); setNavOpen(false); }}
+        >
+          <Plus className="size-5" />
+        </button>
+        {NAV.filter((item) => item.id === "build" || item.id === "projects").map((item) => {
+          const Icon = item.icon;
+          const on = view === item.id;
+          return (
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
               <Icon className="size-4" />
               {item.label}
             </button>
@@ -2589,7 +2713,7 @@ export function CommandApp() {
 
 function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm">
+    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line/80 bg-surface/80 px-3 text-sm shadow-[0_8px_24px_rgb(0_0_0/0.25)] backdrop-blur">
       <Icon className={`size-4 ${tone}`} />
       {label}
     </button>
@@ -2598,7 +2722,7 @@ function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: type
 
 function Panel({ title, action, onAction, children }: { title: string; action: string; onAction: () => void; children: ReactNode }) {
   return (
-    <section className="rounded-panel border border-line bg-surface p-4 shadow-panel">
+    <section className="glow-card rounded-panel border border-line/80 p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">{title}</h2>
         <button type="button" className="text-sm text-info" onClick={onAction}>{action}</button>
@@ -2861,7 +2985,7 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-surface-2" : "bg-surface"}`}>
+            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "ml-auto bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -2938,13 +3062,13 @@ function ChatPane({
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
         </div>
         <form
-          className="command-card m-3 rounded-panel bg-surface p-3"
+          className="floating-composer command-card m-3 p-3"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
           }}
         >
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="min-h-11 w-full bg-transparent text-sm outline-none" />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none" />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -2959,42 +3083,44 @@ function ChatPane({
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttach}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
               <Paperclip className="size-4" /> Attach
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line" onClick={onListen} aria-label="Dictate">
-              <Mic className="size-4" />
-            </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
-              {speaking ? "Speaking" : "Speak"}
-            </button>
-            <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <button type="submit" disabled={busy || halted || !active} className="ml-auto min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
         </form>
       </section>
-      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
-        <section className="rounded-panel border border-line bg-surface p-3">
+      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line/70 p-3 xl:flex">
+        <section className="glass-panel rounded-panel p-3">
           <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
-          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>
-          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Automatic</button>
+        <section className="glass-panel rounded-panel p-3">
+          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
+          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
+        <section className="glass-panel rounded-panel p-3">
           <button type="button" role="switch" aria-checked={memoryChoice === "on"} onClick={onComposerMemory} className="flex min-h-11 w-full items-center justify-between text-sm">
             Memory: {memoryChoice === "on" ? "ON" : "OFF"}
             <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
           </button>
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3 text-sm">
+        <section className="glass-panel rounded-panel p-3 text-sm">
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
+        <div className="voice-zone-rail" aria-label="Voice controls">
+          <button type="button" className="grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label="Dictate">
+            <Mic className="size-4" />
+          </button>
+          <button type="button" className="grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
+            <Volume2 className="size-4" />
+          </button>
+        </div>
       </aside>
     </div>
   );
@@ -3013,9 +3139,12 @@ function ProviderPicker({
 }) {
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold">Model</legend>
+      <legend className="text-sm font-semibold">Provider</legend>
       {choices.map((item) => (
-        <label key={item.id} className="flex items-start gap-2 text-sm">
+        <label
+          key={item.id}
+          className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : "hover:bg-white/5"} ${!item.enabled ? "opacity-60" : ""}`}
+        >
           <input
             type="radio"
             name={name}
