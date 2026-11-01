@@ -283,3 +283,38 @@ dust.update(tSeconds, reducedMotion);    // decays + applies offset
 1000 impulses in one frame stay ≤ `GUST_MAX_SPEED`. Reduced-motion clears / ignores.
 `sharedMotionClock` remains the same exported name/type (lazy inner; importers unchanged).
 
+## Comet launch ease on commit burst (c14)
+
+Pure stagger/cap/ease for fleet commit bursts. `commit-comets` keeps meshes.
+
+```ts
+import {
+  createCometLaunchState, createCometLaunchSample,
+  scheduleCometLaunchBurst, stepCometLaunchEase, clearCometLaunch,
+} from "./motion";
+
+const launch = createCometLaunchState(24);
+const samples = Array.from({ length: 24 }, () => createCometLaunchSample());
+
+// when a commit burst arrives (N shas):
+scheduleCometLaunchBurst(launch, commits.length, reducedMotion);
+
+// each frame:
+stepCometLaunchEase(launch, samples, dt, reducedMotion);
+// apply samples[i].opacity/scale to comet i (or hide if !visible)
+```
+
+Re-call `scheduleCometLaunchBurst` as slots free (concurrent cap). `clearCometLaunch` interrupts.
+
+## Requests for Dashboard Bot
+
+Motion lane **does not edit `package.json`**. Please add these lane test files to the
+`scripts.test` strip-types list on `origin/dashboard-3d` when landing motion/+particles/:
+
+- `src/components/mind/dashboard-3d/motion/comet-launch-ease.test.ts`
+- `src/components/mind/dashboard-3d/motion/wind-gust.test.ts`
+- `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
+- `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
+
+Lane CI locally: `node --experimental-strip-types --test src/components/mind/dashboard-3d/motion/*.test.ts src/components/mind/dashboard-3d/particles/*.test.ts`
+
