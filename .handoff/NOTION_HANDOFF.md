@@ -358,5 +358,15 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - preview/integration unchanged @ 7f3e641 (no merge needed).
 - Fix: pc-approval-action.ts runPcApprovalAction + snapshot params + PcApprovalActionStatusRows; onceRetry; onFailure→reportFailure. failure-states pc_approve_failed / pc_deny_failed.
 - Checks: typecheck pass; TS 811/813 (2 pre-existing); lint our files 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42816b8d15c9f6e5037f9b
+- Pushed origin/error-banners → e59f339afdc6b1d72338c5f1b1d502a1fb905dfd
+- Lock releasing.
+
+## 2026-11-01T17:40:11+01:00 (Africa/Lagos) — Error Banners Bot — H19 MCP Try SELECT 1 call banner
+- Gap: Tools panel Try SELECT 1 catch → muted mcpCallNote; status error/timeout also muted.
+- Lock: /workspace/locks/error-banners-gap-mcp-try-select.lock (no mcp/ touched).
+- preview/integration still @ 7f3e641.
+- Fix: mcp-call-action.ts under src/lib/mind; snapshot serverId/tool/sql; onceRetry; onFailure→reportFailure.
+- Checks: typecheck pass; TS 815/817 (2 pre-existing); lint our files 0e; build pass.
 - Notion: (pending)
 - Lock releasing.

@@ -50,6 +50,13 @@ import {
   snapshotPcApprovalActionParams,
   type PcApprovalActionState,
 } from "@/lib/mind/pc-approval-action";
+import {
+  McpCallActionStatusRows,
+  onceRetry as onceMcpCallRetry,
+  runMcpTrySelect,
+  snapshotMcpTrySelectParams,
+  type McpCallActionState,
+} from "@/lib/mind/mcp-call-action";
 
 
 function botAvatarSrc(name: string) {
@@ -107,6 +114,7 @@ export function FleetPanel({
   const mcpToolsGeneration = useRef(0);
   const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
   const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
+  const [mcpCallActionState, setMcpCallActionState] = useState<McpCallActionState>({ status: "idle" });
   const [pcApprovals, setPcApprovals] = useState<PcApprovalRow[]>([]);
   const [pcApprovalsState, setPcApprovalsState] = useState<FleetListState<PcApprovalRow>>({ status: "loading" });
   const pcApprovalsInFlight = useRef(false);
@@ -682,18 +690,31 @@ export function FleetPanel({
                           className="mt-1 min-h-11 rounded-panel border border-line px-3 text-sm"
                           disabled={mcpCallStatus === "running"}
                           onClick={() => {
-                            setMcpCallStatus("running");
-                            setMcpCallNote(`running: pglite_query on ${server.label} (enabled=${server.enabled})`);
-                            void mcpRegistryCall({ data: { serverId: server.id, tool: "pglite_query", args: { sql: "SELECT 1 AS n" } } })
-                              .then((result) => {
-                                const row = result as { status: string; text: string };
-                                setMcpCallStatus(row.status === "ok" ? "ok" : row.status === "timeout" ? "timeout" : "error");
-                                setMcpCallNote(`${row.status}: ${row.text}`);
-                              })
-                              .catch((error: unknown) => {
-                                setMcpCallStatus("error");
-                                setMcpCallNote(error instanceof Error ? error.message : "MCP call failed.");
+                            const params = snapshotMcpTrySelectParams({ serverId: server.id, serverLabel: server.label });
+                            const run = () => {
+                              setMcpCallStatus("running");
+                              setMcpCallActionState({ status: "running", params });
+                              setMcpCallNote(`running: pglite_query on ${server.label} (enabled=${server.enabled})`);
+                              void runMcpTrySelect(params, (input) => mcpRegistryCall(input)).then((result) => {
+                                if (result.ok) {
+                                  setMcpCallStatus("ok");
+                                  setMcpCallActionState({ status: "ok", note: result.note });
+                                  setMcpCallNote(result.note);
+                                  return;
+                                }
+                                setMcpCallStatus(result.kind === "network_failure" && /timed out|timeout/i.test(result.message) ? "timeout" : "error");
+                                setMcpCallActionState({
+                                  status: "error",
+                                  kind: result.kind,
+                                  message: result.message,
+                                  params: result.params,
+                                });
+                                setMcpCallNote(null);
+                                const retry = onceMcpCallRetry(() => run());
+                                if (retry) onFailure?.(result.message, retry);
                               });
+                            };
+                            run();
                           }}
                         >
                           Try SELECT 1
@@ -708,7 +729,40 @@ export function FleetPanel({
           <McpListStatusRows state={mcpListState} onRetry={onceListRetry(loadMcpServers)} />
           <McpToolsListStatusRows state={mcpToolsState} onRetry={onceListRetry(loadMcpTools)} />
         </ul>
-        {mcpCallNote ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
+        <McpCallActionStatusRows
+          state={mcpCallActionState}
+          onRetry={
+            mcpCallActionState.status === "error"
+              ? onceMcpCallRetry(() => {
+                  const params = mcpCallActionState.params;
+                  const run = () => {
+                    setMcpCallStatus("running");
+                    setMcpCallActionState({ status: "running", params });
+                    void runMcpTrySelect(params, (input) => mcpRegistryCall(input)).then((result) => {
+                      if (result.ok) {
+                        setMcpCallStatus("ok");
+                        setMcpCallActionState({ status: "ok", note: result.note });
+                        setMcpCallNote(result.note);
+                        return;
+                      }
+                      setMcpCallStatus("error");
+                      setMcpCallActionState({
+                        status: "error",
+                        kind: result.kind,
+                        message: result.message,
+                        params: result.params,
+                      });
+                      setMcpCallNote(null);
+                      const retry = onceMcpCallRetry(() => run());
+                      if (retry) onFailure?.(result.message, retry);
+                    });
+                  };
+                  run();
+                }) ?? (() => undefined)
+              : () => undefined
+          }
+        />
+        {mcpCallNote && mcpCallActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
       </div>
 
       <ul className="mt-4 space-y-2 text-sm">

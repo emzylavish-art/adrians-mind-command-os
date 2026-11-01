@@ -48,6 +48,7 @@ export const HONEST_FAILURE_MESSAGES = {
   worker_health_failed: "The worker status could not be read.",
   pc_approve_failed: "The PC shell approval could not be completed.",
   pc_deny_failed: "The PC shell denial could not be completed.",
+  mcp_try_select_failed: "The MCP Try SELECT 1 call failed.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -192,6 +193,8 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text.includes("PC shell approval could not be completed")
     || text === HONEST_FAILURE_MESSAGES.pc_deny_failed
     || text.includes("PC shell denial could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.mcp_try_select_failed
+    || text.includes("MCP Try SELECT 1 call failed")
   ) {
     return "network_failure";
   }

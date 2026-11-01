@@ -136,6 +136,7 @@ describe("top-5 gap classifiers", () => {
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.worker_health_failed), "network_failure");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_approve_failed), "network_failure");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_deny_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_try_select_failed), "network_failure");
     assert.equal(classifyHonestFailure("The worker status could not be read. The network request failed. Nothing was substituted."), "network_failure");
     assert.equal(honestFailureAuditAction("network_failure"), "network_failure");
   });
