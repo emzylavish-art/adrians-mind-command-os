@@ -3728,3 +3728,29 @@ aside .text-xs.text-muted,
     background: rgb(10 10 12 / 0.96) !important;
   }
 }
+
+/* —— Cycle 32k: composer-dock fixed dock (correct ancestors) —— */
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock,
+  .command-card.composer-dock[data-composer="floating"],
+  form.composer-dock.command-card {
+    position: fixed !important;
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 45 !important;
+    max-height: min(52vh, 26rem) !important;
+    overflow: auto !important;
+    margin: 0 !important;
+    background: rgb(10 10 12 / 0.96) !important;
+    backdrop-filter: blur(28px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+  }
+  .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
+  }
+  .flex.min-h-0.min-w-0.flex-1.flex-col.pb-16 {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
+  }
+}
