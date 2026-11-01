@@ -23,6 +23,7 @@ describe("ollama conductor", () => {
   it("includes a custom base URL in the unreachable message", async () => {
     const result = await runOllamaConductor("hello", {
       baseUrl: "http://192.168.1.10:11434/",
+      allowRemote: true,
       fetchImpl: async () => {
         throw new TypeError("fetch failed");
       },
@@ -31,6 +32,21 @@ describe("ollama conductor", () => {
     if (!result.ok) {
       assert.equal(result.unreachable, true);
       assert.equal(result.error, ollamaUnreachableMessage("http://192.168.1.10:11434"));
+    }
+  });
+
+  it("rejects non-loopback Ollama hosts unless allowRemote is set", async () => {
+    const result = await runOllamaConductor("hello", {
+      baseUrl: "http://192.168.1.10:11434/",
+      allowRemote: false,
+      fetchImpl: async () => {
+        throw new TypeError("should not fetch");
+      },
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.unreachable, false);
+      assert.match(result.error, /loopback|local|remote|allow/i);
     }
   });
 
