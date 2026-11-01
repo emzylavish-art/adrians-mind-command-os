@@ -185,7 +185,7 @@ export type PortraitBounceHandle = {
   readonly rgb: Rgb3;
   /** True when the colour came from real portrait pixels. */
   readonly sampled: boolean;
-  /** Last sample failure (tainted canvas, no 2D context…) or null. */
+  /** Sample failure for the CURRENT focus (tainted canvas, no 2D context…) or null. */
   readonly lastSampleError: string | null;
   setFocus: (input: PortraitBounceInput | null, opts?: { reducedMotion?: boolean }) => void;
   tick: (dtMs: number) => void;
@@ -202,7 +202,7 @@ export function createPortraitBounce(
   light.name = "light:portrait-bounce";
   scene.add(light);
 
-  const cache = new WeakMap<THREE.Texture, { version: number; rgb: Rgb3 | null }>();
+  const cache = new WeakMap<THREE.Texture, { version: number; rgb: Rgb3 | null; error: string | null }>();
   let disposed = false;
   let level = 0;
   let target = 0;
@@ -216,14 +216,25 @@ export function createPortraitBounce(
   const toCol = new THREE.Color(1, 1, 1);
   let colElapsed = BOUNCE_EASE_MS;
 
+  // HACKER (#68 cycle): lastSampleError describes the CURRENT focus — cleared on a
+  // real sample / no texture, re-surfaced from cache for a known-bad portrait.
+  // (It used to stick forever after one tainted portrait.)
   const averageFor = (tex: THREE.Texture | null | undefined): Rgb3 | null => {
-    if (!tex) return null;
+    if (!tex) {
+      lastSampleError = null;
+      return null;
+    }
     const hit = cache.get(tex);
-    if (hit && hit.version === tex.version) return hit.rgb;
+    if (hit && hit.version === tex.version) {
+      lastSampleError = hit.error;
+      return hit.rgb;
+    }
     const r = sampleTextureAverage(tex, reader);
-    if (r.error) lastSampleError = r.error;
+    lastSampleError = r.error;
     // Only cache definitive answers (not "image still loading").
-    if (r.rgb || r.error || readyImageSize(tex.image)) cache.set(tex, { version: tex.version, rgb: r.rgb });
+    if (r.rgb || r.error || readyImageSize(tex.image)) {
+      cache.set(tex, { version: tex.version, rgb: r.rgb, error: r.error });
+    }
     return r.rgb;
   };
 
