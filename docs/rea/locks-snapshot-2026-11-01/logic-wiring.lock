@@ -1,0 +1,20 @@
+owner: Logic Bot
+branch: logic-wiring
+worktree: /workspace/mind-command-os-logic
+base: b6f7620
+status: claimed
+claimed_at: 2026-11-01T15:12:55+01:00
+claimed_by: Logic Bot
+paths_claimed:
+  - src/lib/mind/server.ts (recordAgentExecution)
+  - src/lib/mind/execution-ledger.ts (new if needed)
+  - src/lib/mind/execution-ledger.test.ts (new)
+  - src/lib/mind/limits.ts (prune + bound)
+  - src/lib/mind/limits.test.ts
+  - src/lib/mind/rate-limit.test.ts
+  - src/lib/mind/agent-run.server.ts (issue ledger ids if needed)
+  - src/lib/mind (client callers in lane — not command-app/service-board)
+  - package.json (test:mind additive)
+  - .handoff/NOTION_HANDOFF.md
+notes: |
+  H13 forged execution records. No command-app.tsx / service-board.tsx.

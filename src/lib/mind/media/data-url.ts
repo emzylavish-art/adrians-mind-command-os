@@ -1,3 +1,4 @@
+import { sniffImageMimeFromBase64 } from "./harden.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE } from "./types.ts";
 
 const DATA_URL_RE = /^data:(image\/(?:png|jpeg|jpg|gif|webp));base64,([A-Za-z0-9+/=\s]+)$/i;
@@ -16,7 +17,12 @@ export function parseImageDataUrl(value: string): { ok: true; mime: string; base
   if (`data:${mime};base64,${base64}`.length > MAX_DATA_URL_CHARS) {
     return { ok: false, error: "That image is too large after encoding. Downscale it and try again." };
   }
-  return { ok: true, mime, base64 };
+  const sniffed = sniffImageMimeFromBase64(base64);
+  if (!sniffed) {
+    return { ok: false, error: "That file is not a recognizable PNG, JPEG, GIF, or WebP image." };
+  }
+  // Prefer sniffed bytes over a lying MIME claim (polyglot / renamed non-image).
+  return { ok: true, mime: sniffed, base64 };
 }
 
 export function normalizeImageDataUrl(value: string): string | null {

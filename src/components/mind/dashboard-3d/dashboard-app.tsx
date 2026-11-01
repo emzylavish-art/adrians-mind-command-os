@@ -9,7 +9,7 @@ import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
 import "./dashboard-3d.css";
 
-export function DashboardApp() {
+export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const { state } = useDashboardStatus();
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
@@ -41,7 +41,7 @@ export function DashboardApp() {
   };
 
   return (
-    <main className="dash3d-root dash3d-universe" data-fly-level={fly.level}>
+    <main className={`dash3d-root dash3d-universe${embedded ? " is-embedded" : ""}`} data-fly-level={fly.level}>
       {state.status === "ready" && !webglError ? (
         <UniverseScene
           data={state.data}

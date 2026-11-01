@@ -81,13 +81,13 @@ describe("drive list/fetch helpers", () => {
       ok: true,
       name: "shot.png",
       mimeType: "image/png",
-      base64: "aaaa",
+      base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
       bytes: 3,
       kind: "image",
     });
     assert.equal(packaged.ok, true);
     if (packaged.ok && packaged.kind === "image") {
-      assert.match(packaged.image.dataUrl, /^data:image\/png;base64,aaaa$/);
+      assert.match(packaged.image.dataUrl, /^data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==$/);
     }
     const textPack = packageCloudFetchForComposer({
       ok: true,
@@ -100,6 +100,16 @@ describe("drive list/fetch helpers", () => {
     });
     assert.equal(textPack.ok, true);
     if (textPack.ok && textPack.kind === "text") assert.equal(textPack.staged.text, "hello");
+    const mismatch = packageCloudFetchForComposer({
+      ok: true,
+      kind: "image",
+      name: "lie.png",
+      mimeType: "image/jpeg",
+      base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    } as never);
+    // tiny is PNG bytes claimed as jpeg → reject
+    assert.equal(mismatch.ok, false);
+
     const bad = packageCloudFetchForComposer({
       ok: true,
       name: "x.bin",

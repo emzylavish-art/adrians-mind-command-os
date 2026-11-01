@@ -1,0 +1,19 @@
+feature: HARDENING (MED) — H13 recordAgentExecution trusts client-asserted tool runs and has no rate limit
+lane: logic-wiring
+owner_bot: Logic Bot
+branch: logic-wiring
+worktree: /workspace/mind-command-os-logic
+status: claimed
+claimed_by: Logic Bot
+claimed_at: 2026-11-01T15:12:55+01:00
+dispatched_by: Gap Dispatcher (cycle 20)
+dispatched_at: 2026-11-01T15:01:43+01:00
+gap_rank: hardening H13 MED
+paths_claimed:
+  - src/lib/mind/server.ts
+  - src/lib/mind/execution-ledger.ts
+  - src/lib/mind/execution-ledger.test.ts
+  - src/lib/mind/limits.ts
+  - src/lib/mind/agent-run.server.ts
+notes: |
+  Claimed after verifier lock cleared. Fix ledger + 429 + prune.

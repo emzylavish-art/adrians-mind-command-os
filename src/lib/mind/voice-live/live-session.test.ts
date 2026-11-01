@@ -155,6 +155,121 @@ describe("LiveVoiceSession", () => {
     setLiveVoiceOccupied(false);
   });
 
+  it("End mid-connect aborts pending mint and returns to off", async () => {
+    setLiveVoiceOccupied(false);
+    const phases: string[] = [];
+    let mintStarted = false;
+    let mintAborted = false;
+    const session = new LiveVoiceSession(
+      { onState: (s) => phases.push(`${s.phase}`) },
+      {
+        mintSecret: async (signal) => {
+          mintStarted = true;
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => resolve(), 5_000);
+            signal?.addEventListener(
+              "abort",
+              () => {
+                mintAborted = true;
+                clearTimeout(timer);
+                reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+              },
+              { once: true },
+            );
+          });
+          return { ok: true, value: "late", expiresAt: Date.now() + 60_000 };
+        },
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        socketFactory: () => new FakeSocket(),
+      },
+    );
+    const startP = session.start();
+    for (let i = 0; i < 50 && !mintStarted; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(session.state.phase, "connecting");
+    session.end("canceled");
+    assert.equal(session.state.phase, "off");
+    await Promise.allSettled([startP]);
+    assert.equal(mintAborted, true);
+    assert.equal(session.state.phase, "off");
+    assert.ok(phases.includes("connecting"));
+    assert.equal(phases.at(-1), "off");
+    setLiveVoiceOccupied(false);
+  });
+
+  it("timeout-to-error when mic probe throws ConnectTimeoutError", async () => {
+    setLiveVoiceOccupied(false);
+    const { ConnectTimeoutError } = await import("./connect-timeout.ts");
+    const errors: string[] = [];
+    const session = new LiveVoiceSession(
+      { onError: (m) => errors.push(m) },
+      {
+        mintSecret: async () => ({ ok: true, value: "ephemeral", expiresAt: Date.now() + 60_000 }),
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: async () => {
+          throw new ConnectTimeoutError(
+            "mic",
+            "Microphone did not respond in time. Check permissions or connect a mic, then try again.",
+          );
+        },
+        skipMic: true,
+      },
+    );
+    await session.start();
+    assert.ok(errors.some((e) => /Microphone did not respond/i.test(e)));
+    await new Promise((r) => setTimeout(r, 80)); // fail() settles error → off
+    assert.equal(session.state.phase, "off");
+    setLiveVoiceOccupied(false);
+  });
+
+  it("pressMic while connecting cancels instead of stacking starts", async () => {
+    setLiveVoiceOccupied(false);
+    let mintCount = 0;
+    const session = new LiveVoiceSession(
+      {},
+      {
+        mintSecret: async (signal) => {
+          mintCount += 1;
+          await new Promise<void>((resolve, reject) => {
+            const t = setTimeout(resolve, 2_000);
+            signal?.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(t);
+                reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+              },
+              { once: true },
+            );
+          });
+          return { ok: true, value: "x", expiresAt: Date.now() + 60_000 };
+        },
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        socketFactory: () => new FakeSocket(),
+      },
+    );
+    const p = session.pressMic();
+    for (let i = 0; i < 50 && session.state.phase !== "connecting"; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(session.state.phase, "connecting");
+    // Wait until mint begins (connecting is set before mint).
+    for (let i = 0; i < 50 && mintCount < 1; i++) await new Promise((r) => setTimeout(r, 10));
+    await session.pressMic(); // cancel
+    await Promise.allSettled([p]);
+    assert.equal(session.state.phase, "off");
+    assert.ok(mintCount <= 1);
+    setLiveVoiceOccupied(false);
+  });
+
   it("accepts user transcript and ignores empty/garbage via dedupe path", async () => {
     setLiveVoiceOccupied(false);
     const users: string[] = [];

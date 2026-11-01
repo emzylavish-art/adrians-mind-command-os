@@ -22,17 +22,14 @@ export function readXaiInferenceSecretsFile(path: string = XAI_INFERENCE_SECRETS
 
 /**
  * Prefer the box secrets file when present (avoids a stale/invalid process env key).
- * Falls back to env. Never prints the key.
+ * Falls back to env. Returns the key only — never mutates process.env / the env bag.
  */
 export function resolveXaiInferenceApiKey(
   env: Record<string, string | undefined> = process.env,
   path: string = XAI_INFERENCE_SECRETS_PATH,
 ): string | undefined {
   const fromFile = readXaiInferenceSecretsFile(path);
-  if (fromFile) {
-    env.XAI_API_KEY = fromFile;
-    return fromFile;
-  }
+  if (fromFile) return fromFile;
   const fromEnv = env.XAI_API_KEY?.trim();
   return fromEnv || undefined;
 }

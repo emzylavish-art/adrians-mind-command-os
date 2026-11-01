@@ -195,3 +195,22 @@ See `/workspace/locks/media-integration.lock`.
 4. Imagine quality model toggle (`grok-imagine-image-quality`) in composer.
 5. Video generation (Grok Imagine video) — separate paid capability; defer until image lane solid.
 6. Drag generated image onto Agent goal field as vision input affordance.
+
+## Upgrade: Imagine Quality toggle — 2026-11-01T13:52 Africa/Lagos
+
+- Live catalog includes `grok-imagine-image-quality`.
+- Composer **Quality on/off** toggles model for generate + edit requests (`resolveImagineModel`).
+
+
+## Upgrade: Use generated image as Agent vision input — 2026-11-01T13:55 Africa/Lagos
+
+- **Use as Agent input** on inline images stages into `pendingImages`, opens Agents view.
+- Drag generated/inline images onto the Agent goal textarea (`application/x-amcos-image`); file drops also accepted.
+- Planner already sends `pendingImages` as vision attachments.
+
+## Next ranked ideas
+1. Server-side media cache (deferred)
+2. Imagine video generation (deferred)
+3. Multi-select chips for edit subset
+4. Quality/resolution picker beyond on/off
+5. Camera burst countdown / timed interval

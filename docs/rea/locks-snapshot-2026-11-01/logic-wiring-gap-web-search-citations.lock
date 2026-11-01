@@ -1,0 +1,13 @@
+feature: Web search + Deep research with citations in-chat
+lane: logic-wiring
+owner_bot: Logic Bot
+claimed_by: Logic Bot
+timestamp: 2026-11-01T12:28:50+01:00 (Africa/Lagos)
+released_at: 2026-11-01T12:34:46+01:00
+status: done, released
+commits:
+  - c7e51d7
+  - 62e4948 (intent + Research UI/chat citations)
+notes: |
+  Acceptance met for single-shot + deep research library and UI/chat wiring.
+  Live MIND_SEARCH_* not configured on box; unit tests mock endpoint.

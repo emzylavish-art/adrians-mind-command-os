@@ -24,6 +24,13 @@ import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
 import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
+import { Route as ApiMindPairingActionRouteImport } from './routes/api/mind/pairing/action'
+import { Route as ApiMindPairingCodeRouteImport } from './routes/api/mind/pairing/code'
+import { Route as ApiMindPairingHandshakeRouteImport } from './routes/api/mind/pairing/handshake'
+import { Route as ApiMindPairingHeartbeatRouteImport } from './routes/api/mind/pairing/heartbeat'
+import { Route as ApiMindPairingManifestRouteImport } from './routes/api/mind/pairing/manifest'
+import { Route as ApiMindPairingStatusRouteImport } from './routes/api/mind/pairing/status'
+import { Route as ApiMindPairingStopRouteImport } from './routes/api/mind/pairing/stop'
 import { Route as ApiMindPcApprovalsRouteImport } from './routes/api/mind/pc/approvals'
 import { Route as ApiMindPcApproveRouteImport } from './routes/api/mind/pc/approve'
 import { Route as ApiMindPcDenyRouteImport } from './routes/api/mind/pc/deny'
@@ -34,6 +41,8 @@ import { Route as ApiMindPcStatusRouteImport } from './routes/api/mind/pc/status
 import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
 import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
 import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
+import { Route as ApiMindMediaStorageStatusRouteImport } from './routes/api/mind/media/storage/status'
+import { Route as ApiMindMediaStorageUploadRouteImport } from './routes/api/mind/media/storage/upload'
 import { Route as ApiMindOauthConnectorCallbackRouteImport } from './routes/api/mind/oauth/$connector/callback'
 import { Route as ApiMindOauthConnectorDisconnectRouteImport } from './routes/api/mind/oauth/$connector/disconnect'
 import { Route as ApiMindOauthConnectorStartRouteImport } from './routes/api/mind/oauth/$connector/start'
@@ -118,6 +127,41 @@ const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
   path: '/api/mind/media/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindPairingActionRoute = ApiMindPairingActionRouteImport.update({
+  id: '/api/mind/pairing/action',
+  path: '/api/mind/pairing/action',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingCodeRoute = ApiMindPairingCodeRouteImport.update({
+  id: '/api/mind/pairing/code',
+  path: '/api/mind/pairing/code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingHandshakeRoute = ApiMindPairingHandshakeRouteImport.update({
+  id: '/api/mind/pairing/handshake',
+  path: '/api/mind/pairing/handshake',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingHeartbeatRoute = ApiMindPairingHeartbeatRouteImport.update({
+  id: '/api/mind/pairing/heartbeat',
+  path: '/api/mind/pairing/heartbeat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingManifestRoute = ApiMindPairingManifestRouteImport.update({
+  id: '/api/mind/pairing/manifest',
+  path: '/api/mind/pairing/manifest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingStatusRoute = ApiMindPairingStatusRouteImport.update({
+  id: '/api/mind/pairing/status',
+  path: '/api/mind/pairing/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingStopRoute = ApiMindPairingStopRouteImport.update({
+  id: '/api/mind/pairing/stop',
+  path: '/api/mind/pairing/stop',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindPcApprovalsRoute = ApiMindPcApprovalsRouteImport.update({
   id: '/api/mind/pc/approvals',
   path: '/api/mind/pc/approvals',
@@ -168,6 +212,18 @@ const ApiMindMediaCloudStatusRoute = ApiMindMediaCloudStatusRouteImport.update({
   path: '/api/mind/media/cloud/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindMediaStorageStatusRoute =
+  ApiMindMediaStorageStatusRouteImport.update({
+    id: '/api/mind/media/storage/status',
+    path: '/api/mind/media/storage/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindMediaStorageUploadRoute =
+  ApiMindMediaStorageUploadRouteImport.update({
+    id: '/api/mind/media/storage/upload',
+    path: '/api/mind/media/storage/upload',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiMindOauthConnectorCallbackRoute =
   ApiMindOauthConnectorCallbackRouteImport.update({
     id: '/api/mind/oauth/$connector/callback',
@@ -232,6 +288,13 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
+  '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
+  '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
+  '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/manifest': typeof ApiMindPairingManifestRoute
+  '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
+  '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
   '/api/mind/pc/approvals': typeof ApiMindPcApprovalsRoute
   '/api/mind/pc/approve': typeof ApiMindPcApproveRoute
   '/api/mind/pc/deny': typeof ApiMindPcDenyRoute
@@ -242,6 +305,8 @@ export interface FileRoutesByFullPath {
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
+  '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -267,6 +332,13 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
+  '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
+  '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
+  '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/manifest': typeof ApiMindPairingManifestRoute
+  '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
+  '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
   '/api/mind/pc/approvals': typeof ApiMindPcApprovalsRoute
   '/api/mind/pc/approve': typeof ApiMindPcApproveRoute
   '/api/mind/pc/deny': typeof ApiMindPcDenyRoute
@@ -277,6 +349,8 @@ export interface FileRoutesByTo {
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
+  '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -303,6 +377,13 @@ export interface FileRoutesById {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
+  '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
+  '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
+  '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/manifest': typeof ApiMindPairingManifestRoute
+  '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
+  '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
   '/api/mind/pc/approvals': typeof ApiMindPcApprovalsRoute
   '/api/mind/pc/approve': typeof ApiMindPcApproveRoute
   '/api/mind/pc/deny': typeof ApiMindPcDenyRoute
@@ -313,6 +394,8 @@ export interface FileRoutesById {
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
+  '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -340,6 +423,13 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/pairing/action'
+    | '/api/mind/pairing/code'
+    | '/api/mind/pairing/handshake'
+    | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/manifest'
+    | '/api/mind/pairing/status'
+    | '/api/mind/pairing/stop'
     | '/api/mind/pc/approvals'
     | '/api/mind/pc/approve'
     | '/api/mind/pc/deny'
@@ -350,6 +440,8 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/media/storage/status'
+    | '/api/mind/media/storage/upload'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -375,6 +467,13 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/pairing/action'
+    | '/api/mind/pairing/code'
+    | '/api/mind/pairing/handshake'
+    | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/manifest'
+    | '/api/mind/pairing/status'
+    | '/api/mind/pairing/stop'
     | '/api/mind/pc/approvals'
     | '/api/mind/pc/approve'
     | '/api/mind/pc/deny'
@@ -385,6 +484,8 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/media/storage/status'
+    | '/api/mind/media/storage/upload'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -410,6 +511,13 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/pairing/action'
+    | '/api/mind/pairing/code'
+    | '/api/mind/pairing/handshake'
+    | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/manifest'
+    | '/api/mind/pairing/status'
+    | '/api/mind/pairing/stop'
     | '/api/mind/pc/approvals'
     | '/api/mind/pc/approve'
     | '/api/mind/pc/deny'
@@ -420,6 +528,8 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/media/storage/status'
+    | '/api/mind/media/storage/upload'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -446,6 +556,13 @@ export interface RootRouteChildren {
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
   ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
   ApiMindMediaGenerateRoute: typeof ApiMindMediaGenerateRoute
+  ApiMindPairingActionRoute: typeof ApiMindPairingActionRoute
+  ApiMindPairingCodeRoute: typeof ApiMindPairingCodeRoute
+  ApiMindPairingHandshakeRoute: typeof ApiMindPairingHandshakeRoute
+  ApiMindPairingHeartbeatRoute: typeof ApiMindPairingHeartbeatRoute
+  ApiMindPairingManifestRoute: typeof ApiMindPairingManifestRoute
+  ApiMindPairingStatusRoute: typeof ApiMindPairingStatusRoute
+  ApiMindPairingStopRoute: typeof ApiMindPairingStopRoute
   ApiMindPcApprovalsRoute: typeof ApiMindPcApprovalsRoute
   ApiMindPcApproveRoute: typeof ApiMindPcApproveRoute
   ApiMindPcDenyRoute: typeof ApiMindPcDenyRoute
@@ -456,6 +573,8 @@ export interface RootRouteChildren {
   ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
   ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
   ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
+  ApiMindMediaStorageStatusRoute: typeof ApiMindMediaStorageStatusRoute
+  ApiMindMediaStorageUploadRoute: typeof ApiMindMediaStorageUploadRoute
   ApiMindOauthConnectorCallbackRoute: typeof ApiMindOauthConnectorCallbackRoute
   ApiMindOauthConnectorDisconnectRoute: typeof ApiMindOauthConnectorDisconnectRoute
   ApiMindOauthConnectorStartRoute: typeof ApiMindOauthConnectorStartRoute
@@ -573,6 +692,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/pairing/action': {
+      id: '/api/mind/pairing/action'
+      path: '/api/mind/pairing/action'
+      fullPath: '/api/mind/pairing/action'
+      preLoaderRoute: typeof ApiMindPairingActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/code': {
+      id: '/api/mind/pairing/code'
+      path: '/api/mind/pairing/code'
+      fullPath: '/api/mind/pairing/code'
+      preLoaderRoute: typeof ApiMindPairingCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/handshake': {
+      id: '/api/mind/pairing/handshake'
+      path: '/api/mind/pairing/handshake'
+      fullPath: '/api/mind/pairing/handshake'
+      preLoaderRoute: typeof ApiMindPairingHandshakeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/heartbeat': {
+      id: '/api/mind/pairing/heartbeat'
+      path: '/api/mind/pairing/heartbeat'
+      fullPath: '/api/mind/pairing/heartbeat'
+      preLoaderRoute: typeof ApiMindPairingHeartbeatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/manifest': {
+      id: '/api/mind/pairing/manifest'
+      path: '/api/mind/pairing/manifest'
+      fullPath: '/api/mind/pairing/manifest'
+      preLoaderRoute: typeof ApiMindPairingManifestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/status': {
+      id: '/api/mind/pairing/status'
+      path: '/api/mind/pairing/status'
+      fullPath: '/api/mind/pairing/status'
+      preLoaderRoute: typeof ApiMindPairingStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/stop': {
+      id: '/api/mind/pairing/stop'
+      path: '/api/mind/pairing/stop'
+      fullPath: '/api/mind/pairing/stop'
+      preLoaderRoute: typeof ApiMindPairingStopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/pc/approvals': {
       id: '/api/mind/pc/approvals'
       path: '/api/mind/pc/approvals'
@@ -641,6 +809,20 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/media/cloud/status'
       fullPath: '/api/mind/media/cloud/status'
       preLoaderRoute: typeof ApiMindMediaCloudStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/media/storage/status': {
+      id: '/api/mind/media/storage/status'
+      path: '/api/mind/media/storage/status'
+      fullPath: '/api/mind/media/storage/status'
+      preLoaderRoute: typeof ApiMindMediaStorageStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/media/storage/upload': {
+      id: '/api/mind/media/storage/upload'
+      path: '/api/mind/media/storage/upload'
+      fullPath: '/api/mind/media/storage/upload'
+      preLoaderRoute: typeof ApiMindMediaStorageUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/oauth/$connector/callback': {
@@ -718,6 +900,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
   ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
   ApiMindMediaGenerateRoute: ApiMindMediaGenerateRoute,
+  ApiMindPairingActionRoute: ApiMindPairingActionRoute,
+  ApiMindPairingCodeRoute: ApiMindPairingCodeRoute,
+  ApiMindPairingHandshakeRoute: ApiMindPairingHandshakeRoute,
+  ApiMindPairingHeartbeatRoute: ApiMindPairingHeartbeatRoute,
+  ApiMindPairingManifestRoute: ApiMindPairingManifestRoute,
+  ApiMindPairingStatusRoute: ApiMindPairingStatusRoute,
+  ApiMindPairingStopRoute: ApiMindPairingStopRoute,
   ApiMindPcApprovalsRoute: ApiMindPcApprovalsRoute,
   ApiMindPcApproveRoute: ApiMindPcApproveRoute,
   ApiMindPcDenyRoute: ApiMindPcDenyRoute,
@@ -728,6 +917,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
   ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,
   ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
+  ApiMindMediaStorageStatusRoute: ApiMindMediaStorageStatusRoute,
+  ApiMindMediaStorageUploadRoute: ApiMindMediaStorageUploadRoute,
   ApiMindOauthConnectorCallbackRoute: ApiMindOauthConnectorCallbackRoute,
   ApiMindOauthConnectorDisconnectRoute: ApiMindOauthConnectorDisconnectRoute,
   ApiMindOauthConnectorStartRoute: ApiMindOauthConnectorStartRoute,

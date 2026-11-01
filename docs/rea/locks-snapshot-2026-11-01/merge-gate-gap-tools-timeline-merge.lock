@@ -1,0 +1,25 @@
+feature: In-thread tool-execution timeline + live activity rail — merge preview/tools-timeline into preview/integration
+lane: merge-gate
+owner_bot: Merge Gate Bot
+source_platforms: ChatGPT, Claude, Manus, Perplexity
+gap_rank: 1 (gap-list-2026-11-01-c3), effort M, status in_progress (implementation exists off-main, not on integration tip)
+evidence:
+  - /workspace/rea-captures/gap-list-2026-11-01-c3.md (rank 1)
+  - preview/tools-timeline (tip b81ac64) is NOT an ancestor of preview/integration tip c352538
+  - /workspace/audit/reference/03-chat-hero.jpg
+acceptance_criteria:
+  - preview/tools-timeline merged into preview/integration with conflicts resolved against current lane merges (keep lane behavior intact: model chip, failure banners, MCP tools, media attach)
+  - "Executing tools (done/total)" card + Activity rail render in a real chat turn on the integration preview; screenshot under /workspace/audit/
+  - typecheck + tests + build pass (note any pre-existing script failures separately)
+  - Post done on the Notion mirror 40bb95f33e42814aacf8c3281b4f528d with the merge commit, and release this lock
+notes: Respect claimed lanes (voice-integration, media-integration, visual-polish shortcut sheet, dashboard-3d); merge-only, no feature edits beyond conflict resolution.
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T13:33:46+01:00
+status: done, released
+claimed_by: Merge Gate Bot
+claimed_at: 2026-11-01T13:34:35+01:00
+released_at: 2026-11-01T13:38:59+01:00
+merge_commit: 2051b1809aa42cba0594233ea0df0128be67691e
+commits:
+  - 2051b18 Merge preview/tools-timeline (b81ac64) into preview/integration
+screenshot: /workspace/audit/tools-timeline-integration.png

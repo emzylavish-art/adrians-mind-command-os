@@ -295,6 +295,18 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion: child page https://app.notion.com/p/40bb95f33e4281cdb275f3196d0d4e31 under mirror 40bb95f33e42814aacf8c3281b4f528d.
 - Lock releasing.
 
+## 2026-11-01T15:06:00+01:00 (Africa/Lagos) — Error Banners Bot — image-generation banner (banner 4)
+- Gap: Imagine / Edit Imagine failures only called setError; no red Retry + View log banner.
+- Lock: /workspace/locks/error-banners-imagine-banner.lock
+- Lock check: media-integration.lock ACTIVE interrupted claims media/** + command-app clipboard paste ONLY — banner/classifier/retry wiring outside clipboard OK. imagine-hardening done/released. Did not touch media HTTP / mapImagineHttpError implementation (mirrored copy in failure-states only).
+- Built: HonestFailureKind image_generation_failed; mapImagineHttpErrorCopy + imageGenerationFailure + imagineRetryParams; command-app runImagine/runImagineEdit → reportFailure with identical prompt/n/imageDataUrl Retry (onceRetry) + audit View log.
+- Three Retry bugs: already in 18809f7 + 58f8894; retry-fidelity tests still pass.
+- Commit on error-banners: 62a191e (from cb44e0c). Pushed.
+- Checks: typecheck pass; TS 353/353; lint 0 errors/5 warnings; build pass. Scripts 4 pre-existing .grok/skills/og failures not re-run under memory pressure.
+- Live check: INCOMPLETE — stopped. Temp WT /workspace/eb-imagine-live :8191 (~1.5GB) killed + removed per parent memory steering. Playwright chromium timed out/crashed. Evidence: /workspace/audit/error-banners-imagine-20261101T150039+01:00/. Reuse shared integration preview after Merge Gate c19.
+- Remote: git ls-remote origin error-banners → 62a191ecc772bb8e6af685be67d1700fc8894f4a
+- Notion: child page https://app.notion.com/p/40bb95f33e4281a0b648e8639a6cedaf under mirror 40bb95f33e42814aacf8c3281b4f528d
+- Lock releasing done.
 
 # 2026-11-01 (Africa/Lagos) — Grok Build: Memory UX depth
 - Branch: preview/memory-ux (worktree /workspace/mind-command-os-memory)
@@ -303,3 +315,18 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Pending mount: MemorySavedIndicator + MemoryChatToggle into command-app.tsx (claimed by other lanes) — see /workspace/audit/mind-os/memory-ux/MOUNT.md
 - Notion: do NOT write from this lane; mirror at /workspace/audit/mind-os/memory-ux/
 
+## 2026-11-01T15:12+01:00 (Africa/Lagos) — Error Banners Bot — merge watch: c19 on preview/integration verified
+- New merge: local preview/integration 9545007 (Merge Gate c19, still claimed/unpushed; origin/preview/integration still 93eb15a). Includes top-5 banner commit as 8c7ed78 + 0ce53ee, H9 6f40bc9, memory UX 2e769b4.
+- Original banners e3707e9/aded415/b6ce68b present in preview/integration. Kinds model_unavailable / database_write_failed / emergency_stop_active / mcp_tool_failed present with Retry + View log wiring.
+- TS test list: 501/501 pass. failure-banner-markup + retry-fidelity: 10/10 pass.
+- typecheck: FAIL — src/routeTree.gen.ts syntax error (PersonasRoute block truncated, missing getParentRoute/close) introduced by memory merge 2e769b4. Not a banner file; not fixed on error-banners. Flag to Merge Gate / Grok Build.
+- lint: 1 error (src/lib/mind/research.ts:39 no-control-regex, logic lane), 8 warnings.
+- Banner 4 (image generation) in progress under error-banners-imagine-banner.lock; untouched by this run. Not pushed.
+
+## 2026-11-01 (Africa/Lagos) — Error Banners Bot — MCP list error vs empty
+- Lock check: H9 pc-shell-confirm-bypass lock released 14:52:35 +01:00; no active exclusive claim on fleet-panels.tsx.
+- Merged origin/preview/integration (d916fdb) into error-banners as 24bcbc8. Took the error-banners side on conflicts; package.json test list is the union. The origin/mcp-integration fleet-panels H9 change was already in it (6f40bc9). A full mcp-integration merge was aborted because of conflicts in mcp/tools.ts, which the active H12 lock holds.
+- 826aa99: new mcp-list-state.ts gives the MCP list three states: loading, empty (load succeeded with zero servers), and error. Errors are 401→auth_required, 403→forbidden_cross_site, and 5xx/network/non-JSON→network_failure. The error state shows the red failure banner with Retry, which re-runs the load once. It also reports through onFailure→reportFailure, which adds an audit entry and the top banner's View log. Also removed a duplicate list-load effect. Added 16 tests.
+- typecheck pass; TS tests 555/555; lint 1 error (pre-existing research.ts:39) + 8 warnings; build pass.
+- Notion: https://app.notion.com/p/40bb95f33e4281d7a921c1780538952d
+- Open: the onFailure target in command-app is "browser" (owned by another lane). The inline banner has no View log; the top banner provides it.

@@ -1,6 +1,6 @@
 import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
-import { allowMindRequest, checkTurnSize } from "./limits";
+import { CHAT_RATE_LIMIT_REPLY, checkTurnSize, consumeMindRateLimit, jsonRateLimited } from "./limits";
 import { assembleTurn } from "./prompt";
 import { sanitizeAttachments, type ImageAttachment } from "./media";
 import type { ChatContent } from "./media/types";
@@ -8,7 +8,7 @@ import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import type { HistoryInputMessage } from "./media/history";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
-import { callConfiguredProvider, selectProvider } from "./provider-call";
+import { callConfiguredProvider, httpStatusForProviderSelection, selectProvider } from "./provider-call";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
@@ -64,9 +64,10 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if ((await haltIsOn(userId)) || data.halted === true) {
     return { ok: false as const, error: "Emergency stop is on. No new action can run." };
   }
-  if (!allowMindRequest("chat", userId, 12)) {
-    return { ok: false as const, error: "Too many messages. Wait a minute and try again." };
-  }
+  // Body-field validation before rate limit so malformed/empty turns get honest 400s
+  // and do not consume a chat token. (HTTP JSON body guard already ran in handleMindTurn.)
+  const tierField = parseModelTierField(data.modelTier);
+  if (!tierField.ok) return { ok: false as const, error: tierField.error };
   const images = sanitizeAttachments(data.images);
   const text = typeof data.text === "string" ? data.text.trim() : "";
   if (!text && images.length === 0) return { ok: false as const, error: "Write a message first." };
@@ -163,21 +164,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function readLimited(request: Request): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
-  if (!request.body) return { ok: true, text: "" };
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  while (true) {
-    const step = await reader.read();
-    if (step.done) break;
-    received += step.value.byteLength;
-    if (received > MAX_BODY) return { ok: false, error: "That request is too large." };
-    chunks.push(step.value);
-  }
-  return { ok: true, text: Buffer.concat(chunks).toString("utf8") };
-}
-
 export async function handleMindTurn(request: Request): Promise<Response> {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
   if (
@@ -207,15 +193,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const pendingImages = sanitizeAttachments(body.images);
   const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
   // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.
-  if (
-    pendingImages.length > 0 &&
-    typeof requestedProvider === "string" &&
-    requestedProvider !== "grok" &&
-    (requestedProvider === "openai" ||
-      requestedProvider === "anthropic" ||
-      requestedProvider === "gemini" ||
-      requestedProvider === "openrouter")
-  ) {
+  if (pendingImages.length > 0 && typeof requestedProvider === "string" && requestedProvider !== "grok") {
     return json({
       ok: false,
       error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
@@ -223,7 +201,17 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     });
   }
   const selected = selectProvider(body.provider, process.env);
-  if (!selected.ok) return json(selected);
+  if (!selected.ok) {
+    // If images somehow accompany a failed non-Grok selection, still prefer cannot-see copy.
+    if (pendingImages.length > 0 && requestedProvider !== "grok") {
+      return json({
+        ok: false,
+        error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+        provider: requestedProvider,
+      });
+    }
+    return json(selected);
+  }
   if (selected.id !== "grok") {
     if (pendingImages.length > 0) {
       return json({
@@ -234,6 +222,9 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     }
     const { haltIsOn } = await import("./halt.server");
     if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." });
+    // Same chat rate limit as Grok — non-Grok must not skip the token bucket.
+    const limited = consumeMindRateLimit("chat", userId, 12);
+    if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
     const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: globalThis.fetch });
     return json({ ...called, provider: selected.id });

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  OAUTH_STATUS_FETCH_TIMEOUT_MS,
+  STATUS_UNAVAILABLE_DETAIL,
+  STATUS_UNAVAILABLE_SIGNIN_DETAIL,
+  isStatusUnavailable,
+} from "@/lib/mind/service-board-status";
 
 type Service = {
   name: string;
@@ -44,11 +50,14 @@ const OAUTH_BOARD: Record<string, { connector: string; path: string; messageType
 };
 
 function boardState(oauth: OauthStatus | null, legacy?: { state: string; detail: string } | null): { state: string; detail: string } {
+  if (oauth && isStatusUnavailable(oauth)) {
+    return { state: "Status unavailable", detail: oauth.detail };
+  }
   if (oauth?.state === "connected") {
     return { state: "Connected", detail: oauth.detail };
   }
   if (oauth?.state === "not_configured") {
-    return { state: "Not connected", detail: oauth.detail };
+    return { state: "Not configured", detail: oauth.detail };
   }
   if (oauth?.state === "not_connected") {
     if (legacy?.state === "connected") {
@@ -66,6 +75,7 @@ function boardState(oauth: OauthStatus | null, legacy?: { state: string; detail:
 }
 
 function boardForOauth(name: string, oauth: OauthStatus | null | undefined, legacy?: { state: string; detail: string } | null) {
+  void name;
   if (oauth === undefined) {
     return { state: "Not connected", detail: "Checking connection…" };
   }
@@ -78,29 +88,47 @@ export function ServiceBoard({
   onSetup,
   notion,
   mcp,
+  localComputer,
   onDisconnect,
 }: {
   grokConfigured: boolean;
   onSetup: (message: string) => void;
   notion?: { state: string; detail: string } | null;
   mcp?: { state: string; detail: string } | null;
+  localComputer?: { state: string; detail: string } | null;
   onDisconnect?: () => void;
 }) {
-  const [oauthByName, setOauthByName] = useState<Record<string, OauthStatus | null>>({});
+  const [oauthByName, setOauthByName] = useState<Record<string, OauthStatus | null | undefined>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
+  const inFlight = useRef<Set<string>>(new Set());
 
   const refreshOne = useCallback((name: string) => {
     const meta = OAUTH_BOARD[name];
     if (!meta) return;
-    void fetch(`/api/mind/oauth/${meta.path}/status`, { credentials: "include" })
+    if (inFlight.current.has(name)) return;
+    inFlight.current.add(name);
+    setRefreshing(name);
+    void fetch(`/api/mind/oauth/${meta.path}/status`, {
+      credentials: "include",
+      signal: AbortSignal.timeout(OAUTH_STATUS_FETCH_TIMEOUT_MS),
+    })
       .then(async (res) => {
-        const body = (await res.json().catch(() => null)) as OauthStatus & { ok?: boolean; error?: string } | null;
+        const text = await res.text().catch(() => "");
+        let body: (OauthStatus & { ok?: boolean; error?: string }) | null = null;
+        if (text) {
+          try {
+            body = JSON.parse(text) as OauthStatus & { ok?: boolean; error?: string };
+          } catch {
+            body = null;
+          }
+        }
         if (!res.ok || !body) {
           const detail =
             res.status === 401 || res.status === 403
-              ? "Connection status could not be read (sign in required)."
-              : "Connection status could not be read.";
+              ? STATUS_UNAVAILABLE_SIGNIN_DETAIL
+              : STATUS_UNAVAILABLE_DETAIL;
           setOauthByName((prev) => ({
             ...prev,
             [name]: { state: "not_connected", detail },
@@ -121,9 +149,13 @@ export function ServiceBoard({
       .catch(() =>
         setOauthByName((prev) => ({
           ...prev,
-          [name]: { state: "not_connected", detail: "Connection status could not be read." },
+          [name]: { state: "not_connected", detail: STATUS_UNAVAILABLE_DETAIL },
         })),
-      );
+      )
+      .finally(() => {
+        inFlight.current.delete(name);
+        setRefreshing((current) => (current === name ? null : current));
+      });
   }, []);
 
   const refreshAll = useCallback(() => {
@@ -211,10 +243,11 @@ export function ServiceBoard({
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {[grok, ...services].map((service) => {
         const meta = OAUTH_BOARD[service.name];
-        const oauth = meta ? oauthByName[service.name] : null;
+        const oauth = meta ? oauthByName[service.name] : undefined;
+        const unavailable = Boolean(oauth && isStatusUnavailable(oauth));
         const oauthConnected = Boolean(meta && oauth?.state === "connected");
         const legacyConnected = service.name === "Notion" && !oauthConnected && notion?.state === "connected";
-        const showOauthConnect = Boolean(meta && oauth?.state === "not_connected");
+        const showOauthConnect = Boolean(meta && oauth?.state === "not_connected" && !unavailable);
         const showNotConfigured = Boolean(meta && oauth?.state === "not_configured");
         const isBusy = busy === service.name;
         return (
@@ -223,8 +256,25 @@ export function ServiceBoard({
               <h3 className="font-semibold">{service.name}</h3>
               <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
             </div>
-            <p className="mt-2 text-sm text-muted">{service.detail}</p>
-            {meta && oauthConnected ? (
+            {unavailable ? null : <p className="mt-2 text-sm text-muted">{service.detail}</p>}
+            {unavailable && oauth ? (
+              <div
+                className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-panel border border-danger/40 bg-danger/10 px-3 py-2"
+                role="alert"
+                data-testid="connector-status-unavailable"
+              >
+                <p className="text-sm text-danger">{oauth.detail}</p>
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center justify-center rounded-panel border border-danger/40 px-3 text-sm text-danger"
+                  data-testid="connector-status-retry"
+                  disabled={refreshing === service.name}
+                  onClick={() => refreshOne(service.name)}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : meta && oauthConnected ? (
               <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void disconnectOauth(service.name)}>
                 Disconnect
               </button>

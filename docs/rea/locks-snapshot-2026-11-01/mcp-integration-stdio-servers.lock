@@ -1,0 +1,15 @@
+feature: Execute registered stdio (command) MCP servers — tools/list + tools/call with timeouts
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by:
+claimed_at:
+updated_at: 2026-11-01T14:30:17+01:00
+released_at: 2026-11-01T14:30:17+01:00
+status: released
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+paths_claimed: []
+notes: |
+  Done 2026-11-01. Commits cf3bc07, 8d46376, 704213e, 51c22ae.
+  Allowlist MIND_MCP_STDIO_ALLOW deny-by-default; unit+e2e PASS.
+security_note: OAuth XSS/state security fix landed (2595ba7..00fd873); stdio WIP completed after.

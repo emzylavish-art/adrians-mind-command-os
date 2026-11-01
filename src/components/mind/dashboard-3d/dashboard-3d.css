@@ -22,6 +22,11 @@
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
 }
 
+.dash3d-root.is-embedded {
+  min-height: 100%;
+  height: 100%;
+}
+
 .dash3d-canvas-wrap {
   position: absolute;
   inset: 0;

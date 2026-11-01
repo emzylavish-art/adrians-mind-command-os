@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
@@ -24,6 +24,7 @@ import {
   type ProviderConnection,
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
+import { McpListStatusRows, loadMcpList, onceListRetry, type McpListState } from "@/lib/mind/mcp-list-state";
 
 
 function botAvatarSrc(name: string) {
@@ -70,6 +71,8 @@ export function FleetPanel({
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [mcpListState, setMcpListState] = useState<McpListState>({ status: "loading" });
+  const mcpListInFlight = useRef(false);
   const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean; status?: string }[]>([]);
   const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
   const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
@@ -77,6 +80,23 @@ export function FleetPanel({
     { id: string; token: string; command: string; agentId: string; agentLabel: string; expiresAt: string }[]
   >([]);
   const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
+
+  /** One MCP list load: loading → ready (maybe empty) or error banner. Retry re-runs this once. */
+  function loadMcpServers() {
+    if (mcpListInFlight.current) return;
+    mcpListInFlight.current = true;
+    setMcpListState({ status: "loading" });
+    void loadMcpList(() => mcpRegistryList()).then((next) => {
+      mcpListInFlight.current = false;
+      setMcpListState(next);
+      if (next.status === "ready") {
+        setMcpServers(next.servers);
+        return;
+      }
+      setMcpServers([]);
+      if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpServers));
+    });
+  }
 
   function refreshPcApprovals() {
     void fetch("/api/mind/pc/approvals", { credentials: "include" })
@@ -92,9 +112,7 @@ export function FleetPanel({
 
   useEffect(() => {
     if (mode !== "tools") return;
-    void mcpRegistryList()
-      .then((result) => setMcpServers(result.servers))
-      .catch(() => setMcpServers([]));
+    loadMcpServers();
     void mcpRegistryTools()
       .then((result) => setMcpTools(result.tools))
       .catch(() => setMcpTools([]));
@@ -112,16 +130,6 @@ export function FleetPanel({
     void workerHealth()
       .then((health) => setWorkerNote(health.detail))
       .catch(() => setWorkerNote("Worker status could not be read. Nothing is reported as online."));
-  }, [mode]);
-
-  useEffect(() => {
-    if (mode !== "tools") return;
-    void mcpRegistryList()
-      .then((result) => setMcpServers(result.servers))
-      .catch(() => setMcpServers([]));
-    void mcpRegistryTools()
-      .then((result) => setMcpTools(result.tools))
-      .catch(() => setMcpTools([]));
   }, [mode]);
 
 
@@ -392,9 +400,9 @@ export function FleetPanel({
         </button>
       </div>
       {pageNote ? <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{pageNote}</p> : null}
-      <ul className="mt-4 space-y-2 text-sm">
+      <ul className="tool-list mt-4 space-y-2 text-sm">
         {toolCatalog().map((tool) => (
-          <li key={tool.id} className="dense-card flex flex-col gap-1 p-3">
+          <li key={tool.id} className="tool-card dense-card flex flex-col gap-1 p-3" data-available={tool.available ? "true" : "false"}>
             <p className="font-semibold">{tool.name} · {tool.available ? "Available" : "Not available"}</p>
             <p className="text-xs text-muted">{tool.reason}</p>
           </li>
@@ -524,7 +532,7 @@ export function FleetPanel({
               </li>
             );
           })}
-          {mcpServers.length === 0 && <li className="text-sm text-muted">No MCP servers loaded yet.</li>}
+          <McpListStatusRows state={mcpListState} onRetry={onceListRetry(loadMcpServers)} />
         </ul>
         {mcpCallNote ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
       </div>

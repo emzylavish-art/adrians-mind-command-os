@@ -103,6 +103,7 @@ export const searchWeb = createServerFn({ method: "POST" })
 export const recordAgentExecution = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { id?: string; tool?: string; action?: string; ok?: boolean; detail?: string }) => ({
+    // Only a server-issued id is honored. tool/ok/detail from the client are ignored.
     id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
     tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
     action: input.action === "voice" ? "voice" : "chat",
@@ -110,11 +111,20 @@ export const recordAgentExecution = createServerFn({ method: "POST" })
     detail: typeof input.detail === "string" ? input.detail.slice(0, 500) : "",
   }))
   .handler(async ({ data, context }) => {
-    if (!data.id || !data.tool) return { ok: false as const, error: "The execution was not recorded." };
+    const { recordIssuedExecution } = await import("./execution-ledger");
     const { writeToolRun } = await import("./notion-record");
     const { getSql } = await import("../db");
-    await writeToolRun(await getSql(), context.userId, data);
-    return { ok: true as const };
+    const sql = await getSql();
+    const result = await recordIssuedExecution({
+      userId: context.userId,
+      id: data.id,
+      clientOk: data.ok,
+      clientDetail: data.detail,
+      write: async (run) => {
+        await writeToolRun(sql, context.userId, run);
+      },
+    });
+    return result;
   });
 
 export const notionStatus = createServerFn({ method: "GET" })
@@ -352,11 +362,13 @@ export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { text: string; voiceId?: string }) => input)
   .handler(async ({ data, context }) => {
+    const { validateSpeakTextInput } = await import("./voice/voice-input");
+    const parsed = validateSpeakTextInput((data as { text?: unknown } | null)?.text);
+    if (!parsed.ok) return { ok: false as const, error: parsed.error };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
-    const text = data.text.trim().slice(0, 500);
-    if (!text) return { ok: false as const, error: "Nothing to read." };
+    const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
     const { resolveXaiVoiceId } = await import("./voice/voices");
     const apiKey = resolveVoiceApiKey(process.env);
@@ -374,6 +386,8 @@ export const speakText = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
     }
     if (!res.ok) return { ok: false as const, error: `Voice returned ${res.status}. Nothing was played.` };
+    const contentLength = Number(res.headers.get("content-length") || 0);
+    if (contentLength > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     const bytes = Buffer.from(await res.arrayBuffer());
     if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };

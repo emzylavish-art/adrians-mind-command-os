@@ -163,7 +163,7 @@ export async function openCameraStream(): Promise<{ ok: true; stream: MediaStrea
 
 export async function openScreenStream(): Promise<{ ok: true; stream: MediaStream } | { ok: false; error: string }> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    return { ok: false, error: "Screen share is not available in this browser." };
+    return { ok: false, error: "Screen share was cancelled or isn't available." };
   }
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
@@ -171,9 +171,9 @@ export async function openScreenStream(): Promise<{ ok: true; stream: MediaStrea
   } catch (caught) {
     const name = caught instanceof DOMException ? caught.name : "";
     if (name === "NotAllowedError" || name === "AbortError") {
-      return { ok: false, error: "Screen share was cancelled or denied." };
+      return { ok: false, error: "Screen share was cancelled or isn't available." };
     }
-    return { ok: false, error: "Could not start screen share." };
+    return { ok: false, error: "Screen share was cancelled or isn't available." };
   }
 }
 

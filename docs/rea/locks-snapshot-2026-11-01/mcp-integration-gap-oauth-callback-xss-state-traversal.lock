@@ -1,0 +1,14 @@
+feature: HARDENING (CRITICAL) — OAuth callback reflected XSS + state path traversal + non-expiring state
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by:
+claimed_at:
+updated_at: 2026-11-01T14:29:24+01:00
+released_at: 2026-11-01T14:29:24+01:00
+status: released
+gap_rank: 1
+priority: security
+paths_claimed: []
+notes: |
+  Done 2026-11-01. H1/H2/H3 + attacker pass. Commits 2595ba7..00fd873.
+  Stdio WIP left untouched in working tree; stdio commits cf3bc07/8d46376 already on branch.

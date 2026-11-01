@@ -151,10 +151,23 @@ export async function notionAppendSection(input: {
   return { ok: true, status: "ok", text: `Appended heading “${heading}” to page ${pageId}.`, data: { pageId, heading } };
 }
 
-const DEFAULT_SHELL_ALLOWLIST = [/^pwd$/, /^uname( -[a-z]+)?$/, /^echo /, /^date$/, /^whoami$/];
+/** Each pattern must match the WHOLE command (anchored both ends). */
+const DEFAULT_SHELL_ALLOWLIST = [/^pwd$/, /^uname( -[a-z]+)?$/, /^echo [A-Za-z0-9 _.,:=+\/-]+$/, /^date$/, /^whoami$/];
+
+/**
+ * Characters a paired agent's shell (sh, cmd.exe, PowerShell) could treat as
+ * syntax: chaining (; & | newline), substitution ($ ` ( ) { }), redirection
+ * (< >), globbing (* ? [ ] ~), escapes/quotes (\\ ' " ^ %), history (!), comments (#).
+ * Allowlisted commands run WITHOUT human approval, so anything outside this
+ * plain set must go through the approval flow instead.
+ */
+const SHELL_SAFE_CHARS = /^[A-Za-z0-9 _.,:=+\/-]+$/;
+const SHELL_ALLOWLIST_MAX = 200;
 
 export function isShellAllowlisted(command: string, patterns: RegExp[] = DEFAULT_SHELL_ALLOWLIST): boolean {
   const trimmed = command.trim();
+  if (!trimmed || trimmed.length > SHELL_ALLOWLIST_MAX) return false;
+  if (!SHELL_SAFE_CHARS.test(trimmed)) return false;
   return patterns.some((pattern) => pattern.test(trimmed));
 }
 
@@ -327,25 +340,419 @@ export async function pcRunShell(input: {
 const WRITE_SQL =
   /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|call|do|execute|merge|vacuum|reindex|cluster|comment|security|owner|refresh|listen|notify|set\s+role|reset\s+role|load|discard)\b/i;
 
-/** Reject multi-statement payloads and write verbs anywhere (incl. CTE bodies). */
-export function assertReadOnlySql(sql: string): { ok: true; sql: string } | { ok: false; text: string } {
+
+const WRITE_SQL_KEYWORDS = new Set(
+  [
+    "insert",
+    "update",
+    "delete",
+    "drop",
+    "alter",
+    "truncate",
+    "create",
+    "grant",
+    "revoke",
+    "copy",
+    "call",
+    "do",
+    "execute",
+    "merge",
+    "vacuum",
+    "reindex",
+    "cluster",
+    "comment",
+    "security",
+    "owner",
+    "refresh",
+    "listen",
+    "notify",
+    "load",
+    "discard",
+    "into",
+    "prepare",
+    "deallocate",
+    "lock",
+    "checkpoint",
+    "import",
+  ].map((k) => k.toLowerCase()),
+);
+
+const SIDE_EFFECT_FUNCTION_NAMES = new Set(
+  [
+    "set_config",
+    "nextval",
+    "setval",
+    "pg_sleep",
+    "pg_sleep_for",
+    "pg_sleep_until",
+    "lo_creat",
+    "lo_create",
+    "lo_export",
+    "lo_import",
+    "lo_from_bytea",
+    "lo_get",
+    "lo_put",
+    "lo_unlink",
+    "lo_open",
+    "lo_close",
+    "lo_lseek",
+    "lo_lseek64",
+    "lo_tell",
+    "lo_tell64",
+    "lo_truncate",
+    "lo_truncate64",
+    "lowrite",
+    "loread",
+    "query_to_xml",
+    "query_to_xmlschema",
+    "query_to_xml_and_xmlschema",
+    "cursor_to_xml",
+    "cursor_to_xmlschema",
+    "dblink",
+    "dblink_exec",
+    "dblink_connect",
+    "dblink_disconnect",
+    "dblink_send_query",
+    "dblink_get_result",
+    "pg_read_file",
+    "pg_read_binary_file",
+    "pg_stat_file",
+    "pg_terminate_backend",
+    "pg_cancel_backend",
+    "pg_reload_conf",
+    "pg_rotate_logfile",
+    "pg_switch_wal",
+    "pg_promote",
+    "pg_notify",
+    "pg_import_system_collations",
+    "txid_current",
+    "pg_current_xact_id",
+  ].map((k) => k.toLowerCase()),
+);
+
+function isSideEffectFunctionName(name: string): boolean {
+  const n = name.toLowerCase();
+  if (SIDE_EFFECT_FUNCTION_NAMES.has(n)) return true;
+  if (n.startsWith("pg_advisory") || n.startsWith("pg_try_advisory")) return true;
+  if (n.startsWith("lo_")) return true;
+  if (n.startsWith("dblink")) return true;
+  if (n.startsWith("pg_ls_")) return true;
+  if (n.startsWith("pg_file_")) return true;
+  if (n.startsWith("pg_create_") || n.startsWith("pg_drop_") || n.startsWith("pg_copy_")) return true;
+  if (n.startsWith("pg_replication_") || n.startsWith("pg_logical_")) return true;
+  if (n.startsWith("pg_stat_reset")) return true;
+  if (n.startsWith("pg_backup_") || n === "pg_start_backup" || n === "pg_stop_backup") return true;
+  if (n.startsWith("pg_wal_replay_")) return true;
+  if (n === "pg_log_backend_memory_contexts") return true;
+  if (n.startsWith("query_to_xml") || n.startsWith("cursor_to_xml")) return true;
+  return false;
+}
+
+type SqlTok =
+  | { kind: "ident"; value: string }
+  | { kind: "punct"; value: string }
+  | { kind: "other" };
+
+type TokenizeResult =
+  | { ok: true; tokens: SqlTok[] }
+  | { ok: false; text: string };
+
+/**
+ * Quote-aware tokenizer for the read-only SQL guard.
+ * Literals and comments are consumed (not emitted). Keywords / function names
+ * are checked only on identifier tokens that appear outside literals.
+ */
+export function tokenizeSqlForGuard(sql: string): TokenizeResult {
+  const tokens: SqlTok[] = [];
+  let i = 0;
+  const n = sql.length;
+
+  const peek = (k = 0) => (i + k < n ? sql[i + k] : "");
+  const startsIdent = (ch: string) => /[A-Za-z_\u0080-\uFFFF]/.test(ch);
+  const contIdent = (ch: string) => /[A-Za-z0-9_$\u0080-\uFFFF]/.test(ch);
+
+  while (i < n) {
+    const ch = sql[i];
+
+    // Whitespace
+    if (/\s/.test(ch)) {
+      i += 1;
+      continue;
+    }
+
+    // Line comment --
+    if (ch === "-" && peek(1) === "-") {
+      i += 2;
+      while (i < n && sql[i] !== "\n") i += 1;
+      continue;
+    }
+
+    // Block comment /* */ with nesting, outside literals only
+    if (ch === "/" && peek(1) === "*") {
+      i += 2;
+      let depth = 1;
+      while (i < n && depth > 0) {
+        if (sql[i] === "/" && peek(1) === "*") {
+          depth += 1;
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "*" && peek(1) === "/") {
+          depth -= 1;
+          i += 2;
+          continue;
+        }
+        i += 1;
+      }
+      if (depth !== 0) {
+        return { ok: false, text: "Nested or unterminated SQL comments are not allowed. Nothing was queried." };
+      }
+      continue;
+    }
+
+    // Dollar-quoted string: $$...$$ or $tag$...$tag$
+    if (ch === "$") {
+      let j = i + 1;
+      while (j < n && /[A-Za-z0-9_]/.test(sql[j])) j += 1;
+      if (j < n && sql[j] === "$") {
+        const tag = sql.slice(i, j + 1); // includes both $
+        const close = sql.indexOf(tag, j + 1);
+        if (close < 0) {
+          return { ok: false, text: "Unterminated dollar-quoted string. Nothing was queried." };
+        }
+        i = close + tag.length;
+        continue;
+      }
+      // Lone $ (e.g. operator) — treat as punct
+      tokens.push({ kind: "punct", value: "$" });
+      i += 1;
+      continue;
+    }
+
+    // Unicode-escape string/ident U&'...' / U&"..." — refuse (hides names)
+    if ((ch === "U" || ch === "u") && peek(1) === "&") {
+      const after = peek(2);
+      if (after === "'" || after === '"') {
+        return { ok: false, text: "Unicode-escaped identifiers or strings (U&) are not allowed in pglite_query. Nothing was queried." };
+      }
+    }
+
+    // Extended string E'...' with backslash escapes
+    if ((ch === "E" || ch === "e") && peek(1) === "'") {
+      i += 2;
+      let closed = false;
+      while (i < n) {
+        if (sql[i] === "\\") {
+          i += 2; // skip escaped char (including \' )
+          continue;
+        }
+        if (sql[i] === "'") {
+          i += 1;
+          closed = true;
+          break;
+        }
+        i += 1;
+      }
+      if (!closed) return { ok: false, text: "Unterminated string literal. Nothing was queried." };
+      continue;
+    }
+
+    // Standard string '...' with '' escapes
+    if (ch === "'") {
+      i += 1;
+      let closed = false;
+      while (i < n) {
+        if (sql[i] === "'" && peek(1) === "'") {
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "'") {
+          i += 1;
+          closed = true;
+          break;
+        }
+        i += 1;
+      }
+      if (!closed) return { ok: false, text: "Unterminated string literal. Nothing was queried." };
+      continue;
+    }
+    // Double-quoted identifier "..." with "" escapes — emit unquoted ident text
+    if (ch === '"') {
+      i += 1;
+      let value = "";
+      let closed = false;
+      while (i < n) {
+        if (sql[i] === '"' && peek(1) === '"') {
+          value += '"';
+          i += 2;
+          continue;
+        }
+        if (sql[i] === '"') {
+          i += 1;
+          closed = true;
+          break;
+        }
+        value += sql[i];
+        i += 1;
+      }
+      if (!closed) return { ok: false, text: "Unterminated quoted identifier. Nothing was queried." };
+      tokens.push({ kind: "ident", value });
+      continue;
+    }
+
+    // Ident / keyword
+    if (startsIdent(ch)) {
+      let j = i + 1;
+      while (j < n && contIdent(sql[j])) j += 1;
+      tokens.push({ kind: "ident", value: sql.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    // Numbers (skip for keyword checks)
+    if (/[0-9]/.test(ch) || (ch === "." && /[0-9]/.test(peek(1)))) {
+      let j = i + 1;
+      while (j < n && /[0-9_.]/.test(sql[j])) j += 1;
+      tokens.push({ kind: "other" });
+      i = j;
+      continue;
+    }
+
+    // Punctuation / operators of interest
+    if (ch === ";" || ch === "(" || ch === ")" || ch === "," || ch === "." || ch === "*") {
+      tokens.push({ kind: "punct", value: ch });
+      i += 1;
+      continue;
+    }
+
+    // Other operator chars — consume a run
+    if (/[+\-*/%<>=~!@^&|?]/.test(ch)) {
+      let j = i + 1;
+      while (j < n && /[+\-*/%<>=~!@^&|?]/.test(sql[j])) j += 1;
+      tokens.push({ kind: "other" });
+      i = j;
+      continue;
+    }
+
+    // Unknown char — skip conservatively as other
+    tokens.push({ kind: "other" });
+    i += 1;
+  }
+
+  return { ok: true, tokens };
+}
+
+function nextNonOther(tokens: SqlTok[], from: number): { idx: number; tok: SqlTok } | null {
+  for (let i = from; i < tokens.length; i += 1) {
+    if (tokens[i].kind !== "other") return { idx: i, tok: tokens[i] };
+  }
+  return null;
+}
+
+/** Reject multi-statement payloads, write verbs, side-effect functions, and escape tricks. */
+export function assertReadOnlySql(sql: string): { ok: true; sql: string; explain: boolean } | { ok: false; text: string } {
   let trimmed = sql.trim();
   if (!trimmed) return { ok: false, text: "SQL is empty. Nothing was queried." };
-  // Strip one trailing semicolon only; extra statements are refused.
+  if (trimmed.length > 20_000) {
+    return { ok: false, text: "SQL is too long (over 20,000 characters). Nothing was queried." };
+  }
+  if (trimmed.includes("\u0000")) {
+    return { ok: false, text: "SQL contains a NUL byte. Nothing was queried." };
+  }
+  // Strip one trailing semicolon only; extra statements are refused via tokens.
   trimmed = trimmed.replace(/;\s*$/, "");
-  if (trimmed.includes(";")) {
-    return { ok: false, text: "Multiple SQL statements are not allowed. Nothing was queried." };
+
+  const tokenized = tokenizeSqlForGuard(trimmed);
+  if (!tokenized.ok) return tokenized;
+  const { tokens } = tokenized;
+
+  for (const tok of tokens) {
+    if (tok.kind === "punct" && tok.value === ";") {
+      return { ok: false, text: "Multiple SQL statements are not allowed. Nothing was queried." };
+    }
   }
-  // Block classic comment-smuggled writes and dollar-quote escapes lightly
-  const withoutLineComments = trimmed.replace(/--[^\n]*/g, " ");
-  const withoutBlockComments = withoutLineComments.replace(/\/\*[\s\S]*?\*\//g, " ");
-  if (WRITE_SQL.test(withoutBlockComments)) {
-    return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+
+  // Build lowercase ident list with following-punct awareness
+  const idents: { value: string; index: number }[] = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const tok = tokens[i];
+    if (tok.kind === "ident") idents.push({ value: tok.value.toLowerCase(), index: i });
   }
-  if (!/^\s*(select|with|explain)\b/i.test(withoutBlockComments)) {
+
+  if (idents.length === 0) {
     return { ok: false, text: "Only SELECT, WITH, or EXPLAIN statements are allowed. Nothing was queried." };
   }
-  return { ok: true, sql: trimmed };
+
+  const first = idents[0].value;
+  if (first !== "select" && first !== "with" && first !== "explain") {
+    return { ok: false, text: "Only SELECT, WITH, or EXPLAIN statements are allowed. Nothing was queried." };
+  }
+
+  // Write keywords / INTO / SET ROLE etc. on identifier tokens only
+  for (let k = 0; k < idents.length; k += 1) {
+    const word = idents[k].value;
+    if (WRITE_SQL_KEYWORDS.has(word)) {
+      return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+    }
+    if (word === "set" || word === "reset") {
+      const nxt = k + 1 < idents.length ? idents[k + 1].value : "";
+      if (nxt === "role" || nxt === "session" || nxt === "transaction") {
+        return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+      }
+    }
+  }
+
+  // FOR SHARE / FOR UPDATE locking clause: ident sequence for + (share|update|key)
+  for (let k = 0; k < idents.length; k += 1) {
+    if (idents[k].value !== "for") continue;
+    const a = idents[k + 1]?.value;
+    const b = idents[k + 2]?.value;
+    const c = idents[k + 3]?.value;
+    if (a === "share" || a === "update") {
+      return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+    }
+    if (a === "key" && b === "share") {
+      return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+    }
+    if (a === "no" && b === "key" && c === "update") {
+      return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+    }
+  }
+
+  // Side-effect function: ident (optionally schema.ident) followed by '('
+  for (let i = 0; i < tokens.length; i += 1) {
+    const tok = tokens[i];
+    if (tok.kind !== "ident") continue;
+    let name = tok.value;
+    let j = i + 1;
+    // schema.func
+    if (
+      tokens[j]?.kind === "punct" &&
+      (tokens[j] as { kind: "punct"; value: string }).value === "." &&
+      tokens[j + 1]?.kind === "ident"
+    ) {
+      name = (tokens[j + 1] as { kind: "ident"; value: string }).value;
+      j = j + 2;
+    }
+    const next = nextNonOther(tokens, j);
+    if (next && next.tok.kind === "punct" && next.tok.value === "(" && isSideEffectFunctionName(name)) {
+      return {
+        ok: false,
+        text: `pglite_query refuses ${name}(): it changes database or session state, reaches outside the database, or can freeze the server. Nothing was run.`,
+      };
+    }
+  }
+
+  const explain = first === "explain";
+  if (explain) {
+    for (const id of idents) {
+      if (id.value === "analyze" || id.value === "analyse") {
+        return { ok: false, text: "EXPLAIN ANALYZE runs the statement, so it is not allowed in pglite_query. Use plain EXPLAIN. Nothing was run." };
+      }
+    }
+  }
+
+  return { ok: true, sql: trimmed, explain };
 }
 
 export const PGLITE_DEFAULT_ROW_LIMIT = 100;
@@ -353,7 +760,17 @@ export const PGLITE_DEFAULT_TIMEOUT_MS = 5_000;
 
 export type SqlLike = {
   query: (text: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
+  /** Optional non-result exec for BEGIN/ROLLBACK/RESET. Falls back to query(). */
+  exec?: (text: string) => Promise<void>;
 };
+
+async function sqlExec(client: SqlLike, text: string): Promise<void> {
+  if (client.exec) {
+    await client.exec(text);
+    return;
+  }
+  await client.query(text);
+}
 
 export async function pgliteQuery(input: {
   sql: string;
@@ -366,14 +783,36 @@ export async function pgliteQuery(input: {
   if (!checked.ok) return { ok: false, status: "error", text: checked.text };
   const rowLimit = Math.min(Math.max(input.rowLimit ?? PGLITE_DEFAULT_ROW_LIMIT, 1), 500);
   const timeoutMs = Math.min(Math.max(input.timeoutMs ?? PGLITE_DEFAULT_TIMEOUT_MS, 100), 30_000);
-  const limitedSql = `SELECT * FROM (${checked.sql}) AS _mind_q LIMIT ${rowLimit}`;
+  // EXPLAIN cannot sit inside a subquery, so it runs as-is (its output is a short plan).
+  const limitedSql = checked.explain ? checked.sql : `SELECT * FROM (${checked.sql}) AS _mind_q LIMIT ${rowLimit}`;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let began = false;
   try {
-    const rows = await Promise.race([
+    // Clean session state before the query so a prior set_config cannot hide tables
+    // or redirect schema resolution for this call.
+    try {
+      await sqlExec(input.sqlClient, "RESET ALL");
+    } catch {
+      try {
+        await sqlExec(input.sqlClient, "RESET search_path");
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      await sqlExec(input.sqlClient, "BEGIN READ ONLY");
+      began = true;
+    } catch {
+      // Defense-in-depth: continue without a RO txn if the backend rejects it.
+      began = false;
+    }
+    const allRows = await Promise.race([
       input.sqlClient.query(limitedSql, input.params ?? []),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs}ms`)), timeoutMs);
+        timer = setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs}ms`)), timeoutMs);
       }),
     ]);
+    const rows = Array.isArray(allRows) ? allRows.slice(0, rowLimit) : [];
     return {
       ok: true,
       status: "ok",
@@ -383,6 +822,24 @@ export async function pgliteQuery(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Query failed.";
     return { ok: false, status: "error", text: `PGLite query error: ${message}` };
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (began) {
+      try {
+        await sqlExec(input.sqlClient, "ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      await sqlExec(input.sqlClient, "RESET ALL");
+    } catch {
+      try {
+        await sqlExec(input.sqlClient, "RESET search_path");
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 

@@ -52,13 +52,64 @@ export function isModelTier(value: unknown): value is ModelTier {
   return typeof value === "string" && (MODEL_TIERS as readonly string[]).includes(value);
 }
 
+/** Max accepted length for a MIND_MODEL_* override (never echo the raw value in issues). */
+export const MAX_MODEL_ID_LENGTH = 128;
+
+/**
+ * Allowed model id shape: starts with alnum; then alnum / . _ : / -
+ * Rejects whitespace, control chars, and API-key-shaped values (xai-/sk-/Bearer…).
+ */
+export function isValidModelId(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_MODEL_ID_LENGTH) return false;
+  if (/\s/.test(trimmed)) return false;
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return false;
+  if (/^(xai-|sk-|Bearer\b)/i.test(trimmed)) return false;
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(trimmed)) return false;
+  return true;
+}
+
+function readModelOverride(
+  raw: string | undefined,
+  fallback: string,
+): { model: string; issue: string | null } {
+  if (raw === undefined) return { model: fallback, issue: null };
+  // Empty / whitespace-only counts as an explicit bad override when the key is present.
+  if (!raw.trim()) {
+    return { model: fallback, issue: "ignored (empty or whitespace)" };
+  }
+  if (!isValidModelId(raw)) {
+    return { model: fallback, issue: "ignored (invalid or secret-shaped); using default" };
+  }
+  return { model: raw.trim(), issue: null };
+}
+
+const ENV_KEYS: Record<ConcreteModelTier, string> = {
+  Fast: "MIND_MODEL_FAST",
+  Expert: "MIND_MODEL_EXPERT",
+  Heavy: "MIND_MODEL_HEAVY",
+  Build: "MIND_MODEL_BUILD",
+};
+
 export function parseModelTierEnv(env: Record<string, string | undefined> = {}): Record<ConcreteModelTier, string> {
-  return {
-    Fast: env.MIND_MODEL_FAST?.trim() || DEFAULTS.Fast.model,
-    Expert: env.MIND_MODEL_EXPERT?.trim() || DEFAULTS.Expert.model,
-    Heavy: env.MIND_MODEL_HEAVY?.trim() || DEFAULTS.Heavy.model,
-    Build: env.MIND_MODEL_BUILD?.trim() || DEFAULTS.Build.model,
-  };
+  const out = {} as Record<ConcreteModelTier, string>;
+  for (const tier of Object.keys(ENV_KEYS) as ConcreteModelTier[]) {
+    const key = ENV_KEYS[tier];
+    out[tier] = readModelOverride(env[key], DEFAULTS[tier].model).model;
+  }
+  return out;
+}
+
+/** Warnings for bad MIND_MODEL_* values — never echoes the raw value (may be a secret). */
+export function modelTierEnvIssues(env: Record<string, string | undefined> = {}): string[] {
+  const issues: string[] = [];
+  for (const tier of Object.keys(ENV_KEYS) as ConcreteModelTier[]) {
+    const key = ENV_KEYS[tier];
+    if (!Object.prototype.hasOwnProperty.call(env, key)) continue;
+    const read = readModelOverride(env[key], DEFAULTS[tier].model);
+    if (read.issue) issues.push(`${key} ${read.issue}`);
+  }
+  return issues;
 }
 
 export function defaultParamsFor(tier: ConcreteModelTier): ModelRequestParams {

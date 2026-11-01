@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
@@ -9,6 +9,7 @@ import {
   Database,
   FileText,
   Folder,
+  Globe,
   Home,
   Image,
   Lock,
@@ -48,6 +49,8 @@ import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
+
+const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
@@ -158,7 +161,8 @@ type View =
   | "activity"
   | "help"
   | "skills"
-  | "settings";
+  | "settings"
+  | "dashboard";
 
 type Pending = {
   id: string;
@@ -200,6 +204,7 @@ const NAV_ICON_SRC: Partial<Record<View, string>> = {
   scheduled: "/icons/systems.svg",
   skills: "/icons/systems.svg",
   memory: "/icons/library.svg",
+  dashboard: "/icons/systems.svg",
   activity: "/icons/runs.svg",
   settings: "/icons/systems.svg",
   help: "/icons/systems.svg",
@@ -212,6 +217,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     label: "Workspace",
     items: [
       { id: "command", label: "Chat", icon: MessageSquare },
+      { id: "dashboard", label: "Dashboard", icon: Globe },
       { id: "agents", label: "Bots & Agents", icon: Bot },
       { id: "build", label: "Build", icon: Terminal },
       { id: "projects", label: "Projects", icon: Folder },
@@ -261,6 +267,7 @@ const TITLES: Record<View, string> = {
   activity: "Activity",
   help: "Help",
   settings: "Settings",
+  dashboard: "Dashboard",
 };
 
 function statusWord(status: CapabilityStatus) {
@@ -2793,7 +2800,14 @@ export function CommandApp() {
           </div>
         )}
 
-        <div className={`min-h-0 flex-1 ${view === "chat" ? "overflow-hidden" : "overflow-auto"}`}>
+        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" ? "overflow-hidden" : "overflow-auto"}`}>
+          {view === "dashboard" && (
+            <div className="h-full min-h-0">
+              <Suspense fallback={<p className="p-6 text-sm text-muted">Opening the dashboard…</p>}>
+                <DashboardApp embedded />
+              </Suspense>
+            </div>
+          )}
           {view === "command" && (
             <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
               <div className="masthead flex flex-wrap items-end justify-between gap-3">

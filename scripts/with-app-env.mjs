@@ -20,10 +20,38 @@
  * `process.env`, which is why the merge has to happen before Vite starts.
  */
 import { spawn } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const XAI_INFERENCE_SECRETS_PATH = process.env.XAI_INFERENCE_ENV_FILE || "/home/box/.secrets/xai_inference.env";
+
+/** Load box inference key into env (overrides stale process XAI_API_KEY). Never logs the value. */
+export function applyInferenceSecretsToEnv(env = process.env) {
+  const path = XAI_INFERENCE_SECRETS_PATH;
+  if (!existsSync(path)) return env;
+  const body = readFileSync(path, "utf8");
+  for (const line of body.split(/\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^(?:export\s+)?XAI_API_KEY=(.*)$/);
+    if (!match) continue;
+    let value = match[1].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (value) env.XAI_API_KEY = value;
+    break;
+  }
+  const api = env.XAI_API_KEY?.trim() || "";
+  const mgmt = env.XAI_MANAGEMENT_KEY?.trim() || "";
+  if (api && mgmt && api === mgmt) {
+    delete env.XAI_API_KEY;
+  }
+  return env;
+}
+
 
 export const APP_ENV_REL_PATH = ".grok/app-env.json";
 
@@ -110,7 +138,7 @@ function main(argv) {
     console.error("usage: node scripts/with-app-env.mjs <command> [args…]");
     process.exit(2);
   }
-  const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
+  const env = applyInferenceSecretsToEnv(mergeAppEnv(readAppEnv(projectRoot()), process.env));
   const child = spawn(command, args, { stdio: "inherit", env });
   // The dev server is long-running and is stopped by signalling this wrapper.
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
