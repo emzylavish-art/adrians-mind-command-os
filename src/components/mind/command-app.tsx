@@ -43,6 +43,8 @@ import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
+import { ComposerLiveVoice } from "@/components/mind/composer-live-voice";
+import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
 import { toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
@@ -1357,7 +1359,62 @@ export function CommandApp() {
     }
   }
 
-  function stopVoiceSession() {
+  function appendLiveVoiceUser(text: string) {
+    const clipped = text.trim();
+    if (!clipped) return;
+    const targetId = activeId ?? active?.id ?? null;
+    if (!targetId) {
+      setDraft(clipped);
+      setNotice("Live voice heard you. Open a chat to keep the transcript in the thread.");
+      return;
+    }
+    const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: clipped, at: new Date().toISOString() };
+    setWs((prev) =>
+      pushAudit(
+        {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === targetId ? { ...item, messages: [...item.messages, userMsg] } : item,
+          ),
+        },
+        "message_sent",
+        targetId,
+        "live-voice-user",
+      ),
+    );
+  }
+
+  function appendLiveVoiceAssistant(text: string) {
+    const clipped = text.trim();
+    if (!clipped) return;
+    const targetId = activeId ?? active?.id ?? null;
+    if (!targetId) {
+      setNotice(`Live voice reply: ${clipped.slice(0, 160)}`);
+      return;
+    }
+    const assistantMsg = {
+      id: crypto.randomUUID(),
+      role: "assistant" as const,
+      content: clipped,
+      at: new Date().toISOString(),
+      model: "grok-voice-latest",
+    };
+    setWs((prev) =>
+      pushAudit(
+        {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === targetId ? { ...item, messages: [...item.messages, assistantMsg] } : item,
+          ),
+        },
+        "message_sent",
+        targetId,
+        "live-voice-assistant",
+      ),
+    );
+  }
+
+    function stopVoiceSession() {
     interruptSpeakPlayback();
     listenMintAbortRef.current?.abort();
     listenMintAbortRef.current = null;
@@ -1438,6 +1495,10 @@ export function CommandApp() {
         listenMintAbortRef.current,
     );
     const action = resolveListenAction(mode, active);
+    if (action === "start" && isLiveVoiceOccupied()) {
+      setNotice(LIVE_VOICE_BUSY_MESSAGE);
+      return;
+    }
     if (action === "stop") {
       stopVoiceSession();
       listenGuardRef.current.end();
@@ -2009,6 +2070,21 @@ export function CommandApp() {
                     <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
+                    <ComposerLiveVoice
+                      isOverlayMicOpen={() =>
+                        Boolean(
+                          voiceListening ||
+                            voiceSession.current?.isOpen ||
+                            voiceSession.current?.isCapturing ||
+                            listenMintAbortRef.current,
+                        )
+                      }
+                      stopOverlayMic={() => void listen({ mode: "stop" })}
+                      onUserTranscript={(text) => appendLiveVoiceUser(text)}
+                      onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+                      onError={(message) => setError(message)}
+                      onNotice={(message) => setNotice(message)}
+                    />
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
@@ -2210,6 +2286,11 @@ export function CommandApp() {
               onNew={openChat}
               onSpeak={(text) => void speak(text)}
               onListen={() => void listen()}
+              onListenStop={() => void listen({ mode: "stop" })}
+              onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
+              onLiveAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+              onLiveVoiceError={(message) => setError(message)}
+              onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
               voiceMode={voiceMode}
               voiceListening={voiceListening}
@@ -3160,6 +3241,11 @@ function ChatPane({
   onNew,
   onSpeak,
   onListen,
+  onListenStop,
+  onLiveUserTranscript,
+  onLiveAssistantTranscript,
+  onLiveVoiceError,
+  onLiveVoiceNotice,
   speaking,
   voiceMode,
   voiceListening,
@@ -3202,6 +3288,11 @@ function ChatPane({
   onNew: () => void;
   onSpeak: (text: string) => void;
   onListen: () => void;
+  onListenStop?: () => void;
+  onLiveUserTranscript?: (text: string) => void;
+  onLiveAssistantTranscript?: (text: string) => void;
+  onLiveVoiceError?: (message: string) => void;
+  onLiveVoiceNotice?: (message: string) => void;
   speaking: boolean;
   voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
@@ -3428,6 +3519,17 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
               {speaking ? "Speaking" : "Speak"}
             </button>
+            <ComposerLiveVoice
+              isOverlayMicOpen={() => Boolean(voiceListening)}
+              stopOverlayMic={() => {
+                if (onListenStop) onListenStop();
+                else onListen();
+              }}
+              onUserTranscript={(text) => onLiveUserTranscript?.(text)}
+              onAssistantTranscript={(text) => onLiveAssistantTranscript?.(text)}
+              onError={(message) => onLiveVoiceError?.(message)}
+              onNotice={(message) => onLiveVoiceNotice?.(message)}
+            />
             <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
         </form>
