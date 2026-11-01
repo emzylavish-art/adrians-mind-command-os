@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { dataUrlToDownscaled } from "./downscale";
 
+type Facing = "user" | "environment";
+
 export function CameraCapture({
   open,
   onClose,
@@ -14,6 +16,7 @@ export function CameraCapture({
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [facing, setFacing] = useState<Facing>("environment");
 
   useEffect(() => {
     if (!open) return;
@@ -26,11 +29,16 @@ export function CameraCapture({
         return;
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facing } },
+          audio: false,
+        });
         if (cancelled) {
           for (const track of stream.getTracks()) track.stop();
           return;
         }
+        const previous = streamRef.current;
+        if (previous) for (const track of previous.getTracks()) track.stop();
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -43,6 +51,8 @@ export function CameraCapture({
           setError("Camera permission was denied. You can still attach an image file.");
         } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
           setError("No camera was found on this device.");
+        } else if (name === "OverconstrainedError") {
+          setError("That camera facing mode is not available on this device.");
         } else {
           setError("The camera could not be opened.");
         }
@@ -55,7 +65,7 @@ export function CameraCapture({
       if (stream) for (const track of stream.getTracks()) track.stop();
       if (videoRef.current) videoRef.current.srcObject = null;
     };
-  }, [open]);
+  }, [open, facing]);
 
   if (!open) return null;
 
@@ -96,6 +106,13 @@ export function CameraCapture({
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={onClose}>
             Close
+          </button>
+          <button
+            type="button"
+            className="min-h-11 flex-1 rounded-panel border border-line"
+            onClick={() => setFacing((current) => (current === "user" ? "environment" : "user"))}
+          >
+            {facing === "user" ? "Switch to back" : "Switch to front"}
           </button>
           <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink disabled:opacity-50" disabled={!ready || Boolean(error)} onClick={() => void snap()}>
             Capture

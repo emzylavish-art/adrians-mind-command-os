@@ -14,7 +14,7 @@ describe("file reading", () => {
     assert.match(extracted.summary, /extracted/);
     const image = describeFile("dock.jpg", "");
     assert.equal(image.analyzed, false);
-    assert.match(image.summary, /not analyzed/);
+    assert.match(image.summary, /chat vision/);
   });
 
   it("reads a JSON object and refuses broken JSON", () => {

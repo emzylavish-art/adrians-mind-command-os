@@ -183,7 +183,7 @@ describe("bounded agent", () => {
     assert.equal(calls, 3);
   });
 
-  it("sends tool results back in tool-message form and only registers the three read tools", () => {
+  it("sends tool results back in tool-message form and registers read tools plus imagine", () => {
     const body = buildAgentModelBody([
       { role: "user", content: "List chats" },
       { role: "assistant", content: "", toolCalls: [{ id: "call-1", name: "list_chats", arguments: {} }] },
@@ -191,7 +191,7 @@ describe("bounded agent", () => {
     ]);
     assert.equal(body.model, "grok-4.5");
     assert.equal(buildAgentModelBody([], { model: "grok-build-0.1" }).model, "grok-build-0.1");
-    assert.deepEqual(body.tools.map((tool) => tool.function.name), ["list_projects", "list_chats", "search_notes"]);
+    assert.deepEqual(body.tools.map((tool) => tool.function.name), ["list_projects", "list_chats", "search_notes", "imagine"]);
     const encoded = JSON.stringify(body);
     assert.equal(encoded.includes("shell"), false);
     const messages = toProviderMessages([
@@ -206,5 +206,48 @@ describe("bounded agent", () => {
     assert.deepEqual(parsed.toolCalls[0]?.arguments, { query: "pier" });
     const broken = readAgentMessage({ choices: [{ message: { content: "", tool_calls: [{ function: { name: "search_notes", arguments: "{" } }] } }] });
     assert.equal(typeof broken.toolCalls[0]?.arguments, "string");
+  });
+
+  it("runs imagine via the tool registry and returns images for inline render", async () => {
+    const tiny =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let calls = 0;
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw a red circle",
+      model: async () => {
+        calls += 1;
+        if (calls === 1) return { text: "", toolCalls: [{ id: "call-1", name: "imagine", arguments: { prompt: "a red circle" } }] };
+        return { text: "Here is your red circle.", toolCalls: [] };
+      },
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      execute: async (_ws, tool, args) => {
+        assert.equal(tool, "imagine");
+        assert.equal(args.prompt, "a red circle");
+        return { ok: true, lines: ["imagine: Generated 1 image with grok-imagine-image."], images: [{ dataUrl: tiny, name: "imagine-1.png", mime: "image/png" }] };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.text, "Here is your red circle.");
+    assert.equal(result.log[0]?.tool, "imagine");
+    assert.equal(result.images?.length, 1);
+    assert.equal(result.images?.[0]?.name, "imagine-1.png");
+  });
+
+  it("rejects imagine without a prompt", async () => {
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw",
+      model: async () => ({ text: "", toolCalls: [{ id: "call-1", name: "imagine", arguments: {} }] }),
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /prompt/);
   });
 });

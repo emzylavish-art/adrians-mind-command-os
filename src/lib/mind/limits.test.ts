@@ -21,7 +21,7 @@ describe("mind request limits", () => {
 
 describe("checkTurnSize images", () => {
   it("rejects oversized image payloads", () => {
-    const big = "data:image/png;base64," + "a".repeat(2_500_000);
+    const big = "data:image/png;base64," + "a".repeat(2_800_000);
     const result = checkTurnSize({ text: "hi", history: [], memoryContext: [], images: [{ dataUrl: big }] });
     assert.equal(result.ok, false);
   });

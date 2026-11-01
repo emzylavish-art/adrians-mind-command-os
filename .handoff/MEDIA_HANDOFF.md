@@ -6,6 +6,39 @@
 **Base:** `aee35a81a07dbf97f58cc609c455b8179efac7a1` (`logic-wiring` tip — model-tier threading)  
 **Status:** complete
 
+## Upgrade: Grok Imagine (composer) — 2026-11-01T13:13:17+01:00 (Africa/Lagos)
+
+**Status:** complete on `media-integration`
+
+### Model / endpoint
+- Model: `grok-imagine-image` (also listed: `grok-imagine-image-2.0`, `grok-imagine-image-quality`)
+- Endpoint: `POST https://api.x.ai/v1/images/generations` with `response_format: b64_json`
+- Key: existing `/home/box/.secrets/xai_inference.env` via `resolveXaiInferenceApiKey` (never printed/minted)
+- ACL: granted `api-key:endpoint:image` on inference key `0922b6a4-…` via Management API (nested `apiKey.aclStrings` + `fieldMask`) so chat+image work on the same key
+
+### What shipped
+- Helper: `src/lib/mind/media/imagine.ts` + `imagine-http.ts`
+- Route: `POST /api/mind/media/generate`
+- Composer: **Imagine** button + `/imagine <prompt>` in home + chat composers
+- Results render as assistant bubble images (existing `MessageBody` / inline image) and stage into `pendingImages` for follow-up vision (Direct Send + Orchestrator Agent)
+- Honest errors as composer/`setError` + assistant bubble text (no error-banner components)
+- Unit tests: `imagine.test.ts`; live artifact: `/workspace/audit/media-integration/imagine-live.jpg`
+
+### Orchestrator
+- Composer path works in both modes: generated images attach for Agent planner vision turns
+- Did **not** add a separate agent planner tool registry entry (would touch Logic/agent tool surface) — deferred
+
+### Deferred
+- Native Orchestrator `imagine` tool in planner registry
+- OneDrive OAuth (MCP)
+- Encrypted Drive token without MCP decrypt helper
+- `server.ts` mindStatus env-only (voice claim)
+- Workspace data-URL bloat / disk cache for huge generations
+
+### Collision notes
+- Shared `command-app.tsx` Imagine wiring only; avoided styles.css, voice/, xai-adapter, model picker, MCP OAuth, server.ts
+
+
 ## Commits
 - `23b2b70` Add multimodal image packaging and data-URL helpers.
 - `d1cfb9c` Thread image attachments through Direct and Orchestrator turns.
@@ -103,3 +136,62 @@ See `/workspace/locks/media-integration.lock`.
 ### Verification this step
 - typecheck pass; mind/media tests **237/237**; build pass
 - live script with `XAI_API_KEY=invalid-...` still replied **red** via secrets file
+
+## Upgrade A: Orchestrator native `imagine` tool — 2026-11-01T13:30 Africa/Lagos
+
+- Registered `imagine` in `AGENT_TOOLS` (`agent.ts`); validates `prompt`; default executor calls `generateImagineImages`.
+- `runBoundedAgent` returns `images[]` for inline client render; `agent-run.server.ts` includes them in JSON.
+- Agents panel shows `InlineImage` results and stages into `pendingImages` for follow-up vision.
+- Did not touch `model-tiers.ts` or picker UI.
+- Tests: agent.test imagine cases + registry includes four tools.
+
+
+## Upgrade B: Edit with Imagine — 2026-11-01T13:40 Africa/Lagos
+
+- **Supported:** `POST https://api.x.ai/v1/images/edits` with JSON `{ model, prompt, image_url: dataUrl, response_format: "b64_json" }` (live-probed).
+- **Not supported:** OpenAI-style `POST /v1/images/variations` returns HTTP 405 — documented via `XAI_IMAGE_VARIATIONS_SUPPORTED = false`; no Variations UI.
+- Helper `editImagineImage`; generate route accepts `mode:"edit"` / `image` data URL.
+- UI: **Edit with Imagine** on inline bubble images + **Edit** on attachment chips (composer draft = edit instruction).
+
+
+## Hotfix: client media barrel Node crash — 2026-11-01T13:34 Africa/Lagos
+
+- **CRITICAL:** `@/lib/mind/media` re-exported `xai-key.ts` / server `imagine.ts` → Vite client crash `Cannot access node:fs.existsSync`.
+- Client barrel now exports only `types`, `data-url`, `pack`, `history`, `imagine-shared`.
+- Server helpers via direct imports or `index.server.ts`.
+- Guard: `client-barrel.test.ts` fails if barrel export lines pull Node-only modules.
+- Playwright: Attach/Camera visible, camera dialog opens, no pageErrors (`v2-barrel-fix-result.json`).
+
+
+## Fold-in: honesty / export / size cap — 2026-11-01T13:40 Africa/Lagos
+
+- Non-Grok + images returns “cannot see images” **before** missing-key errors.
+- `exportChat` keeps `images` (data URLs + names) in the JSON export.
+- `MAX_TURN_IMAGE_CHARS` aligned to **2_700_000** (history cap).
+
+
+## Upgrade C: blob store for large images — 2026-11-01T13:50 Africa/Lagos
+
+- IndexedDB store `amcos.media.blobs.v1` via `blob-store.ts`.
+- Persist path compacting: data-URLs ≥ 80k chars → `blobId` refs (dataUrl omitted in localStorage JSON).
+- Load path hydrates refs back to data-URLs for display/send.
+- Legacy inline-only messages remain valid (backward compatible).
+- `exportChat` keeps `dataUrl` and/or `blobId` references.
+- `MsgImage.dataUrl` optional; `toImageAttachments` filters for model turns.
+
+
+## Upgrade D: save/download, camera facing, Library copy — 2026-11-01T13:55 Africa/Lagos
+
+- Inline images: **Save** (stage into composer) + **Download** (browser file).
+- Camera: **Switch to front/back** facingMode toggle; restarts stream.
+- Library + `describeFile` image copy no longer implies images are useless/not decoded for chat — clarifies Command vision vs Library OCR.
+
+
+## Next ranked ideas (continuous lane)
+
+1. Multi-image Imagine edits (`multi-image-editing` docs) from several bubble attachments.
+2. Server-side media cache (disk/S3) for sync across devices beyond IndexedDB.
+3. Camera burst / multiple snapshots into chips before Send.
+4. Imagine quality model toggle (`grok-imagine-image-quality`) in composer.
+5. Video generation (Grok Imagine video) — separate paid capability; defer until image lane solid.
+6. Drag generated image onto Agent goal field as vision input affordance.

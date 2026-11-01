@@ -55,8 +55,9 @@ import { MessageBody } from "@/components/mind/message-body";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
+import { InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { historyTextForImages, type ImageAttachment } from "@/lib/mind/media";
+import { historyTextForImages, parseImagineCommand, toImageAttachments, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -332,6 +333,7 @@ export function CommandApp() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
   const [agentLog, setAgentLog] = useState<{ step: number; tool: string; ok: boolean; detail: string }[]>([]);
+  const [agentImages, setAgentImages] = useState<ImageAttachment[]>([]);
   const agentAbort = useRef<AbortController | null>(null);
   const [system, setSystem] = useState("Checking isolation.");
   const [checkedAt, setCheckedAt] = useState("");
@@ -929,7 +931,9 @@ export function CommandApp() {
           history: history.map((item) => ({
             role: item.role,
             content: item.content,
-            images: item.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+            images: item.images
+              ?.filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+              .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
           })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
@@ -1037,6 +1041,30 @@ export function CommandApp() {
     setError(null);
   }
 
+
+  function downloadImageDataUrl(src: string, alt: string) {
+    const link = document.createElement("a");
+    const ext = src.startsWith("data:image/png") ? "png" : src.startsWith("data:image/webp") ? "webp" : "jpg";
+    link.href = src;
+    link.download = (alt || "image").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80) + "." + ext;
+    link.click();
+  }
+
+  function saveImageToComposer(src: string, alt: string) {
+    if (!src.startsWith("data:image/")) {
+      setError("Only in-chat data URLs can be saved back into the composer.");
+      return;
+    }
+    setPendingImages((prev) => {
+      if (prev.length >= 4) {
+        setError("You can attach up to 4 images per message.");
+        return prev;
+      }
+      return [...prev, { dataUrl: src, name: alt || `saved-${prev.length + 1}.jpg` }];
+    });
+    setNotice("Image saved into the composer for a follow-up turn.");
+  }
+
   function editMessage(messageId: string, text: string) {
     if (!active || busy) return;
     if (wsRef.current.halted) {
@@ -1049,7 +1077,7 @@ export function CommandApp() {
       return;
     }
     setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true, revised.images ?? []);
+    void deliver(revised.chat, revised.text, revised.ws, true, toImageAttachments(revised.images));
   }
 
   function regenerate() {
@@ -1064,7 +1092,7 @@ export function CommandApp() {
       return;
     }
     setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true, prepared.images ?? []);
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, toImageAttachments(prepared.images));
   }
 
   function retryLast() {
@@ -1079,7 +1107,7 @@ export function CommandApp() {
       return;
     }
     setError(null);
-    void deliver(prepared.chat, prepared.text, ws, true, prepared.images ?? []);
+    void deliver(prepared.chat, prepared.text, ws, true, toImageAttachments(prepared.images));
   }
 
   function exportActive() {
@@ -1118,6 +1146,15 @@ export function CommandApp() {
   async function sendCommand() {
     if (busy) return;
     const text = draft.trim();
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, null);
+      return;
+    }
     const images = pendingImages;
     if (!text && images.length === 0) {
       setError("Write what you want to work on.");
@@ -1209,6 +1246,7 @@ export function CommandApp() {
     setAgentBusy(true);
     setAgentNote(null);
     setAgentLog([]);
+    setAgentImages([]);
     const plannerImages = pendingImages;
     setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -1235,12 +1273,26 @@ export function CommandApp() {
         model?: string;
         modelTier?: string;
         resolvedTier?: string;
+        images?: { dataUrl: string; name?: string; mime?: string }[];
       };
       if (controller.signal.aborted) return;
       setAgentLog(payload.log ?? []);
       const modelBit = payload.model ? ` Model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? modelTier}→${payload.resolvedTier})` : ""}.` : "";
-      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : ""));
-      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? "finished" : "stopped"));
+      const agentImages = (payload.images ?? [])
+        .filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+        .map((image, index) => ({
+          dataUrl: image.dataUrl,
+          name: image.name || `imagine-${index + 1}.jpg`,
+          mime: image.mime,
+        }));
+      if (agentImages.length) {
+        setPendingImages(agentImages);
+        setAgentImages(agentImages);
+      } else {
+        setAgentImages([]);
+      }
+      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : "") + (agentImages.length ? ` · ${agentImages.length} image staged for follow-up.` : ""));
+      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? (agentImages.length ? "finished+imagine" : "finished") : "stopped"));
     } catch {
       if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
       else setAgentNote("The planner did not finish. Nothing was marked finished.");
@@ -1253,6 +1305,15 @@ export function CommandApp() {
   async function sendInChat() {
     if (!active || busy) return;
     const text = draft.trim();
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, active);
+      return;
+    }
     const images = pendingImages;
     if (!text && !staged && images.length === 0) return;
     if (wsRef.current.halted) {
@@ -1285,6 +1346,236 @@ export function CommandApp() {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
     await deliver(active, full, ws, false, images);
+  }
+
+  async function runImagine(promptRaw?: string, targetChat: Chat | null = active) {
+    if (busy || ws.halted) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write a prompt for Imagine, or use /imagine <prompt>.");
+      return;
+    }
+    setDraft("");
+    setError(null);
+    setBusy(true);
+    setLiveText("");
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    let chat = targetChat;
+    if (!chat) {
+      const made = createChat(ws, {
+        memory: memoryChoice,
+        autonomy,
+        temporary,
+        projectId: projectChoice || null,
+      });
+      chat = made.chat;
+      setActiveId(made.chat.id);
+      setView("chat");
+      setWs((prev) =>
+        pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, `imagine; memory ${made.chat.memory}`),
+      );
+    }
+    const chatId = chat.id;
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: "user" as const,
+      content: `/imagine ${prompt}`,
+      at: new Date().toISOString(),
+    };
+    setWs((prev) => ({
+      ...prev,
+      chats: prev.chats.map((item) =>
+        item.id === chatId
+          ? {
+              ...item,
+              title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
+              messages: [...item.messages, userMsg],
+            }
+          : item,
+      ),
+    }));
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ prompt, n: 1 }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        const message = payload.error || `Imagine failed (HTTP ${response.status}).`;
+        setError(message);
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: message,
+                      at: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      const model = payload.model || "grok-imagine-image";
+      setPendingImages(images);
+      setNotice(`Imagine (${model}). Attached for a follow-up vision turn — Send or Agent to reuse.`);
+      setWs((prev) => {
+        const next = {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Generated with ${model}. The image is shown below and staged in the composer so you can Send or run Agent with it as vision input.`,
+                      at: new Date().toISOString(),
+                      model,
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        };
+        return pushAudit(next, "imagine_generate", chatId, model);
+      });
+    } catch (caught) {
+      const message =
+        caught instanceof Error && caught.message === "Unauthorized"
+          ? "Sign in is required."
+          : caught instanceof Error
+            ? caught.message
+            : "Imagine could not be reached.";
+      setError(message);
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                messages: [
+                  ...item.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant" as const,
+                    content: message,
+                    at: new Date().toISOString(),
+                  },
+                ],
+              }
+            : item,
+        ),
+      }));
+    } finally {
+      setBusy(false);
+      setLiveText("");
+    }
+  }
+
+  async function runImagineEdit(imageDataUrl: string, promptRaw?: string) {
+    if (busy || ws.halted) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write an edit instruction in the composer, then press Edit with Imagine.");
+      return;
+    }
+    if (!imageDataUrl.startsWith("data:image/")) {
+      setError("Edit with Imagine only works on images kept as data URLs in this chat.");
+      return;
+    }
+    setDraft("");
+    setError(null);
+    setBusy(true);
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1 }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        setError(payload.error || `Edit with Imagine failed (HTTP ${response.status}).`);
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-edit-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      setPendingImages(images);
+      setNotice(`Edited with ${payload.model || "grok-imagine-image"}. Staged for Send / Agent.`);
+      if (active) {
+        const chatId = active.id;
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "user" as const,
+                      content: `Edit with Imagine: ${prompt}`,
+                      at: new Date().toISOString(),
+                    },
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Edited with ${payload.model || "grok-imagine-image"}.`,
+                      at: new Date().toISOString(),
+                      model: payload.model || "grok-imagine-image",
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Edit with Imagine could not be reached.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function enableMemory() {
@@ -2191,7 +2482,19 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
                       Drive
                     </button>
-                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} />
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      disabled={busy || ws.halted}
+                      onClick={() => {
+                        const viaCmd = parseImagineCommand(draft);
+                        const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                        void runImagine(prompt || undefined, null);
+                      }}
+                    >
+                      Imagine
+                    </button>
+                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -2257,7 +2560,7 @@ export function CommandApp() {
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
-                    <li className="text-muted">Image and video — paid APIs, not called. HP — not paired.</li>
+                    <li className="text-muted">Imagine — Grok Imagine (composer /imagine). Video — paid API, not called. HP — not paired.</li>
                     <li>
                       <p className="font-semibold">MCP servers</p>
                       <ul className="mt-2 space-y-2">
@@ -2513,6 +2816,14 @@ export function CommandApp() {
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
               onOpenCloud={() => setCloudPickerOpen(true)}
+              onImagine={() => {
+                const viaCmd = parseImagineCommand(draft);
+                const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                void runImagine(prompt || undefined, active);
+              }}
+              onEditImagine={(src) => void runImagineEdit(src)}
+              onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
+              onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -2839,6 +3150,13 @@ export function CommandApp() {
                 </button>
               </div>
               {agentNote ? <p className="mt-3 text-sm text-muted">{agentNote}</p> : null}
+              {agentImages.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {agentImages.map((image, index) => (
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} />
+                  ))}
+                </div>
+              )}
               {agentLog.length > 0 && (
                 <ol className="mt-3 space-y-1 text-sm">
                   {agentLog.map((entry) => (
@@ -3068,7 +3386,7 @@ export function CommandApp() {
                   <img src="/icons/library.svg" alt="" className="size-8" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Library</h2>
-                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Chat can also send images to vision-capable models.</p>
+                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Images attached on Command are decoded for Grok vision and Imagine — they are not OCR’d into Library text copies.</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -3611,6 +3929,10 @@ function ChatPane({
   onAttachImage,
   onOpenCamera,
   onOpenCloud,
+  onImagine,
+  onEditImagine,
+  onSaveImage,
+  onDownloadImage,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -3670,6 +3992,10 @@ function ChatPane({
   onAttachImage: () => void;
   onOpenCamera: () => void;
   onOpenCloud: () => void;
+  onImagine: () => void;
+  onEditImagine: (src: string) => void;
+  onSaveImage: (src: string, alt: string) => void;
+  onDownloadImage: (src: string, alt: string) => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -3803,7 +4129,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} images={msg.images} />
+                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
@@ -3935,7 +4261,7 @@ function ChatPane({
             placeholder={`Message (${modelTier})...`}
             className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
           />
-          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} />
+          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -3946,7 +4272,7 @@ function ChatPane({
             <div className="mt-2 space-y-1 rounded-panel border border-line bg-bg p-3 text-sm">
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onDoctor}>Run REA doctor</button>
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onAnalyze}>Inspect a file with REA</button>
-              <p className="text-xs text-muted">Chat stays on Grok 4.5. Image, video, and web search are not called.</p>
+              <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -3961,6 +4287,9 @@ function ChatPane({
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCloud}>
               Drive
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+              Imagine
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>

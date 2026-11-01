@@ -1,0 +1,318 @@
+import { resolveXaiInferenceApiKey } from "./xai-key.ts";
+import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
+import {
+  GROK_IMAGINE_MODEL,
+  normalizeImaginePrompt,
+  XAI_IMAGES_EDITS_URL,
+  XAI_IMAGES_GENERATIONS_URL,
+} from "./imagine-shared.ts";
+
+export {
+  GROK_IMAGINE_MODEL,
+  normalizeImaginePrompt,
+  parseImagineCommand,
+  XAI_IMAGES_EDITS_URL,
+  XAI_IMAGES_GENERATIONS_URL,
+  XAI_IMAGE_VARIATIONS_SUPPORTED,
+} from "./imagine-shared.ts";
+
+export type ImagineRequest = {
+  prompt: string;
+  /** 1–4; capped at MAX_IMAGES_PER_TURN */
+  n?: number;
+  model?: string;
+  /** Prefer b64_json so images persist without a remote URL. */
+  responseFormat?: "b64_json" | "url";
+};
+
+export type ImagineImage = {
+  dataUrl: string;
+  mime: string;
+  /** Present when the API returned a temporary URL that we downloaded. */
+  sourceUrl?: string;
+};
+
+export type ImagineResult =
+  | { ok: true; model: string; images: ImagineImage[]; usage?: unknown }
+  | { ok: false; error: string; status?: number };
+
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+function clampCount(n: unknown): number {
+  const num = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(num) || num < 1) return 1;
+  return Math.min(MAX_IMAGES_PER_TURN, Math.floor(num));
+}
+
+
+function mimeFromB64Header(b64: string, hinted?: string): string {
+  if (hinted && /^image\/(png|jpeg|jpg|gif|webp)$/i.test(hinted)) {
+    return hinted.toLowerCase().replace("image/jpg", "image/jpeg");
+  }
+  try {
+    const head = Buffer.from(b64.slice(0, 32), "base64");
+    if (head[0] === 0x89 && head[1] === 0x50) return "image/png";
+    if (head[0] === 0xff && head[1] === 0xd8) return "image/jpeg";
+    if (head[0] === 0x47 && head[1] === 0x49) return "image/gif";
+    if (head[0] === 0x52 && head[1] === 0x49) return "image/webp";
+  } catch {
+    /* ignore */
+  }
+  return "image/jpeg";
+}
+
+function dataUrlFromB64(b64: string, mimeHint?: string): { ok: true; dataUrl: string; mime: string } | { ok: false; error: string } {
+  const cleaned = b64.replace(/\s+/g, "");
+  if (!cleaned) return { ok: false, error: "The image API returned empty image data." };
+  const mime = mimeFromB64Header(cleaned, mimeHint);
+  const dataUrl = `data:${mime};base64,${cleaned}`;
+  if (dataUrl.length > MAX_DATA_URL_CHARS) {
+    return { ok: false, error: "A generated image was too large to keep as a data URL." };
+  }
+  return { ok: true, dataUrl, mime };
+}
+
+async function downloadUrlToDataUrl(
+  url: string,
+  fetchImpl: FetchLike,
+): Promise<{ ok: true; dataUrl: string; mime: string } | { ok: false; error: string }> {
+  let response: Response;
+  try {
+    response = await fetchImpl(url, { method: "GET" });
+  } catch {
+    return { ok: false, error: "Could not download the generated image URL." };
+  }
+  if (!response.ok) {
+    return { ok: false, error: `Downloading the generated image failed (HTTP ${response.status}).` };
+  }
+  const contentType = (response.headers.get("content-type") || "image/jpeg").split(";")[0]!.trim();
+  const buf = Buffer.from(await response.arrayBuffer());
+  const b64 = buf.toString("base64");
+  return dataUrlFromB64(b64, contentType.startsWith("image/") ? contentType : "image/jpeg");
+}
+
+/**
+ * Call xAI Grok Imagine (`POST /v1/images/generations`).
+ * Prefers b64_json; when only a URL is returned, downloads it server-side into a data URL.
+ */
+export async function generateImagineImages(
+  input: ImagineRequest,
+  options: {
+    apiKey?: string;
+    fetchImpl?: FetchLike;
+    endpoint?: string;
+  } = {},
+): Promise<ImagineResult> {
+  const normalized = normalizeImaginePrompt(input.prompt);
+  if (!normalized.ok) return normalized;
+
+  const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: "No xAI inference API key is available for image generation. Check /home/box/.secrets/xai_inference.env.",
+      status: 503,
+    };
+  }
+
+  const model = (input.model || GROK_IMAGINE_MODEL).trim() || GROK_IMAGINE_MODEL;
+  const n = clampCount(input.n);
+  const responseFormat = input.responseFormat ?? "b64_json";
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const endpoint = options.endpoint ?? XAI_IMAGES_GENERATIONS_URL;
+
+  let response: Response;
+  try {
+    response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        prompt: normalized.prompt,
+        n,
+        response_format: responseFormat,
+      }),
+    });
+  } catch {
+    return { ok: false, error: "Could not reach the xAI image generation endpoint.", status: 502 };
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return {
+      ok: false,
+      error: `Image generation returned a non-JSON response (HTTP ${response.status}).`,
+      status: response.status,
+    };
+  }
+
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (!response.ok) {
+    const err = record.error;
+    const message =
+      typeof err === "string"
+        ? err
+        : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
+          ? String((err as { message: string }).message)
+          : `Image generation failed (HTTP ${response.status}).`;
+    return { ok: false, error: message, status: response.status };
+  }
+
+  const rawData = Array.isArray(record.data) ? record.data : [];
+  if (rawData.length === 0) {
+    return { ok: false, error: "Image generation returned no images.", status: response.status };
+  }
+
+  const images: ImagineImage[] = [];
+  for (const item of rawData) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.b64_json === "string" && row.b64_json) {
+      const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
+      if (!built.ok) return { ok: false, error: built.error, status: response.status };
+      images.push({ dataUrl: built.dataUrl, mime: built.mime });
+      continue;
+    }
+    if (typeof row.url === "string" && row.url) {
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl);
+      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
+      images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
+    }
+  }
+
+  if (images.length === 0) {
+    return { ok: false, error: "Image generation returned no usable image payloads.", status: response.status };
+  }
+
+  return {
+    ok: true,
+    model: typeof record.model === "string" && record.model ? record.model : model,
+    images,
+    usage: record.usage,
+  };
+}
+
+
+
+export type ImagineEditRequest = {
+  prompt: string;
+  /** data:image/...;base64,... input image */
+  imageDataUrl: string;
+  model?: string;
+  responseFormat?: "b64_json" | "url";
+};
+
+/**
+ * Edit an existing image with Grok Imagine via POST /v1/images/edits.
+ * Body shape confirmed live: `{ model, prompt, image_url: dataUrl, response_format }`.
+ * Multipart and raw-string `image` fields are rejected by the API.
+ */
+export async function editImagineImage(
+  input: ImagineEditRequest,
+  options: {
+    apiKey?: string;
+    fetchImpl?: FetchLike;
+    endpoint?: string;
+  } = {},
+): Promise<ImagineResult> {
+  const normalized = normalizeImaginePrompt(input.prompt);
+  if (!normalized.ok) return normalized;
+  if (typeof input.imageDataUrl !== "string" || !input.imageDataUrl.startsWith("data:image/")) {
+    return { ok: false, error: "Edit with Imagine needs an image data URL as input." };
+  }
+
+  const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: "No xAI inference API key is available for image editing. Check /home/box/.secrets/xai_inference.env.",
+      status: 503,
+    };
+  }
+
+  const model = (input.model || GROK_IMAGINE_MODEL).trim() || GROK_IMAGINE_MODEL;
+  const responseFormat = input.responseFormat ?? "b64_json";
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const endpoint = options.endpoint ?? XAI_IMAGES_EDITS_URL;
+
+  let response: Response;
+  try {
+    response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        prompt: normalized.prompt,
+        response_format: responseFormat,
+        image_url: input.imageDataUrl,
+      }),
+    });
+  } catch {
+    return { ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 };
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return {
+      ok: false,
+      error: `Image editing returned a non-JSON response (HTTP ${response.status}).`,
+      status: response.status,
+    };
+  }
+
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (!response.ok) {
+    const err = record.error;
+    const message =
+      typeof err === "string"
+        ? err
+        : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
+          ? String((err as { message: string }).message)
+          : `Image editing failed (HTTP ${response.status}).`;
+    return { ok: false, error: message, status: response.status };
+  }
+
+  const rawData = Array.isArray(record.data) ? record.data : [];
+  if (rawData.length === 0) {
+    return { ok: false, error: "Image editing returned no images.", status: response.status };
+  }
+
+  const images: ImagineImage[] = [];
+  for (const item of rawData) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.b64_json === "string" && row.b64_json) {
+      const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
+      if (!built.ok) return { ok: false, error: built.error, status: response.status };
+      images.push({ dataUrl: built.dataUrl, mime: built.mime });
+      continue;
+    }
+    if (typeof row.url === "string" && row.url) {
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl);
+      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
+      images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
+    }
+  }
+
+  if (images.length === 0) {
+    return { ok: false, error: "Image editing returned no usable image payloads.", status: response.status };
+  }
+
+  return {
+    ok: true,
+    model: typeof record.model === "string" && record.model ? record.model : model,
+    images,
+    usage: record.usage,
+  };
+}
+

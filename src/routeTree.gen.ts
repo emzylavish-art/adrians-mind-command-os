@@ -25,6 +25,7 @@ import { Route as ApiMindPcStatusRouteImport } from './routes/api/mind/pc/status
 import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
 import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
 import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
+import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
 import { Route as ApiMindOauthConnectorCallbackRouteImport } from './routes/api/mind/oauth/$connector/callback'
 import { Route as ApiMindOauthConnectorDisconnectRouteImport } from './routes/api/mind/oauth/$connector/disconnect'
 import { Route as ApiMindOauthConnectorStartRouteImport } from './routes/api/mind/oauth/$connector/start'
@@ -114,6 +115,11 @@ const ApiMindMediaCloudStatusRoute = ApiMindMediaCloudStatusRouteImport.update({
   path: '/api/mind/media/cloud/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
+  id: '/api/mind/media/generate',
+  path: '/api/mind/media/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindOauthConnectorCallbackRoute =
   ApiMindOauthConnectorCallbackRouteImport.update({
     id: '/api/mind/oauth/$connector/callback',
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -205,6 +212,7 @@ export interface FileRoutesByTo {
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -232,6 +240,7 @@ export interface FileRoutesById {
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
+  '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
   '/api/mind/oauth/$connector/callback': typeof ApiMindOauthConnectorCallbackRoute
   '/api/mind/oauth/$connector/disconnect': typeof ApiMindOauthConnectorDisconnectRoute
   '/api/mind/oauth/$connector/start': typeof ApiMindOauthConnectorStartRoute
@@ -260,6 +269,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/media/generate'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/media/generate'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -312,6 +323,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
+    | '/api/mind/media/generate'
     | '/api/mind/oauth/$connector/callback'
     | '/api/mind/oauth/$connector/disconnect'
     | '/api/mind/oauth/$connector/start'
@@ -339,6 +351,7 @@ export interface RootRouteChildren {
   ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
   ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
   ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
+  ApiMindMediaGenerateRoute: typeof ApiMindMediaGenerateRoute
   ApiMindOauthConnectorCallbackRoute: typeof ApiMindOauthConnectorCallbackRoute
   ApiMindOauthConnectorDisconnectRoute: typeof ApiMindOauthConnectorDisconnectRoute
   ApiMindOauthConnectorStartRoute: typeof ApiMindOauthConnectorStartRoute
@@ -463,6 +476,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMediaCloudStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/media/generate': {
+      id: '/api/mind/media/generate'
+      path: '/api/mind/media/generate'
+      fullPath: '/api/mind/media/generate'
+      preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/oauth/$connector/callback': {
       id: '/api/mind/oauth/$connector/callback'
       path: '/api/mind/oauth/$connector/callback'
@@ -539,6 +559,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
   ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,
   ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
+  ApiMindMediaGenerateRoute: ApiMindMediaGenerateRoute,
   ApiMindOauthConnectorCallbackRoute: ApiMindOauthConnectorCallbackRoute,
   ApiMindOauthConnectorDisconnectRoute: ApiMindOauthConnectorDisconnectRoute,
   ApiMindOauthConnectorStartRoute: ApiMindOauthConnectorStartRoute,

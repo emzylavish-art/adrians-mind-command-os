@@ -18,7 +18,8 @@ export function allowMindRequest(bucket: string, userId: string, limit: number, 
 }
 
 /** Soft cap matching media MAX_DATA_URL_CHARS * a few attachments + history images. */
-export const MAX_TURN_IMAGE_CHARS = 2_400_000;
+/** Aligned with media history cap (MAX_DATA_URL_CHARS * 1.5 ≈ 2.7M). */
+export const MAX_TURN_IMAGE_CHARS = 2_700_000;
 
 export function checkTurnSize(input: {
   text: string;

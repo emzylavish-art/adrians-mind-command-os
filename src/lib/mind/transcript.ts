@@ -84,7 +84,20 @@ export function exportChat(ws: Workspace, chatId: string): { filename: string; j
       id: chat.id,
       title: chat.title,
       memory: chat.memory,
-      messages: chat.messages.map((msg) => ({ role: msg.role, content: msg.content, at: msg.at, model: msg.model ?? null })),
+      messages: chat.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        at: msg.at,
+        model: msg.model ?? null,
+        images: msg.images
+          ?.map((image) => ({
+            dataUrl: image.dataUrl,
+            blobId: image.blobId,
+            name: image.name ?? null,
+            mime: image.mime ?? null,
+          }))
+          .filter((image) => Boolean(image.dataUrl) || Boolean(image.blobId)) ?? undefined,
+      })),
     },
   };
   return { filename: `chat-${chat.id}.json`, json: JSON.stringify(payload, null, 2) };

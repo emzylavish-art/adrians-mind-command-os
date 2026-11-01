@@ -56,3 +56,9 @@ export function historyTextForImages(text: string, images: ImageAttachment[]): s
   const base = text.trim() || "Attached image.";
   return `${base}\n\n[Attached: ${labels}]`;
 }
+
+/** Runtime attachments for model turns: only hydrated data-URLs. */
+export function toImageAttachments(images: { dataUrl?: string; name?: string; mime?: string }[] | undefined): ImageAttachment[] {
+  return sanitizeAttachments(images ?? []);
+}
+
