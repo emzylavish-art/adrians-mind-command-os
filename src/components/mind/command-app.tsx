@@ -40,6 +40,7 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
+import { probeOllamaForBadge } from "@/lib/mind/voice-live/ollama-status";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
@@ -282,6 +283,8 @@ export function CommandApp() {
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
   const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
+  const [orchestratorDetail, setOrchestratorDetail] = useState<string | null>(null);
+  const [orchestratorDetailTone, setOrchestratorDetailTone] = useState<"muted" | "warn" | "danger">("muted");
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
@@ -392,6 +395,21 @@ export function CommandApp() {
     interruptSpeakPlayback();
     if (shouldClearLiveTranscriptOnModeSwitch(previous, committed)) {
       setVoiceLiveTranscript("");
+    }
+    if (committed === "orchestrator") {
+      const model =
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || "qwen2.5:0.5b";
+      const baseUrl =
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) ||
+        "http://127.0.0.1:11434";
+      void probeOllamaForBadge({ model, baseUrl }).then((status) => {
+        setOrchestratorDetail(status.detail);
+        setOrchestratorDetailTone(status.detailTone);
+        if (!status.ok) setNotice(status.detail || "Ollama conductor unreachable.");
+      });
+    } else {
+      setOrchestratorDetail(null);
+      setOrchestratorDetailTone("muted");
     }
   }
 
@@ -1851,6 +1869,8 @@ export function CommandApp() {
             <VoiceModeBadge
               mode={voiceMode}
               listening={voiceListening}
+              detail={voiceMode === "orchestrator" ? orchestratorDetail : null}
+              detailTone={orchestratorDetailTone}
               onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
             />
           </div>
