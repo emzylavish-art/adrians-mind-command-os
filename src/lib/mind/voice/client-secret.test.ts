@@ -4,7 +4,7 @@ import { mintRealtimeClientSecret } from "./client-secret.ts";
 
 describe("mintRealtimeClientSecret", () => {
   it("refuses when no voice key is configured", async () => {
-    const result = await mintRealtimeClientSecret({ env: {} });
+    const result = await mintRealtimeClientSecret({ env: {}, secretsPath: "/tmp/amcos-missing-voice-secrets.env" });
     assert.equal(result.ok, false);
     if (!result.ok) assert.match(result.error, /No speech key/);
   });
@@ -15,6 +15,9 @@ describe("mintRealtimeClientSecret", () => {
       fetchImpl: async (_url, init) => {
         const auth = String((init?.headers as Record<string, string>)?.Authorization || "");
         assert.match(auth, /^Bearer xai-test-voice-key-not-real$/);
+        const body = JSON.parse(String(init?.body || "{}")) as { expires_after?: { seconds?: number }; session?: unknown };
+        assert.equal(body.session, undefined);
+        assert.equal(body.expires_after?.seconds, 300);
         return new Response(JSON.stringify({ value: "xai-realtime-client-secret-test", expires_at: 123 }), {
           status: 200,
           headers: { "content-type": "application/json" },

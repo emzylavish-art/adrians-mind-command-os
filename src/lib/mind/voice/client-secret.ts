@@ -9,13 +9,15 @@ export type ClientSecretResult =
 /**
  * Mint an ephemeral realtime client secret using the server voice key.
  * The returned value is short-lived and safe to hand to the browser.
+ * Body matches docs: expires_after only (no session field).
  */
 export async function mintRealtimeClientSecret(input: {
   env?: Record<string, string | undefined>;
   fetchImpl?: typeof fetch;
   expiresSeconds?: number;
+  secretsPath?: string;
 }): Promise<ClientSecretResult> {
-  const apiKey = resolveVoiceApiKey(input.env ?? process.env);
+  const apiKey = resolveVoiceApiKey(input.env ?? process.env, input.secretsPath);
   if (!apiKey) {
     return {
       ok: false,
@@ -34,7 +36,6 @@ export async function mintRealtimeClientSecret(input: {
       signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({
         expires_after: { seconds: input.expiresSeconds ?? 300 },
-        session: { model: "grok-voice-latest" },
       }),
     });
   } catch {

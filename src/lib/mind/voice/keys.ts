@@ -1,13 +1,44 @@
 /**
  * Server-only voice key resolution. Never log or return the raw key to clients.
  */
-export function resolveVoiceApiKey(env: Record<string, string | undefined> = process.env): string | undefined {
+import { existsSync, readFileSync } from "node:fs";
+
+export const XAI_VOICE_SECRETS_PATH = "/home/box/.secrets/xai_voice.env";
+
+/** Read `XAI_VOICE_API_KEY=...` from the box secrets file. */
+export function readVoiceSecretsFile(path: string = XAI_VOICE_SECRETS_PATH): string | undefined {
+  if (!existsSync(path)) return undefined;
+  const body = readFileSync(path, "utf8");
+  for (const line of body.split(/\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^(?:export\s+)?(?:XAI_VOICE_API_KEY|VOICE_API_KEY)=(.*)$/);
+    if (!match) continue;
+    let value = match[1]!.trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value || undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Prefer process env, then box secrets file. Never prints the value.
+ */
+export function resolveVoiceApiKey(env: Record<string, string | undefined> = process.env, secretsPath: string = XAI_VOICE_SECRETS_PATH): string | undefined {
   const primary = env.XAI_VOICE_API_KEY?.trim();
   if (primary) return primary;
   const legacy = env.VOICE_API_KEY?.trim();
-  return legacy || undefined;
+  if (legacy) return legacy;
+  const fromFile = readVoiceSecretsFile(secretsPath);
+  if (fromFile) {
+    env.XAI_VOICE_API_KEY = fromFile;
+    return fromFile;
+  }
+  return undefined;
 }
 
-export function voiceKeyConfigured(env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(resolveVoiceApiKey(env));
+export function voiceKeyConfigured(env: Record<string, string | undefined> = process.env, secretsPath?: string): boolean {
+  return Boolean(resolveVoiceApiKey(env, secretsPath));
 }
