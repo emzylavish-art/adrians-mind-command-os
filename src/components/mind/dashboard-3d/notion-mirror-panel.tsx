@@ -37,6 +37,16 @@ export function NotionMirrorPanel({ mirror, onOpenPage }: Props) {
             ? `${mirror.mappedCount} mapped · ${mirror.staleCount} stale · ${mirror.mode}`
             : mirror.reason || NO_MIRROR_SOURCE}
         </p>
+        {!mirror.available ? (
+          <span
+            className="dash3d-pill dash3d-mirror-outage"
+            data-testid="mirror-outage"
+            data-mirror-available="0"
+            title={mirror.reason || NO_MIRROR_SOURCE}
+          >
+            Offline
+          </span>
+        ) : null}
       </div>
       {!mirror.available ? (
         <p className="dash3d-muted" data-testid="mirror-empty">

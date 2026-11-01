@@ -4,6 +4,7 @@ import {
   MAX_AMOUNT_USD,
   NO_SPEND_SOURCE,
   buildMoneyView,
+  adjustBurnForHiddenGap,
   createFilesystemSpendAdapter,
   parseSpendTextRobust,
   CANONICAL_SPEND_JSONL,
@@ -12,6 +13,7 @@ import {
   sanitizeAmountUsd,
   type SpendAdapter,
   type SpendLoadResult,
+  type MoneyView,
 } from "./spend.ts";
 
 const NOW = Date.parse("2026-11-01T18:00:00+01:00");
@@ -93,7 +95,7 @@ describe("spend / money (hacker + queue #7)", () => {
             atIso: "2026-11-01T17:00:00+01:00",
             atMs: Date.parse("2026-11-01T17:00:00+01:00"),
             amountUsd: 120,
-            currency: "USD",
+            currency: "USD" as const,
             lane: null,
             model: null,
             source: "memory",
@@ -161,5 +163,28 @@ describe("spend Gap#22 robust JSONL", () => {
       assert.equal(hit.events[0]!.amountUsd, 2.5);
       assert.match(hit.source, /spend\.jsonl/);
     }
+  });
+});
+
+
+describe("adjustBurnForHiddenGap Gap#34", () => {
+  it("nulls burn after long hidden gap", () => {
+    const base: MoneyView = {
+      available: true,
+      reason: null,
+      source: "test",
+      currency: "USD",
+      todayTotalUsd: 1,
+      burnPerHourUsd: 12.5,
+      warnings: [],
+      asOfMs: 1,
+      eventCount: 1,
+      stale: false,
+      droppedInvalid: 0,
+      todayKey: "2026-11-01",
+    };
+    assert.equal(adjustBurnForHiddenGap(base, 0).burnPerHourUsd, 12.5);
+    assert.equal(adjustBurnForHiddenGap(base, 60_000).burnPerHourUsd, 12.5);
+    assert.equal(adjustBurnForHiddenGap(base, 40 * 60_000).burnPerHourUsd, null);
   });
 });

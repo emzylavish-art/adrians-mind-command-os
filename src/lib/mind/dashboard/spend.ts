@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 import {
   MAX_EVENTS,
   NO_SPEND_SOURCE,
-  buildMoneyView,
+  buildMoneyView, adjustBurnForHiddenGap,
   parseSpendFileText,
   parseSpendRecord,
   type MoneyView,

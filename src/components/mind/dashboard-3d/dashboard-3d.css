@@ -942,7 +942,7 @@
 }
 
 .dash3d-charts-panel { z-index: 4; }
-.dash3d-node-detail.is-open { z-index: 6; }
+.dash3d-node-detail.is-open { z-index: 10; } /* Gap#36 raised */
 .dash3d-node-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1041,4 +1041,63 @@
     top: 0.35rem;
     z-index: 12;
   }
+}
+
+
+/* Gap #36 — Star Detail close must sit above HUD focus toggle on mobile */
+.dash3d-node-detail.is-open {
+  z-index: 10;
+}
+.dash3d-node-detail.is-open .dash3d-side-close {
+  position: relative;
+  z-index: 11;
+}
+.dash3d-root:has(.dash3d-node-detail.is-open) .dash3d-hud-focus-toggle {
+  /* Move out of the close-button corner while detail is open */
+  right: auto;
+  left: 0.75rem;
+  z-index: 9;
+}
+
+/* Gap #37 — bound detail height on short / landscape viewports */
+.dash3d-side.dash3d-node-detail.is-open {
+  max-height: min(100dvh, 100%);
+  overflow: auto;
+  overscroll-behavior: contain; /* Gap #38 */
+}
+@media (max-height: 500px), (orientation: landscape) and (max-height: 520px) {
+  .dash3d-side.dash3d-node-detail.is-open {
+    max-height: 100dvh;
+    overflow: auto;
+  }
+  .dash3d-root:has(.dash3d-node-detail.is-open) {
+    overflow: hidden; /* keep page from scrolling away */
+  }
+}
+
+/* Gap #38 — let the scene own pinch/pan; don't chain scroll out of sheets */
+.dash3d-universe canvas,
+.dash3d-universe .dash3d-canvas,
+[data-testid="universe-canvas"],
+.dash3d-root canvas {
+  touch-action: none;
+}
+
+/* Gap #39 — WCAG 2.5.8 minimap tap targets ≥24×24 */
+.dash3d-minimap-dot {
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  background: transparent;
+  box-shadow: inset 0 0 0 7px #7dd3fc;
+}
+.dash3d-minimap-dot[data-health="stalled"] { box-shadow: inset 0 0 0 7px #fbbf24; }
+.dash3d-minimap-dot[data-health="blocked"] { box-shadow: inset 0 0 0 7px #fb7185; }
+.dash3d-minimap-dot[data-health="idle"] { box-shadow: inset 0 0 0 7px #94a3b8; }
+.dash3d-minimap-dot.is-focus { box-shadow: inset 0 0 0 7px #7dd3fc, 0 0 0 2px #fff; }
+
+/* Gap #41 — reserve skybar money card height to cut CLS */
+.dash3d-money,
+.dash3d-skybar-card.dash3d-money {
+  min-height: 4.5rem;
 }

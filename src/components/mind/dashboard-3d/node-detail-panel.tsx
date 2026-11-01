@@ -1,4 +1,5 @@
 import { PORTRAIT_FALLBACK_URL, markPortraitMissing } from "@/lib/mind/dashboard/portrait-resolve";
+import { sanitizeNotionPlainText } from "@/lib/mind/dashboard/notion-plain";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import {
@@ -32,10 +33,11 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
         <img
           className="dash3d-portrait"
           src={portraitSrc}
+          decoding="async"
+          loading="lazy"
           alt=""
           width={72}
           height={72}
-          loading="lazy"
           onError={(e) => {
             const img = e.currentTarget;
             const botId = String(img.dataset.botId || detail.botId || "");
@@ -109,10 +111,10 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
           detail.notionPages.map((p) => (
             <li key={p.id}>
               <a className="dash3d-pill" href={p.url} target="_blank" rel="noreferrer">
-                {p.title || p.id}
+                {sanitizeNotionPlainText(p.title || p.id, 120) || p.id}
               </a>
               <span className="dash3d-muted" style={{ display: "block", fontSize: "0.72rem" }}>
-                {(p.excerpt || NO_SOURCE).slice(0, 160)}
+                {(sanitizeNotionPlainText(p.excerpt || "", 160) || NO_SOURCE).slice(0, 160)}
               </span>
             </li>
           ))
@@ -193,9 +195,9 @@ export function NodeDetailPanel({
         {notionPage ? (
           <>
             <h2 style={{ marginTop: bot ? "1.25rem" : 0 }}>Notion page</h2>
-            <p className="dash3d-title">{notionPage.title || NO_SOURCE}</p>
+            <p className="dash3d-title">{sanitizeNotionPlainText(notionPage.title, 160) || NO_SOURCE}</p>
             <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>
-              {notionPage.excerpt || NO_SOURCE}
+              {sanitizeNotionPlainText(notionPage.excerpt, 400) || NO_SOURCE}
             </p>
             <p className="dash3d-mono dash3d-muted" style={{ marginTop: "0.5rem" }}>
               <Field label="kind" value={notionPage.kind} />
@@ -243,7 +245,7 @@ export function NodeDetailPanel({
                 notionNeighbors.map((n) => (
                   <li key={n.id}>
                     <a className="dash3d-pill" href={n.url} target="_blank" rel="noreferrer">
-                      {n.title || n.id}
+                      {sanitizeNotionPlainText(n.title, 120) || n.id}
                     </a>
                   </li>
                 ))

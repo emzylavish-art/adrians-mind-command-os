@@ -39,6 +39,8 @@ export function useDashboardStatus() {
   const failCountRef = useRef(0);
   const retryTimer = useRef<number | null>(null);
   const stopped = useRef(false);
+  const hiddenSinceRef = useRef<number | null>(null);
+  const [hiddenGapMs, setHiddenGapMs] = useState(0);
   if (lastGoodRef.current == null && state.status === "ready") {
     lastGoodRef.current = state.data;
   }
@@ -137,7 +139,13 @@ export function useDashboardStatus() {
           window.clearTimeout(retryTimer.current);
           retryTimer.current = null;
         }
+        hiddenSinceRef.current = Date.now();
         return;
+      }
+      // Gap#34: record how long we were hidden so money burn can suppress wall spikes.
+      if (hiddenSinceRef.current != null) {
+        setHiddenGapMs(Date.now() - hiddenSinceRef.current);
+        hiddenSinceRef.current = null;
       }
       // Visible again: immediate fetch, then resume schedule.
       void refresh().finally(scheduleNext);
@@ -152,5 +160,5 @@ export function useDashboardStatus() {
     };
   }, [refresh]);
 
-  return { state, refresh };
+  return { state, refresh, hiddenGapMs };
 }

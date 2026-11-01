@@ -1258,6 +1258,30 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       layoutSig = ""; // force GPU resources to re-upload after restore
       syncCity();
       freezePendingClear = true; // clear freeze after first post-restore frame
+      // Gap#32: snap mid-glide so fly FSM does not keep easing into a disposed post-pass.
+      if (rig.t < 1) {
+        rig = { ...rig, t: 1 };
+        camera.position.set(rig.to.position[0], rig.to.position[1], rig.to.position[2]);
+        lookAt.set(rig.to.lookAt[0], rig.to.lookAt[1], rig.to.lookAt[2]);
+        camera.lookAt(lookAt);
+      }
+      pendingFocusBotId = null;
+      // Flush painter resize against the restored pass on the next frame (avoid pending on disposed targets).
+      requestAnimationFrame(() => {
+        if (kit.contextLost) return;
+        const w = Math.max(1, mount.clientWidth || window.innerWidth || 1);
+        const h = Math.max(1, mount.clientHeight || window.innerHeight || 1);
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+        try {
+          renderer.setSize(w, h);
+          labelRenderer.setSize(w, h);
+          composer?.setSize(w, h);
+          bloomHandle?.setSize?.(w, h);
+          kit.resizePass(w, h, dpr);
+        } catch {
+          /* restore race — next resize wins */
+        }
+      });
     });
     // Gap#3: snapshot last frame on context lost so the stage does not flash splash/black.
     const onCtxLostFreeze = () => {

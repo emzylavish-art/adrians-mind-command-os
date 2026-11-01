@@ -12,6 +12,7 @@ import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
 import { TimeScrubber } from "./time-scrubber";
 import { FeedPanel } from "./feed-panel";
 import { MoneyPanel } from "./money-panel";
+import { adjustBurnForHiddenGap } from "@/lib/mind/dashboard/spend-core";
 import { ChartsPanel } from "./charts-panel";
 import {
   OperatorConsole,
@@ -23,7 +24,7 @@ import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
 import { GraphFiltersPanel } from "./graph-filters-panel";
 import { MinimapPanel } from "./minimap-panel";
-import { portraitUrlForBot } from "@/lib/mind/dashboard/portrait-resolve";
+import { portraitUrlForBot, clearPortraitBackoffOnOnline } from "@/lib/mind/dashboard/portrait-resolve";
 import { buildViewUrlSearch, parseViewUrlSearch, type ViewLevel } from "@/lib/mind/dashboard/view-url";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import { pollViewData } from "@/lib/mind/dashboard/status-poll";
@@ -33,7 +34,7 @@ import "./dashboard-3d.css";
 let dash3dStagePrimed = false;
 
 export function DashboardApp() {
-  const { state, refresh } = useDashboardStatus();
+  const { state, refresh, hiddenGapMs } = useDashboardStatus();
   const viewData = useMemo(() => pollViewData(state), [state]);
   if (viewData) dash3dStagePrimed = true;
   const [selected, setSelected] = useState<BotNode | null>(null);
@@ -252,6 +253,43 @@ export function DashboardApp() {
 
   const sceneData = scrubView.data;
 
+  // Gap#40 — one retry wave when connectivity returns (no request storm while offline).
+  useEffect(() => {
+    const onOnline = () => clearPortraitBackoffOnOnline();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
+  // Gap#42 — Star Detail must track live status; close when the bot disappears.
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    if (!selectedId) return;
+    const bots = viewData?.bots;
+    if (!bots) return;
+    const fresh = bots.find((b) => b.id === selectedId);
+    if (!fresh) {
+      setSelected(null);
+      return;
+    }
+    setSelected((prev) => {
+      if (!prev || prev.id !== fresh.id) return fresh;
+      if (
+        prev.health !== fresh.health ||
+        prev.reason !== fresh.reason ||
+        prev.lastActivityAt !== fresh.lastActivityAt ||
+        prev.notes !== fresh.notes ||
+        prev.branch !== fresh.branch ||
+        prev.lock?.heartbeatAt !== fresh.lock?.heartbeatAt ||
+        prev.lock?.status !== fresh.lock?.status ||
+        prev.lock?.claimed_at !== fresh.lock?.claimed_at
+      ) {
+        return fresh;
+      }
+      return prev;
+    });
+  }, [viewData?.bots, selectedId]);
+
+
   useEffect(() => {
     if (!sceneData) {
       soundRef.current?.sync([]);
@@ -405,7 +443,7 @@ export function DashboardApp() {
               {viewData.notionGraph?.reason ? ` — ${viewData.notionGraph?.reason.slice(0, 90)}` : ""}
             </p>
           </div>
-          <MoneyPanel money={viewData.money} />
+          <MoneyPanel money={adjustBurnForHiddenGap(viewData.money, hiddenGapMs ?? 0)} />
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Fleet plan</h2>
             <p className="dash3d-title">

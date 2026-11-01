@@ -103,6 +103,13 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 46 | **200% zoom / short viewport reflow (Gap#23)** — stack panels; pin Operator | **done** | c40 — max-height media query in dashboard-3d.css |
 | 47 | **Feed text ≥12px (Gap#24)** — raise feed/commit floors; title tooltips | **done** | c40 — max(12px) feed CSS + feed-row title |
 | 48 | **Pause status poll when hidden (Gap#25)** — visibilitychange pause; refetch on visible | **done** | c40 — use-dashboard-status hidden gate |
+| 49 | **Gap#36 mobile close under HUD** — raise detail z-index / relocate focus toggle so × is tappable at 390×844 | **done** | c44 — detail z-index 10; focus toggle moves left while open · was queued REA captures-20261101-223652 |
+| 50 | **Gap#37 landscape detail unbounded** — max-height 100dvh + internal scroll for short viewports | **done** | c44 — max-height 100dvh + overscroll contain · was queued REA m844x390 |
+| 51 | **Gap#38 touch-action / overscroll** — canvas touch-action:none; detail overscroll-behavior:contain | **done** | c44 — canvas touch-action:none; detail overscroll-behavior · was queued REA pinch/swipe |
+| 52 | **Gap#42 live Star Detail** — refresh selected bot from latest status; close if bot gone | **done** | c44 — selected sync from status; close if bot gone · was queued REA Conductor stale |
+| 54 | **Gap#43 art cache + lazy dive assets** — long-cache hashed art; defer building/backdrop until Dive | queued | REA cold 3.1MB |
+| 55 | **Gap#41 skybar CLS / long tasks** — more reserved skeletons; defer constellation work off first paint | queued | REA CLS 0.058 |
+| 53 | **Gap#44 Notion plain text in detail** — strip markup escapes in titles/excerpts (reuse Gap#22 helpers) | **done** | c44 — sanitizeNotionPlainText in graph + node-detail · was queued REA mobile Notion page |
 
 
 
