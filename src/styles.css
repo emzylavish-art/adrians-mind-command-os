@@ -1272,3 +1272,73 @@ html[data-theme="light"] .masthead h1 .text-accent {
 .command-card button.bg-accent {
   box-shadow: 0 10px 24px rgb(0 0 0 / 0.4);
 }
+
+/* —— Cycle 14: collapsed rail + mobile drawer (mono) —— */
+
+/* Collapsed icon rail */
+aside.md\:w-16,
+aside[class*="md:w-16"] {
+  align-items: center;
+}
+aside.md\:w-16 nav button,
+aside[class*="md:w-16"] nav button {
+  justify-content: center;
+  padding-inline: 0.35rem !important;
+  width: 2.75rem;
+  margin-inline: auto;
+  border-radius: 0.85rem !important;
+}
+aside.md\:w-16 nav button.bg-accent,
+aside[class*="md:w-16"] nav button.bg-accent {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18), 0 8px 18px rgb(0 0 0 / 0.4);
+}
+aside.md\:w-16 .px-3.pb-1,
+aside[class*="md:w-16"] .px-3.pb-1,
+aside.md\:w-16 p.text-\[10px\],
+aside[class*="md:w-16"] p.text-\[10px\] {
+  opacity: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+aside.md\:w-16 > div.flex.items-center,
+aside[class*="md:w-16"] > div.flex.items-center {
+  justify-content: center;
+  padding-inline: 0.35rem;
+}
+aside.md\:w-16 > div.flex.items-center > div.min-w-0,
+aside[class*="md:w-16"] > div.flex.items-center > div.min-w-0 {
+  display: none;
+}
+
+/* Mobile drawer (fixed inset aside) */
+@media (max-width: 767px) {
+  aside.fixed.inset-0.z-40 {
+    background: rgb(8 8 10 / 0.96) !important;
+    backdrop-filter: blur(22px) saturate(1.1);
+    -webkit-backdrop-filter: blur(22px) saturate(1.1);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 24px 0 64px rgb(0 0 0 / 0.65);
+    animation: drawer-in 180ms ease-out;
+  }
+  aside.fixed.inset-0.z-40 nav button {
+    border-radius: 0.95rem !important;
+    min-height: 2.85rem;
+  }
+  aside.fixed.inset-0.z-40 nav .mb-3 > p {
+    letter-spacing: 0.2em;
+    opacity: 0.85;
+  }
+}
+@keyframes drawer-in {
+  from { transform: translateX(-8%); opacity: 0.6; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  aside.fixed.inset-0.z-40 { animation: none; }
+}
+
+html[data-theme="light"] aside.fixed.inset-0.z-40 {
+  background: rgb(255 255 255 / 0.97) !important;
+  box-shadow: 0 0 0 1px rgb(9 9 11 / 0.08), 20px 0 48px rgb(0 0 0 / 0.12);
+}
