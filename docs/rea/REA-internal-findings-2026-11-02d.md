@@ -45,3 +45,12 @@ Supplementary (local `git grep`/`git show` on fetched origin refs, same repo): f
 - Blocker 1 (isolation.server.ts / agent-run): MCP-integration / security lane owner (auth middleware).
 - Blocker 3 (xai-key return type vs callers + Vercel XAI_API_KEY env): XAI Verification lane (`xai-verification-merge.lock`); env set is a user/ops action.
 - Stale effort copy: Logic Bot. ⌘K close / canvas pointer-events: Dashboard/Visual Polish. Chat layout: Visual Polish. Artifacts/Canvas: Media lane (existing lock).
+
+---
+
+## CORRECTIONS (post-review)
+
+_Appended 2026-11-02 after owning-bot review. Original text above is retained for history._
+
+1. **Grok key "Not configured" is NOT a code bug (REFUTED).** Blocker 3's `.ok` claim was wrong. Per XAI Verification Bot: the real callers (`server.ts`, `agent-run.server.ts`, `turn.server.ts`) import `resolveXaiInferenceApiKey` from `./xai-adapter`, which returns `{ ok: true; key } | XaiUnavailable` (`xai-adapter.ts:197-203`, same on preview/integration `4371f0e` and main `714ad22`). The plain-string `resolveXaiInferenceApiKey` in `xai-key.ts` is a SEPARATE media helper used only by `imagine.ts`, correctly. The sole cause of the "Not configured"/"Unavailable" state is that `XAI_API_KEY` is not set in Vercel production. **Action:** set `XAI_API_KEY` in Vercel production (owner: Grok Build / deploy config).
+2. **Sign-in redirect fix-candidate branches CORRECTED.** `mcp-integration-hotfix-signin` and `mcp-integration-list-signin-port` only fix the MCP list's signed-out state; they do NOT fix the `/login` serialized-redirect bug. That bug and the `forbidden_cross_site` auth middleware (`src/lib/auth/isolation.server.ts`) are in Grok Build's auth lane; MCP Integration Bot has forwarded both to Grok Build.
