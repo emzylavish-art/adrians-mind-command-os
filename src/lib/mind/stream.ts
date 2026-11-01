@@ -60,7 +60,7 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null }
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string }
   | { event: "error"; error: string }
   | { event: "canceled"; error: string };
 
@@ -98,6 +98,9 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         usage: record.usage && typeof record.usage === "object" ? (record.usage as ModelUsage) : null,
         usedIds: Array.isArray(record.usedIds) ? record.usedIds.filter((id) => typeof id === "string") : [],
         requestId: typeof record.requestId === "string" ? record.requestId : null,
+        modelTier: typeof record.modelTier === "string" ? record.modelTier : undefined,
+        resolvedTier: typeof record.resolvedTier === "string" ? record.resolvedTier : undefined,
+        tierReason: typeof record.tierReason === "string" ? record.tierReason : undefined,
       });
     }
   }

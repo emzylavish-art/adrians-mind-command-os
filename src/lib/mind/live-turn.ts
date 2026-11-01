@@ -3,7 +3,7 @@ import { pullMindEvents, type ModelUsage } from "./stream.ts";
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 
 export type LiveTurnResult =
-  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null }
+  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string }
   | { ok: false; error: string };
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
@@ -111,6 +111,9 @@ export async function consumeMindTurn(input: {
           usage: event.usage,
           usedIds: event.usedIds,
           requestId: event.requestId,
+          modelTier: event.modelTier,
+          resolvedTier: event.resolvedTier,
+          tierReason: event.tierReason,
         };
       }
     }

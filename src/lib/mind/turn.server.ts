@@ -2,12 +2,14 @@ import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
+import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, selectProvider } from "./provider-call";
-import { relayModelStream } from "./relay";
+import { buildRelayModelBody, relayModelStream } from "./relay";
 import { decideFetchSite } from "./request-guard";
 import { readModelPayload } from "./stream";
 
+/** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
 const MAX_BODY = 200_000;
 
@@ -21,6 +23,8 @@ export type TurnBody = {
   history?: unknown;
   memoryContext?: unknown;
   provider?: unknown;
+  /** UI picker: Auto | Fast | Expert | Heavy | Build */
+  modelTier?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryItem {
@@ -70,22 +74,26 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     memoryContext,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
-  return { ok: true as const, assembled, memory, model: routed.model };
-}
-
-function modelBody(model: string, messages: { role: string; content: string }[]) {
+  const tier = resolveModelTier(data.modelTier, text, process.env);
   return {
-    model,
-    messages,
-    max_tokens: 500,
-    temperature: 0.4,
-    stream: true,
-    stream_options: { include_usage: true },
+    ok: true as const,
+    assembled,
+    memory,
+    model: tier.model,
+    modelTier: tier,
+    provider: routed.id,
   };
 }
 
-export async function completeModelReply(prepared: { assembled: { messages: { role: "system" | "user" | "assistant"; content: string }[]; usedIds: string[] }; memory: "off" | "on"; model: "grok-4.5" }) {
-  if (prepared.model !== MIND_MODEL) return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
+export async function completeModelReply(prepared: {
+  assembled: { messages: { role: "system" | "user" | "assistant"; content: string }[]; usedIds: string[] };
+  memory: "off" | "on";
+  model: string;
+  modelTier: ResolvedModelTier;
+}) {
+  if (!allowedModelIds(process.env).has(prepared.model)) {
+    return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
+  }
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return { ok: false as const, error: "Grok is not configured on the server." };
   let res: Response;
@@ -94,7 +102,13 @@ export async function completeModelReply(prepared: { assembled: { messages: { ro
       method: "POST",
       signal: AbortSignal.timeout(25_000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(modelBody(prepared.model, prepared.assembled.messages)),
+      body: JSON.stringify(
+        buildRelayModelBody(prepared.model, prepared.assembled.messages, {
+          temperature: prepared.modelTier.params.temperature,
+          max_tokens: prepared.modelTier.params.max_tokens,
+          reasoning_effort: prepared.modelTier.params.reasoning_effort,
+        }),
+      ),
     });
   } catch {
     return { ok: false as const, error: "Grok did not answer in time. Nothing was saved as a success." };
@@ -106,6 +120,9 @@ export async function completeModelReply(prepared: { assembled: { messages: { ro
     ok: true as const,
     text: parsed.text,
     model: prepared.model,
+    modelTier: prepared.modelTier.selected,
+    resolvedTier: prepared.modelTier.resolved,
+    tierReason: prepared.modelTier.reason,
     requestId: res.headers.get("x-request-id"),
     usage: parsed.usage,
     memory: prepared.memory,
@@ -175,7 +192,9 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const prepared = await prepareMindTurn(userId, body);
   if (!prepared.ok) return json(prepared);
-  if (prepared.model !== MIND_MODEL) return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
+  if (!allowedModelIds(process.env).has(prepared.model)) {
+    return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
+  }
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
   return relayModelStream({
@@ -184,5 +203,15 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     messages: prepared.assembled.messages,
     usedIds: prepared.assembled.usedIds,
     requestSignal: request.signal,
+    params: {
+      temperature: prepared.modelTier.params.temperature,
+      max_tokens: prepared.modelTier.params.max_tokens,
+      reasoning_effort: prepared.modelTier.params.reasoning_effort,
+    },
+    meta: {
+      modelTier: prepared.modelTier.selected,
+      resolvedTier: prepared.modelTier.resolved,
+      tierReason: prepared.modelTier.reason,
+    },
   });
 }
