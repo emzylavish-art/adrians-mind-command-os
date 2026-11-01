@@ -14,6 +14,12 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as ApiMindPairingActionRouteImport } from './routes/api/mind/pairing/action'
+import { Route as ApiMindPairingCodeRouteImport } from './routes/api/mind/pairing/code'
+import { Route as ApiMindPairingHandshakeRouteImport } from './routes/api/mind/pairing/handshake'
+import { Route as ApiMindPairingHeartbeatRouteImport } from './routes/api/mind/pairing/heartbeat'
+import { Route as ApiMindPairingStatusRouteImport } from './routes/api/mind/pairing/status'
+import { Route as ApiMindPairingStopRouteImport } from './routes/api/mind/pairing/stop'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +46,36 @@ const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   path: '/api/mind/turn',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindPairingActionRoute = ApiMindPairingActionRouteImport.update({
+  id: '/api/mind/pairing/action',
+  path: '/api/mind/pairing/action',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingCodeRoute = ApiMindPairingCodeRouteImport.update({
+  id: '/api/mind/pairing/code',
+  path: '/api/mind/pairing/code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingHandshakeRoute = ApiMindPairingHandshakeRouteImport.update({
+  id: '/api/mind/pairing/handshake',
+  path: '/api/mind/pairing/handshake',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingHeartbeatRoute = ApiMindPairingHeartbeatRouteImport.update({
+  id: '/api/mind/pairing/heartbeat',
+  path: '/api/mind/pairing/heartbeat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingStatusRoute = ApiMindPairingStatusRouteImport.update({
+  id: '/api/mind/pairing/status',
+  path: '/api/mind/pairing/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindPairingStopRoute = ApiMindPairingStopRouteImport.update({
+  id: '/api/mind/pairing/stop',
+  path: '/api/mind/pairing/stop',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +83,12 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
+  '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
+  '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
+  '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
+  '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +96,12 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
+  '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
+  '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
+  '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
+  '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +110,40 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
+  '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
+  '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
+  '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
+  '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/login' | '/api/auth/$' | '/api/mind/agent' | '/api/mind/turn'
+    | '/'
+    | '/login'
+    | '/api/auth/$'
+    | '/api/mind/agent'
+    | '/api/mind/turn'
+    | '/api/mind/pairing/action'
+    | '/api/mind/pairing/code'
+    | '/api/mind/pairing/handshake'
+    | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/status'
+    | '/api/mind/pairing/stop'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/api/auth/$' | '/api/mind/agent' | '/api/mind/turn'
+  to:
+    | '/'
+    | '/login'
+    | '/api/auth/$'
+    | '/api/mind/agent'
+    | '/api/mind/turn'
+    | '/api/mind/pairing/action'
+    | '/api/mind/pairing/code'
+    | '/api/mind/pairing/handshake'
+    | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/status'
+    | '/api/mind/pairing/stop'
   id:
     | '__root__'
     | '/'
@@ -76,6 +151,12 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/pairing/action'
+    | '/api/mind/pairing/code'
+    | '/api/mind/pairing/handshake'
+    | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/status'
+    | '/api/mind/pairing/stop'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -84,6 +165,12 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  ApiMindPairingActionRoute: typeof ApiMindPairingActionRoute
+  ApiMindPairingCodeRoute: typeof ApiMindPairingCodeRoute
+  ApiMindPairingHandshakeRoute: typeof ApiMindPairingHandshakeRoute
+  ApiMindPairingHeartbeatRoute: typeof ApiMindPairingHeartbeatRoute
+  ApiMindPairingStatusRoute: typeof ApiMindPairingStatusRoute
+  ApiMindPairingStopRoute: typeof ApiMindPairingStopRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -123,6 +210,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindTurnRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/pairing/action': {
+      id: '/api/mind/pairing/action'
+      path: '/api/mind/pairing/action'
+      fullPath: '/api/mind/pairing/action'
+      preLoaderRoute: typeof ApiMindPairingActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/code': {
+      id: '/api/mind/pairing/code'
+      path: '/api/mind/pairing/code'
+      fullPath: '/api/mind/pairing/code'
+      preLoaderRoute: typeof ApiMindPairingCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/handshake': {
+      id: '/api/mind/pairing/handshake'
+      path: '/api/mind/pairing/handshake'
+      fullPath: '/api/mind/pairing/handshake'
+      preLoaderRoute: typeof ApiMindPairingHandshakeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/heartbeat': {
+      id: '/api/mind/pairing/heartbeat'
+      path: '/api/mind/pairing/heartbeat'
+      fullPath: '/api/mind/pairing/heartbeat'
+      preLoaderRoute: typeof ApiMindPairingHeartbeatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/status': {
+      id: '/api/mind/pairing/status'
+      path: '/api/mind/pairing/status'
+      fullPath: '/api/mind/pairing/status'
+      preLoaderRoute: typeof ApiMindPairingStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/pairing/stop': {
+      id: '/api/mind/pairing/stop'
+      path: '/api/mind/pairing/stop'
+      fullPath: '/api/mind/pairing/stop'
+      preLoaderRoute: typeof ApiMindPairingStopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -132,6 +261,12 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  ApiMindPairingActionRoute: ApiMindPairingActionRoute,
+  ApiMindPairingCodeRoute: ApiMindPairingCodeRoute,
+  ApiMindPairingHandshakeRoute: ApiMindPairingHandshakeRoute,
+  ApiMindPairingHeartbeatRoute: ApiMindPairingHeartbeatRoute,
+  ApiMindPairingStatusRoute: ApiMindPairingStatusRoute,
+  ApiMindPairingStopRoute: ApiMindPairingStopRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

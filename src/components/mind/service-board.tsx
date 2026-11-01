@@ -28,12 +28,14 @@ export function ServiceBoard({
   onSetup,
   notion,
   mcp,
+  localComputer,
   onDisconnect,
 }: {
   grokConfigured: boolean;
   onSetup: (message: string) => void;
   notion?: { state: string; detail: string } | null;
   mcp?: { state: string; detail: string } | null;
+  localComputer?: { state: string; detail: string } | null;
   onDisconnect?: () => void;
 }) {
   const grok: Service = grokConfigured
@@ -44,7 +46,9 @@ export function ServiceBoard({
       ? { name: "Notion", state: notion.state === "connected" ? "Connected" : notion.state === "disconnected" ? "Disconnected" : "Not connected", detail: notion.detail }
       : service.name === "MCP" && mcp
         ? { name: "MCP", state: mcp.state, detail: mcp.detail }
-        : service,
+        : service.name === "Local computer" && localComputer
+          ? { name: "Local computer", state: localComputer.state, detail: localComputer.detail }
+          : service,
   );
 
   return (
