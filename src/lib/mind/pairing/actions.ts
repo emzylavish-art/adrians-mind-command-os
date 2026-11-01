@@ -297,3 +297,73 @@ export function deviceBindingHelpers(deviceToken: string) {
     fingerprint: found.device.publicKeyFingerprint,
   };
 }
+
+
+/** Always reports outcome (success/failure/rejected) with timestamp via reportActionOutcome. */
+export function executeDeviceActionWithReport(input: {
+  deviceToken: string;
+  action: SignedAction;
+  emergencyStopped: boolean;
+  autonomy?: Autonomy;
+  allowedRoots?: string[];
+  now?: number;
+  binding?: {
+    claimedFingerprint: string;
+    challenge: string;
+    hmacProof?: string;
+    rsaSignatureBase64?: string;
+  };
+  skipBindingForTests?: boolean;
+  /** Simulated executor — return success/failure after verify passes. */
+  run?: () => { ok: true; detail: string } | { ok: false; detail: string };
+}): { ok: true; detail: string; report: ActionReport } | { ok: false; error: string; outcome: "rejected" | "failure"; report: ActionReport | null } {
+  const verified = verifyAndAuthorizeAction({
+    deviceToken: input.deviceToken,
+    action: input.action,
+    emergencyStopped: input.emergencyStopped,
+    autonomy: input.autonomy,
+    allowedRoots: input.allowedRoots,
+    now: input.now,
+    binding: input.binding,
+    skipBindingForTests: input.skipBindingForTests,
+  });
+  if (!verified.ok) {
+    const reported = reportActionOutcome({
+      deviceToken: input.deviceToken,
+      actionId: input.action.actionId,
+      kind: input.action.kind,
+      outcome: "rejected",
+      detail: verified.error,
+      now: input.now,
+    });
+    return {
+      ok: false,
+      error: verified.error,
+      outcome: "rejected",
+      report: reported.ok ? reported.report : null,
+    };
+  }
+  const run = input.run ?? (() => ({ ok: true as const, detail: "ok" }));
+  const result = run();
+  const outcome = result.ok ? ("success" as const) : ("failure" as const);
+  const reported = reportActionOutcome({
+    deviceToken: input.deviceToken,
+    actionId: input.action.actionId,
+    kind: input.action.kind,
+    outcome,
+    detail: result.detail,
+    now: input.now,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.detail,
+      outcome: "failure",
+      report: reported.ok ? reported.report : null,
+    };
+  }
+  if (!reported.ok) {
+    return { ok: false, error: reported.error, outcome: "failure", report: null };
+  }
+  return { ok: true, detail: result.detail, report: reported.report };
+}
