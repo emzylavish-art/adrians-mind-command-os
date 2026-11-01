@@ -12,6 +12,9 @@ import {
   normalizeClientFailureMessage,
   type HonestFailureKind,
 } from "./failure-states.ts";
+import type { ConnectorVerifyPayload, ConnectorVerifyResult } from "./mcp/connector-verify-shared.ts";
+export type { ConnectorVerifyResult } from "./mcp/connector-verify-shared.ts";
+export { formatVerifyBadge } from "./mcp/connector-verify-shared.ts";
 
 /** Client list-load budget; matches HTTP_RPC_TIMEOUT_MS in mcp/registry.ts (15s). */
 export const MCP_LIST_LOAD_TIMEOUT_MS = 15_000;
@@ -511,4 +514,56 @@ export function WorkerHealthStatusRows({
     onRetry,
     onViewLog,
   });
+}
+
+
+/** ---- Connector verify (Tools panel) ---- */
+
+export type ConnectorVerifyUiState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "unauthenticated" }
+  | { status: "ready"; results: ConnectorVerifyResult[] }
+  | { status: "error"; message: string };
+
+export const CONNECTOR_VERIFY_LOADING_COPY = "Verifying connectors…";
+
+function isVerifyResult(value: unknown): value is ConnectorVerifyResult {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === "string" && typeof row.kind === "string" && typeof row.state === "string";
+}
+
+/** Run one connector-verify load. Signed-out stays quiet (unauthenticated). Never throws. */
+export async function loadConnectorVerify(
+  fetchVerify: () => Promise<unknown>,
+  options?: { timeoutMs?: number },
+): Promise<ConnectorVerifyUiState> {
+  const timeoutMs = options?.timeoutMs ?? MCP_LIST_LOAD_TIMEOUT_MS;
+  try {
+    const result = (await withListTimeout(fetchVerify(), timeoutMs, "Connector verify")) as ConnectorVerifyPayload | null;
+    if (!result || typeof result !== "object") {
+      return { status: "error", message: "Connector verify failed (response was not JSON)." };
+    }
+    if (result.status === "unauthenticated") {
+      return { status: "unauthenticated" };
+    }
+    if (result.status !== "ok" || !Array.isArray(result.results) || !result.results.every(isVerifyResult)) {
+      return { status: "error", message: "Connector verify failed (response was not JSON)." };
+    }
+    return { status: "ready", results: result.results };
+  } catch (caught) {
+    const classified = classifyListFailure(caught, "mcp_list");
+    if (classified.kind === "auth_required") {
+      return { status: "unauthenticated" };
+    }
+    return { status: "error", message: classified.message };
+  }
+}
+
+export function verifyResultFor(
+  results: ConnectorVerifyResult[] | undefined,
+  id: string,
+): ConnectorVerifyResult | undefined {
+  return results?.find((row) => row.id === id);
 }
