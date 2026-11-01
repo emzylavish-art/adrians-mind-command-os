@@ -21,6 +21,8 @@ export function publicPathLabel(input: string | null | undefined): string | null
 }
 
 /** Replace absolute paths and key-shaped tokens inside free text. */
+const BARE_ABS_PATH_RE = /\/(?:workspace|home|Users|var|tmp|private)\/[^\s"'<>`)\]},]*/g;
+
 export function redactSensitiveText(input: string | null | undefined): string {
   if (input == null) return "";
   let s = String(input);
@@ -28,10 +30,7 @@ export function redactSensitiveText(input: string | null | undefined): string {
     const prefix = full.slice(0, full.length - path.length);
     return prefix + (publicPathLabel(path) ?? "path");
   });
-  // bare absolute paths without delimiter
-  if (s.startsWith("/workspace/") || s.startsWith("/home/") || s.startsWith("/Users/")) {
-    s = publicPathLabel(s) ?? "path";
-  }
+  s = s.replace(BARE_ABS_PATH_RE, (path) => publicPathLabel(path) ?? "path");
   s = s.replace(KEY_SHAPED_RE, "[redacted]");
   return s;
 }

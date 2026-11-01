@@ -22,6 +22,12 @@ describe("status-publicize (Gap#29)", () => {
     assert.match(s, /\[redacted\]/);
   });
 
+  it("redacts html-embedded /workspace paths without leading delimiter", () => {
+    const s = redactSensitiveText("report <code>/workspace/mind-command-os-logic</code>");
+    assert.ok(!s.includes("/workspace"));
+    assert.match(s, /mind-command-os-logic/);
+  });
+
   it("drops lock.raw and publicizes worktree", () => {
     const pub = publicizeDashboardStatus({
       bots: [

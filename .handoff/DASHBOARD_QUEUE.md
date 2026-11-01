@@ -6,6 +6,17 @@
 
 Last release: Dashboard c42 — Gap#29 publicize+405 + Gap#28 server TTL/single-flight + Motion 831225f (motion/+particles/, skip package.json) + Painter c10 94c28c7. Next: probe-ranked gaps + fleet tips.
 
+
+## Probe 20261101-162902 ranked (after c42)
+
+| Item | Rank | Notes |
+|------|------|-------|
+| Gap#29 remaining HTML-embedded paths | **P0 follow-up in c42b** | bare `/workspace` in notion excerpts — harden BARE_ABS_PATH_RE |
+| Gap#28 cache | **done** | parallel8 wall ~0.04s; warm GET ~4ms on :8102 |
+| Gap#29 methods | **done** | POST/PUT/PATCH/DELETE → 405 JSON + Allow:GET; raw bags=0 |
+| Filters Groups | **done** | capture filtersOpen=true; no TDZ/feedback |
+| Next gap-feed head after #29 | **read latest ###** | continue from newest undelivered gaps below #29 |
+
 ## Motion / Painter lane notes (c42)
 - Motion tip `831225f` also listed `package.json` — **skipped**; registered `wind-gust.test.ts` in dashboard lane (no new runtime deps).
 - Painter tip `94c28c7` rebased on dashboard-3d (wide MB diff); landed **materials/shaders only** from the c10 commit; `styles.css` not taken.
