@@ -1,5 +1,7 @@
 /** Server-side xAI speech-to-text (POST /v1/stt). Never log the API key. */
 
+import { audioMimeBase, isAllowedAudioMime, sanitizeAudioFilename } from "./voice-input.ts";
+
 export const STT_URL = "https://api.x.ai/v1/stt";
 export const STT_MODEL = "grok-voice-transcribe-2.0";
 
@@ -19,8 +21,9 @@ export async function transcribeWavBytes(input: {
   if (!input.bytes.length) return { ok: false, error: "No audio was recorded. Nothing was transcribed." };
   const fetchImpl = input.fetchImpl ?? fetch;
   const form = new FormData();
-  const mime = input.mime || "audio/wav";
-  const filename = input.filename || (mime.includes("webm") ? "dictation.webm" : "dictation.wav");
+  const rawMime = input.mime || "audio/wav";
+  const mime = isAllowedAudioMime(rawMime) ? audioMimeBase(rawMime) : "audio/wav";
+  const filename = sanitizeAudioFilename(input.filename, mime);
   // Uint8Array → ArrayBuffer copy so BlobPart typing is happy across runtimes.
   const copy = new Uint8Array(input.bytes);
   form.append("file", new Blob([copy], { type: mime }), filename);

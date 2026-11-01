@@ -30,4 +30,28 @@ describe("mintRealtimeClientSecret", () => {
       assert.equal(result.expiresAt, 123);
     }
   });
+
+
+  it("handles non-JSON 200 with an honest error", async () => {
+    const result = await mintRealtimeClientSecret({
+      env: { XAI_VOICE_API_KEY: "xai-test-voice-key-not-real" },
+      fetchImpl: async () =>
+        new Response("not-json{", { status: 200, headers: { "content-type": "text/plain" } }),
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /could not be read/i);
+  });
+
+  it("refuses missing expires_at instead of falling back to 0", async () => {
+    const result = await mintRealtimeClientSecret({
+      env: { XAI_VOICE_API_KEY: "xai-test-voice-key-not-real" },
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ value: "xai-realtime-client-secret-test" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /no expiry/i);
+  });
 });

@@ -344,13 +344,15 @@ export const loadMindCopy = createServerFn({ method: "POST" })
 
 export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text: string }) => input)
+  .validator((input: unknown) => input)
   .handler(async ({ data, context }) => {
+    const { validateSpeakTextInput } = await import("./voice/voice-input");
+    const parsed = validateSpeakTextInput((data as { text?: unknown } | null)?.text);
+    if (!parsed.ok) return { ok: false as const, error: parsed.error };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
-    const text = data.text.trim().slice(0, 500);
-    if (!text) return { ok: false as const, error: "Nothing to read." };
+    const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
     const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
@@ -366,6 +368,8 @@ export const speakText = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
     }
     if (!res.ok) return { ok: false as const, error: `Voice returned ${res.status}. Nothing was played.` };
+    const contentLength = Number(res.headers.get("content-length") || 0);
+    if (contentLength > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     const bytes = Buffer.from(await res.arrayBuffer());
     if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };
@@ -385,30 +389,24 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
 
 export const transcribeAudio = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { audioBase64: string; mime?: string; filename?: string }) => input)
+  .validator((input: unknown) => input)
   .handler(async ({ data, context }) => {
+    const { decodeAudioBase64, validateTranscribeAudioInput } = await import("./voice/voice-input");
+    const parsed = validateTranscribeAudioInput(data);
+    if (!parsed.ok) return { ok: false as const, error: parsed.error };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was transcribed." };
     if (!allowMindRequest("stt", context.userId, 12)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const { resolveVoiceApiKey } = await import("./voice/keys");
     const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was transcribed." };
-    const raw = (data.audioBase64 || "").trim();
-    if (!raw) return { ok: false as const, error: "No audio was recorded. Nothing was transcribed." };
-    let bytes: Buffer;
-    try {
-      bytes = Buffer.from(raw, "base64");
-    } catch {
-      return { ok: false as const, error: "Recorded audio could not be read." };
-    }
-    if (bytes.length < 32 || bytes.length > 4_000_000) {
-      return { ok: false as const, error: "Recorded audio was empty or too large. Nothing was transcribed." };
-    }
+    const decoded = decodeAudioBase64(parsed.audioBase64);
+    if (!decoded.ok) return { ok: false as const, error: decoded.error };
     const { transcribeWavBytes } = await import("./voice/stt");
     return transcribeWavBytes({
-      bytes,
+      bytes: decoded.bytes,
       apiKey,
-      mime: data.mime || "audio/webm",
-      filename: data.filename,
+      mime: parsed.mime,
+      filename: parsed.filename,
     });
   });

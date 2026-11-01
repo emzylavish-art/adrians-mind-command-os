@@ -40,4 +40,26 @@ describe("stt", () => {
       assert.equal(result.duration, 1.2);
     }
   });
+
+
+  it("falls back unsafe mime and sanitises path filenames before upload", async () => {
+    let seenName = "";
+    let seenType = "";
+    await transcribeWavBytes({
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      apiKey: "test-key",
+      mime: "text/html",
+      filename: "../../etc/passwd",
+      fetchImpl: async (_url, init) => {
+        const body = init?.body as FormData;
+        const file = body.get("file") as File;
+        seenName = file.name;
+        seenType = file.type;
+        return new Response(JSON.stringify({ text: "ok" }), { status: 200 });
+      },
+    });
+    assert.equal(seenType, "audio/wav");
+    assert.equal(seenName.includes("/"), false);
+    assert.equal(seenName.includes(".."), false);
+  });
 });

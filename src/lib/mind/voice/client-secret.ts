@@ -44,7 +44,21 @@ export async function mintRealtimeClientSecret(input: {
   if (!response.ok) {
     return { ok: false, error: `Voice secret service returned ${response.status}.` };
   }
-  const payload = (await response.json()) as { value?: string; expires_at?: number };
-  if (!payload.value) return { ok: false, error: "Voice secret service returned no token." };
-  return { ok: true, value: payload.value, expiresAt: payload.expires_at ?? 0 };
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, error: "Voice secret service returned a response that could not be read." };
+  }
+  if (!payload || typeof payload !== "object") {
+    return { ok: false, error: "Voice secret service returned a response that could not be read." };
+  }
+  const record = payload as { value?: unknown; expires_at?: unknown };
+  if (typeof record.value !== "string" || !record.value.trim()) {
+    return { ok: false, error: "Voice secret service returned no token." };
+  }
+  if (typeof record.expires_at !== "number" || !Number.isFinite(record.expires_at)) {
+    return { ok: false, error: "Voice secret service returned no expiry." };
+  }
+  return { ok: true, value: record.value, expiresAt: record.expires_at };
 }
