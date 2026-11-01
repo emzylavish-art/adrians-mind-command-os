@@ -5,6 +5,7 @@ import {
   notionAppendSection,
   notionReadPage,
   pcRunShell,
+  pgliteListSchema,
   pgliteQuery,
   type SqlLike,
   type ToolResult,
@@ -68,7 +69,7 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
   server.registerTool(
     "pglite_query",
     {
-      description: "Read-only SQL against the app database (SELECT/WITH/EXPLAIN).",
+      description: "Read-only SQL against the app database (single SELECT/WITH/EXPLAIN; row limit + timeout).",
       inputSchema: {
         sql: z.string().describe("SQL query"),
       },
@@ -76,6 +77,18 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
     async ({ sql }) => {
       const sqlClient = await getSql();
       return asContent(await pgliteQuery({ sql, sqlClient }));
+    },
+  );
+
+  server.registerTool(
+    "pglite_list_schema",
+    {
+      description: "List non-system tables/views in the app database.",
+      inputSchema: {},
+    },
+    async () => {
+      const sqlClient = await getSql();
+      return asContent(await pgliteListSchema({ sqlClient }));
     },
   );
 

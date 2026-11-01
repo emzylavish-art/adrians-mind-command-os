@@ -230,19 +230,32 @@ export async function pcRunShell(input: {
   return { ok: true, status: "ok", text: out || "(empty output)", data: body as Record<string, unknown> };
 }
 
-const WRITE_SQL = /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|call|do|execute|merge|vacuum|reindex|cluster|comment|security|owner)\b/i;
+const WRITE_SQL =
+  /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|call|do|execute|merge|vacuum|reindex|cluster|comment|security|owner|refresh|listen|notify|set\s+role|reset\s+role|load|discard)\b/i;
 
-export function assertReadOnlySql(sql: string): { ok: true } | { ok: false; text: string } {
-  const trimmed = sql.trim().replace(/;+\s*$/, "");
+/** Reject multi-statement payloads and write verbs anywhere (incl. CTE bodies). */
+export function assertReadOnlySql(sql: string): { ok: true; sql: string } | { ok: false; text: string } {
+  let trimmed = sql.trim();
   if (!trimmed) return { ok: false, text: "SQL is empty. Nothing was queried." };
-  if (WRITE_SQL.test(trimmed)) {
-    return { ok: false, text: "pglite_query is read-only by default. Only SELECT / WITH / EXPLAIN are allowed. Nothing was changed." };
+  // Strip one trailing semicolon only; extra statements are refused.
+  trimmed = trimmed.replace(/;\s*$/, "");
+  if (trimmed.includes(";")) {
+    return { ok: false, text: "Multiple SQL statements are not allowed. Nothing was queried." };
   }
-  if (!/^\s*(select|with|explain)\b/i.test(trimmed)) {
+  // Block classic comment-smuggled writes and dollar-quote escapes lightly
+  const withoutLineComments = trimmed.replace(/--[^\n]*/g, " ");
+  const withoutBlockComments = withoutLineComments.replace(/\/\*[\s\S]*?\*\//g, " ");
+  if (WRITE_SQL.test(withoutBlockComments)) {
+    return { ok: false, text: "pglite_query is read-only. Only a single SELECT / WITH / EXPLAIN is allowed. Nothing was changed." };
+  }
+  if (!/^\s*(select|with|explain)\b/i.test(withoutBlockComments)) {
     return { ok: false, text: "Only SELECT, WITH, or EXPLAIN statements are allowed. Nothing was queried." };
   }
-  return { ok: true };
+  return { ok: true, sql: trimmed };
 }
+
+export const PGLITE_DEFAULT_ROW_LIMIT = 100;
+export const PGLITE_DEFAULT_TIMEOUT_MS = 5_000;
 
 export type SqlLike = {
   query: (text: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
@@ -252,22 +265,43 @@ export async function pgliteQuery(input: {
   sql: string;
   params?: unknown[];
   sqlClient: SqlLike;
+  rowLimit?: number;
+  timeoutMs?: number;
 }): Promise<ToolResult> {
   const checked = assertReadOnlySql(input.sql);
   if (!checked.ok) return { ok: false, status: "error", text: checked.text };
+  const rowLimit = Math.min(Math.max(input.rowLimit ?? PGLITE_DEFAULT_ROW_LIMIT, 1), 500);
+  const timeoutMs = Math.min(Math.max(input.timeoutMs ?? PGLITE_DEFAULT_TIMEOUT_MS, 100), 30_000);
+  const limitedSql = `SELECT * FROM (${checked.sql}) AS _mind_q LIMIT ${rowLimit}`;
   try {
-    const rows = await input.sqlClient.query(input.sql, input.params ?? []);
-    const preview = rows.slice(0, 50);
+    const rows = await Promise.race([
+      input.sqlClient.query(limitedSql, input.params ?? []),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
     return {
       ok: true,
       status: "ok",
-      text: JSON.stringify({ rowCount: rows.length, rows: preview }, null, 2).slice(0, 8000),
-      data: { rowCount: rows.length, rows: preview },
+      text: JSON.stringify({ rowCount: rows.length, rowLimit, rows }, null, 2).slice(0, 8000),
+      data: { rowCount: rows.length, rowLimit, rows },
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Query failed.";
     return { ok: false, status: "error", text: `PGLite query error: ${message}` };
   }
+}
+
+/** List base tables/views in public schema (read-only helper). */
+export async function pgliteListSchema(input: { sqlClient: SqlLike }): Promise<ToolResult> {
+  return pgliteQuery({
+    sql: `SELECT table_schema, table_name, table_type
+      FROM information_schema.tables
+      WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+      ORDER BY table_schema, table_name`,
+    sqlClient: input.sqlClient,
+    rowLimit: 200,
+  });
 }
 
 export const BUILTIN_TOOL_DEFS = [
@@ -285,7 +319,11 @@ export const BUILTIN_TOOL_DEFS = [
   },
   {
     name: "pglite_query",
-    description: "Run a read-only SQL query against the app PGLite (or Neon) database. SELECT/WITH/EXPLAIN only.",
+    description: "Run a read-only SQL query against the app PGLite (or Neon) database. Single SELECT/WITH/EXPLAIN only; row limit + timeout enforced.",
+  },
+  {
+    name: "pglite_list_schema",
+    description: "List non-system tables/views (read-only helper for exploring the app DB).",
   },
 ] as const;
 
