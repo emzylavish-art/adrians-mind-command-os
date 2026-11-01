@@ -6300,3 +6300,109 @@ html[data-theme="light"] [role="menu"] {
   box-shadow: 0 18px 48px rgb(15 23 42 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.8) !important;
   color: #0a0d14 !important;
 }
+
+/* —— Evolution c85: hover / active / selected / disabled — Grok/ChatGPT mono —— */
+/* List rows & dense cards */
+.main-stage .dense-card,
+.main-stage .dense-row,
+.main-stage li.dense-card,
+.main-stage article.dense-card {
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease !important;
+}
+.main-stage .dense-card:hover,
+.main-stage .dense-row:hover,
+.main-stage li.dense-card:hover {
+  background-color: rgb(255 255 255 / 0.07) !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
+}
+.main-stage .dense-card:active,
+.main-stage .dense-row:active {
+  transform: scale(0.992) !important;
+  background-color: rgb(255 255 255 / 0.05) !important;
+}
+
+/* Nav / rail */
+aside.rail nav button,
+aside nav button,
+nav[aria-label="Primary"] button {
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease !important;
+}
+aside.rail nav button:hover,
+aside nav button:hover {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: var(--color-fg) !important;
+}
+aside.rail nav button[aria-current="page"],
+aside.rail nav button.bg-accent,
+aside nav button.tile-active,
+aside nav button[aria-current="page"] {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  box-shadow: none !important;
+}
+aside.rail nav button:disabled,
+aside nav button:disabled,
+.main-stage button:disabled,
+.composer-bar button:disabled {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.15) !important;
+}
+
+/* Chips / pills */
+.main-stage button.rounded-full,
+.main-stage .rounded-full.border,
+.masthead button.min-h-11.rounded-full,
+.main-stage [class*="rounded-full"].border {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+.main-stage button.rounded-full:hover:not(:disabled),
+.masthead button.min-h-11.rounded-full:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.2) !important;
+}
+.main-stage button.rounded-full.bg-accent,
+.main-stage button.rounded-full.tile-active,
+.masthead button.min-h-11.rounded-full.bg-accent {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  border-color: transparent !important;
+}
+
+/* Menu options */
+.composer-bar__model-option:hover,
+.live-voice-bar__plus-item:hover,
+.floating-menu button:hover,
+.floating-menu [role="menuitem"]:hover,
+[role="menu"] [role="menuitem"]:hover {
+  background: rgb(255 255 255 / 0.08) !important;
+}
+.composer-bar__model-option.is-selected,
+.composer-bar__model-option[aria-selected="true"],
+[role="option"][aria-selected="true"] {
+  background: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16) !important;
+}
+.composer-bar__model-option:disabled,
+.live-voice-bar__plus-item:disabled {
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+}
+
+/* Waveform bars — mono (was purple gradient) */
+.voice-zone .waveform span {
+  background: linear-gradient(180deg, #e8ecf5, #6b7280) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-stage .dense-card,
+  .main-stage .dense-row,
+  aside.rail nav button,
+  .main-stage button.rounded-full {
+    transition: none !important;
+  }
+  .main-stage .dense-card:active,
+  .main-stage .dense-row:active {
+    transform: none !important;
+  }
+}
