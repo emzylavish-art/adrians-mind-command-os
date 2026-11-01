@@ -7,6 +7,7 @@ import {
   startOAuth,
 } from "@/lib/supabase/actions";
 import { safeRedirectPath } from "@/lib/supabase/safe-redirect";
+import { oauthAuthorizeTarget } from "@/lib/supabase/oauth-redirect";
 import { authEnabled, signIn } from "@/lib/auth/client";
 import {
   emailPasswordGate,
@@ -233,8 +234,15 @@ function Login() {
         const result = await startOAuth({
           data: { provider: action.provider, next },
         });
+        const target = oauthAuthorizeTarget(result);
+        if (target) {
+          window.location.assign(target);
+          return;
+        }
         if (result && "ok" in result && result.ok === false) {
           setBanner(result.error);
+        } else {
+          setBanner("Could not start provider sign-in.");
         }
         return;
       }

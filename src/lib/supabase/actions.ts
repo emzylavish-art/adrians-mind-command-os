@@ -211,7 +211,7 @@ export const startOAuth = createServerFn({ method: "POST" })
         error: error?.message || "Could not start provider sign-in.",
       };
     }
-    throw redirect({ href: oauth.url });
+    return { ok: true as const, url: oauth.url };
   });
 
 export const signOutSupabase = createServerFn({ method: "POST" }).handler(
