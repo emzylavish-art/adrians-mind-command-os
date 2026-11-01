@@ -13,7 +13,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -47,6 +47,7 @@ import {
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
+import { createFeedGlyphs } from "./feed-glyphs";
 import { createCityLayer } from "./city/city-layer";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
 import {
@@ -303,6 +304,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     skyMat.depthWrite = false;
     const sky = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), skyMat);
     scene.add(sky);
+    // Painted backdrop (Grok Imagine) — honest fallback keeps procedural sky if missing
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      "/dashboard-3d/art/backdrop-nebula.webp",
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const painted = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false });
+        sky.material = painted;
+        skyMat.dispose();
+      },
+      undefined,
+      () => { /* keep procedural sky — no source */ },
+    );
 
 
 
@@ -372,14 +386,30 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botGroup.add(mesh);
         botMeshes.push(mesh);
 
-        const glow = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: starTex,
-            color,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          }),
+        const glowMat = new THREE.SpriteMaterial({
+          map: starTex,
+          color,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const glow = new THREE.Sprite(glowMat);
+        // Portrait sprite (additive halo still uses starTex); portrait sits as small card sprite if asset exists
+        const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
+        loader.load(
+          portraitUrl,
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const card = new THREE.Sprite(
+              new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.92 }),
+            );
+            card.scale.set(1.15, 1.15, 1.15);
+            card.position.copy(pos).add(new THREE.Vector3(0, 0.95, 0));
+            card.userData.botId = bot.id;
+            botGroup.add(card);
+          },
+          undefined,
+          () => { /* no portrait asset yet */ },
         );
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
@@ -508,7 +538,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         roughness: 0.5,
       });
       pageMesh = new THREE.InstancedMesh(pageGeo, mat, pages.length);
+      pageMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(pages.length * 3), 3);
       const dummy = new THREE.Object3D();
+      const baseCol = new THREE.Color(0x9bb7ff);
       pages.forEach((p, i) => {
         pageIdByIndex[i] = p.id;
         const [x, y, z] = positions[i]!;
@@ -516,8 +548,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         dummy.scale.setScalar(1);
         dummy.updateMatrix();
         pageMesh!.setMatrixAt(i, dummy.matrix);
+        pageMesh!.setColorAt(i, baseCol);
       });
       pageMesh.instanceMatrix.needsUpdate = true;
+      if (pageMesh.instanceColor) pageMesh.instanceColor.needsUpdate = true;
       pageGroup.add(pageMesh);
 
       // parent/child edges (cap for perf)
@@ -635,29 +669,80 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const dust = createDustField(scene, { count: 480, seed: 42 });
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+    let starHealthFilter: string = "all";
+    let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
 
     let composer: EffectComposer | null = null;
     let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
     let gradeHandle: ReturnType<typeof createColorGradePass> | null = null;
-    if (!reducedMotion) {
-      composer = new EffectComposer(renderer);
+    let raysHandle: ReturnType<typeof createGodRayPass> | null = null;
+    // Light lane #12: idle until real weather arrives (not healthy-green before data)
+    let exposureRide = createExposureRide({ tone: "idle", reducedMotion });
+    exposureRide.apply(renderer);
+
+    const rebuildPostfxBundle = () => {
+      // Light #13: rebuild passes into the live composer after WebGL restore
+      if (!composer || reducedMotion) {
+        return { bloom: null, grade: null, godRays: null, exposure: exposureRide };
+      }
+      const w = Math.max(1, mount.clientWidth || width);
+      const h = Math.max(1, mount.clientHeight || height);
+      composer.passes.length = 0;
       composer.addPass(new RenderPass(scene, camera));
+      let nextRays: typeof raysHandle = null;
+      let nextBloom: typeof bloomHandle = null;
+      let nextGrade: typeof gradeHandle = null;
       try {
-        bloomHandle = createTunedBloomPass(new THREE.Vector2(width, height), "healthy");
-        composer.addPass(bloomHandle.pass);
+        nextRays = createGodRayPass({ healthy: 0, total: 0, reducedMotion: false });
+        if (composer.readBuffer?.depthTexture) {
+          nextRays.setDepthTexture(composer.readBuffer.depthTexture, camera);
+        }
+        composer.addPass(nextRays.pass);
       } catch {
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.62, 0.75, 0.22));
+        nextRays = null;
       }
       try {
-        gradeHandle = createColorGradePass("healthy");
-        composer.addPass(gradeHandle.pass);
+        nextBloom = createTunedBloomPass(new THREE.Vector2(w, h), "idle");
+        composer.addPass(nextBloom.pass);
       } catch {
-        /* optional */
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.62, 0.75, 0.22));
+      }
+      try {
+        nextGrade = createColorGradePass("idle");
+        composer.addPass(nextGrade.pass);
+      } catch {
+        nextGrade = null;
       }
       composer.addPass(kit.painterlyPass);
+      bloomHandle = nextBloom;
+      gradeHandle = nextGrade;
+      raysHandle = nextRays;
+      exposureRide = createExposureRide({ tone: "idle", reducedMotion });
+      exposureRide.apply(renderer);
+      return { bloom: nextBloom, grade: nextGrade, godRays: nextRays, exposure: exposureRide };
+    };
+
+    if (!reducedMotion) {
+      try {
+        const depthTex = new THREE.DepthTexture(Math.max(1, width), Math.max(1, height));
+        const rt = new THREE.WebGLRenderTarget(Math.max(1, width), Math.max(1, height), {
+          depthTexture: depthTex,
+        });
+        composer = new EffectComposer(renderer, rt);
+      } catch {
+        composer = new EffectComposer(renderer);
+      }
+      rebuildPostfxBundle();
     }
+
+    const postfxRecovery = createContextLossRecovery({
+      canvas: renderer.domElement,
+      initial: { bloom: bloomHandle, grade: gradeHandle, godRays: raysHandle, exposure: exposureRide },
+      factory: rebuildPostfxBundle,
+    });
 
     let rig: CameraRigState = createRig(UNIVERSE_HIGH);
     let lookAt = new THREE.Vector3(...UNIVERSE_HIGH.lookAt);
@@ -677,6 +762,35 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    let hoverPageId: string | null = null;
+    const pageIndexById = () => {
+      const m = new Map<string, number>();
+      pageIdByIndex.forEach((id, i) => m.set(id, i));
+      return m;
+    };
+    const tintNotionNeighbors = (focusId: string | null) => {
+      if (!pageMesh || !pageMesh.instanceColor) return;
+      const base = new THREE.Color(0x9bb7ff);
+      const hot = new THREE.Color(0xffe08a);
+      const dim = new THREE.Color(0x3a4566);
+      const idx = pageIndexById();
+      const neigh = new Set<string>();
+      if (focusId) {
+        neigh.add(focusId);
+        for (const e of dataRef.current.notionGraph.edges) {
+          if (e.from === focusId && !e.to.startsWith("bot:")) neigh.add(e.to);
+          if (e.to === focusId && !e.from.startsWith("bot:")) neigh.add(e.from);
+        }
+      }
+      for (let i = 0; i < pageIdByIndex.length; i++) {
+        const id = pageIdByIndex[i]!;
+        if (!focusId) pageMesh.setColorAt(i, base);
+        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x7c5cff));
+        else pageMesh.setColorAt(i, dim);
+      }
+      pageMesh.instanceColor.needsUpdate = true;
+    };
+
 
     function setFly(next: FlyState, fly2camera: boolean) {
       fly = next;
@@ -828,6 +942,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (pageHits[0] && pageHits[0].instanceId != null) {
           const pid = pageIdByIndex[pageHits[0].instanceId];
           if (pid) {
+            hoverPageId = pid;
+            tintNotionNeighbors(pid);
             cbs.current.onSelectNotion(pid);
             return;
           }
@@ -887,9 +1003,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       camera.position.copy(freePos);
       camera.lookAt(lookAt);
     };
+    const onPointerHoverNotion = (ev: PointerEvent) => {
+      if (dragging || fly.level !== "universe" || !pageMesh) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObject(pageMesh, false);
+      const id = hits[0] && hits[0].instanceId != null ? pageIdByIndex[hits[0].instanceId] ?? null : null;
+      if (id !== hoverPageId) {
+        hoverPageId = id;
+        tintNotionNeighbors(id);
+      }
+    };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointermove", onPointerHoverNotion);
     renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
 
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
@@ -908,7 +1038,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     document.addEventListener("visibilitychange", onVisibility);
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      if (kit.contextLost) return; // WebGL context lost: pause instead of throwing every frame
+      if (kit.contextLost || postfxRecovery.lost) return; // WebGL context lost: pause (painter kit + light #13)
       if (isDocumentHidden()) {
         last = now;
         return;
@@ -930,6 +1060,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const wallT = now * 0.001;
       const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
+        const show = starHealthFilter === "all" || n.health === starHealthFilter;
+        n.mesh.visible = show;
+        n.glow.visible = show;
+        n.label.visible = show && labelsOn && fly.level === "universe";
         const phase = pulsePhaseFromId(n.id);
         sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
         n.mesh.scale.setScalar(pulseOut.scale);
@@ -940,7 +1074,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
-        n.label.visible = fly.level === "universe"; // star labels don't bleed into the city/interior
+        // label visibility owned above (health filter + labels layer + fly level)
       }
       if (!reducedMotion) {
         for (const fl of flowLines) {
@@ -960,14 +1094,29 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city.tick(wallT, reducedMotion);
       dust.update(wallT, reducedMotion);
       comets.update(wallT, reducedMotion);
+      feedGlyphs.update(wallT, reducedMotion);
+      const botsNow = dataRef.current.bots;
+      const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
+      const healthy = botsNow.filter((b) => b.health === "healthy").length;
+      const total = botsNow.length;
+      const localHour = new Date().getHours(); // box clock = Africa/Lagos
+      exposureRide.setTarget({ tone, hour: localHour, reducedMotion });
+      exposureRide.tick(dt * 1000);
+      const liveBloom = postfxRecovery.bundle.bloom ?? bloomHandle;
+      const liveGrade = postfxRecovery.bundle.grade ?? gradeHandle;
+      const liveRays = postfxRecovery.bundle.godRays ?? raysHandle;
+      const liveExposure = postfxRecovery.bundle.exposure ?? exposureRide;
+      liveExposure.apply(renderer, liveBloom ?? undefined);
+
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
         tickPainterlyKit(kit, t);
-        if (atm) {
-          const tone = dataRef.current.weather?.tone ?? deriveFleetTone(dataRef.current.bots.map((b) => b.health));
-          atm.update(tone);
-          bloomHandle?.update(tone);
-          gradeHandle?.update(tone);
+        if (atm) atm.update(tone);
+        liveBloom?.update(tone);
+        liveGrade?.update(tone);
+        if (liveRays) {
+          liveRays.setSun(sunMesh.position, camera);
+          liveRays.update({ healthy, total, reducedMotion: false, tone: tone as never });
         }
       }
 
@@ -981,6 +1130,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+        feedGlyphs.dispose();
+        feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };
     tick(performance.now());
@@ -993,6 +1144,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.setSize(w, h);
       labelRenderer.setSize(w, h);
       composer?.setSize(w, h);
+      bloomHandle?.setSize?.(w, h);
+      if (raysHandle && composer?.readBuffer?.depthTexture) {
+        raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
+      }
     };
     
     const onSkyEvent = () => {
@@ -1008,12 +1163,46 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       );
       cbs.current.onSkyView();
     };
+
+    const onFocusBot = (ev: Event) => {
+      const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
+      if (!botId) return;
+      const bot = dataRef.current.bots.find((b) => b.id === botId);
+      if (!bot) return;
+      const pos =
+        bot.id === "grok-build"
+          ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
+          : botWorldPosition(bot.id);
+      const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
+      if (!acceptPointerPick(rig)) return;
+      rig = flyTo(
+        rig,
+        target,
+        [camera.position.x, camera.position.y, camera.position.z],
+        [lookAt.x, lookAt.y, lookAt.z],
+      );
+      cbs.current.onSelectBot(bot);
+    };
+    document.addEventListener("dash3d-focus-bot", onFocusBot);
+    const onLayers = (ev: Event) => {
+      const d = (ev as CustomEvent<{ labels?: boolean; healthFilter?: string }>).detail || {};
+      if (typeof d.labels === "boolean") {
+        labelsOn = d.labels;
+        city.setLabelsVisible(labelsOn && fly.level === "city");
+      }
+      if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
+    };
+    document.addEventListener("dash3d-layers", onLayers);
+
+
     document.addEventListener("dash3d-sky", onSkyEvent);
 
     window.addEventListener("resize", onResize);
 
     return () => {
       window.removeEventListener("resize", onResize);
+      document.removeEventListener("dash3d-focus-bot", onFocusBot);
+      document.removeEventListener("dash3d-layers", onLayers);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);
@@ -1023,9 +1212,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointermove", onPointerHoverNotion);
       cancelAnimationFrame(raf);
       dust.dispose();
       comets.dispose();
+      feedGlyphs.dispose();
       sphereGeo.dispose();
       pageGeo.dispose();
       travelerGeo.dispose();
@@ -1033,6 +1224,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       skyMat.map?.dispose();
       skyMat.dispose();
       disposePainterlyKit(kit);
+      postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure
       renderer.dispose();
       composer?.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);

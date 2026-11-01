@@ -109,11 +109,57 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   const brushMats: THREE.ShaderMaterial[] = [];
   const ownedMats: THREE.Material[] = [];
   const ownedGeos: THREE.BufferGeometry[] = [];
+  const backdropMats: THREE.Material[] = [];
+  const backdropGeos: THREE.BufferGeometry[] = [];
   const exteriors = new Map<string, THREE.Object3D[]>();
   const interiors = new Map<string, THREE.Group>();
   const labels: CSS2DObject[] = [];
   let buildingCount = 0;
   let labelsVisible = true;
+
+  // Painted city skyline + interior room backdrops (Grok Imagine webp)
+  // Kept out of ownedMats so rebuild()/clearDynamic does not dispose them.
+  const cityBackdropGroup = new THREE.Group();
+  cityBackdropGroup.name = "dash3d-city-backdrop";
+  group.add(cityBackdropGroup);
+  const texLoader = new THREE.TextureLoader();
+  let interiorBackdropMat: THREE.MeshBasicMaterial | null = null;
+  texLoader.load(
+    "/dashboard-3d/art/backdrop-city.webp",
+    (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      backdropMats.push(mat);
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), mat);
+      backdropGeos.push(plane.geometry);
+      plane.position.set(0, CITY_Y + 7.5, -22);
+      cityBackdropGroup.add(plane);
+    },
+    undefined,
+    () => { /* no source */ },
+  );
+  texLoader.load(
+    "/dashboard-3d/art/backdrop-interior.webp",
+    (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      interiorBackdropMat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      backdropMats.push(interiorBackdropMat);
+    },
+    undefined,
+    () => { /* no source */ },
+  );
 
   function clearDynamic() {
     for (const l of labels) {
@@ -158,6 +204,41 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       shell.add(body);
       pickables.push(body);
       const ext: THREE.Object3D[] = [body];
+
+      // Painted facade card (Grok Imagine) — fill empty building surfaces
+      const facadeUrl =
+        b.id === "project-gap-cycle"
+          ? "/dashboard-3d/art/building-gap-cycle.webp"
+          : b.id === "project-orchestrator"
+            ? "/dashboard-3d/art/building-orchestrator.webp"
+            : b.id.startsWith("bot-")
+              ? "/dashboard-3d/art/building-guild.webp"
+              : null;
+      if (facadeUrl) {
+        texLoader.load(
+          facadeUrl,
+          (tex: THREE.Texture) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const fMat = new THREE.MeshBasicMaterial({
+              map: tex,
+              transparent: true,
+              opacity: 0.92,
+              depthWrite: false,
+            });
+            ownedMats.push(fMat);
+            const fGeo = new THREE.PlaneGeometry(b.width * 0.92, Math.min(b.height * 0.85, b.width * 1.35));
+            ownedGeos.push(fGeo);
+            const face = new THREE.Mesh(fGeo, fMat);
+            face.position.set(0, Math.min(b.height * 0.55, b.height - 0.2), b.depth / 2 + 0.02);
+            face.userData.cityPick = { buildingId: b.id, part: "facade", floor: null } satisfies CityPick;
+            shell.add(face);
+            pickables.push(face);
+            ext.push(face);
+          },
+          undefined,
+          () => { /* no source yet */ },
+        );
+      }
 
       // glowing windows: one per floor on the front face; lit only for real progress
       const winGeo = new THREE.PlaneGeometry(b.width * 0.62, b.floorHeight * 0.5);
@@ -241,6 +322,15 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       const walls = new THREE.Mesh(wallGeo, wallMat);
       walls.position.y = b.height / 2;
       inside.add(walls);
+      if (interiorBackdropMat) {
+        const bg = new THREE.Mesh(
+          new THREE.PlaneGeometry(b.width * 0.98, b.height * 0.92),
+          interiorBackdropMat,
+        );
+        ownedGeos.push(bg.geometry);
+        bg.position.set(0, b.height / 2, -b.depth * 0.48);
+        inside.add(bg);
+      }
       const wire = new THREE.LineSegments(new THREE.EdgesGeometry(wallGeo), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 }));
       ownedGeos.push(wire.geometry);
       ownedMats.push(wire.material as THREE.Material);
@@ -290,12 +380,21 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     clearDynamic();
     scene.remove(group);
     scene.remove(clouds);
+    // cityBackdropGroup is inside group — cleared with group; mats/geos already in owned*
     groundGeo.dispose();
     groundMat.dispose();
     grid.geometry.dispose();
     (grid.material as THREE.Material).dispose();
     for (const m of cloudMats) m.dispose();
     cloudTex.dispose();
+    for (const m of backdropMats) {
+      const map = (m as THREE.MeshBasicMaterial).map;
+      map?.dispose();
+      m.dispose();
+    }
+    for (const g of backdropGeos) g.dispose();
+    backdropMats.length = 0;
+    backdropGeos.length = 0;
   }
 
   return {

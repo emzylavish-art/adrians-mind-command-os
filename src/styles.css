@@ -550,3 +550,1907 @@ html[data-theme="light"] .thread-divider,
 html[data-theme="light"] .message-divider {
   background: linear-gradient(90deg, transparent, rgb(9 9 11 / 0.12), transparent);
 }
+
+/* —— Cycle 6: scrollbars, selection, topbar density, mobile safe-area (mono) —— */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.22);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgb(255 255 255 / 0.4); background-clip: padding-box; }
+html[data-theme="light"] * { scrollbar-color: rgb(9 9 11 / 0.28) transparent; }
+html[data-theme="light"] *::-webkit-scrollbar-thumb {
+  background: rgb(9 9 11 / 0.22);
+  background-clip: padding-box;
+}
+
+::selection {
+  background: rgb(255 255 255 / 0.22);
+  color: #fff;
+}
+html[data-theme="light"] ::selection {
+  background: rgb(9 9 11 / 0.18);
+  color: #09090b;
+}
+
+.topbar {
+  min-height: 3.25rem;
+  padding-inline: 0.85rem;
+  gap: 0.65rem;
+}
+.topbar .title,
+.topbar h1 {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+/* Mobile shell density + safe areas */
+@media (max-width: 720px) {
+  .rail {
+    box-shadow: 0 -12px 40px rgb(0 0 0 / 0.5);
+  }
+  .floating-composer,
+  .composer-dock,
+  [data-composer="floating"] {
+    margin: 0.5rem;
+    margin-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    border-radius: 1.15rem;
+  }
+  .voice-zone,
+  .live-voice-bar,
+  [data-voice-zone] {
+    margin-bottom: env(safe-area-inset-bottom);
+    border-radius: 1.15rem 1.15rem 0.85rem 0.85rem;
+  }
+  .main-stage {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Skeleton shimmer — gray only */
+@keyframes mono-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.skeleton,
+[data-skeleton="true"] {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.04));
+  background-size: 200% 100%;
+  animation: mono-shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+html[data-theme="light"] .skeleton,
+html[data-theme="light"] [data-skeleton="true"] {
+  background: linear-gradient(90deg, rgb(9 9 11 / 0.04), rgb(9 9 11 / 0.1), rgb(9 9 11 / 0.04));
+  background-size: 200% 100%;
+}
+
+/* —— Cycle 7: workspace page chrome (Build/Projects/Research/Library/Runs) + logo purple —— */
+
+/* Brand mark in aside — purple ONLY here (markup uses from-info/to-accent utilities) */
+aside > div.flex.items-center > span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent,
+.logo-mark {
+  background: #7c5cff !important;
+  background-image: none !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
+
+/* Top chrome on every workspace page */
+header.flex.items-center.border-b.border-line {
+  background: rgb(8 8 10 / 0.78);
+  backdrop-filter: blur(16px) saturate(1.05);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05);
+  border-bottom-color: rgb(255 255 255 / 0.08) !important;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+html[data-theme="light"] header.flex.items-center.border-b.border-line {
+  background: rgb(255 255 255 / 0.86);
+  border-bottom-color: rgb(9 9 11 / 0.08) !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.05);
+}
+
+/* Page scroll stage */
+.flex.min-h-0.min-w-0.flex-1.flex-col .min-h-0.flex-1.overflow-auto {
+  background:
+    radial-gradient(ellipse 70% 35% at 50% -5%, rgb(255 255 255 / 0.035), transparent 55%),
+    var(--color-bg);
+}
+html[data-theme="light"] .flex.min-h-0.min-w-0.flex-1.flex-col .min-h-0.flex-1.overflow-auto {
+  background:
+    radial-gradient(ellipse 70% 35% at 50% -5%, rgb(9 9 11 / 0.03), transparent 55%),
+    var(--color-bg);
+}
+
+/* Page hero / section cards */
+.min-h-0.flex-1.overflow-auto .rounded-panel,
+.min-h-0.flex-1.overflow-auto .rounded-2xl.border {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.045), transparent 60%), var(--color-surface);
+  border-color: rgb(255 255 255 / 0.09) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 28px rgb(0 0 0 / 0.28);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-panel,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-2xl.border {
+  background: #fff;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.06);
+}
+
+/* Capability / status rows (Build stacked pills) */
+.min-h-0.flex-1.overflow-auto .rounded-full.border,
+.min-h-0.flex-1.overflow-auto .rounded-panel.border.border-line {
+  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+.min-h-0.flex-1.overflow-auto > div > .rounded-panel.border,
+.min-h-0.flex-1.overflow-auto section .rounded-panel {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* In-page pill tabs (Projects On this device / External) */
+.min-h-0.flex-1.overflow-auto .rounded-full.bg-accent,
+.min-h-0.flex-1.overflow-auto button.rounded-full.bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2), 0 6px 16px rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-full.bg-accent,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto button.rounded-full.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* External / project identity tiles — mono initials */
+.min-h-0.flex-1.overflow-auto .grid.place-items-center.rounded-2xl.bg-accent\/15,
+.min-h-0.flex-1.overflow-auto .bg-accent\/15 {
+  background: rgb(255 255 255 / 0.08) !important;
+  color: #f4f4f5 !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .bg-accent\/15 {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #18181b !important;
+}
+
+/* —— Cycle 8: hover / press micro-interactions (mono) —— */
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a.rounded-panel,
+  a.rounded-2xl {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease,
+      transform 100ms ease,
+      opacity 140ms ease;
+  }
+  button:not(:disabled):hover,
+  [role="button"]:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: translateY(1px) scale(0.985);
+    filter: brightness(0.96);
+  }
+  html[data-theme="light"] button:not(:disabled):hover,
+  html[data-theme="light"] [role="button"]:not(:disabled):hover {
+    filter: brightness(0.97);
+  }
+}
+
+/* Nav row hover/press */
+aside nav button {
+  position: relative;
+}
+aside nav button:hover {
+  background: rgb(255 255 255 / 0.07) !important;
+  color: #f4f4f5 !important;
+}
+aside nav button:active {
+  background: rgb(255 255 255 / 0.11) !important;
+}
+aside nav button.bg-accent:hover,
+aside nav button.bg-accent {
+  filter: none;
+}
+html[data-theme="light"] aside nav button:hover {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #09090b !important;
+}
+
+/* Primary / accent CTAs */
+button.bg-accent,
+.bg-accent.rounded-panel,
+.bg-accent.rounded-full,
+.bg-accent.rounded-2xl {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.2) inset, 0 8px 18px rgb(0 0 0 / 0.35);
+}
+button.bg-accent:hover {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.28) inset, 0 10px 22px rgb(0 0 0 / 0.4);
+}
+button.bg-accent:active {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15) inset;
+}
+
+/* Bordered controls lift */
+button.border.border-line:hover,
+.rounded-panel.border.border-line:hover {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  background-color: rgb(255 255 255 / 0.04);
+}
+html[data-theme="light"] button.border.border-line:hover,
+html[data-theme="light"] .rounded-panel.border.border-line:hover {
+  border-color: rgb(9 9 11 / 0.22) !important;
+  background-color: rgb(9 9 11 / 0.03);
+}
+
+/* Icon-only rounds */
+button.grid.size-11:hover,
+button.size-11.rounded-full:hover,
+button.size-11.rounded-panel:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.2) !important;
+}
+
+/* —— Cycle 9: Settings surface + theme segment controls (mono) —— */
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl > .rounded-panel.border.border-line.bg-surface {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    rgb(12 12 14 / 0.92) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl > .rounded-panel.border.border-line.bg-surface {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.06);
+}
+
+/* Theme segment group (dark / light / system) */
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border-radius: 0.95rem;
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button {
+  border-radius: 0.7rem !important;
+  min-width: 4.5rem;
+}
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button.bg-accent,
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button.border-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 {
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.08);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* How-to-use bullets → mini-card rhythm */
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl ul.space-y-2 > li {
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.03);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  color: var(--color-muted);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl ul.space-y-2 > li {
+  background: rgb(9 9 11 / 0.03);
+  border-color: rgb(9 9 11 / 0.08);
+}
+
+/* Settings page title weight */
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl > h2.font-display {
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+/* —— Cycle 10: Attach/Tools/Context panels + mode picker + command palette (mono) —— */
+
+/* Mode picker (Ask / Research / Agent / Build) as floating segment */
+form .rounded-full.px-3.text-sm,
+.rounded-full.px-3.text-sm.bg-accent,
+.rounded-full.px-3.text-sm.border.border-line {
+  backdrop-filter: blur(8px);
+}
+/* Wrap adjacent mode pills visually when parent is a flex row of modes */
+form > .flex.items-center.gap-2:has(> .rounded-full),
+.flex.items-center.gap-2:has(> button.rounded-full.px-3) {
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.4);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 28px rgb(0 0 0 / 0.35);
+  width: fit-content;
+}
+button.rounded-full.px-3.text-sm.bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.4);
+}
+button.rounded-full.px-3.text-sm.border.border-line {
+  border-color: transparent !important;
+  color: #d4d4d8 !important;
+}
+button.rounded-full.px-3.text-sm.border.border-line:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: #fff !important;
+}
+html[data-theme="light"] form > .flex.items-center.gap-2:has(> .rounded-full),
+html[data-theme="light"] .flex.items-center.gap-2:has(> button.rounded-full.px-3) {
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.1);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.08);
+}
+html[data-theme="light"] button.rounded-full.px-3.text-sm.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* Composer action row (Attach / Add Context / Tools / …) */
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.border.border-line {
+  background: rgb(255 255 255 / 0.03);
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.border.border-line:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.22) !important;
+}
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.bg-accent {
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.4);
+}
+
+/* Expand panels: Add Context + Tools list */
+form ~ .mt-3.rounded-panel.border.border-line.bg-bg,
+.mt-3.rounded-panel.border.border-line.bg-bg.p-3,
+ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg {
+  background: rgb(10 10 12 / 0.92) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    0 18px 40px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+}
+ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg > li {
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 0.05);
+  background: rgb(255 255 255 / 0.02);
+}
+html[data-theme="light"] .mt-3.rounded-panel.border.border-line.bg-bg.p-3,
+html[data-theme="light"] ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 16px 36px rgb(0 0 0 / 0.12);
+}
+
+/* Command palette floating depth */
+#command-palette {
+  background: rgb(12 12 14 / 0.94) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 24px 56px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+}
+#command-palette button:hover,
+#command-palette [role="option"]:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-radius: 0.65rem;
+}
+html[data-theme="light"] #command-palette {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 20px 48px rgb(0 0 0 / 0.14) !important;
+}
+
+/* Quick tool chips */
+.flex.gap-2.overflow-x-auto.pb-1 > button,
+.flex.gap-2.overflow-x-auto.pb-1 > .rounded-panel {
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  backdrop-filter: blur(8px);
+}
+.flex.gap-2.overflow-x-auto.pb-1 > button:hover {
+  background: rgb(255 255 255 / 0.09);
+  border-color: rgb(255 255 255 / 0.2);
+}
+
+/* —— Cycle 11: toasts + modals (mono) —— */
+
+/* Modal scrim */
+.fixed.inset-0.z-40.grid.place-items-end.bg-bg\/80,
+.fixed.inset-0.z-40.grid.md\:place-items-center {
+  background: rgb(0 0 0 / 0.72) !important;
+  backdrop-filter: blur(10px) saturate(1.05);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+}
+html[data-theme="light"] .fixed.inset-0.z-40.grid.place-items-end {
+  background: rgb(9 9 11 / 0.45) !important;
+}
+
+/* Modal card */
+.fixed.inset-0.z-40.grid > .w-full.max-w-md.rounded-panel.border.border-line.bg-surface {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    rgb(14 14 16 / 0.96) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    0 28px 64px rgb(0 0 0 / 0.65),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+html[data-theme="light"] .fixed.inset-0.z-40.grid > .w-full.max-w-md.rounded-panel.border.border-line.bg-surface {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 24px 56px rgb(0 0 0 / 0.18) !important;
+}
+
+/* Notice toast strip */
+p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted {
+  background: rgb(20 20 22 / 0.92) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  color: #e4e4e7 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+html[data-theme="light"] p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  color: #3f3f46 !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.1);
+}
+
+/* Error line — high-contrast mono, not pink */
+p.text-sm.text-danger {
+  color: #f4f4f5 !important;
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] p.text-sm.text-danger {
+  color: #09090b !important;
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.18);
+}
+
+/* Mobile primary tab bar */
+nav.fixed.inset-x-0.bottom-0.z-30[aria-label="Primary"] {
+  background: rgb(10 10 12 / 0.92) !important;
+  border-top-color: rgb(255 255 255 / 0.1) !important;
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: 0 -12px 32px rgb(0 0 0 / 0.45);
+}
+nav.fixed.inset-x-0.bottom-0.z-30[aria-label="Primary"] button.text-accent {
+  color: #fff !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30[aria-label="Primary"] {
+  background: rgb(255 255 255 / 0.92) !important;
+  border-top-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.08);
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30[aria-label="Primary"] button.text-accent {
+  color: #09090b !important;
+}
+
+/* —— Cycle 12: light theme parity + monochrome icon set —— */
+
+/* Light shell wash */
+html[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse 55% 40% at 85% -5%, rgb(9 9 11 / 0.04), transparent 55%),
+    var(--color-bg);
+}
+html[data-theme="light"] aside {
+  background: linear-gradient(180deg, #ffffff, #f4f4f5) !important;
+  border-right: 1px solid rgb(9 9 11 / 0.08);
+  box-shadow: 8px 0 28px rgb(0 0 0 / 0.04);
+}
+
+/* Force semantic utility colors to mono gray (icons + labels) */
+.text-info,
+.text-ok,
+.text-warn,
+.text-accent,
+.text-danger {
+  color: var(--color-muted) !important;
+}
+button.bg-accent .text-accent,
+button.bg-accent,
+.bg-accent,
+.bg-accent.text-accent-ink,
+.text-accent-ink {
+  /* keep accent-ink readable on accent fills */
+}
+button.bg-accent,
+.bg-accent.text-accent-ink,
+button.bg-accent .text-accent-ink,
+.text-accent-ink {
+  color: var(--color-accent-ink) !important;
+}
+aside nav button.bg-accent,
+aside nav button.bg-accent .text-accent,
+aside nav button.bg-accent svg {
+  color: var(--color-accent-ink) !important;
+}
+aside nav button:not(.bg-accent) svg {
+  color: var(--color-muted);
+  opacity: 0.9;
+}
+aside nav button.bg-accent svg {
+  opacity: 1;
+}
+
+/* Lucide / icon buttons — mono strokes */
+button svg.lucide,
+a svg.lucide,
+.rounded-panel svg.lucide,
+.rounded-2xl svg.lucide {
+  stroke: currentColor;
+}
+html[data-theme="light"] .text-info,
+html[data-theme="light"] .text-ok,
+html[data-theme="light"] .text-warn {
+  color: #52525b !important;
+}
+html[data-theme="light"] aside nav button.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+html[data-theme="light"] aside nav button.bg-accent svg {
+  color: #fafafa !important;
+}
+
+/* Light search / status chips in header */
+html[data-theme="light"] header.flex.items-center.border-b.border-line input,
+html[data-theme="light"] header.flex.items-center.border-b.border-line .rounded-full,
+html[data-theme="light"] header.flex.items-center.border-b.border-line .rounded-panel {
+  border-color: rgb(9 9 11 / 0.12);
+}
+html[data-theme="light"] header.flex.items-center.border-b.border-line {
+  color: #09090b;
+}
+
+/* Light page stage cards already covered; reinforce empty copy contrast */
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .text-muted {
+  color: #52525b !important;
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto h1,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto h2.font-display {
+  color: #09090b;
+}
+
+/* Dashboard route shell (CSS only around 3D canvas host) */
+[class*="dashboard-3d"],
+.dashboard-3d-shell,
+#dashboard-3d-root {
+  border-color: rgb(255 255 255 / 0.08);
+}
+html[data-theme="light"] [class*="dashboard-3d"],
+html[data-theme="light"] .dashboard-3d-shell,
+html[data-theme="light"] #dashboard-3d-root {
+  border-color: rgb(9 9 11 / 0.1);
+  background: #fafafa;
+}
+
+/* Kill any leftover colored glow utilities on non-logo nodes */
+[class*="shadow-[0_0_18px_rgb(124_92_255"]:not(.logo-mark):not(aside span.grid.size-11) {
+  box-shadow: 0 0 18px rgb(255 255 255 / 0.12) !important;
+}
+html[data-theme="light"] [class*="shadow-[0_0_18px_rgb(124_92_255"]:not(.logo-mark):not(aside span.grid.size-11) {
+  box-shadow: 0 0 18px rgb(9 9 11 / 0.08) !important;
+}
+/* Re-assert logo purple after the kill switch */
+aside > div.flex.items-center > span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent,
+.logo-mark {
+  background: #7c5cff !important;
+  background-image: none !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
+
+/* —— Cycle 13: chat empty hero + command-card hero composer (mono) —— */
+.masthead {
+  position: relative;
+  padding: 0.35rem 0.15rem 0.6rem;
+  margin-bottom: 0.15rem;
+}
+.masthead h1.font-display,
+.masthead .font-display.text-3xl,
+.masthead .font-display.text-4xl {
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.45);
+}
+.masthead h1 .text-accent {
+  color: #fafafa !important;
+  background: linear-gradient(180deg, #fff, #d4d4d8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+}
+@supports not (background-clip: text) {
+  .masthead h1 .text-accent {
+    color: #fafafa !important;
+    -webkit-text-fill-color: #fafafa;
+  }
+}
+.masthead > div > p.text-sm.text-muted {
+  margin-top: 0.45rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  color: #a1a1aa !important;
+}
+.masthead .font-display.text-2xl.text-fg {
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.command-card {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.055), transparent 42%),
+    rgb(12 12 14 / 0.78) !important;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: calc(var(--radius-panel) + 0.15rem);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.45),
+    0 28px 64px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+}
+.command-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 8% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  pointer-events: none;
+}
+html[data-theme="light"] .command-card {
+  background: rgb(255 255 255 / 0.92) !important;
+  border-color: rgb(9 9 11 / 0.1);
+  box-shadow: 0 22px 48px rgb(0 0 0 / 0.1), inset 0 1px 0 #fff !important;
+}
+html[data-theme="light"] .masthead h1 .text-accent {
+  background: none;
+  color: #09090b !important;
+  -webkit-text-fill-color: #09090b;
+}
+
+/* Hero autonomy tiles inside command-card */
+.command-card .bg-surface-2 {
+  background: rgb(255 255 255 / 0.04) !important;
+  border: 1px solid rgb(255 255 255 / 0.06);
+}
+.command-card .bg-accent.text-accent-ink,
+.command-card button.bg-accent {
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.4);
+}
+
+/* —— Cycle 14: collapsed rail + mobile drawer (mono) —— */
+
+/* Collapsed icon rail */
+aside.md\:w-16,
+aside[class*="md:w-16"] {
+  align-items: center;
+}
+aside.md\:w-16 nav button,
+aside[class*="md:w-16"] nav button {
+  justify-content: center;
+  padding-inline: 0.35rem !important;
+  width: 2.75rem;
+  margin-inline: auto;
+  border-radius: 0.85rem !important;
+}
+aside.md\:w-16 nav button.bg-accent,
+aside[class*="md:w-16"] nav button.bg-accent {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18), 0 8px 18px rgb(0 0 0 / 0.4);
+}
+aside.md\:w-16 .px-3.pb-1,
+aside[class*="md:w-16"] .px-3.pb-1,
+aside.md\:w-16 p.text-\[10px\],
+aside[class*="md:w-16"] p.text-\[10px\] {
+  opacity: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+aside.md\:w-16 > div.flex.items-center,
+aside[class*="md:w-16"] > div.flex.items-center {
+  justify-content: center;
+  padding-inline: 0.35rem;
+}
+aside.md\:w-16 > div.flex.items-center > div.min-w-0,
+aside[class*="md:w-16"] > div.flex.items-center > div.min-w-0 {
+  display: none;
+}
+
+/* Mobile drawer (fixed inset aside) */
+@media (max-width: 767px) {
+  aside.fixed.inset-0.z-40 {
+    background: rgb(8 8 10 / 0.96) !important;
+    backdrop-filter: blur(22px) saturate(1.1);
+    -webkit-backdrop-filter: blur(22px) saturate(1.1);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 24px 0 64px rgb(0 0 0 / 0.65);
+    animation: drawer-in 180ms ease-out;
+  }
+  aside.fixed.inset-0.z-40 nav button {
+    border-radius: 0.95rem !important;
+    min-height: 2.85rem;
+  }
+  aside.fixed.inset-0.z-40 nav .mb-3 > p {
+    letter-spacing: 0.2em;
+    opacity: 0.85;
+  }
+}
+@keyframes drawer-in {
+  from { transform: translateX(-8%); opacity: 0.6; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  aside.fixed.inset-0.z-40 { animation: none; }
+}
+
+html[data-theme="light"] aside.fixed.inset-0.z-40 {
+  background: rgb(255 255 255 / 0.97) !important;
+  box-shadow: 0 0 0 1px rgb(9 9 11 / 0.08), 20px 0 48px rgb(0 0 0 / 0.12);
+}
+
+/* —— Cycle 15: focus-visible audit (mono rings everywhere) —— */
+:focus { outline: none; }
+:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none;
+}
+:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.85), 0 0 0 6px rgb(255 255 255 / 0.35) !important;
+}
+html[data-theme="light"] :focus-visible {
+  outline-color: #09090b !important;
+  box-shadow: 0 0 0 4px #fff, 0 0 0 6px rgb(9 9 11 / 0.35) !important;
+}
+
+/* Nav / menu rows: inset focus so rail doesn't clip */
+aside nav button:focus-visible,
+aside nav a:focus-visible,
+.floating-menu button:focus-visible,
+#command-palette button:focus-visible,
+#command-palette [role="option"]:focus-visible {
+  outline-offset: -2px !important;
+  box-shadow: inset 0 0 0 2px #f4f4f5 !important;
+}
+html[data-theme="light"] aside nav button:focus-visible {
+  box-shadow: inset 0 0 0 2px #09090b !important;
+}
+
+/* Cards lift when a child is keyboard-focused */
+.command-card:focus-within,
+.glow-card:focus-within,
+.dense-card:focus-within,
+.rounded-panel.border.border-line.bg-surface:focus-within {
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.16),
+    0 18px 40px rgb(0 0 0 / 0.45) !important;
+}
+html[data-theme="light"] .command-card:focus-within,
+html[data-theme="light"] .rounded-panel.border.border-line.bg-surface:focus-within {
+  border-color: rgb(9 9 11 / 0.28) !important;
+  box-shadow: 0 0 0 1px rgb(9 9 11 / 0.14), 0 14px 32px rgb(0 0 0 / 0.1) !important;
+}
+
+/* Checkbox / switch / radio */
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+[role="switch"]:focus-visible {
+  outline-offset: 3px !important;
+}
+
+/* —— Cycle 16: loading/empty states + typography rhythm (mono) —— */
+
+/* Page title rhythm */
+.min-h-0.flex-1.overflow-auto h2.font-display.text-3xl,
+.min-h-0.flex-1.overflow-auto h1.font-display {
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 0.15rem;
+}
+.min-h-0.flex-1.overflow-auto .masthead + p,
+.min-h-0.flex-1.overflow-auto .masthead p.text-muted,
+.min-h-0.flex-1.overflow-auto h2.font-display + p.text-sm.text-muted,
+.min-h-0.flex-1.overflow-auto h2.font-display + p.mt-2 {
+  max-width: 42rem;
+  line-height: 1.55;
+  color: #a1a1aa !important;
+}
+
+/* Empty copy blocks */
+.min-h-0.flex-1.overflow-auto p.text-sm.text-muted:only-of-type,
+.min-h-0.flex-1.overflow-auto .rounded-panel.border.border-line p.text-muted {
+  line-height: 1.55;
+}
+/* Empty-state panels */
+.min-h-0.flex-1.overflow-auto .rounded-panel.border.border-line.bg-surface:has(p),
+.min-h-0.flex-1.overflow-auto .glow-card {
+  position: relative;
+}
+.min-h-0.flex-1.overflow-auto .rounded-panel.border.border-line.bg-bg {
+  background: rgb(255 255 255 / 0.025) !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  color: #a1a1aa;
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-panel.border.border-line.bg-bg {
+  background: rgb(9 9 11 / 0.02) !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+}
+
+/* Loading / painting fallback (dashboard + generic) */
+.dash3d-fallback,
+[data-loading="true"],
+.loading-card {
+  background: rgb(10 10 12 / 0.88) !important;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.9rem;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  letter-spacing: -0.02em;
+}
+.dash3d-fallback .dash3d-title,
+.dash3d-fallback h1,
+.dash3d-fallback h2 {
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.7rem !important;
+  color: #a1a1aa !important;
+  font-weight: 600;
+}
+
+/* Skeleton already mono; tighten spacing under titles */
+.min-h-0.flex-1.overflow-auto .mt-4.grid,
+.min-h-0.flex-1.overflow-auto .mt-3.grid {
+  gap: 0.85rem;
+}
+.min-h-0.flex-1.overflow-auto section > * + * {
+  margin-top: 0.15rem;
+}
+
+/* —— Cycle 17: 3D dashboard HUD chrome (styles.css overrides only; mono) —— */
+.dash3d-root {
+  --dash3d-bg: #050507 !important;
+  --dash3d-panel: rgb(12 12 14 / 0.78) !important;
+  --dash3d-line: rgb(39 39 42 / 0.9) !important;
+  --dash3d-fg: #f4f4f5 !important;
+  --dash3d-muted: #a1a1aa !important;
+  --dash3d-accent: #f4f4f5 !important;
+  --dash3d-ok: #d4d4d8 !important;
+  --dash3d-amber: #a1a1aa !important;
+  --dash3d-danger: #e4e4e7 !important;
+  --dash3d-idle: #52525b !important;
+  background:
+    radial-gradient(ellipse 50% 40% at 20% 0%, rgb(255 255 255 / 0.05), transparent 60%),
+    radial-gradient(ellipse 40% 35% at 90% 10%, rgb(255 255 255 / 0.03), transparent 55%),
+    var(--dash3d-bg) !important;
+  color: var(--dash3d-fg) !important;
+}
+.dash3d-glass,
+.dash3d-skybar-card,
+.dash3d-flyhud,
+.dash3d-side .dash3d-glass {
+  background: rgb(12 12 14 / 0.78) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 16px 40px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+  backdrop-filter: blur(16px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.1) !important;
+  color: #f4f4f5 !important;
+}
+.dash3d-glass h2,
+.dash3d-glass h3,
+.dash3d-title {
+  color: #fafafa !important;
+  letter-spacing: -0.02em;
+}
+.dash3d-muted,
+.dash3d-label {
+  color: #a1a1aa !important;
+}
+.dash3d-pill {
+  background: rgb(255 255 255 / 0.06) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  color: #f4f4f5 !important;
+}
+.dash3d-pill:hover,
+.dash3d-pill[aria-pressed="true"],
+.dash3d-pill.is-active {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+}
+.dash3d-dot,
+.dash3d-dot.healthy,
+.dash3d-dot.stalled,
+.dash3d-dot.blocked,
+.dash3d-dot.idle {
+  background: #d4d4d8 !important;
+  color: #d4d4d8 !important;
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.25) !important;
+}
+.dash3d-dot.idle {
+  background: #52525b !important;
+  color: #52525b !important;
+  box-shadow: none !important;
+}
+.dash3d-list li {
+  border-color: rgb(255 255 255 / 0.08) !important;
+}
+.dash3d-fallback {
+  background: rgb(5 5 7 / 0.92) !important;
+}
+html[data-theme="light"] .dash3d-root {
+  --dash3d-bg: #fafafa !important;
+  --dash3d-panel: rgb(255 255 255 / 0.86) !important;
+  --dash3d-line: rgb(228 228 231 / 0.95) !important;
+  --dash3d-fg: #09090b !important;
+  --dash3d-muted: #52525b !important;
+  --dash3d-accent: #18181b !important;
+  background:
+    radial-gradient(ellipse 50% 40% at 20% 0%, rgb(9 9 11 / 0.04), transparent 60%),
+    var(--dash3d-bg) !important;
+}
+html[data-theme="light"] .dash3d-glass,
+html[data-theme="light"] .dash3d-skybar-card,
+html[data-theme="light"] .dash3d-flyhud {
+  background: rgb(255 255 255 / 0.9) !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  color: #09090b !important;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.1) !important;
+}
+
+/* —— Cycle 18: attachment chips + mono avatars/status + kill non-logo purple glow —— */
+
+/* Staged attachment chip */
+p.text-xs.text-muted:has(+ *),
+form p.mt-2.text-xs.text-muted,
+p.text-xs.text-muted[class*="mt-2"] {
+  /* default */
+}
+form p.mt-2.text-xs.text-muted,
+.mt-2.text-xs.text-muted,
+p.text-xs.text-muted:is([class~="mt-2"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  color: #e4e4e7 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  line-height: 1.3;
+}
+form p.mt-2.text-xs.text-muted::before,
+p.text-xs.text-muted.mt-2::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #f4f4f5;
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.35);
+  flex: 0 0 auto;
+}
+html[data-theme="light"] form p.mt-2.text-xs.text-muted,
+html[data-theme="light"] p.text-xs.text-muted.mt-2 {
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.12);
+  color: #3f3f46 !important;
+}
+html[data-theme="light"] form p.mt-2.text-xs.text-muted::before {
+  background: #18181b;
+  box-shadow: none;
+}
+
+/* Status pill dot — always mono */
+header span.size-2.rounded-full.bg-current,
+.size-2.rounded-full.bg-current {
+  background: #d4d4d8 !important;
+  color: #d4d4d8 !important;
+  box-shadow: 0 0 6px rgb(255 255 255 / 0.25);
+}
+html[data-theme="light"] header span.size-2.rounded-full.bg-current {
+  background: #52525b !important;
+  box-shadow: none;
+}
+header .rounded-full.border.text-sm {
+  background: rgb(255 255 255 / 0.04);
+  border-color: rgb(255 255 255 / 0.14) !important;
+  color: #d4d4d8 !important;
+}
+
+/* Mono agent/bot avatars */
+.bot-avatar,
+.bot-avatar-pink,
+.bot-avatar-teal,
+.bot-avatar-amber,
+.bot-avatar-violet,
+.bot-avatar-sky {
+  background: linear-gradient(145deg, #3f3f46, #18181b) !important;
+  color: #f4f4f5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 14px rgb(255 255 255 / 0.08) !important;
+}
+html[data-theme="light"] .bot-avatar,
+html[data-theme="light"] .bot-avatar-pink,
+html[data-theme="light"] .bot-avatar-teal,
+html[data-theme="light"] .bot-avatar-amber,
+html[data-theme="light"] .bot-avatar-violet,
+html[data-theme="light"] .bot-avatar-sky {
+  background: linear-gradient(145deg, #e4e4e7, #a1a1aa) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 12px rgb(0 0 0 / 0.08) !important;
+}
+
+/* Profile / initials avatars — mono, no purple glow */
+span.grid.size-8.place-items-center.rounded-full.bg-accent,
+span.grid.size-16.place-items-center.rounded-full {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15), 0 8px 20px rgb(0 0 0 / 0.35) !important;
+}
+html[data-theme="light"] span.grid.size-8.place-items-center.rounded-full.bg-accent,
+html[data-theme="light"] span.grid.size-16.place-items-center.rounded-full {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* Kill purple glow on chat-thread empty Zap badge (not logo) */
+span.shadow-\[0_0_28px_rgb\(124_92_255\/0\.45\)\],
+span[class*="shadow-[0_0_28px_rgb(124_92_255"] {
+  background: rgb(255 255 255 / 0.08) !important;
+  color: #f4f4f5 !important;
+  box-shadow: 0 0 28px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+html[data-theme="light"] span[class*="shadow-[0_0_28px_rgb(124_92_255"] {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #18181b !important;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.08) !important;
+}
+
+/* Re-assert logo purple last */
+aside > div.flex.items-center > span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent,
+.logo-mark {
+  background: #7c5cff !important;
+  background-image: none !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
+
+/* —— Cycle 19: ServiceBoard / Connected card icon wells + status chrome (mono) —— */
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article.rounded-panel.border.border-line.bg-surface {
+  position: relative;
+  padding: 0.95rem 0.95rem 0.85rem !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 28px rgb(0 0 0 / 0.28);
+  transition: border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article.rounded-panel.border.border-line.bg-surface:hover {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 16px 36px rgb(0 0 0 / 0.38);
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article > .flex.items-center.justify-between {
+  gap: 0.75rem;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article h3.font-semibold {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  letter-spacing: -0.015em;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article h3.font-semibold::before {
+  content: "";
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+  flex: 0 0 auto;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.04)),
+    #18181b;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 6px 14px rgb(0 0 0 / 0.35);
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article span.rounded-full.border.border-line.px-2 {
+  background: rgb(255 255 255 / 0.06);
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: #e4e4e7 !important;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article > button.mt-3 {
+  width: 100%;
+  justify-content: center;
+  background: rgb(255 255 255 / 0.03);
+}
+html[data-theme="light"] .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article.rounded-panel.border.border-line.bg-surface {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article h3.font-semibold::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff, 0 4px 10px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article span.rounded-full.border.border-line.px-2 {
+  background: rgb(9 9 11 / 0.05);
+  color: #3f3f46 !important;
+}
+
+/* —— Cycle 20: chat command hero integration strip density (mono) —— */
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 {
+  gap: 1.1rem !important;
+}
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 > .grid.gap-2 {
+  margin-top: 0.15rem;
+}
+/* Notice toast sits above board — keep strip visually grouped */
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 > .flex.gap-2.overflow-x-auto.pb-1 {
+  padding-bottom: 0.35rem;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article {
+  min-height: 8.5rem;
+}
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article > p.mt-2.text-sm.text-muted {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Soft section label before board via first article group feel */
+.mx-auto.flex.max-w-6xl.flex-col.gap-4 > .grid.gap-2.sm\:grid-cols-2::before {
+  content: "Services";
+  grid-column: 1 / -1;
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  margin-bottom: 0.15rem;
+}
+html[data-theme="light"] .mx-auto.flex.max-w-6xl.flex-col.gap-4 > .grid.gap-2.sm\:grid-cols-2::before {
+  color: #52525b;
+}
+
+/* —— Cycle 21: Projects empty-state hero + external tiles (mono) —— */
+.min-h-0.flex-1.overflow-auto article.glow-card.rounded-panel.border.border-line.bg-surface.p-4.lg\:col-span-2,
+.min-h-0.flex-1.overflow-auto article.lg\:col-span-2 {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  min-height: 11rem;
+  padding: 2rem 1.5rem !important;
+  background:
+    radial-gradient(ellipse 60% 80% at 50% 0%, rgb(255 255 255 / 0.06), transparent 60%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
+    var(--color-surface) !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+.min-h-0.flex-1.overflow-auto article.lg\:col-span-2::before {
+  content: "";
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 0.85rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.04)),
+    #18181b;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 10px 24px rgb(0 0 0 / 0.4);
+}
+.min-h-0.flex-1.overflow-auto article.lg\:col-span-2 > p.font-semibold {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+.min-h-0.flex-1.overflow-auto article.lg\:col-span-2 > p.text-sm.text-muted {
+  max-width: 28rem;
+  margin-inline: auto;
+}
+/* External monogram wells → mono */
+.min-h-0.flex-1.overflow-auto span.grid.size-11.place-items-center.rounded-2xl.bg-warn\/15,
+.min-h-0.flex-1.overflow-auto span.bg-warn\/15,
+.min-h-0.flex-1.overflow-auto span.bg-accent\/20 {
+  background: rgb(255 255 255 / 0.08) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto article.lg\:col-span-2 {
+  background:
+    radial-gradient(ellipse 60% 80% at 50% 0%, rgb(9 9 11 / 0.04), transparent 60%),
+    #fff !important;
+  border-color: rgb(9 9 11 / 0.16) !important;
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto article.lg\:col-span-2::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff, 0 8px 18px rgb(0 0 0 / 0.08);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto span.bg-warn\/15,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto span.bg-accent\/20 {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #18181b !important;
+}
+
+/* —— Cycle 22: Agents list rows as mono avatar tiles —— */
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg {
+  padding: 0.7rem 0.85rem !important;
+  background: rgb(255 255 255 / 0.03) !important;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg::before {
+  content: "";
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: linear-gradient(145deg, #3f3f46, #18181b);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 14px rgb(255 255 255 / 0.06);
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg:hover {
+  background: rgb(255 255 255 / 0.055) !important;
+  border-color: rgb(255 255 255 / 0.16);
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg > span:first-of-type {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+.min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg > span.text-xs.text-muted {
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  padding: 0.2rem 0.55rem;
+  background: rgb(255 255 255 / 0.04);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg {
+  background: rgb(9 9 11 / 0.03) !important;
+  border-color: rgb(9 9 11 / 0.1);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto li.flex.items-center.justify-between.gap-3.rounded-panel.bg-bg::before {
+  background: linear-gradient(145deg, #e4e4e7, #a1a1aa);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff;
+}
+
+/* —— Cycle 23: light theme composer / autonomy tile parity —— */
+html[data-theme="light"] .command-card {
+  border-color: rgb(9 9 11 / 0.14) !important;
+  box-shadow: 0 0 0 1px rgb(9 9 11 / 0.04), 0 24px 56px rgb(0 0 0 / 0.1), inset 0 1px 0 #fff !important;
+}
+html[data-theme="light"] .command-card .bg-surface-2 {
+  background: rgb(9 9 11 / 0.04) !important;
+  border: 1px solid rgb(9 9 11 / 0.08);
+  color: #3f3f46;
+}
+html[data-theme="light"] .command-card button.bg-accent,
+html[data-theme="light"] .command-card .bg-accent.text-accent-ink {
+  background: #18181b !important;
+  color: #fafafa !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+}
+html[data-theme="light"] .command-card .mb-2.flex.flex-wrap.gap-2,
+html[data-theme="light"] form .mb-2.flex.flex-wrap.gap-2 {
+  padding: 0.28rem;
+  border-radius: 999px;
+  background: rgb(9 9 11 / 0.05);
+  border: 1px solid rgb(9 9 11 / 0.08);
+  width: fit-content;
+}
+html[data-theme="light"] .masthead h1.font-display {
+  color: #09090b;
+  text-shadow: none;
+}
+html[data-theme="light"] .mx-auto.flex.max-w-6xl.flex-col.gap-4 > .flex.gap-2.overflow-x-auto.pb-1 > button {
+  background: #fff;
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.05);
+}
+html[data-theme="light"] header.flex.items-center.border-b.border-line {
+  background: rgb(255 255 255 / 0.92);
+}
+/* Ask/Research pills already covered; reinforce light selected */
+html[data-theme="light"] button.rounded-full.px-3.text-sm.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* —— Cycle 24: Tools list + Skills directory icon wells (mono) —— */
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.rounded-panel.border.border-line.bg-surface.p-3 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 3.6rem !important;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 24px rgb(0 0 0 / 0.25);
+  transition: border-color 140ms ease, transform 120ms ease;
+}
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.rounded-panel.border.border-line.bg-surface.p-3::before {
+  content: "";
+  position: absolute;
+  left: 0.85rem;
+  top: 0.95rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+  background: linear-gradient(145deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.04)), #18181b;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.rounded-panel.border.border-line.bg-surface.p-3:hover {
+  border-color: rgb(255 255 255 / 0.2) !important;
+  transform: translateY(-1px);
+}
+
+/* Skills grid articles (md:grid-cols-2) */
+.min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article.rounded-panel.border.border-line.bg-surface {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 28px rgb(0 0 0 / 0.28);
+}
+.min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article h3.font-semibold {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article h3.font-semibold::before {
+  content: "";
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 0.55rem;
+  flex: 0 0 auto;
+  background: linear-gradient(145deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.04)), #18181b;
+  border: 1px solid rgb(255 255 255 / 0.14);
+}
+.min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article span.rounded-full {
+  background: rgb(255 255 255 / 0.06);
+  border-color: rgb(255 255 255 / 0.14) !important;
+}
+
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.rounded-panel.border.border-line.bg-surface.p-3 {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.05);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.rounded-panel.border.border-line.bg-surface.p-3::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article.rounded-panel.border.border-line.bg-surface {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .grid.gap-3.md\:grid-cols-2 > article h3.font-semibold::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+}
+
+/* —— Cycle 25: empty-state rhythm (Research / Library / Runs / Activity) —— */
+/* Shared ChatGPT-like empty well for lone muted list rows */
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6 {
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  min-height: 9.5rem;
+  padding: 2rem 1.5rem !important;
+  letter-spacing: 0.01em;
+  color: var(--color-muted) !important;
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(255 255 255 / 0.05), transparent 65%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-surface) !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  position: relative;
+}
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li::before,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card::before,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6::before {
+  content: "";
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.85rem;
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.03)),
+    #141416;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 8px 20px rgb(0 0 0 / 0.35);
+}
+
+/* Research capability checklist as mono glass tiles */
+.min-h-0.flex-1.overflow-auto ul.mt-3.space-y-2.text-sm > li.flex.items-center.justify-between {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 60%),
+    #0a0a0c !important;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  min-height: 2.85rem;
+}
+.min-h-0.flex-1.overflow-auto .masthead.glow-card {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.06), transparent 55%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 18px 40px rgb(0 0 0 / 0.35);
+}
+
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6 {
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(9 9 11 / 0.03), transparent 65%),
+    #fff !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.04);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-1 > li::before,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.glow-card::before,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.glow-card.rounded-panel.border.border-line.bg-surface.p-6::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff, 0 6px 14px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-3.space-y-2.text-sm > li.flex.items-center.justify-between {
+  background: #fafafa !important;
+  border-color: rgb(9 9 11 / 0.08);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .masthead.glow-card {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.06);
+}
+
+/* —— Cycle 26: GenerateImage mono textures (hero grain + frost card) —— */
+body {
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(180deg, rgb(5 5 7 / 0.82), rgb(5 5 7 / 0.92)),
+    url("/brand/textures/hero-mono-grain.jpg");
+  background-size: auto, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+  background-repeat: no-repeat;
+}
+html[data-theme="light"] body {
+  background-image:
+    linear-gradient(180deg, rgb(250 250 250 / 0.88), rgb(250 250 250 / 0.94)),
+    url("/brand/textures/hero-mono-grain.jpg");
+}
+
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg");
+  background-size: auto, 420px 420px;
+  background-blend-mode: soft-light, soft-light;
+}
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero {
+  background-color: rgb(12 12 14 / 0.78);
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+}
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] .glass-panel,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .settings-card,
+html[data-theme="light"] .page-hero {
+  background-color: rgb(255 255 255 / 0.86);
+  background-blend-mode: multiply, soft-light;
+}
+
+/* —— Cycle 27: topbar search glass (ChatGPT-like) —— */
+.topbar input.h-11.w-full.rounded-panel.border.border-line.bg-surface,
+header input.h-11.w-full.rounded-panel.border.border-line.bg-surface,
+input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02)),
+    rgb(12 12 14 / 0.72) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 8px 24px rgb(0 0 0 / 0.28);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  color: var(--color-fg);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.topbar input.h-11.w-full.rounded-panel.border.border-line.bg-surface:focus,
+header input.h-11.w-full.rounded-panel.border.border-line.bg-surface:focus,
+input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm:focus {
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 0 0 1px rgb(255 255 255 / 0.18),
+    0 12px 28px rgb(0 0 0 / 0.35);
+  outline: none;
+}
+.topbar,
+header.topbar,
+.flex.items-center.gap-3.border-b.border-line {
+  background: rgb(8 8 10 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border-bottom-color: rgb(255 255 255 / 0.08) !important;
+}
+html[data-theme="light"] input.h-11.w-full.rounded-panel.border.border-line.bg-surface.pr-14.pl-10.text-sm {
+  background: rgb(255 255 255 / 0.9) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.05);
+}
+html[data-theme="light"] .topbar,
+html[data-theme="light"] .flex.items-center.gap-3.border-b.border-line {
+  background: rgb(255 255 255 / 0.82) !important;
+  border-bottom-color: rgb(9 9 11 / 0.08) !important;
+}
+
+/* —— Cycle 28: Scheduled + Memory chrome (mono glass) —— */
+.min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2 {
+  padding: 0.85rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    rgb(12 12 14 / 0.75);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 14px 32px rgb(0 0 0 / 0.3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2 input,
+.min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2 select {
+  background: rgb(8 8 10 / 0.85) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.text-sm.text-muted {
+  text-align: center;
+  min-height: 7.5rem;
+  padding: 1.75rem 1.25rem;
+  border-radius: 1.1rem;
+  border: 1px dashed rgb(255 255 255 / 0.14);
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(255 255 255 / 0.05), transparent 65%),
+    var(--color-surface);
+  display: grid;
+  place-items: center;
+}
+
+.min-h-0.flex-1.overflow-auto .masthead {
+  padding: 1rem 1.1rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.06), transparent 55%),
+    rgb(12 12 14 / 0.8);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 16px 36px rgb(0 0 0 / 0.32);
+}
+.min-h-0.flex-1.overflow-auto .glow-card.mt-4.grid.gap-4 {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    rgb(12 12 14 / 0.82) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 16px 40px rgb(0 0 0 / 0.34);
+}
+.min-h-0.flex-1.overflow-auto .mt-4.flex.gap-2.overflow-x-auto > button {
+  border-radius: 999px !important;
+  backdrop-filter: blur(10px);
+}
+.min-h-0.flex-1.overflow-auto .mt-4.flex.gap-2.overflow-x-auto > button.border.border-line {
+  background: rgb(255 255 255 / 0.04);
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+.min-h-0.flex-1.overflow-auto .mt-4.grid.gap-3.md\:grid-cols-\[16rem_1fr\] > .glow-card {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto section.p-4.md\:p-6 .mt-4.flex.flex-wrap.gap-2,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .masthead,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .glow-card.mt-4.grid.gap-4 {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.text-sm.text-muted {
+  background: #fafafa;
+  border-color: rgb(9 9 11 / 0.14);
+}
+
+/* —— Cycle 29: charts / progress mono glass + mobile bottom-nav active —— */
+.dash3d-charts-panel.dash3d-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.82) !important;
+  background-size: auto, 360px 360px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+}
+.dash3d-charts-grid {
+  gap: 0.75rem !important;
+}
+.dash3d-chart-card {
+  position: relative;
+  padding: 0.75rem 0.8rem 0.65rem !important;
+  border-radius: 0.95rem !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    rgb(8 8 10 / 0.88) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 24px rgb(0 0 0 / 0.35) !important;
+  font-variant-numeric: tabular-nums;
+}
+.dash3d-chart-card h3 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.68rem !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: #e4e4e7 !important;
+  margin-bottom: 0.35rem !important;
+}
+.dash3d-chart-card svg {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+  background-size: 100% 12px, 18px 100%;
+  background-position: 0 0, 0 0;
+  border-radius: 0.35rem;
+}
+.dash3d-chart-card svg rect {
+  fill: rgb(244 244 245 / 0.78) !important;
+  transition: fill 120ms ease, opacity 120ms ease;
+}
+.dash3d-chart-card svg g:hover rect {
+  fill: #fff !important;
+}
+.dash3d-chart-card svg line {
+  stroke: rgb(255 255 255 / 0.22) !important;
+  stroke-width: 1px;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.dash3d-chart-card .dash3d-muted[data-testid="chart-empty"] {
+  min-height: 4.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  border: 1px dashed rgb(255 255 255 / 0.14);
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.03), rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.03));
+  background-size: 200% 100%;
+  animation: 1.4s ease-in-out infinite skeleton-shimmer;
+}
+
+.dash3d-progress {
+  background: rgb(255 255 255 / 0.08) !important;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  overflow: hidden;
+}
+.dash3d-progress-fill,
+.dash3d-progress-fill.healthy,
+.dash3d-progress-fill.stalled,
+.dash3d-progress-fill.blocked {
+  background: linear-gradient(90deg, #a1a1aa, #f4f4f5) !important;
+}
+aside .mt-3.h-1\.5.overflow-hidden.rounded-full.bg-line {
+  background: rgb(255 255 255 / 0.08) !important;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+aside .mt-3.h-1\.5.overflow-hidden.rounded-full.bg-line > .h-full.rounded-full.bg-accent {
+  background: linear-gradient(90deg, #71717a, #f4f4f5) !important;
+}
+
+/* Mobile bottom nav active pill */
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface {
+  background: rgb(8 8 10 / 0.88) !important;
+  border-top-color: rgb(255 255 255 / 0.1) !important;
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: 0 -12px 32px rgb(0 0 0 / 0.45);
+}
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button {
+  position: relative;
+  color: #a1a1aa !important;
+  transition: color 140ms ease, transform 120ms ease;
+}
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent {
+  color: #fafafa !important;
+}
+nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent::before {
+  content: "";
+  position: absolute;
+  top: 0.35rem;
+  left: 50%;
+  width: 1.65rem;
+  height: 0.2rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #f4f4f5;
+  box-shadow: 0 0 12px rgb(255 255 255 / 0.35);
+}
+html[data-theme="light"] .dash3d-chart-card {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg rect {
+  fill: rgb(24 24 27 / 0.78) !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface {
+  background: rgb(255 255 255 / 0.92) !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent {
+  color: #09090b !important;
+}
+html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent::before {
+  background: #18181b;
+  box-shadow: none;
+}
+
+/* —— Cycle 30: ChatGPT depth polish + dash HUD fallback glass —— */
+.dash3d-fallback {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 35%),
+    url("/brand/textures/hero-mono-grain.jpg"),
+    rgb(5 5 7 / 0.94) !important;
+  background-size: auto, cover, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 24px 64px rgb(0 0 0 / 0.55) !important;
+  backdrop-filter: blur(20px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.05) !important;
+}
+.dash3d-fallback .dash3d-title,
+.dash3d-fallback h1,
+.dash3d-fallback h2 {
+  letter-spacing: -0.03em !important;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.45);
+}
+.dash3d-flyhud,
+.dash3d-skybar-card {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 45%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.8) !important;
+  background-size: auto, 320px 320px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+}
+
+/* Global ChatGPT-like stage depth */
+.main-stage {
+  background:
+    radial-gradient(ellipse 55% 40% at 50% -10%, rgb(255 255 255 / 0.05), transparent 60%),
+    transparent !important;
+}
+.rail {
+  box-shadow:
+    inset -1px 0 0 rgb(255 255 255 / 0.05),
+    12px 0 40px rgb(0 0 0 / 0.45) !important;
+}
+.command-card,
+.floating-composer {
+  box-shadow:
+    0 28px 72px rgb(0 0 0 / 0.55),
+    0 0 0 1px rgb(255 255 255 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+aside nav button.bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.65),
+    0 8px 22px rgb(0 0 0 / 0.35) !important;
+}
+html[data-theme="light"] .dash3d-fallback,
+html[data-theme="light"] .dash3d-flyhud,
+html[data-theme="light"] .dash3d-skybar-card {
+  background: rgb(255 255 255 / 0.92) !important;
+  background-blend-mode: normal !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.08) !important;
+}
+html[data-theme="light"] aside nav button.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
