@@ -2,7 +2,7 @@
  * Persistent Grok-style live-voice bottom bar.
  * Layout + colors live here (Tailwind). Do not edit styles.css (Visual Polish).
  */
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   Camera,
   FileText,
@@ -402,7 +402,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       className="live-voice-bar live-voice-control fixed inset-x-0 bottom-14 z-40 md:bottom-0 border-t border-white/10 bg-zinc-950/95 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-zinc-100 backdrop-blur-md md:px-5"
       data-live-voice={uiAttr}
       data-testid="live-voice-bar"
-      style={style}
+      style={style as CSSProperties}
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
         <div className="flex items-center justify-between gap-2">

@@ -19,6 +19,6 @@ export function muteButtonAria(active: boolean, muted: boolean): {
   return { label: "Mute", pressed: false };
 }
 
-export function barRootStyle(level: number): { ["--live-level"]: string } {
+export function barRootStyle(level: number): Record<string, string> {
   return { ["--live-level"]: String(clampLiveLevel(level)) };
 }
