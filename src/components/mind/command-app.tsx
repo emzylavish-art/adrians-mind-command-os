@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
@@ -45,15 +45,39 @@ import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemo
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
+import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
+import { VoicePicker } from "@/components/mind/voice-picker";
+import { ComposerLiveVoice } from "@/components/mind/composer-live-voice";
+import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
-import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
-  isEditableKeyboardTarget,
-  matchesVoiceToggleShortcut,
+  getServerVoiceMode,
+  getVoiceMode,
+  hydrateVoiceModeStore,
+  setVoiceModeStore,
+  subscribeVoiceMode,
+} from "@/lib/mind/voice/mode-store";
+import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
+import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
+import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
+import { formatMicCaptureError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
+import {
   voiceMicAriaLabel,
   VOICE_TOGGLE_SHORTCUT,
 } from "@/lib/mind/voice/shortcut";
+import {
+  createHoldToTalkController,
+  shouldToggleVoiceShortcut,
+} from "@/lib/mind/voice/hold-to-talk";
+import { clampLiveTranscript, shouldClearLiveTranscriptOnModeSwitch } from "@/lib/mind/voice/live-transcript";
+import {
+  DEFAULT_XAI_VOICE,
+  type XaiBuiltinVoice,
+  readStoredVoiceChoice,
+  writeStoredVoiceChoice,
+} from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
@@ -313,12 +337,20 @@ export function CommandApp() {
   const turnAbort = useRef<AbortController | null>(null);
   const voiceNext = useRef(false);
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
-  const listenRef = useRef<() => void>(() => undefined);
-  const voiceModeRef = useRef<VoiceRoutingMode>("direct");
-  const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
+  const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
+  const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
+  const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
+  const [voiceLiveTranscript, setVoiceLiveTranscript] = useState("");
+  const [voiceChoice, setVoiceChoice] = useState<XaiBuiltinVoice>(DEFAULT_XAI_VOICE);
+  const voiceChoiceRef = useRef<XaiBuiltinVoice>(DEFAULT_XAI_VOICE);
+  const listenMintAbortRef = useRef<AbortController | null>(null);
+  const speakAbortRef = useRef<AbortController | null>(null);
+  const speakGenRef = useRef(0);
+  const listenGuardRef = useRef(createListenGuard());
+  const voiceReconnectRef = useRef(0);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -389,29 +421,99 @@ export function CommandApp() {
   const [listening, setListening] = useState(false);
 
   useEffect(() => {
-    // Hydrate is read-only. Never write the SSR default ("direct") from an effect —
-    // that race wiped Orchestrator after toggle+reload in live QA.
-    const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
-    setVoiceMode(mode);
-    voiceModeRef.current = mode;
+    // Single store: hydrate from localStorage once; every badge reads the same snapshot.
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    hydrateVoiceModeStore(storage);
+    const choice = readStoredVoiceChoice(storage);
+    voiceChoiceRef.current = choice;
+    setVoiceChoice(choice);
   }, []);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "amcos.voice.choice.v1") return;
+      const next = readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage);
+      voiceChoiceRef.current = next;
+      setVoiceChoice(next);
+      voiceSession.current?.setVoice(next);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : null;
+    if (!devices || typeof devices.addEventListener !== "function") return;
+    const onDeviceChange = () => {
+      const session = voiceSession.current;
+      if (!session?.isCapturing) return;
+      // Mic unplugged / device change while listening — stop cleanly, no stuck Listening.
+      stopVoiceSession();
+      setError("The microphone changed or was removed. Voice capture stopped.");
+      setNotice("The microphone changed or was removed. Voice capture stopped.");
+    };
+    devices.addEventListener("devicechange", onDeviceChange);
+    return () => devices.removeEventListener("devicechange", onDeviceChange);
+  }, []);
+
   function applyVoiceMode(next: VoiceRoutingMode) {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
-    const committed = commitVoiceMode(next, storage);
+    const previous = voiceModeRef.current;
+    const committed = setVoiceModeStore(next, storage);
     voiceModeRef.current = committed;
-    setVoiceMode(committed);
+    if (shouldClearLiveTranscriptOnModeSwitch(previous, committed)) {
+      setVoiceLiveTranscript("");
+    }
+  }
+
+  function applyVoiceChoice(next: XaiBuiltinVoice) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const committed = writeStoredVoiceChoice(next, storage);
+    voiceChoiceRef.current = committed;
+    setVoiceChoice(committed);
+    voiceSession.current?.setVoice(committed);
+  }
+
+  function interruptSpeakPlayback() {
+    interruptMessageSpeak({
+      sharedAudio: sharedAudioOutput,
+      abortSpeak: speakAbortRef.current,
+      speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
+    });
+    speakAbortRef.current = null;
+    setSpeaking(false);
   }
 
   useEffect(() => {
-    return () => {
+    const releaseVoice = () => {
+      interruptMessageSpeak({
+        sharedAudio: sharedAudioOutput,
+        abortSpeak: speakAbortRef.current,
+        speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
+      });
+      listenMintAbortRef.current?.abort();
+      listenMintAbortRef.current = null;
       voiceSession.current?.close();
       voiceSession.current = null;
-      sharedAudioOutput.interrupt();
+      setVoiceListening(false);
+      setVoiceLevel(0);
+      setVoiceLiveTranscript("");
+      setSpeaking(false);
+      listenGuardRef.current.end();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") releaseVoice();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", releaseVoice);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", releaseVoice);
+      releaseVoice();
     };
   }, []);
 
@@ -547,14 +649,50 @@ export function CommandApp() {
         searchRef.current?.focus();
       }
       if (event.key === "Escape") setPaletteOpen(false);
-      if (matchesVoiceToggleShortcut(event)) {
-        if (isEditableKeyboardTarget(event.target)) return;
+      if (shouldToggleVoiceShortcut(event, document)) {
         event.preventDefault();
-        void listenRef.current();
+        void listenRef.current({ mode: "toggle" });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const hold = createHoldToTalkController({
+      start: () => {
+        void listenRef.current({ mode: "start" });
+      },
+      stop: () => {
+        stopVoiceSession();
+        setNotice("Voice capture stopped.");
+      },
+      isListening: () =>
+        Boolean(
+          voiceSession.current?.isOpen ||
+            voiceSession.current?.isCapturing ||
+            listenMintAbortRef.current,
+        ),
+    });
+    // stopVoiceSession is stable enough via refs; hold controller owns blur/hide.
+    const onDown = (event: KeyboardEvent) => hold.onKeyDown(event);
+    const onUp = (event: KeyboardEvent) => hold.onKeyUp(event);
+    const onBlur = () => hold.onBlurOrHide();
+    const onVis = () => {
+      if (document.visibilityState === "hidden") hold.onBlurOrHide();
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVis);
+      hold.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hold wired once; listenRef/stopVoiceSession use refs
   }, []);
 
   useEffect(() => {
@@ -1848,49 +1986,131 @@ export function CommandApp() {
   }
 
   async function speak(text: string) {
+    interruptSpeakPlayback();
+    const clipped = clampSpeakText(text);
+    if (!clipped) {
+      setError("Nothing to read aloud.");
+      return;
+    }
+    const generation = ++speakGenRef.current;
+    const abort = new AbortController();
+    speakAbortRef.current = abort;
     setSpeaking(true);
     setError(null);
-    const result = await speakText({ data: { text } });
-    setSpeaking(false);
+    let result: Awaited<ReturnType<typeof speakText>>;
+    try {
+      result = await speakText({ data: { text: clipped, voiceId: voiceChoiceRef.current } });
+    } catch (caught) {
+      if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
+      setSpeaking(false);
+      setError(formatVoiceClientError(caught));
+      return;
+    }
+    if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
     if (!result.ok) {
       if (!result.error.includes("No speech key")) {
+        setSpeaking(false);
         setError(result.error);
         return;
       }
       const synth = window.speechSynthesis;
       if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
+        setSpeaking(false);
         setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
         return;
       }
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => {
-        setSpeaking(false);
-        setError("Browser speech failed. Nothing was spoken.");
+      const utter = new SpeechSynthesisUtterance(clipped);
+      utter.onend = () => {
+        if (generation === speakGenRef.current) setSpeaking(false);
       };
-      setSpeaking(true);
+      utter.onerror = () => {
+        if (generation === speakGenRef.current) {
+          setSpeaking(false);
+          setError("Browser speech failed. Nothing was spoken.");
+        }
+      };
       synth.cancel();
       synth.speak(utter);
       setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
       return;
     }
-    sharedAudioOutput.interrupt();
     try {
       await sharedAudioOutput.playMpegBase64(result.audio);
     } catch {
-      setError("The browser blocked playback.");
+      if (!shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) {
+        setError("The browser blocked playback.");
+      }
     } finally {
-      setSpeaking(false);
+      if (generation === speakGenRef.current) setSpeaking(false);
     }
   }
 
-  function stopVoiceSession() {
+  function appendLiveVoiceUser(text: string) {
+    const clipped = text.trim();
+    if (!clipped) return;
+    const targetId = activeId ?? active?.id ?? null;
+    if (!targetId) {
+      setDraft(clipped);
+      setNotice("Live voice heard you. Open a chat to keep the transcript in the thread.");
+      return;
+    }
+    const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: clipped, at: new Date().toISOString() };
+    setWs((prev) =>
+      pushAudit(
+        {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === targetId ? { ...item, messages: [...item.messages, userMsg] } : item,
+          ),
+        },
+        "message_sent",
+        targetId,
+        "live-voice-user",
+      ),
+    );
+  }
+
+  function appendLiveVoiceAssistant(text: string) {
+    const clipped = text.trim();
+    if (!clipped) return;
+    const targetId = activeId ?? active?.id ?? null;
+    if (!targetId) {
+      setNotice(`Live voice reply: ${clipped.slice(0, 160)}`);
+      return;
+    }
+    const assistantMsg = {
+      id: crypto.randomUUID(),
+      role: "assistant" as const,
+      content: clipped,
+      at: new Date().toISOString(),
+      model: "grok-voice-latest",
+    };
+    setWs((prev) =>
+      pushAudit(
+        {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === targetId ? { ...item, messages: [...item.messages, assistantMsg] } : item,
+          ),
+        },
+        "message_sent",
+        targetId,
+        "live-voice-assistant",
+      ),
+    );
+  }
+
+    function stopVoiceSession() {
+    interruptSpeakPlayback();
+    listenMintAbortRef.current?.abort();
+    listenMintAbortRef.current = null;
     voiceSession.current?.close();
     voiceSession.current = null;
-    sharedAudioOutput.interrupt();
     setVoiceListening(false);
     setVoiceMuted(false);
     setVoiceLevel(0);
+    setVoiceLiveTranscript("");
+    listenGuardRef.current.end();
   }
 
   function toggleVoiceMute() {
@@ -1901,11 +2121,12 @@ export function CommandApp() {
   }
 
   async function handleVoiceTranscript(transcript: string) {
-    const text = transcript.trim();
-    if (!text) {
-      setNotice("No words were recognized. Nothing was sent.");
+    const sanitized = sanitizeVoiceTranscript(transcript);
+    if (!sanitized.ok) {
+      setNotice(sanitized.error);
       return;
     }
+    const text = sanitized.text;
     setDraft(text);
     voiceNext.current = true;
     setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
@@ -1959,20 +2180,45 @@ export function CommandApp() {
     }
   }
 
-  async function listen() {
-    if (voiceListening) {
+  async function listen(opts?: { mode?: "toggle" | "start" | "stop" }) {
+    const mode = opts?.mode ?? "toggle";
+    const active = Boolean(
+      voiceListening ||
+        voiceSession.current?.isOpen ||
+        voiceSession.current?.isCapturing ||
+        listenMintAbortRef.current,
+    );
+    const action = resolveListenAction(mode, active);
+    if (action === "start" && isLiveVoiceOccupied()) {
+      setNotice(LIVE_VOICE_BUSY_MESSAGE);
+      return;
+    }
+    if (action === "stop") {
       stopVoiceSession();
+      listenGuardRef.current.end();
       setNotice("Voice capture stopped.");
       return;
     }
+    if (action === "ignore") {
+      // Already listening or minting — do not toggle-stop (fixes reconnect/PTT race).
+      return;
+    }
+    if (!listenGuardRef.current.begin()) {
+      setNotice("Voice is already starting. Wait a moment.");
+      return;
+    }
+    // Cut message-level Speak / TTS / browser speech before opening the mic.
+    interruptSpeakPlayback();
     if (ws.halted) {
+      listenGuardRef.current.end();
       setError("Emergency stop is on. Voice was not started.");
       return;
     }
     setError(null);
     setNotice(null);
-    sharedAudioOutput.interrupt();
-    voiceSession.current?.interruptPlayback();
+    // Close any stale session before minting a new secret (spam / race).
+    voiceSession.current?.close();
+    voiceSession.current = null;
 
     try {
       if (voiceModeRef.current === "orchestrator") {
@@ -1987,10 +2233,25 @@ export function CommandApp() {
         }
       }
 
+      listenMintAbortRef.current?.abort();
+      const mintAbort = new AbortController();
+      listenMintAbortRef.current = mintAbort;
+      setNotice("Minting voice session… (press mic or release Space to cancel)");
+
       let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
       try {
         secret = await createVoiceClientSecret();
+        if (mintAbort.signal.aborted) {
+          setNotice("Voice start canceled.");
+          setVoiceListening(false);
+          return;
+        }
       } catch (caught) {
+        if (mintAbort.signal.aborted) {
+          setNotice("Voice start canceled.");
+          setVoiceListening(false);
+          return;
+        }
         setError(formatVoiceClientError(caught));
         setVoiceListening(false);
         return;
@@ -2005,37 +2266,83 @@ export function CommandApp() {
         setVoiceListening(false);
         return;
       }
+      if (mintAbort.signal.aborted) {
+        setNotice("Voice start canceled.");
+        setVoiceListening(false);
+        return;
+      }
 
-      const session = new RealtimeVoiceSession({
-        onTranscript: (text) => {
-          void handleVoiceTranscript(text);
+      const session = new RealtimeVoiceSession(
+        {
+          onTranscript: (text) => {
+            setVoiceLiveTranscript(clampLiveTranscript(text));
+            void handleVoiceTranscript(text);
+          },
+          onPartialTranscript: (text) => {
+            setVoiceLiveTranscript(clampLiveTranscript(text));
+          },
+          onSpeechStarted: () => {
+            interruptSpeakPlayback();
+            session.interruptPlayback();
+          },
+          onError: (message) => setError(message || "Voice realtime error."),
+          onStatus: (status) => {
+            setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
+            if (status === "speaking") setSpeaking(true);
+            if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+            if (status === "idle" || status === "closed") {
+              setVoiceLevel(0);
+              if (status === "closed") setVoiceLiveTranscript("");
+            }
+          },
+          onLevel: (level) => setVoiceLevel(level),
+          onUnexpectedClose: () => {
+            listenGuardRef.current.end();
+            setVoiceListening(false);
+            setVoiceLevel(0);
+            setVoiceLiveTranscript("");
+            setSpeaking(false);
+            setError(VOICE_CONNECTION_DROPPED);
+            setNotice(VOICE_CONNECTION_DROPPED);
+            // Optional single reconnect attempt.
+            if (voiceReconnectRef.current < 1) {
+              voiceReconnectRef.current += 1;
+              setNotice("Voice connection dropped. Reconnecting once…");
+              window.setTimeout(() => {
+              void listenRef.current({ mode: "start" });
+            }, 400);
+            }
+          },
         },
-        onSpeechStarted: () => {
-          sharedAudioOutput.interrupt();
-          session.interruptPlayback();
-        },
-        onError: (message) => setError(message || "Voice realtime error."),
-        onLevel: (level) => setVoiceLevel(level),
-        onStatus: (status) => {
-          setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
-          if (status === "speaking") setSpeaking(true);
-          if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
-          if (status === "idle" || status === "closed") setVoiceLevel(0);
-        },
-      });
+        sharedAudioOutput,
+        undefined,
+        { voice: voiceChoiceRef.current },
+      );
       voiceSession.current = session;
-      await session.connect(secret.value, { captureOnly: true });
-      session.setMuted(voiceMuted);
+      await session.connect(secret.value);
+      if (mintAbort.signal.aborted) {
+        session.close();
+        voiceSession.current = null;
+        setVoiceListening(false);
+        setNotice("Voice start canceled.");
+        return;
+      }
       await session.startCapture();
       setVoiceListening(true);
-      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Press mic again to stop.`);
+      voiceReconnectRef.current = 0;
+      listenMintAbortRef.current = null;
+      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Hold Space or press mic to stop.`);
     } catch (caught) {
       stopVoiceSession();
-      setError(formatVoiceClientError(caught));
+      const mic = formatMicCaptureError(caught);
+      setError(mic || formatVoiceClientError(caught));
+    } finally {
+      // Keep guard held while listening; release when idle/stop/error.
+      if (!voiceSession.current?.isOpen) listenGuardRef.current.end();
     }
   }
-  listenRef.current = () => {
-    void listen();
+  listenRef.current = (opts) => {
+    void listen(opts);
   };
 
   function listenBrowserFallback() {
@@ -2287,6 +2594,8 @@ export function CommandApp() {
               >
                 {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
               </button>
+              <VoiceLiveTranscript text={voiceLiveTranscript} />
+              <VoicePicker value={voiceChoice} onChange={applyVoiceChoice} disabled={voiceListening} />
             </div>
 
           </div>
@@ -2625,6 +2934,21 @@ export function CommandApp() {
                     <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
+                    <ComposerLiveVoice
+                      isOverlayMicOpen={() =>
+                        Boolean(
+                          voiceListening ||
+                            voiceSession.current?.isOpen ||
+                            voiceSession.current?.isCapturing ||
+                            listenMintAbortRef.current,
+                        )
+                      }
+                      stopOverlayMic={() => void listen({ mode: "stop" })}
+                      onUserTranscript={(text) => appendLiveVoiceUser(text)}
+                      onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+                      onError={(message) => setError(message)}
+                      onNotice={(message) => setNotice(message)}
+                    />
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
@@ -2877,6 +3201,11 @@ export function CommandApp() {
               onNew={openChat}
               onSpeak={(text) => void speak(text)}
               onListen={() => void listen()}
+              onListenStop={() => void listen({ mode: "stop" })}
+              onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
+              onLiveAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+              onLiveVoiceError={(message) => setError(message)}
+              onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
               voiceMode={voiceMode}
               voiceListening={voiceListening}
@@ -4012,6 +4341,11 @@ function ChatPane({
   onNew,
   onSpeak,
   onListen,
+  onListenStop,
+  onLiveUserTranscript,
+  onLiveAssistantTranscript,
+  onLiveVoiceError,
+  onLiveVoiceNotice,
   speaking,
   voiceMode,
   voiceListening,
@@ -4075,6 +4409,11 @@ function ChatPane({
   onNew: () => void;
   onSpeak: (text: string) => void;
   onListen: () => void;
+  onListenStop?: () => void;
+  onLiveUserTranscript?: (text: string) => void;
+  onLiveAssistantTranscript?: (text: string) => void;
+  onLiveVoiceError?: (message: string) => void;
+  onLiveVoiceNotice?: (message: string) => void;
   speaking: boolean;
   voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
@@ -4407,6 +4746,17 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
               {speaking ? "Speaking" : "Speak"}
             </button>
+            <ComposerLiveVoice
+              isOverlayMicOpen={() => Boolean(voiceListening)}
+              stopOverlayMic={() => {
+                if (onListenStop) onListenStop();
+                else onListen();
+              }}
+              onUserTranscript={(text) => onLiveUserTranscript?.(text)}
+              onAssistantTranscript={(text) => onLiveAssistantTranscript?.(text)}
+              onError={(message) => onLiveVoiceError?.(message)}
+              onNotice={(message) => onLiveVoiceNotice?.(message)}
+            />
             <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
         </form>

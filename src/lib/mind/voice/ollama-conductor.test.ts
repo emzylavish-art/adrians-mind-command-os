@@ -44,4 +44,17 @@ describe("ollama conductor", () => {
       assert.equal(result.error, OLLAMA_UNREACHABLE);
     }
   });
+  it("rejects a remote Ollama host with visible text (SSRF guard)", async () => {
+    let called = false;
+    const result = await probeOllamaConductor({
+      baseUrl: "http://169.254.169.254/",
+      fetchImpl: async () => {
+        called = true;
+        return new Response("{}", { status: 200 });
+      },
+    });
+    assert.equal(called, false);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /not allowed|localhost/i);
+  });
 });

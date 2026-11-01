@@ -67,4 +67,23 @@ describe("RealtimeVoiceSession", () => {
     assert.ok(socket.sent.filter((line: string) => line.includes("response.cancel")).length >= 1);
     session.close();
   });
+
+  it("session.update uses allowlisted voice (corrupt falls back to eve)", async () => {
+    let created: FakeSocket | undefined;
+    const session = new RealtimeVoiceSession(
+      {},
+      new SharedAudioOutput(),
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created;
+      },
+      { voice: "not-a-real-voice" },
+    );
+    await session.connect("ephemeral-test");
+    const update = created!.sent.find((line) => line.includes("session.update"));
+    assert.ok(update);
+    assert.ok(update!.includes('"voice":"eve"'), update);
+    session.close();
+  });
 });
