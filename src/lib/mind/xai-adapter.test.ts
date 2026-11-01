@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { callXaiChat, readXaiApiKey } from "./xai-adapter.ts";
+import { applyXaiInferenceSecrets, callXaiChat, readXaiApiKey, readXaiInferenceSecretsFile } from "./xai-adapter.ts";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 describe("xai adapter", () => {
   it("returns unavailable missing_key with no fabricated reply when XAI_API_KEY is unset", async () => {
@@ -46,5 +49,29 @@ describe("xai adapter", () => {
     assert.equal(result.status, 400);
     assert.equal(result.requestId, "req-test");
     assert.match(result.error, /Nothing was persisted/);
+  });
+});
+
+describe("xai secrets file", () => {
+  it("loads export XAI_API_KEY from a secrets file into env when unset", () => {
+    const dir = mkdtempSync(join(tmpdir(), "xai-sec-"));
+    const path = join(dir, "xai_inference.env");
+    try {
+      writeFileSync(path, "export XAI_API_KEY=xai-test-from-file\n");
+      const env: Record<string, string | undefined> = {};
+      assert.equal(applyXaiInferenceSecrets(env, path), true);
+      assert.equal(env.XAI_API_KEY, "xai-test-from-file");
+      assert.equal(readXaiInferenceSecretsFile(path), "xai-test-from-file");
+      const keyed = readXaiApiKey(env);
+      assert.equal(keyed.ok, true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not invent a key when the secrets file is absent", () => {
+    const env: Record<string, string | undefined> = {};
+    assert.equal(applyXaiInferenceSecrets(env, join(tmpdir(), "missing-xai-inference.env")), false);
+    assert.equal(readXaiApiKey(env).ok, false);
   });
 });

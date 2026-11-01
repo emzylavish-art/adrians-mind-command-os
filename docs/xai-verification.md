@@ -2,32 +2,50 @@
 
 Date: 2026-11-01 (Africa/Lagos, UTC+1)
 Branch: `xai-verification`
+Stop point: **complete**
 
-## Adapter
+## Key creation and storage
 
-- Found existing xAI chat path in `src/lib/mind/relay.ts` and `src/lib/mind/turn.server.ts` (`https://api.x.ai/v1/chat/completions`, `XAI_API_KEY`).
-- Added minimal shared adapter: `src/lib/mind/xai-adapter.ts` (missing-key → `unavailable`, never fabricates).
-- Orchestrator/PGLite persistence path: `applyAgentTurn` → `writeSnapshot` / `readSnapshot` (`src/lib/mind/store.ts`) on file PGLite.
+- Minted via Management API `POST /auth/teams/{teamId}/api-keys` using `XAI_MANAGEMENT_KEY`.
+- Team ID: `c5078e86-a42f-4f3c-93d9-be513103966b`
+- Key id: `0922b6a4-e716-4e29-9b40-a1b9ee217964`
+- Name: `Adrian's Mind inference`
+- Redacted: `xai-...IA44`
+- ACLs: `api-key:endpoint:chat`, `api-key:endpoint:models`, `api-key:model:*` (inference/chat + models list only; no image/voice/etc.)
+- Propagation: all listed clusters `true`
+- **Stored at (not in git):** `/home/box/.secrets/xai_inference.env` as `export XAI_API_KEY=…` (dir `0700`, file `0600`)
+- Meta (no secret): `/home/box/.secrets/xai_inference_meta.json`
+- **Loaded by:** `applyXaiInferenceSecrets()` in `src/lib/mind/xai-adapter.ts` (secrets file is authoritative when present). Wired from `turn.server.ts`, `server.ts`, and `agent-run.server.ts`. Template: `.env.example` (placeholder only).
 
-## Live call (exactly one)
+## Adapter / persistence path
 
-- Models list (`GET /v1/models`) and one chat completion were attempted with the environment `XAI_API_KEY` present (`xai-` prefix, length 90).
-- API response: HTTP 400 `invalid-argument` / "Incorrect API key provided."
-- No retry after the API error. No response text, request id, or token usage available.
-- Model requested for the chat probe: `grok-4-fast-non-reasoning` (key rejected before model execution mattered). Code default remains `grok-4.5`.
-- Script for a future opted-in call: `MIND_LIVE_XAI=1 node --experimental-strip-types scripts/verify-xai.mjs`
+- Adapter: `src/lib/mind/xai-adapter.ts` (+ existing `relay.ts` / `turn.server.ts`)
+- Persist: `applyAgentTurn` → `writeSnapshot` / `readSnapshot` (`store.ts`) on file PGLite
+- Script: `MIND_LIVE_XAI=1 node --experimental-strip-types scripts/verify-xai.mjs`
+
+## Live call (exactly one chat completion)
+
+- Models listed first (14); chosen `grok-4.5`
+- Response text: `VERIFY-OK`
+- Latency: `1146` ms
+- Usage: prompt_tokens `501`, completion_tokens `3`
+- Request id: `8311fb70-341a-9631-9fa0-ed0521e6f6b5`
 
 ## Persistence read-back
 
-- Live reply was not persisted (API error → nothing stored as a model reply).
-- Local PGLite round-trip via the verification script confirmed byte-for-byte match for a fixture string (`VERIFY-OK-LOCAL`) using sha256 + length.
+- Byte-for-byte match: **true**
+- sha256: `7d18b48ff73e9b7672256fc0fdb82543568351810874ea4fbe49fae8cc0d061e`
+- length: `9`
 
 ## Missing-key path
 
-- `env` without `XAI_API_KEY` (or empty) returns `state: unavailable`, `reason: missing_key`.
-- No network fetch, no fabricated text, and `shouldStoreReply` stays false.
+- Isolated env + absent secrets path → `state: unavailable`, `reason: missing_key`
+- No network fetch, no fabricated text, nothing persisted as a model reply
+
+## Earlier stop (superseded)
+
+- First attempt used the box `XAI_API_KEY` which matched the management key and was rejected by the inference API (`400 incorrect API key`). That was the previous stop point before minting this inference key.
 
 ## Locks
 
-- `/workspace/locks` existed with `rea-feature-hunter.lock` (paths under `rea-captures/` and planned `docs/rea/` only). No lock on xAI verification files.
-- No `locks` directory inside the repo.
+- `/workspace/locks` had unrelated bots (`error-banners` released, `voice-wiring` on other paths). No lock on xAI verification files. No repo `locks/` dir.

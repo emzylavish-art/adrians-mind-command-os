@@ -1,8 +1,13 @@
-/** Minimal xAI chat adapter. Never fabricates a model reply. */
+/** Minimal xAI chat adapter. Never fabricates a model reply. Never logs key values. */
+
+import { existsSync, readFileSync } from "node:fs";
 
 export const XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions";
 export const XAI_MODELS_URL = "https://api.x.ai/v1/models";
 export const DEFAULT_XAI_MODEL = "grok-4.5";
+
+/** Box-local secrets file (gitignored / outside the repo). Same pattern as voice. */
+export const XAI_INFERENCE_SECRETS_PATH = "/home/box/.secrets/xai_inference.env";
 
 export type XaiUnavailable = {
   ok: false;
@@ -30,22 +35,57 @@ export type XaiOk = {
 
 export type XaiResult = XaiOk | XaiUnavailable;
 
+function missingKey(): XaiUnavailable {
+  return {
+    ok: false,
+    state: "unavailable",
+    reason: "missing_key",
+    error: "XAI_API_KEY is missing. Grok is unavailable. Nothing was sent and nothing was persisted as a model reply.",
+    status: null,
+    requestId: null,
+    latencyMs: 0,
+    text: "",
+    model: null,
+    usage: null,
+  };
+}
+
+/** Read `export XAI_API_KEY=...` or `XAI_API_KEY=...` from the box secrets file. */
+export function readXaiInferenceSecretsFile(path: string = XAI_INFERENCE_SECRETS_PATH): string | undefined {
+  if (!existsSync(path)) return undefined;
+  const body = readFileSync(path, "utf8");
+  for (const line of body.split(/\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^(?:export\s+)?XAI_API_KEY=(.*)$/);
+    if (!match) continue;
+    let value = match[1]!.trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value || undefined;
+  }
+  return undefined;
+}
+
+/**
+ * If `XAI_API_KEY` is unset, load it from the box secrets file into `env` (default: process.env).
+ * Returns whether a non-empty key is available afterward. Never prints the value.
+ */
+export function applyXaiInferenceSecrets(env: Record<string, string | undefined> = process.env, path: string = XAI_INFERENCE_SECRETS_PATH): boolean {
+  // Box secrets file is authoritative for Mind inference when present (avoids a stale
+  // process env key shadowing the minted inference key). Never logs the value.
+  const fromFile = readXaiInferenceSecretsFile(path);
+  if (fromFile) {
+    env.XAI_API_KEY = fromFile;
+    return true;
+  }
+  return Boolean(env.XAI_API_KEY?.trim());
+}
+
 export function readXaiApiKey(env: Record<string, string | undefined> = process.env): { ok: true; key: string } | XaiUnavailable {
   const key = env.XAI_API_KEY?.trim() ?? "";
-  if (!key) {
-    return {
-      ok: false,
-      state: "unavailable",
-      reason: "missing_key",
-      error: "XAI_API_KEY is missing. Grok is unavailable. Nothing was sent and nothing was persisted as a model reply.",
-      status: null,
-      requestId: null,
-      latencyMs: 0,
-      text: "",
-      model: null,
-      usage: null,
-    };
-  }
+  if (!key) return missingKey();
   return { ok: true, key };
 }
 
