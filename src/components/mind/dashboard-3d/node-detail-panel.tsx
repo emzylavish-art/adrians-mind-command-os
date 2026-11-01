@@ -56,7 +56,7 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
         <span className="dash3d-muted"> — {detail.reason || NO_SOURCE}</span>
       </p>
       <p className="dash3d-mono dash3d-muted" style={{ marginTop: "0.75rem" }}>
-        <Field label="lane" value={detail.laneName ? `${detail.laneName}${detail.laneHealth ? ` · ${detail.laneHealth}` : ""}` : null} />
+        <Field label="lane health" value={detail.laneHealthLine} />
         <Field label="lock" value={detail.lockFile} />
         <Field label="status" value={detail.lockStatus} />
         <Field label="claimed_at" value={detail.claimedAt ? formatWat(detail.claimedAt) : null} />
@@ -174,6 +174,8 @@ export function NodeDetailPanel({
   status,
   notionNeighbors,
   portraitSrc,
+  nhopDepth = 0,
+  onNhopDepth,
 }: {
   bot: BotNode | null;
   notionPage: NotionSnapPage | null;
@@ -183,14 +185,70 @@ export function NodeDetailPanel({
   status?: DashboardStatus | null;
   notionNeighbors?: NotionSnapPage[];
   portraitSrc?: string | null;
+  /** Gap#55: controlled local-graph depth (0 = expand all). */
+  nhopDepth?: number;
+  onNhopDepth?: (depth: number) => void;
 }) {
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const openPanel = Boolean(open && (bot || notionPage));
+
   useEffect(() => {
     if (!openPanel) return;
-    // Gap#46: move focus into the dialog when it opens (close is always present).
+    // Gap#46/#54: remember opener and move focus into the dialog.
+    const prev = document.activeElement;
+    if (prev instanceof HTMLElement && !panelRef.current?.contains(prev)) {
+      restoreFocusRef.current = prev;
+    }
     closeBtnRef.current?.focus();
   }, [openPanel, bot?.id, notionPage?.id]);
+
+  useEffect(() => {
+    if (!openPanel) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const focusables = (): HTMLElement[] =>
+      Array.from(
+        panel.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((node): node is HTMLElement => {
+        if (!(node instanceof HTMLElement)) return false;
+        return node.offsetParent !== null || node === closeBtnRef.current;
+      });
+
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const restore = restoreFocusRef.current;
+        onClose();
+        // Restore after close paints (Gap#54).
+        queueMicrotask(() => restore?.focus?.());
+        return;
+      }
+      if (ev.key !== "Tab") return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0]!;
+      const last = list[list.length - 1]!;
+      const active = document.activeElement as HTMLElement | null;
+      if (ev.shiftKey) {
+        if (active === first || !panel.contains(active)) {
+          ev.preventDefault();
+          last.focus();
+        }
+      } else if (active === last) {
+        ev.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [openPanel, onClose]);
 
   const detail =
     bot && status
@@ -205,8 +263,48 @@ export function NodeDetailPanel({
         })
       : null;
 
+  const depthValue = Number.isFinite(nhopDepth) ? Math.max(0, Math.min(3, Math.floor(nhopDepth))) : 0;
+
+  const nhopControls =
+    bot ? (
+      <div className="dash3d-nhop" data-testid="nhop-controls">
+        <label className="dash3d-muted" style={{ fontSize: "0.68rem" }}>
+          Local graph depth
+          <input
+            type="range"
+            min={0}
+            max={3}
+            step={1}
+            value={depthValue}
+            data-testid="nhop-depth"
+            onChange={(e) => {
+              const depth = Number(e.target.value) || 0;
+              onNhopDepth?.(depth);
+              document.dispatchEvent(
+                new CustomEvent("dash3d-nhop", {
+                  detail: { botId: bot.id, depth, isolate: depth > 0 },
+                }),
+              );
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="dash3d-pill"
+          data-testid="nhop-clear"
+          onClick={() => {
+            onNhopDepth?.(0);
+            document.dispatchEvent(new CustomEvent("dash3d-nhop", { detail: { botId: null, depth: 0, isolate: false } }));
+          }}
+        >
+          Expand all
+        </button>
+      </div>
+    ) : null;
+
   return (
     <aside
+      ref={(el) => { panelRef.current = el; }}
       className={`dash3d-side dash3d-node-detail ${open && (bot || notionPage) ? "is-open" : ""}`}
       aria-hidden={!open}
       role={open && (bot || notionPage) ? "dialog" : undefined}
@@ -220,7 +318,11 @@ export function NodeDetailPanel({
           type="button"
           ref={closeBtnRef}
           className="dash3d-side-close"
-          onClick={onClose}
+          onClick={() => {
+            const restore = restoreFocusRef.current;
+            onClose();
+            queueMicrotask(() => restore?.focus?.());
+          }}
           aria-label="Close details"
         >
           ×
@@ -229,6 +331,9 @@ export function NodeDetailPanel({
         {!detail && bot ? (
           <p className="dash3d-muted">Detail data {NO_SOURCE}</p>
         ) : null}
+
+        {/* Gap#55: N-hop for every bot, not only those with a Notion page. */}
+        {bot ? nhopControls : null}
 
         {notionPage ? (
           <>
@@ -242,40 +347,6 @@ export function NodeDetailPanel({
               <Field label="edited" value={notionPage.lastEdited ? formatWat(notionPage.lastEdited) : null} />
               <Field label="id" value={notionPage.id} />
             </p>
-            
-          {bot ? (
-            <div className="dash3d-nhop" data-testid="nhop-controls">
-              <label className="dash3d-muted" style={{ fontSize: "0.68rem" }}>
-                Local graph depth
-                <input
-                  type="range"
-                  min={0}
-                  max={3}
-                  step={1}
-                  defaultValue={1}
-                  data-testid="nhop-depth"
-                  onChange={(e) => {
-                    const depth = Number(e.target.value) || 0;
-                    document.dispatchEvent(
-                      new CustomEvent("dash3d-nhop", {
-                        detail: { botId: bot.id, depth, isolate: depth > 0 },
-                      }),
-                    );
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                className="dash3d-pill"
-                data-testid="nhop-clear"
-                onClick={() =>
-                  document.dispatchEvent(new CustomEvent("dash3d-nhop", { detail: { botId: null, depth: 0, isolate: false } }))
-                }
-              >
-                Expand all
-              </button>
-            </div>
-          ) : null}
 
             <h3 style={{ marginTop: "0.75rem" }}>Linked neighbors</h3>
             <ul className="dash3d-list">

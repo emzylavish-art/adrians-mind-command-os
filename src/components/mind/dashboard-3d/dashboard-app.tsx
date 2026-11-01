@@ -39,6 +39,7 @@ export function DashboardApp() {
   const viewData = useMemo(() => pollViewData(state), [state]);
   if (viewData) dash3dStagePrimed = true;
   const [selected, setSelected] = useState<BotNode | null>(null);
+  const [nhopDepth, setNhopDepth] = useState(0);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
   const [fly, setFlyState] = useState<FlyState>(FLY_HOME);
@@ -661,6 +662,8 @@ export function DashboardApp() {
         status={viewData}
         notionNeighbors={resolveNotionNeighbors(viewData, notionPage?.id)}
         portraitSrc={selected ? portraitUrlForBot(selected.id) : null}
+        nhopDepth={nhopDepth}
+        onNhopDepth={setNhopDepth}
         onClose={() => {
           setSelected(null);
           setNotionPage(null);

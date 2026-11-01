@@ -46,6 +46,7 @@ import {
   stepRigSmooth,
   type CameraRigState,
 } from "@/lib/mind/dashboard/camera-rig";
+import { resolveFocusBotRequest } from "@/lib/mind/dashboard/focus-request";
 import {
   lineFlowPhase,
   samplePolylineTravel,
@@ -1829,26 +1830,51 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (composer?.readBuffer?.depthTexture) {
           liveBloomGuard?.setDepthTexture(composer.readBuffer.depthTexture);
         }
-        // Gap#67/#68: dim nebula behind open detail / charts; measured WCAG dim when text colour known.
+        // Gap#67/#68/#79: per-rect measured dim — detail card (4.5:1 text) vs Charts (3:1 lines + 4.5:1 ticks).
         if (liveDetailDim) {
           const vp = renderer.domElement.getBoundingClientRect();
           const detailEl = document.querySelector<HTMLElement>(".dash3d-node-detail.is-open");
           const chartEl = document.querySelector<HTMLElement>("[data-testid=charts-panel]");
-          const rects = [detailEl?.getBoundingClientRect(), chartEl?.getBoundingClientRect()].filter(
-            Boolean,
-          ) as DOMRect[];
-          liveDetailDim.setRects(rects, vp, { reducedMotion });
-          const sampleEl = detailEl ?? chartEl;
-          if (sampleEl) {
-            const cs = getComputedStyle(sampleEl);
+          const rects: DOMRect[] = [];
+          const targets: Array<{
+            textRgb: [number, number, number];
+            cardRgb?: [number, number, number];
+            cardAlpha?: number;
+            lines?: { rgb: [number, number, number] };
+          } | null> = [];
+          if (detailEl) {
+            rects.push(detailEl.getBoundingClientRect());
+            const cs = getComputedStyle(detailEl);
             const text = parseCssColor(cs.color);
             const bg = parseCssColor(cs.backgroundColor);
-            liveDetailDim.setContrastTarget(
+            targets.push(
               text ? { textRgb: text.rgb, cardRgb: bg?.rgb, cardAlpha: bg?.alpha } : null,
             );
-          } else {
-            liveDetailDim.setContrastTarget(null);
           }
+          if (chartEl) {
+            rects.push(chartEl.getBoundingClientRect());
+            const cs = getComputedStyle(chartEl);
+            const tickEl =
+              chartEl.querySelector<HTMLElement>(".dash3d-muted, .dash3d-chart-empty, text") ?? chartEl;
+            const tick = parseCssColor(getComputedStyle(tickEl).color) ?? parseCssColor(cs.color);
+            const bg = parseCssColor(cs.backgroundColor);
+            const strokeEl = chartEl.querySelector<SVGElement>("polyline[stroke], path[stroke], circle[stroke], line[stroke]");
+            const line = strokeEl
+              ? parseCssColor(strokeEl.getAttribute("stroke") || getComputedStyle(strokeEl).stroke)
+              : null;
+            targets.push(
+              tick
+                ? {
+                    textRgb: tick.rgb,
+                    cardRgb: bg?.rgb,
+                    cardAlpha: bg?.alpha,
+                    lines: line ? { rgb: line.rgb } : undefined,
+                  }
+                : null,
+            );
+          }
+          liveDetailDim.setRects(rects, vp, { reducedMotion });
+          liveDetailDim.setContrastTarget(rects.length ? targets : null);
           liveDetailDim.setHidden(document.hidden);
         }
         focusLight.tick(dt * 1000);
@@ -1940,24 +1966,30 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const onFocusBot = (ev: Event) => {
       const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
-      if (!botId) return;
-      const bot = dataRef.current.bots.find((b) => b.id === botId);
-      if (!bot) {
-        // Unknown id: clear misleading stale detail by selecting nothing useful
+      const decided = resolveFocusBotRequest(botId, dataRef.current.bots, {
+        gliding: !acceptPointerPick(rig),
+        preferRetarget: true, // Gap#10: interrupt glide; latest request wins
+      });
+      if (decided.kind === "clear") {
+        pendingFocusBotId = null;
         cbs.current.onSkyView();
         return;
       }
-      // Always update selection immediately so STAR DETAIL matches the latest request (Gap#10).
+      const bot = dataRef.current.bots.find((b) => b.id === decided.botId);
+      if (!bot) {
+        pendingFocusBotId = null;
+        cbs.current.onSkyView();
+        return;
+      }
+      // Selection tracks the latest request immediately (Star Detail must not lag the camera).
       cbs.current.onSelectBot(bot);
+      pendingFocusBotId = decided.pendingId;
+      if (!decided.startCamera) return;
       const pos =
         bot.id === "grok-build"
           ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
           : botWorldPosition(bot.id);
       const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
-      if (!acceptPointerPick(rig)) {
-        pendingFocusBotId = botId;
-        return;
-      }
       pendingFocusBotId = null;
       rig = flyTo(
         rig,

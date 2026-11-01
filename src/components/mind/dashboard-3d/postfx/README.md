@@ -195,3 +195,15 @@ document.addEventListener("visibilitychange", () => liveDetailDim?.setHidden(doc
 - Before: `lastSampleError` was only ever written on failure. After focusing one CORS-tainted Imagine portrait, every later focus (good portrait, no portrait) kept reporting the old SecurityError while the light used real pixels; a cached failure never re-surfaced once overwritten.
 - Now it describes the CURRENT focus: cleared on a real sample / no texture, re-surfaced from the per-texture cache for a known-bad portrait. Test: `atmosphere/bounce-stale-error.test.ts`.
 - Rest of the pass (resize/high-DPR bloom clamps, depth-validity, context-loss isolate+retry, health → idle on missing data, RT disposal) re-checked: no new real breakage found.
+
+## #69 Per-rect measured dim (card vs chart) + chart-line 3:1 target — wire-up for Dashboard Bot
+- #68 drove ONE strength from the worst rect, so a bright nebula behind Charts over-dimmed the Imagine scene behind the detail card. Now each rect (≤2) gets its own strength from its own measured p90; the shader takes `strength` = peak and a per-rect `rectWeight[i]` (share of peak). No measurement / no target → every rect at #67 static `DIM_MAX`, weight 1 (byte-identical to before).
+- `setContrastTarget` accepts one target (all rects, #68 behaviour) or an array index-aligned with the rects passed to `setRects`; a `null` entry keeps that rect static.
+- Chart rect: `{ textRgb: <tick label colour>, lines: { rgb: <series line colour> } }` — lines default to `WCAG_GRAPHIC_AA` (3:1), tick text stays `WCAG_TEXT_AA` (4.5:1); the rect uses whichever plan needs more dim. Junk line colour → text-only (never guessed).
+- Example: `liveDetailDim.setRects([detailEl.getBoundingClientRect(), chartEl.getBoundingClientRect()], canvasRect)` then `liveDetailDim.setContrastTarget([{ textRgb: detailText, cardRgb, cardAlpha }, { textRgb: tickText, lines: { rgb: lineRgb } }])` (colours via `parseCssColor(getComputedStyle(el)...)`).
+- `contrast.perRectPlans` / `contrast.perRectStrength` report each rect honestly; `contrast.plan` is the worst rect's plan.
+- Register tests: `postfx/detail-dim-per-rect.test.ts`, `postfx/meter-sample-age.test.ts` (plus the #68 list).
+
+## Hacker-pass notes (#69 cycle) — backdrop meter counted slow readbacks as fresh
+- Before: a measurement's age started when the async readback LANDED, so a readback stalled 1.9 s (driver stall / context trouble) counted as fresh for another 2 s — the dim acted on a backdrop up to ~4 s old, contradicting the "older than METER_MAX_AGE_MS → static" contract. `reset()` also left the previous layout's `lastError` showing.
+- Now age is measured from the sampled frame; a readback landing after max age is rejected with `lastError = "stale-readback"`; `reset()` clears `lastError`. Test: `postfx/meter-sample-age.test.ts` (fails 3/3 on the old code).
