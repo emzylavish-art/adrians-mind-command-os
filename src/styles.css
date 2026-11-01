@@ -4455,3 +4455,195 @@ html[data-theme="light"] .tool-card {
   .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.75rem !important; }
   .main-stage button.rounded-full { min-height: 2.85rem !important; padding-inline: 1.05rem !important; }
 }
+
+/* —— Evolution c59: a11y CSS-only from a11y-dead-controls.md ——
+   sidebar-plus contrast; ≥44px hit targets; coming-soon chrome; early Tab rings */
+
+/* New chat: axe color-contrast — mono high-contrast (purple stays on .logo-mark only) */
+.sidebar-plus,
+.sidebar-plus.bg-accent,
+aside .sidebar-plus,
+button.sidebar-plus {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 10px 28px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.55) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+.sidebar-plus:hover,
+.sidebar-plus.bg-accent:hover {
+  background: #ffffff !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] .sidebar-plus,
+html[data-theme="light"] .sidebar-plus.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+  border-color: rgb(9 9 11 / 0.2) !important;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+}
+
+/* Hit targets ≥44×44: Dictate, Speak, Voice/Mute/Speak-last, Alerts, Attach */
+[data-testid="composer-mic-dictate"],
+.composer-mic-dictation,
+button.composer-mic-dictation {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  width: auto !important;
+  padding-inline: 0.55rem !important;
+}
+[data-testid="composer-speak"],
+.composer-speak-pill,
+button.composer-speak-pill {
+  min-height: 2.75rem !important;
+  padding-block: 0.45rem !important;
+}
+[data-testid="open-voice-mode"],
+[data-testid="voice-mode-toggle-composer"],
+[data-testid="live-voice-bar-mute"],
+[data-testid="voice-mute"],
+button[aria-label="Speak last reply"],
+button[aria-label="Alerts"],
+button[aria-label="Mute microphone"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  flex-shrink: 0 !important;
+}
+/* Alerts was ~18px wide despite size-11 — force square hit box */
+button[aria-label="Alerts"] {
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+}
+/* Attach on mobile */
+.composer-dock button[aria-label="Attach"],
+.composer-dock button:has(> svg):not([data-testid]):not([aria-label="Alerts"]),
+form.composer-dock button.min-h-10,
+.composer-bar button[aria-label="Attach"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+.main-stage button:has(> span):is([class*="Attach"]),
+.composer-dock .flex button {
+  /* ensure attach-like icon buttons in dock row */
+}
+.composer-dock .flex.items-center.gap-2 > button,
+.composer-dock .flex.gap-2 > button,
+.floating-composer .flex.gap-2 > button {
+  min-height: 2.75rem !important;
+}
+
+/* ASK / AUTOMATIC / Memory tiles — were h33 on 390 */
+.main-stage button.min-h-16.rounded-panel,
+.main-stage .min-h-16.rounded-panel,
+.main-stage button.rounded-panel.min-h-16 {
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding: 0.55rem 0.75rem !important;
+  font-size: 0.72rem !important;
+  line-height: 1.15 !important;
+}
+
+/* /explore All filter chip width 41 → ≥44 */
+.main-stage button.min-h-11.rounded-panel,
+[data-testid="persona-directory"] button.min-h-11,
+.persona-directory button.min-h-11 {
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding-inline: 0.85rem !important;
+}
+
+/* /login Sign in / Sign up tabs min-h-10 (40) → 44 */
+[data-testid="login-password-submit"],
+.login-card button.min-h-10,
+main button.min-h-10.rounded-\[calc\(var\(--radius-panel\)-0\.15rem\)\],
+form button.min-h-10 {
+  min-height: 2.75rem !important;
+}
+/* login mode tabs specifically */
+main .rounded-panel button.min-h-10,
+[data-testid="login-error-banner"] ~ * button.min-h-10,
+form[data-testid] button.min-h-10,
+/* broader login route tabs */
+body:has([data-testid="login-password-submit"]) button.min-h-10 {
+  min-height: 2.75rem !important;
+  padding-inline: 0.9rem !important;
+}
+
+/* Coming-soon chrome — Connect Google, Generate Image/Video (+ any .service-setup) */
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon,
+button.is-coming-soon.min-h-11 {
+  position: relative !important;
+  opacity: 0.62 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1) !important;
+  pointer-events: auto !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow: none !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after,
+a.is-coming-soon::after {
+  content: "Soon" !important;
+  display: inline-flex !important;
+  align-items: center;
+  margin-left: 0.5rem;
+  font-size: 0.62rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d4d4d8 !important;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  line-height: 1.2;
+  background: rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] button.is-coming-soon::after,
+html[data-theme="light"] .service-setup.is-coming-soon::after {
+  color: #3f3f46 !important;
+  background: rgb(255 255 255 / 0.7);
+  border-color: rgb(9 9 11 / 0.18);
+}
+
+/* Early Tab focus-visible on /login, /memory, /explore */
+body:has([data-testid="login-password-submit"]) :focus-visible,
+body:has([data-testid="login-oauth-google"]) :focus-visible,
+[data-testid="login-password-submit"]:focus-visible,
+[data-testid="login-oauth-google"]:focus-visible,
+[data-testid="login-oauth-github"]:focus-visible,
+[data-testid="login-back-home"]:focus-visible,
+main:has([href="/memory"]) :focus-visible,
+a[href="/memory"]:focus-visible,
+body:has([data-testid="persona-directory"]) :focus-visible,
+.persona-directory :focus-visible,
+.main-stage:has(.persona-directory) button:focus-visible,
+.main-stage:has(.persona-directory) a:focus-visible,
+.main-stage:has(.persona-directory) input:focus-visible {
+  outline: none !important;
+  box-shadow:
+    0 0 0 2px #0a0a0b,
+    0 0 0 4px #f4f4f5,
+    0 0 22px rgb(255 255 255 / 0.18) !important;
+}
+html[data-theme="light"] body:has([data-testid="login-password-submit"]) :focus-visible,
+html[data-theme="light"] .persona-directory :focus-visible {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #18181b !important;
+}
+/* Ensure first interactive controls can show ring (skip-link / tabs) */
+body:has([data-testid="login-password-submit"]) a:focus-visible,
+body:has([data-testid="login-password-submit"]) button:focus-visible,
+body:has([data-testid="login-password-submit"]) input:focus-visible {
+  outline-offset: 2px;
+}
