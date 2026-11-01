@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: **405ef30** (hacker-pass + Light/Painter wire). Next: Camera/city + Projects.
+Last release: painter c2 lore plaques (pending land). Prior: **405ef30** (hacker-pass + Light/Painter wire). Next after land: Camera/city + Projects.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -14,8 +14,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | # | Upgrade | Status | Notes |
 |---|---------|--------|-------|
 | 0 | **Universe** (+ Visual Fleet stars + extension folders) — painterly cosmos, constellations, Notion galaxy snapshot, weather, fly-to camera rig foundation | **done** | Landed on dashboard-3d; light/painter/motion fill lane folders |
-| 0b | **Light — health-tinted lights + bloom/color-grade** | **done** | Cosmos Light Bot `dashboard-3d-visual-light`; awaits `universe-scene` hook |
-| 0c | **Painter kit (shaders/materials)** — brush/watercolor ShaderMaterials, star+building surfaces, paper grain, procedural nebula, painterly post-pass + `createPainterlyKit` | **done** | Cosmos Painter Bot; wire-up TODO in `materials/WIRING_TODO.md` |
+| 0b | **Light — health-tinted lights + bloom/color-grade** | **done** | Cosmos Light Bot; wired in 405ef30 |
+| 0c | **Painter kit (shaders/materials)** — brush/watercolor ShaderMaterials, star+building surfaces, paper grain, procedural nebula, painterly post-pass + `createPainterlyKit` | **done** | Cosmos Painter Bot; wired in 405ef30 |
+| 0d | **Painter — constellation lore plaques** — watercolor plaque ShaderMaterial + procedural parchment | **done** | Cosmos Painter Bot; `createLorePlaqueMaterial` + `makeParchmentRGBA`; sky dispose leak + mediump paintWrap hacker fixes |
 | 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | queued | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; use `createBuildingBrushMaterial`; shots flyover-high/city/interior |
 | 2 | **Click-and-zoom** — star click eases camera in + detail; wheel/pinch dolly; empty-space/zoom-out → sky; reuse camera FSM | queued | Shots zoom-star.png, zoom-sky.png |
 | 3 | **Animation pass** — living motion: orbiting, drifting, pulsing, transition polish | queued | After click-zoom; tickPainterlyKit time uniforms |
@@ -35,8 +36,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
-- **Painter — constellation lore plaques** — watercolor plaque ShaderMaterial + procedural parchment; readable mid-dolly with last 3 lock notes + health reason (next painter cycle).
-- **Painter kit wire-up** — Dashboard Bot imports `createPainterlyKit` into `universe-scene.tsx`; replace inlined PainterlyShader / canvas helpers.
+- **Painter — ink-wash constellation edge ribbons** — ShaderMaterial/Line2 ribbons replacing LineBasic edges; health-tinted wash; mediump-safe (next painter cycle).
+- **Painter — lore plaque text atlas** — procedural canvas glyph atlas for lock-note body text on plaques (no external fonts/assets).
 - **Depth-aware god-ray shafts** (next light-lane) — soft volumetric shafts from orchestrator sun, intensity tied to healthy count; honest off when WebGL/reduced-motion.
 - **Health-reactive exposure ride** — ACES exposure + bloom threshold ease over 400ms when weather.tone changes (pairs with color-grade).
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
