@@ -107,9 +107,11 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 50 | **Gap#37 landscape detail unbounded** — max-height 100dvh + internal scroll for short viewports | **done** | c44 — max-height 100dvh + overscroll contain · was queued REA m844x390 |
 | 51 | **Gap#38 touch-action / overscroll** — canvas touch-action:none; detail overscroll-behavior:contain | **done** | c44 — canvas touch-action:none; detail overscroll-behavior · was queued REA pinch/swipe |
 | 52 | **Gap#42 live Star Detail** — refresh selected bot from latest status; close if bot gone | **done** | c44 — selected sync from status; close if bot gone · was queued REA Conductor stale |
+| 53 | **Gap#44 Notion plain text in detail** — strip markup escapes in titles/excerpts (reuse Gap#22 helpers) | **done** | c44 — sanitizeNotionPlainText in graph + node-detail · was queued REA mobile Notion page |
 | 54 | **Gap#43 art cache + lazy dive assets** — long-cache hashed art; defer building/backdrop until Dive | queued | REA cold 3.1MB |
 | 55 | **Gap#41 skybar CLS / long tasks** — more reserved skeletons; defer constellation work off first paint | queued | REA CLS 0.058 |
-| 53 | **Gap#44 Notion plain text in detail** — strip markup escapes in titles/excerpts (reuse Gap#22 helpers) | **done** | c44 — sanitizeNotionPlainText in graph + node-detail · was queued REA mobile Notion page |
+| 56 | **Light — focus key/rim light + depth focus falloff (wire)** — `createFocusLight` (atmosphere/) + `createFocusDepthPass` (postfx/, after god-rays, before bloom) driven by `rig.subjectId` focused mesh + bot health | **done** | c44 — wired in universe-scene (after god-rays, before bloom; real health; DPR RT; dispose on unmount/context loss); Light lane 53f5ad1 was #49 |
+| 57 | **Light — focus-aware bloom guard** — while a node is focused, depth-mask bloom so Imagine portrait/card highlights inside the focus band don't haze over detail; background keeps tone bloom | queued | Light lane was #50; builds on #56 focus depth; reduced-motion static |
 
 
 

@@ -13,12 +13,14 @@ import type { TunedBloomHandle } from "./bloom-tuning.ts";
 import type { ColorGradeHandle } from "./color-grade.ts";
 import type { GodRayHandle } from "./god-rays.ts";
 import type { ExposureRideHandle } from "./exposure-ride.ts";
+import type { FocusDepthHandle } from "./focus-depth.ts";
 
 export type PostfxBundle = {
   bloom?: TunedBloomHandle | null;
   grade?: ColorGradeHandle | null;
   godRays?: GodRayHandle | null;
   exposure?: ExposureRideHandle | null;
+  focusDepth?: FocusDepthHandle | null;
 };
 
 export type PostfxRebuildFactory = () => PostfxBundle;
@@ -57,6 +59,7 @@ function disposeBundle(bundle: PostfxBundle): void {
   bundle.grade?.dispose();
   bundle.godRays?.dispose();
   bundle.exposure?.dispose();
+  bundle.focusDepth?.dispose();
 }
 
 /**
@@ -71,6 +74,7 @@ export function createContextLossRecovery(opts: CreateContextLossOpts = {}): Con
     grade: opts.initial?.grade ?? null,
     godRays: opts.initial?.godRays ?? null,
     exposure: opts.initial?.exposure ?? null,
+    focusDepth: opts.initial?.focusDepth ?? null,
   };
 
   const onLost = (ev?: Event) => {
@@ -82,14 +86,14 @@ export function createContextLossRecovery(opts: CreateContextLossOpts = {}): Con
     if (lost) return;
     lost = true;
     disposeBundle(bundle);
-    bundle = { bloom: null, grade: null, godRays: null, exposure: null };
+    bundle = { bloom: null, grade: null, godRays: null, exposure: null, focusDepth: null };
   };
 
   const onRestored = () => {
     if (disposed) return;
     // Always dispose any stale refs before rebuild (idempotent).
     disposeBundle(bundle);
-    bundle = { bloom: null, grade: null, godRays: null, exposure: null };
+    bundle = { bloom: null, grade: null, godRays: null, exposure: null, focusDepth: null };
     if (!factory) {
       lost = false;
       return;
@@ -100,6 +104,7 @@ export function createContextLossRecovery(opts: CreateContextLossOpts = {}): Con
       grade: next.grade ?? null,
       godRays: next.godRays ?? null,
       exposure: next.exposure ?? null,
+      focusDepth: next.focusDepth ?? null,
     };
     lost = false;
   };
@@ -135,7 +140,7 @@ export function createContextLossRecovery(opts: CreateContextLossOpts = {}): Con
         canvas.removeEventListener("webglcontextrestored", onRestored as EventListener, false);
       }
       disposeBundle(bundle);
-      bundle = { bloom: null, grade: null, godRays: null, exposure: null };
+      bundle = { bloom: null, grade: null, godRays: null, exposure: null, focusDepth: null };
       factory = null;
       lost = false;
     },
