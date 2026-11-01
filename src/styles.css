@@ -6574,3 +6574,34 @@ aside button span.truncate,
   min-width: 2.75rem !important;
   min-height: 2.75rem !important;
 }
+
+/* —— Evolution c88: harden aside/list truncate; model stub still TSX —— */
+aside.rail span.truncate,
+aside span.truncate,
+aside button .truncate,
+aside .max-w-\[14rem\].truncate {
+  display: inline-block !important;
+  max-width: 14rem !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: bottom;
+}
+/* Make stub model look like a chip but not fake interactivity beyond CSS */
+.composer-bar__model[data-testid="composer-bar-model"]:not(button) {
+  pointer-events: none; /* honest: stub is non-interactive until TSX wires it */
+  opacity: 0.85;
+}
+
+/* Reassert guards */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
