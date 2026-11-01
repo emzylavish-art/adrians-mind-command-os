@@ -1675,3 +1675,67 @@ aside span.bg-gradient-to-br.from-info.to-accent,
   color: #fff !important;
   box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
 }
+
+/* —— Cycle 19: ServiceBoard / Connected card icon wells + status chrome (mono) —— */
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article.rounded-panel.border.border-line.bg-surface {
+  position: relative;
+  padding: 0.95rem 0.95rem 0.85rem !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    var(--color-surface) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 28px rgb(0 0 0 / 0.28);
+  transition: border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article.rounded-panel.border.border-line.bg-surface:hover {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 16px 36px rgb(0 0 0 / 0.38);
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article > .flex.items-center.justify-between {
+  gap: 0.75rem;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article h3.font-semibold {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  letter-spacing: -0.015em;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article h3.font-semibold::before {
+  content: "";
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+  flex: 0 0 auto;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.04)),
+    #18181b;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 6px 14px rgb(0 0 0 / 0.35);
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article span.rounded-full.border.border-line.px-2 {
+  background: rgb(255 255 255 / 0.06);
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: #e4e4e7 !important;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+.grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article > button.mt-3 {
+  width: 100%;
+  justify-content: center;
+  background: rgb(255 255 255 / 0.03);
+}
+html[data-theme="light"] .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article.rounded-panel.border.border-line.bg-surface {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article h3.font-semibold::before {
+  background: linear-gradient(145deg, #f4f4f5, #e4e4e7);
+  border-color: rgb(9 9 11 / 0.12);
+  box-shadow: inset 0 1px 0 #fff, 0 4px 10px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] .grid.gap-2.sm\:grid-cols-2.xl\:grid-cols-3 > article span.rounded-full.border.border-line.px-2 {
+  background: rgb(9 9 11 / 0.05);
+  color: #3f3f46 !important;
+}
