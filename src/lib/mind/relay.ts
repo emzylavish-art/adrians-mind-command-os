@@ -1,4 +1,5 @@
 import { createSseFeed, pushSse, type ModelUsage } from "./stream.ts";
+import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
 import type { ChatContent } from "./media/types.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
@@ -67,7 +68,7 @@ export function relayModelStream(input: {
   /** Optional metadata echoed on the done event (e.g. selected/resolved tier). */
   meta?: Record<string, unknown>;
 }): Response {
-  const linked = combineAbort(input.requestSignal, input.timeoutMs ?? 25_000);
+  const linked = combineAbort(input.requestSignal, input.timeoutMs ?? chatTurnTimeoutMs());
   const encoder = new TextEncoder();
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let closed = false;
@@ -104,7 +105,7 @@ export function relayModelStream(input: {
           } catch {
             /* the provider reader is already closed */
           }
-          send("error", { error: "Grok did not answer in time. Nothing was saved as a success." });
+          send("error", { error: CHAT_TIMEOUT_REPLY });
           finish();
           return;
         }
@@ -182,7 +183,7 @@ export function relayModelStream(input: {
       } catch {
         if (linked.signal.aborted) await stopped();
         else {
-          send("error", { error: "Grok did not answer in time. Nothing was saved as a success." });
+          send("error", { error: CHAT_TIMEOUT_REPLY });
           finish();
         }
       } finally {

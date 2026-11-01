@@ -10,6 +10,7 @@ import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./mod
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, selectProvider } from "./provider-call";
 import { buildRelayModelBody, relayModelStream } from "./relay";
+import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
 import { readModelPayload } from "./stream";
 
@@ -127,7 +128,7 @@ export async function completeModelReply(prepared: {
       ),
     });
   } catch {
-    return { ok: false as const, error: "Grok did not answer in time. Nothing was saved as a success." };
+    return { ok: false as const, error: CHAT_TIMEOUT_REPLY };
   }
   if (!res.ok) return { ok: false as const, error: `Grok returned ${res.status}. Nothing was saved as a success.` };
   const parsed = readModelPayload(await res.text());
@@ -244,6 +245,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     messages: prepared.assembled.messages,
     usedIds: prepared.assembled.usedIds,
     requestSignal: request.signal,
+    timeoutMs: chatTurnTimeoutMs(),
     params: {
       temperature: prepared.modelTier.params.temperature,
       max_tokens: prepared.modelTier.params.max_tokens,

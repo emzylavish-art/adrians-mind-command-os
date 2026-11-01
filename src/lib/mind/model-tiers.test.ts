@@ -104,3 +104,18 @@ describe("Auto routing", () => {
     assert.equal(custom.has("grok-4.5"), false);
   });
 });
+
+
+describe("Auto heavyHints narrowness", () => {
+  it("keeps everyday tradeoffs / architecture prompts on Expert", () => {
+    assert.equal(routeAutoTier("Please analyze the design tradeoffs for this API.").tier, "Expert");
+    assert.equal(routeAutoTier("Explain the architecture of a pier booking flow.").tier, "Expert");
+    assert.equal(routeAutoTier("Compare the trade-offs of caching strategies briefly.").tier, "Expert");
+  });
+
+  it("still routes real deep-reasoning or long prompts to Heavy", () => {
+    assert.equal(routeAutoTier("Please prove this rigorously with a formal proof of correctness.").tier, "Heavy");
+    assert.equal(routeAutoTier("Provide a deep analysis with multi-step reasoning.").tier, "Heavy");
+    assert.equal(routeAutoTier("x".repeat(1800)).tier, "Heavy");
+  });
+});

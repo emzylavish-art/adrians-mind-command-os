@@ -1,6 +1,10 @@
 import { pullMindEvents, type ModelUsage } from "./stream.ts";
 
+import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
+import { CHAT_TIMEOUT_REPLY, isTimeoutAbort } from "./turn-timeouts.ts";
+
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
+export { CHAT_TIMEOUT_REPLY };
 
 export type LiveTurnResult =
   | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string }
@@ -18,7 +22,9 @@ function readOrAbort(reader: ReadableStreamDefaultReader<Uint8Array>, signal: Ab
       if (settled) return;
       settled = true;
       signal.removeEventListener("abort", onAbort);
-      reject(new DOMException("The operation was aborted", "AbortError"));
+      const reason = signal.reason;
+      if (reason instanceof DOMException) reject(reason);
+      else reject(new DOMException("The operation was aborted", "AbortError"));
     };
     signal.addEventListener("abort", onAbort, { once: true });
     reader.read().then(
@@ -56,10 +62,13 @@ export async function consumeMindTurn(input: {
       signal: input.signal,
       credentials: "same-origin",
     });
-  } catch {
+  } catch (caught) {
+    if (isTimeoutAbort(input.signal, caught) || (input.signal.aborted && isTimeoutAbort(input.signal, input.signal.reason))) {
+      return { ok: false, error: CHAT_TIMEOUT_REPLY };
+    }
     return {
       ok: false,
-      error: input.signal.aborted ? STOPPED_REPLY : "Grok did not answer in time. Nothing was saved as a success.",
+      error: input.signal.aborted ? STOPPED_REPLY : CHAT_TIMEOUT_REPLY,
     };
   }
   const type = response.headers.get("content-type") ?? "";
@@ -89,7 +98,15 @@ export async function consumeMindTurn(input: {
       step = await readOrAbort(reader, input.signal);
     } catch {
       await reader.cancel().catch(() => undefined);
-      return { ok: false, error: input.signal.aborted ? STOPPED_REPLY : "Grok did not answer in time. Nothing was saved as a success." };
+      return {
+        ok: false,
+        error:
+          isTimeoutAbort(input.signal, input.signal.reason) || isTimeoutAbort(input.signal, undefined)
+            ? CHAT_TIMEOUT_REPLY
+            : input.signal.aborted
+              ? STOPPED_REPLY
+              : CHAT_TIMEOUT_REPLY,
+      };
     }
     if (input.signal.aborted) return stop();
     if (step.done) break;
@@ -115,6 +132,8 @@ export async function consumeMindTurn(input: {
           resolvedTier: event.resolvedTier,
           tierReason: event.tierReason,
         };
+        const outcome = outcomeFromDoneEvent(event);
+        if (outcome) rememberTierOutcome(outcome);
       }
     }
   }
