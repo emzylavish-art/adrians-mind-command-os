@@ -6,6 +6,7 @@ export * from "./mic-stream.ts";
 export * from "./playback.ts";
 export * from "./speaker-gain.ts";
 export * from "./attachments.ts";
+export * from "./bar-state.ts";
 export * from "./mic-probe.ts";
 export * from "./live-session.ts";
 export * from "./use-live-voice-session.ts";

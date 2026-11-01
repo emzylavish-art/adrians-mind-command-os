@@ -85,6 +85,13 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     void ensureSession().pressMic();
   }, [ensureSession]);
 
+  /** @deprecated alias — first tap starts, later taps mute */
+  const toggle = pressMic;
+
+  const start = useCallback(() => {
+    void ensureSession().start();
+  }, [ensureSession]);
+
   const end = useCallback(() => {
     sessionRef.current?.end("Live voice ended.");
     setSpeakerMuted(false);
@@ -161,6 +168,8 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     error: state.error,
     modeBadge: state.modeBadge,
     pressMic,
+    toggle,
+    start,
     end,
     toggleMute,
     toggleSpeaker,

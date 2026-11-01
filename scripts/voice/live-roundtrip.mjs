@@ -296,6 +296,74 @@ async function main() {
     });
   });
 
+  // Probe whether realtime accepts conversation.item.create with input_image.
+  // Documented: accepted but ignored on grok-voice; record observed behavior.
+  console.log("probing realtime input_image support…");
+  metrics.imageInput = { attempted: true, nativeSupported: false, note: "", events: [] };
+  try {
+    await new Promise((resolve, reject) => {
+      const ws = new WebSocket(ENDPOINT, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      const timer = setTimeout(() => {
+        try { ws.close(); } catch {}
+        reject(new Error("image-input probe timed out"));
+      }, 20_000);
+      const tinyJpeg =
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGcP//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAQUCf//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQMBAT8Bf//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQIBAT8Bf//Z";
+      ws.on("open", () => {
+        ws.send(JSON.stringify({
+          type: "session.update",
+          session: { voice: "eve", turn_detection: { type: "server_vad" }, instructions: "Say only: image probe ok." },
+        }));
+        ws.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [
+              { type: "input_image", image_url: `data:image/jpeg;base64,${tinyJpeg}` },
+              { type: "input_text", text: "What do you see in this image? Reply briefly." },
+            ],
+          },
+        }));
+        ws.send(JSON.stringify({ type: "response.create" }));
+      });
+      ws.on("message", (data) => {
+        let event;
+        try { event = JSON.parse(String(data)); } catch { return; }
+        const type = event.type || "";
+        if (type.includes("error") || type === "error" || type === "response.done" || type === "response.output_audio.delta" || type.includes("transcript")) {
+          metrics.imageInput.events.push(type);
+        }
+        if (type === "error" || type === "response.error") {
+          metrics.imageInput.note = redact(event.error?.message || event.message || "error");
+          metrics.imageInput.nativeSupported = false;
+        }
+        if (type === "response.output_audio.delta") {
+          metrics.imageInput.gotAudio = true;
+        }
+        if (type === "response.done") {
+          // Audio without a clear image understanding still means the text part may have driven the reply.
+          metrics.imageInput.nativeSupported = false;
+          metrics.imageInput.note =
+            metrics.imageInput.note ||
+            "Realtime accepted the event envelope but native image understanding is unsupported; UI uses chat/vision fallback.";
+          clearTimeout(timer);
+          try { ws.close(); } catch {}
+          resolve();
+        }
+      });
+      ws.on("error", (err) => {
+        clearTimeout(timer);
+        reject(new Error(redact(err.message || String(err))));
+      });
+    });
+  } catch (err) {
+    metrics.imageInput.note = redact(err.message || String(err));
+    metrics.imageInput.nativeSupported = false;
+  }
+
   mkdirSync(OUT_DIR, { recursive: true });
   writeFileSync(METRICS, JSON.stringify(metrics, null, 2));
   console.log(
@@ -310,6 +378,7 @@ async function main() {
         bargeCancelSent: metrics.bargeCancelSent === true,
         audioDeltasAfterCancel: metrics.audioDeltasAfterCancel || 0,
         ephemeralWsOpen: metrics.ephemeralWsOpen === true,
+        imageInput: metrics.imageInput || null,
         metricsPath: METRICS,
       },
       null,
