@@ -49,3 +49,11 @@ Full local write-up: `MEDIA_HANDOFF.md`.
 - Counts: typecheck pass; mind 314 pass; scripts 198 pass / 4 skipped; build pass
 - Notion child: https://app.notion.com/p/40bb95f33e42817a9615c1a4549d43fb
 - Lock: logic-wiring.lock → done, released
+
+## 2026-11-01T14:48:28+01:00 (Africa/Lagos) — Logic Bot — stop point: verifier fixes done
+- Branch tip: f8db0a3 on origin/logic-wiring
+- Commits: d2ef414 proto-key 400 reject; 886d759 with-app-env ambient isolation; f8db0a3 done.model coerce + 404 fail-closed
+- Fixed: __proto__/constructor/prototype at any depth → 400; scripts tests green under ambient VITE_AUTH_ENABLED=false; null/number/object model → model unknown; provider 404 never done/chip
+- Counts: typecheck pass; mind 326 pass; scripts 198 pass / 4 skipped; build pass
+- Notion child: https://app.notion.com/p/40bb95f33e4281c9ab52d1c445d273d3
+- Lock: logic-wiring.lock → done, released
