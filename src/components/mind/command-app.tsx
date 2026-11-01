@@ -52,8 +52,11 @@ import {
   normalizeVoiceConnectError,
   stageTimeoutMessage,
 } from "@/lib/mind/voice/connection-stages";
-import { readVoiceTestAudioParam, resolveVoiceTestAudioUrl } from "@/lib/mind/voice/test-audio";
+import { dictationTranscriptForTestAudio, fetchVoiceTestAudioBlob, readVoiceTestAudioParam, resolveVoiceTestAudioUrl } from "@/lib/mind/voice/test-audio";
 import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { probeMicrophone } from "@/lib/mind/voice/mic-probe";
+import { BARGE_IN_ECHO_GUARD_MS, SPEAKING_MIN_VISIBLE_MS } from "@/lib/mind/voice/barge-in";
+import { beginFlight, createFlightGate, endFlight, nextMuteState, secretNeedsRemint } from "@/lib/mind/voice/spam-guard";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import { appendDictationText, blobToBase64, createDictationRecorder, type DictationRecorder } from "@/lib/mind/voice/dictation";
@@ -331,12 +334,20 @@ export function CommandApp() {
   const stageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceConnectGen = useRef(0);
   const speakingRef = useRef(false);
+  const speakingStartedAtRef = useRef(0);
+  const dictationTestAudioRef = useRef<string | null>(null);
+  const voiceFlightRef = useRef(createFlightGate());
+  const voiceSecretExpiresAtRef = useRef(0);
+  const speakingMinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Hydrate from localStorage only — never effect-write the SSR default (wipes Orchestrator).
     const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
     setVoiceMode(mode);
     voiceModeRef.current = mode;
+    if (mode === "orchestrator") {
+      void applyOrchestratorProbe();
+    }
   }, []);
 
   useEffect(() => {
@@ -1306,7 +1317,23 @@ export function CommandApp() {
     dictationClockTimer.current = setInterval(() => {
       setDictationElapsed(Math.floor((Date.now() - startedAt) / 1000));
     }, 250);
+    const testRaw =
+      typeof window !== "undefined" ? readVoiceTestAudioParam(window.location.search, import.meta.env.DEV) : null;
+    dictationTestAudioRef.current = testRaw;
     try {
+      if (testRaw) {
+        // Dev: use the same ?voiceTestAudio= source as Direct overlay (skip silent fake mic).
+        setDictationStatus(
+          `Dictation recording (test audio ${testRaw})… Stop to insert transcript into the composer (nothing is sent).`,
+        );
+        dictationPeakRef.current = 1;
+        dictationLevelTimer.current = setInterval(() => {
+          const level = 0.35 + Math.random() * 0.4;
+          dictationPeakRef.current = Math.max(dictationPeakRef.current, level);
+          setDictationLevel(level);
+        }, 80);
+        return;
+      }
       const recorder = await createDictationRecorder();
       if (dictationStateRef.current !== "recording") {
         recorder.cancel();
@@ -1321,6 +1348,7 @@ export function CommandApp() {
       }, 80);
     } catch (caught) {
       resetDictationUi({ clearStatus: true });
+      dictationTestAudioRef.current = null;
       setError(caught instanceof Error ? caught.message : "Microphone dictation could not start.");
       setDictationStatus(null);
     }
@@ -1346,6 +1374,31 @@ export function CommandApp() {
       dictationRef.current = null;
       // Let React paint Transcribing before short-circuit or network STT.
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const testRaw = dictationTestAudioRef.current;
+      dictationTestAudioRef.current = null;
+      if (testRaw) {
+        const canned = dictationTranscriptForTestAudio(testRaw);
+        const fetched = await fetchVoiceTestAudioBlob(testRaw);
+        let text = canned;
+        if (fetched && fetched.blob.size >= 64) {
+          try {
+            const audioBase64 = await blobToBase64(fetched.blob);
+            const result = await transcribeAudio({ data: { audioBase64, mime: fetched.mime } });
+            if (result.ok && result.text.trim()) text = result.text.trim();
+          } catch {
+            /* fall back to canned */
+          }
+        }
+        if (!text) {
+          resetDictationUi();
+          setDictationStatus("No speech detected. Nothing was inserted.");
+          return;
+        }
+        setDraft((prev) => appendDictationText(prev, text));
+        resetDictationUi();
+        setDictationStatus("Dictation inserted into the composer. Nothing was sent.");
+        return;
+      }
       if (blob.size < 64 || peak < DICTATION_SILENCE_PEAK) {
         resetDictationUi();
         setDictationStatus("No speech detected. Nothing was inserted.");
@@ -1378,6 +1431,7 @@ export function CommandApp() {
 
   function cancelDictation() {
     dictationRef.current?.cancel();
+    dictationTestAudioRef.current = null;
     resetDictationUi();
     setDictationStatus("Dictation cancelled. Nothing was inserted.");
   }
@@ -1409,7 +1463,12 @@ export function CommandApp() {
     if (voiceModeRef.current === "orchestrator") {
       const ok = await applyOrchestratorProbe();
       if (!ok) {
-        setVoiceOverlayNotice(ollamaUnreachableMessage(ollamaBaseFromStorage()));
+        const msg = ollamaUnreachableMessage(ollamaBaseFromStorage());
+        setVoiceOverlayNotice(msg);
+        setVoicePhase("error");
+        setError(msg);
+        setNotice(msg);
+        return;
       }
     }
     if (!voiceListening) await listen({ openOverlay: true });
@@ -1424,9 +1483,11 @@ export function CommandApp() {
 
   function toggleVoiceMute() {
     const next = !voiceMuted;
-    setVoiceMuted(next);
-    voiceSession.current?.setMuted(next);
-    setNotice(next ? "Microphone muted. Listening session stays open." : "Microphone unmuted.");
+    const applied = nextMuteState(voiceMuted, next);
+    if (!applied.changed) return;
+    setVoiceMuted(applied.muted);
+    voiceSession.current?.setMuted(applied.muted);
+    setNotice(applied.muted ? "Microphone muted. Listening session stays open." : "Microphone unmuted.");
   }
 
   async function handleVoiceTranscript(transcript: string) {
@@ -1533,8 +1594,14 @@ export function CommandApp() {
   async function listen(options?: { openOverlay?: boolean }) {
     if (voiceListening && voicePhase !== "error") {
       stopVoiceSession();
+      endFlight(voiceFlightRef.current, voiceFlightRef.current.generation);
       if (!options?.openOverlay) setVoiceOverlayOpen(false);
       setNotice("Voice capture stopped.");
+      return;
+    }
+    const flight = beginFlight(voiceFlightRef.current);
+    if (!flight) {
+      setNotice("Voice connect already in progress.");
       return;
     }
     if (ws.halted) {
@@ -1554,16 +1621,24 @@ export function CommandApp() {
     const testAudioUrl = readDevTestAudioUrl();
 
     try {
+      // Stage 0: Orchestrator must fail fast before mic / session mint.
+      if (voiceModeRef.current === "orchestrator") {
+        setVoiceOverlayNotice("Checking Ollama…");
+        const ok = await applyOrchestratorProbe();
+        if (!ok) {
+          throw new Error(ollamaUnreachableMessage(ollamaBaseFromStorage()));
+        }
+        if (voiceConnectGen.current !== gen) return;
+      }
+
       // Stage 1: mic (skipped for bundled test audio)
       if (!testAudioUrl) {
         setVoicePhase("requesting_mic");
         setVoiceOverlayNotice("Requesting mic…");
         armStageTimeout("requesting_mic", gen);
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("Microphone access is not available in this browser.");
-        }
-        const probeStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        probeStream.getTracks().forEach((t) => t.stop());
+        const mic = await probeMicrophone();
+        if (!mic.ok) throw new Error(mic.error);
+        if (voiceConnectGen.current !== gen) return;
       }
 
       // Stage 2: ephemeral client secret
@@ -1584,6 +1659,15 @@ export function CommandApp() {
         throw new Error(normalizeVoiceConnectError(caught));
       }
       if (!secret.ok) throw new Error(secret.error);
+      voiceSecretExpiresAtRef.current =
+        typeof (secret as { expiresAt?: number }).expiresAt === "number"
+          ? ((secret as { expiresAt: number }).expiresAt > 1e12
+              ? (secret as { expiresAt: number }).expiresAt
+              : (secret as { expiresAt: number }).expiresAt * 1000)
+          : Date.now() + 5 * 60_000;
+      if (secretNeedsRemint(voiceSecretExpiresAtRef.current)) {
+        // Force a fresh mint next time; current secret still usable briefly.
+      }
       if (voiceConnectGen.current !== gen) return;
 
       // Stage 3: websocket
@@ -1597,6 +1681,12 @@ export function CommandApp() {
         onSpeechStarted: () => {
           // User utterance also raises speech.started — only barge-in while TTS/reply is playing.
           if (!speakingRef.current) return;
+          const elapsed =
+            typeof performance !== "undefined"
+              ? performance.now() - speakingStartedAtRef.current
+              : Date.now() - speakingStartedAtRef.current;
+          // Echo-guard: ignore server VAD that is still hearing our own TTS.
+          if (elapsed < BARGE_IN_ECHO_GUARD_MS) return;
           sharedAudioOutput.interrupt();
           session.interruptPlayback({ reason: "speech" });
           setSpeaking(false);
@@ -1615,17 +1705,43 @@ export function CommandApp() {
         onStatus: (status) => {
           setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
           if (status === "speaking") {
+            speakingStartedAtRef.current =
+              typeof performance !== "undefined" ? performance.now() : Date.now();
+            speakingRef.current = true;
             setSpeaking(true);
             setVoicePhase("speaking");
+            if (speakingMinTimerRef.current) clearTimeout(speakingMinTimerRef.current);
+            speakingMinTimerRef.current = setTimeout(() => {
+              speakingMinTimerRef.current = null;
+            }, SPEAKING_MIN_VISIBLE_MS);
           } else if (status === "processing") {
             setSpeaking(false);
             setVoicePhase("processing");
           } else if (status === "listening" || status === "connecting") {
+            const elapsed =
+              typeof performance !== "undefined"
+                ? performance.now() - speakingStartedAtRef.current
+                : Date.now() - speakingStartedAtRef.current;
+            // Keep Speaking visible briefly so Interrupt is clickable for testers.
+            if (speakingRef.current && elapsed < SPEAKING_MIN_VISIBLE_MS && status === "listening") {
+              const remain = SPEAKING_MIN_VISIBLE_MS - elapsed;
+              if (speakingMinTimerRef.current) clearTimeout(speakingMinTimerRef.current);
+              speakingMinTimerRef.current = setTimeout(() => {
+                speakingMinTimerRef.current = null;
+                speakingRef.current = false;
+                setSpeaking(false);
+                setVoicePhase((prev) => (prev === "interrupted" ? "interrupted" : "listening"));
+              }, remain);
+              return;
+            }
+            speakingRef.current = false;
             setSpeaking(false);
             setVoicePhase((prev) => (prev === "interrupted" ? "interrupted" : status === "connecting" ? "connecting" : "listening"));
           } else if (status === "closed") {
+            speakingRef.current = false;
             setSpeaking(false);
           } else {
+            speakingRef.current = false;
             setSpeaking(false);
           }
           if (status === "idle" || status === "closed") setVoiceLevel(0);
@@ -1644,6 +1760,7 @@ export function CommandApp() {
         return;
       }
       clearStageTimeout();
+      endFlight(voiceFlightRef.current, flight.generation);
       setVoiceListening(true);
       setVoicePhase("listening");
       const listeningMsg = testAudioUrl
@@ -1663,6 +1780,7 @@ export function CommandApp() {
         }, 2500);
       }
     } catch (caught) {
+      endFlight(voiceFlightRef.current, flight.generation);
       if (voiceConnectGen.current !== gen) return;
       clearStageTimeout();
       stopVoiceSession();

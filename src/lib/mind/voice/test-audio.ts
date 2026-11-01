@@ -97,3 +97,36 @@ export function resampleLinear(input: Float32Array, fromRate: number, toRate: nu
   }
   return out;
 }
+
+/**
+ * Dev dictation shortcut: map ?voiceTestAudio= kind to an insertable transcript
+ * when the MediaRecorder path would only capture silence (fake mic / no device).
+ */
+export function dictationTranscriptForTestAudio(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const key = raw.trim().toLowerCase();
+  if (key === "hello") return "hello";
+  if (key === "tone") return "tone";
+  // Custom path/filename without extension → use basename as a stand-in label
+  const base = key.split("/").pop() || key;
+  const stem = base.replace(/\.wav$/i, "").trim();
+  return stem || null;
+}
+
+/** Fetch bundled test WAV as a Blob for STT when available; null if tone: or fetch fails. */
+export async function fetchVoiceTestAudioBlob(
+  raw: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ blob: Blob; mime: string } | null> {
+  const url = resolveVoiceTestAudioUrl(raw);
+  if (url.startsWith("tone:")) return null;
+  try {
+    const res = await fetchImpl(url);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength < 64) return null;
+    return { blob: new Blob([buf], { type: "audio/wav" }), mime: "audio/wav" };
+  } catch {
+    return null;
+  }
+}
