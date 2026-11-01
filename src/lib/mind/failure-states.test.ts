@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CHAT_DISCONNECT_REPLY,
+  CHAT_TIMEOUT_REPLY,
   HONEST_FAILURE_MESSAGES,
   bindRetry,
   classifyHonestFailure,
   honestFailureAuditAction,
   honestFailureDescription,
   mcpToolFailure,
+  normalizeClientFailureMessage,
 } from "./failure-states.ts";
 
 describe("honest failure states", () => {
@@ -17,7 +20,7 @@ describe("honest failure states", () => {
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.model_unavailable), "model_unavailable");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.model_unreachable), "model_unavailable");
     assert.equal(classifyHonestFailure("No Grok key is configured on the server. Another provider is not substituted."), "model_unavailable");
-    assert.equal(classifyHonestFailure("Sign in is required."), null);
+    assert.equal(classifyHonestFailure("Sign in is required."), "auth_required");
   });
 
   it("keeps one-line descriptions and audit action names stable", () => {
@@ -105,5 +108,64 @@ describe("honest failure states", () => {
     ]);
     assert.equal(calls[0][2], args);
     assert.equal(calls[1][2], args);
+  });
+});
+
+
+describe("top-5 gap classifiers", () => {
+  it("recognizes CHAT_TIMEOUT_REPLY and stale timeout markers as chat_timeout, not model_unavailable", () => {
+    assert.equal(classifyHonestFailure(CHAT_TIMEOUT_REPLY), "chat_timeout");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.chat_timeout_stale), "chat_timeout");
+    assert.equal(classifyHonestFailure("Grok did not answer in time"), "chat_timeout");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.model_unreachable), "model_unavailable");
+    assert.equal(honestFailureAuditAction("chat_timeout"), "chat_timeout");
+    assert.equal(honestFailureDescription("chat_timeout"), CHAT_TIMEOUT_REPLY);
+  });
+
+  it("recognizes network, offline, and Failed to fetch as network_failure", () => {
+    assert.equal(classifyHonestFailure("Failed to fetch"), "network_failure");
+    assert.equal(classifyHonestFailure(CHAT_DISCONNECT_REPLY), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.network_offline), "network_failure");
+    assert.equal(classifyHonestFailure("TypeError: NetworkError when attempting to fetch resource."), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_list_failed), "network_failure");
+    assert.equal(honestFailureAuditAction("network_failure"), "network_failure");
+  });
+
+  it("recognizes 401 sign-in and 403 cross-site with server copy", () => {
+    assert.equal(classifyHonestFailure("Sign in is required."), "auth_required");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.auth_required), "auth_required");
+    assert.equal(classifyHonestFailure("Forbidden: cross-site request blocked"), "forbidden_cross_site");
+    assert.equal(honestFailureDescription("auth_required"), "Sign in is required.");
+    assert.equal(honestFailureDescription("forbidden_cross_site"), "Forbidden: cross-site request blocked");
+    assert.equal(honestFailureAuditAction("auth_required"), "auth_required");
+    assert.equal(honestFailureAuditAction("forbidden_cross_site"), "forbidden_cross_site");
+  });
+
+  it("recognizes provider 429 rate limit copy", () => {
+    assert.equal(
+      classifyHonestFailure("grok rate limited the request. Nothing was substituted."),
+      "rate_limited",
+    );
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.rate_limited), "rate_limited");
+    assert.equal(honestFailureAuditAction("rate_limited"), "rate_limited");
+  });
+
+  it("normalizes caught client errors into honest copy for Retry banners", () => {
+    assert.equal(normalizeClientFailureMessage(new Error("Unauthorized")), "Sign in is required.");
+    assert.equal(normalizeClientFailureMessage(new TypeError("Failed to fetch")), "Failed to fetch");
+    assert.equal(
+      normalizeClientFailureMessage(new Error("Forbidden: cross-site request blocked")),
+      "Forbidden: cross-site request blocked",
+    );
+    assert.match(normalizeClientFailureMessage(new Error("xai rate limited the request. Nothing was substituted.")), /rate limited/);
+  });
+
+  it("retries MCP list load with identical action via bindRetry", () => {
+    const calls: string[] = [];
+    const load = () => calls.push("load");
+    const retry = bindRetry(load, [] as []);
+    retry();
+    retry();
+    assert.deepEqual(calls, ["load", "load"]);
   });
 });
