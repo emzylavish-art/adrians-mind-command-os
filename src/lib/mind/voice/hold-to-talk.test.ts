@@ -145,7 +145,7 @@ describe("hold-to-talk Space", () => {
     });
     const target = el({ tagName: "DIV" });
     ctl.onKeyDown({ key: " ", repeat: false, target, preventDefault() {} } as unknown as KeyboardEvent);
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 120));
     assert.deepEqual(log, ["start"]);
     // Release always stops after a real hold (cancels in-flight mint path).
     ctl.onKeyUp({ key: " ", preventDefault() {} } as unknown as KeyboardEvent);
@@ -154,7 +154,7 @@ describe("hold-to-talk Space", () => {
     log.length = 0;
     listening = false;
     ctl.onKeyDown({ key: " ", repeat: false, target, preventDefault() {} } as unknown as KeyboardEvent);
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 120));
     ctl.onBlurOrHide();
     assert.deepEqual(log, ["start", "stop"]);
   });
