@@ -94,6 +94,13 @@ export type BackdropMeter = {
   noteFrame: (dtMs: number) => void;
   /** #80: honest back-off state (real timings only). */
   readonly backoff: MeterBackoff;
+  /**
+   * Hacker pass (cycle after #80): the page stopped rendering (tab hidden,
+   * context lost) while a read was in flight. That read's latency / resume
+   * frame / timeout are NOT readback cost: it settles without touching the
+   * back-off and is surfaced as lastError "readback-suspended". No-op when idle.
+   */
+  suspend: () => void;
   reset: () => void;
 };
 
@@ -101,7 +108,7 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
   const interval = Number.isFinite(opts.intervalMs) && opts.intervalMs! > 0 ? opts.intervalMs! : METER_INTERVAL_MS;
   const maxAge = Number.isFinite(opts.maxAgeMs) && opts.maxAgeMs! > 0 ? opts.maxAgeMs! : METER_MAX_AGE_MS;
   let token = 0;
-  let pending: { token: number; key: string; atMs: number } | null = null;
+  let pending: { token: number; key: string; atMs: number; suspended?: boolean } | null = null;
   let lastStart = -Infinity;
   let lastKey = "";
   let latest: MeterMeasurement | null = null;
@@ -133,10 +140,14 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
         // A readback that never resolves (lost context, driver stall) must not
         // wedge the meter forever: time it out, surface it, allow a new read.
         if (nowMs - pending.atMs <= maxAge) return false;
+        const excused = !!pending.suspended;
         pending = null;
-        lastError = "readback-timeout";
         droppedDuringRead = false;
-        widen("readback-timeout");
+        if (excused) lastError = "readback-suspended";
+        else {
+          lastError = "readback-timeout";
+          widen("readback-timeout");
+        }
       }
       if (key !== lastKey) return true;
       if (o.reducedMotion) return !latest || latest.key !== key; // one read per layout
@@ -156,8 +167,15 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
     },
     resolve(t, perRect, nowMs) {
       if (!pending || pending.token !== t) return; // superseded / reset
-      const { key, atMs: sampledAt } = pending;
+      const { key, atMs: sampledAt, suspended } = pending;
       pending = null;
+      if (suspended) {
+        // Hidden-tab / lost-context time is not GPU cost; the sampled frame is
+        // from before the gap, so it is never used as a fresh reading either.
+        droppedDuringRead = false;
+        lastError = "readback-suspended";
+        return;
+      }
       if (Number.isFinite(nowMs) && nowMs >= sampledAt) settle(nowMs - sampledAt);
       // Age is measured from the frame that was SAMPLED, not when the async
       // readback landed: a 1.9 s driver stall must not make a 1.9 s-old backdrop
@@ -203,10 +221,13 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
       return reads;
     },
     noteFrame(dtMs) {
-      if (pending && Number.isFinite(dtMs) && dtMs >= METER_DROP_FRAME_MS) droppedDuringRead = true;
+      if (pending && !pending.suspended && Number.isFinite(dtMs) && dtMs >= METER_DROP_FRAME_MS) droppedDuringRead = true;
     },
     get backoff() {
       return { multiplier: mult, intervalMs: interval * mult, lastLatencyMs: lastLatency, reason };
+    },
+    suspend() {
+      if (pending) pending.suspended = true;
     },
     reset() {
       pending = null;

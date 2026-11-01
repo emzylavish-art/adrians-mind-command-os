@@ -254,6 +254,20 @@ export type CreateDetailBackdropDimOpts = {
   intervalMs?: number;
 };
 
+type VisibilityDoc = {
+  hidden?: unknown;
+  visibilityState?: unknown;
+  addEventListener?: (type: string, fn: () => void) => void;
+  removeEventListener?: (type: string, fn: () => void) => void;
+};
+const visibilityDoc = (): VisibilityDoc | null =>
+  ((globalThis as { document?: VisibilityDoc }).document ?? null);
+/** True when the page is not being shown (tab hidden). Missing document → false. */
+const documentHidden = (): boolean => {
+  const d = visibilityDoc();
+  return !!d && (d.hidden === true || d.visibilityState === "hidden");
+};
+
 const defaultNow = () =>
   typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
 
@@ -380,6 +394,14 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
   };
   apply();
 
+  // Hacker (cycle after #80): a read still in flight when the tab hides (and
+  // resolving / timing out only after resume) is excused the moment we hide.
+  const vdoc = visibilityDoc();
+  const onVisibility = () => {
+    if (documentHidden()) meter.suspend();
+  };
+  if (vdoc && typeof vdoc.addEventListener === "function") vdoc.addEventListener("visibilitychange", onVisibility);
+
   const baseRender = pass.render.bind(pass);
   pass.render = ((renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
     if (disposed) return;
@@ -393,7 +415,13 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
           reader ??= createRegionReader(DIM_MAX_RECTS);
           reader
             .read(renderer, src, uvRects)
-            .then((bufs) => meter.resolve(token, bufs.map((b) => measureLuminance(b, METER_EDGE, METER_EDGE)), now()))
+            .then((bufs) => {
+              // Hacker (cycle after #80): the render loop pauses before it can
+              // call setHidden(true), so a read that lands while the tab is
+              // hidden must be excused here, not billed as slow-readback.
+              if (hidden || documentHidden()) meter.suspend();
+              meter.resolve(token, bufs.map((b) => measureLuminance(b, METER_EDGE, METER_EDGE)), now());
+            })
             .catch((e: unknown) => meter.fail(token, e));
         } catch (e) {
           meter.fail(token, e); // sync GL failure: surfaced, static dim stays
@@ -479,6 +507,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     setHidden(h) {
       if (disposed) return;
       hidden = !!h;
+      if (hidden) meter.suspend();
       apply();
     },
     get contrast() {
@@ -504,6 +533,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     dispose() {
       if (disposed) return;
       disposed = true;
+      if (vdoc && typeof vdoc.removeEventListener === "function") vdoc.removeEventListener("visibilitychange", onVisibility);
       level = 0;
       target = 0;
       uvRects = [];

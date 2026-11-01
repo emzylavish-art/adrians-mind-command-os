@@ -138,3 +138,19 @@ export {
   type ContrastPlan,
   type CssColor,
 } from "./wcag-contrast.ts";
+export {
+  KEY_LIFT_BRIGHT,
+  KEY_LIFT_DARK,
+  KEY_LIFT_EASE_MS,
+  KEY_LIFT_MAX,
+  KEY_LIFT_OFFSET,
+  KEY_LIFT_RADIUS_SCALE,
+  SceneKeyLiftShader,
+  createSceneKeyLiftPass,
+  keyLiftFactor,
+  keyLiftGain,
+  statsAtFocus,
+  type SceneKeyLiftHandle,
+  type SceneKeyLiftReport,
+} from "./scene-key-lift.ts";
+export { formatMeterBadge, type MeterBadge } from "./meter-badge.ts";
