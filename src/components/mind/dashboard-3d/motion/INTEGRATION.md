@@ -111,6 +111,31 @@ person.scale.y = charSample.scaleY;
 ```
 
 Per-id phase desyncs a crowd. Reduced-motion → static pose. `MotionClock` / focus-ease /
-transition-ease APIs unchanged. **Note:** `sharedMotionClock.reset()` is a no-op (c7) — use
-`createMotionClock()` for private resettable clocks.
+transition-ease APIs unchanged. **Note:** `sharedMotionClock.reset()` is a no-op (c7) — use `createMotionClock()` for
+private resettable clocks. For an intentional wipe of the singleton (tests / full teardown
+only), call `hardResetSharedMotionClockForTests()` — nothing on `origin/dashboard-3d` was
+calling `sharedMotionClock.reset()` for effect (c8 grep).
 
+## Star focus breadcrumb ease (c8)
+
+Motion-only helpers for Dashboard queue #21 (HUD markup/CSS stay with Dashboard Bot):
+
+```ts
+import {
+  createBreadcrumbEaseState, createBreadcrumbEaseSample,
+  setBreadcrumbFocus, clearBreadcrumbFocus, stepBreadcrumbEase,
+} from "./motion";
+
+const bc = createBreadcrumbEaseState();
+const bcSample = createBreadcrumbEaseSample();
+
+// when rig.subjectId changes:
+if (rig.subjectId) setBreadcrumbFocus(bc, rig.subjectId);
+else clearBreadcrumbFocus(bc);
+
+// rAF:
+stepBreadcrumbEase(bc, bcSample, dt, reducedMotion);
+// apply bcSample.opacity + bcSample.offsetX (px) to the focus crumb element
+```
+
+Interruptible exit mid-enter. Reduced-motion snaps. Label text/DOM is Dashboard Bot's job.

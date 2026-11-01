@@ -22,6 +22,8 @@ export const CHAR_WALK_SWAY_AMP = 0.05;
 export const CHAR_WALK_STRIDE_HZ = 1.85;
 export const CHAR_LOOK_LAMBDA = 7;
 export const CHAR_LOCOMOTION_LAMBDA = 6;
+/** Cap id length hashed per call (very long ids must not burn a frame). */
+export const CHAR_PHASE_ID_MAX = 256;
 
 export type CharacterMotionState = {
   /** Eased locomotion weight 0 (idle) → 1 (full walk). */
@@ -59,6 +61,9 @@ export type CharacterMotionOpts = {
   strideHz?: number;
 };
 
+/** Hacker c8: default `= {}` allocated a fresh object every call. */
+const EMPTY_CHAR_OPTS: CharacterMotionOpts = Object.freeze({});
+
 export function createCharacterMotionState(): CharacterMotionState {
   return { loco: 0, lookYaw: 0 };
 }
@@ -67,9 +72,17 @@ export function createCharacterSample(): CharacterSample {
   return { offsetY: 0, offsetX: 0, offsetZ: 0, scaleY: 1, yaw: 0, stridePhase: 0, loco: 0 };
 }
 
+/** Hacker c8: +Infinity → full walk; NaN/-Inf/neg → idle; finite clamped to [0,1]. */
+export function sanitizeCharacterSpeed(speed: number): number {
+  if (speed === Number.POSITIVE_INFINITY) return 1;
+  if (!Number.isFinite(speed) || speed < 0) return 0;
+  return speed > 1 ? 1 : speed;
+}
+
 /** Stable phase offset in [0, 2π) from an id string (crowd desync). */
 export function characterPhaseFromId(id: string | null | undefined): number {
-  const s = id ?? "";
+  const raw = id ?? "";
+  const s = raw.length > CHAR_PHASE_ID_MAX ? raw.slice(0, CHAR_PHASE_ID_MAX) : raw;
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -89,9 +102,9 @@ export function stepCharacterMotion(
   tSeconds: number,
   dt: number,
   reducedMotion: boolean,
-  opts: CharacterMotionOpts = {},
+  opts: CharacterMotionOpts = EMPTY_CHAR_OPTS,
 ): CharacterSample {
-  const speed = clamp01(finiteOr(opts.speed ?? 0, 0));
+  const speed = sanitizeCharacterSpeed(opts.speed ?? 0);
   const lookTarget = finiteOr(opts.lookYaw ?? 0, 0);
   const phase = characterPhaseFromId(id);
   const clock = opts.clock ?? sharedMotionClock;
@@ -131,14 +144,11 @@ export function stepCharacterMotion(
   const strideAng = t * strideHz * Math.PI * 2 + phase;
   let stridePhase = (strideAng / (Math.PI * 2)) % 1;
   if (stridePhase < 0) stridePhase += 1;
-  // abs-sin bounce (double-frequency footfalls feel) + lateral sway
   const bounce = Math.abs(Math.sin(strideAng)) * bounceAmp;
   const sway = Math.sin(strideAng) * swayAmp;
   const strideZ = Math.sin(strideAng * 2) * (bounceAmp * 0.25);
 
-  const idleY = idleBob;
-  const walkY = bounce;
-  out.offsetY = lerp(idleY, walkY, loco);
+  out.offsetY = lerp(idleBob, bounce, loco);
   out.offsetX = sway * loco;
   out.offsetZ = strideZ * loco;
   out.scaleY = lerp(breath, 1 + bounce * 0.15, loco);
@@ -154,7 +164,7 @@ export function sampleCharacterIdle(
   id: string | null | undefined,
   tSeconds: number,
   reducedMotion: boolean,
-  opts: Omit<CharacterMotionOpts, "speed"> = {},
+  opts: Omit<CharacterMotionOpts, "speed"> = EMPTY_CHAR_OPTS,
 ): CharacterSample {
   idleScratch.loco = 0;
   idleScratch.lookYaw = finiteOr(out.yaw, 0);
