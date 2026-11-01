@@ -344,7 +344,7 @@ export const loadMindCopy = createServerFn({ method: "POST" })
 
 export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text: string }) => input)
+  .validator((input: { text: string; voiceId?: string }) => input)
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
@@ -352,15 +352,17 @@ export const speakText = createServerFn({ method: "POST" })
     const text = data.text.trim().slice(0, 500);
     if (!text) return { ok: false as const, error: "Nothing to read." };
     const { resolveVoiceApiKey } = await import("./voice/keys");
+    const { resolveXaiVoiceId } = await import("./voice/voices");
     const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
+    const voice_id = resolveXaiVoiceId(data.voiceId);
     let res: Response;
     try {
       res = await fetch("https://api.x.ai/v1/tts", {
         method: "POST",
         signal: AbortSignal.timeout(20_000),
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ text, voice_id: "eve", language: "en", output_format: { codec: "mp3" } }),
+        body: JSON.stringify({ text, voice_id, language: "en", output_format: { codec: "mp3" } }),
       });
     } catch {
       return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
