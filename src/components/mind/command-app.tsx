@@ -1285,7 +1285,7 @@ export function CommandApp() {
         <nav className="flex-1 overflow-auto px-3 pb-3">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-4">
-              {!railCollapsed && <p className="px-3 pb-2 text-[10px] font-semibold tracking-[0.18em] text-muted">{group.label.toUpperCase()}</p>}
+              {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
               <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
@@ -1393,7 +1393,7 @@ export function CommandApp() {
         </div>
       </aside>
 
-      <div className="main-stage flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
+      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
         <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
@@ -1490,23 +1490,21 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <div className="voice-zone" aria-label="Voice controls">
+          <div className={`voice-zone ${listening || speaking ? "is-live" : ""}`} aria-label="Voice controls">
             <button
               type="button"
-              className={`grid size-9 place-items-center rounded-full ${listening ? "mic-pulse text-glow" : "text-muted"}`}
+              className={`focus-ring grid size-9 place-items-center rounded-full ${listening ? "mic-pulse text-glow" : "text-muted"}`}
               aria-label="Dictate"
               onClick={() => listen()}
             >
               <Mic className="size-4" />
             </button>
-            {listening ? (
-              <span className="waveform px-1" aria-hidden="true">
-                <span /><span /><span /><span /><span />
-              </span>
-            ) : null}
+            <span className="waveform" aria-hidden="true">
+              <span /><span /><span /><span /><span /><span /><span />
+            </span>
             <button
               type="button"
-              className="grid size-9 place-items-center rounded-full text-muted"
+              className="focus-ring grid size-9 place-items-center rounded-full text-muted"
               aria-label="Speak last reply"
               disabled={speaking}
               onClick={() => {
@@ -1577,7 +1575,7 @@ export function CommandApp() {
           </div>
         )}
         {ws.halted && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2">
+          <div className="banner-error mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 px-4 py-2 md:mx-5">
             <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
               Clear stop
@@ -1760,8 +1758,8 @@ export function CommandApp() {
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
-              {error && <p className="text-sm text-danger">{error}</p>}
+              {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
+              {error && <p className="banner-error px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -2850,8 +2848,8 @@ function StatusRow({
 
 function Overlay({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-40 grid place-items-end bg-bg/80 p-4 md:place-items-center">
-      <div className="w-full max-w-md rounded-panel border border-line bg-surface p-4 shadow-panel">{children}</div>
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center">
+      <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
     </div>
   );
 }
@@ -2878,7 +2876,7 @@ function ReaPanel({
         <p className="mt-2 max-w-2xl text-sm text-muted">{lead}</p>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_18rem]">
-        <div className="glow-card rounded-panel border border-line bg-surface p-4">
+        <div className="dense-card card-texture p-4">
           <p className="text-sm font-semibold">What can run</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA doctor</span><span className="text-xs text-muted">Live check</span></li>
@@ -3141,7 +3139,14 @@ function ChatPane({
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
-          {busy && !liveText && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {busy && !liveText && (
+            <div className="max-w-3xl space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
+              <p className="text-xs text-muted">Waiting for Grok.</p>
+              <div className="skeleton h-3" style={{ width: "75%" }} />
+              <div className="skeleton h-3" style={{ width: "50%" }} />
+              <div className="skeleton h-3" style={{ width: "66%" }} />
+            </div>
+          )}
           {busy && (
             <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
           )}
@@ -3203,11 +3208,12 @@ function ChatPane({
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
-        <div className="voice-zone-rail" aria-label="Voice controls">
-          <button type="button" className="grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label="Dictate">
+        <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label="Dictate">
             <Mic className="size-4" />
           </button>
-          <button type="button" className="grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
+          <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
             <Volume2 className="size-4" />
           </button>
         </div>

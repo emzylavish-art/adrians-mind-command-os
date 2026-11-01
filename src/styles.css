@@ -525,3 +525,270 @@ html[data-theme="light"] .settings-row {
 html[data-theme="light"] .promo-banner {
   background: linear-gradient(90deg, rgb(124 92 255 / 0.1), rgb(56 189 248 / 0.08)), #fff;
 }
+
+/* —— Pass 3: motion, type, scrollbars, micro chrome —— */
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --dur-slow: 320ms;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.125rem;
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-body: 1.55;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.14em;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  body {
+    font-size: var(--text-base);
+    line-height: var(--leading-body);
+    letter-spacing: -0.011em;
+  }
+  h1, .font-display.text-4xl, .font-display.text-3xl {
+    letter-spacing: var(--tracking-tight);
+    line-height: var(--leading-tight);
+  }
+  h2, .font-display.text-2xl {
+    letter-spacing: -0.015em;
+    line-height: var(--leading-snug);
+  }
+  .text-xs, .text-\[10px\] {
+    letter-spacing: 0.01em;
+  }
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+  }
+  :disabled, [aria-disabled="true"], .is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: grayscale(0.15);
+  }
+}
+
+/* Scrollbars — thin translucent */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(124 92 255 / 0.25));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgb(124 92 255 / 0.45); background-clip: padding-box; }
+html[data-theme="light"] * { scrollbar-color: rgb(15 23 42 / 0.25) transparent; }
+html[data-theme="light"] *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgb(15 23 42 / 0.18), rgb(124 92 255 / 0.22));
+  background-clip: padding-box;
+}
+
+/* Motion system */
+.nav-item, .dense-card, .dense-row, .model-chip, .suggestion-chip, .sidebar-plus,
+button, .glow-card, .settings-row, a {
+  transition:
+    background var(--dur-med) var(--ease-soft),
+    color var(--dur-fast) var(--ease-soft),
+    border-color var(--dur-med) var(--ease-soft),
+    box-shadow var(--dur-med) var(--ease-soft),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-med) var(--ease-soft);
+}
+button:active:not(:disabled), .nav-item:active, .dense-card:active {
+  transform: scale(0.985);
+}
+.page-enter {
+  animation: page-fade var(--dur-slow) var(--ease-out);
+}
+@keyframes page-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.overlay-backdrop {
+  animation: fade-in var(--dur-med) var(--ease-soft);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  background: rgb(5 7 13 / 0.72);
+}
+.overlay-panel {
+  animation: pop-in var(--dur-slow) var(--ease-out);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    rgb(14 18 28 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+.floating-menu {
+  animation: pop-in var(--dur-med) var(--ease-out);
+  transform-origin: top right;
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Voice waveform — presentational */
+.voice-zone .waveform {
+  display: inline-flex;
+  align-items: end;
+  gap: 2px;
+  height: 16px;
+  padding-inline: 2px;
+  opacity: 0.35;
+}
+.voice-zone:hover .waveform,
+.voice-zone:focus-within .waveform,
+.voice-zone.is-live .waveform {
+  opacity: 1;
+}
+.voice-zone .waveform span {
+  width: 2.5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c4b5fd, #7c5cff);
+  height: 35%;
+  transform-origin: bottom;
+  animation: none;
+}
+.voice-zone:hover .waveform span,
+.voice-zone:focus-within .waveform span,
+.voice-zone.is-live .waveform span {
+  animation: wave 0.85s ease-in-out infinite;
+}
+.voice-zone.is-live .waveform span:nth-child(1) { animation-duration: 0.7s; }
+.voice-zone.is-live .waveform span:nth-child(2) { animation-duration: 0.95s; }
+.voice-zone.is-live .waveform span:nth-child(3) { animation-duration: 0.8s; }
+.voice-zone.is-live .waveform span:nth-child(4) { animation-duration: 1.05s; }
+.voice-zone.is-live .waveform span:nth-child(5) { animation-duration: 0.75s; }
+.voice-zone.is-live .waveform span:nth-child(6) { animation-duration: 0.9s; }
+.voice-zone.is-live .waveform span:nth-child(7) { animation-duration: 0.82s; }
+
+/* Skeleton loaders */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.06);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+  animation: shimmer 1.4s var(--ease-soft) infinite;
+}
+@keyframes shimmer {
+  from { transform: translateX(-60%); }
+  to { transform: translateX(60%); }
+}
+
+.banner-error {
+  border: 1px solid rgb(255 107 122 / 0.35);
+  background: linear-gradient(90deg, rgb(255 107 122 / 0.12), rgb(255 107 122 / 0.04));
+  box-shadow: inset 0 0 20px rgb(255 107 122 / 0.08);
+  border-radius: 1rem;
+  backdrop-filter: blur(10px);
+}
+.banner-notice {
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.04);
+  border-radius: 1rem;
+}
+
+.login-shell {
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 50% 40% at 70% 10%, rgb(124 92 255 / 0.22), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 20% 80%, rgb(45 212 191 / 0.1), transparent 50%),
+    var(--color-bg);
+}
+.login-card {
+  border-radius: 1.5rem;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 45%),
+    rgb(12 16 26 / 0.85);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  animation: pop-in var(--dur-slow) var(--ease-out);
+}
+
+.meta-label {
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px rgb(124 92 255 / 0.55), 0 0 24px rgb(124 92 255 / 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter, .overlay-backdrop, .overlay-panel, .floating-menu, .login-card, .skeleton::after {
+    animation: none !important;
+  }
+  .voice-zone .waveform span {
+    animation: none !important;
+  }
+  .nav-item, .dense-card, button {
+    transition: none !important;
+  }
+}
+
+html[data-theme="light"] .overlay-backdrop {
+  background: rgb(15 23 42 / 0.35);
+}
+html[data-theme="light"] .overlay-panel,
+html[data-theme="light"] .login-card {
+  background: rgb(255 255 255 / 0.92);
+  border-color: rgb(15 23 42 / 0.08);
+  box-shadow: 0 24px 64px rgb(15 23 42 / 0.12);
+}
+html[data-theme="light"] .banner-error {
+  background: rgb(254 226 226 / 0.85);
+}
+.voice-zone-rail .waveform {
+  display: inline-flex;
+  align-items: end;
+  gap: 2px;
+  height: 18px;
+  opacity: 0.35;
+}
+.voice-zone-rail:hover .waveform,
+.voice-zone-rail.is-live .waveform { opacity: 1; }
+.voice-zone-rail .waveform span {
+  width: 2.5px;
+  height: 40%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c4b5fd, #7c5cff);
+}
+.voice-zone-rail:hover .waveform span,
+.voice-zone-rail.is-live .waveform span {
+  animation: wave 0.85s ease-in-out infinite;
+}
+.voice-zone-rail.is-live .waveform span:nth-child(2) { animation-delay: 0.1s; }
+.voice-zone-rail.is-live .waveform span:nth-child(3) { animation-delay: 0.2s; }
+.voice-zone-rail.is-live .waveform span:nth-child(4) { animation-delay: 0.05s; }
+.voice-zone-rail.is-live .waveform span:nth-child(5) { animation-delay: 0.15s; }
