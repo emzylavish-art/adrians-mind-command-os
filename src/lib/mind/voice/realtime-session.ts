@@ -287,6 +287,45 @@ export class RealtimeVoiceSession {
     this.startLevelPump();
   }
 
+
+  /** Dev-only: push decoded WAV/tone PCM into the realtime input buffer (no mic). */
+  private async startTestAudioCapture(url: string) {
+    let samples: Float32Array;
+    if (url.startsWith("tone:")) {
+      samples = synthesizeTone(REALTIME_SAMPLE_RATE, 1.25, Number(url.slice(5)) || 440);
+    } else {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Test audio ${url} returned ${res.status}.`);
+      const decoded = decodeWavPcm(await res.arrayBuffer());
+      samples = resampleLinear(decoded.samples, decoded.sampleRate, REALTIME_SAMPLE_RATE);
+    }
+    this.capturing = true;
+    this.handlers.onStatus?.("listening");
+    const frame = Math.floor(REALTIME_SAMPLE_RATE * 0.1); // 100ms
+    let offset = 0;
+    // Lead-in silence so VAD arms.
+    const lead = new Float32Array(frame);
+    this.send({ type: "input_audio_buffer.append", audio: bufferToBase64(floatTo16BitPCM(lead)) });
+    this.testAudioTimer = setInterval(() => {
+      if (!this.capturing || !this.open) return;
+      if (offset >= samples.length) {
+        this.send({ type: "input_audio_buffer.commit" });
+        if (this.testAudioTimer) {
+          clearInterval(this.testAudioTimer);
+          this.testAudioTimer = null;
+        }
+        this.handlers.onLevel?.(0);
+        return;
+      }
+      const slice = samples.subarray(offset, Math.min(samples.length, offset + frame));
+      offset += frame;
+      this.handlers.onLevel?.(this.muted ? 0 : rmsLevel(slice));
+      if (this.muted) return;
+      const pcm = floatTo16BitPCM(slice);
+      this.send({ type: "input_audio_buffer.append", audio: bufferToBase64(pcm) });
+    }, 100);
+  }
+
   private startLevelPump() {
     const tick = () => {
       if (!this.capturing || !this.analyser || this.muted) {
