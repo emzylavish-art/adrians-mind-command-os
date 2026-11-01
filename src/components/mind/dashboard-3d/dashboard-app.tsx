@@ -171,6 +171,7 @@ export function DashboardApp() {
   return (
     <main
       className="dash3d-root dash3d-universe"
+      data-testid="dash3d-root"
       data-fly-level={fly.level}
       data-labels={operatorPrefs.layers.labels ? "1" : "0"}
       data-health-filter={operatorPrefs.healthFilter}
@@ -241,7 +242,10 @@ export function DashboardApp() {
       ) : null}
 
       {state.status === "ready" ? (
-        <div className="dash3d-skybar" aria-live="polite">
+        <a className="dash3d-skip-link" href="#dash3d-skybar" data-testid="dash3d-skip-skybar">
+          Skip to skybar
+        </a>
+        <div className="dash3d-skybar" id="dash3d-skybar" aria-live="polite" role="region" aria-label="Dashboard skybar">
           {state.stale ? (
             <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
               <h2>Status stale</h2>

@@ -789,3 +789,31 @@
     font-weight: 600;
   }
 }
+
+/* --- Queue #16: accessibility — skip-link + focus-visible --- */
+.dash3d-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.5rem;
+  z-index: 40;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.55rem;
+  background: #0b1020;
+  color: #f8fafc;
+  border: 1px solid rgba(124, 92, 255, 0.7);
+  text-decoration: none;
+  font-size: 0.8rem;
+  transform: translateY(-200%);
+}
+.dash3d-skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+.dash3d-root :is(button, a, input, [tabindex]):focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+.dash3d-forever:focus-within {
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.55);
+}
