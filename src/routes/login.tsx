@@ -34,7 +34,8 @@ export const Route = createFileRoute("/login")({
     try {
       return await getSupabaseAuthUser();
     } catch {
-      return { configured: false, user: null };
+      // Keep shape aligned with AuthUserResult so broker Google/X stays gated.
+      return { configured: false, user: null, brokerConfigured: false };
     }
   },
   component: Login,
