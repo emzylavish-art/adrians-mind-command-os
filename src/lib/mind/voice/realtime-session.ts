@@ -1,5 +1,6 @@
 import { SharedAudioOutput, sharedAudioOutput } from "./audio-output.ts";
 import { rmsLevel } from "./levels.ts";
+import { BARGE_IN_HOLD_MS, BARGE_IN_RMS_THRESHOLD } from "./barge-in.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 export const REALTIME_MODEL = "grok-voice-latest";
@@ -74,6 +75,9 @@ export class RealtimeVoiceSession {
   private speakQueue: string[] = [];
   private pendingForce = false;
   private levelTimer: ReturnType<typeof setInterval> | null = null;
+  private speakingHotMs = 0;
+  private lastProcessAt = 0;
+  private bargeInArmed = false;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -167,6 +171,8 @@ export class RealtimeVoiceSession {
         content: [{ type: "output_text", text: next.slice(0, 500) }],
       },
     });
+    this.speakingHotMs = 0;
+    this.bargeInArmed = true;
     this.handlers.onStatus?.("speaking");
   }
 
@@ -190,7 +196,7 @@ export class RealtimeVoiceSession {
       return;
     }
     if (type === "input_audio_buffer.speech_started") {
-      this.interruptPlayback();
+      this.interruptPlayback({ reason: "speech" });
       this.handlers.onSpeechStarted?.();
       this.handlers.onStatus?.("listening");
       return;
@@ -236,17 +242,32 @@ export class RealtimeVoiceSession {
     if (type === "response.done") {
       this.responseBusy = false;
       this.pendingForce = false;
+      this.bargeInArmed = this.speakQueue.length > 0;
+      this.speakingHotMs = 0;
       this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
       this.flushSpeakQueue();
     }
   }
 
   /** Cut local playback and cancel in-flight model audio. */
-  interruptPlayback() {
+  interruptPlayback(options?: { reason?: "speech" | "manual" | "rms" | "stop" }) {
+    const wasSpeaking = this.responseBusy || this.pendingForce || this.speakQueue.length > 0;
     this.output.interrupt();
     this.speakQueue = [];
     this.pendingForce = false;
+    this.responseBusy = false;
+    this.speakingHotMs = 0;
     this.send({ type: "response.cancel" });
+    if (wasSpeaking && options?.reason && options.reason !== "stop") {
+      this.handlers.onStatus?.("listening");
+    }
+  }
+
+  /** Manual barge-in from the overlay Interrupt button. */
+  interruptFromUser() {
+    this.interruptPlayback({ reason: "manual" });
+    this.handlers.onSpeechStarted?.();
+    this.handlers.onStatus?.("listening");
   }
 
   async startCapture() {
@@ -269,7 +290,26 @@ export class RealtimeVoiceSession {
     this.processor.onaudioprocess = (ev) => {
       if (!this.capturing) return;
       const input = ev.inputBuffer.getChannelData(0);
-      this.handlers.onLevel?.(this.muted ? 0 : rmsLevel(input));
+      const level = this.muted ? 0 : rmsLevel(input);
+      this.handlers.onLevel?.(level);
+      // Local barge-in: sustained RMS while TTS/force_message is playing.
+      if (this.bargeInArmed && (this.responseBusy || this.pendingForce) && !this.muted) {
+        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+        const dt = this.lastProcessAt ? Math.min(50, now - this.lastProcessAt) : 0;
+        this.lastProcessAt = now;
+        if (level >= BARGE_IN_RMS_THRESHOLD) this.speakingHotMs += dt;
+        else this.speakingHotMs = 0;
+        if (this.speakingHotMs >= BARGE_IN_HOLD_MS) {
+          this.bargeInArmed = false;
+          this.speakingHotMs = 0;
+          this.interruptPlayback({ reason: "rms" });
+          this.handlers.onSpeechStarted?.();
+          this.handlers.onStatus?.("listening");
+        }
+      } else {
+        this.speakingHotMs = 0;
+        this.lastProcessAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+      }
       if (this.muted) return;
       const pcm = floatTo16BitPCM(input);
       this.send({ type: "input_audio_buffer.append", audio: bufferToBase64(pcm) });
