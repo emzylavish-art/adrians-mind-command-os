@@ -1464,3 +1464,95 @@ html[data-theme="light"] .min-h-0.flex-1.overflow-auto .rounded-panel.border.bor
 .min-h-0.flex-1.overflow-auto section > * + * {
   margin-top: 0.15rem;
 }
+
+/* —— Cycle 17: 3D dashboard HUD chrome (styles.css overrides only; mono) —— */
+.dash3d-root {
+  --dash3d-bg: #050507 !important;
+  --dash3d-panel: rgb(12 12 14 / 0.78) !important;
+  --dash3d-line: rgb(39 39 42 / 0.9) !important;
+  --dash3d-fg: #f4f4f5 !important;
+  --dash3d-muted: #a1a1aa !important;
+  --dash3d-accent: #f4f4f5 !important;
+  --dash3d-ok: #d4d4d8 !important;
+  --dash3d-amber: #a1a1aa !important;
+  --dash3d-danger: #e4e4e7 !important;
+  --dash3d-idle: #52525b !important;
+  background:
+    radial-gradient(ellipse 50% 40% at 20% 0%, rgb(255 255 255 / 0.05), transparent 60%),
+    radial-gradient(ellipse 40% 35% at 90% 10%, rgb(255 255 255 / 0.03), transparent 55%),
+    var(--dash3d-bg) !important;
+  color: var(--dash3d-fg) !important;
+}
+.dash3d-glass,
+.dash3d-skybar-card,
+.dash3d-flyhud,
+.dash3d-side .dash3d-glass {
+  background: rgb(12 12 14 / 0.78) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 16px 40px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+  backdrop-filter: blur(16px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.1) !important;
+  color: #f4f4f5 !important;
+}
+.dash3d-glass h2,
+.dash3d-glass h3,
+.dash3d-title {
+  color: #fafafa !important;
+  letter-spacing: -0.02em;
+}
+.dash3d-muted,
+.dash3d-label {
+  color: #a1a1aa !important;
+}
+.dash3d-pill {
+  background: rgb(255 255 255 / 0.06) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  color: #f4f4f5 !important;
+}
+.dash3d-pill:hover,
+.dash3d-pill[aria-pressed="true"],
+.dash3d-pill.is-active {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+}
+.dash3d-dot,
+.dash3d-dot.healthy,
+.dash3d-dot.stalled,
+.dash3d-dot.blocked,
+.dash3d-dot.idle {
+  background: #d4d4d8 !important;
+  color: #d4d4d8 !important;
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.25) !important;
+}
+.dash3d-dot.idle {
+  background: #52525b !important;
+  color: #52525b !important;
+  box-shadow: none !important;
+}
+.dash3d-list li {
+  border-color: rgb(255 255 255 / 0.08) !important;
+}
+.dash3d-fallback {
+  background: rgb(5 5 7 / 0.92) !important;
+}
+html[data-theme="light"] .dash3d-root {
+  --dash3d-bg: #fafafa !important;
+  --dash3d-panel: rgb(255 255 255 / 0.86) !important;
+  --dash3d-line: rgb(228 228 231 / 0.95) !important;
+  --dash3d-fg: #09090b !important;
+  --dash3d-muted: #52525b !important;
+  --dash3d-accent: #18181b !important;
+  background:
+    radial-gradient(ellipse 50% 40% at 20% 0%, rgb(9 9 11 / 0.04), transparent 60%),
+    var(--dash3d-bg) !important;
+}
+html[data-theme="light"] .dash3d-glass,
+html[data-theme="light"] .dash3d-skybar-card,
+html[data-theme="light"] .dash3d-flyhud {
+  background: rgb(255 255 255 / 0.9) !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  color: #09090b !important;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.1) !important;
+}
