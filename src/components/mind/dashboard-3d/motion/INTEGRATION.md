@@ -306,15 +306,40 @@ stepCometLaunchEase(launch, samples, dt, reducedMotion);
 
 Re-call `scheduleCometLaunchBurst` as slots free (concurrent cap). `clearCometLaunch` interrupts.
 
+## Focus-ring breathe (c15)
+
+```ts
+import {
+  createFocusRingBreatheState, createFocusRingBreatheSample,
+  setFocusRingActive, stepFocusRingBreathe,
+} from "./motion";
+
+const ring = createFocusRingBreatheState();
+const ringOut = createFocusRingBreatheSample();
+
+setFocusRingActive(ring, Boolean(focusId)); // on select/deselect
+stepFocusRingBreathe(ring, ringOut, tSeconds, dt, reducedMotion);
+// apply ringOut.opacity / ringOut.scale to the selection ring mesh
+```
+
+Breathe phase uses MotionClock (survives tab freeze — see REA c15 capture).
+Reduced-motion → static base opacity, no breathe.
+
 ## Requests for Dashboard Bot
 
 Motion lane **does not edit `package.json`**. Please add these lane test files to the
 `scripts.test` strip-types list on `origin/dashboard-3d` when landing motion/+particles/:
 
 - `src/components/mind/dashboard-3d/motion/comet-launch-ease.test.ts`
+- `src/components/mind/dashboard-3d/motion/focus-ring-breathe.test.ts`
 - `src/components/mind/dashboard-3d/motion/wind-gust.test.ts`
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
 
 Lane CI locally: `node --experimental-strip-types --test src/components/mind/dashboard-3d/motion/*.test.ts src/components/mind/dashboard-3d/particles/*.test.ts`
+
+### REA c15 (fleet/motion/c15)
+- Dev `:8112` + Playwright frame sequence + freeze/resume.
+- Measured ~1.6–2.2 fps headless SwiftShader; avg frame 450–620ms; heavy drops <30fps.
+- Hacker follow-up: `maxConcurrent=0` + 10k burst clamp (avoid scheduling cliffs).
 

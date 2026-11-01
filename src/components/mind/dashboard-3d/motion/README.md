@@ -71,3 +71,9 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - Hacker c14: gust huge/NaN dirs; mid-RM residual clear; dust dispose clears gust; sub-ε snap
 - **Do not edit package.json** — list unregistered tests under INTEGRATION.md → Requests for Dashboard Bot
 
+## Focus-ring breathe (c15)
+
+- `focus-ring-breathe.ts` — MotionClock-phased opacity/scale breathe; ease in/out; reduced-motion static
+- Hacker c15 (from REA): comet-launch `maxConcurrent=0` + 10k burst clamp; multi-system clock resume finite
+- package.json owned by Dashboard Bot — see INTEGRATION Requests
+

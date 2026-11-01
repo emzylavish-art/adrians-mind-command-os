@@ -200,4 +200,20 @@ export {
   type CometLaunchSlot,
   type CometLaunchState,
 } from "./comet-launch-ease.ts";
+export {
+  FOCUS_RING_BREATHE_HZ,
+  FOCUS_RING_BREATHE_AMP,
+  FOCUS_RING_BASE_OPACITY,
+  FOCUS_RING_ENTER_LAMBDA,
+  FOCUS_RING_EXIT_LAMBDA,
+  FOCUS_RING_SCALE_BASE,
+  FOCUS_RING_SCALE_AMP,
+  createFocusRingBreatheSample,
+  createFocusRingBreatheState,
+  setFocusRingActive,
+  stepFocusRingBreathe,
+  type FocusRingBreatheOpts,
+  type FocusRingBreatheSample,
+  type FocusRingBreatheState,
+} from "./focus-ring-breathe.ts";
 
