@@ -245,9 +245,13 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       ownedGeos.push(winGeo);
       const litMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 });
       const dimMat = new THREE.MeshBasicMaterial({ color: 0x24304f, transparent: true, opacity: 0.85 });
-      ownedMats.push(litMat, dimMat);
+      const nightMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: b.nightShiftSteady ? 0.92 : 0.8 });
+      ownedMats.push(litMat, dimMat, nightMat);
+      const nightSet = new Set(b.nightShiftFloors ?? []);
       for (let f = 1; f < b.floors; f++) {
-        const w = new THREE.Mesh(winGeo, f < b.litFloors ? litMat : dimMat);
+        const night = nightSet.has(f);
+        const w = new THREE.Mesh(winGeo, night ? nightMat : f < b.litFloors ? litMat : dimMat);
+        if (night) w.userData.nightShift = true;
         w.position.set(0, 0.15 + f * b.floorHeight + b.floorHeight / 2, b.depth / 2 + 0.01);
         w.userData.cityPick = { buildingId: b.id, part: "window", floor: f } satisfies CityPick;
         shell.add(w);

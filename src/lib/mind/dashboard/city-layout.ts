@@ -4,6 +4,7 @@
  */
 import type { Health } from "./types.ts";
 import type { ProjectBuilding, ProjectsDashboard } from "./projects.ts";
+import { nightShiftFloors as computeNightShift } from "./night-shift.ts";
 
 export type CityBuilding = {
   id: string;
@@ -23,7 +24,12 @@ export type CityBuilding = {
   progress: number;
   /** real task states (capped) for interior task lanterns */
   taskStates: Array<"open" | "done">;
+  /** floors with night-shift glow from real lastActivityAt within 30m */
+  nightShiftFloors: number[];
+  nightShiftActive: boolean;
+  nightShiftSteady: boolean;
 };
+
 
 export type CityLayout = {
   buildings: CityBuilding[];
@@ -55,10 +61,15 @@ export function floorsFor(p: Pick<ProjectBuilding, "openTasks" | "doneTasks" | "
 
 const HEALTHS: Health[] = ["healthy", "stalled", "blocked", "idle"];
 
-export function buildCityLayout(projects: ProjectsDashboard | null | undefined): CityLayout {
+export function buildCityLayout(
+  projects: ProjectsDashboard | null | undefined,
+  opts?: { nowMs?: number; reducedMotion?: boolean },
+): CityLayout {
   if (!projects || !Array.isArray(projects.projects)) {
     return { buildings: [], radius: 6, available: false, reason: "Projects data unavailable." };
   }
+  const nowMs = Number.isFinite(opts?.nowMs) ? (opts!.nowMs as number) : Date.now();
+  const reducedMotion = Boolean(opts?.reducedMotion);
   const seen = new Set<string>();
   const list = projects.projects
     .filter((p) => p && typeof p.id === "string" && p.id && !seen.has(p.id) && (seen.add(p.id), true))
@@ -99,6 +110,19 @@ export function buildCityLayout(projects: ProjectsDashboard | null | undefined):
       taskStates: (Array.isArray(p.tasks) ? p.tasks : [])
         .slice(0, 24)
         .map((t) => (t && t.status === "done" ? "done" : "open")),
+      ...(() => {
+        const ns = computeNightShift({
+          floors,
+          lastActivityAt: p.lastActivityAt ?? null,
+          nowMs,
+          reducedMotion,
+        });
+        return {
+          nightShiftFloors: ns.floors,
+          nightShiftActive: ns.active,
+          nightShiftSteady: ns.steady,
+        };
+      })(),
     };
   });
   const radius = (Math.max(cols, rows) * SPACING) / 2;
