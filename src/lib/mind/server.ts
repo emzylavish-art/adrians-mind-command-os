@@ -8,12 +8,13 @@ import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 const MODEL = "grok-4.5";
 
 function envCheck() {
   return guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
@@ -33,7 +34,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   } catch {
     signedIn = false;
   }
-  const described = describePersistence(process.env.DATABASE_URL);
+  const described = describePersistence(resolveDatabaseUrl(process.env));
   const persistence = described.note;
   const databaseBackend = described.backend;
   if (!gate.ok) {
@@ -405,10 +406,10 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     return mintRealtimeClientSecret({});
   });
 /**
- * MCP server list for Tools. Soft-auth: same session resolution as authMiddleware
- * (getSessionUser + bearer), but returns a typed `unauthenticated` payload instead
- * of throwing — so the Tools panel can show a quiet sign-in empty state (not a banner).
- * Grok Build owns accepting Supabase HttpOnly cookies inside getSessionUser.
+ * MCP server list for Tools. Soft-auth: always calls getSessionUser (Supabase
+ * HttpOnly cookies first, then Better Auth) via resolveMcpListUserId — same
+ * session helper as authMiddleware/requireUserId — but returns typed
+ * `unauthenticated` instead of throwing so Tools stays quiet when signed out.
  */
 export const mcpRegistryList = createServerFn({ method: "GET" })
   .middleware([
@@ -426,19 +427,22 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
     const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
-    let userId: string | null = null;
-    if (!authConfigured && !gateIdentityEnabled()) {
-      // Match requireUserId: auth-off + no DATABASE_URL → shared dev user.
-      if (!process.env.DATABASE_URL?.trim()) userId = DEV_USER_ID;
-    } else {
-      const user = await getSessionUser(context.bearerToken);
-      userId = user?.id ?? null;
-    }
+    const { resolveMcpListUserId, buildMcpRegistryListPayload } = await import("./mcp-list-auth");
+    // Always reuse getSessionUser (Supabase cookies first, then Better Auth) so a
+    // signed-in Supabase user is never short-circuited when Better Auth is off.
+    const sessionUser = await getSessionUser(context.bearerToken);
+    const userId = resolveMcpListUserId({
+      sessionUser,
+      authConfigured,
+      gateIdentityEnabled: gateIdentityEnabled(),
+      databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+      devUserId: DEV_USER_ID,
+    });
     if (!userId) {
-      return { status: "unauthenticated" as const, servers: [] as { id: string; label: string; kind: string; enabled: boolean }[] };
+      return buildMcpRegistryListPayload(null, []);
     }
     const { listRegistryServers } = await import("./mcp/registry");
-    return { status: "ok" as const, servers: listRegistryServers(userId) };
+    return buildMcpRegistryListPayload(userId, listRegistryServers(userId));
   });
 
 export const mcpRegistryToggle = createServerFn({ method: "POST" })

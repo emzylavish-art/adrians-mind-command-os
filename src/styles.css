@@ -3468,3 +3468,3135 @@ html[data-theme="light"] form.floating-composer.composer-dock {
     display: none !important;
   }
 }
+
+/* —— Cycle 35: desk main-stage crushed by .composer-bar width:100% flex sibling ——
+   LiveVoiceBar mounts `composer-bar is-fixed` as a .shell flex-row child. Base
+   `.composer-bar { position:sticky; width:100% }` made it ~1152px wide and stole
+   all free space from `.main-stage` (computed width 0 / inner column ~48px).
+   `is-fixed` had no CSS. Take the bar out of flow; restore main-stage flex. */
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed,
+.shell > [data-testid="composer-bar"].composer-bar {
+  position: fixed !important;
+  left: 0.75rem !important;
+  right: 0.75rem !important;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom)) !important;
+  top: auto !important;
+  width: auto !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  z-index: 46 !important;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .shell > [data-testid="composer-bar"].composer-bar {
+    left: calc(18rem + 1.25rem) !important; /* clear md:w-72 rail */
+    right: 1.5rem !important;
+    bottom: 1.5rem !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card,
+  .shell > .composer-bar.is-fixed .composer-bar__card {
+    width: min(100%, 42rem) !important;
+    margin-inline: auto !important;
+  }
+}
+.shell > .main-stage,
+.shell > .main-stage.flex-1,
+div.shell > div.main-stage {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+/* —— Cycle 36: force visible glass / backdrop-blur on every surface —— */
+.shell .rail,
+.shell aside.rail,
+.topbar,
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+.composer-dock,
+.floating-composer,
+[data-composer="floating"],
+.composer-bar__card,
+.masthead,
+.empty-state,
+.dash3d-glass,
+.dash3d-chart-card {
+  backdrop-filter: blur(22px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+}
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+article.rounded-panel.border.border-line,
+li.rounded-panel.border.border-line,
+.dash3d-chart-card,
+.empty-state {
+  background-color: rgb(12 12 14 / 0.72) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 320px 320px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 16px 40px rgb(0 0 0 / 0.45) !important;
+}
+.composer-dock,
+.floating-composer,
+[data-composer="floating"],
+.composer-bar__card {
+  background-color: rgb(10 10 12 / 0.78) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+}
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .rounded-panel.border.border-line.bg-surface,
+html[data-theme="light"] article.rounded-panel.border.border-line,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .empty-state {
+  background-color: rgb(255 255 255 / 0.82) !important;
+  background-image: linear-gradient(180deg, #fff, rgb(244 244 245 / 0.9)) !important;
+  background-blend-mode: normal !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.1), inset 0 1px 0 #fff !important;
+}
+html[data-theme="light"] .composer-dock,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.88) !important;
+}
+
+/* —— Cycle 37: mono shell — kill remaining color leaks (purple only .logo-mark) —— */
+aside.rail nav svg,
+aside.rail nav button svg,
+.main-stage svg:not(.logo-mark svg),
+.topbar svg,
+nav.fixed[aria-label="Primary"] svg,
+.composer-bar svg,
+.composer-dock svg {
+  color: #e4e4e7 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+aside.rail nav button.bg-accent svg,
+aside.rail nav button[aria-current="page"] svg {
+  color: #09090b !important;
+  stroke: currentColor !important;
+}
+.text-danger,
+.text-ok,
+.text-warn,
+.text-info,
+.main-stage .text-danger,
+.main-stage .text-ok,
+.main-stage .text-warn,
+.main-stage .text-info,
+p.text-sm.text-danger,
+span.text-danger,
+span.text-ok {
+  color: #e4e4e7 !important;
+}
+html[data-theme="light"] .text-danger,
+html[data-theme="light"] .text-ok,
+html[data-theme="light"] .text-warn,
+html[data-theme="light"] .text-info,
+html[data-theme="light"] p.text-sm.text-danger {
+  color: #27272a !important;
+}
+.composer-mic-dictation__dot,
+[class*="dictation__dot"],
+span.bg-danger,
+span.bg-red-500,
+.bg-\[\#ef4444\],
+.bg-red-500 {
+  background: #a1a1aa !important;
+  background-color: #a1a1aa !important;
+  box-shadow: none !important;
+}
+/* Active rail / Connected purple bloom → mono chip */
+aside.rail nav button.bg-accent,
+aside.rail nav button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+}
+/* Re-assert logo purple */
+.logo-mark,
+.logo-badge,
+aside span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent {
+  color: #fff !important;
+  background: #7c5cff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+  filter: none !important;
+}
+
+/* —— Cycle 38: spacing rhythm + contrast + empty/disabled wells —— */
+.main-stage .mx-auto.flex.max-w-6xl.flex-col.gap-4 {
+  gap: 1.15rem !important;
+}
+.main-stage .masthead {
+  padding: 1.15rem 1.25rem !important;
+  border-radius: 1.25rem !important;
+}
+/* Quick-action / suggestion pills — GPT-level contrast */
+.main-stage button.rounded-full.border,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage button.min-h-11.rounded-panel.border.border-line {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage button.rounded-full.border:hover,
+.main-stage .flex.flex-wrap.gap-2 > button:hover {
+  background: rgb(255 255 255 / 0.14) !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
+html[data-theme="light"] .main-stage button.rounded-full.border,
+html[data-theme="light"] .main-stage .flex.flex-wrap.gap-2 > button {
+  background: rgb(9 9 11 / 0.04) !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  color: #18181b !important;
+}
+/* Empty wells with texture */
+.empty-state,
+[data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted:only-child),
+.dash3d-chart-card [data-testid="chart-empty"] {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    url("/brand/textures/empty-well-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 280px 280px !important;
+  background-position: center, center, center !important;
+  min-height: 7.5rem !important;
+  padding: 1.25rem !important;
+}
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1) !important;
+  box-shadow: none !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after {
+  content: "Soon" !important;
+  letter-spacing: 0.04em;
+  font-size: 0.62rem !important;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+/* —— Cycle 39: chart mono gradients, grid, tooltips —— */
+.dash3d-charts-panel.dash3d-glass,
+.dash3d-charts-panel {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/chart-grid-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 300px 300px !important;
+  background-blend-mode: soft-light, multiply, soft-light !important;
+  padding: 1rem !important;
+  border-radius: 1.15rem !important;
+}
+.dash3d-chart-card {
+  border-radius: 1rem !important;
+  padding: 0.85rem 0.9rem !important;
+}
+.dash3d-chart-card svg {
+  filter: grayscale(1) contrast(1.05) !important;
+}
+.dash3d-chart-card svg rect,
+.dash3d-chart-card svg path,
+.dash3d-chart-card svg circle {
+  fill: #d4d4d8 !important;
+  stroke: #a1a1aa !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-chart-card svg .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.12) !important;
+  stroke-dasharray: 3 4 !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-chart-card .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+  font-size: 11px !important;
+}
+.dash3d-chart-card .recharts-tooltip-wrapper .recharts-default-tooltip,
+.dash3d-chart-card [class*="tooltip"] {
+  background: rgb(10 10 12 / 0.94) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.65rem !important;
+  color: #f4f4f5 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.5) !important;
+}
+.dash3d-progress,
+aside .mt-3.h-1\.5,
+.main-stage .h-1\.5.rounded-full.bg-surface-2 {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+}
+.dash3d-progress-fill,
+.dash3d-progress-fill-ok,
+.dash3d-progress > div,
+aside .mt-3.h-1\.5 > div {
+  background: linear-gradient(90deg, #71717a, #f4f4f5) !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg rect,
+html[data-theme="light"] .dash3d-chart-card svg path {
+  fill: #3f3f46 !important;
+  stroke: #52525b !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg line {
+  stroke: rgb(9 9 11 / 0.12) !important;
+}
+
+/* —— Cycle 40: brand Imagine textures mounted —— */
+.command-card,
+.glow-card,
+.dense-card,
+.composer-bar__card {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    url("/brand/textures/panel-noise-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 220px 220px, 320px 320px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+}
+
+/* —— Cycle 41: rail workspace icon mono (hardcoded fills / emoji-like marks) —— */
+aside.rail nav button,
+aside.rail nav a,
+aside.rail [class*="text-"] {
+  color: #d4d4d8 !important;
+}
+aside.rail nav button.bg-accent,
+aside.rail nav button.bg-accent * {
+  color: #09090b !important;
+}
+aside.rail nav svg *,
+aside.rail nav button svg * {
+  stroke: currentColor !important;
+  fill: currentColor !important;
+  color: inherit !important;
+}
+/* Prefer outline icons: if fill paints blobs, keep muted gray */
+aside.rail nav button:not(.bg-accent) svg *[fill]:not([fill="none"]) {
+  fill: #a1a1aa !important;
+  stroke: #a1a1aa !important;
+}
+aside.rail nav .text-info,
+aside.rail nav .text-ok,
+aside.rail nav .text-warn,
+aside.rail nav .text-danger,
+aside.rail nav .text-accent {
+  color: #d4d4d8 !important;
+}
+/* Logo exception */
+aside.rail .logo-mark,
+aside.rail .logo-badge,
+aside.rail span.grid.size-11.rounded-2xl,
+aside.rail span.grid.size-11.rounded-2xl * {
+  color: #fff !important;
+  fill: #fff !important;
+  background: #7c5cff !important;
+}
+
+/* —— Blueprint c42: de-overlap intentional dual composers (dock + LiveVoiceBar) ——
+   Both intentional: command dock (ASK/AUTO/Send) + Voice Speak bar. Voice lock claimed.
+   Mobile had ~80px overlap. Hide duplicate Ask field; stack dock above slim Speak strip
+   above tab bar; clamp bar width to viewport (tablet overflow). */
+@media (max-width: 767.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed {
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__card,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__card {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0.45rem 0.65rem calc(0.45rem + env(safe-area-inset-bottom, 0px)) !important;
+    gap: 0.35rem !important;
+    border-radius: 1.15rem !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__safe {
+    padding: 0 !important;
+  }
+  /* Lift command dock above slim Speak strip (~3.25rem) + tab */
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock {
+    bottom: calc(2.7rem + 3.35rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+/* Tablet/desktop: never exceed viewport; clear rail when present */
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed {
+  left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+  right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+  width: auto !important;
+  max-width: calc(100vw - 1.5rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+  box-sizing: border-box !important;
+}
+@media (min-width: 768px) {
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    left: max(0.75rem, calc(18rem + 0.75rem)) !important;
+    max-width: calc(100vw - 18rem - 1.5rem) !important;
+  }
+}
+
+/* —— Blueprint c43: 44px minimum hit targets —— */
+button:not(:disabled),
+a[href],
+[role="button"],
+input:not([type="hidden"]),
+select,
+textarea,
+.composer-bar__plus,
+.composer-bar__model,
+.composer-speak-pill,
+nav.fixed[aria-label="Primary"] > button {
+  min-height: 44px !important;
+}
+nav.fixed[aria-label="Primary"] > button {
+  min-width: 44px !important;
+}
+.composer-bar__plus,
+.composer-bar__model,
+button.grid.size-9,
+button.grid.size-10,
+button.grid.size-11,
+.topbar button.grid {
+  min-width: 44px !important;
+  min-height: 44px !important;
+}
+/* Keep idle composer compact chips tappable without exploding dock height */
+@media (max-width: 767.98px) {
+  section.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    min-height: 44px !important;
+    height: 44px !important;
+  }
+}
+
+/* —— Blueprint c44: focus-visible rings + safe-area on fixed chrome —— */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.composer-bar__plus:focus-visible,
+.composer-bar__model:focus-visible,
+.composer-speak-pill:focus-visible,
+aside.rail nav button:focus-visible {
+  outline: 2px solid rgb(255 255 255 / 0.9) !important;
+  outline-offset: 2px !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] [role="button"]:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] textarea:focus-visible {
+  outline-color: rgb(9 9 11 / 0.9) !important;
+}
+.composer-bar.is-fixed,
+.composer-bar.is-fixed .composer-bar__safe,
+.composer-bar.is-fixed .composer-bar__card,
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+section.composer-dock {
+  padding-left: max(0px, env(safe-area-inset-left)) !important;
+  padding-right: max(0px, env(safe-area-inset-right)) !important;
+}
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+  padding-bottom: max(0.15rem, env(safe-area-inset-bottom)) !important;
+}
+
+/* —— Blueprint c45: kill horizontal overflow + wrap + keyboard room —— */
+html, body, #root, .shell, .main-stage {
+  max-width: 100vw !important;
+  overflow-x: clip !important;
+}
+.main-stage .mx-auto.flex.max-w-6xl,
+.composer-bar__card,
+.composer-dock,
+.floating-composer {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.main-stage button,
+.main-stage .rounded-full,
+.composer-dock button,
+aside.rail nav button span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Extra bottom padding so content clears dock + speak + tab when keyboard opens */
+@media (max-width: 767.98px) {
+  .main-stage,
+  .min-h-0.flex-1.overflow-auto,
+  .flex.min-h-0.min-w-0.flex-1.flex-col.pb-16 {
+    padding-bottom: calc(18rem + env(safe-area-inset-bottom)) !important;
+  }
+  /* When visual viewport shrinks (keyboard), keep fixed chrome inside */
+  @supports (height: 100dvh) {
+    .shell { min-height: 100dvh; height: 100dvh; }
+  }
+}
+
+
+/* HyperFrames-alternative mono motion (flag-gated component) */
+.mono-motion-graphic {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: rgb(244 246 251);
+}
+.mono-motion-graphic__core {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.9;
+}
+.mono-motion-graphic__ring {
+  position: absolute;
+  inset: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.35;
+  animation: mono-motion-breathe 2.4s ease-in-out infinite;
+}
+@keyframes mono-motion-breathe {
+  0%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.22;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mono-motion-graphic__ring {
+    animation: none;
+    opacity: 0.3;
+    transform: none;
+  }
+}
+
+/* —— Blueprint c46: force dock above Speak strip (specificity win) —— */
+@media (max-width: 767.98px) {
+  .main-stage section.command-card.composer-dock,
+  .main-stage section.floating-composer.composer-dock,
+  .main-stage .floating-composer.command-card.composer-dock,
+  section.floating-composer.command-card.composer-dock.rounded-panel,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.floating-composer.composer-dock[data-composer="floating"] {
+    bottom: calc(2.75rem + 4.25rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(2.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    height: auto !important;
+    max-height: 4.1rem !important;
+  }
+}
+
+/* —— Evolution c47: translucent glass so blur/frost reads; tablet dual-composer —— */
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+article.rounded-panel.border,
+.dash3d-chart-card,
+.dash3d-node-detail,
+[data-dash3d-node],
+.composer-dock,
+.floating-composer,
+.composer-bar__card {
+  background-color: rgb(12 12 14 / 0.55) !important;
+  backdrop-filter: blur(24px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+}
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.7) !important;
+}
+/* Tablet (md, < lg): treat like mobile stack for dual composers */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    max-width: calc(100vw - 1.5rem) !important;
+  }
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    max-height: none !important;
+  }
+}
+
+/* —— Evolution c48: dash3d charts + node-detail cards (mono, CSS-only) —— */
+.dash3d-charts-panel,
+.dash3d-charts-panel.dash3d-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/chart-grid-mono.jpg"),
+    rgb(10 10 12 / 0.72) !important;
+  background-size: auto, cover, auto !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1.15rem !important;
+  padding: 1rem !important;
+  backdrop-filter: blur(20px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.15) !important;
+}
+.dash3d-chart-card,
+.dash3d-node-detail,
+.dash3d-node-card,
+[data-dash3d-node],
+.dash3d-side .dash3d-glass {
+  background-color: rgb(12 12 14 / 0.62) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1rem !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.dash3d-node-detail:empty,
+.dash3d-node-card:empty,
+[data-dash3d-node]:empty {
+  min-height: 7rem !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #a1a1aa !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, cover !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"]::before,
+.dash3d-node-detail:empty::before,
+.dash3d-node-card:empty::before {
+  content: "No data yet" !important;
+  font-size: 0.78rem !important;
+  letter-spacing: 0.02em;
+  color: #a1a1aa !important;
+}
+.dash3d-chart-card svg rect,
+.dash3d-chart-card svg path {
+  fill: #d4d4d8 !important;
+  stroke: #a1a1aa !important;
+}
+.dash3d-chart-card svg line {
+  stroke: rgb(255 255 255 / 0.14) !important;
+}
+html[data-theme="light"] .dash3d-charts-panel,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .dash3d-node-detail {
+  background-color: rgb(255 255 255 / 0.82) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  color: #18181b !important;
+}
+
+/* —— Evolution c49: tablet — dock in-flow, Speak bar docked under content without cover —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    position: sticky !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 0.75rem !important;
+    z-index: 5 !important;
+  }
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed {
+    /* keep as shell child but out of crushing flex: already fixed→sticky */
+    flex: 0 0 auto !important;
+  }
+  .shell > .main-stage {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* —— Evolution c50: chip/tab hit targets + focus outline-style solid —— */
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage button.rounded-full,
+.composer-dock button.rounded-full,
+aside.rail nav button {
+  min-height: 44px !important;
+  min-width: 44px !important;
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline-style: solid !important;
+  outline-width: 2px !important;
+  outline-color: #f4f4f5 !important;
+  outline-offset: 2px !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] textarea:focus-visible {
+  outline-color: #09090b !important;
+}
+/* Masthead / suggestion contrast */
+.main-stage a.underline,
+.main-stage button.underline,
+.main-stage .text-accent.underline {
+  color: #f4f4f5 !important;
+  text-underline-offset: 0.2em;
+  opacity: 1 !important;
+}
+
+/* —— Evolution c51: denser empty panels + Connected mono warning chrome —— */
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted) {
+  min-height: 8rem !important;
+  padding: 1.35rem 1.25rem !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+.main-stage p.text-sm.text-danger,
+.main-stage .text-danger,
+.main-stage [class*="border-danger"] {
+  color: #e4e4e7 !important;
+  border-color: rgb(255 255 255 / 0.22) !important;
+  background: rgb(255 255 255 / 0.04) !important;
+}
+/* Rail mono assert after other lanes */
+aside.rail nav button:not(.bg-accent) {
+  color: #d4d4d8 !important;
+}
+aside.rail nav button:not(.bg-accent) svg,
+aside.rail nav button:not(.bg-accent) svg * {
+  stroke: #a1a1aa !important;
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+}
+.logo-mark, .logo-badge, aside span.grid.size-11.rounded-2xl {
+  background: #7c5cff !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c52: GPT-like stage rhythm (masthead → actions → dock) —— */
+.main-stage .mx-auto.flex.max-w-6xl.flex-col {
+  gap: 1.25rem !important;
+}
+.main-stage .masthead {
+  margin-bottom: 0.25rem !important;
+}
+.main-stage .flex.flex-wrap.gap-2.pb-1,
+.main-stage .flex.gap-2.overflow-x-auto.pb-1 {
+  padding-bottom: 0.5rem !important;
+  gap: 0.6rem !important;
+}
+@media (min-width: 1024px) {
+  .composer-bar.is-fixed .composer-bar__card {
+    box-shadow:
+      0 22px 56px rgb(0 0 0 / 0.55),
+      inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+    border-color: rgb(255 255 255 / 0.14) !important;
+  }
+}
+
+/* —— Evolution c53: undo tablet sticky (crushed mainW→0); fixed bar + main flex —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    position: fixed !important;
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: calc(100vw - 1.5rem) !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    z-index: 46 !important;
+  }
+  .shell > .main-stage,
+  .shell > .main-stage.flex-1 {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+}
+
+/* —— Evolution c54: tablet overflow — clamp Speak bar; don't cover dock bottom —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    max-width: min(42rem, calc(100vw - 1.5rem)) !important;
+    width: min(42rem, calc(100vw - 1.5rem)) !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    bottom: 0.75rem !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* Prefer command dock on tablet; keep Speak reachable via dock voice controls */
+  body:has(section.composer-dock[data-composer="floating"]) .composer-bar.is-fixed {
+    opacity: 0.92;
+  }
+  .shell, .main-stage, html, body {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+}
+
+/* —— Evolution c55: prove glass — override Pass-8 backdrop-filter:none on tool/service cards —— */
+.tool-card,
+.service-card,
+.main-stage .grid > article.dense-card.card-texture,
+.dense-card.card-texture,
+.command-card,
+.glow-card,
+.dense-card,
+.composer-dock,
+.floating-composer,
+.composer-bar__card,
+.masthead,
+.dash3d-chart-card,
+.dash3d-glass {
+  backdrop-filter: blur(22px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+  background-color: rgb(12 12 14 / 0.58) !important;
+}
+html[data-theme="light"] .tool-card,
+html[data-theme="light"] .service-card,
+html[data-theme="light"] .dense-card.card-texture,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+}
+/* Kill purple focus leftovers (mono shell) */
+.dense-card:focus-within,
+.settings-row:focus-within,
+.glow-card:focus-within,
+.floating-composer:focus-within,
+main:focus-visible {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2), 0 18px 48px rgb(0 0 0 / 0.45) !important;
+}
+html[data-theme="light"] :focus-visible {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(9 9 11 / 0.55) !important;
+}
+
+/* —— Evolution c56: GPT/Grok hero density — chips, type, empty wells —— */
+.main-stage .masthead h1,
+.main-stage .masthead .font-display,
+.main-stage h1.font-display,
+.main-stage .masthead h2 {
+  font-size: clamp(1.65rem, 4vw, 2.15rem) !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.02em !important;
+  font-weight: 650 !important;
+}
+.main-stage .masthead p,
+.main-stage .masthead .text-muted {
+  font-size: 0.95rem !important;
+  line-height: 1.45 !important;
+  color: #a1a1aa !important;
+  max-width: 36rem;
+}
+.main-stage .masthead {
+  padding: 1.35rem 1.35rem 1.2rem !important;
+  gap: 0.65rem !important;
+}
+/* Suggestion / action chips denser like GPT */
+.main-stage button.rounded-full,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage .flex.gap-2.overflow-x-auto > button {
+  min-height: 2.75rem !important;
+  padding: 0.55rem 1rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 550 !important;
+  letter-spacing: 0.01em;
+  border-radius: 999px !important;
+}
+.main-stage .flex.flex-col.gap-2 > button.rounded-full,
+.main-stage a.underline {
+  font-size: 0.95rem !important;
+  line-height: 1.4 !important;
+}
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted:only-child) {
+  min-height: 9.5rem !important;
+  padding: 1.5rem 1.35rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+}
+.main-stage .empty-state h2,
+.main-stage .empty-state h3,
+.main-stage [data-empty="true"] h2 {
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+}
+@media (max-width: 429.98px) {
+  .main-stage .masthead { padding: 1.1rem 1rem !important; }
+  .main-stage button.rounded-full { padding-inline: 0.85rem !important; font-size: 0.8125rem !important; }
+}
+
+/* —— Evolution c57: glass proof without relying on headless blur ——
+   Override opaque 0.96 dock fills so frost texture + translucency read on real devices.
+   Keep blur !important for capable browsers; headless still reports none. */
+section.command-card.composer-dock,
+section.floating-composer.composer-dock,
+.command-card.composer-dock,
+.floating-composer.command-card.composer-dock,
+form.composer-dock.command-card,
+.composer-bar__card,
+.command-card,
+.glow-card,
+.dense-card,
+.tool-card,
+.service-card,
+.masthead,
+.dash3d-glass,
+.dash3d-chart-card {
+  background-color: rgb(10 10 12 / 0.72) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  backdrop-filter: blur(24px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.15) !important;
+}
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock,
+  .command-card.composer-dock {
+    background: rgb(10 10 12 / 0.72) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 280px 280px !important;
+  }
+}
+html[data-theme="light"] section.command-card.composer-dock,
+html[data-theme="light"] .composer-bar__card,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .tool-card {
+  background-color: rgb(255 255 255 / 0.78) !important;
+  background-image: linear-gradient(180deg, #fff, rgb(244 244 245 / 0.9)) !important;
+  background-blend-mode: normal !important;
+}
+
+/* —— Evolution c58: 375 / 430 edge viewport rhythm —— */
+@media (max-width: 379.98px) {
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col { gap: 0.95rem !important; padding-inline: 0.85rem !important; }
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.45rem !important; }
+  .main-stage button.rounded-full { min-height: 2.6rem !important; font-size: 0.78rem !important; }
+  section.composer-dock:not(:focus-within) { padding: 0.55rem 0.65rem !important; }
+}
+@media (min-width: 380px) and (max-width: 429.98px) {
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.55rem !important; }
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col { gap: 1.05rem !important; }
+}
+@media (min-width: 430px) and (max-width: 767.98px) {
+  .main-stage .masthead { padding: 1.25rem 1.15rem !important; }
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.75rem !important; }
+  .main-stage button.rounded-full { min-height: 2.85rem !important; padding-inline: 1.05rem !important; }
+}
+
+/* —— Evolution c59: a11y CSS-only from a11y-dead-controls.md ——
+   sidebar-plus contrast; ≥44px hit targets; coming-soon chrome; early Tab rings */
+
+/* New chat: axe color-contrast — mono high-contrast (purple stays on .logo-mark only) */
+.sidebar-plus,
+.sidebar-plus.bg-accent,
+aside .sidebar-plus,
+button.sidebar-plus {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 10px 28px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.55) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+.sidebar-plus:hover,
+.sidebar-plus.bg-accent:hover {
+  background: #ffffff !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] .sidebar-plus,
+html[data-theme="light"] .sidebar-plus.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+  border-color: rgb(9 9 11 / 0.2) !important;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+}
+
+/* Hit targets ≥44×44: Dictate, Speak, Voice/Mute/Speak-last, Alerts, Attach */
+[data-testid="composer-mic-dictate"],
+.composer-mic-dictation,
+button.composer-mic-dictation {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  width: auto !important;
+  padding-inline: 0.55rem !important;
+}
+[data-testid="composer-speak"],
+.composer-speak-pill,
+button.composer-speak-pill {
+  min-height: 2.75rem !important;
+  padding-block: 0.45rem !important;
+}
+[data-testid="open-voice-mode"],
+[data-testid="voice-mode-toggle-composer"],
+[data-testid="live-voice-bar-mute"],
+[data-testid="voice-mute"],
+button[aria-label="Speak last reply"],
+button[aria-label="Alerts"],
+button[aria-label="Mute microphone"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  flex-shrink: 0 !important;
+}
+/* Alerts was ~18px wide despite size-11 — force square hit box */
+button[aria-label="Alerts"] {
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+}
+/* Attach on mobile */
+.composer-dock button[aria-label="Attach"],
+.composer-dock button:has(> svg):not([data-testid]):not([aria-label="Alerts"]),
+form.composer-dock button.min-h-10,
+.composer-bar button[aria-label="Attach"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+.composer-dock .flex.items-center.gap-2 > button,
+.composer-dock .flex.gap-2 > button,
+.floating-composer .flex.gap-2 > button {
+  min-height: 2.75rem !important;
+}
+
+/* ASK / AUTOMATIC / Memory tiles — were h33 on 390 */
+.main-stage button.min-h-16.rounded-panel,
+.main-stage .min-h-16.rounded-panel,
+.main-stage button.rounded-panel.min-h-16 {
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding: 0.55rem 0.75rem !important;
+  font-size: 0.72rem !important;
+  line-height: 1.15 !important;
+}
+
+/* /explore All filter chip width 41 → ≥44 */
+.main-stage button.min-h-11.rounded-panel,
+[data-testid="persona-directory"] button.min-h-11,
+.persona-directory button.min-h-11 {
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding-inline: 0.85rem !important;
+}
+
+/* /login Sign in / Sign up tabs min-h-10 (40) → 44 */
+[data-testid="login-password-submit"],
+.login-card button.min-h-10,
+main button.min-h-10.rounded-\[calc\(var\(--radius-panel\)-0\.15rem\)\],
+form button.min-h-10 {
+  min-height: 2.75rem !important;
+}
+/* login mode tabs specifically */
+main .rounded-panel button.min-h-10,
+[data-testid="login-error-banner"] ~ * button.min-h-10,
+form[data-testid] button.min-h-10,
+/* broader login route tabs */
+body:has([data-testid="login-password-submit"]) button.min-h-10 {
+  min-height: 2.75rem !important;
+  padding-inline: 0.9rem !important;
+}
+
+/* Coming-soon chrome — Connect Google, Generate Image/Video (+ any .service-setup) */
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon,
+button.is-coming-soon.min-h-11 {
+  position: relative !important;
+  opacity: 0.62 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1) !important;
+  pointer-events: auto !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow: none !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after,
+a.is-coming-soon::after {
+  content: "Soon" !important;
+  display: inline-flex !important;
+  align-items: center;
+  margin-left: 0.5rem;
+  font-size: 0.62rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d4d4d8 !important;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  line-height: 1.2;
+  background: rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] button.is-coming-soon::after,
+html[data-theme="light"] .service-setup.is-coming-soon::after {
+  color: #3f3f46 !important;
+  background: rgb(255 255 255 / 0.7);
+  border-color: rgb(9 9 11 / 0.18);
+}
+
+/* Early Tab focus-visible on /login, /memory, /explore */
+body:has([data-testid="login-password-submit"]) :focus-visible,
+body:has([data-testid="login-oauth-google"]) :focus-visible,
+[data-testid="login-password-submit"]:focus-visible,
+[data-testid="login-oauth-google"]:focus-visible,
+[data-testid="login-oauth-github"]:focus-visible,
+[data-testid="login-back-home"]:focus-visible,
+main:has([href="/memory"]) :focus-visible,
+a[href="/memory"]:focus-visible,
+body:has([data-testid="persona-directory"]) :focus-visible,
+.persona-directory :focus-visible,
+.main-stage:has(.persona-directory) button:focus-visible,
+.main-stage:has(.persona-directory) a:focus-visible,
+.main-stage:has(.persona-directory) input:focus-visible {
+  outline: none !important;
+  box-shadow:
+    0 0 0 2px #0a0a0b,
+    0 0 0 4px #f4f4f5,
+    0 0 22px rgb(255 255 255 / 0.18) !important;
+}
+html[data-theme="light"] body:has([data-testid="login-password-submit"]) :focus-visible,
+html[data-theme="light"] .persona-directory :focus-visible {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #18181b !important;
+}
+/* Ensure first interactive controls can show ring (skip-link / tabs) */
+body:has([data-testid="login-password-submit"]) a:focus-visible,
+body:has([data-testid="login-password-submit"]) button:focus-visible,
+body:has([data-testid="login-password-submit"]) input:focus-visible {
+  outline-offset: 2px;
+}
+
+/* —— Evolution c60: a11y hit-target overrides beating idle-dock crush (2.05rem / 2.5rem) —— */
+@media (max-width: 767.98px) {
+  /* ASK / AUTOMATIC / Memory idle tiles — raise above prior 2.05rem + unlock row max-height */
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    max-height: 3rem !important;
+    min-height: 2.75rem !important;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    min-height: 2.75rem !important;
+    height: 2.75rem !important;
+    min-width: 2.75rem !important;
+  }
+  /* Attach idle circle was 2.5rem / font-size 0 */
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child,
+  section.floating-composer.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    height: 2.75rem !important;
+  }
+}
+
+/* Mono focus rings — kill residual purple Pass-8 glow on early Tab (/login /memory /explore /shell) */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+aside.rail nav button:focus-visible,
+.sidebar-plus:focus-visible,
+[data-testid="login-oauth-google"]:focus-visible,
+[data-testid="login-oauth-github"]:focus-visible,
+[data-testid="login-password-submit"]:focus-visible,
+[data-testid="login-back-home"]:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] [role="button"]:focus-visible {
+  outline: 2px solid #18181b !important;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #18181b !important;
+}
+
+/* —— Evolution c61: sidebar-plus contrast beat rail [class*=text-]; tablet ASK tile stretch —— */
+aside.rail .sidebar-plus,
+aside.rail .sidebar-plus.bg-accent,
+aside.rail button.sidebar-plus,
+aside.rail .sidebar-plus[class*="text-"],
+aside.rail button.sidebar-plus[class*="text-"],
+aside.rail .sidebar-plus.text-accent-ink {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  -webkit-text-fill-color: #09090b !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+aside.rail .sidebar-plus *,
+aside.rail button.sidebar-plus * {
+  color: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail .sidebar-plus,
+html[data-theme="light"] aside.rail .sidebar-plus[class*="text-"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  -webkit-text-fill-color: #fafafa !important;
+}
+html[data-theme="light"] aside.rail .sidebar-plus * {
+  color: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Tablet+: stop ASK/AUTOMATIC/Memory grid stretching to ~374px row */
+@media (min-width: 768px) {
+  section.composer-dock > .grid.gap-2,
+  section.command-card.composer-dock > .grid.gap-2,
+  section.floating-composer.composer-dock > .grid.gap-2,
+  .main-stage section.composer-dock > .grid.gap-2 {
+    grid-template-rows: auto !important;
+    align-items: stretch !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+  section.composer-dock > .grid.gap-2 > button,
+  section.command-card.composer-dock > .grid.gap-2 > button,
+  section.floating-composer.composer-dock > .grid.gap-2 > button {
+    height: auto !important;
+    min-height: 3.5rem !important;
+    max-height: none !important;
+    align-self: stretch !important;
+  }
+}
+
+/* —— Evolution c62: tablet (768–1023) composer density — stop 900px dock / 374px ASK —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock {
+    max-height: min(42vh, 22rem) !important;
+    overflow: auto !important;
+    height: auto !important;
+    inset: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+  }
+  section.composer-dock > .grid.gap-2,
+  section.command-card.composer-dock > .grid.gap-2,
+  section.floating-composer.composer-dock > .grid.gap-2 {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    gap: 0.45rem !important;
+    max-height: 3.25rem !important;
+    height: 3.25rem !important;
+    grid-template-rows: none !important;
+    overflow-x: auto !important;
+  }
+  section.composer-dock > .grid.gap-2 > button,
+  section.command-card.composer-dock > .grid.gap-2 > button,
+  section.floating-composer.composer-dock > .grid.gap-2 > button {
+    flex: 1 1 0 !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    height: 3.25rem !important;
+    max-height: 3.25rem !important;
+    overflow: hidden !important;
+    padding: 0.45rem 0.65rem !important;
+  }
+  /* Hide verbose tile subtitles on tablet (same as mobile idle) */
+  section.composer-dock > .grid.gap-2 > button .text-xs,
+  section.command-card.composer-dock > .grid.gap-2 > button .text-xs,
+  section.floating-composer.composer-dock > .grid.gap-2 > button .text-xs {
+    display: none !important;
+  }
+  section.composer-dock > .grid.gap-2 > button .text-sm,
+  section.command-card.composer-dock > .grid.gap-2 > button .text-sm {
+    font-size: 0.78rem !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* —— Evolution c63: mono hard-kill remaining purple chrome; loading status; aria-current —— */
+
+/* Kill ambient purple wash on body (B/W shell) */
+body {
+  background:
+    radial-gradient(ellipse 55% 45% at 78% -8%, rgb(255 255 255 / 0.04), transparent 55%),
+    radial-gradient(ellipse 40% 40% at 8% 18%, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-bg) !important;
+}
+
+/* Active nav (aria-current) — markup may omit bg-accent but keep purple utility shadows */
+aside.rail nav button[aria-current="page"],
+aside.rail nav a[aria-current="page"],
+aside nav button[aria-current="page"],
+aside.rail nav button[class*="shadow-[0_0_18px_rgb(124_92_255"],
+aside.rail nav button[class*="124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+  filter: none !important;
+}
+aside.rail nav button[aria-current="page"] *,
+aside.rail nav button[aria-current="page"] svg,
+aside.rail nav button[aria-current="page"] svg * {
+  color: #09090b !important;
+  stroke: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"],
+html[data-theme="light"] aside.rail nav button[class*="124_92_255"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.12) !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"] * {
+  color: #fafafa !important;
+  stroke: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Settings / Help selected pills — force mono borders (no purple glow) */
+.main-stage button.tile-active,
+.main-stage button.border-accent,
+.main-stage button[aria-pressed="true"],
+.main-stage .tile-active {
+  border-color: #f4f4f5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 0 1px rgb(255 255 255 / 0.18) !important;
+}
+.main-stage button.tile-active.bg-accent,
+.main-stage button[aria-pressed="true"].bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] .main-stage button.tile-active.bg-accent,
+html[data-theme="light"] .main-stage button[aria-pressed="true"].bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+  border-color: #18181b !important;
+}
+
+/* Loading shell on /explore /memory — presentational only (no focusables yet) */
+main.min-h-screen > p.text-sm.text-muted:only-child {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.72;
+  letter-spacing: 0.01em;
+}
+main.min-h-screen:has(> p.text-sm.text-muted:only-child) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* —— Evolution c64: motion — hover/press, sheets, reduced-motion —— */
+:root {
+  --dur-fast: 120ms;
+  --dur-med: 180ms;
+  --dur-slow: 280ms;
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.nav-item, .dense-card, .dense-row, .model-chip, .suggestion-chip, .sidebar-plus,
+button, .glow-card, .settings-row, a, .tool-card, .service-card,
+.main-stage .rounded-panel, .empty-state, .settings-card {
+  transition:
+    background var(--dur-med) var(--ease-soft),
+    color var(--dur-fast) var(--ease-soft),
+    border-color var(--dur-med) var(--ease-soft),
+    box-shadow var(--dur-med) var(--ease-soft),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-med) var(--ease-soft),
+    filter var(--dur-med) var(--ease-soft) !important;
+}
+
+button:not(:disabled):hover,
+.nav-item:hover,
+.dense-row:hover,
+.tool-card:hover,
+.service-card:hover,
+.settings-row:hover {
+  border-color: rgb(255 255 255 / 0.22);
+  transform: translateY(-1px);
+}
+button:not(:disabled):active,
+.nav-item:active,
+.dense-card:active,
+.dense-row:active,
+.tool-card:active {
+  transform: scale(0.985) translateY(0);
+}
+
+/* Sheets / overlays — smoother open; respect reduced motion */
+.overlay-backdrop {
+  animation: fade-in var(--dur-med) var(--ease-soft) both;
+}
+.overlay-panel,
+.floating-menu,
+[role="dialog"],
+[data-testid="alerts-panel"],
+.composer-dock:focus-within {
+  animation: sheet-rise var(--dur-slow) var(--ease-sheet) both;
+}
+@keyframes sheet-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.page-enter {
+  animation: page-fade var(--dur-slow) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-backdrop,
+  .overlay-panel,
+  .floating-menu,
+  [role="dialog"],
+  [data-testid="alerts-panel"],
+  .composer-dock:focus-within,
+  .page-enter,
+  .empty-state,
+  .mono-motion-graphic__ring {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+  button:not(:disabled):hover,
+  .nav-item:hover,
+  .dense-row:hover,
+  .tool-card:hover,
+  .service-card:hover {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c65: inner-page hero / empty density (Runs, Projects, Library…) —— */
+.main-stage .page-hero,
+.main-stage > .mx-auto .page-hero,
+.main-stage h2.font-display,
+.main-stage .font-display.text-3xl {
+  letter-spacing: -0.02em !important;
+  line-height: 1.15 !important;
+}
+.main-stage .page-hero {
+  padding: 1.15rem 1.25rem !important;
+  margin-bottom: 1rem !important;
+  border-radius: 1.25rem !important;
+  background-color: rgb(10 10 12 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+}
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel:has(> p.text-muted):has(svg) {
+  min-height: 10rem !important;
+  padding: 1.75rem 1.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.55rem !important;
+  text-align: center !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, cover !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+}
+.main-stage .empty-state p,
+.main-stage [data-empty="true"] p {
+  max-width: 28rem;
+  color: #a1a1aa !important;
+  font-size: 0.9rem !important;
+  line-height: 1.45 !important;
+}
+.main-stage .settings-card,
+.main-stage .settings-row {
+  border-radius: 1rem !important;
+}
+.main-stage .settings-row {
+  padding: 0.85rem 1rem !important;
+  min-height: 3rem;
+}
+.main-stage .settings-card + .settings-card,
+.main-stage section.rounded-panel + section.rounded-panel {
+  margin-top: 0.85rem !important;
+}
+
+/* —— Evolution c66: uncrush Voice mode / Switch chrome; alerts panel sheet —— */
+[data-testid="voice-mode-badge-header"],
+[data-testid="voice-mode-badge-composer"],
+[data-testid="open-voice-mode"] {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  height: auto !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+[data-testid="voice-mode-toggle-header"],
+[data-testid="voice-mode-toggle-composer"] {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding-inline: 0.65rem !important;
+}
+/* Top voice cluster — keep row, never stack glyphs sideways */
+.topbar [data-testid="voice-controls"],
+[data-testid="voice-controls"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  writing-mode: horizontal-tb !important;
+}
+[data-testid="alerts-panel"] {
+  border-radius: 1rem !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    rgb(10 10 12 / 0.88) !important;
+  backdrop-filter: blur(20px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  padding: 0.75rem 1rem !important;
+}
+
+/* —— Evolution c67: login depth/glass (AuthCard has no .login-card class) —— */
+main.grid.min-h-screen.place-items-center {
+  background:
+    radial-gradient(ellipse 55% 45% at 70% 8%, rgb(255 255 255 / 0.05), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 15% 85%, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-bg) !important;
+}
+main.grid.min-h-screen.place-items-center > div[class*="max-w-"],
+main.grid.min-h-screen.place-items-center > div.rounded-panel {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.72) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    0 28px 80px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+  backdrop-filter: blur(24px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.15) !important;
+  border-radius: 1.35rem !important;
+}
+main.grid.min-h-screen.place-items-center input,
+main.grid.min-h-screen.place-items-center [data-testid="auth-not-configured"],
+main.grid.min-h-screen.place-items-center [data-testid="login-inline-notice"] {
+  background-color: rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+}
+/* Keep fa50cf6 login tabs ≥44px; mono selected pill */
+main.grid.min-h-screen.place-items-center button.min-h-10,
+main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center a[data-testid^="login-oauth"] {
+  min-height: 2.75rem !important;
+}
+.login-shell {
+  background:
+    radial-gradient(ellipse 50% 40% at 70% 10%, rgb(255 255 255 / 0.05), transparent 55%),
+    var(--color-bg) !important;
+}
+html[data-theme="light"] main.grid.min-h-screen.place-items-center > div[class*="max-w-"] {
+  background: rgb(255 255 255 / 0.88) !important;
+  background-image: none !important;
+  box-shadow: 0 24px 64px rgb(15 23 42 / 0.12) !important;
+}
+
+/* —— Evolution c68: explore/memory page-shell depth + inner card glass —— */
+.page-shell,
+[data-testid="persona-directory"],
+[data-testid="memory-manager"] {
+  min-height: 100dvh;
+}
+.page-shell .page-hero,
+[data-testid="persona-directory"] .page-hero,
+[data-testid="memory-manager"] .page-hero {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(10 10 12 / 0.7) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  backdrop-filter: blur(20px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1.25rem !important;
+  padding: 1.15rem 1.25rem !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 16px 40px rgb(0 0 0 / 0.35) !important;
+}
+.page-shell .glow-card,
+.page-shell .dense-card,
+[data-testid="persona-directory"] .glow-card,
+[data-testid="persona-directory"] .dense-card,
+[data-testid="memory-manager"] .glow-card,
+[data-testid="memory-manager"] .dense-card,
+[data-testid="memory-row"],
+[data-testid="persona-empty"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 45%),
+    url("/brand/textures/panel-noise-mono.jpg"),
+    rgb(12 12 14 / 0.68) !important;
+  background-size: auto, 220px 220px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  backdrop-filter: blur(16px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.08) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.32) !important;
+}
+/* Settings / Tools / Connected card depth bump */
+.main-stage .settings-card,
+.main-stage .tool-card,
+.main-stage .service-card,
+.main-stage .dense-card.card-texture {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 14px 36px rgb(0 0 0 / 0.4) !important;
+}
+
+/* —— Evolution c69: charts/viz consistency (dash3d + any main-stage SVG) —— */
+.dash3d-chart-card,
+.dash3d-charts-panel .dash3d-chart-card,
+.main-stage [data-testid="charts-panel"] .rounded-panel,
+.main-stage .recharts-wrapper,
+.main-stage svg.chart,
+.main-stage [data-testid="chart-empty"] {
+  border-radius: 1rem !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-charts-panel svg text,
+.main-stage svg text.axis,
+.main-stage .recharts-cartesian-axis-tick text,
+.main-stage .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  font-size: 0.65rem !important;
+  font-family: var(--font-sans), system-ui, sans-serif !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-charts-panel svg .domain,
+.main-stage .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.1) !important;
+}
+.dash3d-chart-card [role="tooltip"],
+.dash3d-chart-tooltip,
+.main-stage .recharts-default-tooltip,
+.main-stage [role="tooltip"].chart-tooltip {
+  background: rgb(10 10 12 / 0.92) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.55rem !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  font-size: 0.75rem !important;
+  padding: 0.4rem 0.6rem !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.main-stage [data-testid="chart-empty"],
+.dash3d-charts-panel [data-empty="true"] {
+  min-height: 8.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  text-align: center !important;
+  color: #a1a1aa !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 50%),
+    url("/brand/textures/chart-grid-mono.jpg") !important;
+  background-size: auto, cover !important;
+  border: 1px dashed rgb(255 255 255 / 0.12) !important;
+  border-radius: 0.85rem !important;
+  padding: 1.25rem !important;
+}
+.dash3d-charts-panel .dash3d-muted,
+.dash3d-chart-card h3 {
+  color: #d4d4d8 !important;
+  letter-spacing: -0.01em;
+}
+/* Legend mono chips */
+.dash3d-charts-panel .legend,
+.main-stage .recharts-legend-wrapper {
+  color: #a1a1aa !important;
+  font-size: 0.72rem !important;
+}
+
+/* —— Evolution c70: guard fa50cf6 a11y hit targets (do not regress) —— */
+[data-testid="alerts-toggle"],
+button[aria-label="Alerts"],
+[data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center button.min-h-10 {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
+
+/* —— Nav flake fix: composer-bar__card (z 46, pointer-events:auto) sat on top of
+   mobile Primary tabs (z 40) and stole More/Build/Tools drawer clicks in headless.
+   Lift the Speak/composer strip above the tab bar and keep Primary above the card. */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .shell > [data-testid="composer-bar"].composer-bar,
+  body:has(section.composer-dock) .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(2.9rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* —— Evolution c71: typography scale vs GPT/Grok — consistent hierarchy —— */
+:root {
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 0.9375rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.125rem;
+  --text-display: clamp(1.65rem, 3.2vw, 2.25rem);
+  --leading-tight: 1.18;
+  --leading-snug: 1.32;
+  --leading-body: 1.5;
+  --leading-relaxed: 1.6;
+  --tracking-tighter: -0.025em;
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.08em;
+  --weight-body: 450;
+  --weight-medium: 550;
+  --weight-semibold: 600;
+  --weight-bold: 650;
+}
+
+body, .main-stage, .page-shell {
+  font-size: var(--text-base) !important;
+  line-height: var(--leading-body) !important;
+  letter-spacing: var(--tracking-normal);
+  font-weight: var(--weight-body);
+}
+
+.main-stage h1,
+.main-stage .font-display.text-3xl,
+.main-stage .font-display.text-4xl,
+.page-hero h1,
+.page-shell h1,
+.masthead h1,
+main.grid.min-h-screen h1 {
+  font-size: var(--text-display) !important;
+  line-height: var(--leading-tight) !important;
+  letter-spacing: var(--tracking-tighter) !important;
+  font-weight: var(--weight-bold) !important;
+}
+
+.main-stage h2,
+.main-stage .font-display.text-2xl,
+.page-hero h2,
+.page-shell h2 {
+  font-size: var(--text-2xl) !important;
+  line-height: var(--leading-snug) !important;
+  letter-spacing: var(--tracking-tight) !important;
+  font-weight: var(--weight-semibold) !important;
+}
+
+.main-stage h3,
+.main-stage .font-semibold,
+.settings-card .settings-row > div:first-child > p.font-semibold {
+  font-size: var(--text-md) !important;
+  line-height: var(--leading-snug) !important;
+  font-weight: var(--weight-semibold) !important;
+  letter-spacing: -0.01em;
+}
+
+.main-stage p,
+.main-stage .text-sm,
+.page-hero p,
+.page-shell .text-muted,
+.masthead p,
+.main-stage .text-muted {
+  font-size: var(--text-sm) !important;
+  line-height: var(--leading-relaxed) !important;
+  letter-spacing: 0.005em;
+}
+
+.meta-label,
+.main-stage .text-\[10px\],
+.main-stage .text-xs,
+.page-shell .meta-label {
+  font-size: var(--text-xs) !important;
+  line-height: 1.3 !important;
+  letter-spacing: var(--tracking-wide) !important;
+  font-weight: var(--weight-semibold) !important;
+  text-transform: uppercase;
+}
+
+.main-stage button,
+.main-stage a.min-h-11,
+aside.rail nav button {
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.01em;
+}
+
+/* —— Evolution c72: mono GenerateImage assets — empty + hero atmosphere —— */
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage [data-testid="chart-empty"],
+.page-shell [data-testid="persona-empty"],
+.page-shell .dense-card.rounded-panel.border.border-line.p-6.text-center,
+.dash3d-chart-card [data-testid="chart-empty"] {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 45%),
+    url("/brand/textures/empty-state-illustration-mono.jpg"),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, 140px 140px, cover !important;
+  background-position: center, center 28%, center !important;
+  background-repeat: no-repeat, no-repeat, repeat !important;
+  background-blend-mode: soft-light, normal, soft-light !important;
+  min-height: 11rem !important;
+  padding-top: 5.5rem !important;
+}
+
+.main-stage .page-hero,
+.page-shell .page-hero,
+.masthead,
+.main-stage .mx-auto > .rounded-panel.border.border-line:first-child {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 48%),
+    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 280px 280px !important;
+  background-position: center, center, center !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+}
+
+/* Help / Agents / Thread content panels — ensure frost depth when present */
+.main-stage .settings-card,
+.main-stage article.rounded-panel,
+.main-stage section.rounded-panel.border,
+.main-stage .help-card,
+.main-stage li.rounded-panel.border {
+  background-color: rgb(12 12 14 / 0.68) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    url("/brand/textures/panel-noise-mono.jpg") !important;
+  background-size: auto, 220px 220px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  backdrop-filter: blur(16px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.08) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.32) !important;
+}
+
+/* —— Evolution c73: Thread / Help / Agents empty & prose panels glass fill —— */
+.main-stage .page-hero + .rounded-panel,
+.main-stage .prose,
+.main-stage [class*="help"] .rounded-panel,
+.main-stage .empty-state,
+.main-stage .rounded-panel.border.border-line.bg-surface,
+.main-stage .rounded-panel.border.border-line.p-4,
+.main-stage .rounded-panel.border.border-line.p-5,
+.main-stage .rounded-panel.border.border-line.p-6 {
+  background-color: rgb(12 12 14 / 0.7) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 260px 260px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  backdrop-filter: blur(16px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.1) !important;
+}
+
+/* —— Evolution c74: deepen desktop glass — Help / Agents / Thread (softest) ——
+   Do NOT touch Primary z48 or composer-bar z46 from nav-flake fix. */
+@media (min-width: 768px) {
+  /* Help list cards */
+  .main-stage section.mx-auto.max-w-3xl.space-y-3 .dense-card,
+  .main-stage section.mx-auto.max-w-3xl ul.space-y-2 > li.dense-card {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 42%),
+      url("/brand/textures/frost-card-texture.jpg"),
+      rgb(10 10 12 / 0.62) !important;
+    background-size: auto, 260px 260px, auto !important;
+    background-blend-mode: soft-light, soft-light, normal !important;
+    backdrop-filter: blur(22px) saturate(1.18) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.18) !important;
+    border: 1px solid rgb(255 255 255 / 0.16) !important;
+    border-radius: 1.15rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 16px 40px rgb(0 0 0 / 0.42) !important;
+    padding: 1rem 1.1rem !important;
+  }
+
+  /* Agents / Build ReaPanel + lookup forms */
+  .main-stage .masthead,
+  .main-stage section.p-4.md\:p-6 .masthead,
+  .main-stage section.p-4 .masthead {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
+      url("/brand/textures/hero-atmosphere-mono.jpg"),
+      url("/brand/textures/frost-card-texture.jpg"),
+      rgb(10 10 12 / 0.58) !important;
+    background-size: auto, cover, 280px 280px, auto !important;
+    background-blend-mode: soft-light, soft-light, soft-light, normal !important;
+    backdrop-filter: blur(24px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+    border: 1px solid rgb(255 255 255 / 0.15) !important;
+    border-radius: 1.25rem !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 18px 44px rgb(0 0 0 / 0.4) !important;
+    padding: 1.25rem 1.35rem !important;
+  }
+  .main-stage .dense-card.card-texture,
+  .main-stage form.mx-4.mb-6.rounded-panel,
+  .main-stage form.rounded-panel.border.border-line.bg-surface,
+  .main-stage .glow-card.whitespace-pre-wrap {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
+      url("/brand/textures/panel-noise-mono.jpg"),
+      rgb(12 12 14 / 0.6) !important;
+    background-size: auto, 220px 220px, auto !important;
+    background-blend-mode: soft-light, soft-light, normal !important;
+    backdrop-filter: blur(20px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.15) !important;
+    border: 1px solid rgb(255 255 255 / 0.15) !important;
+    border-radius: 1.15rem !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 14px 36px rgb(0 0 0 / 0.38) !important;
+  }
+  .main-stage .dense-card.card-texture li.rounded-panel.bg-bg {
+    background: rgb(0 0 0 / 0.35) !important;
+    border: 1px solid rgb(255 255 255 / 0.08) !important;
+  }
+
+  /* Thread masthead + empty stream well */
+  .main-stage section.flex.min-w-0.flex-1.flex-col > .masthead,
+  .main-stage .masthead.px-4.pt-4 {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
+      url("/brand/textures/hero-atmosphere-mono.jpg"),
+      rgb(10 10 12 / 0.55) !important;
+    background-size: auto, cover, auto !important;
+    background-blend-mode: soft-light, soft-light, normal !important;
+    backdrop-filter: blur(24px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    border-radius: 1.25rem !important;
+    margin: 0.75rem 1rem 0 !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 16px 40px rgb(0 0 0 / 0.4) !important;
+  }
+  .main-stage aside.flex.w-72,
+  .main-stage aside[class*="w-72"],
+  .main-stage aside.border-r {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 30%),
+      rgb(8 8 10 / 0.72) !important;
+    backdrop-filter: blur(18px) !important;
+    -webkit-backdrop-filter: blur(18px) !important;
+    border-right: 1px solid rgb(255 255 255 / 0.1) !important;
+  }
+}
+
+/* Re-assert nav flake stacking after glass rules (never regress 29c2f9b) */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .shell > [data-testid="composer-bar"].composer-bar {
+    z-index: 46 !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+
+/* —— Evolution c75: pixel polish — radii, 1px borders, shadows, icon align —— */
+:root {
+  --radius-panel: 1.15rem;
+  --radius-pill: 999px;
+  --border-hairline: 1px solid rgb(255 255 255 / 0.14);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 14px 36px rgb(0 0 0 / 0.38);
+}
+
+.main-stage .rounded-panel,
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .settings-card,
+.main-stage .page-hero,
+.main-stage .masthead,
+.page-shell .page-hero,
+.page-shell .glow-card,
+.page-shell .dense-card {
+  border-radius: var(--radius-panel) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+.main-stage button.rounded-full,
+.main-stage .rounded-full,
+.topbar .rounded-full,
+aside .sidebar-plus {
+  border-radius: var(--radius-pill) !important;
+}
+
+/* Kill double-shadow banding — single soft stack */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .settings-card,
+.main-stage .rounded-panel.border {
+  box-shadow: var(--shadow-card) !important;
+}
+
+/* Topbar / chrome icon alignment */
+.topbar button.grid,
+.topbar button.size-9,
+.topbar button.size-11,
+.topbar [class*="size-9"],
+.topbar [class*="size-11"] {
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+.topbar button svg,
+.topbar a svg {
+  width: 1.05rem !important;
+  height: 1.05rem !important;
+}
+.topbar {
+  align-items: center !important;
+  gap: 0.5rem !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+/* Hairline consistency on inputs */
+.main-stage input,
+.main-stage textarea,
+.main-stage select {
+  border-width: 1px !important;
+  border-radius: var(--radius-panel) !important;
+}
+
+/* —— Evolution c76: deepen glass win — Help/Agents/Thread desktop (strict) ——
+   Separate color+image so longhands cannot wipe frost; keep z48/z46 intact. */
+@media (min-width: 768px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card,
+  .main-stage section.mx-auto.max-w-3xl.space-y-3 > ul > li.dense-card {
+    background-color: rgb(10 10 12 / 0.55) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 46%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 280px 280px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(24px) saturate(1.22) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.22) !important;
+    border: 1px solid rgb(255 255 255 / 0.18) !important;
+    border-radius: 1.15rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.12),
+      0 18px 44px rgb(0 0 0 / 0.46) !important;
+  }
+
+  .main-stage .masthead,
+  .main-stage .masthead.px-4.pt-4,
+  .main-stage section.flex.min-w-0.flex-1.flex-col > .masthead {
+    background-color: rgb(10 10 12 / 0.52) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 50%),
+      url("/brand/textures/hero-atmosphere-mono.jpg"),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, cover, 280px 280px !important;
+    background-blend-mode: soft-light, soft-light, soft-light !important;
+    backdrop-filter: blur(26px) saturate(1.24) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(1.24) !important;
+    border: 1px solid rgb(255 255 255 / 0.16) !important;
+    border-radius: 1.25rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.12),
+      0 20px 48px rgb(0 0 0 / 0.44) !important;
+  }
+
+  .main-stage .dense-card.card-texture,
+  .main-stage form.mx-4.mb-6.rounded-panel,
+  .main-stage form.rounded-panel.border.border-line.bg-surface,
+  .main-stage .glow-card.whitespace-pre-wrap.rounded-panel {
+    background-color: rgb(12 12 14 / 0.55) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 44%),
+      url("/brand/textures/panel-noise-mono.jpg"),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 220px 220px, 260px 260px !important;
+    background-blend-mode: soft-light, soft-light, soft-light !important;
+    backdrop-filter: blur(22px) saturate(1.18) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.18) !important;
+    border: 1px solid rgb(255 255 255 / 0.16) !important;
+    border-radius: 1.15rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 16px 40px rgb(0 0 0 / 0.42) !important;
+  }
+
+  /* Thread stream well + empty hero */
+  .main-stage [data-testid="chat-empty"],
+  .main-stage .chat-empty,
+  .main-stage section.flex.min-w-0.flex-1.flex-col .flex-1.overflow-y-auto {
+    background-color: rgb(8 8 10 / 0.35) !important;
+  }
+}
+
+/* —— Evolution c77: pixel polish II — hairline mono, icon optical center —— */
+.topbar .size-9,
+.topbar .size-11,
+.topbar button.grid {
+  box-sizing: border-box !important;
+}
+.topbar [data-testid="voice-controls"] {
+  align-items: center !important;
+  gap: 0.4rem !important;
+}
+.topbar [data-testid="voice-controls"] > * {
+  vertical-align: middle;
+}
+.composer-bar__card,
+.composer-bar .composer-bar__card {
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 1.25rem !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 18px 48px rgb(0 0 0 / 0.48) !important;
+}
+aside .sidebar-plus,
+aside button.sidebar-plus {
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+}
+/* Kill banding from stacked identical shadows on nested cards */
+.main-stage .dense-card .dense-card,
+.main-stage .glow-card .glow-card {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+
+/* Final reassert — never regress 29c2f9b */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    z-index: 46 !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+
+/* —— Evolution c78: Thread provider chrome → mono (purple only .logo-mark) ——
+   model-option-active + native radio accent were still purple/blue.
+   Markup owner: emzylavish-art (command-app ProviderPicker); CSS can reach both. */
+.model-option-active,
+fieldset .model-option-active,
+.main-stage .model-option-active,
+label.model-option-active {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.04)) !important;
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.04)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: var(--color-fg) !important;
+}
+html[data-theme="light"] .model-option-active,
+html[data-theme="light"] .main-stage .model-option-active {
+  background: linear-gradient(180deg, rgb(15 23 42 / 0.08), rgb(15 23 42 / 0.03)) !important;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.18) !important;
+  color: var(--color-fg) !important;
+}
+
+/* Native radio/checkbox accent (browser default blue) → mono */
+.main-stage input[type="radio"],
+.main-stage input[type="checkbox"],
+fieldset input[type="radio"],
+aside input[type="radio"],
+main input[type="radio"],
+main input[type="checkbox"] {
+  accent-color: #e8ecf5 !important;
+}
+html[data-theme="light"] .main-stage input[type="radio"],
+html[data-theme="light"] .main-stage input[type="checkbox"],
+html[data-theme="light"] fieldset input[type="radio"] {
+  accent-color: #111827 !important;
+}
+
+/* Provider panel selected wash — no purple glow token */
+.main-stage fieldset label:has(input[type="radio"]:checked) {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03)) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16) !important;
+}
+
+/* chat-empty-hero TSX still has purple shadow utility — kill via CSS */
+.chat-empty-hero span.grid.size-16,
+.chat-empty-hero [class*="124_92_255"],
+.main-stage .chat-empty-hero span[class*="bg-accent"] {
+  background: rgb(255 255 255 / 0.1) !important;
+  color: var(--color-fg) !important;
+  box-shadow: 0 0 28px rgb(255 255 255 / 0.12) !important;
+}
+
+/* Glow token itself — keep logo purple via .logo-mark overrides below */
+:root {
+  --color-glow: #c8d0e0;
+}
+html[data-theme="light"] {
+  --color-glow: #64748b;
+}
+.logo-mark,
+.logo-badge {
+  /* re-assert purple ONLY here */
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow:
+    inset 0 0 18px rgb(124 92 255 / 0.35),
+    0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c79: mobile glass deepen — Help / Agents / Thread (<768) ——
+   Desktop deepen was min-width:768 only; softest remaining on phones. */
+@media (max-width: 767.98px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card,
+  .main-stage section.mx-auto.max-w-3xl.space-y-3 > ul > li.dense-card {
+    background-color: rgb(10 10 12 / 0.58) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 46%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 240px 240px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(18px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.15) !important;
+    border: 1px solid rgb(255 255 255 / 0.15) !important;
+    border-radius: 1.1rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 12px 32px rgb(0 0 0 / 0.4) !important;
+  }
+
+  .main-stage .masthead,
+  .main-stage .masthead.px-4.pt-4,
+  .main-stage section.flex.min-w-0.flex-1.flex-col > .masthead {
+    background-color: rgb(10 10 12 / 0.55) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 240px 240px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(20px) saturate(1.18) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.18) !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    border-radius: 1.15rem !important;
+    margin: 0.5rem 0.75rem 0 !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 14px 36px rgb(0 0 0 / 0.4) !important;
+  }
+
+  .main-stage .dense-card.card-texture,
+  .main-stage form.mx-4.mb-6.rounded-panel,
+  .main-stage form.rounded-panel.border.border-line.bg-surface,
+  .main-stage .glow-card.whitespace-pre-wrap.rounded-panel {
+    background-color: rgb(12 12 14 / 0.58) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 220px 220px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(18px) saturate(1.14) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.14) !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    border-radius: 1.1rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 12px 32px rgb(0 0 0 / 0.38) !important;
+  }
+
+  /* Reassert nav flake — never regress 29c2f9b after mobile glass */
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    z-index: 46 !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+
+/* —— Evolution c80: deepen login / dashboard auth glass (readable contrast) ——
+   Keep AuthCard text readable: inputs darker well, body text at --color-fg/muted. */
+main.grid.min-h-screen.place-items-center {
+  background:
+    radial-gradient(ellipse 55% 45% at 72% 6%, rgb(255 255 255 / 0.07), transparent 55%),
+    radial-gradient(ellipse 42% 36% at 12% 88%, rgb(255 255 255 / 0.04), transparent 52%),
+    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    var(--color-bg) !important;
+  background-size: auto, auto, cover, auto !important;
+  background-blend-mode: soft-light, soft-light, soft-light, normal !important;
+}
+main.grid.min-h-screen.place-items-center > div[class*="max-w-"],
+main.grid.min-h-screen.place-items-center > div.rounded-panel.border {
+  background-color: rgb(10 10 12 / 0.58) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 44%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow:
+    0 32px 88px rgb(0 0 0 / 0.58),
+    inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+}
+/* Readable contrast: titles/fg stay bright; muted ≥ ~#9aa3b5; inputs darker */
+main.grid.min-h-screen.place-items-center h1,
+main.grid.min-h-screen.place-items-center .font-display {
+  color: #f4f6fb !important;
+}
+main.grid.min-h-screen.place-items-center .text-muted,
+main.grid.min-h-screen.place-items-center p.text-sm {
+  color: #b4bccb !important;
+}
+main.grid.min-h-screen.place-items-center input,
+main.grid.min-h-screen.place-items-center textarea {
+  background-color: rgb(0 0 0 / 0.45) !important;
+  color: #f4f6fb !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+}
+main.grid.min-h-screen.place-items-center label,
+main.grid.min-h-screen.place-items-center [class*="text-"] {
+  /* don't force every utility — only ensure labels readable */
+}
+main.grid.min-h-screen.place-items-center label {
+  color: #e8ecf5 !important;
+}
+/* fa50cf6 a11y: keep ≥44px hit targets on login controls */
+main.grid.min-h-screen.place-items-center button.min-h-10,
+main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center a[data-testid^="login-oauth"],
+main.grid.min-h-screen.place-items-center [data-testid="login-back-home"] {
+  min-height: 2.75rem !important;
+}
+/* Selected auth mode pill — mono, not purple */
+main.grid.min-h-screen.place-items-center button.bg-accent,
+main.grid.min-h-screen.place-items-center [aria-pressed="true"] {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  box-shadow: none !important;
+}
+
+.login-shell,
+.login-card {
+  background-color: rgb(10 10 12 / 0.58) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 44%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  border: 1px solid rgb(255 255 255 / 0.15) !important;
+  backdrop-filter: blur(26px) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.18) !important;
+}
+
+/* —— Evolution c81: global non-logo hue sweep — kill residual purple/teal washes ——
+   CSS-reachable only. Purple remains exclusively on .logo-mark / .logo-badge. */
+/* Early shell washes that still paint without always being overridden */
+body,
+html,
+.shell,
+#root,
+.app-shell {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 80% -10%, rgb(255 255 255 / 0.04), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 10% 100%, rgb(255 255 255 / 0.03), transparent 50%) !important;
+}
+/* Kill any leftover purple inset/bloom utilities on non-logo nodes */
+.main-stage [class*="124_92_255"]:not(.logo-mark):not(.logo-badge),
+.main-stage [class*="7c5cff"]:not(.logo-mark),
+aside [class*="124_92_255"]:not(.logo-mark),
+.topbar [class*="124_92_255"],
+.composer-bar [class*="124_92_255"] {
+  box-shadow: none !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  text-shadow: none !important;
+}
+/* Teal / cyan accents that sneak in via status */
+.main-stage .text-info,
+.main-stage [class*="text-teal"],
+.main-stage [class*="text-cyan"],
+.main-stage [class*="text-sky"] {
+  color: var(--color-info) !important;
+}
+/* Status ok/warn/danger stay semantic but desaturate blooms */
+.main-stage [class*="shadow"][class*="ok"],
+.main-stage [class*="shadow"][class*="warn"] {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+/* Focus rings already mono in c63+ — reassert */
+:focus-visible {
+  outline: 2px solid rgb(232 236 245 / 0.85) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px rgb(232 236 245 / 0.45) !important;
+}
+.logo-mark:focus-visible,
+.logo-badge:focus-visible {
+  /* logo may keep purple focus if needed — still mono ring for a11y */
+  outline: 2px solid rgb(232 236 245 / 0.9) !important;
+}
+
+/* Voice listening / accent chips → mono white lift */
+.main-stage .text-accent,
+.topbar .text-accent,
+aside .text-accent:not(.logo-mark),
+.voice-mode-badge .text-accent,
+[data-testid="voice-controls"] .text-accent {
+  color: #e8ecf5 !important;
+}
+.main-stage .bg-accent\/15,
+.main-stage .bg-accent\/20,
+.main-stage [class*="bg-accent/"],
+.main-stage span.bg-accent\/15,
+.main-stage span[class*="bg-accent"] {
+  background-color: rgb(255 255 255 / 0.1) !important;
+  color: #e8ecf5 !important;
+}
+/* Selected tiles that use bg-accent — keep high-contrast mono (not purple) */
+.main-stage button.bg-accent,
+.main-stage .bg-accent.text-accent-ink,
+.main-stage .bg-accent.text-white,
+aside .sidebar-plus.bg-accent,
+aside button.bg-accent {
+  background-color: #e8ecf5 !important;
+  background-image: none !important;
+  color: #0a0d14 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35) !important;
+}
+
+/* Final logo purple re-assert after global kills */
+.logo-mark,
+.logo-badge,
+aside .logo-mark,
+.login-shell .logo-mark,
+main .logo-mark {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow:
+    inset 0 0 18px rgb(124 92 255 / 0.35),
+    0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+/* Final nav stack reassert (29c2f9b) */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+
+/* —— Evolution c82: fix remaining hue hits from route sweep ——
+   - --color-line navy (#243044 sat~0.31) → neutral gray
+   - bot-avatar-* chromatic skins → mono
+   - bot-avatar-img / input-glow / promo-banner / sidebar-plus purple leftovers
+   Semantic ok/warn/danger kept for status meaning (listed in scorecard). */
+:root,
+html {
+  --color-line: #2c3038;
+  --color-glow: #c8d0e0;
+  --color-navy: #0c0e12;
+}
+html[data-theme="light"] {
+  --color-line: #d8dbe2;
+  --color-glow: #64748b;
+  --color-navy: #eef0f4;
+}
+
+.bot-avatar,
+.bot-avatar-pink,
+.bot-avatar-teal,
+.bot-avatar-amber,
+.bot-avatar-violet,
+.bot-avatar-sky {
+  background: linear-gradient(145deg, #3a3f4a, #1a1d24) !important;
+  color: #e8ecf5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 12px rgb(255 255 255 / 0.08) !important;
+}
+.bot-avatar-img {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 4px 14px rgb(0 0 0 / 0.35) !important;
+}
+html[data-theme="light"] .bot-avatar-img {
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.1), 0 4px 12px rgb(15 23 42 / 0.08) !important;
+}
+
+.input-glow:focus,
+.input-glow:focus-within {
+  border-color: rgb(232 236 245 / 0.45) !important;
+  box-shadow: 0 0 0 1px rgb(232 236 245 / 0.25), 0 0 20px rgb(255 255 255 / 0.08) !important;
+}
+
+.promo-banner {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.03)),
+    rgb(14 18 28 / 0.75) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+
+.sidebar-plus,
+aside .sidebar-plus,
+aside button.sidebar-plus {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 10px 28px rgb(0 0 0 / 0.4),
+    inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+}
+
+.floating-menu {
+  box-shadow:
+    0 24px 64px rgb(0 0 0 / 0.6),
+    0 0 0 1px rgb(255 255 255 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+}
+
+/* border-line utility surfaces — force neutral in case token lag */
+.border-line,
+[class*="border-line"] {
+  border-color: #2c3038 !important;
+}
+html[data-theme="light"] .border-line,
+html[data-theme="light"] [class*="border-line"] {
+  border-color: #d8dbe2 !important;
+}
+
+/* Logo purple final reassert */
+.logo-mark,
+.logo-badge,
+aside .logo-mark,
+main .logo-mark {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow:
+    inset 0 0 18px rgb(124 92 255 / 0.35),
+    0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+/* Nav stack final (29c2f9b) */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+
+/* —— Evolution c83: mono skeleton / shimmer + CLS-stable slots ——
+   One shimmer recipe; skeleton rows reserve content-like min-heights. */
+:root {
+  --glass-radius: 1.15rem;
+  --glass-radius-sm: 0.85rem;
+  --glass-border: 1px solid rgb(255 255 255 / 0.14);
+  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%), rgb(12 12 14 / 0.92);
+  --glass-shadow: 0 22px 56px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  --glass-blur: blur(22px) saturate(1.15);
+  --dim-backdrop: rgb(5 7 13 / 0.72);
+  --skel-h-line: 0.75rem;
+  --skel-h-title: 1.75rem;
+  --skel-h-card: 5.5rem;
+  --skel-gap: 0.65rem;
+}
+
+.skeleton,
+[data-loading="true"],
+.skeleton.h-3,
+.main-stage .skeleton {
+  position: relative !important;
+  overflow: hidden !important;
+  border-radius: var(--glass-radius-sm) !important;
+  background: rgb(255 255 255 / 0.055) !important;
+  background-image: none !important;
+  min-height: var(--skel-h-line) !important;
+  /* kill layout jump: fixed block formatting */
+  display: block !important;
+  flex-shrink: 0 !important;
+}
+.skeleton.h-3 { min-height: var(--skel-h-line) !important; height: var(--skel-h-line) !important; }
+.skeleton.h-4,
+.skeleton.h-5 { min-height: 1.1rem !important; }
+.skeleton.h-8,
+.skeleton.h-10,
+.skeleton.h-12 { min-height: 2.5rem !important; }
+.skeleton::after,
+[data-loading="true"]::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.04) 35%,
+    rgb(255 255 255 / 0.12) 50%,
+    rgb(255 255 255 / 0.04) 65%,
+    transparent 100%
+  ) !important;
+  background-size: 220% 100% !important;
+  animation: skel-mono-shimmer 1.35s ease-in-out infinite !important;
+  pointer-events: none !important;
+}
+@keyframes skel-mono-shimmer {
+  from { transform: translateX(-45%); }
+  to { transform: translateX(45%); }
+}
+/* Prefer transform-only shimmer (no background-position CLS) */
+.skeleton,
+[data-loading="true"] {
+  animation: none !important;
+}
+html[data-theme="light"] .skeleton,
+html[data-theme="light"] [data-loading="true"] {
+  background: rgb(15 23 42 / 0.06) !important;
+}
+html[data-theme="light"] .skeleton::after,
+html[data-theme="light"] [data-loading="true"]::after {
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(15 23 42 / 0.04) 35%,
+    rgb(15 23 42 / 0.1) 50%,
+    rgb(15 23 42 / 0.04) 65%,
+    transparent 100%
+  ) !important;
+}
+/* Chat loading block — match message bubble footprint */
+.main-stage .skeleton.h-3 + .skeleton.h-3 {
+  margin-top: var(--skel-gap) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after,
+  [data-loading="true"]::after {
+    animation: none !important;
+    opacity: 0.35 !important;
+  }
+}
+
+/* —— Evolution c84: one glass recipe for overlays / menus / sheets / toasts —— */
+.overlay-backdrop,
+[role="dialog"].fixed.inset-0,
+.shortcut-sheet-shell,
+div.fixed.inset-0.z-50.grid.place-items-center {
+  background: var(--dim-backdrop) !important;
+  backdrop-filter: blur(10px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.08) !important;
+}
+
+.overlay-panel,
+.floating-menu,
+.shortcut-sheet-panel,
+.composer-bar__model-menu,
+.live-voice-bar__plus-menu,
+[data-testid="alerts-panel"],
+[role="menu"],
+[role="listbox"],
+[role="tooltip"],
+.dash3d-chart-tooltip,
+.toast,
+[data-testid*="toast"],
+[class*="toast"] {
+  border-radius: var(--glass-radius) !important;
+  border: var(--glass-border) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
+    rgb(12 12 14 / 0.94) !important;
+  box-shadow: var(--glass-shadow) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  color: var(--color-fg) !important;
+}
+
+/* Model picker opens upward — origin + same glass */
+.composer-bar__model-menu {
+  bottom: calc(100% + 0.55rem) !important;
+  top: auto !important;
+  transform-origin: bottom left !important;
+  min-width: 16.5rem !important;
+  padding: 0.4rem !important;
+  z-index: 60 !important;
+}
+.live-voice-bar__plus-menu {
+  bottom: calc(100% + 0.45rem) !important;
+  transform-origin: bottom left !important;
+  min-width: 11rem !important;
+  z-index: 60 !important;
+}
+.floating-menu {
+  transform-origin: top center !important;
+  z-index: 55 !important;
+}
+[data-testid="alerts-panel"] {
+  margin: 0.35rem 0.75rem 0.5rem !important;
+}
+
+/* Menu row chrome */
+.composer-bar__model-option,
+.live-voice-bar__plus-item,
+.floating-menu button,
+.floating-menu [role="menuitem"],
+[role="menu"] [role="menuitem"],
+[role="listbox"] [role="option"] {
+  border-radius: var(--glass-radius-sm) !important;
+  min-height: 2.5rem !important;
+}
+.live-voice-bar__plus-item:hover {
+  background: rgb(255 255 255 / 0.08) !important; /* was purple */
+}
+
+/* Model ico / beta — mono (was chromatic) */
+.composer-bar__model-ico {
+  background: linear-gradient(135deg, #e8ecf5, #6b7280 55%, #1f2430) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25) !important;
+}
+.composer-bar__model-beta {
+  background: rgb(255 255 255 / 0.1) !important;
+  color: #e8ecf5 !important;
+}
+
+html[data-theme="light"] .overlay-panel,
+html[data-theme="light"] .floating-menu,
+html[data-theme="light"] .composer-bar__model-menu,
+html[data-theme="light"] .live-voice-bar__plus-menu,
+html[data-theme="light"] [data-testid="alerts-panel"],
+html[data-theme="light"] [role="menu"] {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(15 23 42 / 0.12) !important;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.8) !important;
+  color: #0a0d14 !important;
+}
+
+/* —— Evolution c85: hover / active / selected / disabled — Grok/ChatGPT mono —— */
+/* List rows & dense cards */
+.main-stage .dense-card,
+.main-stage .dense-row,
+.main-stage li.dense-card,
+.main-stage article.dense-card {
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease !important;
+}
+.main-stage .dense-card:hover,
+.main-stage .dense-row:hover,
+.main-stage li.dense-card:hover {
+  background-color: rgb(255 255 255 / 0.07) !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
+}
+.main-stage .dense-card:active,
+.main-stage .dense-row:active {
+  transform: scale(0.992) !important;
+  background-color: rgb(255 255 255 / 0.05) !important;
+}
+
+/* Nav / rail */
+aside.rail nav button,
+aside nav button,
+nav[aria-label="Primary"] button {
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease !important;
+}
+aside.rail nav button:hover,
+aside nav button:hover {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: var(--color-fg) !important;
+}
+aside.rail nav button[aria-current="page"],
+aside.rail nav button.bg-accent,
+aside nav button.tile-active,
+aside nav button[aria-current="page"] {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  box-shadow: none !important;
+}
+aside.rail nav button:disabled,
+aside nav button:disabled,
+.main-stage button:disabled,
+.composer-bar button:disabled {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.15) !important;
+}
+
+/* Chips / pills */
+.main-stage button.rounded-full,
+.main-stage .rounded-full.border,
+.masthead button.min-h-11.rounded-full,
+.main-stage [class*="rounded-full"].border {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+.main-stage button.rounded-full:hover:not(:disabled),
+.masthead button.min-h-11.rounded-full:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.2) !important;
+}
+.main-stage button.rounded-full.bg-accent,
+.main-stage button.rounded-full.tile-active,
+.masthead button.min-h-11.rounded-full.bg-accent {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  border-color: transparent !important;
+}
+
+/* Menu options */
+.composer-bar__model-option:hover,
+.live-voice-bar__plus-item:hover,
+.floating-menu button:hover,
+.floating-menu [role="menuitem"]:hover,
+[role="menu"] [role="menuitem"]:hover {
+  background: rgb(255 255 255 / 0.08) !important;
+}
+.composer-bar__model-option.is-selected,
+.composer-bar__model-option[aria-selected="true"],
+[role="option"][aria-selected="true"] {
+  background: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16) !important;
+}
+.composer-bar__model-option:disabled,
+.live-voice-bar__plus-item:disabled {
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+}
+
+/* Waveform bars — mono (was purple gradient) */
+.voice-zone .waveform span {
+  background: linear-gradient(180deg, #e8ecf5, #6b7280) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-stage .dense-card,
+  .main-stage .dense-row,
+  aside.rail nav button,
+  .main-stage button.rounded-full {
+    transition: none !important;
+  }
+  .main-stage .dense-card:active,
+  .main-stage .dense-row:active {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c86: landscape phone + ultrawide desktop layout —— */
+/* Landscape phone 844×390 (and similar short viewports) */
+@media (max-height: 480px) and (orientation: landscape) {
+  .shell,
+  .main-stage {
+    padding-bottom: 0 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    bottom: 0.35rem !important;
+  }
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    min-height: 2.75rem !important;
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+    padding-block: 0.35rem !important;
+  }
+  .topbar { padding-block: 0.35rem !important; }
+  .masthead { margin-top: 0.35rem !important; padding: 0.65rem 0.85rem !important; }
+  .main-stage .page-hero,
+  .main-stage .masthead h2.font-display {
+    font-size: 1.35rem !important;
+  }
+}
+
+/* Very wide: cap content, center, no stretched cards */
+@media (min-width: 1600px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl,
+  .main-stage section.mx-auto {
+    max-width: 72rem !important; /* ~1152px */
+    margin-inline: auto !important;
+    width: 100% !important;
+  }
+  .main-stage .dense-card,
+  .main-stage .glow-card,
+  .main-stage .settings-card,
+  .main-stage .rounded-panel.border {
+    max-width: 100% !important;
+  }
+  /* Thread columns: don't let center pane balloon past ~48rem inside stage */
+  .main-stage section.flex.min-w-0.flex-1.flex-col {
+    max-width: 56rem !important;
+    margin-inline: auto !important;
+  }
+}
+@media (min-width: 1920px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl {
+    max-width: 76rem !important;
+  }
+  .shell {
+    /* subtle side letterbox wash — prevents infinite stretch feel */
+    background-image:
+      radial-gradient(ellipse 40% 60% at 0% 40%, rgb(255 255 255 / 0.03), transparent 55%),
+      radial-gradient(ellipse 40% 60% at 100% 40%, rgb(255 255 255 / 0.03), transparent 55%) !important;
+  }
+}
+@media (min-width: 2560px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl {
+    max-width: 80rem !important; /* 1280 */
+  }
+  aside.rail {
+    max-width: 18rem !important;
+  }
+}
+
+/* Help 2-col grid: don't stretch single cards on ultrawide */
+@media (min-width: 1600px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 {
+    max-width: 48rem !important;
+  }
+}
+
+/* —— Evolution c87: long-content stress — ellipsis + wrap —— */
+/* Thread / chat titles */
+aside .truncate,
+.main-stage .truncate,
+.rail .truncate,
+[data-testid*="chat"] .truncate,
+aside button span.truncate,
+.main-stage span.truncate,
+.main-stage .min-w-0.truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+/* Bot / agent names in lists */
+.main-stage .dense-card .font-semibold,
+.main-stage .dense-row .font-semibold,
+.main-stage article.dense-card h3,
+.main-stage [class*="bot"] .font-semibold {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+/* Long messages — wrap, don't blow horizontal scroll */
+.main-stage article.max-w-3xl,
+.main-stage .chat-stream article,
+.main-stage [data-testid="message-body"],
+.main-stage .message-body,
+.chat-stream {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+}
+.main-stage article.max-w-3xl pre,
+.main-stage .chat-stream pre,
+.main-stage article.max-w-3xl code {
+  white-space: pre-wrap !important;
+  overflow-x: auto !important;
+  max-width: 100% !important;
+}
+/* Masthead titles with long AI Chat / thread names */
+.masthead h2.font-display,
+.main-stage h2.font-display {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+/* Provider labels */
+.main-stage fieldset label,
+.model-option-active,
+.composer-bar__model-option-title {
+  min-width: 0 !important;
+}
+.composer-bar__model-option-title {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 14rem !important;
+}
+/* Prevent shell horizontal CLS from long content */
+.shell,
+.main-stage,
+.page-shell {
+  overflow-x: clip !important;
+  max-width: 100vw !important;
+}
+
+/* Final guards — 29c2f9b nav stack */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+
+/* fa50cf6: keep alerts toggle ≥44px */
+[data-testid="alerts-toggle"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+
+/* —— Evolution c88: harden aside/list truncate; model stub still TSX —— */
+aside.rail span.truncate,
+aside span.truncate,
+aside button .truncate,
+aside .max-w-\[14rem\].truncate {
+  display: inline-block !important;
+  max-width: 14rem !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: bottom;
+}
+
+/* Reassert guards */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}

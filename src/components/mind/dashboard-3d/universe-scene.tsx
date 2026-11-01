@@ -394,19 +394,32 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           blending: THREE.AdditiveBlending,
         });
         const glow = new THREE.Sprite(glowMat);
-        // Portrait sprite (additive halo still uses starTex); portrait sits as small card sprite if asset exists
+        // Portrait card + life-size character plane (Imagine art). Clickable via botId userData.
         const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
         loader.load(
           portraitUrl,
           (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
             const card = new THREE.Sprite(
-              new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.92 }),
+              new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.95 }),
             );
-            card.scale.set(1.15, 1.15, 1.15);
-            card.position.copy(pos).add(new THREE.Vector3(0, 0.95, 0));
+            card.scale.set(1.8, 1.8, 1.8);
+            card.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
             card.userData.botId = bot.id;
             botGroup.add(card);
+            // Life-size billboard person/character in the constellation (reuses same Imagine portrait).
+            const personMat = new THREE.MeshBasicMaterial({
+              map: tex,
+              transparent: true,
+              depthWrite: false,
+              side: THREE.DoubleSide,
+              opacity: 0.9,
+            });
+            const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
+            person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
+            person.userData.botId = bot.id;
+            person.userData.kind = "character";
+            botGroup.add(person);
           },
           undefined,
           () => { /* no portrait asset yet */ },
@@ -424,6 +437,40 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
         botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone() });
       }
+    }
+
+
+    // Shared scene characters / environments (real Imagine assets already in public/).
+    const sceneArts = [
+      { url: "/dashboard-3d/art/backdrop-nebula.webp", pos: new THREE.Vector3(-10, 4.5, -8), scale: [6.5, 3.8] as const },
+      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
+      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
+      { url: "/dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
+      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
+      { url: "/dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
+      { url: "/dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
+      { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
+    ];
+    for (const art of sceneArts) {
+      loader.load(
+        art.url,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const mat = new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            opacity: 0.55,
+          });
+          const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
+          plane.position.copy(art.pos);
+          plane.userData.kind = "scene";
+          botGroup.add(plane);
+        },
+        undefined,
+        () => { /* missing art — keep procedural sky */ },
+      );
     }
 
     type FlowLine = { line: THREE.Line; seed: number; speed: number; baseOpacity: number };

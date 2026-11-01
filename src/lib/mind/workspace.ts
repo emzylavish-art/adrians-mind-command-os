@@ -135,6 +135,12 @@ function normalizeChat(row: unknown): Chat | null {
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
+        ...(msg.memorySaved === true
+          ? {
+              memorySaved: true as const,
+              savedMemoryId: typeof msg.savedMemoryId === "string" ? msg.savedMemoryId : null,
+            }
+          : {}),
       });
     }
   }

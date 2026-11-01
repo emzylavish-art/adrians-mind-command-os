@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useState, type FormEvent, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   getSupabaseAuthUser,
@@ -7,6 +7,7 @@ import {
   startOAuth,
 } from "@/lib/supabase/actions";
 import { safeRedirectPath } from "@/lib/supabase/safe-redirect";
+import { oauthAuthorizeTarget } from "@/lib/supabase/oauth-redirect";
 import { authEnabled, authClient, signIn } from "@/lib/auth/client";
 import { emailAndPasswordEnabled } from "@/lib/auth/email-password";
 import {
@@ -15,6 +16,10 @@ import {
   resolveLoginProviderAction,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
+
+const LazyMonoMotion = lazy(() =>
+  import("@/components/mind/motion/MonoMotionGraphic").then((m) => ({ default: m.MonoMotionGraphic })),
+);
 
 type LoginSearch = {
   next?: string;
@@ -30,7 +35,8 @@ export const Route = createFileRoute("/login")({
     try {
       return await getSupabaseAuthUser();
     } catch {
-      return { configured: false, user: null };
+      // Keep shape aligned with AuthUserResult so broker Google/X stays gated.
+      return { configured: false, user: null, brokerConfigured: false, supabaseOAuthProviders: [] };
     }
   },
   component: Login,
@@ -55,6 +61,9 @@ function AuthBrand({ title, subtitle }: { title: string; subtitle?: string }) {
       <span className="logo-mark grid size-11 place-items-center rounded-2xl text-lg font-bold tracking-tight">
         A
       </span>
+      <Suspense fallback={null}>
+        <LazyMonoMotion className="mt-1" />
+      </Suspense>
       <div>
         <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
           Adrian&apos;s Mind
@@ -172,6 +181,7 @@ function Login() {
   const next = safeRedirectPath(search.next);
   const supabaseConfigured = Boolean(data.configured);
   const brokerConfigured = Boolean(data.brokerConfigured);
+  const supabaseOAuthProviders = data.supabaseOAuthProviders ?? [];
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -242,6 +252,7 @@ function Login() {
     const action = resolveLoginProviderAction(provider, {
       supabaseConfigured,
       betterAuthEnabled: brokerConfigured && authEnabled,
+      supabaseOAuthProviders,
     });
     try {
       if (action.kind === "not_configured") {
@@ -252,8 +263,15 @@ function Login() {
         const result = await startOAuth({
           data: { provider: action.provider, next },
         });
+        const target = oauthAuthorizeTarget(result);
+        if (target) {
+          window.location.assign(target);
+          return;
+        }
         if (result && "ok" in result && result.ok === false) {
           setBanner(result.error);
+        } else {
+          setBanner("Could not start provider sign-in.");
         }
         return;
       }
@@ -418,18 +436,33 @@ function Login() {
         <div className="flex flex-col gap-2">
           {oauthButtons.map((item) => {
             const Icon = item.icon;
+            const action = resolveLoginProviderAction(item.id, {
+              supabaseConfigured,
+              betterAuthEnabled: brokerConfigured && authEnabled,
+              supabaseOAuthProviders,
+            });
+            const disabled = busy || action.kind === "not_configured";
+            const note = action.kind === "not_configured" ? action.message : undefined;
             return (
-              <button
-                key={item.id}
-                type="button"
-                disabled={busy}
-                data-testid={`login-oauth-${item.id}`}
-                onClick={() => void onProvider(item.id)}
-                className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                <Icon />
-                {item.label}
-              </button>
+              <div key={item.id} className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  title={note}
+                  aria-label={note ? `${item.label} (${note})` : item.label}
+                  data-testid={`login-oauth-${item.id}`}
+                  onClick={() => void onProvider(item.id)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <Icon />
+                  {item.label}
+                </button>
+                {note ? (
+                  <p className="px-1 text-xs text-muted" data-testid={`login-oauth-${item.id}-note`}>
+                    {note}
+                  </p>
+                ) : null}
+              </div>
             );
           })}
         </div>

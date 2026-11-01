@@ -1,4 +1,4 @@
-/** Per-chat "don't use memory" control. Mount pending in command-app if claimed. */
+/** Per-chat "don't use memory" control. Mounted in ChatPane header + right rail. */
 export function MemoryChatToggle({
   memory,
   onChange,
