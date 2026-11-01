@@ -245,3 +245,27 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 ### Commits (this gap)
 - (pending push) Harden pc_run_shell with human UI approvals; ignore client confirm.
 
+
+## Security fix: pglite_query side-effect function bypass (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed. Commit c2266bb.
+
+### Weakness (confirmed live on an in-memory PGLite)
+`assertReadOnlySql` only blocked write keywords, so any SELECT that *calls* a state-changing function passed:
+- `SELECT set_config('search_path','evil',false)` persisted on the shared single connection, poisoning every later app query.
+- `U&"\0073et_config"(...)` (unicode-escaped name) and `"set_config"(...)` (quoted name) hid the function from word checks.
+- `SELECT pg_sleep(2)` ran the full 2s despite a 500ms timeout: PGLite runs synchronously in the Node event loop and ignores statement_timeout, so a long call freezes the whole server.
+- `pg_advisory_lock`, `lo_create`, `query_to_xml('<sql>')`, `FOR SHARE` row locks, and `SELECT ... INTO` also got through.
+- Plain EXPLAIN never worked (it was wrapped in a subquery).
+
+### Fix
+- Denylist of side-effect / file / backend / nested-SQL / blocking functions (checked with quotes stripped), refuse U& escapes, nested or unterminated block comments, locking reads, INTO/PREPARE/LOCK, EXPLAIN ANALYZE, SQL over 20,000 chars and NUL bytes.
+- Plain EXPLAIN runs unwrapped; rows capped client-side; timeout timer is cleared.
+
+### Checks
+- New `src/lib/mind/mcp/pglite-guard.test.ts` (24 tests on real PGLite): 23 fail against the old guard, all pass now; confirms search_path, sequence, advisory locks, and tables are untouched after every attack.
+- typecheck pass; mind/src tests 320/320; build pass; `npm run mcp:e2e` pass (pglite_query ok).
+
+### Open
+- CPU-heavy pure reads (e.g. huge `generate_series` or cross joins) can still block PGLite's event loop; a real fix needs running PGLite in a worker so a timeout can terminate it.
+- DNS rebinding for http MCP servers (from the previous cycle) still open.
