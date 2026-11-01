@@ -66,8 +66,14 @@ export function defaultParamsFor(tier: ConcreteModelTier): ModelRequestParams {
 }
 
 /**
- * Auto routing: code-shaped prompts → Build; long/complex reasoning → Heavy;
- * medium analytical → Expert; short/simple → Fast.
+ * Auto routing rules (order matters):
+ * 1) Code-shaped prompts → Build (fences, languages, refactor/PR/stack-trace cues).
+ * 2) Heavy only for deep-reasoning signals OR length ≥ 1800.
+ *    Deep signals: prove/derive/theorem/formal proof/rigorous/multi-step/
+ *    deep analysis/compare and contrast — NOT everyday words like tradeoffs,
+ *    architecture, or design (those stay Expert when medium-length).
+ * 3) Medium analytical (length ≥ 320 or explain/analyze/design/plan/…) → Expert.
+ * 4) Otherwise → Fast.
  */
 export function routeAutoTier(prompt: string): { tier: ConcreteModelTier; reason: string } {
   const text = prompt.trim();
@@ -82,16 +88,17 @@ export function routeAutoTier(prompt: string): { tier: ConcreteModelTier; reason
   if (hasCode) {
     return { tier: "Build", reason: "Auto routed to Build because the prompt looks code-oriented." };
   }
-  const heavyHints =
-    /\b(prove|derive|theorem|multi[- ]?step|trade-?offs?|architect(?:ure|ural)?|deep analysis|rigorous|formal proof|compare and contrast)\b/i.test(
-      lower,
-    );
-  if (length >= 1800 || heavyHints) {
+  // Narrow: exclude trade-offs/architecture so medium analytical prompts stay Expert.
+  const deepReasoning =
+    /\b(prove|derive|theorem|multi[- ]?step|deep analysis|rigorous|formal proof|compare and contrast)\b/i.test(lower);
+  if (length >= 1800 || deepReasoning) {
     return { tier: "Heavy", reason: "Auto routed to Heavy because the prompt is long or asks for deep reasoning." };
   }
   if (
     length >= 320 ||
-    /\b(explain|analyze|analyse|summarize|summarise|design|plan|why|how does|compare)\b/i.test(lower)
+    /\b(explain|analyze|analyse|summarize|summarise|design|plan|why|how does|compare|trade-?offs?|architect(?:ure|ural)?)\b/i.test(
+      lower,
+    )
   ) {
     return { tier: "Expert", reason: "Auto routed to Expert for a medium-complexity prompt." };
   }
