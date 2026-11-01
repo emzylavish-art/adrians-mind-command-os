@@ -719,3 +719,274 @@ html[data-theme="light"] .min-h-0.flex-1.overflow-auto .bg-accent\/15 {
   background: rgb(9 9 11 / 0.06) !important;
   color: #18181b !important;
 }
+
+/* —— Cycle 8: hover / press micro-interactions (mono) —— */
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a.rounded-panel,
+  a.rounded-2xl {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease,
+      transform 100ms ease,
+      opacity 140ms ease;
+  }
+  button:not(:disabled):hover,
+  [role="button"]:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: translateY(1px) scale(0.985);
+    filter: brightness(0.96);
+  }
+  html[data-theme="light"] button:not(:disabled):hover,
+  html[data-theme="light"] [role="button"]:not(:disabled):hover {
+    filter: brightness(0.97);
+  }
+}
+
+/* Nav row hover/press */
+aside nav button {
+  position: relative;
+}
+aside nav button:hover {
+  background: rgb(255 255 255 / 0.07) !important;
+  color: #f4f4f5 !important;
+}
+aside nav button:active {
+  background: rgb(255 255 255 / 0.11) !important;
+}
+aside nav button.bg-accent:hover,
+aside nav button.bg-accent {
+  filter: none;
+}
+html[data-theme="light"] aside nav button:hover {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #09090b !important;
+}
+
+/* Primary / accent CTAs */
+button.bg-accent,
+.bg-accent.rounded-panel,
+.bg-accent.rounded-full,
+.bg-accent.rounded-2xl {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.2) inset, 0 8px 18px rgb(0 0 0 / 0.35);
+}
+button.bg-accent:hover {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.28) inset, 0 10px 22px rgb(0 0 0 / 0.4);
+}
+button.bg-accent:active {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15) inset;
+}
+
+/* Bordered controls lift */
+button.border.border-line:hover,
+.rounded-panel.border.border-line:hover {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  background-color: rgb(255 255 255 / 0.04);
+}
+html[data-theme="light"] button.border.border-line:hover,
+html[data-theme="light"] .rounded-panel.border.border-line:hover {
+  border-color: rgb(9 9 11 / 0.22) !important;
+  background-color: rgb(9 9 11 / 0.03);
+}
+
+/* Icon-only rounds */
+button.grid.size-11:hover,
+button.size-11.rounded-full:hover,
+button.size-11.rounded-panel:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.2) !important;
+}
+
+/* —— Cycle 9: Settings surface + theme segment controls (mono) —— */
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl > .rounded-panel.border.border-line.bg-surface {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    rgb(12 12 14 / 0.92) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl > .rounded-panel.border.border-line.bg-surface {
+  background: #fff !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.06);
+}
+
+/* Theme segment group (dark / light / system) */
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border-radius: 0.95rem;
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button {
+  border-radius: 0.7rem !important;
+  min-width: 4.5rem;
+}
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button.bg-accent,
+.min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button.border-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 {
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.08);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .mt-2.flex.flex-wrap.gap-2 > button.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* How-to-use bullets → mini-card rhythm */
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl ul.space-y-2 > li {
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.03);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  color: var(--color-muted);
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl ul.space-y-2 > li {
+  background: rgb(9 9 11 / 0.03);
+  border-color: rgb(9 9 11 / 0.08);
+}
+
+/* Settings page title weight */
+.min-h-0.flex-1.overflow-auto section.mx-auto.max-w-3xl > h2.font-display {
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+/* —— Cycle 10: Attach/Tools/Context panels + mode picker + command palette (mono) —— */
+
+/* Mode picker (Ask / Research / Agent / Build) as floating segment */
+form .rounded-full.px-3.text-sm,
+.rounded-full.px-3.text-sm.bg-accent,
+.rounded-full.px-3.text-sm.border.border-line {
+  backdrop-filter: blur(8px);
+}
+/* Wrap adjacent mode pills visually when parent is a flex row of modes */
+form > .flex.items-center.gap-2:has(> .rounded-full),
+.flex.items-center.gap-2:has(> button.rounded-full.px-3) {
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.4);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 28px rgb(0 0 0 / 0.35);
+  width: fit-content;
+}
+button.rounded-full.px-3.text-sm.bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.4);
+}
+button.rounded-full.px-3.text-sm.border.border-line {
+  border-color: transparent !important;
+  color: #d4d4d8 !important;
+}
+button.rounded-full.px-3.text-sm.border.border-line:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: #fff !important;
+}
+html[data-theme="light"] form > .flex.items-center.gap-2:has(> .rounded-full),
+html[data-theme="light"] .flex.items-center.gap-2:has(> button.rounded-full.px-3) {
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.1);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.08);
+}
+html[data-theme="light"] button.rounded-full.px-3.text-sm.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* Composer action row (Attach / Add Context / Tools / …) */
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.border.border-line {
+  background: rgb(255 255 255 / 0.03);
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.border.border-line:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.22) !important;
+}
+form .mt-2.flex.flex-wrap.items-center.gap-2 > button.bg-accent {
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.4);
+}
+
+/* Expand panels: Add Context + Tools list */
+form ~ .mt-3.rounded-panel.border.border-line.bg-bg,
+.mt-3.rounded-panel.border.border-line.bg-bg.p-3,
+ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg {
+  background: rgb(10 10 12 / 0.92) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    0 18px 40px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+}
+ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg > li {
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 0.05);
+  background: rgb(255 255 255 / 0.02);
+}
+html[data-theme="light"] .mt-3.rounded-panel.border.border-line.bg-bg.p-3,
+html[data-theme="light"] ul.mt-3.space-y-2.rounded-panel.border.border-line.bg-bg {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 16px 36px rgb(0 0 0 / 0.12);
+}
+
+/* Command palette floating depth */
+#command-palette {
+  background: rgb(12 12 14 / 0.94) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 24px 56px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+}
+#command-palette button:hover,
+#command-palette [role="option"]:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-radius: 0.65rem;
+}
+html[data-theme="light"] #command-palette {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 20px 48px rgb(0 0 0 / 0.14) !important;
+}
+
+/* Quick tool chips */
+.flex.gap-2.overflow-x-auto.pb-1 > button,
+.flex.gap-2.overflow-x-auto.pb-1 > .rounded-panel {
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  backdrop-filter: blur(8px);
+}
+.flex.gap-2.overflow-x-auto.pb-1 > button:hover {
+  background: rgb(255 255 255 / 0.09);
+  border-color: rgb(255 255 255 / 0.2);
+}
