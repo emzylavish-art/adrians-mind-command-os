@@ -8,11 +8,14 @@ function hasContent(ws: Workspace) {
   return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + ws.audit.length > 0;
 }
 
+const SAVE_FAIL = "The server copy could not be saved. The browser copy was kept.";
+
 export function useMindWorkspace() {
   const [ws, setWs] = useState<Workspace>(emptyWorkspace);
   const [ready, setReady] = useState(false);
   const [syncNote, setSyncNote] = useState("Browser copy. Server copy has not been checked.");
   const [serverHeld, setServerHeld] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const followServer = useRef(false);
   const savedJson = useRef<string | null>(null);
   const latest = useRef(ws);
@@ -41,7 +44,9 @@ export function useMindWorkspace() {
         if (choice === "upload-local") {
           followServer.current = true;
           savedJson.current = JSON.stringify(local);
-          void saveMindCopy({ data: { workspace: local } });
+          void saveMindCopy({ data: { workspace: local } }).then((saved) => {
+            if (!saved.ok) setSaveError(saved.error || SAVE_FAIL);
+          });
           setSyncNote("This browser's copy was sent to the local server database. It is not cloud backup.");
           return;
         }
@@ -82,9 +87,18 @@ export function useMindWorkspace() {
     const id = window.setTimeout(() => {
       void saveMindCopy({ data: { workspace: ws } })
         .then((result) => {
-          if (result.ok) savedJson.current = packed;
+          if (result.ok) {
+            savedJson.current = packed;
+            setSaveError(null);
+            return;
+          }
+          setSaveError(result.error || SAVE_FAIL);
+          setSyncNote(result.error || SAVE_FAIL);
         })
-        .catch(() => undefined);
+        .catch(() => {
+          setSaveError(SAVE_FAIL);
+          setSyncNote(SAVE_FAIL);
+        });
     }, 1500);
     return () => window.clearTimeout(id);
   }, [ready, ws]);
@@ -96,10 +110,38 @@ export function useMindWorkspace() {
       followServer.current = true;
       savedJson.current = JSON.stringify(current);
       setServerHeld(false);
+      setSaveError(null);
       setSyncNote("This browser copy replaced the server copy. It is still not cloud backup.");
+    } else {
+      setSaveError(result.error || SAVE_FAIL);
     }
     return result;
   }
 
-  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy };
+  /** Retries ONLY the persistence write. Does not call a model. Preserves current workspace content. */
+  async function retrySave() {
+    const current = latest.current;
+    const result = await saveMindCopy({ data: { workspace: current } });
+    if (result.ok) {
+      followServer.current = true;
+      savedJson.current = JSON.stringify(current);
+      setSaveError(null);
+      setSyncNote("This browser copy replaced the server copy. It is still not cloud backup.");
+    } else {
+      setSaveError(result.error || SAVE_FAIL);
+    }
+    return result;
+  }
+
+  function clearSaveError() {
+    setSaveError(null);
+  }
+
+  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError };
+}
+
+/** Pure helper for tests: classify a save result without UI. */
+export function saveFailureMessage(result: { ok: true } | { ok: false; error?: string }): string | null {
+  if (result.ok) return null;
+  return result.error || SAVE_FAIL;
 }
