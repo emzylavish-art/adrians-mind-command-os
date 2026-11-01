@@ -131,6 +131,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 74 | **Motion c18 — neighbor-drift-damp + alloc-budget** | **done** | c50 — neighbor damp after batch; alloc-budget via --expose-gc |
 | 75 | **Gap#10 focus mid-flight** — queue focus requests while camera flies; latest wins; unknown bot clears stale detail | **done** | c51 — preferRetarget mid-glide; focus-request helper + tests | 
 | 79 | **Light — #79 per-panel backdrop dim** | **done** | c51 — land f3b1c41; per-rect setContrastTarget array; meter-sample-age + detail-dim-per-rect |
+| 80 | **Light — #80 meter readback cost guard** | **done** | c51 — land fd3656b (no extra wiring); meter-backoff test |
+| 81 | **Motion c19 — star-batch xfade+neighbors one-call** | **done** | c51 — land 37333fd; pass xfade/neighbors opts; renumbered (Motion tip said #79, Light owns #79) |
+| 82 | **Motion c20 — edge pulse flip + pruneMotionStateMap** | **done** | c51 — prune on bot-list change; edge-pulse-flip + state-prune tests |
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |

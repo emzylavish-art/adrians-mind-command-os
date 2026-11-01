@@ -7,10 +7,19 @@
  * adjacency list (edge endpoints / nhop depth-1). Reduced-motion → no extra damp
  * (neighbors stay at driftMul 1). Does not change star-batch / health-xfade /
  * focus-ring public APIs.
+ *
+ * Hacker c19: run after `stepFocusEase` (as documented) the two damps fought —
+ * focus-ease pulled driftMul → 1, this pulled → floor — settling ~0.71 (and
+ * fps-dependent) instead of the floor. Neighbor damp now keeps its own eased
+ * value (`neighborMul`, synced to driftMul while focused) and owns driftMul for
+ * every non-focused star, so the order no longer matters.
  */
 import { clamp01, damp } from "./ease.ts";
 import { finiteOr, sanitizeDt } from "./sanitize.ts";
 import { isFocusedStar, type FocusEaseState } from "./focus-ease.ts";
+
+/** FocusEaseState plus the neighbor damp's private eased value (c19). */
+export type NeighborDriftState = FocusEaseState & { neighborMul?: number };
 
 /** Soft floor for neighbor drift (1 = full drift, 0 = pinned). */
 export const NEIGHBOR_DRIFT_FLOOR = 0.35;
@@ -96,20 +105,25 @@ export function stepNeighborDriftDamp(
     !!neighbors &&
     neighbors.has(starId);
 
-  if (reducedMotion) {
+  const st = state as NeighborDriftState;
+  if (focused || reducedMotion) {
     // Focus pinning stays with focus-ease; neighbors get no extra damp under RM.
-    if (isNeighbor) state.driftMul = 1;
-    return state;
-  }
-
-  if (focused) {
-    // Let focus-ease drive driftMul → 0; do not fight it.
+    if (reducedMotion && isNeighbor) state.driftMul = 1;
+    // Track driftMul so the hand-off after unfocus / RM-off is continuous.
+    st.neighborMul = clamp01(finiteOr(state.driftMul, 1));
     return state;
   }
 
   const target = isNeighbor ? floor : 1;
   const d = sanitizeDt(dt);
-  state.driftMul = damp(finiteOr(state.driftMul, 1), target, lambda, d);
+  const prev = Number.isFinite(st.neighborMul)
+    ? (st.neighborMul as number)
+    : clamp01(finiteOr(state.driftMul, 1));
+  const next = clamp01(damp(prev, target, lambda, d));
+  st.neighborMul = next;
+  // Own driftMul for non-focused stars: overrides focus-ease's pull to 1 so the
+  // documented order (focus-ease → neighbor) settles exactly at the floor.
+  state.driftMul = next;
   return state;
 }
 

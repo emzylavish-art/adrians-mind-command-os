@@ -164,11 +164,18 @@ test("cli: relative paths follow the script's root, not the caller's cwd", () =>
   assert.equal(existsSync(join(root, "public/og.jpg")), false);
 });
 
-test("every hand-over the og skill prints is one this script accepts", () => {
+test("every hand-over the og skill prints is one this script accepts", (t) => {
   // The card and banner recipes live in the skill's references/, not SKILL.md.
   const skillDir = join(TEMPLATE_ROOT, ".grok/skills/og");
+  const skillMd = join(skillDir, "SKILL.md");
+  if (!existsSync(skillMd)) {
+    const reason = "skip: .grok/skills/og/SKILL.md absent (gitignored; not fabricated for CI)";
+    console.log(reason);
+    t.skip(reason);
+    return;
+  }
   const docs = [
-    join(skillDir, "SKILL.md"),
+    skillMd,
     ...readdirSync(join(skillDir, "references")).map((f) => join(skillDir, "references", f)),
   ];
   const invocations = docs.flatMap(

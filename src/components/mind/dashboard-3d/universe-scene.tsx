@@ -58,17 +58,9 @@ import {
   createFocusEaseState,
   stepStarFieldBatch,
   STAR_BATCH_MAX,
-  STAR_BATCH_ORBIT_OPTS,
   createHealthPulseCrossfadeState,
-  setHealthPulseTarget,
-  stepHealthPulseCrossfade,
-  sampleStarPulseCrossfaded,
   collectOneHopNeighbors,
-  stepNeighborDriftDampBatch,
-  pulsePhaseFromId,
-  sampleOrbitDrift,
-  applyFocusPulse,
-  applyFocusDrift,
+  pruneMotionStateMap,
   type FocusEaseState,
   type HealthPulseCrossfadeState,
   createMotionPoseBag,
@@ -467,6 +459,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       schedulePortraitPump();
     };
     const focusEase = new Map<string, FocusEaseState>();
+    const healthXfade = new Map<string, HealthPulseCrossfadeState>();
+    let lastLiveBotKey = "";
     sanitizeMotionPoseBag(motionPoseBag);
 
     let pendingFocusBotId: string | null = null;
@@ -498,6 +492,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       botVis.length = 0;
       botMeshes.length = 0;
       focusEase.clear();
+      // Motion c20: drop xfade state for bots that left the feed (cap-enforced).
+      pruneMotionStateMap(healthXfade, new Set(list.map((b) => b.id)));
       const capped = list.length > MAX_SCENE_BOTS ? list.slice(0, MAX_SCENE_BOTS) : list;
       for (const bot of capped) {
         const posArr = botWorldPosition(bot.id);
@@ -923,14 +919,12 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     // Gap#58 / Motion c16: reusable star-batch buffers (steady-state zero alloc).
     const starBatchIds: string[] = [];
     const starBatchHealths: string[] = [];
+    const starBatchXfade: HealthPulseCrossfadeState[] = [];
     const starBatchBases: Array<{ x: number; y: number; z: number }> = [];
     const starBatchFocus: ReturnType<typeof createFocusEaseState>[] = [];
     const starBatchPulse: Array<{ scale: number; glow: number; emissive: number }> = [];
     const starBatchPos: Array<{ x: number; y: number; z: number }> = [];
     // Motion c17: health pulse crossfade state per bot (+ reusable sample temps).
-    const healthXfade = new Map<string, HealthPulseCrossfadeState>();
-    const pulseXfadeFrom = { scale: 1, glow: 2, emissive: 0.7 };
-    const pulseXfadeTo = { scale: 1, glow: 2, emissive: 0.7 };
     // Motion c18: 1-hop neighbor drift damp (rebuild when focus/graph changes).
     let neighborSet: Set<string> = new Set();
     let neighborFocusKey = "";
@@ -1545,9 +1539,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           starBatchFocus.push(createFocusEaseState());
           starBatchPulse.push({ scale: 1, glow: 2, emissive: 0.7 });
           starBatchPos.push({ x: 0, y: 0, z: 0 });
+          starBatchXfade.push(createHealthPulseCrossfadeState("idle"));
         }
         starBatchIds[bi] = n.id;
         starBatchHealths[bi] = n.health;
+        {
+          let xf = healthXfade.get(n.id);
+          if (!xf) {
+            xf = createHealthPulseCrossfadeState(n.health);
+            healthXfade.set(n.id, xf);
+          }
+          starBatchXfade[bi] = xf;
+        }
         starBatchBases[bi]!.x = n.base.x;
         starBatchBases[bi]!.y = n.base.y;
         starBatchBases[bi]!.z = n.base.z;
@@ -1577,8 +1580,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         neighborFocusKey = focusKey;
       }
       const batchCount = Math.min(botVis.length, STAR_BATCH_MAX);
-      // Touch STAR_BATCH_ORBIT_OPTS.clock so reused orbit opts stay phase-locked (c18 alloc).
-      STAR_BATCH_ORBIT_OPTS.clock = sharedMotionClock;
+      // Motion c19: one-call health-crossfade + neighbor-damp via batch opts.
       stepStarFieldBatch(
         starBatchIds,
         starBatchHealths,
@@ -1591,61 +1593,12 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         dt,
         reducedMotion,
         batchCount,
-        { clock: sharedMotionClock },
+        {
+          clock: sharedMotionClock,
+          xfade: starBatchXfade,
+          neighbors: neighborSet,
+        },
       );
-      // Motion c18: damp 1-hop neighbor orbit after batch focus-ease.
-      stepNeighborDriftDampBatch(
-        starBatchIds,
-        starBatchFocus,
-        rig.subjectId,
-        neighborSet,
-        dt,
-        reducedMotion,
-        batchCount,
-      );
-      // Re-sample orbit + apply updated driftMul (neighbor damp / focus) onto pos outs.
-      for (let bi = 0; bi < batchCount; bi++) {
-        const id = starBatchIds[bi];
-        const base = starBatchBases[bi];
-        const st = starBatchFocus[bi];
-        const pos = starBatchPos[bi];
-        if (id == null || id === "" || base == null || st == null || pos == null) continue;
-        sampleOrbitDrift(
-          pos,
-          base,
-          wallT,
-          pulsePhaseFromId(id),
-          reducedMotion,
-          STAR_BATCH_ORBIT_OPTS,
-        );
-        applyFocusDrift(pos, base, st.driftMul);
-      }
-      // Motion c17: crossfade pulse when health flips (real status changes).
-      for (let bi = 0; bi < batchCount; bi++) {
-        const id = starBatchIds[bi]!;
-        const health = starBatchHealths[bi]!;
-        let xf = healthXfade.get(id);
-        if (!xf) {
-          xf = createHealthPulseCrossfadeState(health);
-          healthXfade.set(id, xf);
-        }
-        setHealthPulseTarget(xf, health, reducedMotion);
-        stepHealthPulseCrossfade(xf, dt, reducedMotion);
-        if (xf.blend < 0.999 || xf.from !== xf.to) {
-          sampleStarPulseCrossfaded(
-            starBatchPulse[bi]!,
-            pulseXfadeFrom,
-            pulseXfadeTo,
-            xf,
-            wallT,
-            pulsePhaseFromId(id),
-            reducedMotion,
-            { clock: sharedMotionClock },
-          );
-          // Crossfade replaces pulse sample — re-apply focus pulse mul.
-          applyFocusPulse(starBatchPulse[bi]!, starBatchFocus[bi]!.pulseMul);
-        }
-      }
 
       for (let bi = 0; bi < botVis.length; bi++) {
         const n = botVis[bi]!;
@@ -1754,6 +1707,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
+      {
+        const liveKey = botsNow.map((b) => b.id).join("\0");
+        if (liveKey !== lastLiveBotKey) {
+          lastLiveBotKey = liveKey;
+          const live = new Set(botsNow.map((b) => b.id));
+          pruneMotionStateMap(healthXfade, live);
+          pruneMotionStateMap(focusEase, live);
+        }
+      }
       syncCanvasAria();
       const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
       const healthy = botsNow.filter((b) => b.health === "healthy").length;

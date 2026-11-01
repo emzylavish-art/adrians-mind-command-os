@@ -260,6 +260,7 @@ export function NodeDetailPanel({
           constellationEdges: status.constellationEdges,
           notionGraph: status.notionGraph,
           fleetPlan: status.fleetPlan,
+          timeline: status.timeline,
         })
       : null;
 

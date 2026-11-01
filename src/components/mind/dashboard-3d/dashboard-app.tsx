@@ -21,6 +21,7 @@ import {
   persistOperatorPrefs,
   useOperatorHotkey,
 } from "./operator-console";
+import { DEFAULT_PREFS } from "@/lib/mind/dashboard/operator-palette";
 import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
 import { GraphFiltersPanel } from "./graph-filters-panel";
@@ -31,13 +32,11 @@ import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashbo
 import { pollViewData } from "@/lib/mind/dashboard/status-poll";
 import "./dashboard-3d.css";
 
-/** Gap#3: once we have painted a scene this session, never re-show the boot splash. */
-let dash3dStagePrimed = false;
-
 export function DashboardApp() {
   const { state, refresh, hiddenGapMs } = useDashboardStatus();
   const viewData = useMemo(() => pollViewData(state), [state]);
-  if (viewData) dash3dStagePrimed = true;
+  // Gap#3 / hydration: stagePrimed only flips after mount+data (never during SSR render).
+  const [stagePrimed, setStagePrimed] = useState(false);
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [nhopDepth, setNhopDepth] = useState(0);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
@@ -56,9 +55,15 @@ export function DashboardApp() {
     () => cityLayout ?? buildCityLayout(viewData?.projects ?? null),
     [cityLayout, viewData],
   );
-  const reducedMotion = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Hydration-safe: SSR + first client paint agree on false; read matchMedia after mount.
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setReducedMotion(!!mq.matches);
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
   }, []);
 
   const soundRef = useRef<ReturnType<typeof createHealthSound> | null>(null);
@@ -124,8 +129,19 @@ export function DashboardApp() {
     return () => window.removeEventListener("popstate", onPop);
   }, [viewData]);
 
+  useEffect(() => {
+    if (viewData) setStagePrimed(true);
+  }, [viewData]);
+
   const [perfHint, setPerfHint] = useState<string | null>(null);
-  const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
+  const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => ({
+    ...DEFAULT_PREFS,
+    layers: { ...DEFAULT_PREFS.layers },
+  }));
+  useEffect(() => {
+    // Client-only prefs after hydrate (localStorage must not affect first paint).
+    setOperatorPrefs(loadInitialOperatorPrefs());
+  }, []);
   useEffect(() => {
     const sound = createHealthSound({ reducedMotion });
     soundRef.current = sound;
@@ -411,7 +427,7 @@ export function DashboardApp() {
         </div>
       ) : null}
 
-      {state.status === "loading" && !viewData && !dash3dStagePrimed ? (
+      {state.status === "loading" && !viewData && !stagePrimed ? (
         <div className="dash3d-fallback">
           <div className="dash3d-glass">
             <h2>Adrian&apos;s Mind</h2>
