@@ -222,3 +222,15 @@ describe("relay model body follows model tiers", () => {
     assert.equal(seen.size, 4);
   });
 });
+
+describe("relay multimodal body", () => {
+  it("passes content part arrays through to the provider JSON", () => {
+    const parts = [
+      { type: "text" as const, text: "what color?" },
+      { type: "image_url" as const, image_url: { url: "data:image/png;base64,aa" } },
+    ];
+    const body = buildRelayModelBody("grok-4.5", [{ role: "user", content: parts }], { temperature: 0, max_tokens: 16 });
+    assert.deepEqual(body.messages, [{ role: "user", content: parts }]);
+  });
+});
+

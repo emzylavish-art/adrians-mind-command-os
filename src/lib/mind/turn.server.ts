@@ -2,6 +2,8 @@ import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
+import { sanitizeAttachments, type ImageAttachment } from "./media/index.ts";
+import type { ChatContent } from "./media/types.ts";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, selectProvider } from "./provider-call";
@@ -11,7 +13,8 @@ import { readModelPayload } from "./stream";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
-const MAX_BODY = 200_000;
+/** Raised so a few downscaled image data-URLs can ride with the turn JSON. */
+const MAX_BODY = 2_500_000;
 
 type HistoryItem = { role: "user" | "assistant"; content: string };
 type NoteItem = { id: string; text: string };
@@ -25,6 +28,8 @@ export type TurnBody = {
   provider?: unknown;
   /** UI picker: Auto | Fast | Expert | Heavy | Build */
   modelTier?: unknown;
+  /** Optional image attachments (data-URLs) for multimodal Direct turns. */
+  images?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryItem {
@@ -55,11 +60,12 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if (!allowMindRequest("chat", userId, 12)) {
     return { ok: false as const, error: "Too many messages. Wait a minute and try again." };
   }
+  const images = sanitizeAttachments(data.images);
   const text = typeof data.text === "string" ? data.text.trim() : "";
-  if (!text) return { ok: false as const, error: "Write a message first." };
+  if (!text && images.length === 0) return { ok: false as const, error: "Write a message first." };
   const history = Array.isArray(data.history) ? data.history.filter(isHistory).slice(-12) : [];
   const memoryContext = Array.isArray(data.memoryContext) ? data.memoryContext.filter(isNote).slice(0, 12) : [];
-  const sized = checkTurnSize({ text, history, memoryContext });
+  const sized = checkTurnSize({ text: text || "Describe the attached image.", history, memoryContext });
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
   if (!memory) return { ok: false as const, error: "Memory setting is invalid." };
@@ -70,11 +76,12 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   const assembled = assembleTurn({
     memory,
     history,
-    text,
+    text: text || "Describe the attached image.",
     memoryContext,
+    images,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
-  const tier = resolveModelTier(data.modelTier, text, process.env);
+  const tier = resolveModelTier(data.modelTier, text || "image", process.env);
   return {
     ok: true as const,
     assembled,
@@ -82,11 +89,12 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     model: tier.model,
     modelTier: tier,
     provider: routed.id,
+    images,
   };
 }
 
 export async function completeModelReply(prepared: {
-  assembled: { messages: { role: "system" | "user" | "assistant"; content: string }[]; usedIds: string[] };
+  assembled: { messages: { role: "system" | "user" | "assistant"; content: ChatContent }[]; usedIds: string[] };
   memory: "off" | "on";
   model: string;
   modelTier: ResolvedModelTier;
@@ -212,6 +220,10 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       modelTier: prepared.modelTier.selected,
       resolvedTier: prepared.modelTier.resolved,
       tierReason: prepared.modelTier.reason,
+      images: prepared.images.length,
     },
   });
 }
+
+/** Exported for scripts/tests that build a multimodal Direct turn without the HTTP handler. */
+export type { ImageAttachment };

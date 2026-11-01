@@ -96,7 +96,8 @@ describe("assembleTurn", () => {
     if (clean.ok) {
       assert.equal(clean.usedIds.length, 0);
       assert.equal(JSON.stringify(clean.messages).includes("secret fact"), false);
-      assert.match(clean.messages[0].content, /Memory is OFF/);
+      assert.equal(typeof clean.messages[0].content, "string");
+      assert.match(clean.messages[0].content as string, /Memory is OFF/);
     }
   });
 });

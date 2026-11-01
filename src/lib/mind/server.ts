@@ -298,6 +298,7 @@ export const sendTurn = createServerFn({ method: "POST" })
     history: { role: "user" | "assistant"; content: string }[];
     memoryContext: { id: string; text: string }[];
     modelTier?: string;
+    images?: { dataUrl: string; name?: string }[];
   }) => input)
   .handler(async ({ data, context }) => {
     const { completeModelReply, prepareMindTurn } = await import("./turn.server");

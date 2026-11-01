@@ -14,12 +14,19 @@ export type { AgentDefinition, AgentRun, BrowserSessionRecord, DeploymentRecord,
 
 export type Autonomy = "ask" | "automatic";
 
+export type MsgImage = {
+  dataUrl: string;
+  name?: string;
+};
+
 export type Msg = {
   id: string;
   role: "user" | "assistant";
   content: string;
   at: string;
   model?: string;
+  /** Inline image attachments shown in the bubble and sent on the originating turn. */
+  images?: MsgImage[];
 };
 
 export type Retrieval = { at: string; ids: string[] };
