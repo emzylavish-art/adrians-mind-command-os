@@ -3868,3 +3868,36 @@ aside.rail span.grid.size-11.rounded-2xl * {
     max-width: calc(100vw - 18rem - 1.5rem) !important;
   }
 }
+
+/* —— Blueprint c43: 44px minimum hit targets —— */
+button:not(:disabled),
+a[href],
+[role="button"],
+input:not([type="hidden"]),
+select,
+textarea,
+.composer-bar__plus,
+.composer-bar__model,
+.composer-speak-pill,
+nav.fixed[aria-label="Primary"] > button {
+  min-height: 44px !important;
+}
+nav.fixed[aria-label="Primary"] > button {
+  min-width: 44px !important;
+}
+.composer-bar__plus,
+.composer-bar__model,
+button.grid.size-9,
+button.grid.size-10,
+button.grid.size-11,
+.topbar button.grid {
+  min-width: 44px !important;
+  min-height: 44px !important;
+}
+/* Keep idle composer compact chips tappable without exploding dock height */
+@media (max-width: 767.98px) {
+  section.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    min-height: 44px !important;
+    height: 44px !important;
+  }
+}
