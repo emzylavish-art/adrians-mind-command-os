@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import {
   clearConnection,
   CONNECTOR_DISPLAY_NAMES,
@@ -11,6 +12,23 @@ import {
   type ConnectionPublic,
   type ConnectorId,
 } from "./store.ts";
+
+
+function ownerIdsMatch(a: string, b: string): boolean {
+  try {
+    const ba = Buffer.from(a);
+    const bb = Buffer.from(b);
+    if (ba.length !== bb.length) return false;
+    return timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
+
+/** Never relay upstream bodies that might contain tokens; fixed client-safe errors only. */
+function safeTokenExchangeError(status: number): string {
+  return `Token exchange failed (${status}). Nothing was stored.`;
+}
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<{
   ok: boolean;
@@ -86,6 +104,18 @@ export function buildAuthorizeUrl(
         `${name} OAuth is not configured. Set ${provider.envKeys.clientId}, ${provider.envKeys.clientSecret}, and ${provider.envKeys.redirectUri}. Nothing was started.`,
     };
   }
+  try {
+    const redirect = new URL(env.redirectUri);
+    const local = redirect.hostname === "localhost" || redirect.hostname === "127.0.0.1";
+    if (redirect.protocol === "http:" && !local) {
+      return { ok: false, error: `${name} redirect URI must use https (or http on localhost). Nothing was started.` };
+    }
+    if (redirect.protocol !== "https:" && redirect.protocol !== "http:") {
+      return { ok: false, error: `${name} redirect URI scheme is not allowed. Nothing was started.` };
+    }
+  } catch {
+    return { ok: false, error: `${name} redirect URI is invalid. Nothing was started.` };
+  }
   const { state, codeVerifier, codeChallenge } = newOAuthState();
   savePendingOAuth({
     state,
@@ -119,6 +149,8 @@ export async function exchangeAuthorizationCode(
   input: {
     code: string;
     state: string;
+    /** When set, must match the owner who started OAuth (session bind). */
+    expectedOwnerId?: string;
     env?: OAuthProviderEnv;
     fetch?: FetchLike;
   },
@@ -128,9 +160,19 @@ export async function exchangeAuthorizationCode(
   if (!providerConfigured(env) || !env.clientId || !env.clientSecret || !env.tokenUrl) {
     return { ok: false, error: `${name} OAuth is not configured. Nothing was stored.` };
   }
+  // Reject open-looking redirect_uri: pending.redirectUri must equal configured env redirect.
+  if (env.redirectUri && typeof env.redirectUri === "string") {
+    /* checked after pending load */
+  }
   const pending = takePendingOAuth(input.state);
   if (!pending || pending.connector !== provider.id) {
     return { ok: false, error: "OAuth state is invalid or expired. Nothing was stored." };
+  }
+  if (input.expectedOwnerId && !ownerIdsMatch(pending.ownerId, input.expectedOwnerId)) {
+    return { ok: false, error: "OAuth state does not match the signed-in user. Nothing was stored." };
+  }
+  if (env.redirectUri && pending.redirectUri !== env.redirectUri) {
+    return { ok: false, error: "OAuth redirect URI mismatch. Nothing was stored." };
   }
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -163,30 +205,27 @@ export async function exchangeAuthorizationCode(
     json = provider.normalizeTokenJson(json);
   }
   if (!response.ok || !json || typeof json.access_token !== "string") {
-    const message =
-      json && typeof json.error_description === "string"
-        ? json.error_description
-        : json && typeof json.error === "string"
-          ? String(json.error)
-          : json && typeof json.message === "string"
-            ? json.message
-            : `Token exchange failed (${response.status}).`;
-    return { ok: false, error: `${message} Nothing was stored.` };
+    return { ok: false, error: safeTokenExchangeError(response.status) };
   }
   const hints = provider.parseAccount(json);
-  const conn = storeAccessToken({
-    ownerId: pending.ownerId,
-    connector: provider.id,
-    accessToken: json.access_token,
-    refreshToken: typeof json.refresh_token === "string" ? json.refresh_token : undefined,
-    workspaceName: hints.workspaceName,
-    workspaceId: hints.workspaceId,
-    botId: hints.botId,
-    accountLabel: hints.accountLabel,
-    tokenType: typeof json.token_type === "string" ? json.token_type : "bearer",
-    scopes: typeof json.scope === "string" ? json.scope : pending.scopes,
-  });
-  return { ok: true, public: toPublic(provider.id, conn, true) };
+  try {
+    const conn = storeAccessToken({
+      ownerId: pending.ownerId,
+      connector: provider.id,
+      accessToken: json.access_token,
+      refreshToken: typeof json.refresh_token === "string" ? json.refresh_token : undefined,
+      workspaceName: hints.workspaceName,
+      workspaceId: hints.workspaceId,
+      botId: hints.botId,
+      accountLabel: hints.accountLabel,
+      tokenType: typeof json.token_type === "string" ? json.token_type : "bearer",
+      scopes: typeof json.scope === "string" ? json.scope : pending.scopes,
+    });
+    return { ok: true, public: toPublic(provider.id, conn, true) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Token could not be stored encrypted.";
+    return { ok: false, error: `${message} Nothing was stored.` };
+  }
 }
 
 export function connectionStatus(
@@ -198,17 +237,22 @@ export function connectionStatus(
   return toPublic(provider.id, readConnection(ownerId, provider.id), providerConfigured(cfg));
 }
 
+export type DisconnectResult = ConnectionPublic & { revokeOk?: boolean; revokeDetail?: string };
+
 export async function disconnectProvider(
   provider: OAuthProvider,
   input: { ownerId: string; env?: OAuthProviderEnv; fetch?: FetchLike },
-): Promise<ConnectionPublic> {
+): Promise<DisconnectResult> {
   const env = input.env ?? provider.readEnv();
   const token = getAccessToken(input.ownerId, provider.id);
+  let revokeOk: boolean | undefined;
+  let revokeDetail: string | undefined;
   if (token && env.revokeUrl && provider.revokeStyle !== "none") {
     const fetchImpl = input.fetch ?? (globalThis.fetch as FetchLike);
     try {
+      let response: Awaited<ReturnType<FetchLike>> | null = null;
       if (provider.revokeStyle === "bearer_json") {
-        await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(env.revokeUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -217,13 +261,13 @@ export async function disconnectProvider(
           body: JSON.stringify({ token }),
         });
       } else if (provider.revokeStyle === "form_token") {
-        await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(env.revokeUrl, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({ token }),
         });
       } else if (provider.revokeStyle === "slack_auth_revoke") {
-        await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(env.revokeUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -232,7 +276,7 @@ export async function disconnectProvider(
           body: new URLSearchParams({ token }),
         });
       } else if (provider.revokeStyle === "github_basic" && env.clientId && env.clientSecret) {
-        await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(env.revokeUrl, {
           method: "DELETE",
           headers: {
             Authorization: `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`,
@@ -242,12 +286,22 @@ export async function disconnectProvider(
           body: JSON.stringify({ access_token: token }),
         });
       }
+      revokeOk = Boolean(response?.ok);
+      revokeDetail = revokeOk
+        ? "Provider revoke succeeded; local token cleared."
+        : "Provider revoke failed or was unreachable; local token was still cleared.";
     } catch {
-      /* still clear local record */
+      revokeOk = false;
+      revokeDetail = "Provider revoke failed or was unreachable; local token was still cleared.";
     }
   }
   clearConnection(input.ownerId, provider.id);
-  return toPublic(provider.id, null, providerConfigured(env));
+  const pub = toPublic(provider.id, null, providerConfigured(env));
+  const detail =
+    revokeDetail && pub.state !== "not_configured"
+      ? `${pub.detail} ${revokeDetail}`
+      : pub.detail;
+  return { ...pub, detail, revokeOk, revokeDetail };
 }
 
 export function displayNameFor(id: ConnectorId): string {
