@@ -499,3 +499,172 @@
 }
 .dash3d-money-warn li[data-level="warn"] { color: #fbbf24; }
 .dash3d-money-warn li[data-level="crit"] { color: #fb7185; }
+
+
+/* Real-data charts */
+.dash3d-charts-panel {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 4.5rem;
+  width: min(280px, 34vw);
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  z-index: 6;
+  pointer-events: auto;
+  padding: 0.55rem 0.7rem 0.65rem;
+}
+.dash3d-charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.dash3d-chart-card h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+
+/* Queue #8 Operator */
+.dash3d-operator-root {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: start center;
+  padding-top: 12vh;
+  pointer-events: auto;
+}
+.dash3d-operator-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(4, 8, 18, 0.55);
+  cursor: pointer;
+}
+.dash3d-operator-panel {
+  position: relative;
+  width: min(520px, 92vw);
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 0.75rem 0.85rem 0.9rem;
+  z-index: 1;
+}
+.dash3d-operator-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+.dash3d-operator-head h2 { margin: 0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.dash3d-operator-input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: rgba(8, 14, 28, 0.85);
+  color: #e8eefc;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.9rem;
+}
+.dash3d-operator-list {
+  list-style: none;
+  margin: 0.45rem 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.dash3d-operator-row {
+  width: 100%;
+  display: flex;
+  gap: 0.5rem;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0.4rem 0.35rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+.dash3d-operator-row.is-active,
+.dash3d-operator-row:hover {
+  background: rgba(125, 211, 252, 0.12);
+}
+.dash3d-operator-row-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dash3d-operator-filters,
+.dash3d-operator-layers,
+.dash3d-operator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  align-items: center;
+}
+.dash3d-pill.is-on {
+  background: rgba(61, 214, 140, 0.22);
+  border-color: rgba(61, 214, 140, 0.5);
+}
+.dash3d-operator-layer {
+  font-size: 0.68rem;
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  text-transform: capitalize;
+}
+.dash3d-root[data-labels="0"] .dash3d-label, .dash3d-root[data-labels="0"] .dash3d-city-label {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Queue #9 Notion mirror */
+.dash3d-mirror-panel {
+  position: absolute;
+  left: 0.75rem;
+  top: 4.6rem;
+  width: min(300px, 34vw);
+  max-height: min(36vh, 320px);
+  overflow: auto;
+  z-index: 6;
+  pointer-events: auto;
+  padding: 0.55rem 0.7rem;
+}
+.dash3d-mirror-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.dash3d-mirror-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.05rem 0.4rem;
+  text-align: left;
+  border: 1px solid rgba(125, 211, 252, 0.12);
+  background: rgba(8, 14, 28, 0.4);
+  color: inherit;
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.4rem;
+  cursor: pointer;
+}
+.dash3d-mirror-row:disabled { cursor: default; opacity: 0.75; }
+.dash3d-mirror-bot { font-size: 0.72rem; font-weight: 600; }
+.dash3d-mirror-fresh { font-size: 0.62rem; color: #86efac; }
+.dash3d-mirror-fresh.is-stale { color: #fbbf24; }
+.dash3d-mirror-title {
+  grid-column: 1 / -1;
+  font-size: 0.65rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

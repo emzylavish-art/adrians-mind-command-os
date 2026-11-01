@@ -205,6 +205,41 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       pickables.push(body);
       const ext: THREE.Object3D[] = [body];
 
+      // Painted facade card (Grok Imagine) — fill empty building surfaces
+      const facadeUrl =
+        b.id === "project-gap-cycle"
+          ? "/dashboard-3d/art/building-gap-cycle.webp"
+          : b.id === "project-orchestrator"
+            ? "/dashboard-3d/art/building-orchestrator.webp"
+            : b.id.startsWith("bot-")
+              ? "/dashboard-3d/art/building-guild.webp"
+              : null;
+      if (facadeUrl) {
+        texLoader.load(
+          facadeUrl,
+          (tex: THREE.Texture) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const fMat = new THREE.MeshBasicMaterial({
+              map: tex,
+              transparent: true,
+              opacity: 0.92,
+              depthWrite: false,
+            });
+            ownedMats.push(fMat);
+            const fGeo = new THREE.PlaneGeometry(b.width * 0.92, Math.min(b.height * 0.85, b.width * 1.35));
+            ownedGeos.push(fGeo);
+            const face = new THREE.Mesh(fGeo, fMat);
+            face.position.set(0, Math.min(b.height * 0.55, b.height - 0.2), b.depth / 2 + 0.02);
+            face.userData.cityPick = { buildingId: b.id, part: "facade", floor: null } satisfies CityPick;
+            shell.add(face);
+            pickables.push(face);
+            ext.push(face);
+          },
+          undefined,
+          () => { /* no source yet */ },
+        );
+      }
+
       // glowing windows: one per floor on the front face; lit only for real progress
       const winGeo = new THREE.PlaneGeometry(b.width * 0.62, b.floorHeight * 0.5);
       ownedGeos.push(winGeo);

@@ -12,6 +12,15 @@ import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
 import { TimeScrubber } from "./time-scrubber";
 import { FeedPanel } from "./feed-panel";
 import { MoneyPanel } from "./money-panel";
+import { ChartsPanel } from "./charts-panel";
+import {
+  OperatorConsole,
+  loadInitialOperatorPrefs,
+  persistOperatorPrefs,
+  useOperatorHotkey,
+} from "./operator-console";
+import { NotionMirrorPanel } from "./notion-mirror-panel";
+import type { OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import "./dashboard-3d.css";
 
 export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
@@ -41,6 +50,8 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const soundRef = useRef<ReturnType<typeof createHealthSound> | null>(null);
   const [soundMuted, setSoundMuted] = useState(true);
   const [scrubMs, setScrubMs] = useState<number | null>(null);
+  const [operatorOpen, setOperatorOpen] = useState(false);
+  const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
   useEffect(() => {
     const sound = createHealthSound({ reducedMotion });
     soundRef.current = sound;
@@ -58,6 +69,23 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     soundRef.current?.setReducedMotion(reducedMotion);
   }, [reducedMotion]);
+
+  useEffect(() => {
+    persistOperatorPrefs(operatorPrefs);
+    document.documentElement.dataset.dashLabels = operatorPrefs.layers.labels ? "1" : "0";
+    // sync sound layer → mute (layer sound true means allow unmute path; still start muted until user enables)
+    if (!operatorPrefs.layers.sound) {
+      soundRef.current?.setMuted(true);
+      setSoundMuted(true);
+    }
+    document.dispatchEvent(
+      new CustomEvent("dash3d-layers", {
+        detail: { labels: operatorPrefs.layers.labels, healthFilter: operatorPrefs.healthFilter },
+      }),
+    );
+  }, [operatorPrefs]);
+
+  useOperatorHotkey(() => setOperatorOpen((o) => !o));
 
   const unlockSound = useCallback(() => {
     soundRef.current?.unlock();
@@ -140,7 +168,13 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   };
 
   return (
-    <main className={`dash3d-root dash3d-universe${embedded ? " is-embedded" : ""}`} data-fly-level={fly.level} onPointerDownCapture={unlockSound}>
+    <main
+      className={`dash3d-root dash3d-universe${embedded ? " is-embedded" : ""}`}
+      data-fly-level={fly.level}
+      data-labels={operatorPrefs.layers.labels ? "1" : "0"}
+      data-health-filter={operatorPrefs.healthFilter}
+      onPointerDownCapture={unlockSound}
+    >
       {state.status === "ready" && sceneData && !webglError ? (
         <UniverseScene
           data={sceneData}
@@ -245,6 +279,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               {(state.data.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
             </p>
           </div>
+          {operatorPrefs.layers.time ? (
           <TimeScrubber
             timeline={state.data.timeline ?? {
               events: [],
@@ -260,6 +295,15 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             mode={scrubView.mode}
             onScrubMs={setScrubMs}
           />
+          ) : null}
+          <button
+            type="button"
+            className="dash3d-glass dash3d-zoomout"
+            data-testid="operator-open"
+            onClick={() => setOperatorOpen(true)}
+          >
+            Operator (⌘K)
+          </button>
           <button
             type="button"
             className="dash3d-glass dash3d-zoomout"
@@ -299,8 +343,37 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         />
       ) : null}
 
-      {state.status === "ready" && sceneData ? (
+      {state.status === "ready" && sceneData && operatorPrefs.layers.feed ? (
         <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
+      ) : null}
+      {state.status === "ready" && sceneData?.charts && operatorPrefs.layers.charts ? (
+        <ChartsPanel charts={sceneData.charts} />
+      ) : null}
+      {state.status === "ready" ? (
+        <NotionMirrorPanel
+          mirror={state.data.notionMirror}
+          onOpenPage={(pageId) => {
+            openNotion(pageId);
+          }}
+        />
+      ) : null}
+      {state.status === "ready" ? (
+        <OperatorConsole
+          bots={state.data.bots}
+          buildings={layoutForHud.buildings}
+          pages={state.data.notionGraph.pages}
+          open={operatorOpen}
+          onOpenChange={setOperatorOpen}
+          prefs={operatorPrefs}
+          onPrefsChange={setOperatorPrefs}
+          onFlyBot={(botId) => {
+            document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId } }));
+          }}
+          onOpenNotion={openNotion}
+          onSelectBot={(bot) => {
+            setSelected(bot);
+          }}
+        />
       ) : null}
 
       <NodeDetailPanel

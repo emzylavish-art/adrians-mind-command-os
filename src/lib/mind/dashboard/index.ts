@@ -9,3 +9,6 @@ export type * from "./types.ts";
 export { buildTimeline, scrubAt, applyScrubToBots, formatWat } from "./time-scrub.ts";
 export { buildSkyFeed, sanitizeFeedText } from "./sky-feed.ts";
 export { loadMoneyView, buildMoneyView, createFilesystemSpendAdapter, NO_SPEND_SOURCE } from "./spend.ts";
+export { buildDashboardCharts } from "./chart-series.ts";
+export { buildOperatorTargets, filterOperatorTargets, sanitizePaletteText } from "./operator-palette.ts";
+export { buildNotionMirrorView } from "./notion-mirror.ts";

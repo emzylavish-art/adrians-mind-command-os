@@ -80,8 +80,6 @@ export type DashboardStatus = {
     lockFile: string | null;
   };
   spend: { available: false; reason: string } | { available: true; entries: unknown[] };
-  /** Queue #7 — burn/today/warnings from real spend adapter only. */
-  money: import("./spend-core.ts").MoneyView;
   sources: {
     locksDir: string;
     repoDir: string;
@@ -104,4 +102,10 @@ export type DashboardStatus = {
   timeline: import("./time-scrub.ts").Timeline;
   /** Queue #6 — drifting sky feed + glass list (real sources only). */
   skyFeed: import("./sky-feed.ts").SkyFeed;
+  /** Queue #7 — burn/today/warnings from real spend adapter only. */
+  money: import("./spend-core.ts").MoneyView;
+  /** Real-data spark charts. */
+  charts: import("./chart-series.ts").DashboardCharts;
+  /** Queue #9 — per-bot Notion stop-point freshness from snapshot. */
+  notionMirror: import("./notion-mirror.ts").NotionMirrorView;
 };
