@@ -7094,3 +7094,26 @@ nav.fixed[aria-label="Primary"] button {
 aside.rail nav {
   touch-action: pan-y !important;
 }
+
+/* —— Evolution c104: phone feel — overscroll contain + momentum scroll —— */
+html, body {
+  overscroll-behavior-y: none !important;
+  overscroll-behavior-x: none !important;
+}
+.main-stage,
+.main-stage .overflow-auto,
+.main-stage .overflow-y-auto,
+.min-h-0.flex-1.overflow-auto,
+.chat-stream,
+aside.rail,
+aside.rail nav,
+.floating-menu,
+[role="menu"],
+.overlay-panel {
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+.composer-bar__model-menu {
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
