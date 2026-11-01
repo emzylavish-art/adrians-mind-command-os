@@ -6587,11 +6587,6 @@ aside .max-w-\[14rem\].truncate {
   white-space: nowrap !important;
   vertical-align: bottom;
 }
-/* Make stub model look like a chip but not fake interactivity beyond CSS */
-.composer-bar__model[data-testid="composer-bar-model"]:not(button) {
-  pointer-events: none; /* honest: stub is non-interactive until TSX wires it */
-  opacity: 0.85;
-}
 
 /* Reassert guards */
 @media (max-width: 767.98px) {
