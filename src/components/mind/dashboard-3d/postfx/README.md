@@ -227,3 +227,17 @@ Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (m
   ```
 - **`meter-badge.ts`** — `formatMeterBadge(dim.contrast, lift.report)` → `{ text, level }` for the debug overlay; prints only real readings ("no read yet" otherwise).
 - Register tests: `postfx/{meter-suspend,scene-key-lift,meter-backoff,meter-sample-age,detail-dim-per-rect}.test.ts`.
+
+## #84 — meter the focused Imagine card's own rect; hacker: per-rect targets stay caller-aligned
+
+- **Hacker (live, no wiring):** `setRects` drops junk / off-canvas / zero-area rects, which compacted the active list, but `setContrastTarget([...])` targets stayed aligned to the CALLER's list. With the detail card off-canvas or 0×0 (open transition) the Charts rect slid into slot 0 and was planned with the detail card's text/background target — the chart-line 3:1 plan was silently dropped. Targets are now looked up by caller index (`contrast.rectSource[i]` = caller index of active rect `i`; caller lists up to `DIM_MAX_CALLER_RECTS` = 8). Test: `postfx/dim-target-align.test.ts` (failed 3/3 before the fix).
+- **Card probe (`detail-backdrop-dim.ts`)** — `liveDetailDim.setCardProbe(true)` adds the focused card's projected bounds (`cardProbeRect`, from the `setHole` centre/radius/aspect) as an extra meter slot (reader `METER_SLOTS` = 3). Measured only, never dimmed; with no panel open the pass stays enabled at strength 0 / no dim rects (identity frame) purely to meter. The probe rect is sticky between reads and refreshes at the meter's current `backoff.intervalMs` (so #80 back-off still bounds readback cost; a drifting card can't re-key every frame), or immediately when focus moves to another card. Panel slots are matched to their exact panel layout, so a probe refresh never blanks the panel measurement. Reported on `contrast.card` (`{ stats, rect, atMs }`, null when off/no focus/stale/failed/focus moved) and `contrast.cardProbe`. Off by default (no extra cost until wired). Hidden tab → no reads.
+- **Key lift** — `liftBackdrop(dim.contrast, dim.rects, lift.focusUv)` prefers the card's own reading and falls back to the #83 panel rect (`statsAtFocus`). Wiring (replaces the #83 `setBackdrop` line):
+  ```ts
+  liveDetailDim.setCardProbe(true); // once, after creating the dim pass (and in rebuildPostfxBundle)
+  const b = liftBackdrop(liveDetailDim.contrast, liveDetailDim.rects, lift.focusUv);
+  lift.setBackdrop(b?.stats ?? null, { reducedMotion, source: b?.source ?? null });
+  ```
+  `lift.report.backdropSource` = `"card" | "panel" | null`.
+- **Badge** — `formatMeterBadge` adds `card mean X p90 Y` (or `card no reading` while the probe is on) and `key +G (card|panel)`.
+- Register tests: `postfx/{card-probe,dim-target-align}.test.ts` (plus the #83 list).

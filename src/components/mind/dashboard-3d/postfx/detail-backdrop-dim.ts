@@ -44,6 +44,42 @@ export const DIM_MAX_RECTS = 2;
  * targets) may be longer than DIM_MAX_RECTS before junk rects are dropped.
  */
 export const DIM_MAX_CALLER_RECTS = 8;
+/**
+ * #84: meter slots — the DIM_MAX_RECTS panel rects + one probe on the focused
+ * Imagine card's own projected bounds (measured, never dimmed).
+ */
+export const METER_SLOTS = DIM_MAX_RECTS + 1;
+/** #84: card probe half-extent as a multiple of the projected card radius. */
+export const CARD_PROBE_SCALE = 1;
+
+/**
+ * #84: focused card's projected bounds as a UV rect (centre uv, radius in v
+ * units, aspect = canvas w/h so u half-extent = r/aspect). Clamped to the
+ * canvas; junk / off-canvas / zero area → null.
+ */
+export function cardProbeRect(
+  centerUv: readonly [number, number] | null | undefined,
+  radiusUv: number | null | undefined,
+  aspect: number,
+  scale = CARD_PROBE_SCALE,
+): UvRect | null {
+  if (!centerUv || !Number.isFinite(radiusUv) || !(radiusUv! > 0) || !Number.isFinite(aspect) || aspect <= 0) return null;
+  const [cu, cv] = centerUv;
+  if (!Number.isFinite(cu) || !Number.isFinite(cv) || !Number.isFinite(scale) || scale <= 0) return null;
+  const hv = radiusUv! * scale;
+  const hu = hv / aspect;
+  const u0 = Math.max(0, cu - hu);
+  const u1 = Math.min(1, cu + hu);
+  const v0 = Math.max(0, cv - hv);
+  const v1 = Math.min(1, cv + hv);
+  if (!(u1 > u0) || !(v1 > v0)) return null;
+  return [u0, v0, u1, v1];
+}
+
+const insideUv = (p: readonly [number, number], r: UvRect) => p[0] >= r[0] && p[0] <= r[2] && p[1] >= r[1] && p[1] <= r[3];
+
+/** #84: real luminance of the focused card's own projected rect. */
+export type CardMeasurement = { stats: LuminanceStats; rect: UvRect; atMs: number };
 /** #68: measured mode may dim harder than the static window when WCAG needs it. */
 export const DIM_MEASURED_MAX = 0.7;
 /** Time constant for easing between static / measured strengths. */
@@ -95,6 +131,13 @@ export type ContrastReport = {
    * caller rects are dropped, so active ≠ caller index in general.
    */
   rectSource: number[];
+  /** #84: card probe opted in (setCardProbe(true)). */
+  cardProbe: boolean;
+  /**
+   * #84: fresh reading of the focused card's own rect (null: probe off, no
+   * focus, no/stale/failed read, or focus moved to another card).
+   */
+  card: CardMeasurement | null;
 };
 
 /**
@@ -256,6 +299,14 @@ export type DetailBackdropDimHandle = {
   setHidden: (hidden: boolean) => void;
   /** Honest state of the measured dim (for debug badges / tests). */
   readonly contrast: ContrastReport;
+  /**
+   * #84: also meter the focused card's own projected bounds (from setHole)
+   * so the #83 key lift has a reading when no panel sits behind the card.
+   * The probe is measured only (never dimmed); it refreshes at the meter's
+   * #80 interval (or at once when focus moves to another card), so readback
+   * cost stays under the back-off guard. Off by default.
+   */
+  setCardProbe: (on: boolean) => void;
   dispose: () => void;
 };
 
@@ -295,6 +346,15 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
   let uvRects: UvRect[] = [];
   /** Caller index of each active uvRect (targets are caller-aligned). */
   let rectSrc: number[] = [];
+  /** #84 card probe: opted in, live candidate (from setHole), sticky rect being metered. */
+  let probeOn = false;
+  let probeCenter: [number, number] | null = null;
+  let probeCandidate: UvRect | null = null;
+  let probeRect: UvRect | null = null;
+  let lastBeginMs = -Infinity;
+  type Layout = { key: string; panelKey: string; panelCount: number; probe: UvRect | null };
+  /** Layout of the latest resolved measurement (slot meaning of perRect). */
+  let measuredLayout: Layout | null = null;
   let level = 0;
   let target = 0;
   let from = 0;
@@ -319,6 +379,8 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     perRectStrength: [],
     backoff: meter.backoff,
     rectSource: [],
+    cardProbe: false,
+    card: null,
   };
 
   /** Plan for one rect from its own measured stats (text, and lines if given). */
@@ -354,8 +416,22 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
    * Imagine scene behind the detail card.
    */
   const fullStrengths = (): number[] => {
-    const key = uvRects.length ? rectsKey(uvRects) : "";
-    const m = contrastTarget && key ? meter.measurementFor(key, now()) : null;
+    const panelKey = uvRects.length ? rectsKey(uvRects) : "";
+    const lm = meter.latestFresh(now());
+    const layout = lm && measuredLayout && measuredLayout.key === lm.key ? measuredLayout : null;
+    // Panel slots apply only to the exact panel layout they were read for.
+    const panelM =
+      lm && layout && contrastTarget && panelKey && layout.panelKey === panelKey && layout.panelCount > 0
+        ? { atMs: lm.atMs, perRect: lm.perRect.slice(0, layout.panelCount) }
+        : null;
+    const m = panelM;
+    // #84: card slot applies while the probe is on and focus is still on the
+    // card it was read for (centre inside the metered rect).
+    const cardStats = layout && layout.probe && lm ? lm.perRect[layout.panelCount] ?? null : null;
+    const card: CardMeasurement | null =
+      probeOn && !disposed && cardStats && layout!.probe && probeCenter && insideUv(probeCenter, layout!.probe)
+        ? { stats: cardStats, rect: layout!.probe, atMs: lm!.atMs }
+        : null;
     const plans: (ContrastPlan | null)[] = [];
     const strengths: number[] = [];
     for (let i = 0; i < Math.max(1, uvRects.length); i++) {
@@ -384,11 +460,15 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       perRectStrength: strengths,
       backoff: meter.backoff,
       rectSource: rectSrc.slice(),
+      cardProbe: probeOn && !disposed,
+      card,
     };
     return strengths;
   };
 
-  const measuring = () => !disposed && !!contrastTarget && !hidden && uvRects.length > 0 && target > 0;
+  const panelMeasuring = () => !disposed && !!contrastTarget && !hidden && uvRects.length > 0 && target > 0;
+  const probeMeasuring = () => !disposed && probeOn && !hidden && !!probeCandidate;
+  const measuring = () => panelMeasuring() || probeMeasuring();
 
   /** Eased per-rect full strengths so a new measurement never pops the dim (reduced motion snaps). */
   const curFull: number[] = [DIM_MAX, DIM_MAX];
@@ -407,8 +487,11 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     u.strength.value = disposed ? 0 : peak * level;
     // While measuring keep the pass alive even at strength 0: the readback runs
     // inside its render (input buffer = undimmed backdrop, no feedback).
+    // #84: the card probe alone also keeps it alive (rectCount 0 / strength 0
+    // = identity output, so the frame is unchanged while it measures).
     pass.enabled =
-      !disposed && u.rectCount.value > 0 && (u.strength.value > 0.001 || (measuring() && level > 0.001));
+      !disposed &&
+      ((u.rectCount.value > 0 && (u.strength.value > 0.001 || (panelMeasuring() && level > 0.001))) || probeMeasuring());
   };
   apply();
 
@@ -425,20 +508,34 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     if (disposed) return;
     const src = (readBuffer as THREE.WebGLRenderTarget | undefined)?.texture;
     if (measuring() && src) {
-      const key = rectsKey(uvRects);
       const t0 = now();
-      if (meter.due(t0, key, { hidden, reducedMotion: reduced })) {
+      // #84: the probe rect is sticky between reads so a drifting card can't
+      // re-key (= force a read) every frame; it refreshes at the meter's
+      // current (#80 back-off aware) interval, or at once on a focus change.
+      if (probeMeasuring()) {
+        const stale = !Number.isFinite(lastBeginMs) || t0 < lastBeginMs || t0 - lastBeginMs >= meter.backoff.intervalMs;
+        if (!probeRect || stale || !probeCenter || !insideUv(probeCenter, probeRect)) probeRect = probeCandidate;
+      } else probeRect = null;
+      const panels = panelMeasuring() ? uvRects : [];
+      const list = probeRect ? [...panels, probeRect] : panels;
+      const panelKey = panels.length ? rectsKey(panels) : "";
+      const key = `${panelKey}#${probeRect ? rectsKey([probeRect]) : ""}`;
+      if (list.length && meter.due(t0, key, { hidden, reducedMotion: reduced })) {
         const token = meter.begin(t0, key);
+        lastBeginMs = t0;
+        const layout: Layout = { key, panelKey, panelCount: panels.length, probe: probeRect };
         try {
-          reader ??= createRegionReader(DIM_MAX_RECTS);
+          reader ??= createRegionReader(METER_SLOTS);
           reader
-            .read(renderer, src, uvRects)
+            .read(renderer, src, list)
             .then((bufs) => {
               // Hacker (cycle after #80): the render loop pauses before it can
               // call setHidden(true), so a read that lands while the tab is
               // hidden must be excused here, not billed as slow-readback.
               if (hidden || documentHidden()) meter.suspend();
               meter.resolve(token, bufs.map((b) => measureLuminance(b, METER_EDGE, METER_EDGE)), now());
+              const lm = meter.latestFresh(now());
+              if (lm && lm.key === key) measuredLayout = layout;
             })
             .catch((e: unknown) => meter.fail(token, e));
         } catch (e) {
@@ -493,20 +590,37 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     },
     setHole(world, camera, radiusUv) {
       if (disposed) return;
+      const clearProbe = () => {
+        probeCenter = null;
+        probeCandidate = null;
+      };
       if (!world || !camera || ![world.x, world.y, world.z].every(Number.isFinite)) {
         u.holeRadius.value = 0;
+        clearProbe();
+        apply();
         return;
       }
       camera.updateMatrixWorld();
       const s = sunScreenUv(world, camera);
       if (!s.visible) {
         u.holeRadius.value = 0;
+        clearProbe();
+        apply();
         return;
       }
       u.holeUv.value.set(s.uv[0], s.uv[1]);
       u.holeRadius.value = clampGuardRadius(radiusUv ?? undefined);
       const cam = camera as THREE.PerspectiveCamera;
       u.aspect.value = cam.isPerspectiveCamera && Number.isFinite(cam.aspect) && cam.aspect > 0 ? cam.aspect : 1;
+      probeCenter = [s.uv[0], s.uv[1]];
+      probeCandidate = cardProbeRect(probeCenter, u.holeRadius.value, u.aspect.value);
+      apply();
+    },
+    setCardProbe(on) {
+      if (disposed) return;
+      probeOn = !!on;
+      if (!probeOn) probeRect = null;
+      apply();
     },
     setContrastTarget(next) {
       if (disposed) return;
@@ -523,7 +637,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
           ? Array.from({ length: DIM_MAX_CALLER_RECTS }, () => valid(next as ContrastTarget))
           : [];
       contrastTarget = list.some(Boolean) ? list : null;
-      if (!contrastTarget) meter.reset();
+      if (!contrastTarget && !probeOn) meter.reset(); // #84: the card probe keeps its own readings
       apply();
     },
     setHidden(h) {
@@ -561,6 +675,11 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       target = 0;
       uvRects = [];
       rectSrc = [];
+      probeOn = false;
+      probeRect = null;
+      probeCandidate = null;
+      probeCenter = null;
+      measuredLayout = null;
       u.rectCount.value = 0;
       contrastTarget = null;
       meter.reset();
