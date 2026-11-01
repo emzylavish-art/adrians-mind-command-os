@@ -49,7 +49,7 @@ import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { historyTextForImages, parseImagineCommand, type ImageAttachment } from "@/lib/mind/media";
+import { historyTextForImages, parseImagineCommand, toImageAttachments, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -745,7 +745,9 @@ export function CommandApp() {
           history: history.map((item) => ({
             role: item.role,
             content: item.content,
-            images: item.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+            images: item.images
+              ?.filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+              .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
           })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
@@ -842,7 +844,7 @@ export function CommandApp() {
       return;
     }
     setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true, revised.images ?? []);
+    void deliver(revised.chat, revised.text, revised.ws, true, toImageAttachments(revised.images));
   }
 
   function regenerate() {
@@ -853,7 +855,7 @@ export function CommandApp() {
       return;
     }
     setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true, prepared.images ?? []);
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, toImageAttachments(prepared.images));
   }
 
   function retryLast() {
@@ -864,7 +866,7 @@ export function CommandApp() {
       return;
     }
     setError(null);
-    void deliver(prepared.chat, prepared.text, ws, true, prepared.images ?? []);
+    void deliver(prepared.chat, prepared.text, ws, true, toImageAttachments(prepared.images));
   }
 
   function exportActive() {

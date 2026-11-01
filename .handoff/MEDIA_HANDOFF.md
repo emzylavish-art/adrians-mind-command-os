@@ -169,3 +169,13 @@ See `/workspace/locks/media-integration.lock`.
 - `exportChat` keeps `images` (data URLs + names) in the JSON export.
 - `MAX_TURN_IMAGE_CHARS` aligned to **2_700_000** (history cap).
 
+
+## Upgrade C: blob store for large images — 2026-11-01T13:50 Africa/Lagos
+
+- IndexedDB store `amcos.media.blobs.v1` via `blob-store.ts`.
+- Persist path compacting: data-URLs ≥ 80k chars → `blobId` refs (dataUrl omitted in localStorage JSON).
+- Load path hydrates refs back to data-URLs for display/send.
+- Legacy inline-only messages remain valid (backward compatible).
+- `exportChat` keeps `dataUrl` and/or `blobId` references.
+- `MsgImage.dataUrl` optional; `toImageAttachments` filters for model turns.
+

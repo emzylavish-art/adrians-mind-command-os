@@ -89,7 +89,14 @@ export function exportChat(ws: Workspace, chatId: string): { filename: string; j
         content: msg.content,
         at: msg.at,
         model: msg.model ?? null,
-        images: msg.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null })) ?? undefined,
+        images: msg.images
+          ?.map((image) => ({
+            dataUrl: image.dataUrl,
+            blobId: image.blobId,
+            name: image.name ?? null,
+            mime: image.mime ?? null,
+          }))
+          .filter((image) => Boolean(image.dataUrl) || Boolean(image.blobId)) ?? undefined,
       })),
     },
   };

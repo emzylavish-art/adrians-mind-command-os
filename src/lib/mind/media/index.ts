@@ -8,3 +8,4 @@ export * from "./data-url.ts";
 export * from "./pack.ts";
 export * from "./history.ts";
 export * from "./imagine-shared.ts";
+export * from "./blob-store.ts";

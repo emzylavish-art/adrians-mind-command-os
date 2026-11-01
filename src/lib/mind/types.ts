@@ -15,8 +15,12 @@ export type { AgentDefinition, AgentRun, BrowserSessionRecord, DeploymentRecord,
 export type Autonomy = "ask" | "automatic";
 
 export type MsgImage = {
-  dataUrl: string;
+  /** Inline data URL when hydrated for display/send. May be omitted in persisted JSON when blobId is set. */
+  dataUrl?: string;
+  /** IndexedDB (or other blob store) key for large image bytes. Backward compatible with inline-only messages. */
+  blobId?: string;
   name?: string;
+  mime?: string;
 };
 
 export type Msg = {

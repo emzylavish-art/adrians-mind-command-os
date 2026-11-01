@@ -61,16 +61,22 @@ export function MessageBody({
   const [copied, setCopied] = useState<number | null>(null);
   return (
     <div className="space-y-2">
-      {images?.map((image, index) => (
-        <InlineImage
-          key={`attach-${index}`}
-          src={image.dataUrl}
-          alt={image.name || `Attachment ${index + 1}`}
-          onEditImagine={onEditImagine}
-          onSave={onSaveImage}
-          onDownload={onDownloadImage}
-        />
-      ))}
+      {images?.map((image, index) =>
+        image.dataUrl ? (
+          <InlineImage
+            key={`attach-${index}`}
+            src={image.dataUrl}
+            alt={image.name || `Attachment ${index + 1}`}
+            onEditImagine={onEditImagine}
+            onSave={onSaveImage}
+            onDownload={onDownloadImage}
+          />
+        ) : image.blobId ? (
+          <p key={`attach-${index}`} className="text-xs text-muted">
+            Image reference {image.name || image.blobId} is stored offline and is still loading.
+          </p>
+        ) : null,
+      )}
       {blocks.map((block, index) =>
         block.kind === "code" ? (
           <pre key={index} className="overflow-x-auto rounded-panel bg-bg p-3 text-xs">
