@@ -161,3 +161,27 @@ export {
   type SceneKeyLiftReport,
 } from "./scene-key-lift.ts";
 export { formatMeterBadge, type MeterBadge } from "./meter-badge.ts";
+export {
+  CARD_CORE_R,
+  CARD_RING_MIN_R,
+  CARD_SURROUND_SCALE,
+  CardEdgeShader,
+  EDGE_COLOR,
+  EDGE_EASE_MS,
+  EDGE_INNER,
+  EDGE_MAX,
+  EDGE_SEP_FULL,
+  EDGE_SEP_RATIO,
+  EDGE_SHADE_ABOVE,
+  EDGE_WIDTH,
+  cardSurroundRatio,
+  createCardEdgePass,
+  edgeApply,
+  edgeRimBand,
+  edgeSeparationGain,
+  splitProbeBlock,
+  type CardEdgeHandle,
+  type CardEdgeReport,
+  type EdgeMode,
+  type ProbeSplit,
+} from "./card-edge.ts";

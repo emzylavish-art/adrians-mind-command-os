@@ -241,3 +241,20 @@ Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (m
   `lift.report.backdropSource` = `"card" | "panel" | null`.
 - **Badge** — `formatMeterBadge` adds `card mean X p90 Y` (or `card no reading` while the probe is on) and `key +G (card|panel)`.
 - Register tests: `postfx/{card-probe,dim-target-align}.test.ts` (plus the #83 list).
+
+## #93 — Imagine card edge separation from measured card-vs-surround contrast; hacker: probe meters the real radius only
+
+- **Hacker (live, no wiring):** the #84 card probe was sized from the guard-clamped HOLE radius, so when `projectedRadiusUv()` returned null (non-perspective, behind camera, junk) the probe metered a guessed 0.16-radius square, and for tiny cards (< 0.04) a rect up to 4× too big, and reported either one as `contrast.card`. That reading drives the #84 key lift. The probe now uses the real projected radius only: null / NaN / ≤0 means no probe read and `contrast.card = null`, and tiny cards are metered at their real size. The hole itself keeps its #57 default. Test: `postfx/probe-radius-honest.test.ts` (failed 6/6 before the fix).
+- **Surround split (`detail-backdrop-dim.ts`):** `liveDetailDim.setCardSurround(true)` reads the #84 probe slot at `CARD_SURROUND_SCALE` (1.5×) the card radius and splits its existing 8×8 block (`splitProbeBlock`) into the card **core** (texel centres ≤ 0.6 radii, 12 texels) and the **surround ring** (≥ 1.2 radii, 32 texels). It uses the same slot and the same readback, so readback cost does not change. `contrast.card.stats` becomes the core only, which is a cleaner card reading for the key lift, and `contrast.card.surround` holds the ring. If the probe would be clamped at the canvas edge, it falls back to the plain #84 1× rect with `surround: null`, so a split block is never stretched out of shape. Off by default.
+- **`card-edge.ts`** — `createCardEdgePass()` is a screen-space rim just outside the focused card's projected bound. Its strength comes only from the measured ratio `cardSurroundRatio(core, ring)` (WCAG formula on mean luminance): full `EDGE_MAX` 0.32 at ≤1.05:1 and none at ≥ `EDGE_SEP_RATIO` 1.5:1. Over a dark surround it adds a cool, health-neutral light rim (headroom-weighted so it never clips). When card or surround mean is above 0.35 it switches to a soft shade halo. Any of these turns the pass off and leaves the frame byte-identical: no reading, no surround, junk input, or no real radius. Reduced motion snaps the change. Otherwise it eases over 260 ms.
+- Wiring (Dashboard Bot, universe-scene, next to the #84 lines):
+  ```ts
+  liveDetailDim.setCardSurround(true); // once, with setCardProbe(true) (and in rebuildPostfxBundle)
+  const edge = createCardEdgePass(); composer.addPass(edge.pass); // AFTER lift.pass (the meter reads the dim's input, so no feedback)
+  // per frame, after liveDetailDim.setHole(...):
+  edge.setFocus(focusedVis?.mesh.position ?? null, camera, rad); // rad = projectedRadiusUv(...) — pass null when unknown
+  edge.setSeparation(liveDetailDim.contrast.card, { reducedMotion });
+  edge.tick(dt * 1000); // dispose with the postfx bundle
+  // badge: formatMeterBadge(liveDetailDim.contrast, lift.report, edge.report) → "edge 1.08:1 rim +0.29 (light)" / "edge 2.40:1 ok" / "edge no reading"
+  ```
+- Register tests: `postfx/{card-edge,probe-radius-honest}.test.ts` (plus the #84 list: `card-probe`, `dim-target-align`, and the #83 list).

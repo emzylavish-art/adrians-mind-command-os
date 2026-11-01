@@ -1,5 +1,6 @@
 import type { ContrastReport } from "./detail-backdrop-dim.ts";
 import type { SceneKeyLiftReport } from "./scene-key-lift.ts";
+import type { CardEdgeReport } from "./card-edge.ts";
 
 /**
  * #81→#83 debug badge: honest one-line state of the measured dim + meter
@@ -21,6 +22,7 @@ export function formatMeterBadge(
     | null
     | undefined,
   lift?: SceneKeyLiftReport | null,
+  edge?: CardEdgeReport | null,
 ): MeterBadge {
   if (!contrast) return { text: "dim: off", level: "idle" };
   const parts: string[] = [];
@@ -42,6 +44,15 @@ export function formatMeterBadge(
       lift.source === "measured"
         ? `key +${fmt(lift.targetGain)}${lift.backdropSource ? ` (${lift.backdropSource})` : ""}`
         : "key off",
+    );
+  // #93: card-vs-surround edge separation — only the real measured ratio.
+  if (edge)
+    parts.push(
+      edge.ratio === null
+        ? "edge no reading"
+        : edge.source === "measured"
+          ? `edge ${fmt(edge.ratio)}:1 rim +${fmt(edge.targetGain)} (${edge.mode ?? "?"})`
+          : `edge ${fmt(edge.ratio)}:1 ok`,
     );
   const warn = (b && b.multiplier > 1) || !!contrast.lastError;
   const level = warn ? "warn" : contrast.source === "measured" ? "ok" : "idle";
