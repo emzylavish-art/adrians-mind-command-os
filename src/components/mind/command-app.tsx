@@ -47,6 +47,7 @@ import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fl
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { runLocalPlan } from "@/lib/mind/local-tools";
+import { greeting } from "@/lib/mind/greeting";
 import { relevantMemories } from "@/lib/mind/memory";
 import { databaseMode } from "@/lib/mind/persistence";
 import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
@@ -210,13 +211,6 @@ function humanAction(action: string) {
     rea_inspect: "REA inspected a file",
   };
   return map[action] ?? action;
-}
-
-function greeting(date: Date) {
-  const hour = date.getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
 }
 
 function stamp(iso: string) {
@@ -1326,7 +1320,7 @@ export function CommandApp() {
             <p className="text-sm font-semibold">Adrian (Personal)</p>
             <p className="text-xs text-muted">Only workspace on this device.</p>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, Math.min(100, (storedBytes / 5_000_000) * 100))}%` }} />
+              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
             </div>
             <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
             <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
@@ -1353,6 +1347,7 @@ export function CommandApp() {
               placeholder="Search or jump…"
               className="h-11 w-full rounded-panel border border-line bg-surface pr-14 pl-10 text-sm"
               aria-label="Search"
+              aria-keyshortcuts="Control+K Meta+K"
               aria-expanded={paletteOpen}
               aria-controls="command-palette"
             />

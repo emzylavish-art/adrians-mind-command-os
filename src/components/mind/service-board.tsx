@@ -18,7 +18,7 @@ const SERVICES: Service[] = [
   { name: "OpenRouter", state: "Not configured", detail: "No API key." },
   { name: "Web search", state: "Not configured", detail: "No search endpoint. No citations are created." },
   { name: "Image and video", state: "Not called", detail: "Paid generation is not run from this app." },
-  { name: "Voice", state: "One-shot only", detail: "Speak can read a finished reply. There is no live call." },
+  { name: "Voice", state: "Not realtime", detail: "Browser speech when this browser has it. Not a live call." },
   { name: "MCP", state: "Not connected", detail: "No MCP server has answered a handshake. Nothing is called." },
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
 ];
