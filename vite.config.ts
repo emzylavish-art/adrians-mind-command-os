@@ -183,6 +183,59 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  // Perf: fold origin/perf-split@4a79f1a (MCP) and extend. Rolldown ignores
+  // output.manualChunks when codeSplitting is set (Nitro server). CLIENT groups
+  // stream three / dashboard-3d / voice / media / charts as separate chunks.
+  environments: {
+    client: {
+      build: {
+        rollupOptions: {
+          output: {
+            codeSplitting: {
+              groups: [
+                {
+                  name: "vendor-three",
+                  test: /[\\/]node_modules[\\/]three[\\/]/,
+                  priority: 50,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-charts",
+                  test: /[\\/]node_modules[\\/]recharts[\\/]/,
+                  priority: 45,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-postfx",
+                  test: /[\\/]src[\\/]components[\\/]mind[\\/]dashboard-3d[\\/]postfx[\\/]/,
+                  priority: 42,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "dashboard-3d",
+                  test: /[\\/]src[\\/]components[\\/]mind[\\/]dashboard-3d[\\/]/,
+                  priority: 40,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-voice",
+                  test: /[\\/]src[\\/]lib[\\/]mind[\\/]voice(?:-live)?[\\/]/,
+                  priority: 35,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-media",
+                  test: /[\\/](?:src[\\/]lib[\\/]mind[\\/]media|src[\\/]components[\\/]mind[\\/]media)[\\/]/,
+                  priority: 34,
+                  includeDependenciesRecursively: false,
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.

@@ -10,4 +10,12 @@ describe("workspace-nav", () => {
     assert.equal(dash.href, "/dashboard");
     assert.equal(dash.iconSrc, "/icons/dashboard.svg");
   });
+
+  it("includes Explore linking to /explore", () => {
+    const explore = WORKSPACE_ROUTE_LINKS.find((item) => item.id === "explore");
+    assert.ok(explore, "Explore workspace route link missing");
+    assert.equal(explore.label, "Explore");
+    assert.equal(explore.href, "/explore");
+    assert.ok(explore.iconSrc.startsWith("/icons/"));
+  });
 });

@@ -6,6 +6,12 @@ export const WORKSPACE_ROUTE_LINKS = [
     href: "/dashboard",
     iconSrc: "/icons/dashboard.svg",
   },
+  {
+    id: "explore",
+    label: "Explore",
+    href: "/explore",
+    iconSrc: "/icons/bots.svg",
+  },
 ] as const;
 
 export type WorkspaceRouteLink = (typeof WORKSPACE_ROUTE_LINKS)[number];

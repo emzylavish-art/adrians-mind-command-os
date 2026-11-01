@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -67,6 +67,16 @@ import {
 } from "@/components/mind/voice-ui";
 
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
+const LazyShortcutSheetHost = lazy(() =>
+  import("@/components/mind/shortcut-sheet").then((mod) => ({ default: mod.ShortcutSheetHost })),
+);
+const LazyCameraCapture = lazy(() =>
+  import("@/components/mind/media/camera-capture").then((mod) => ({ default: mod.CameraCapture })),
+);
+const LazyCloudPicker = lazy(() =>
+  import("@/components/mind/media/cloud-picker").then((mod) => ({ default: mod.CloudPicker })),
+);
+
 import { DICTATE_MINT_TIMEOUT_MS, withDictateTimeout } from "@/components/mind/live-voice-bar/dictate-timeout";
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
@@ -99,7 +109,7 @@ import {
   readStoredVoiceChoice,
   writeStoredVoiceChoice,
 } from "@/lib/mind/voice/voices";
-import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import type { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import { appendDictationText } from "@/lib/mind/voice/dictation";
 import {
@@ -150,8 +160,7 @@ import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
-import { CameraCapture } from "@/components/mind/media/camera-capture";
-import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
+import type { CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
 import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, collectClipboardImageFiles, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
@@ -481,8 +490,10 @@ function browserSpeechCtor(): (new () => BrowserSpeechRec) | null {
   return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
 }
 
-export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
+export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types").Workspace | null } = {}) {
+  const serverWorkspace = props.serverWorkspace ?? null;
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, cloudHydrating } = useMindWorkspace(serverWorkspace);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -3278,7 +3289,8 @@ export function CommandApp() {
 
       publishConnectStage("connecting");
       const testAudioUrl = readDevTestAudioUrl();
-      const session = new RealtimeVoiceSession(
+      const { RealtimeVoiceSession: RealtimeVoiceSessionCtor } = await import("@/lib/mind/voice/realtime-session");
+      const session = new RealtimeVoiceSessionCtor(
         {
           onTranscript: (text) => {
             setVoiceLiveTranscript(clampLiveTranscript(text));
@@ -3543,7 +3555,7 @@ export function CommandApp() {
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
-    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-cloud-hydrating={cloudHydrating ? "1" : "0"} data-workspace-ready={ready ? "1" : "0"}>
       <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
           <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
@@ -3576,6 +3588,19 @@ export function CommandApp() {
             <Search className="size-4 shrink-0" />
             {!railCollapsed && <span>Search</span>}
           </button>
+          <button
+            type="button"
+            className={`nav-item mt-2 flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            aria-label="Keyboard shortcuts"
+            data-testid="nav-open-shortcuts"
+            onClick={() => {
+              window.dispatchEvent(new Event("mind:open-shortcut-sheet"));
+              setNavOpen(false);
+            }}
+          >
+            <span className="text-sm font-semibold" aria-hidden>?</span>
+            {!railCollapsed && <span>Shortcuts</span>}
+          </button>
         </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
           {NAV_GROUPS.map((group) => (
@@ -3607,22 +3632,28 @@ export function CommandApp() {
                   return (
                     <div key={`workspace-head-${item.id}`} className="contents">
                       {button}
-                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => (
+                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => {
+                        const routeOn =
+                          pathname === routeItem.href || pathname.startsWith(`${routeItem.href}/`);
+                        return (
                         <Link
                           key={routeItem.id}
                           to={routeItem.href}
                           title={routeItem.label}
                           aria-label={routeItem.label}
+                          aria-current={routeOn ? "page" : undefined}
+                          data-testid={`nav-route-${routeItem.id}`}
                           onClick={() => {
                             setNavOpen(false);
                             closeMenus();
                           }}
-                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
+                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${routeOn ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                         >
                           <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
                           {!railCollapsed && routeItem.label}
                         </Link>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 }
@@ -5458,20 +5489,23 @@ export function CommandApp() {
           if (file) void addImageAttachment(file);
         }}
       />
-      <CameraCapture
+      <Suspense fallback={null}><LazyCameraCapture
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onCapture={(dataUrl, name) => {
           setPendingImages((prev) => (prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]));
           setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
         }}
-      />
-      <CloudPicker
+      /></Suspense>
+      <Suspense fallback={null}><LazyCloudPicker
         open={cloudPickerOpen}
         onClose={() => setCloudPickerOpen(false)}
         onAttach={applyCloudAttach}
         onNotice={(message) => setNotice(message)}
-      />
+      /></Suspense>
+      <Suspense fallback={null}>
+        <LazyShortcutSheetHost />
+      </Suspense>
 
       {projectOpen && (
         <Overlay>
