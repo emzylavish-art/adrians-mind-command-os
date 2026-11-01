@@ -5,6 +5,15 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import {
+  createPainterlyKit,
+  tickPainterlyKit,
+  disposePainterlyKit,
+  type PainterlyKit,
+} from "./materials";
+import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
+import { createTunedBloomPass, createColorGradePass } from "./postfx";
+import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
@@ -241,23 +250,33 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     mount.appendChild(labelRenderer.domElement);
 
     // Sky dome with painterly nebula
-    const skyMat = new THREE.MeshBasicMaterial({
-      map: makeNebulaTexture(3),
-      side: THREE.BackSide,
-      depthWrite: false,
-    });
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), skyMat);
-    scene.add(sky);
-
-    scene.add(new THREE.AmbientLight(0x8ea0d0, 0.55));
+    const kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 } });
+    let atm: HealthAtmosphereHandle | null = null;
+    try {
+      atm = createHealthAtmosphere(scene, { attachFog: false, tone: "idle" });
+    } catch {
+      atm = null;
+    }
+    // Ambient/key/rim owned by Light atmosphere when available; keep sun mesh light separate.
+    if (!atm) {
+      scene.add(new THREE.AmbientLight(0x8ea0d0, 0.55));
+    }
     const sun = new THREE.PointLight(0xffe6a8, 90, 60);
     sun.position.set(0, 2, 0);
     scene.add(sun);
     const rim = new THREE.PointLight(0x7c5cff, 40, 50);
     rim.position.set(-8, 6, 10);
-    scene.add(rim);
+    if (!atm) scene.add(rim);
 
-    const starTex = makeStarSpriteTexture();
+    const skyMat = kit.createSkyMaterial({ seed: 3 });
+    skyMat.side = THREE.BackSide;
+    skyMat.depthWrite = false;
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), skyMat);
+    scene.add(sky);
+
+
+
+    const starTex = kit.starSpriteTexture;
     const botGroup = new THREE.Group();
     scene.add(botGroup);
     const edgeGroup = new THREE.Group();
@@ -330,7 +349,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
         const el = document.createElement("div");
         el.className = "dash3d-label";
-        el.textContent = bot.name.replace(/ Bot$/, "").replace(" / Orchestrator", "");
+        el.textContent = sanitizeLabelText(bot.name.replace(/ Bot$/, "").replace(" / Orchestrator", ""));
         const label = new CSS2DObject(el);
         label.position.set(pos.x, pos.y + 0.75, pos.z);
         botGroup.add(label);
@@ -510,13 +529,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     rebuildAll();
 
     let composer: EffectComposer | null = null;
-    let paintPass: ShaderPass | null = null;
+    let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
+    let gradeHandle: ReturnType<typeof createColorGradePass> | null = null;
     if (!reducedMotion) {
       composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(scene, camera));
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.62, 0.75, 0.22));
-      paintPass = new ShaderPass(PainterlyShader);
-      composer.addPass(paintPass);
+      try {
+        bloomHandle = createTunedBloomPass(new THREE.Vector2(width, height), "healthy");
+        composer.addPass(bloomHandle.pass);
+      } catch {
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.62, 0.75, 0.22));
+      }
+      try {
+        gradeHandle = createColorGradePass("healthy");
+        composer.addPass(gradeHandle.pass);
+      } catch {
+        /* optional */
+      }
+      composer.addPass(kit.painterlyPass);
     }
 
     let rig: CameraRigState = createRig();
@@ -658,7 +688,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           n.glow.scale.setScalar(2.0 + Math.sin(t * speed) * 0.3);
         }
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
-        if (paintPass) paintPass.uniforms.time.value = t;
+        tickPainterlyKit(kit, t);
+        if (atm) {
+          const tone = dataRef.current.weather?.tone ?? deriveFleetTone(dataRef.current.bots.map((b) => b.health));
+          atm.update(tone);
+          bloomHandle?.update(tone);
+          gradeHandle?.update(tone);
+        }
       }
 
       if (composer) composer.render();

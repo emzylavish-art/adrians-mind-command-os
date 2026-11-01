@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
 import type { GitCommit } from "./types.ts";
+import { repoDirFromEnvSafe } from "./safe-paths.ts";
 
 export function repoDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
-  return env.MIND_REPO_DIR?.trim() || "/workspace/mind-command-os";
+  return repoDirFromEnvSafe(env).path;
 }
 
 function runGit(repo: string, args: string[]): string {

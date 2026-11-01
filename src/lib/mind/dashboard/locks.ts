@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { locksDirFromEnvSafe } from "./safe-paths.ts";
 import type { LockRecord } from "./types.ts";
 
 /**
@@ -112,6 +113,8 @@ function stripZoneParen(value: string | null): string | null {
   return value.replace(/\s*\(Africa\/Lagos\)\s*$/i, "").trim() || null;
 }
 
+const MAX_LOCK_BYTES = 256_000;
+
 export function readLocksDir(dir: string): LockRecord[] {
   let names: string[] = [];
   try {
@@ -122,7 +125,10 @@ export function readLocksDir(dir: string): LockRecord[] {
   const out: LockRecord[] = [];
   for (const name of names) {
     try {
-      const text = readFileSync(join(dir, name), "utf8");
+      const full = join(dir, name);
+      const st = statSync(full);
+      if (st.size > MAX_LOCK_BYTES) continue; // refuse huge/malformed locks
+      const text = readFileSync(full, "utf8");
       out.push(parseLockText(text, name));
     } catch {
       // skip unreadable
@@ -132,5 +138,5 @@ export function readLocksDir(dir: string): LockRecord[] {
 }
 
 export function locksDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
-  return env.MIND_LOCKS_DIR?.trim() || "/workspace/locks";
+  return locksDirFromEnvSafe(env).path;
 }

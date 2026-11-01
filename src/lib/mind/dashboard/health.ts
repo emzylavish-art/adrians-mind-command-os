@@ -1,6 +1,5 @@
 import type { Health, LockRecord } from "./types.ts";
 
-const BLOCKED_RE = /\b(blocked|error|404|unauthorized|unauthorised|fail(?:ed|ure)?)\b/i;
 const DONE_RE = /\b(done|released|complete|completed)\b/i;
 const CLAIMED_RE = /\b(claimed|in\s*progress|active|working)\b/i;
 
@@ -11,22 +10,20 @@ export function parseTimeMs(value: string | null | undefined, now = Date.now()):
   const cleaned = value.replace(/\s*\(Africa\/Lagos\)\s*$/i, "").trim();
   const ms = Date.parse(cleaned);
   if (Number.isFinite(ms)) return ms;
-  // allow date-only
   const fallback = Date.parse(cleaned.replace(" ", "T"));
   return Number.isFinite(fallback) ? fallback : null;
 }
 
-export function textLooksBlocked(status: string | null, notes: string): boolean {
-  if (/\bblocked\b/i.test(status ?? "")) return true;
-  if (BLOCKED_RE.test(status ?? "") && !DONE_RE.test(status ?? "")) return true;
-  // Notes: only treat as blocked when they declare a blocked/error state, not when
-  // they mention past Unauthorized/404 diagnostics being fixed or expected.
-  if (/\b(not|no longer)\s+(a\s+)?blocked\b/i.test(notes)) return false;
-  if (/\bcurrently\s+blocked\b/i.test(notes)) return true;
-  if (/\bstatus:\s*(blocked|error)\b/i.test(notes)) return true;
-  if (/\b(lane|bot|work)\s+blocked\b/i.test(notes)) return true;
-  if (/^blocked\b/im.test(notes)) return true;
-  return false;
+/**
+ * Notes alone must NOT paint a lane red. Problem words in notes (404, Unauthorized,
+ * BLOCKED: cycle stopped by rate limits, etc.) are diagnostic — only an active
+ * status of blocked/error without release means blocked.
+ */
+export function textLooksBlocked(status: string | null, _notes: string): boolean {
+  const s = (status ?? "").trim();
+  if (!s) return false;
+  if (DONE_RE.test(s) && !/\bblocked\b/i.test(s)) return false;
+  return /^(blocked|error)\b/i.test(s) || /\bstatus:\s*(blocked|error)\b/i.test(s);
 }
 
 export function isReleasedOrDone(status: string | null): boolean {
@@ -37,25 +34,18 @@ export function isReleasedOrDone(status: string | null): boolean {
 export function isActivelyClaimed(status: string | null): boolean {
   if (!status) return false;
   if (isReleasedOrDone(status)) return false;
+  if (/^(blocked|error)\b/i.test(status.trim())) return false;
   return CLAIMED_RE.test(status) || /\bin progress\b/i.test(status);
 }
 
 export type HealthInput = {
   lock: LockRecord | null;
-  /** Latest activity from lock timestamps or matching git commits */
   lastActivityAt: string | null;
   now?: number;
 };
 
 export type HealthResult = { health: Health; reason: string };
 
-/**
- * Health rule:
- * - idle: no lock
- * - green/healthy: claimed with recent activity <30 min, OR done/released
- * - amber/stalled: claimed but no lock/commit activity >30 min
- * - red/blocked: notes/status mention blocked/error/404/unauthorized, or explicit blocked status
- */
 export function classifyHealth(input: HealthInput): HealthResult {
   const now = input.now ?? Date.now();
   const lock = input.lock;
@@ -63,8 +53,16 @@ export function classifyHealth(input: HealthInput): HealthResult {
     return { health: "idle", reason: "No lock file mapped to this bot." };
   }
 
-  if (textLooksBlocked(lock.status, lock.notes) || /\bblocked\b/i.test(lock.status ?? "")) {
-    return { health: "blocked", reason: "Lock status/notes indicate blocked or error." };
+  const statusBlocked = textLooksBlocked(lock.status, lock.notes);
+  if (statusBlocked) {
+    // Released+blocked = cycle ended (e.g. rate-limit stop), not an active red failure.
+    if (lock.released_at) {
+      return {
+        health: "stalled",
+        reason: "Status blocked but lock released — cycle ended; not an active block.",
+      };
+    }
+    return { health: "blocked", reason: "Lock status is actively blocked/error." };
   }
 
   if (isReleasedOrDone(lock.status)) {
@@ -75,11 +73,7 @@ export function classifyHealth(input: HealthInput): HealthResult {
     return { health: "idle", reason: "Lock explicitly idle." };
   }
 
-  const activityIso =
-    input.lastActivityAt ||
-    lock.released_at ||
-    lock.claimed_at ||
-    null;
+  const activityIso = input.lastActivityAt || lock.released_at || lock.claimed_at || null;
   const activityMs = parseTimeMs(activityIso, now);
   const claimed = isActivelyClaimed(lock.status) || Boolean(lock.claimed_at && !lock.released_at);
 
@@ -94,7 +88,6 @@ export function classifyHealth(input: HealthInput): HealthResult {
     return { health: "stalled", reason: `Claimed but no activity for ${Math.round(age / 60000)} min.` };
   }
 
-  // Unknown status with a lock — treat as idle-ish stalled if old, else healthy if recent
   if (activityMs != null && now - activityMs <= STALL_MS) {
     return { health: "healthy", reason: "Recent lock activity." };
   }
@@ -102,4 +95,9 @@ export function classifyHealth(input: HealthInput): HealthResult {
     return { health: "stalled", reason: "Lock present but activity older than 30 min." };
   }
   return { health: "idle", reason: "Lock present without clear claim/activity." };
+}
+
+/** Strip control chars for CSS2D / DOM labels (textContent-safe extra hardening). */
+export function sanitizeLabelText(raw: string, max = 80): string {
+  return raw.replace(/[\u0000-\u001F\u007F<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
 }

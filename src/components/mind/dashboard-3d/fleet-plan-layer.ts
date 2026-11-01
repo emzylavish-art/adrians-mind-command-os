@@ -23,12 +23,12 @@ export function clearGroup(group: THREE.Group) {
   }
 }
 
-function line(a: THREE.Vector3, b: THREE.Vector3, color: number, opacity = 0.55) {
+function line(a: THREE.Vector3, b: THREE.Vector3, color: number, opacity = 0.85) {
   const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
   return new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
 }
 
-function ball(pos: THREE.Vector3, color: number, r = 0.28) {
+function ball(pos: THREE.Vector3, color: number, r = 0.42) {
   return new THREE.Mesh(
     new THREE.SphereGeometry(r, 20, 20),
     new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.85, roughness: 0.4 }),
@@ -46,10 +46,10 @@ export function rebuildLandingPaths(group: THREE.Group, plan: FleetPlan) {
     const points: THREE.Vector3[] = [];
     hops.forEach((hop, i) => {
       const color = hop.reached ? 0x3dd68c : 0xfbbf24;
-      const opacity = hop.reached ? 0.7 : 0.28;
+      const opacity = hop.reached ? 0.95 : 0.45;
       const p = new THREE.Vector3(xs[i] ?? i * 3, baseY + 0.2, z);
       points.push(p);
-      const mesh = ball(p, color, hop.hop === "main" ? 0.34 : 0.26);
+      const mesh = ball(p, color, hop.hop === "main" ? 0.5 : 0.4);
       (mesh.material as THREE.MeshStandardMaterial).opacity = 1;
       (mesh.material as THREE.MeshStandardMaterial).transparent = !hop.reached;
       if (!hop.reached) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.25;
@@ -76,7 +76,7 @@ export function rebuildQueueRoad(group: THREE.Group, plan: FleetPlan) {
     const [x, y, z] = positions[i] ?? [0, 8, 0];
     const color =
       item.status === "done" ? 0x3dd68c : item.status === "active" ? 0xffe08a : 0x5b6b8c;
-    const mesh = ball(new THREE.Vector3(x, y, z), color, item.status === "active" ? 0.38 : 0.26);
+    const mesh = ball(new THREE.Vector3(x, y, z), color, item.status === "active" ? 0.55 : 0.4);
     mesh.userData.queueIndex = item.index;
     mesh.position.set(x, y, z);
     if (item.status === "queued") (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.2;
@@ -88,7 +88,7 @@ export function rebuildQueueRoad(group: THREE.Group, plan: FleetPlan) {
           new THREE.Vector3(...prev),
           new THREE.Vector3(x, y, z),
           item.status === "queued" ? 0x3a4566 : color,
-          item.status === "queued" ? 0.2 : 0.55,
+          item.status === "queued" ? 0.35 : 0.9,
         ),
       );
     }
