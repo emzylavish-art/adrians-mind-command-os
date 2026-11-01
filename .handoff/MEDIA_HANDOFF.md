@@ -6,6 +6,39 @@
 **Base:** `aee35a81a07dbf97f58cc609c455b8179efac7a1` (`logic-wiring` tip — model-tier threading)  
 **Status:** complete
 
+## Upgrade: Grok Imagine (composer) — 2026-11-01T13:13:17+01:00 (Africa/Lagos)
+
+**Status:** complete on `media-integration`
+
+### Model / endpoint
+- Model: `grok-imagine-image` (also listed: `grok-imagine-image-2.0`, `grok-imagine-image-quality`)
+- Endpoint: `POST https://api.x.ai/v1/images/generations` with `response_format: b64_json`
+- Key: existing `/home/box/.secrets/xai_inference.env` via `resolveXaiInferenceApiKey` (never printed/minted)
+- ACL: granted `api-key:endpoint:image` on inference key `0922b6a4-…` via Management API (nested `apiKey.aclStrings` + `fieldMask`) so chat+image work on the same key
+
+### What shipped
+- Helper: `src/lib/mind/media/imagine.ts` + `imagine-http.ts`
+- Route: `POST /api/mind/media/generate`
+- Composer: **Imagine** button + `/imagine <prompt>` in home + chat composers
+- Results render as assistant bubble images (existing `MessageBody` / inline image) and stage into `pendingImages` for follow-up vision (Direct Send + Orchestrator Agent)
+- Honest errors as composer/`setError` + assistant bubble text (no error-banner components)
+- Unit tests: `imagine.test.ts`; live artifact: `/workspace/audit/media-integration/imagine-live.jpg`
+
+### Orchestrator
+- Composer path works in both modes: generated images attach for Agent planner vision turns
+- Did **not** add a separate agent planner tool registry entry (would touch Logic/agent tool surface) — deferred
+
+### Deferred
+- Native Orchestrator `imagine` tool in planner registry
+- OneDrive OAuth (MCP)
+- Encrypted Drive token without MCP decrypt helper
+- `server.ts` mindStatus env-only (voice claim)
+- Workspace data-URL bloat / disk cache for huge generations
+
+### Collision notes
+- Shared `command-app.tsx` Imagine wiring only; avoided styles.css, voice/, xai-adapter, model picker, MCP OAuth, server.ts
+
+
 ## Commits
 - `23b2b70` Add multimodal image packaging and data-URL helpers.
 - `d1cfb9c` Thread image attachments through Direct and Orchestrator turns.

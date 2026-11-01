@@ -48,7 +48,7 @@ import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { historyTextForImages, type ImageAttachment } from "@/lib/mind/media";
+import { historyTextForImages, parseImagineCommand, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -901,6 +901,15 @@ export function CommandApp() {
   async function sendCommand() {
     if (busy || ws.halted) return;
     const text = draft.trim();
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, null);
+      return;
+    }
     const images = pendingImages;
     if (!text && images.length === 0) {
       setError("Write what you want to work on.");
@@ -1008,6 +1017,15 @@ export function CommandApp() {
   async function sendInChat() {
     if (!active || busy || ws.halted) return;
     const text = draft.trim();
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, active);
+      return;
+    }
     const images = pendingImages;
     if (!text && !staged && images.length === 0) return;
     const file = staged;
@@ -1027,6 +1045,157 @@ export function CommandApp() {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
     await deliver(active, full, ws, false, images);
+  }
+
+  async function runImagine(promptRaw?: string, targetChat: Chat | null = active) {
+    if (busy || ws.halted) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write a prompt for Imagine, or use /imagine <prompt>.");
+      return;
+    }
+    setDraft("");
+    setError(null);
+    setBusy(true);
+    setLiveText("");
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    let chat = targetChat;
+    if (!chat) {
+      const made = createChat(ws, {
+        memory: memoryChoice,
+        autonomy,
+        temporary,
+        projectId: projectChoice || null,
+      });
+      chat = made.chat;
+      setActiveId(made.chat.id);
+      setView("chat");
+      setWs((prev) =>
+        pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, `imagine; memory ${made.chat.memory}`),
+      );
+    }
+    const chatId = chat.id;
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: "user" as const,
+      content: `/imagine ${prompt}`,
+      at: new Date().toISOString(),
+    };
+    setWs((prev) => ({
+      ...prev,
+      chats: prev.chats.map((item) =>
+        item.id === chatId
+          ? {
+              ...item,
+              title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
+              messages: [...item.messages, userMsg],
+            }
+          : item,
+      ),
+    }));
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ prompt, n: 1 }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        const message = payload.error || `Imagine failed (HTTP ${response.status}).`;
+        setError(message);
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: message,
+                      at: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      const model = payload.model || "grok-imagine-image";
+      setPendingImages(images);
+      setNotice(`Imagine (${model}). Attached for a follow-up vision turn — Send or Agent to reuse.`);
+      setWs((prev) => {
+        const next = {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Generated with ${model}. The image is shown below and staged in the composer so you can Send or run Agent with it as vision input.`,
+                      at: new Date().toISOString(),
+                      model,
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        };
+        return pushAudit(next, "imagine_generate", chatId, model);
+      });
+    } catch (caught) {
+      const message =
+        caught instanceof Error && caught.message === "Unauthorized"
+          ? "Sign in is required."
+          : caught instanceof Error
+            ? caught.message
+            : "Imagine could not be reached.";
+      setError(message);
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                messages: [
+                  ...item.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant" as const,
+                    content: message,
+                    at: new Date().toISOString(),
+                  },
+                ],
+              }
+            : item,
+        ),
+      }));
+    } finally {
+      setBusy(false);
+      setLiveText("");
+    }
   }
 
   function enableMemory() {
@@ -1658,6 +1827,18 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
                       Drive
                     </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      disabled={busy || ws.halted}
+                      onClick={() => {
+                        const viaCmd = parseImagineCommand(draft);
+                        const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                        void runImagine(prompt || undefined, null);
+                      }}
+                    >
+                      Imagine
+                    </button>
                     <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} />
                     <button
                       type="button"
@@ -1723,7 +1904,7 @@ export function CommandApp() {
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
-                    <li className="text-muted">Image and video — paid APIs, not called. HP — not paired.</li>
+                    <li className="text-muted">Imagine — Grok Imagine (composer /imagine). Video — paid API, not called. HP — not paired.</li>
                     <li>
                       <button type="button" className="min-h-11 text-accent" onClick={() => { setView("agents"); void checkRea(); }}>
                         Run REA doctor
@@ -1915,6 +2096,11 @@ export function CommandApp() {
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
               onOpenCloud={() => setCloudPickerOpen(true)}
+              onImagine={() => {
+                const viaCmd = parseImagineCommand(draft);
+                const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                void runImagine(prompt || undefined, active);
+              }}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -2889,6 +3075,7 @@ function ChatPane({
   onAttachImage,
   onOpenCamera,
   onOpenCloud,
+  onImagine,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -2935,6 +3122,7 @@ function ChatPane({
   onAttachImage: () => void;
   onOpenCamera: () => void;
   onOpenCloud: () => void;
+  onImagine: () => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -3161,7 +3349,7 @@ function ChatPane({
             <div className="mt-2 space-y-1 rounded-panel border border-line bg-bg p-3 text-sm">
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onDoctor}>Run REA doctor</button>
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onAnalyze}>Inspect a file with REA</button>
-              <p className="text-xs text-muted">Chat stays on Grok 4.5. Image, video, and web search are not called.</p>
+              <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -3176,6 +3364,9 @@ function ChatPane({
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCloud}>
               Drive
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+              Imagine
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
