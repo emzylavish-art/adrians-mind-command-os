@@ -114,3 +114,65 @@ export function createPaperGrainTexture(
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+/** Idle constellation pigment — used when color inputs are empty/invalid (not bright white). */
+export const PAINTER_IDLE_RGB: [number, number, number] = [0.36, 0.42, 0.55];
+
+export type SanitizePainterColorResult = {
+  color: THREE.Color;
+  ok: boolean;
+  reason: string | null;
+};
+
+/**
+ * HACKER (c13): Three.Color.set("") / unknown CSS names coerce to white (1,1,1) with only a
+ * console warning — bot stars flash bright-white on bad HEALTH_COLOR lookups instead of idle.
+ * Reject empty/unknown strings and non-finite components; never silent.
+ */
+export function sanitizePainterColor(
+  color: unknown,
+  fallbackRgb: readonly [number, number, number] = PAINTER_IDLE_RGB,
+): SanitizePainterColorResult {
+  const fb = new THREE.Color(fallbackRgb[0], fallbackRgb[1], fallbackRgb[2]);
+  if (color == null) return { color: fb.clone(), ok: false, reason: "color-null" };
+  if (typeof color === "number") {
+    if (!Number.isFinite(color)) return { color: fb.clone(), ok: false, reason: "color-nan-number" };
+    return { color: new THREE.Color(color), ok: true, reason: null };
+  }
+  if (color instanceof THREE.Color) {
+    if (Number.isFinite(color.r) && Number.isFinite(color.g) && Number.isFinite(color.b)) {
+      return { color: color.clone(), ok: true, reason: null };
+    }
+    return { color: fb.clone(), ok: false, reason: "color-nan-components" };
+  }
+  if (Array.isArray(color) && color.length >= 3) {
+    const r = Number(color[0]);
+    const g = Number(color[1]);
+    const b = Number(color[2]);
+    if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+      return { color: new THREE.Color(r, g, b), ok: true, reason: null };
+    }
+    return { color: fb.clone(), ok: false, reason: "color-array-nan" };
+  }
+  if (typeof color === "string") {
+    const s = color.trim();
+    if (!s) return { color: fb.clone(), ok: false, reason: "color-empty" };
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s)) {
+      return { color: new THREE.Color(s), ok: true, reason: null };
+    }
+    if (/^0x[0-9a-fA-F]+$/.test(s)) {
+      const n = Number(s);
+      if (!Number.isFinite(n)) return { color: fb.clone(), ok: false, reason: "color-bad-hex" };
+      return { color: new THREE.Color(n), ok: true, reason: null };
+    }
+    const names = (THREE.Color as unknown as { NAMES?: Record<string, number> }).NAMES;
+    const key = s.toLowerCase();
+    if (names && Object.prototype.hasOwnProperty.call(names, key)) {
+      return { color: new THREE.Color(key), ok: true, reason: null };
+    }
+    // Health tone strings are handled by callers with HEALTH_RGB; here treat as unknown
+    return { color: fb.clone(), ok: false, reason: `color-unknown:${s.slice(0, 32)}` };
+  }
+  return { color: fb.clone(), ok: false, reason: "color-type" };
+}
+

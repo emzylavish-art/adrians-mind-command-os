@@ -16,6 +16,8 @@ export type InkWashEdgeOptions = {
   health?: HealthTone | THREE.ColorRepresentation;
   ink?: number;
   pulse?: number;
+  /** Watercolor edge bleed from real weight (0..1.5). Neutral default 0.35. */
+  bleed?: number;
 };
 
 function resolveHealthColor(
@@ -47,6 +49,7 @@ function cloneUniforms(src: typeof InkWashEdgeShader.uniforms) {
     uTime: { value: 0 },
     uInk: { value: src.uInk.value },
     uPulse: { value: src.uPulse.value },
+    uBleed: { value: src.uBleed.value },
   };
 }
 
@@ -56,6 +59,7 @@ export function createInkWashEdgeMaterial(opts: InkWashEdgeOptions = {}): THREE.
   uniforms.uHealth.value.copy(resolveHealthColor(opts.health));
   if (opts.ink != null) uniforms.uInk.value = sanitizeFinite(opts.ink, 0.65, 0, 2);
   if (opts.pulse != null) uniforms.uPulse.value = sanitizeFinite(opts.pulse, 0.35, 0, 1);
+  if (opts.bleed != null) uniforms.uBleed.value = sanitizeFinite(opts.bleed, 0.35, 0, 1.5);
   return new THREE.ShaderMaterial({
     name: "InkWashEdgeMaterial",
     precision: PAINTER_SHADER_PRECISION,
@@ -80,6 +84,26 @@ export function setInkWashEdgeHealth(
     (mat.uniforms["uHealth"].value as THREE.Color).copy(resolveHealthColor(health));
   }
 }
+
+/** Real edge weight → watercolor bleed. Health severity + hub/link kind; no fabricated activity. */
+export function inkBleedFromWeight(tone: HealthTone, kind?: string): number {
+  const base: Record<HealthTone, number> = {
+    healthy: 0.28,
+    stalled: 0.55,
+    blocked: 0.88,
+    idle: 0.2,
+  };
+  const b = base[tone] ?? 0.35;
+  const kindMul = kind === "hub" ? 0.75 : 1.0;
+  return sanitizeFinite(b * kindMul, 0.35, 0, 1.5);
+}
+
+export function setInkWashEdgeBleed(mat: THREE.ShaderMaterial, bleed: number): void {
+  if (mat.uniforms["uBleed"]) {
+    mat.uniforms["uBleed"].value = sanitizeFinite(bleed, 0.35, 0, 1.5);
+  }
+}
+
 
 /**
  * Sanitize a parallel health-tone array for multi-edge updates.
