@@ -1,5 +1,5 @@
-import type { MoneyView } from "@/lib/mind/dashboard/spend";
-import { NO_SPEND_SOURCE } from "@/lib/mind/dashboard/spend";
+import type { MoneyView } from "@/lib/mind/dashboard/spend-core";
+import { NO_SPEND_SOURCE } from "@/lib/mind/dashboard/spend-core";
 
 type Props = { money: MoneyView };
 

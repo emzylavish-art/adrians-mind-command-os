@@ -81,7 +81,7 @@ export type DashboardStatus = {
   };
   spend: { available: false; reason: string } | { available: true; entries: unknown[] };
   /** Queue #7 — burn/today/warnings from real spend adapter only. */
-  money: import("./spend.ts").MoneyView;
+  money: import("./spend-core.ts").MoneyView;
   sources: {
     locksDir: string;
     repoDir: string;
