@@ -52,15 +52,10 @@ import {
   travelProgress,
 } from "@/lib/mind/dashboard/sky-flow";
 import {
-  pulsePhaseFromId,
-  sampleOrbitDrift,
-  sampleStarPulse,
   sanitizeDt,
   sharedMotionClock,
   createFocusEaseState,
-  stepFocusEase,
-  applyFocusPulse,
-  applyFocusDrift,
+  stepStarFieldBatch,
   type FocusEaseState,
   createMotionPoseBag,
   captureFocusPose,
@@ -413,6 +408,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const MAX_SCENE_BOTS = 48; // Gap#11: hard cap so a spiked payload cannot kill the tab
     const PORTRAIT_FALLBACK = "/dashboard-3d/art/portrait-dashboard.webp";
     let fallbackPortraitTex: THREE.Texture | null = null;
+    /** Gap#47 — dispose per-rebuild Imagine maps so focus/open cycles don't retain heap. */
+    const ownedPortraitTextures: THREE.Texture[] = [];
     // Gap#41/#43: queue portrait TextureLoader work so cold load doesn't open N parallel 512px fetches.
     type PortraitJob = () => void;
     const portraitLoadQueue: PortraitJob[] = [];
@@ -451,6 +448,12 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     function rebuildBots(list: BotNode[]) {
       // Hacker-pass c8: dispose per-bot materials on each 5 s rebuild (previously leaked
       // ~2 materials per bot per rebuild → thousands of orphaned materials per hour).
+      // Gap#47: also release TextureLoader maps from the previous rebuild.
+      while (ownedPortraitTextures.length) {
+        const tex = ownedPortraitTextures.pop()!;
+        if (tex !== fallbackPortraitTex) tex.dispose();
+      }
+      portraitLoadQueue.length = 0;
       while (botGroup.children.length) {
         const ch = botGroup.children[0]!;
         botGroup.remove(ch);
@@ -499,6 +502,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botGroup.add(person);
         const applyPortrait = (tex: THREE.Texture) => {
           tex.colorSpace = THREE.SRGBColorSpace;
+          if (tex !== fallbackPortraitTex && !ownedPortraitTextures.includes(tex)) {
+            ownedPortraitTextures.push(tex);
+          }
           const r1 = setImagineNodeMap(cardMat, tex, { maxTextureSize: maxTexSize });
           const r2 = setImagineNodeMap(personMat, tex, { maxTextureSize: maxTexSize });
           // Painter c5: surface sanitize failures honestly (wash stays; never silent).
@@ -880,8 +886,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let starHealthFilter: string = "all";
 
     let labelsOn = true;
-    const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
-    const driftOut = { x: 0, y: 0, z: 0 };
+    // Gap#58 / Motion c16: reusable star-batch buffers (steady-state zero alloc).
+    const starBatchIds: string[] = [];
+    const starBatchHealths: string[] = [];
+    const starBatchBases: Array<{ x: number; y: number; z: number }> = [];
+    const starBatchFocus: ReturnType<typeof createFocusEaseState>[] = [];
+    const starBatchPulse: Array<{ scale: number; glow: number; emissive: number }> = [];
+    const starBatchPos: Array<{ x: number; y: number; z: number }> = [];
 
     let composer: EffectComposer | null = null;
     let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
@@ -1441,17 +1452,22 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
       const wallT = now * 0.001;
       const t = sharedMotionClock.map(wallT);
-      for (const n of botVis) {
-        const healthOk = starHealthFilter === "all" || n.health === starHealthFilter;
-        const graphOk = !graphVisibleIds || graphVisibleIds.has(n.id);
-        const nhopOk = !nhopVisibleIds || nhopVisibleIds.has(n.id);
-        const show = healthOk && graphOk && nhopOk;
-        n.mesh.visible = show;
-        n.glow.visible = show;
-        n.label.visible = show && labelsOn && fly.level === "universe" && !labelsPaused;
-        const phase = pulsePhaseFromId(n.id);
-        sampleStarPulse(pulseOut, wallT, phase, n.health, reducedMotion);
-        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, wallT, phase, reducedMotion);
+      // Gap#58: Motion c16 star-batch — pulse+focus+drift in one pass, then apply + hover mul.
+      for (let bi = 0; bi < botVis.length; bi++) {
+        const n = botVis[bi]!;
+        if (starBatchIds.length <= bi) {
+          starBatchIds.push("");
+          starBatchHealths.push("idle");
+          starBatchBases.push({ x: 0, y: 0, z: 0 });
+          starBatchFocus.push(createFocusEaseState());
+          starBatchPulse.push({ scale: 1, glow: 2, emissive: 0.7 });
+          starBatchPos.push({ x: 0, y: 0, z: 0 });
+        }
+        starBatchIds[bi] = n.id;
+        starBatchHealths[bi] = n.health;
+        starBatchBases[bi]!.x = n.base.x;
+        starBatchBases[bi]!.y = n.base.y;
+        starBatchBases[bi]!.z = n.base.z;
         let st = focusEase.get(n.id);
         if (!st) {
           st = createFocusEaseState();
@@ -1459,10 +1475,36 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           if (held) restoreFocusPose(st, held);
           focusEase.set(n.id, st);
         }
-        stepFocusEase(st, n.id, rig.subjectId, dt, reducedMotion);
-        applyFocusPulse(pulseOut, st.pulseMul);
-        applyFocusDrift(driftOut, n.base, st.driftMul);
-        let scaleMul = pulseOut.scale;
+        starBatchFocus[bi] = st;
+      }
+      stepStarFieldBatch(
+        starBatchIds,
+        starBatchHealths,
+        starBatchBases,
+        starBatchFocus,
+        starBatchPulse,
+        starBatchPos,
+        rig.subjectId,
+        wallT,
+        dt,
+        reducedMotion,
+        botVis.length,
+        { clock: sharedMotionClock },
+      );
+      for (let bi = 0; bi < botVis.length; bi++) {
+        const n = botVis[bi]!;
+        const healthOk = starHealthFilter === "all" || n.health === starHealthFilter;
+        const graphOk = !graphVisibleIds || graphVisibleIds.has(n.id);
+        const nhopOk = !nhopVisibleIds || nhopVisibleIds.has(n.id);
+        const show = healthOk && graphOk && nhopOk;
+        n.mesh.visible = show;
+        n.glow.visible = show;
+        n.label.visible = show && labelsOn && fly.level === "universe" && !labelsPaused;
+        const pulse = starBatchPulse[bi]!;
+        const pos = starBatchPos[bi]!;
+        const st = starBatchFocus[bi]!;
+        focusEase.set(n.id, st);
+        let scaleMul = pulse.scale;
         if (hoverTipSample.edge > 0.05 && hoverTipSample.hoverId) {
           const hid = hoverTipSample.hoverId;
           const neigh =
@@ -1483,16 +1525,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           }
         }
         n.mesh.scale.setScalar(scaleMul);
-        n.glow.scale.setScalar(pulseOut.glow * (scaleMul / Math.max(1e-6, pulseOut.scale)));
-        if (n.setColor) n.setColor(HEALTH_COLOR[n.health], pulseOut.emissive);
+        n.glow.scale.setScalar(pulse.glow * (scaleMul / Math.max(1e-6, pulse.scale)));
+        if (n.setColor) n.setColor(HEALTH_COLOR[n.health], pulse.emissive);
         else {
           const mat = n.mesh.material as THREE.MeshStandardMaterial;
-          if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
+          if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulse.emissive;
         }
-        n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
-        n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
-        n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
-        // label visibility owned above (health filter + labels layer + fly level)
+        n.mesh.position.set(pos.x, pos.y, pos.z);
+        n.glow.position.set(pos.x, pos.y, pos.z);
+        n.label.position.set(pos.x, pos.y + 0.75, pos.z);
       }
       if (!reducedMotion) {
         inkEdges?.tick(t);
@@ -1794,6 +1835,12 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       skyMat.map?.dispose();
       skyMat.dispose();
       disposePainterlyKit(kit);
+      while (ownedPortraitTextures.length) {
+        const tex = ownedPortraitTextures.pop()!;
+        if (tex !== fallbackPortraitTex) tex.dispose();
+      }
+      fallbackPortraitTex?.dispose();
+      fallbackPortraitTex = null;
       focusLight.dispose();
       focusDepthHandle?.dispose();
       postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth

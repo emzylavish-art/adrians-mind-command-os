@@ -111,9 +111,12 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 54 | **Gap#43 art cache + lazy dive assets** — long-cache hashed art; defer building/backdrop until Dive | **done** | c45 — Dive-only city/interior/building; idle-deferred scene plates; vite+vercel Cache-Control; capture art 30→fewer |
 | 55 | **Gap#41 skybar CLS / long tasks** — more reserved skeletons; defer constellation work off first paint | **done** | c45 — skybar/card min-heights; portrait idle queue; evidence captures-c45-cls |
 | 56 | **Light — focus key/rim light + depth focus falloff (wire)** — `createFocusLight` (atmosphere/) + `createFocusDepthPass` (postfx/, after god-rays, before bloom) driven by `rig.subjectId` focused mesh + bot health | **done** | c44 — wired in universe-scene (after god-rays, before bloom; real health; DPR RT; dispose on unmount/context loss); Light lane 53f5ad1 was #49 |
-| 58 | **Motion c16 follow-up — wire star-batch into universe tick** — adopt star-batch helper for botVis pulse/drift; keep camera dolly Dashboard-owned | queued | Motion c16 772fe62 landed helpers |
-| 59 | **Attacker — status cold-cache / payload size** — re-check Gap#28-style slow status after bot cap; add timing badge if still >500ms | queued | feed #28/#33 follow-up |
+| 58 | **Motion c16 follow-up — wire star-batch into universe tick** — adopt star-batch helper for botVis pulse/drift; keep camera dolly Dashboard-owned | **done** | c46 — ancestry 601a8be; `stepStarFieldBatch` in universe tick; cpu-budget+star-batch tests registered |
+| 59 | **Attacker — status cold-cache / payload size** — re-check Gap#28-style slow status after bot cap; add timing badge if still >500ms | **done** | c46 — Gap#59 `slimDashboardStatusForPoll` default poll + `?bot=` / `?full=1`; lazy select fetch; timing badge still open if >500ms |
 | 57 | **Light — focus-aware bloom guard** — while a node is focused, depth-mask bloom so Imagine portrait/card highlights inside the focus band don't haze over detail; background keeps tone bloom | queued | Light lane was #50; builds on #56 focus depth; reduced-motion static |
+| 60 | **Gap#45 Mirror over Time + zoomout flex slabs** — skybar z-index above mirror; zoomout pills `align-self:flex-start` max 2.75rem | **done** | c46 — CSS only; elementFromPoint Time should hit scrubber |
+| 61 | **Gap#46 Star Detail dialog a11y + skybar live region** — role=dialog, focus close on open; drop skybar aria-live | **done** | c46 — node-detail-panel + dashboard-app |
+| 62 | **Gap#47 Portrait texture dispose on rebuild** — track owned Imagine maps; dispose on rebuild/unmount | **done** | c46 — ownedPortraitTextures in universe-scene |
 
 
 

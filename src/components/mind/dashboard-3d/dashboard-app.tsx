@@ -341,6 +341,15 @@ export function DashboardApp() {
           reducedMotion={reducedMotion}
           onSelectBot={(bot) => {
             setSelected(bot);
+            // Gap#59: lazy per-node detail (excerpts) without fat poll payload.
+            void fetch(`/api/mind/dashboard/status?bot=${encodeURIComponent(bot.id)}`, { cache: "no-store" })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((j) => {
+                if (!j?.botDetail?.ok || !j.botDetail.bot) return;
+                const fresh = j.botDetail.bot;
+                setSelected((prev) => (prev && prev.id === fresh.id ? { ...prev, ...fresh } : prev));
+              })
+              .catch(() => {});
             const graph = viewData?.notionGraph;
             const mapped = graph?.botPageMap[bot.id];
             if (mapped && graph) {
@@ -410,7 +419,7 @@ export function DashboardApp() {
 
       {viewData ? (
         <>
-        <div className="dash3d-skybar" id="dash3d-skybar" aria-live="polite" role="region" aria-label="Dashboard skybar">
+        <div className="dash3d-skybar" id="dash3d-skybar" role="region" aria-label="Dashboard skybar">
           {state.status === "ready" && state.stale ? (
             <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
               <h2>Status stale</h2>
