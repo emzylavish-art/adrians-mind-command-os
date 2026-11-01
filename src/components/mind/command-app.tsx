@@ -38,7 +38,7 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { analyzeImageFile, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { analyzeImageFile, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -297,6 +297,8 @@ export function CommandApp() {
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; host: string; state: "unchecked" | "connected" | "failed"; tools: { name: string; description: string }[]; error: string }[]>([]);
+  const [mcpRegistry, setMcpRegistry] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [toolResultStatus, setToolResultStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
@@ -337,6 +339,9 @@ export function CommandApp() {
     mcpList()
       .then((result) => setMcpServers(result.servers))
       .catch(() => setMcpServers([]));
+    mcpRegistryList()
+      .then((result) => setMcpRegistry(result.servers))
+      .catch(() => setMcpRegistry([]));
     try {
       const saved = localStorage.getItem("amcos.skills.v1");
       if (saved) setEnabledSkills(JSON.parse(saved) as Record<string, boolean>);
@@ -636,11 +641,13 @@ export function CommandApp() {
   async function askMcp(chat: Chat, text: string, confirmed = false) {
     setBusy(true);
     setError(null);
+    setToolResultStatus("running");
     try {
       const result = await mcpCommand({ data: { text, confirmed } });
       setBusy(false);
       setMcpServers(result.servers);
       if (result.needsConfirmation) {
+        setToolResultStatus("idle");
         setPending({
           id: "mcp-call",
           kind: "mcp-call",
@@ -653,9 +660,13 @@ export function CommandApp() {
         });
         return;
       }
-      recordToolTurn(chat, text, [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.");
+      const reply = [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.";
+      const status = result.ok ? "ok" : "error";
+      setToolResultStatus(status);
+      recordToolTurn(chat, text, `[${status}] ${reply}`, undefined, { tool: "mcp", ok: result.ok, action: "chat" });
     } catch {
       setBusy(false);
+      setToolResultStatus("error");
       setError("The MCP server could not be reached. Nothing was called.");
     }
   }
@@ -1611,6 +1622,30 @@ export function CommandApp() {
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
                     <li className="text-muted">Image and video — paid APIs, not called. HP — not paired.</li>
+                    <li>
+                      <p className="font-semibold">MCP servers</p>
+                      <ul className="mt-2 space-y-2">
+                        {mcpRegistry.map((server) => (
+                          <li key={server.id} className="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line px-3 py-2">
+                            <span>{server.label} · {server.kind} · {server.enabled ? "On" : "Off"}</span>
+                            <button
+                              type="button"
+                              className="min-h-11 rounded-panel border border-line px-3"
+                              onClick={() => {
+                                void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => setMcpRegistry(result.servers));
+                              }}
+                            >
+                              {server.enabled ? "Turn off" : "Turn on"}
+                            </button>
+                          </li>
+                        ))}
+                        {mcpRegistry.length === 0 && <li className="text-muted">No MCP registry loaded.</li>}
+                      </ul>
+                      <button type="button" className="mt-2 min-h-11 text-accent" onClick={() => setView("tools")}>
+                        Open Tools panel
+                      </button>
+                      {toolResultStatus !== "idle" ? <p className="mt-2 text-xs text-muted">Last tool call: {toolResultStatus}</p> : null}
+                    </li>
                     <li>
                       <button type="button" className="min-h-11 text-accent" onClick={() => { setView("agents"); void checkRea(); }}>
                         Run REA doctor
