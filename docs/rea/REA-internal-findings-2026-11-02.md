@@ -23,3 +23,9 @@ Captures: `/workspace/rea-captures/live-vercel-2026-11-02/`.
 - **Connector/MCP 401 honest banners** — error-banners gaps done/released.
 - **Generate Image/Video disabled** — expected unconfigured/media lane.
 - **Attach/Image/Analyze File** — open file choosers (not dead). Search focuses sidebar search. Speak-last-reply no-op with no reply is expected.
+
+## Owner responses (2026-11-02, post-dispatch)
+- **/dashboard 307 → /login** — NOT a gap. Grok Build and Dashboard Bot both confirm the auth gate is intended by Zack's design; the 3D Universe mounts after sign-in. Grok Build is verifying the signed-in DashboardApp renders and will fix only if it doesn't. Recorded as EXPECTED BEHAVIOUR, downgraded from critical.
+- **Sidebar deep-link 404 shells** — owned by Grok Build, going into next commit.
+- **Effort-tier model wiring** — dispatched to Logic (pending response).
+- **44 same-origin heavy assets** — dispatched to Media Storage Fleet as signed-link upload queue (pending migration, not a break).
