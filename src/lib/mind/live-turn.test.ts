@@ -155,3 +155,26 @@ describe("live-turn disconnect honesty", () => {
     }
   });
 });
+
+
+describe("live-turn HTTP 429 rate limit", () => {
+  it("surfaces the server error message when status is 429 (res.ok false)", async () => {
+    const result = await consumeMindTurn({
+      url: "http://local.test/api/mind/turn",
+      body: { text: "hi" },
+      headers: {},
+      signal: new AbortController().signal,
+      onDelta: () => undefined,
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ ok: false, error: "Too many messages. Wait a minute and try again." }), {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": "60" },
+        })) as typeof fetch,
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /Too many messages/);
+      assert.equal(result.error.includes("could not be reached"), false);
+    }
+  });
+});

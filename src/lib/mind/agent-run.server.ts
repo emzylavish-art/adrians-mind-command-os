@@ -3,7 +3,7 @@ import { buildAgentModelBody, readAgentMessage, runBoundedAgent, type AgentModel
 import { resolveModelTier } from "./model-tiers";
 import { AGENT_TIMEOUT_REPLY, agentRunTimeoutMs, boundAbortSignal, isTimeoutAbort } from "./turn-timeouts";
 import { guardMindEnv } from "./isolation";
-import { allowMindRequest } from "./limits";
+import { AGENT_RATE_LIMIT_REPLY, consumeMindRateLimit, jsonRateLimited } from "./limits";
 import { decideFetchSite } from "./request-guard";
 import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
@@ -81,7 +81,9 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   if (!tierField.ok) return json({ ok: false, error: tierField.error, log: [] }, 400);
   const { haltIsOn } = await import("./halt.server");
   if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on. No new action can run.", log: [] });
-  if (!allowMindRequest("agent", userId, 6)) return json({ ok: false, error: "Too many agent runs. Wait a minute and try again.", log: [] });
+  // Rate limit after body guard + tier parse so malformed bodies stay 400 and do not consume a token.
+  const limited = consumeMindRateLimit("agent", userId, 6);
+  if (!limited.ok) return jsonRateLimited(AGENT_RATE_LIMIT_REPLY, limited.retryAfterSec, { log: [] });
   const gate = guardMindEnv({
     databaseUrl: process.env.DATABASE_URL,
     mindUrl: process.env.MIND_SUPABASE_URL,

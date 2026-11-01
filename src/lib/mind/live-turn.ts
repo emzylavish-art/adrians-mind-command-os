@@ -73,10 +73,15 @@ export async function consumeMindTurn(input: {
   }
   const type = response.headers.get("content-type") ?? "";
   if (!response.ok || !type.includes("text/event-stream")) {
-    let message = response.status === 401 ? "Sign in is required." : "Grok could not be reached.";
+    let message =
+      response.status === 401
+        ? "Sign in is required."
+        : response.status === 429
+          ? "Too many messages. Wait a minute and try again."
+          : "Grok could not be reached.";
     try {
       const payload = (await response.json()) as { error?: string };
-      if (payload.error) message = payload.error;
+      if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
     } catch {
       /* the status message stands */
     }

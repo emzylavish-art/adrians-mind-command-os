@@ -1,6 +1,6 @@
 import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
-import { allowMindRequest, checkTurnSize } from "./limits";
+import { CHAT_RATE_LIMIT_REPLY, checkTurnSize, consumeMindRateLimit, jsonRateLimited } from "./limits";
 import { assembleTurn } from "./prompt";
 import { sanitizeAttachments, type ImageAttachment } from "./media/index.ts";
 import type { ChatContent } from "./media/types.ts";
@@ -59,9 +59,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if ((await haltIsOn(userId)) || data.halted === true) {
     return { ok: false as const, error: "Emergency stop is on. No new action can run." };
   }
-  if (!allowMindRequest("chat", userId, 12)) {
-    return { ok: false as const, error: "Too many messages. Wait a minute and try again." };
-  }
+  // Body-field validation before rate limit so malformed/empty turns get honest 400s
+  // and do not consume a chat token. (HTTP JSON body guard already ran in handleMindTurn.)
   const tierField = parseModelTierField(data.modelTier);
   if (!tierField.ok) return { ok: false as const, error: tierField.error };
   const images = sanitizeAttachments(data.images);
@@ -85,6 +84,15 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     images,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
+  const limited = consumeMindRateLimit("chat", userId, 12);
+  if (!limited.ok) {
+    return {
+      ok: false as const,
+      error: CHAT_RATE_LIMIT_REPLY,
+      rateLimited: true as const,
+      retryAfterSec: limited.retryAfterSec,
+    };
+  }
   const tier = resolveModelTier(tierField.tier, text || "image", process.env);
   return {
     ok: true as const,
@@ -185,7 +193,12 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     return json({ ...called, provider: selected.id });
   }
   const prepared = await prepareMindTurn(userId, body);
-  if (!prepared.ok) return json(prepared);
+  if (!prepared.ok) {
+    if ("rateLimited" in prepared && prepared.rateLimited) {
+      return jsonRateLimited(prepared.error, prepared.retryAfterSec);
+    }
+    return json(prepared);
+  }
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
