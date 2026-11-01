@@ -113,10 +113,15 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 56 | **Light — focus key/rim light + depth focus falloff (wire)** — `createFocusLight` (atmosphere/) + `createFocusDepthPass` (postfx/, after god-rays, before bloom) driven by `rig.subjectId` focused mesh + bot health | **done** | c44 — wired in universe-scene (after god-rays, before bloom; real health; DPR RT; dispose on unmount/context loss); Light lane 53f5ad1 was #49 |
 | 58 | **Motion c16 follow-up — wire star-batch into universe tick** — adopt star-batch helper for botVis pulse/drift; keep camera dolly Dashboard-owned | **done** | c46 — ancestry 601a8be; `stepStarFieldBatch` in universe tick; cpu-budget+star-batch tests registered |
 | 59 | **Attacker — status cold-cache / payload size** — re-check Gap#28-style slow status after bot cap; add timing badge if still >500ms | **done** | c46 — Gap#59 `slimDashboardStatusForPoll` default poll + `?bot=` / `?full=1`; lazy select fetch; timing badge still open if >500ms |
-| 57 | **Light — focus-aware bloom guard** — while a node is focused, depth-mask bloom so Imagine portrait/card highlights inside the focus band don't haze over detail; background keeps tone bloom | queued | Light lane was #50; builds on #56 focus depth; reduced-motion static |
+| 57 | **Light — focus-aware bloom guard** — while a node is focused, depth-mask bloom so Imagine portrait/card highlights inside the focus band don't haze over detail; background keeps tone bloom | **done** | c46 — land postfx from f2df35a; wire createFocusBloomGuard + context-loss focusBloomGuard; tests registered |
 | 60 | **Gap#45 Mirror over Time + zoomout flex slabs** — skybar z-index above mirror; zoomout pills `align-self:flex-start` max 2.75rem | **done** | c46 — CSS only; elementFromPoint Time should hit scrubber |
 | 61 | **Gap#46 Star Detail dialog a11y + skybar live region** — role=dialog, focus close on open; drop skybar aria-live | **done** | c46 — node-detail-panel + dashboard-app |
 | 62 | **Gap#47 Portrait texture dispose on rebuild** — track owned Imagine maps; dispose on rebuild/unmount | **done** | c46 — ownedPortraitTextures in universe-scene |
+| 63 | **Gap#48 Time scrubber drives Charts/Money/Forever (or honest Live note) + aria-valuetext** | queued | feed captures-20261101-230352; after Light f2df35a + context-loss/#57 |
+| 64 | **Gap#49 Chart labels/tooltips still truncated (Gap#15 re-check)** | queued | feed 230352; after #63 |
+| 65 | **Gap#50 Lock claims vs releases chart drops empty hours / claims-only bars** | queued | feed 230352; after #64 |
+| 66 | **Gap#51 Compass minimap overlaps Charts at 1280×800** | queued | feed 230352; after #65 |
+| 67 | **Light — Imagine portrait colour bounce + detail-card backdrop dim (#60)** | queued | Light lane next after #57; real average colour from texture; never invent |
 
 
 

@@ -83,7 +83,11 @@ export function createTunedBloomPass(
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    // three r187 UnrealBloomPass.dispose() never frees materialHighPassFilter —
+    // one leaked program per context-loss rebuild / unmount. Free it here.
+    const hp = pass.materialHighPassFilter;
     pass.dispose();
+    hp?.dispose();
   };
   return { pass, update, setSize, dispose };
 }

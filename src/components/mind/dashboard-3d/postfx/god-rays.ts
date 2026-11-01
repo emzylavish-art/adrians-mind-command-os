@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";
 import { KEY_RGB, normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.ts";
 
 /**
@@ -193,8 +194,7 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
   const baseRender = pass.render.bind(pass);
   pass.render = ((renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
     if (disposed) return;
-    const liveDepth =
-      (readBuffer && (readBuffer as THREE.WebGLRenderTarget).depthTexture) || depthTex;
+    const liveDepth = liveSceneDepth(renderer, readBuffer as THREE.WebGLRenderTarget, depthTex);
     u.tDepth.value = liveDepth;
     u.useDepth.value = liveDepth ? 1 : 0;
     if (depthCam) {
@@ -202,6 +202,7 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
       u.cameraFar.value = depthCam.far;
     }
     baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+    if (!pass.renderToScreen) markDepthClobbered(renderer, writeBuffer);
     u.tDepth.value = null;
     u.useDepth.value = 0;
   }) as typeof pass.render;

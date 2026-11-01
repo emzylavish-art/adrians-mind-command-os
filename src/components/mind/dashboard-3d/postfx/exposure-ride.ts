@@ -120,6 +120,9 @@ export function createExposureRide(init: ExposureRideInputs = {}): ExposureRideH
       elapsed = EXPOSURE_EASE_MS;
       return;
     }
+    // HACKER: universe-scene retargets every frame. An unchanged target must not
+    // restart the ease clock, or the 400 ms ride crawls ~0.5%/frame forever.
+    if (nextExp === targetExp && nextThr === targetThr) return;
     fromExp = curExp;
     fromThr = curThr;
     targetExp = nextExp;

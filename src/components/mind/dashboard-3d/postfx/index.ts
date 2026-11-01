@@ -63,3 +63,19 @@ export {
   focusBandWeight,
   type FocusDepthHandle,
 } from "./focus-depth.ts";
+export { isDepthClobbered, liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";
+export {
+  BLOOM_GUARD_EASE_MS,
+  BLOOM_GUARD_FEATHER,
+  BLOOM_GUARD_MAX,
+  BLOOM_GUARD_RADIUS,
+  BLOOM_GUARD_RADIUS_MAX,
+  BLOOM_GUARD_RADIUS_MIN,
+  FocusBloomGuardShader,
+  bloomGuardKeepDepth,
+  bloomGuardKeepRadial,
+  clampGuardRadius,
+  createFocusBloomGuard,
+  projectedRadiusUv,
+  type FocusBloomGuardHandle,
+} from "./focus-bloom-guard.ts";

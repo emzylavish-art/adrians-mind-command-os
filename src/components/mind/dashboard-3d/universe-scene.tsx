@@ -26,7 +26,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, projectedRadiusUv } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -899,6 +899,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let gradeHandle: ReturnType<typeof createColorGradePass> | null = null;
     let raysHandle: ReturnType<typeof createGodRayPass> | null = null;
     let focusDepthHandle: ReturnType<typeof createFocusDepthPass> | null = null;
+    let focusBloomGuardHandle: ReturnType<typeof createFocusBloomGuard> | null = null;
     // Light lane focus readability: key/rim follow focused star (dispose on unmount / context loss).
     let focusLight = createFocusLight(scene);
     // Light lane #12: idle until real weather arrives (not healthy-green before data)
@@ -908,7 +909,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const rebuildPostfxBundle = () => {
       // Light #13: rebuild passes into the live composer after WebGL restore
       if (!composer || reducedMotion) {
-        return { bloom: null, grade: null, godRays: null, exposure: exposureRide, focusDepth: null };
+        return { bloom: null, grade: null, godRays: null, exposure: exposureRide, focusDepth: null, focusBloomGuard: null };
       }
       const w = Math.max(1, mount.clientWidth || width);
       const h = Math.max(1, mount.clientHeight || height);
@@ -950,13 +951,29 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         nextGrade = null;
       }
       composer.addPass(kit.painterlyPass);
+      let nextGuard: typeof focusBloomGuardHandle = null;
+      if (nextBloom) {
+        try {
+          nextGuard = createFocusBloomGuard(nextBloom);
+        } catch {
+          nextGuard = null;
+        }
+      }
       bloomHandle = nextBloom;
       gradeHandle = nextGrade;
       raysHandle = nextRays;
       focusDepthHandle = nextFocusDepth;
+      focusBloomGuardHandle = nextGuard;
       exposureRide = createExposureRide({ tone: "idle", reducedMotion });
       exposureRide.apply(renderer);
-      return { bloom: nextBloom, grade: nextGrade, godRays: nextRays, exposure: exposureRide, focusDepth: nextFocusDepth };
+      return {
+        bloom: nextBloom,
+        grade: nextGrade,
+        godRays: nextRays,
+        exposure: exposureRide,
+        focusDepth: nextFocusDepth,
+        focusBloomGuard: nextGuard,
+      };
     };
 
     if (!reducedMotion) {
@@ -977,7 +994,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const postfxRecovery = createContextLossRecovery({
       canvas: renderer.domElement,
-      initial: { bloom: bloomHandle, grade: gradeHandle, godRays: raysHandle, exposure: exposureRide, focusDepth: focusDepthHandle },
+      initial: { bloom: bloomHandle, grade: gradeHandle, godRays: raysHandle, exposure: exposureRide, focusDepth: focusDepthHandle, focusBloomGuard: focusBloomGuardHandle },
       factory: rebuildPostfxBundle,
     });
 
@@ -1629,6 +1646,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const focusedVis = focusId ? botVis.find((b) => b.id === focusId) : null;
         const focusedBot = focusId ? botsNow.find((b) => b.id === focusId) : null;
         const liveFocusDepth = postfxRecovery.bundle.focusDepth ?? focusDepthHandle;
+        const liveBloomGuard = postfxRecovery.bundle.focusBloomGuard ?? focusBloomGuardHandle;
         if (focusedVis && focusedBot) {
           focusLight.setFocus(
             {
@@ -1639,16 +1657,26 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             { reducedMotion },
           );
           liveFocusDepth?.setFocus(focusedVis.mesh.position, camera, { reducedMotion });
+          const rad = projectedRadiusUv(focusedVis.mesh.position, 1.2, camera);
+          liveBloomGuard?.setFocus(focusedVis.mesh.position, camera, {
+            reducedMotion,
+            radiusUv: rad ?? undefined,
+          });
         } else {
           focusLight.setFocus(null, { reducedMotion });
           liveFocusDepth?.setFocus(null, camera, { reducedMotion });
+          liveBloomGuard?.setFocus(null, camera, { reducedMotion });
         }
         const fog = scene.fog as THREE.FogExp2 | null;
         if (fog && "color" in fog) {
           liveFocusDepth?.setFogColor(fog.color.getHex());
         }
+        if (composer?.readBuffer?.depthTexture) {
+          liveBloomGuard?.setDepthTexture(composer.readBuffer.depthTexture);
+        }
         focusLight.tick(dt * 1000);
         liveFocusDepth?.tick(dt * 1000);
+        liveBloomGuard?.tick(dt * 1000);
       }
 
       if (composer) composer.render();
@@ -1842,8 +1870,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       fallbackPortraitTex?.dispose();
       fallbackPortraitTex = null;
       focusLight.dispose();
+      focusBloomGuardHandle?.dispose();
       focusDepthHandle?.dispose();
-      postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth
+      postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth/bloomGuard
       renderer.dispose();
       composer?.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
