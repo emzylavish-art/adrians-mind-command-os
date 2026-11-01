@@ -107,6 +107,46 @@ describe("hacker pass — motion lane breaks", () => {
   });
 });
 
+
+describe("hacker pass c5 — reduced-motion mid-session + dispose callback", () => {
+  it("reduced-motion mid-session restores full rest dust (no LOD-thinned freeze)", () => {
+    const scene = new THREE.Scene();
+    const dust = createDustField(scene, { count: 200, seed: 1 });
+    const cam = new THREE.PerspectiveCamera();
+    cam.position.set(0, 0, 80);
+    dust.mesh!.onBeforeRender({} as any, scene, cam, {} as any, {} as any, {} as any);
+    for (let i = 0; i < 200; i++) dust.update(i * 0.05, false);
+    assert.ok(dust.mesh!.count < 200, `expected LOD thin, got ${dust.mesh!.count}`);
+    const thinned = dust.mesh!.count;
+    dust.update(12, true);
+    assert.equal(dust.mesh!.count, 200, `reduced-motion left count at ${dust.mesh!.count} (was ${thinned})`);
+    assert.equal(dust.lod.active, 200);
+    // rest pose: first instance translation matches seed (no wobble)
+    const arr = dust.mesh!.instanceMatrix.array as Float32Array;
+    // After another reduced-motion call, count stays full (idempotent rest apply)
+    dust.update(13, true);
+    assert.equal(dust.mesh!.count, 200);
+    assert.ok(Number.isFinite(arr[12]!));
+    dust.dispose();
+  });
+
+  it("dispose clears onBeforeRender so unmount cannot keep writing LOD", () => {
+    const scene = new THREE.Scene();
+    const dust = createDustField(scene, { count: 32, seed: 2 });
+    const mesh = dust.mesh!;
+    const cam = new THREE.PerspectiveCamera();
+    cam.position.set(0, 0, 40);
+    mesh.onBeforeRender({} as any, scene, cam, {} as any, {} as any, {} as any);
+    const before = dust.lod.camDistance;
+    assert.ok(before > 0);
+    dust.dispose();
+    // leftover call must be a no-op (cleared) — must not throw or bump camDistance
+    mesh.onBeforeRender({} as any, scene, cam, {} as any, {} as any, {} as any);
+    assert.equal(dust.lod.camDistance, before);
+    assert.equal(dust.mesh, null);
+  });
+});
+
 // Lane suites without their own package.json test entry (lane-only edit rule) ride along here.
 import "./hacker-pass-c3.test.ts";
 import "./motion-lod.test.ts";

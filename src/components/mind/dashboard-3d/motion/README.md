@@ -13,3 +13,10 @@ Universe / node-graph should call:
 - `easeInOutCubic` / `smootherstep` for any local transition polish alongside camera-rig
 
 Do not allocate inside the rAF tick. See INTEGRATION.md.
+
+## Focus-aware star easing (c5)
+
+- `stepFocusEase(state, starId, focusId, dt, reducedMotion)` — per-star `pulseMul`→1.25 / `driftMul`→0
+- `applyFocusPulse` / `applyFocusDrift` after the usual samplers
+- Unknown/empty `focusId` = no focus; reduced-motion snaps. Wire `focusId` from `rig.subjectId` (see INTEGRATION.md).
+
