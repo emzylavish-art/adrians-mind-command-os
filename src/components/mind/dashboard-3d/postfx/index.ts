@@ -6,6 +6,7 @@ export {
   BLOOM_BY_TONE,
   BLOOM_MAX_EDGE,
   bloomParamsForTone,
+  inferPixelRatio,
   safeBloomSize,
   createTunedBloomPass,
   type BloomTuning,
