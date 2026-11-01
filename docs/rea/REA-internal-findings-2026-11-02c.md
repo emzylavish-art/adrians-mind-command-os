@@ -18,3 +18,11 @@ Landed-on-branch: none of the 8 fully landed.
 - Integration tip moved to 4371f0e (perf/lazy assets + cloud memory); does not touch the 8 items.
 - New observation: worker code for #3 exists on branch (not hosted) — moves it from "no code" to "partial, needs a hosting owner".
 - Live state for all 8 unchanged.
+
+## GitHub tool-backed verification (2026-11-02, parent)
+GitHub tool calls made on emzylavish-art/adrians-mind-command-os:
+1. get_branch `preview/integration` → head **4371f0e** (parent 2a2fb16), commit "perf: lazy assets, split 3D, deferred CSS/JS, cloud memory" + "wire: shortcut sheet + Explore nav". `deploymentEnabled.preview/integration = false` (confirmed in vercel.json) → **nothing on this branch is deployed**, which is why the live site still shows the pre-integration state.
+2. get_file_contents `vercel.json` @preview/integration → only cache-header rules for `/assets/*`, `/art/*`, `/dashboard-3d/art/*`; **no rewrites/routes for the 11 deep-link paths** → item #7 (deep-link 404s) is a real, still-open gap, confirmed at source.
+3. search_code `MIND_SEARCH_ENDPOINT` → 0 results, and `asset-url` → 0 results. Note: GitHub code search only indexes the **default branch**; this code lives on feature/preview branches, so 0 results is a search-index limitation, not proof of absence. Branch-level reads (get_file_contents on the specific branch) are the authoritative check and will be used for these next cycle.
+
+Net: branch tip 4371f0e carries the shortcut-sheet + Explore-nav wiring and a getAssetUrl shim (Grok Build / Media), but `deploymentEnabled=false` means none of it is live yet. The 8-item live-vs-shipped status above stands.
