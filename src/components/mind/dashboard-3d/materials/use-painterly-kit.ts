@@ -176,6 +176,9 @@ export type PainterlyKit = {
   frozenTickTime: number;
 };
 
+/** Thrown by kit create/bind after disposePainterlyKit — prevents use-after-free on disposed textures. */
+export const PAINTER_KIT_DISPOSED = "painterly-kit-disposed";
+
 /** HACKER (c7): track live kits so StrictMode double-mount leaks can be audited/disposed. */
 const LIVE_PAINTER_KITS = new Set<PainterlyKit>();
 
@@ -218,26 +221,31 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     frozenTickTime: 0,
     textureBudgetBytes,
     createStarMaterial(starOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       const m = createStarWatercolorMaterial(starOpts);
       tracked.push(m);
       return m;
     },
     createBuildingMaterial(bOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       const m = createBuildingBrushMaterial(bOpts);
       tracked.push(m);
       return m;
     },
     createLorePlaqueMaterial(pOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       const m = createLorePlaqueMaterialImpl(pOpts);
       tracked.push(m);
       return m;
     },
     createInkWashEdgeMaterial(eOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       const m = createInkWashEdgeMaterialImpl(eOpts);
       tracked.push(m);
       return m;
     },
     createImagineNodeMaterial(iOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       const m = createImagineNodeMaterialImpl({
         ...iOpts,
         paperMap: iOpts?.paperMap === undefined ? kit.paperGrainTexture : iOpts.paperMap,
@@ -248,11 +256,13 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       return m;
     },
     createSkyMaterial(skyOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       const m = createNebulaSkyMaterial(skyOpts ?? opts.nebula);
       trackedSkies.push(m);
       return m;
     },
     bindSharedTexture(material, slot, target = "map") {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       // Replace existing binding for same material+slot
       for (let i = textureBindings.length - 1; i >= 0; i--) {
         const b = textureBindings[i]!;
@@ -271,17 +281,21 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       resizePainterlyPass(kit.painterlyPass, width, height, dpr);
     },
     createBotStar(starOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       return createPainterlyBotStar(kit, starOpts);
     },
     createInkEdges(edges = [], eOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       return createPainterlyInkEdges(kit, edges, eOpts);
     },
     createLaneNebulaMaterial(nOpts) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       const m = createLaneNebulaMaterialImpl(nOpts);
       tracked.push(m);
       return m;
     },
     createLaneNebulae(lanes = []) {
+      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
       return createPainterlyLaneNebulae(kit, lanes);
     },
     textureBudget() {

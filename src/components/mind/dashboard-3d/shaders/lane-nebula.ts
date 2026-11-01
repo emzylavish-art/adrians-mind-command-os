@@ -3,6 +3,10 @@ import { GLSL_HASH_NOISE } from "./glsl-noise.ts";
 /**
  * Soft watercolor lane nebula (replaces MeshBasicMaterial tint spheres).
  * Sphere UVs + view-facing soft edge; health-tinted ink wash; no derivatives.
+ *
+ * c14: `uPool` pigment pooling from real lane health (blocked pools heavier;
+ * healthy stays light). Time animation uses a period-continuous sin/cos orbit
+ * so sanitizeShaderTime wrap seams do not pop the wash.
  */
 export const LaneNebulaShader = {
   name: "LaneNebulaShader",
@@ -11,6 +15,8 @@ export const LaneNebulaShader = {
     uTime: { value: 0 },
     uOpacity: { value: 0.28 },
     uWash: { value: 0.65 },
+    /** Pigment pooling strength from real lane health (0..1.5). Neutral ~0.45. */
+    uPool: { value: 0.45 },
   },
   vertexShader: /* glsl */ `
     varying vec3 vObj;
@@ -27,6 +33,7 @@ export const LaneNebulaShader = {
     uniform float uTime;
     uniform float uOpacity;
     uniform float uWash;
+    uniform float uPool;
     varying vec3 vObj;
     varying vec3 vView;
     ${GLSL_HASH_NOISE}
@@ -42,14 +49,22 @@ export const LaneNebulaShader = {
       float limb = smoothstep(0.05, 0.55, facing);
       float rim = pow(1.0 - facing, 1.6);
       vec2 uv = vObj.xz * 1.6 + vObj.y * 0.55;
-      float wash = paintFbm(uv + vec2(uTime * 0.03, -uTime * 0.02));
-      float streak = paintNoise(uv * 3.5 + uTime * 0.04);
+      // c14: period-continuous orbit (PAINTER_TIME_PERIOD=600) — no wrap-seam pop
+      float ang = uTime * 0.010472; // 2π/600
+      vec2 tOrbit = vec2(sin(ang), cos(ang * 0.93));
+      float wash = paintFbm(uv + tOrbit * 0.85);
+      float streak = paintNoise(uv * 3.5 + tOrbit.yx * 1.2);
+      float pool = clamp(uPool, 0.0, 1.5);
       float pigment = mix(0.4, 1.0, smoothstep(0.15, 0.9, wash)) * (0.7 + streak * 0.3);
+      // Health-driven pooling: darker puddles where wash settles at the limb
+      float puddle = smoothstep(0.2, 0.75, wash) * smoothstep(0.15, 0.55, rim + (1.0 - facing) * 0.35);
+      pigment = mix(pigment, pigment * (0.55 + pool * 0.35), puddle * pool);
       vec3 col = uHealth * (0.35 + pigment * uWash);
-      col += uHealth * rim * 0.45; // pooled rim ink
-      col += (paintNoise(uv * 22.0) - 0.5) * 0.06;
-      float alpha = uOpacity * (limb * (0.5 + pigment * 0.55) + rim * 0.35);
-      alpha = clamp(alpha, 0.0, 0.78);
+      col += uHealth * rim * (0.35 + pool * 0.35); // pooled rim ink scales with health pool
+      col = mix(col, uHealth * 0.28, puddle * pool * 0.55);
+      col += (paintNoise(uv * 22.0 + tOrbit) - 0.5) * 0.06;
+      float alpha = uOpacity * (limb * (0.5 + pigment * 0.55) + rim * (0.3 + pool * 0.15) + puddle * pool * 0.12);
+      alpha = clamp(alpha, 0.0, 0.82);
       if (alpha < 0.02) discard;
       gl_FragColor = vec4(clamp(col, 0.0, 1.0), alpha);
     }
