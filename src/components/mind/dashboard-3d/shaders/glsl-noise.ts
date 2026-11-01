@@ -36,7 +36,15 @@ float paintFbm(vec2 p) {
 }
 `;
 
-export const PAINTER_SHADER_VERSION = "painter-1.5.0";
+export const PAINTER_SHADER_VERSION = "painter-1.6.0";
+
+/**
+ * HACKER (c7): iOS Safari / WebGL1 often reject highp in fragments.
+ * Three.js ShaderMaterial `precision: "mediump"` pairs with this marker;
+ * all painter noise already uses paintWrap for mediump-safe domains.
+ */
+export const PAINTER_SHADER_PRECISION = "mediump" as const;
+
 
 /** Marker string tests assert is present for mediump hardening. */
 export const GLSL_MEDIUMP_GUARD = "paintWrap";

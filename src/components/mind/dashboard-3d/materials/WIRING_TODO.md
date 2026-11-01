@@ -74,6 +74,22 @@ kit.resizePass(cssWidth, cssHeight, window.devicePixelRatio);
 - `resizePainterlyPass` clamps 0/NaN/huge×DPR and skips identical drawing sizes (RT thrash).
 - Shader construct failure → identity fallback + `userData.painterPassMeta.compileError` (not silent black).
 
+## c7 — kit harden + one-line bot stars
+
+```ts
+// Replace MeshStandardMaterial bot cores:
+const star = kit.createBotStar({ color: HEALTH_COLOR[bot.health], idle: bot.health === "idle" });
+mesh.material = star.meshMaterial;
+glow.material = star.glowMaterial;
+// health change: star.setColor(HEALTH_COLOR[h], h === "idle" ? 0.25 : 0.9);
+
+// StrictMode-safe: disposePainterlyKit always detaches context listeners.
+// tickPainterlyKit never throws — check kit.lastTickError after a frame if diagnosing.
+```
+
+- All painter ShaderMaterials use `precision: "mediump"` (iOS Safari / WebGL1).
+- Double `attachPainterlyContextHandlers` detaches the previous pair first.
+
 ## Next painter candidate
-- Dashboard Bot: call `kit.setPassHealth` + `kit.resizePass` from universe-scene (alongside god-rays).
-- Optional: brush building window glow sync with night-shift (out of painter lane unless materials-only).
+- Dashboard Bot: swap bot MeshStandardMaterial → `kit.createBotStar`; wire `setPassHealth`/`resizePass`.
+- Ink-wash edges still pending scene adopt (`rebuildEdges` still LineDashed).

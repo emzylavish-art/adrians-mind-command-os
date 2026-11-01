@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { InkWashEdgeShader } from "../shaders/ink-wash-edge.ts";
 import { sanitizeFinite, sanitizeShaderTime } from "./paper-grain.ts";
+import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 
 export type HealthTone = "healthy" | "stalled" | "blocked" | "idle";
 
@@ -57,6 +58,7 @@ export function createInkWashEdgeMaterial(opts: InkWashEdgeOptions = {}): THREE.
   if (opts.pulse != null) uniforms.uPulse.value = sanitizeFinite(opts.pulse, 0.35, 0, 1);
   return new THREE.ShaderMaterial({
     name: "InkWashEdgeMaterial",
+    precision: PAINTER_SHADER_PRECISION,
     uniforms,
     vertexShader: InkWashEdgeShader.vertexShader,
     fragmentShader: InkWashEdgeShader.fragmentShader,

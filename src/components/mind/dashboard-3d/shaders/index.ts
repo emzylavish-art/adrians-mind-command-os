@@ -12,6 +12,7 @@ export {
   GLSL_HASH_NOISE,
   GLSL_MEDIUMP_GUARD,
   PAINTER_SHADER_VERSION,
+  PAINTER_SHADER_PRECISION,
 } from "./glsl-noise.ts";
 export {
   PainterlyPassShader,

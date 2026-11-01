@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BrushBuildingShader } from "../shaders/brush-building.ts";
 import { sanitizeFinite, sanitizeShaderTime } from "./paper-grain.ts";
+import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 
 export type BuildingSurfaceOptions = {
   base?: THREE.ColorRepresentation;
@@ -33,6 +34,7 @@ export function createBuildingBrushMaterial(
   if (opts.paper != null) uniforms.uPaper.value = sanitizeFinite(opts.paper, 0.18, 0, 1);
   return new THREE.ShaderMaterial({
     name: "BuildingBrushMaterial",
+    precision: PAINTER_SHADER_PRECISION,
     uniforms,
     vertexShader: BrushBuildingShader.vertexShader,
     fragmentShader: BrushBuildingShader.fragmentShader,
