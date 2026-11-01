@@ -3934,3 +3934,35 @@ section.composer-dock {
 nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
   padding-bottom: max(0.15rem, env(safe-area-inset-bottom)) !important;
 }
+
+/* —— Blueprint c45: kill horizontal overflow + wrap + keyboard room —— */
+html, body, #root, .shell, .main-stage {
+  max-width: 100vw !important;
+  overflow-x: clip !important;
+}
+.main-stage .mx-auto.flex.max-w-6xl,
+.composer-bar__card,
+.composer-dock,
+.floating-composer {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.main-stage button,
+.main-stage .rounded-full,
+.composer-dock button,
+aside.rail nav button span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Extra bottom padding so content clears dock + speak + tab when keyboard opens */
+@media (max-width: 767.98px) {
+  .main-stage,
+  .min-h-0.flex-1.overflow-auto,
+  .flex.min-h-0.min-w-0.flex-1.flex-col.pb-16 {
+    padding-bottom: calc(18rem + env(safe-area-inset-bottom)) !important;
+  }
+  /* When visual viewport shrinks (keyboard), keep fixed chrome inside */
+  @supports (height: 100dvh) {
+    .shell { min-height: 100dvh; height: 100dvh; }
+  }
+}
