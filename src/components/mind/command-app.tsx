@@ -52,6 +52,8 @@ import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
+import { IntentPredictionChip } from "@/components/mind/intent-prediction-chip";
+import { pushComposerText, pushVoiceChunk } from "@/lib/intent";
 import {
   ComposerBar,
   type ComposerModelId,
@@ -3121,6 +3123,7 @@ export function CommandApp() {
           },
           onPartialTranscript: (text) => {
             setVoiceLiveTranscript(clampLiveTranscript(text));
+            pushVoiceChunk(text);
           },
           onSpeechStarted: () => {
             if (overlayOpenRef.current) {
@@ -3824,9 +3827,30 @@ export function CommandApp() {
                     ))}
                   </div>
                   <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
+                  <IntentPredictionChip
+                    text={draft}
+                    source="keystroke"
+                    handlers={{
+                      setView: (view) => setView(view as View),
+                      navigate: (href) => {
+                        window.location.assign(href);
+                      },
+                      setModelTier: (tier) => setModelTier(tier as ModelTier),
+                      openModelPicker: () => setPaletteOpen(true),
+                      startVoice: () => {
+                        void openVoiceOverlay();
+                      },
+                      openPalette: () => setPaletteOpen(true),
+                      searchMemory: () => setView("memory"),
+                    }}
+                  />
                   <textarea
                     value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setDraft(next);
+                      pushComposerText(next);
+                    }}
                     placeholder="What would you like to work on?"
                     rows={3}
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"

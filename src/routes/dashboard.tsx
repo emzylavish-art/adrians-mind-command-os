@@ -1,21 +1,17 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { DashboardApp } from "@/components/mind/dashboard-3d/dashboard-app";
-import { dashboardLoginSearch } from "@/lib/auth/login-providers";
-import { getSessionUser } from "@/lib/auth/verify.server";
+import { requireSessionUser } from "@/lib/auth/require-session";
 
 /**
  * Universe dashboard. A Better Auth or Supabase session may enter.
  * No session goes to sign-in.
+ *
+ * Session resolution stays inside createServerFn (dynamic import of verify.server)
+ * so the client bundle never pulls server-only modules.
  */
 export const Route = createFileRoute("/dashboard")({
   beforeLoad: async () => {
-    const user = await getSessionUser();
-    if (!user) {
-      throw redirect({
-        to: "/login",
-        search: dashboardLoginSearch(),
-      });
-    }
+    const user = await requireSessionUser();
     return { sessionUser: user };
   },
   component: DashboardPage,
