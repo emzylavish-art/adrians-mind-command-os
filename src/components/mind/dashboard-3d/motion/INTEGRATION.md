@@ -354,8 +354,15 @@ Motion lane **does not edit `package.json`**. Please add these lane test files t
 - `src/components/mind/dashboard-3d/motion/health-pulse-crossfade.test.ts`
 - `src/components/mind/dashboard-3d/motion/alloc-budget.test.ts`
 - `src/components/mind/dashboard-3d/motion/neighbor-drift-damp.test.ts`
+- `src/components/mind/dashboard-3d/motion/health-xfade-flap.test.ts` (c19)
+- `src/components/mind/dashboard-3d/motion/neighbor-focus-fight.test.ts` (c19)
+- `src/components/mind/dashboard-3d/motion/star-batch-xfade.test.ts` (c19)
+- `src/components/mind/dashboard-3d/motion/edge-pulse-flip.test.ts` (c20)
+- `src/components/mind/dashboard-3d/motion/state-prune.test.ts` (c20)
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
+
+`alloc-budget.test.ts` no longer needs `--expose-gc` (c19 enables gc at runtime via `v8.setFlagsFromString`), so it is safe in the plain strip-types chain. No new deps.
 
 Lane CI locally: `node --experimental-strip-types --test src/components/mind/dashboard-3d/motion/*.test.ts src/components/mind/dashboard-3d/particles/*.test.ts`
 
@@ -424,3 +431,51 @@ Camera dolly remains Dashboard-owned.
 - Build `edgePairs` from constellation edges; `collectOneHopNeighbors(edgePairs, rig.subjectId)` when focus/graph changes.
 - After star-batch / focus-ease, call `stepNeighborDriftDampBatch` so neighbor `driftMul` eases toward `NEIGHBOR_DRIFT_FLOOR`.
 - Register `alloc-budget.test.ts` + `neighbor-drift-damp.test.ts` in package.json test glob when landing (Motion lane does not edit package.json).
+
+## Star-batch xfade + neighbors (c19)
+
+One-call wiring for the c17 health crossfade and c18 neighbor damp (both opt-in;
+omit them and output is identical to c16):
+
+```ts
+import { stepStarFieldBatch, createHealthPulseCrossfadeState, collectOneHopNeighbors } from "./motion";
+
+const xfade = bots.map((b) => createHealthPulseCrossfadeState(b.health)); // keep per bot, like focus states
+const neighbors = collectOneHopNeighbors(edgePairs, focusId); // rebuild only when focus/graph changes
+
+stepStarFieldBatch(ids, healths, bases, focusStates, pulseOuts, posOuts,
+  focusId, tSeconds, dt, reducedMotion, ids.length, { clock, xfade, neighbors });
+```
+
+- Health changes are picked up from `healths[i]` each frame (no separate setter call needed).
+- Reduced-motion → crossfade snaps, neighbors keep full drift.
+- Hacker c19: crossfade flapping (A→B→A / A→B→C mid-blend) is now exactly continuous
+  (per-health weight vector; `from/to/blend` kept as derived fields).
+- Hacker c19: neighbor damp no longer fights `stepFocusEase` (settled ~0.71 instead of
+  the 0.35 floor); it owns driftMul for non-focused stars via `neighborMul`.
+- Star-batch no longer pins the caller's MotionClock in module scope after a frame.
+- Camera dolly stays Dashboard-owned.
+
+## Edge pulse flip + motion state prune (c20)
+
+- Hacker c20: `stepEdgePulseSync` phase is now symmetric per edge (`edgePulsePhase(a,b)`),
+  so `rig.subjectId ?? hoverId` flipping between endpoints / to null no longer pops the
+  ink-edge `uPulse` (was up to ~0.19 pulse / ~0.2 uniform in one frame). API unchanged.
+- `pruneMotionStateMap(map, liveIds, max?, onEvict?)` — drop per-bot motion state for
+  bots that left status + hard cap (`MOTION_STATE_MAP_MAX` 4096). Call on bot-list
+  change, e.g. after the rebuild that already does `focusEase.clear()`:
+
+```ts
+import { pruneMotionStateMap } from "./motion";
+pruneMotionStateMap(healthXfade, liveBotIdSet); // currently never pruned in universe-scene
+```
+
+`liveIds == null` (failed fetch) only enforces the cap — it never wipes all state.
+
+### c50 wiring note (from c19 fixes)
+- Your post-batch `stepNeighborDriftDampBatch` now settles neighbors at the 0.35 floor
+  (was ~0.71) with no change on your side.
+- `STAR_BATCH_ORBIT_OPTS.clock` is reset to `undefined` after each batch; your post-batch
+  orbit re-sample still uses `sharedMotionClock` via the default. Passing
+  `{ clock, xfade, neighbors }` to the batch lets you delete that re-sample and the
+  separate crossfade loop (queue #79).

@@ -24,6 +24,8 @@ export type BotDetailView = {
   reason: string;
   laneName: string | null;
   laneHealth: Health | null;
+  /** Gap#56: display line for lane rollup (never confused with bot health). */
+  laneHealthLine: string | null;
   lockFile: string | null;
   lockStatus: string | null;
   claimedAt: string | null;
@@ -237,6 +239,36 @@ export function connectionsForBot(
   return out;
 }
 
+
+/** Gap#56: bots in the same lane whose health matches the rolled-up lane health (not this bot). */
+export function laneHealthDrivers(
+  bots: readonly BotNode[],
+  laneBotIds: readonly string[] | null | undefined,
+  laneHealth: Health | null | undefined,
+  selfId: string,
+): BotNode[] {
+  if (!laneBotIds?.length || !laneHealth) return [];
+  const want = new Set(laneBotIds);
+  return bots.filter((b) => b.id !== selfId && want.has(b.id) && b.health === laneHealth);
+}
+
+/** Gap#56: honest label so bot health and lane rollup are not confused. */
+export function formatLaneHealthLine(
+  laneName: string | null | undefined,
+  laneHealth: Health | null | undefined,
+  drivers: readonly { id: string; name?: string | null }[],
+): string | null {
+  if (!laneName) return null;
+  const healthBit = laneHealth ? ` · ${laneHealth}` : "";
+  if (!drivers.length) return `${laneName}${healthBit}`;
+  const names = drivers
+    .slice(0, 3)
+    .map((d) => (d.name && d.name.trim() ? d.name.trim() : d.id))
+    .join(", ");
+  const more = drivers.length > 3 ? ` +${drivers.length - 3}` : "";
+  return `${laneName}${healthBit} (from ${names}${more})`;
+}
+
 export function buildBotDetailView(input: {
   bot: BotNode;
   bots: readonly BotNode[];
@@ -258,6 +290,11 @@ export function buildBotDetailView(input: {
     reason: bot.reason || NO_SOURCE,
     laneName,
     laneHealth: lane?.health ?? null,
+    laneHealthLine: formatLaneHealthLine(
+      laneName,
+      lane?.health ?? null,
+      laneHealthDrivers(input.bots, lane?.botIds, lane?.health ?? null, bot.id),
+    ),
     lockFile: bot.lock?.file ?? null,
     lockStatus: bot.lock?.status ?? null,
     claimedAt: bot.lock?.claimed_at ?? null,
