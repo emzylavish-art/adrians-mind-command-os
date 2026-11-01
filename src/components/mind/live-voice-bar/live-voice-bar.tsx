@@ -1,25 +1,9 @@
 /**
- * Persistent Grok-style composer / live-call bar.
- * Idle: Ask Anything + attach + model chip + dictation mic + Speak pill.
- * Live: four control pills + (+ Ask Anything) + red hang-up.
- * Tailwind = layout + basic colors. Visual Polish skins via stable class hooks.
+ * Wired Grok composer + live-call chrome.
+ * DOM mirrors Visual Polish voice-ui (pass 10c/d) so styles.css skins apply after merge.
+ * Do not edit styles.css. Tailwind kept to layout/safety only where VP CSS is absent.
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import {
-  AudioLines,
-  Camera,
-  FileText,
-  Image as ImageIcon,
-  Mic,
-  MicOff,
-  MonitorUp,
-  Phone,
-  Plus,
-  Settings,
-  Video,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
 import { analyzeImageFile } from "@/lib/mind/server";
 import { useLiveVoiceSession } from "@/lib/mind/voice-live/use-live-voice-session";
 import { isLiveVoiceOccupied } from "@/lib/mind/voice-live/occupancy";
@@ -30,7 +14,7 @@ import {
   SCREEN_FRAME_INTERVAL_MS,
   validateAttachment,
 } from "@/lib/mind/voice-live/attachments";
-import { barRootStyle, muteButtonAria } from "@/lib/mind/voice-live/bar-state";
+import { barRootStyle } from "@/lib/mind/voice-live/bar-state";
 import { getVoiceMode, setVoiceModeStore } from "@/lib/mind/voice/mode-store";
 import { toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
@@ -41,6 +25,7 @@ import {
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { matchesVoiceToggleShortcut } from "@/lib/mind/voice/shortcut";
+import type { LiveVoiceUiAttr } from "@/lib/mind/voice-live/types";
 import {
   captureCameraJpeg,
   fileToBase64,
@@ -61,45 +46,16 @@ export type LiveVoiceBarProps = {
   onNotice?: (message: string) => void;
   onChatSend?: (text: string) => void;
   onChatAttachText?: (text: string, name: string) => void;
-  /** Dictation (not a call): existing listen() path. */
   dictating?: boolean;
   onDictateToggle?: () => void;
-  /** Sync Ask Anything with parent draft (dictation writes draft). */
   askValue?: string;
   onAskChange?: (value: string) => void;
-  /** Logic-owned model chip — pass-through, do not rebuild. */
+  /** Existing model picker (Logic-owned) — wrapped in .composer-bar__model. */
   modelPickerSlot?: ReactNode;
 };
 
-function AttachMenu(props: {
-  open: boolean;
-  onClose: () => void;
-  onCamera: () => void;
-  onPhoto: () => void;
-  onVideo: () => void;
-  onFiles: () => void;
-}) {
-  if (!props.open) return null;
-  return (
-    <div
-      className="absolute bottom-12 left-0 z-50 min-w-[12rem] overflow-hidden rounded-2xl border border-white/10 bg-zinc-900 shadow-2xl"
-      role="menu"
-      aria-label="Attach menu"
-    >
-      <button type="button" role="menuitem" data-testid="live-voice-bar-attach-camera" className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-zinc-800" onClick={props.onCamera}>
-        <Camera className="size-4" /> Camera
-      </button>
-      <button type="button" role="menuitem" data-testid="live-voice-bar-attach-photo" className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-zinc-800" onClick={props.onPhoto}>
-        <ImageIcon className="size-4" /> Photo
-      </button>
-      <button type="button" role="menuitem" data-testid="live-voice-bar-attach-video" className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-zinc-800" onClick={props.onVideo}>
-        <Video className="size-4" /> Video
-      </button>
-      <button type="button" role="menuitem" data-testid="live-voice-bar-attach-files" className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-zinc-800" onClick={props.onFiles}>
-        <FileText className="size-4" /> Files
-      </button>
-    </div>
-  );
+function speakAttr(ui: LiveVoiceUiAttr): LiveVoiceUiAttr {
+  return ui || "off";
 }
 
 export function LiveVoiceBar(props: LiveVoiceBarProps) {
@@ -112,6 +68,9 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   });
 
   const inCall = live.active;
+  const uiAttr = speakAttr(live.uiAttr || "off");
+  const dictationState = props.dictating ? "recording" : "idle";
+
   const [localAsk, setLocalAsk] = useState("");
   const ask = props.askValue !== undefined ? props.askValue : localAsk;
   const setAsk = (value: string) => {
@@ -198,17 +157,14 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
 
   const pushVisionFallback = useCallback(
     async (jpegBase64: string, caption: string) => {
-      const wasLive = live.active;
-      if (!wasLive) {
+      if (!live.active) {
         props.onNotice?.(
           "Not live yet — starting live voice, then attaching via chat/vision fallback (realtime has no native input_image).",
         );
         await ensureLive();
-      } else {
+      } else if (!REALTIME_NATIVE_INPUT_IMAGE) {
         props.onNotice?.(
-          REALTIME_NATIVE_INPUT_IMAGE
-            ? "Sending image into the live session."
-            : "Realtime ignores input_image — using chat/vision fallback and speaking the reply on the same output.",
+          "Realtime ignores input_image — using chat/vision fallback and speaking the reply on the same output.",
         );
       }
 
@@ -275,7 +231,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     if (props.dictating) props.stopOverlayMic();
     if (props.isOverlayMicOpen()) props.stopOverlayMic();
     if (live.state.phase === "connecting" || live.state.phase === "reconnecting") {
-      live.pressMic(); // cancel
+      live.pressMic();
       return;
     }
     if (!live.active) live.pressMic();
@@ -319,19 +275,24 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     opened.stream.getVideoTracks()[0]?.addEventListener("ended", () => stopScreen());
   };
 
-  const attachCameraSnap = async () => {
+  const onPlusItem = async (id: "camera" | "photo" | "video" | "files") => {
     setAttachOpen(false);
-    const snap = await captureCameraJpeg();
-    if (!snap.ok) {
-      setAttachMsg(snap.error);
-      props.onError?.(snap.error);
+    if (id === "camera") {
+      const snap = await captureCameraJpeg();
+      if (!snap.ok) {
+        setAttachMsg(snap.error);
+        props.onError?.(snap.error);
+        return;
+      }
+      await pushVisionFallback(snap.base64, "Camera snapshot");
       return;
     }
-    await pushVisionFallback(snap.base64, "Camera snapshot");
+    if (id === "photo") photoInputRef.current?.click();
+    else if (id === "video") videoInputRef.current?.click();
+    else fileInputRef.current?.click();
   };
 
   const handlePhotoFiles = async (files: FileList | null) => {
-    setAttachOpen(false);
     const file = files?.[0];
     if (!file) return;
     const check = validateAttachment(file, "photo");
@@ -340,8 +301,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       return;
     }
     try {
-      const b64 = await fileToBase64(file);
-      await pushVisionFallback(b64, `Photo: ${file.name}`);
+      await pushVisionFallback(await fileToBase64(file), `Photo: ${file.name}`);
     } catch {
       setAttachMsg("Could not read that photo.");
     } finally {
@@ -350,7 +310,6 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   };
 
   const handleVideoFiles = async (files: FileList | null) => {
-    setAttachOpen(false);
     const file = files?.[0];
     if (!file) return;
     const check = validateAttachment(file, "video");
@@ -363,7 +322,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       setAttachMsg(sampled.error);
       return;
     }
-    props.onNotice?.(`Sampled ${sampled.frames.length} video frame(s) (~1 fps, max ${MAX_VIDEO_FRAMES}).`);
+    props.onNotice?.(`Sampled ${sampled.frames.length} video frame(s).`);
     for (const frame of sampled.frames.slice(0, 3)) {
       await pushVisionFallback(frame, `Video frame from ${file.name}`);
     }
@@ -371,7 +330,6 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   };
 
   const handleTextFiles = async (files: FileList | null) => {
-    setAttachOpen(false);
     const file = files?.[0];
     if (!file) return;
     const check = validateAttachment(file, "files");
@@ -396,62 +354,34 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     }
   };
 
-  const muteAria = muteButtonAria(live.active, live.muted);
-  const uiAttr = live.uiAttr || "off";
   const style = barRootStyle(live.level) as CSSProperties;
-  const trulyListening =
-    live.state.phase === "listening" ||
-    live.state.phase === "user_speaking" ||
-    live.state.phase === "thinking" ||
-    live.state.phase === "assistant_speaking";
+  const muted = live.muted || uiAttr === "muted";
 
   const settingsPopover = settingsOpen ? (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Live voice settings"
-      className="absolute right-0 bottom-14 z-50 w-72 rounded-2xl border border-white/10 bg-zinc-900 p-3 shadow-2xl"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          setSettingsOpen(false);
-        }
-      }}
+      className="absolute right-0 bottom-16 z-50 w-72 rounded-2xl border border-white/10 bg-zinc-900 p-3 shadow-2xl"
     >
-      <p className="mb-2 text-xs font-semibold tracking-wide text-zinc-400">VOICE SETTINGS</p>
       <VoiceModeBadge
         mode={voiceMode}
-        listening={trulyListening}
-        onToggle={() => {
-          const next = setVoiceModeStore(toggleVoiceMode(voiceMode));
-          setVoiceMode(next);
-        }}
+        listening={uiAttr === "listening" || uiAttr === "user-speaking" || uiAttr === "assistant-speaking"}
+        onToggle={() => setVoiceMode(setVoiceModeStore(toggleVoiceMode(voiceMode)))}
       />
       <div className="mt-3">
-        <p className="mb-1 text-xs text-zinc-400">Voice</p>
         <VoicePicker
           value={voiceChoice}
           onChange={(v) => {
             setVoiceChoice(v);
             writeStoredVoiceChoice(v, typeof localStorage === "undefined" ? null : localStorage);
           }}
-          className="inline-flex w-full items-center gap-1 text-xs text-zinc-300"
         />
       </div>
-      <div className="mt-3">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <p className="text-xs text-zinc-400">Speaker</p>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs"
-            aria-label={live.speakerMuted ? "Unmute output" : "Mute output"}
-            aria-pressed={live.speakerMuted}
-            onClick={live.toggleSpeaker}
-          >
-            {live.speakerMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-            {live.speakerMuted ? "Muted" : "On"}
-          </button>
-        </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <button type="button" className="text-xs" onClick={live.toggleSpeaker} aria-pressed={live.speakerMuted}>
+          Output {live.speakerMuted ? "muted" : "on"}
+        </button>
         <input
           type="range"
           min={0}
@@ -460,13 +390,12 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           value={live.volume}
           aria-label="Output volume"
           onChange={(e) => live.setOutputVolume(Number(e.target.value))}
-          className="w-full accent-violet-400"
         />
       </div>
     </div>
   ) : null;
 
-  const hiddenFileInputs = (
+  const fileInputs = (
     <>
       <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => void handlePhotoFiles(e.target.files)} />
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => void handleVideoFiles(e.target.files)} />
@@ -480,233 +409,274 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     </>
   );
 
-  return (
-    <div
-      className="live-voice-bar live-voice-control fixed inset-x-0 bottom-14 z-40 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:bottom-0 md:px-5"
-      data-live-voice={uiAttr}
-      data-testid="live-voice-bar"
-      style={style}
-    >
-      <div className="mx-auto w-full max-w-3xl">
-        {!inCall ? (
-          <div className="rounded-[1.75rem] border border-white/10 bg-zinc-900/95 p-3 text-zinc-100 shadow-2xl backdrop-blur-md">
+  if (!inCall) {
+    return (
+      <div
+        className="composer-bar is-fixed"
+        data-testid="composer-bar"
+        data-model-menu="closed"
+        role="region"
+        aria-label="Message composer"
+        style={style}
+      >
+        <div className="composer-bar__safe">
+          <div className="composer-bar__card">
             <form onSubmit={onAskSubmit}>
-              <input
-                data-testid="live-voice-bar-input"
-                value={ask}
-                onChange={(e) => setAsk(e.target.value)}
-                placeholder="Ask Anything"
-                aria-label="Ask Anything"
-                className="mb-3 h-10 w-full bg-transparent px-2 text-base text-zinc-100 outline-none placeholder:text-zinc-500"
-              />
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    data-testid="live-voice-bar-plus"
-                    aria-label="Attach"
-                    aria-pressed={attachOpen}
-                    onClick={() => {
-                      setAttachOpen((v) => !v);
-                      setSettingsOpen(false);
-                      setAttachMsg(null);
-                    }}
-                    className="grid size-10 place-items-center rounded-full border border-white/10 bg-zinc-800 text-zinc-100"
-                  >
-                    <Plus className="size-5" />
-                  </button>
-                  <AttachMenu
-                    open={attachOpen}
-                    onClose={() => setAttachOpen(false)}
-                    onCamera={() => void attachCameraSnap()}
-                    onPhoto={() => photoInputRef.current?.click()}
-                    onVideo={() => videoInputRef.current?.click()}
-                    onFiles={() => fileInputRef.current?.click()}
-                  />
-                </div>
-
-                <div className="min-w-0 shrink">{props.modelPickerSlot ?? null}</div>
-
-                <div className="flex-1" />
-
-                <button
-                  type="button"
-                  data-testid="composer-mic-dictate"
-                  aria-label={props.dictating ? "Stop dictation" : "Dictate"}
-                  aria-pressed={Boolean(props.dictating)}
-                  onClick={onDictate}
-                  className={`composer-mic-dictate grid size-10 place-items-center rounded-full border shadow-md ${
-                    props.dictating
-                      ? "border-violet-400/60 bg-violet-500/25 text-violet-100"
-                      : "border-white/10 bg-zinc-800 text-zinc-100"
-                  }`}
-                >
-                  {props.dictating ? <MicOff className="size-5" /> : <Mic className="size-5" />}
-                </button>
-
-                <button
-                  type="button"
-                  data-testid="composer-speak"
-                  aria-label="Speak"
-                  onClick={startSpeak}
-                  className="composer-speak-pill inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-black shadow-md"
-                >
-                  <AudioLines className="size-4" aria-hidden="true" />
-                  Speak
-                </button>
-              </div>
-            </form>
-            {live.error ? (
-              <p className="mt-2 text-xs text-red-300" role="alert" data-testid="live-voice-bar-error">
-                {live.error}
-              </p>
-            ) : null}
-            {attachMsg ? (
-              <p className="mt-2 text-xs text-amber-300" role="alert" data-testid="live-voice-bar-attach-msg">
-                {attachMsg}
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <div className="rounded-[1.75rem] border border-white/10 bg-zinc-950/95 p-3 text-zinc-100 shadow-2xl backdrop-blur-md">
-            <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-300" role="status">
-                LIVE · {live.label}
-              </span>
-              <VoiceModeBadge
-                mode={voiceMode}
-                listening={trulyListening}
-                onToggle={() => {
-                  const next = setVoiceModeStore(toggleVoiceMode(voiceMode));
-                  setVoiceMode(next);
-                }}
-              />
-            </div>
-
-            <div className="live-call-grid mb-3 grid grid-cols-4 gap-2" role="group" aria-label="Live call controls">
-              <button
-                type="button"
-                data-testid="live-voice-bar-screen"
-                aria-label="Share screen"
-                aria-pressed={screenOn}
-                onClick={() => void toggleScreen()}
-                className={`live-call-pill flex h-14 items-center justify-center rounded-2xl border ${
-                  screenOn ? "border-sky-400/50 bg-sky-500/20" : "border-white/10 bg-zinc-900"
-                }`}
-              >
-                <MonitorUp className="size-5" />
-              </button>
-              <button
-                type="button"
-                data-testid="live-voice-bar-speaker"
-                aria-label={live.speakerMuted ? "Unmute output" : "Mute output"}
-                aria-pressed={live.speakerMuted}
-                onClick={live.toggleSpeaker}
-                className={`live-call-pill flex h-14 items-center justify-center rounded-2xl border ${
-                  live.speakerMuted ? "border-amber-400/40 bg-amber-500/15" : "border-white/10 bg-zinc-900"
-                }`}
-              >
-                {live.speakerMuted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-              </button>
-              <button
-                type="button"
-                data-testid="live-voice-bar-mute"
-                aria-label={muteAria.label === "Start live voice" ? "Mute" : muteAria.label}
-                aria-pressed={muteAria.pressed}
-                onClick={() => live.toggleMute()}
-                className={`live-call-pill flex h-14 flex-col items-center justify-center gap-1 rounded-2xl border ${
-                  live.muted ? "border-white/20 bg-zinc-800" : "border-violet-400/50 bg-violet-500/20"
-                }`}
-              >
-                {live.muted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
-                <span className="flex gap-0.5" aria-hidden="true">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <i
-                      key={i}
-                      className="inline-block size-1 rounded-full bg-current opacity-80"
-                      style={{ opacity: 0.35 + live.level * 0.65 }}
-                    />
-                  ))}
-                </span>
-              </button>
-              <div className="relative" ref={settingsRef}>
-                <button
-                  type="button"
-                  data-testid="live-voice-bar-settings"
-                  aria-label="Settings"
-                  aria-pressed={settingsOpen}
-                  onClick={() => {
-                    setSettingsOpen((v) => !v);
-                    setAttachOpen(false);
-                  }}
-                  className="live-call-pill flex h-14 w-full items-center justify-center rounded-2xl border border-white/10 bg-zinc-900"
-                >
-                  <Settings className="size-5" />
-                </button>
-                {settingsPopover}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <form onSubmit={onAskSubmit} className="relative flex min-w-0 flex-1 items-center rounded-full border border-white/10 bg-zinc-900 pl-1.5 pr-3">
-                <div className="relative shrink-0">
-                  <button
-                    type="button"
-                    data-testid="live-voice-bar-plus"
-                    aria-label="Attach"
-                    aria-pressed={attachOpen}
-                    onClick={() => {
-                      setAttachOpen((v) => !v);
-                      setSettingsOpen(false);
-                      setAttachMsg(null);
-                    }}
-                    className="grid size-9 place-items-center rounded-full bg-zinc-800 text-zinc-100"
-                  >
-                    <Plus className="size-4" />
-                  </button>
-                  <AttachMenu
-                    open={attachOpen}
-                    onClose={() => setAttachOpen(false)}
-                    onCamera={() => void attachCameraSnap()}
-                    onPhoto={() => photoInputRef.current?.click()}
-                    onVideo={() => videoInputRef.current?.click()}
-                    onFiles={() => fileInputRef.current?.click()}
-                  />
-                </div>
+              <div className="composer-bar__ask" data-testid="composer-bar-ask">
                 <input
                   data-testid="live-voice-bar-input"
                   value={ask}
                   onChange={(e) => setAsk(e.target.value)}
                   placeholder="Ask Anything"
                   aria-label="Ask Anything"
-                  className="h-11 min-w-0 flex-1 bg-transparent px-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                  className="composer-bar__ask-input w-full bg-transparent outline-none"
                 />
-              </form>
-              <button
-                type="button"
-                data-testid="live-voice-bar-end"
-                aria-label="End voice"
-                onClick={endEverything}
-                className="live-call-end grid h-12 w-14 shrink-0 place-items-center rounded-full bg-red-600 text-white shadow-[0_0_20px_rgb(220_38_38/0.45)]"
-              >
-                <Phone className="size-5 rotate-[135deg]" />
-              </button>
-            </div>
+              </div>
 
-            {attachMsg ? (
-              <p className="mt-2 text-xs text-amber-300" role="alert" data-testid="live-voice-bar-attach-msg">
-                {attachMsg}
-              </p>
-            ) : null}
+              <div className="composer-bar__row">
+                <div className="composer-bar__left">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="composer-bar__plus"
+                      data-testid="composer-bar-plus"
+                      aria-label="Add attachment"
+                      aria-expanded={attachOpen}
+                      onClick={() => {
+                        setAttachOpen((v) => !v);
+                        setAttachMsg(null);
+                      }}
+                    >
+                      <span className="composer-bar__plus-glyph" aria-hidden="true" />
+                    </button>
+                    {attachOpen ? (
+                      <ul className="live-voice-bar__plus-menu absolute bottom-12 left-0 z-50 min-w-[12rem] rounded-2xl border border-white/10 bg-zinc-900 p-1 shadow-2xl" role="menu" aria-label="Add media">
+                        {(["camera", "photo", "video", "files"] as const).map((id) => (
+                          <li key={id} role="none">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="live-voice-bar__plus-item flex w-full px-3 py-2 text-left text-sm"
+                              data-testid={`live-voice-bar-attach-${id}`}
+                              onClick={() => void onPlusItem(id)}
+                            >
+                              <span className={`lvb-ico lvb-ico--${id}`} aria-hidden="true" />
+                              {id[0]!.toUpperCase() + id.slice(1)}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+
+                  <div className="composer-bar__model-wrap">
+                    <div className="composer-bar__model" data-testid="composer-bar-model">
+                      {props.modelPickerSlot ?? (
+                        <span className="composer-bar__model-label">Model</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="composer-voice-btns"
+                  data-testid="composer-voice-buttons"
+                  data-dictation={dictationState}
+                  data-speak={uiAttr}
+                  role="group"
+                  aria-label="Voice input"
+                >
+                  <button
+                    type="button"
+                    className="composer-mic-dictation composer-mic-dictate"
+                    data-testid="composer-mic-dictate"
+                    data-state={dictationState}
+                    aria-label="Dictate"
+                    aria-pressed={dictationState === "recording"}
+                    onClick={onDictate}
+                  >
+                    <span className="composer-mic-dictation__glyph" aria-hidden="true" />
+                    <span className="composer-mic-dictation__dot" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="composer-speak-live composer-speak-pill"
+                    data-testid="composer-speak"
+                    data-live-voice={uiAttr}
+                    data-state={uiAttr}
+                    aria-label="Start voice conversation"
+                    aria-pressed={false}
+                    onClick={startSpeak}
+                  >
+                    <span className="composer-speak-live__bars" aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <span className="composer-speak-live__label">Speak</span>
+                  </button>
+                </div>
+              </div>
+            </form>
             {live.error ? (
-              <p className="mt-2 text-xs text-red-300" role="alert" data-testid="live-voice-bar-error">
+              <p className="mt-2 px-2 text-xs text-red-300" role="alert" data-testid="live-voice-bar-error">
                 {live.error}
               </p>
             ) : null}
+            {attachMsg ? (
+              <p className="mt-2 px-2 text-xs text-amber-300" role="alert" data-testid="live-voice-bar-attach-msg">
+                {attachMsg}
+              </p>
+            ) : null}
           </div>
-        )}
+        </div>
+        {fileInputs}
       </div>
-      {hiddenFileInputs}
+    );
+  }
+
+  return (
+    <div
+      className="live-voice-bar live-voice-control"
+      data-live-voice={uiAttr}
+      data-state={uiAttr}
+      data-testid="live-voice-bar"
+      role="region"
+      aria-label={`Live voice bar — ${live.label}`}
+      style={style}
+    >
+      <div className="live-voice-bar__glass" aria-hidden="true" />
+
+      <div className="live-voice-bar__controls live-call-grid" role="group" aria-label="Live voice tools">
+        <button
+          type="button"
+          className="live-voice-bar__round live-call-pill"
+          data-testid="live-voice-bar-screen"
+          aria-label="Screen share"
+          aria-pressed={screenOn}
+          onClick={() => void toggleScreen()}
+        >
+          <span className="lvb-ico lvb-ico--screen" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="live-voice-bar__round live-call-pill"
+          data-testid="live-voice-bar-speaker"
+          aria-label="Speaker"
+          aria-pressed={live.speakerMuted}
+          onClick={live.toggleSpeaker}
+        >
+          <span className="lvb-ico lvb-ico--speaker" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="live-voice-bar__round live-voice-bar__mic live-call-pill"
+          data-testid="live-voice-bar-mute"
+          aria-label={muted ? "Unmute microphone" : "Mute microphone"}
+          aria-pressed={muted}
+          onClick={() => live.toggleMute()}
+        >
+          <span className="live-voice-bar__mic-ring" aria-hidden="true" />
+          <span className={`lvb-ico lvb-ico--mic${muted ? " is-slashed" : ""}`} aria-hidden="true" />
+          <span className="live-voice-bar__mic-dot" aria-hidden="true" />
+          <span className="live-voice-bar__mic-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        </button>
+        <div className="relative" ref={settingsRef}>
+          <button
+            type="button"
+            className="live-voice-bar__round live-call-pill"
+            data-testid="live-voice-bar-settings"
+            aria-label="Voice settings"
+            aria-pressed={settingsOpen}
+            onClick={() => {
+              setSettingsOpen((v) => !v);
+              setAttachOpen(false);
+            }}
+          >
+            <span className="lvb-ico lvb-ico--settings" aria-hidden="true" />
+          </button>
+          {settingsPopover}
+        </div>
+      </div>
+
+      <div className="live-voice-bar__composer">
+        <div className="live-voice-bar__plus-wrap">
+          <button
+            type="button"
+            className="live-voice-bar__plus"
+            data-testid="live-voice-bar-plus"
+            aria-label="Add attachment"
+            aria-expanded={attachOpen}
+            onClick={() => {
+              setAttachOpen((v) => !v);
+              setSettingsOpen(false);
+              setAttachMsg(null);
+            }}
+          >
+            <span className="lvb-ico lvb-ico--plus" aria-hidden="true" />
+          </button>
+          {attachOpen ? (
+            <ul className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
+              {(["camera", "photo", "video", "files"] as const).map((id) => (
+                <li key={id} role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="live-voice-bar__plus-item"
+                    data-testid={`live-voice-bar-attach-${id}`}
+                    onClick={() => void onPlusItem(id)}
+                  >
+                    <span className={`lvb-ico lvb-ico--${id}`} aria-hidden="true" />
+                    {id[0]!.toUpperCase() + id.slice(1)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        <form className="live-voice-bar__ask" data-testid="live-voice-bar-input" onSubmit={onAskSubmit}>
+          <input
+            value={ask}
+            onChange={(e) => setAsk(e.target.value)}
+            placeholder="Ask Anything"
+            aria-label="Ask Anything"
+            className="live-voice-bar__ask-input w-full bg-transparent outline-none"
+          />
+        </form>
+
+        <button
+          type="button"
+          className="live-voice-bar__end live-call-end"
+          data-testid="live-voice-bar-end"
+          aria-label="End call"
+          onClick={endEverything}
+        >
+          <span className="lvb-ico lvb-ico--hangup" aria-hidden="true" />
+        </button>
+      </div>
+
+      <span className="live-voice-bar__sr" role="status" aria-live="polite">
+        {live.label}
+      </span>
+      {attachMsg ? (
+        <p className="px-3 text-xs text-amber-300" role="alert" data-testid="live-voice-bar-attach-msg">
+          {attachMsg}
+        </p>
+      ) : null}
+      {live.error ? (
+        <p className="px-3 text-xs text-red-300" role="alert" data-testid="live-voice-bar-error">
+          {live.error}
+        </p>
+      ) : null}
+      {fileInputs}
     </div>
   );
 }

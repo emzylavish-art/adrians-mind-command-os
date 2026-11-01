@@ -3115,13 +3115,12 @@ export function CommandApp() {
         dictating={voiceListening}
         onDictateToggle={() => void listen()}
         modelPickerSlot={
-          <span
-            className="inline-flex max-w-[9rem] items-center gap-1 truncate rounded-full border border-white/10 bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-100"
-            data-testid="composer-model-chip"
-            title="Model picker is owned by Logic Bot"
-          >
-            {providerChoices(grokConfigured).find((item) => item.id === providerChoice)?.label ?? "Model"}
-          </span>
+          <>
+            <span className="composer-bar__model-ico" aria-hidden="true" />
+            <span className="composer-bar__model-label">
+              {providerChoices(grokConfigured).find((item) => item.id === providerChoice)?.label ?? "Model"}
+            </span>
+          </>
         }
         onChatSend={(text) => {
           const clipped = text.trim().slice(0, 8000);
