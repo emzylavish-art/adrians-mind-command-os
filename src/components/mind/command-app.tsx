@@ -40,9 +40,16 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
+import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import {
+  isEditableKeyboardTarget,
+  matchesVoiceToggleShortcut,
+  voiceMicAriaLabel,
+  VOICE_TOGGLE_SHORTCUT,
+} from "@/lib/mind/voice/shortcut";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
@@ -248,9 +255,11 @@ export function CommandApp() {
   const turnAbort = useRef<AbortController | null>(null);
   const voiceNext = useRef(false);
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
+  const listenRef = useRef<() => void>(() => undefined);
   const voiceModeRef = useRef<VoiceRoutingMode>("direct");
   const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceLevel, setVoiceLevel] = useState(0);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -416,6 +425,11 @@ export function CommandApp() {
         searchRef.current?.focus();
       }
       if (event.key === "Escape") setPaletteOpen(false);
+      if (matchesVoiceToggleShortcut(event)) {
+        if (isEditableKeyboardTarget(event.target)) return;
+        event.preventDefault();
+        void listenRef.current();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1189,6 +1203,7 @@ export function CommandApp() {
     voiceSession.current = null;
     sharedAudioOutput.interrupt();
     setVoiceListening(false);
+    setVoiceLevel(0);
   }
 
   async function handleVoiceTranscript(transcript: string) {
@@ -1310,7 +1325,9 @@ export function CommandApp() {
           setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
           if (status === "speaking") setSpeaking(true);
           if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+          if (status === "idle" || status === "closed") setVoiceLevel(0);
         },
+        onLevel: (level) => setVoiceLevel(level),
       });
       voiceSession.current = session;
       await session.connect(secret.value);
@@ -1322,6 +1339,9 @@ export function CommandApp() {
       setError(formatVoiceClientError(caught));
     }
   }
+  listenRef.current = () => {
+    void listen();
+  };
 
   async function checkRea() {
     setReaBusy(true);
@@ -1489,11 +1509,14 @@ export function CommandApp() {
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
           <div className="hidden shrink-0 md:block">
-            <VoiceModeBadge
-              mode={voiceMode}
-              listening={voiceListening}
-              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-            />
+            <div className="flex items-center gap-2">
+              <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+              <VoiceModeBadge
+                mode={voiceMode}
+                listening={voiceListening}
+                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+              />
+            </div>
           </div>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
@@ -1733,7 +1756,8 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+                    <VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" />
+                    <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
@@ -1790,11 +1814,14 @@ export function CommandApp() {
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
-              <VoiceModeBadge
-                mode={voiceMode}
-                listening={voiceListening}
-                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-              />
+              <div className="flex items-center gap-2">
+                <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+                <VoiceModeBadge
+                  mode={voiceMode}
+                  listening={voiceListening}
+                  onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+                />
+              </div>
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="text-sm text-danger">{error}</p>}
               <ServiceBoard
@@ -1937,6 +1964,7 @@ export function CommandApp() {
               speaking={speaking}
               voiceMode={voiceMode}
               voiceListening={voiceListening}
+              voiceLevel={voiceLevel}
               onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
@@ -2886,6 +2914,7 @@ function ChatPane({
   speaking,
   voiceMode,
   voiceListening,
+  voiceLevel,
   onToggleVoiceMode,
   memoryChoice,
   mode,
@@ -2927,6 +2956,7 @@ function ChatPane({
   speaking: boolean;
   voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
+  voiceLevel: number;
   onToggleVoiceMode: () => void;
   memoryChoice: "off" | "on";
   mode: Autonomy;
@@ -3111,7 +3141,7 @@ function ChatPane({
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
-          <VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} />
+          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
         </div>
         <form
           className="command-card m-3 rounded-panel bg-surface p-3"
@@ -3142,7 +3172,8 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <button type="button" className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+            <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+            <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
               {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>

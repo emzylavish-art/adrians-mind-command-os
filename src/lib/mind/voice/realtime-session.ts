@@ -1,4 +1,5 @@
 import { SharedAudioOutput, sharedAudioOutput } from "./audio-output.ts";
+import { rmsFromTimeDomain } from "./level.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 export const REALTIME_MODEL = "grok-voice-latest";
@@ -9,6 +10,8 @@ export type RealtimeHandlers = {
   onSpeechStarted?: () => void;
   onError?: (message: string) => void;
   onStatus?: (status: "connecting" | "listening" | "processing" | "speaking" | "idle" | "closed") => void;
+  /** 0..1 mic RMS from AnalyserNode while capturing. */
+  onLevel?: (level: number) => void;
 };
 
 type WsLike = {
@@ -58,6 +61,8 @@ export class RealtimeVoiceSession {
   private output: SharedAudioOutput;
   private socketFactory: RealtimeSocketFactory;
   private pendingTranscript = "";
+  private analyser: AnalyserNode | null = null;
+  private levelRaf = 0;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -188,6 +193,8 @@ export class RealtimeVoiceSession {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioCtx = new Ctx({ sampleRate: REALTIME_SAMPLE_RATE });
     this.source = this.audioCtx.createMediaStreamSource(media);
+    this.analyser = this.audioCtx.createAnalyser();
+    this.analyser.fftSize = 2048;
     this.processor = this.audioCtx.createScriptProcessor(4096, 1, 1);
     this.processor.onaudioprocess = (ev) => {
       if (!this.capturing) return;
@@ -195,22 +202,43 @@ export class RealtimeVoiceSession {
       const pcm = floatTo16BitPCM(input);
       this.send({ type: "input_audio_buffer.append", audio: bufferToBase64(pcm) });
     };
+    this.source.connect(this.analyser);
     this.source.connect(this.processor);
     this.processor.connect(this.audioCtx.destination);
     this.capturing = true;
     this.handlers.onStatus?.("listening");
+    this.startLevelPump();
+  }
+
+  private startLevelPump() {
+    const tick = () => {
+      if (!this.capturing || !this.analyser) {
+        this.handlers.onLevel?.(0);
+        return;
+      }
+      const buf = new Uint8Array(this.analyser.fftSize);
+      this.analyser.getByteTimeDomainData(buf);
+      this.handlers.onLevel?.(rmsFromTimeDomain(buf));
+      this.levelRaf = requestAnimationFrame(tick);
+    };
+    if (typeof requestAnimationFrame === "function") this.levelRaf = requestAnimationFrame(tick);
   }
 
   stopCapture() {
     this.capturing = false;
+    if (this.levelRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.levelRaf);
+    this.levelRaf = 0;
+    this.handlers.onLevel?.(0);
     this.interruptPlayback();
     try {
       this.processor?.disconnect();
+      this.analyser?.disconnect();
       this.source?.disconnect();
     } catch {
       /* ignore */
     }
     this.processor = null;
+    this.analyser = null;
     this.source = null;
     this.media?.getTracks().forEach((track) => track.stop());
     this.media = null;
