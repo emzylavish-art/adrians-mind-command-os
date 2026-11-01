@@ -1,5 +1,5 @@
-owner: dashboard-3d-loop
+owner: released
 cycle: 43
-heartbeat: 2026-11-01T22:36:59+01:00
+released: 2026-11-01T22:37:19+01:00
 branch: dashboard-3d
-work: committing c43
+last: c43 Gap#22/#30 Motion3fff118 Painterbbf6c47
