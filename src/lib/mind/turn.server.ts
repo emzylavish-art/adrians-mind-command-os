@@ -33,6 +33,8 @@ export type TurnBody = {
   modelTier?: unknown;
   /** Optional image attachments (data-URLs) for multimodal Direct turns. */
   images?: unknown;
+  /** Optional explicit note to persist with this turn (owner-scoped). */
+  saveMemory?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryInputMessage {
@@ -92,6 +94,7 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
   const tier = resolveModelTier(data.modelTier, text || "image", process.env);
+  const saveMemoryText = typeof data.saveMemory === "string" ? data.saveMemory : "";
   return {
     ok: true as const,
     assembled,
@@ -100,6 +103,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     modelTier: tier,
     provider: routed.id,
     images,
+    saveMemoryText,
+    userId,
   };
 }
 
@@ -145,6 +150,8 @@ export async function completeModelReply(prepared: {
     usage: parsed.usage,
     memory: prepared.memory,
     usedIds: prepared.assembled.usedIds,
+    memorySaved: false as const,
+    savedMemoryId: null as string | null,
   };
 }
 
@@ -237,6 +244,23 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const apiKey = resolveXaiInferenceApiKey(process.env);
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
+  let memorySaved = false;
+  let savedMemoryId: string | null = null;
+  const { shouldPersistTurnMemory, memorySignalFromSave } = await import("./memory/signal");
+  if (shouldPersistTurnMemory({ memory: prepared.memory, saveText: prepared.saveMemoryText })) {
+    const { getSql } = await import("../db");
+    const { createOwnerMemory } = await import("./memory/owner-ops");
+    const saved = await createOwnerMemory(await getSql(), userId, {
+      scope: "chat",
+      text: prepared.saveMemoryText,
+      source: "turn",
+      projectId: null,
+      chatId: null,
+    });
+    const signal = memorySignalFromSave(saved.ok ? { ok: true, id: saved.item.id } : { ok: false });
+    memorySaved = signal.memorySaved;
+    savedMemoryId = signal.savedMemoryId;
+  }
   return relayModelStream({
     apiKey,
     model: prepared.model,
@@ -254,6 +278,8 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       resolvedTier: prepared.modelTier.resolved,
       tierReason: prepared.modelTier.reason,
       images: prepared.images.length,
+      memorySaved,
+      savedMemoryId,
     },
   });
 }

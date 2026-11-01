@@ -295,3 +295,11 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion: child page https://app.notion.com/p/40bb95f33e4281cdb275f3196d0d4e31 under mirror 40bb95f33e42814aacf8c3281b4f528d.
 - Lock releasing.
 
+
+# 2026-11-01 (Africa/Lagos) — Grok Build: Memory UX depth
+- Branch: preview/memory-ux (worktree /workspace/mind-command-os-memory)
+- Base: origin/preview/integration @ 7c73ba3
+- Real: /memory manager (list/edit/delete/empty/add + localStorage persist); owner-scoped server list/edit/delete/create; turn SSE memorySaved signal; per-chat skip helpers + tests
+- Pending mount: MemorySavedIndicator + MemoryChatToggle into command-app.tsx (claimed by other lanes) — see /workspace/audit/mind-os/memory-ux/MOUNT.md
+- Notion: do NOT write from this lane; mirror at /workspace/audit/mind-os/memory-ux/
+
