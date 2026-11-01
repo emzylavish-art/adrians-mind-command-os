@@ -14,6 +14,7 @@ import {
   Lock,
   MessageSquare,
   Mic,
+  MicOff,
   Paperclip,
   Plus,
   Search,
@@ -40,6 +41,7 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
+import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
@@ -250,6 +252,8 @@ export function CommandApp() {
   const voiceModeRef = useRef<VoiceRoutingMode>("direct");
   const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceLevel, setVoiceLevel] = useState(0);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1180,6 +1184,15 @@ export function CommandApp() {
     voiceSession.current = null;
     sharedAudioOutput.interrupt();
     setVoiceListening(false);
+    setVoiceMuted(false);
+    setVoiceLevel(0);
+  }
+
+  function toggleVoiceMute() {
+    const next = !voiceMuted;
+    setVoiceMuted(next);
+    voiceSession.current?.setMuted(next);
+    setNotice(next ? "Microphone muted. Listening session stays open." : "Microphone unmuted.");
   }
 
   async function handleVoiceTranscript(transcript: string) {
@@ -1268,18 +1281,21 @@ export function CommandApp() {
         session.interruptPlayback();
       },
       onError: (message) => setError(message),
+      onLevel: (level) => setVoiceLevel(level),
       onStatus: (status) => {
-        setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
+        setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
         if (status === "speaking") setSpeaking(true);
         if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+        if (status === "idle" || status === "closed") setVoiceLevel(0);
       },
     });
     voiceSession.current = session;
     try {
-      await session.connect(secret.value);
+      await session.connect(secret.value, { captureOnly: true });
+      session.setMuted(voiceMuted);
       await session.startCapture();
       setVoiceListening(true);
-      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Press mic again to stop.`);
+      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Press mic again to stop.`);
     } catch (caught) {
       stopVoiceSession();
       setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
@@ -1457,6 +1473,21 @@ export function CommandApp() {
               listening={voiceListening}
               onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
             />
+            <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                onClick={toggleVoiceMute}
+                aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
+                aria-pressed={voiceMuted}
+                data-testid="voice-mute"
+                disabled={!voiceListening}
+              >
+                {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
+            </div>
+
           </div>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
@@ -1696,7 +1727,8 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+                    <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+                    <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
@@ -1758,6 +1790,21 @@ export function CommandApp() {
                 listening={voiceListening}
                 onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
               />
+            <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                onClick={toggleVoiceMute}
+                aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
+                aria-pressed={voiceMuted}
+                data-testid="voice-mute"
+                disabled={!voiceListening}
+              >
+                {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
+            </div>
+
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="text-sm text-danger">{error}</p>}
               <ServiceBoard
@@ -1900,6 +1947,9 @@ export function CommandApp() {
               speaking={speaking}
               voiceMode={voiceMode}
               voiceListening={voiceListening}
+              voiceMuted={voiceMuted}
+              voiceLevel={voiceLevel}
+              onToggleMute={toggleVoiceMute}
               onToggleVoiceMode={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
@@ -2849,6 +2899,9 @@ function ChatPane({
   speaking,
   voiceMode,
   voiceListening,
+  voiceMuted,
+  voiceLevel,
+  onToggleMute,
   onToggleVoiceMode,
   memoryChoice,
   mode,
@@ -2890,6 +2943,9 @@ function ChatPane({
   speaking: boolean;
   voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
+  voiceMuted: boolean;
+  voiceLevel: number;
+  onToggleMute: () => void;
   onToggleVoiceMode: () => void;
   memoryChoice: "off" | "on";
   mode: Autonomy;
@@ -3105,8 +3161,12 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <button type="button" className={`ml-auto grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+            <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+            <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
               {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
+            </button>
+            <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
+              {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
               {speaking ? "Speaking" : "Speak"}
