@@ -179,3 +179,19 @@ See `/workspace/locks/media-integration.lock`.
 - `exportChat` keeps `dataUrl` and/or `blobId` references.
 - `MsgImage.dataUrl` optional; `toImageAttachments` filters for model turns.
 
+
+## Upgrade D: save/download, camera facing, Library copy — 2026-11-01T13:55 Africa/Lagos
+
+- Inline images: **Save** (stage into composer) + **Download** (browser file).
+- Camera: **Switch to front/back** facingMode toggle; restarts stream.
+- Library + `describeFile` image copy no longer implies images are useless/not decoded for chat — clarifies Command vision vs Library OCR.
+
+
+## Next ranked ideas (continuous lane)
+
+1. Multi-image Imagine edits (`multi-image-editing` docs) from several bubble attachments.
+2. Server-side media cache (disk/S3) for sync across devices beyond IndexedDB.
+3. Camera burst / multiple snapshots into chips before Send.
+4. Imagine quality model toggle (`grok-imagine-image-quality`) in composer.
+5. Video generation (Grok Imagine video) — separate paid capability; defer until image lane solid.
+6. Drag generated image onto Agent goal field as vision input affordance.

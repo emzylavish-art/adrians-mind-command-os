@@ -836,6 +836,30 @@ export function CommandApp() {
     setError(null);
   }
 
+
+  function downloadImageDataUrl(src: string, alt: string) {
+    const link = document.createElement("a");
+    const ext = src.startsWith("data:image/png") ? "png" : src.startsWith("data:image/webp") ? "webp" : "jpg";
+    link.href = src;
+    link.download = (alt || "image").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80) + "." + ext;
+    link.click();
+  }
+
+  function saveImageToComposer(src: string, alt: string) {
+    if (!src.startsWith("data:image/")) {
+      setError("Only in-chat data URLs can be saved back into the composer.");
+      return;
+    }
+    setPendingImages((prev) => {
+      if (prev.length >= 4) {
+        setError("You can attach up to 4 images per message.");
+        return prev;
+      }
+      return [...prev, { dataUrl: src, name: alt || `saved-${prev.length + 1}.jpg` }];
+    });
+    setNotice("Image saved into the composer for a follow-up turn.");
+  }
+
   function editMessage(messageId: string, text: string) {
     if (!active || busy || ws.halted) return;
     const revised = reviseUserTurn(ws, active.id, messageId, text);
@@ -2200,6 +2224,8 @@ export function CommandApp() {
                 void runImagine(prompt || undefined, active);
               }}
               onEditImagine={(src) => void runImagineEdit(src)}
+              onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
+              onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -2505,7 +2531,7 @@ export function CommandApp() {
               {agentImages.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {agentImages.map((image, index) => (
-                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} />
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} />
                   ))}
                 </div>
               )}
@@ -2711,7 +2737,7 @@ export function CommandApp() {
               <div className="masthead flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-3xl font-bold">Library</h2>
-                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Chat can also send images to vision-capable models.</p>
+                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Images attached on Command are decoded for Grok vision and Imagine — they are not OCR’d into Library text copies.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
@@ -3183,6 +3209,8 @@ function ChatPane({
   onOpenCloud,
   onImagine,
   onEditImagine,
+  onSaveImage,
+  onDownloadImage,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -3231,6 +3259,8 @@ function ChatPane({
   onOpenCloud: () => void;
   onImagine: () => void;
   onEditImagine: (src: string) => void;
+  onSaveImage: (src: string, alt: string) => void;
+  onDownloadImage: (src: string, alt: string) => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -3357,7 +3387,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} />
+                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
