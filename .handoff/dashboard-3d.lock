@@ -1,5 +1,6 @@
-owner: released
-cycle: 43
-released: 2026-11-01T22:37:19+01:00
-branch: dashboard-3d
-last: c43 Gap#22/#30 Motion3fff118 Painterbbf6c47
+owner: dashboard-3d-loop
+cycle: 44
+status: released
+released_at: 2026-11-01T22:57:06+01:00
+tip: 125d5b4
+work: Gap#35+#31-44+Light53f5ad1+Motion c15 lane
