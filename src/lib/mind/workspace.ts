@@ -338,7 +338,7 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
   };
 }
 
-export function pushAudit(ws: Workspace, action: string, target: string, result: string): Workspace {
+export function recordAudit(ws: Workspace, action: string, target: string, result: string): { ws: Workspace; entry: AuditEntry } {
   const entry: AuditEntry = {
     id: crypto.randomUUID(),
     at: new Date().toISOString(),
@@ -346,7 +346,11 @@ export function pushAudit(ws: Workspace, action: string, target: string, result:
     target,
     result,
   };
-  return { ...ws, audit: [entry, ...ws.audit].slice(0, 200) };
+  return { ws: { ...ws, audit: [entry, ...ws.audit].slice(0, 200) }, entry };
+}
+
+export function pushAudit(ws: Workspace, action: string, target: string, result: string): Workspace {
+  return recordAudit(ws, action, target, result).ws;
 }
 
 export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Workspace {
