@@ -22,11 +22,14 @@ export {
   clampTextureSizeToGpu,
   sanitizeFinite,
   sanitizeShaderTime,
+  sanitizePainterColor,
+  PAINTER_IDLE_RGB,
   PAINTER_TIME_PERIOD,
   PAPER_GRAIN_MIN_SIZE,
   PAPER_GRAIN_MAX_SIZE,
   GPU_SAFE_TEXTURE_DEFAULT,
   type PaperGrainTextureOptions,
+  type SanitizePainterColorResult,
 } from "./paper-grain.ts";
 export {
   createStarWatercolorMaterial,
@@ -71,6 +74,8 @@ export {
   createInkWashEdgeMaterial,
   tickInkWashEdgeMaterial,
   setInkWashEdgeHealth,
+  setInkWashEdgeBleed,
+  inkBleedFromWeight,
   buildInkWashRibbon,
   measureInkEdgeLength,
   isDegenerateInkEdge,

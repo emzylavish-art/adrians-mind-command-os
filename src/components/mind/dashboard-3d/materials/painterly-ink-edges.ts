@@ -3,6 +3,8 @@ import type { PainterlyKit } from "./use-painterly-kit.ts";
 import {
   buildInkWashRibbon,
   setInkWashEdgeHealth,
+  setInkWashEdgeBleed,
+  inkBleedFromWeight,
   tickInkWashEdgeMaterial,
   isDegenerateInkEdge,
   INK_EDGES_MAX,
@@ -27,6 +29,8 @@ export type PainterlyInkEdgeInput = {
   to: readonly [number, number, number] | { x: number; y: number; z: number };
   health?: HealthTone | string;
   kind?: "hub" | "link" | string;
+  /** Optional real edge weight/activity (0..2). Drives uBleed when set. */
+  weight?: number;
   /** Optional stable id for diffing updates. */
   id?: string;
 };
@@ -197,6 +201,7 @@ export function createPainterlyInkEdges(
     const mat = kit.createInkWashEdgeMaterial({
       health: tone,
       pulse: linkPulse,
+      bleed: inkBleedFromWeight(tone, "link"),
     });
     materials.set(tone, mat);
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
@@ -263,6 +268,16 @@ export function createPainterlyInkEdges(
       mat.uniforms["uPulse"]!.value = list.some((e) => e.kind === "hub") && list.every((e) => e.kind === "hub")
         ? hubPulse
         : linkPulse;
+      // c13: watercolor bleed from real health/kind/weight (average over batch)
+      let bleedSum = 0;
+      for (const e of list) {
+        if (e.weight != null) {
+          bleedSum += sanitizeFinite(0.15 + sanitizeFinite(e.weight, 0.5, 0, 2) * 0.5, 0.4, 0, 1.5);
+        } else {
+          bleedSum += inkBleedFromWeight(tone, e.kind);
+        }
+      }
+      setInkWashEdgeBleed(mat, list.length ? bleedSum / list.length : inkBleedFromWeight(tone));
       if (built.used > 0) drawCalls += 1;
     }
   };

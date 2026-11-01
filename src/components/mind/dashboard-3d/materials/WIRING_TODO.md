@@ -15,8 +15,8 @@ Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materi
 | `createLaneNebulae` | **done** | `rebuildNebulae` (Dashboard Bot wired) |
 | `setPassHealth` / `resizePass` | **done** | frame loop + `onResize` |
 | `createBuildingBrushMaterial` (+ c10 `uWindowGlow`) | **done** | `city-layer` rebuild with real `lit/floors` |
-| `tickPainterlyKit(kit, t, { reducedMotion })` | **done** | always called each frame (incl. reducedMotion); flushes throttled resize |
-| `setBuildingProgress` | **done** | create + `applyBuildingProgress` on live litFloors; unknown→0 |
+| `tickPainterlyKit(kit, t, { reducedMotion })` | **done** | `universe-scene` always calls each frame with `{ reducedMotion }` (never skipped); flushes throttled resize |
+| `setBuildingProgress` | **done** | create + `city.applyBuildingProgress` on live litFloors; `progressKnown` false → 0 |
 | `setBuildingWindowGlow` | optional | progress already drives glow |
 | `attachPainterlyContextHandlers` | check scene | confirm detach on unmount |
 
@@ -34,8 +34,8 @@ composer.addPass(kit.painterlyPass);
 const detachCtx = attachPainterlyContextHandlers(renderer.domElement, kit);
 // WIRED: stars kit.createBotStar; sky kit.createSkyMaterial; lore; Imagine; inkEdges; laneNebulae
 // WIRED: kit.setPassHealth({ healthy, total, reducedMotion }); kit.resizePass(w,h,dpr)
-// WIRED: tickPainterlyKit(kit, t, { reducedMotion }); setBuildingProgress(mat, progress)
-// OPTIONAL: when reducedMotion, still call tick with { reducedMotion:true } instead of skipping block
+// WIRED: tickPainterlyKit(kit, t, { reducedMotion }); // always — never skipped (c42c/c52)
+// WIRED: setBuildingProgress via city.applyBuildingProgress (real lit/floors; unknown→0)
 // cleanup: detachCtx(); disposePainterlyKit(kit);
 ```
 
@@ -163,4 +163,20 @@ const star = kit.createBotStar({ color: HEALTH_COLOR[bot.health], idle: bot.heal
 // on health poll:
 star.setColor(HEALTH_COLOR[h], h === "idle" ? 0.25 : 0.9); // also refreshes halo
 // optional lock: star.setHalo(0.4);
+```
+
+## c13 — ink-edge watercolor bleed + star color sanitize
+
+- `uBleed` on InkWashEdgeShader driven by real health severity + hub/link kind (optional `weight` on edge input). Neutral default 0.35. Already applied inside `createInkEdges` / `update` — **no extra Dashboard Bot wiring**.
+- `sanitizePainterColor` / `starColorError`: empty/unknown CSS colors no longer become bright white; idle tint + explicit reason.
+- Star `forceFallback` records `painterMaterialMeta.compileError` (visible idle-tint fallback, not black).
+- `paintWrap` clamps large coords for mediump banding.
+
+```ts
+// Optional: pass real edge activity when available
+kit.createInkEdges(edges.map(e => ({
+  from: posOf(e.from), to: posOf(e.to), health: e.health, kind: e.kind,
+  weight: e.activity, // optional 0..2
+})));
+// createBotStar already sanitizes bad colors — no wiring change.
 ```

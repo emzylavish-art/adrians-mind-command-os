@@ -7,6 +7,8 @@ import {
   clampTextureSizeToGpu,
   sanitizeFinite,
   sanitizeShaderTime,
+  sanitizePainterColor,
+  PAINTER_IDLE_RGB,
   createPaperGrainTexture,
   PAINTER_TIME_PERIOD,
   PAPER_GRAIN_MAX_SIZE,
@@ -76,6 +78,8 @@ import {
 import {
   createInkWashEdgeMaterial,
   setInkWashEdgeHealth,
+  setInkWashEdgeBleed,
+  inkBleedFromWeight,
   buildInkWashRibbon,
   sanitizeHealthToneArray,
   HEALTH_RGB,
@@ -791,7 +795,7 @@ describe("painter c6: post-pass amount from constellation health", () => {
 
   it("PainterlyPassShader still exposes amount/grain/wash; version bumped", () => {
     assert.ok(PainterlyPassShader.uniforms.amount);
-    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.6/);
+    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.[67]/);
     assert.equal(PAINTER_SHADER_PRECISION, "mediump");
   });
 });
@@ -1558,5 +1562,96 @@ describe("painter c12: status-driven star brush-stroke halos", () => {
     active.meshMaterial.dispose();
     idle.glowMaterial.dispose();
     active.glowMaterial.dispose();
+  });
+});
+
+
+describe("hacker pass c13: invalid star colors + compile fallback + mediump wrap", () => {
+  it("sanitizePainterColor rejects empty/unknown strings (Three would coerce to white)", () => {
+    const empty = sanitizePainterColor("");
+    assert.equal(empty.ok, false);
+    assert.equal(empty.reason, "color-empty");
+    assert.ok(Math.abs(empty.color.r - PAINTER_IDLE_RGB[0]) < 1e-6);
+    const bad = sanitizePainterColor("not-a-color");
+    assert.equal(bad.ok, false);
+    assert.match(String(bad.reason), /color-unknown/);
+    // Must NOT be bright white (the Three.Color.set failure mode)
+    assert.ok(!(bad.color.r === 1 && bad.color.g === 1 && bad.color.b === 1));
+    const hex = sanitizePainterColor("#3dd68c");
+    assert.equal(hex.ok, true);
+    const num = sanitizePainterColor(0xff6b8a);
+    assert.equal(num.ok, true);
+  });
+
+  it("createStarWatercolorMaterial / setStarWatercolorColor record starColorError and stay idle-tinted", () => {
+    const m = createStarWatercolorMaterial({ color: "" as unknown as number });
+    assert.equal((m.userData as { starColorError?: string }).starColorError, "color-empty");
+    const c = m.uniforms["uColor"]!.value as { r: number; g: number; b: number };
+    assert.ok(Math.abs(c.r - PAINTER_IDLE_RGB[0]) < 1e-5);
+    setStarWatercolorColor(m, "totally-invalid");
+    assert.match(String((m.userData as { starColorError?: string }).starColorError), /color-unknown/);
+    assert.ok(Math.abs(c.r - PAINTER_IDLE_RGB[0]) < 1e-5);
+    m.dispose();
+  });
+
+  it("forceFallback star material records compileError and is not silent black", () => {
+    const m = createStarWatercolorMaterial({ forceFallback: true, color: 0x3dd68c });
+    const meta = (m.userData as { painterMaterialMeta?: { fallback: boolean; compileError: string | null } }).painterMaterialMeta;
+    assert.ok(meta);
+    assert.equal(meta!.fallback, true);
+    assert.ok(meta!.compileError);
+    assert.match(m.name, /Fallback/);
+    const c = m.uniforms["uColor"]!.value as { r: number; g: number; b: number };
+    assert.ok(c.r + c.g + c.b > 0.1, "fallback keeps visible tint");
+    m.dispose();
+  });
+
+  it("paintWrap GLSL clamps large coords (mediump banding guard present)", () => {
+    assert.match(GLSL_HASH_NOISE, /clamp\(p,\s*-1\.0e4,\s*1\.0e4\)/);
+    assert.equal(PAINTER_SHADER_VERSION, "painter-1.7.0");
+  });
+});
+
+describe("painter c13: ink-edge watercolor bleed from real weight", () => {
+  it("inkBleedFromWeight: blocked > stalled > healthy; hub calmer than link", () => {
+    assert.ok(inkBleedFromWeight("blocked") > inkBleedFromWeight("stalled"));
+    assert.ok(inkBleedFromWeight("stalled") > inkBleedFromWeight("healthy"));
+    assert.ok(inkBleedFromWeight("healthy", "hub") < inkBleedFromWeight("healthy", "link"));
+  });
+
+  it("createInkWashEdgeMaterial exposes uBleed; setInkWashEdgeBleed clamps", () => {
+    assert.ok(InkWashEdgeShader.uniforms.uBleed);
+    assert.match(InkWashEdgeShader.fragmentShader, /uBleed/);
+    const m = createInkWashEdgeMaterial({ health: "blocked", bleed: 0.9 });
+    assert.ok(Math.abs((m.uniforms["uBleed"]!.value as number) - 0.9) < 1e-6);
+    setInkWashEdgeBleed(m, Number.NaN);
+    assert.equal(m.uniforms["uBleed"]!.value, 0.35);
+    setInkWashEdgeBleed(m, 99);
+    assert.equal(m.uniforms["uBleed"]!.value, 1.5);
+    m.dispose();
+  });
+
+  it("createPainterlyInkEdges sets higher bleed on blocked batch than healthy", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      textureBindings: [] as { material: unknown; slot: string; target?: string }[],
+      createInkWashEdgeMaterial: (o?: object) => {
+        const m = createInkWashEdgeMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+    } as unknown as PainterlyKit;
+    const ink = createPainterlyInkEdges(kit, [
+      { from: [0, 0, 0], to: [1, 0, 0], health: "healthy", kind: "link" },
+      { from: [0, 1, 0], to: [1, 1, 0], health: "blocked", kind: "link" },
+    ]);
+    assert.equal(tracked.length, 4);
+    const bleeds = tracked.map((m) => m.uniforms["uBleed"]!.value as number);
+    // TONES: healthy, stalled, blocked, idle — blocked batch updated with edges
+    assert.ok(bleeds[2]! >= inkBleedFromWeight("blocked") - 0.05);
+    assert.ok(bleeds[0]! <= inkBleedFromWeight("healthy") + 0.05);
+    assert.ok(bleeds[2]! > bleeds[0]!);
+    ink.dispose();
   });
 });
