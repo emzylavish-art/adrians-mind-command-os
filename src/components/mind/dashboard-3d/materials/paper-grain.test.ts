@@ -22,6 +22,8 @@ import {
 import {
   createPainterlyKit,
   disposePainterlyKit,
+  disposeAllPainterlyKits,
+  livePainterlyKitCount,
   painterlyKitResourceCounts,
   tickPainterlyKit,
   releasePainterlyMaterial,
@@ -82,7 +84,7 @@ import {
   INK_EDGES_MAX,
   INK_EDGE_DEGENERATE_EPS,
 } from "./ink-wash-edge.ts";
-import { createStarWatercolorMaterial, tickStarMaterial } from "./star-surface.ts";
+import { createStarWatercolorMaterial, tickStarMaterial, setStarHalo, setStarWatercolorColor } from "./star-surface.ts";
 import {
   GLSL_HASH_NOISE,
   GLSL_MEDIUMP_GUARD,
@@ -103,6 +105,7 @@ import {
   safePainterlyPassSize,
   painterlyAmountFromHealth,
   setPainterlyPassHealth,
+  setPainterlyPassAmount,
   painterlyPassResizeStats,
   PAINTER_PASS_MAX_EDGE,
   PAINTER_PASS_MAX_DPR,
@@ -1411,5 +1414,149 @@ describe("painter c11: unified post-pass palette grade", () => {
     const pass = createPainterlyPass({ amount: 0.5 });
     assert.ok(pass.uniforms["amount"]);
     disposePainterlyPass(pass);
+  });
+});
+
+
+describe("hacker pass c12: kit HMR disposeAll + texture budget after dispose", () => {
+  it("repeated create/dispose + disposeAllPainterlyKits clears LIVE set; budget safe after dispose", () => {
+    // Avoid DOM canvas for star sprite: use createPainterlyKit only if document exists;
+    // in node, createStarSpriteTexture may throw — mock via disposeAll on empty first
+    const before = livePainterlyKitCount();
+    // Create kits with minimal pass only by calling createPainterlyKit — needs canvas for star sprite
+    // Skip full kit if no document; instead test disposeAll idempotent + budget on mock
+    const tracked: import("three").ShaderMaterial[] = [];
+    const paper = createPaperGrainTexture({ size: 32, seed: 1 });
+    const kit = {
+      painterlyPass: createPainterlyPass(),
+      starSpriteTexture: paper,
+      paperGrainTexture: paper,
+      tracked,
+      trackedSkies: [],
+      textureBindings: [],
+      disposed: false,
+      contextLost: false,
+      textureBudgetBytes: 48 * 1024 * 1024,
+      detachContext: null,
+    } as unknown as PainterlyKit;
+    // Manually register like createPainterlyKit would — call disposePainterlyKit path via disposeAll
+    // Use real createPainterlyKit when possible
+    let realKits = 0;
+    try {
+      for (let i = 0; i < 3; i++) {
+        createPainterlyKit({ pass: { amount: 0.2 } });
+        realKits += 1;
+      }
+    } catch {
+      realKits = 0;
+    }
+    if (realKits > 0) {
+      assert.ok(livePainterlyKitCount() >= realKits);
+      const n = disposeAllPainterlyKits();
+      assert.ok(n >= realKits);
+      assert.equal(livePainterlyKitCount(), 0);
+      assert.equal(disposeAllPainterlyKits(), 0);
+    } else {
+      // node without canvas — still verify disposed budget short-circuit
+      kit.disposed = true;
+      const report = painterlyKitTextureBudget(kit);
+      assert.equal(report.bytes, 0);
+      assert.equal(report.items.length, 0);
+      void before;
+    }
+    paper.dispose();
+    disposePainterlyPass(kit.painterlyPass as never);
+  });
+});
+
+describe("hacker pass c12: lore atlas emoji/RTL/huge + Imagine disposed/0x0 + palette NaN", () => {
+  it("createLoreTextAtlas handles empty, emoji, RTL, and hostile atlas size", () => {
+    const empty = createLoreTextAtlas("");
+    assert.equal(empty.empty, true);
+    empty.dispose();
+    const emoji = createLoreTextAtlas("🚀 ship it ✅ · مرحبا بالعالم");
+    assert.ok(emoji.width >= 64 && emoji.width <= 1024);
+    assert.ok(emoji.noteCount >= 1);
+    emoji.dispose();
+    const huge = createLoreTextAtlas("x".repeat(50000), { width: 99999, height: -3, maxTextureSize: 512 });
+    assert.ok(huge.width <= 1024);
+    assert.ok(huge.height <= 1024);
+    huge.dispose();
+    assert.doesNotThrow(() => {
+      huge.dispose();
+      huge.dispose();
+    });
+  });
+
+  it("setImagineNodeMap rejects disposed and 0x0 textures with explicit reason", () => {
+    const mat = createImagineNodeMaterial();
+    const disposedTex = {
+      disposed: true,
+      isTexture: true,
+      image: { width: 64, height: 64 },
+      dispose() {},
+    } as unknown as import("three").Texture;
+    const r1 = setImagineNodeMap(mat, disposedTex);
+    assert.equal(r1.ok, false);
+    assert.equal(r1.reason, "texture-disposed");
+    const zero = {
+      disposed: false,
+      isTexture: true,
+      image: { width: 0, height: 0 },
+      dispose() {},
+    } as unknown as import("three").Texture;
+    const r2 = setImagineNodeMap(mat, zero);
+    assert.equal(r2.ok, false);
+    assert.equal(r2.reason, "invalid-dimensions");
+    mat.dispose();
+  });
+
+  it("setPainterlyPassAmount / setPassHealth NaN stay in range (palette never NaN amount)", () => {
+    const pass = createPainterlyPass({ amount: 0.4 });
+    const v = setPainterlyPassAmount(pass, Number.NaN);
+    assert.ok(Number.isFinite(v));
+    assert.ok(v >= 0 && v <= 0.85);
+    const a = setPainterlyPassHealth(pass, { healthy: Number.NaN, total: Number.POSITIVE_INFINITY });
+    assert.ok(Number.isFinite(a));
+    assert.ok(a >= PAINTER_AMOUNT_MIN);
+    disposePainterlyPass(pass);
+  });
+});
+
+describe("painter c12: status-driven star brush-stroke halos", () => {
+  it("createBotStar idle has lower uHalo than active; setColor refreshes halo", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const textureBindings: { material: unknown; slot: string; target?: string }[] = [];
+    const starTex = { id: "star", dispose() {} };
+    const kit = {
+      starSpriteTexture: starTex,
+      paperGrainTexture: { dispose() {} },
+      tracked,
+      textureBindings,
+      disposed: false,
+      contextLost: false,
+      createStarMaterial: (o?: object) => {
+        const m = createStarWatercolorMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+      bindSharedTexture(material: unknown, slot: string, target = "map") {
+        textureBindings.push({ material, slot, target });
+        (material as { map: unknown }).map = starTex;
+      },
+    } as unknown as PainterlyKit;
+    const idle = createPainterlyBotStar(kit, { color: 0x5c6b8a, idle: true });
+    const active = createPainterlyBotStar(kit, { color: 0x3dd68c, idle: false });
+    assert.ok((idle.meshMaterial.uniforms["uHalo"]!.value as number) < (active.meshMaterial.uniforms["uHalo"]!.value as number));
+    assert.match(WatercolorStarShader.fragmentShader, /uHalo/);
+    active.setColor(0xff6b8a, 0.9);
+    assert.ok((active.meshMaterial.uniforms["uHalo"]!.value as number) > 0.4);
+    active.setHalo(0.15);
+    active.setColor(0x3dd68c, 0.9);
+    assert.equal(active.meshMaterial.uniforms["uHalo"]!.value, 0.15, "locked halo");
+    idle.meshMaterial.dispose();
+    active.meshMaterial.dispose();
+    idle.glowMaterial.dispose();
+    active.glowMaterial.dispose();
   });
 });

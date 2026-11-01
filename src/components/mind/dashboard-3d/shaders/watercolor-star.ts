@@ -1,6 +1,10 @@
 import { GLSL_HASH_NOISE } from "./glsl-noise.ts";
 
-/** Vertex + fragment for watercolor star / bot-node spheres. */
+/**
+ * Watercolor star / bot-node spheres.
+ * c12: painted brush-stroke halo (`uHalo`) driven from real status via createBotStar
+ * (idle → low halo; active → stronger ink corona). No fabricated activity.
+ */
 export const WatercolorStarShader = {
   name: "WatercolorStarShader",
   uniforms: {
@@ -9,6 +13,8 @@ export const WatercolorStarShader = {
     uTime: { value: 0 },
     uGrain: { value: 0.22 },
     uStroke: { value: 0.55 },
+    /** Brush-stroke corona strength 0..1.5 (from real idle/health emissive). */
+    uHalo: { value: 0.55 },
   },
   vertexShader: /* glsl */ `
     varying vec3 vNormalW;
@@ -28,13 +34,16 @@ export const WatercolorStarShader = {
     uniform float uTime;
     uniform float uGrain;
     uniform float uStroke;
+    uniform float uHalo;
     varying vec3 vNormalW;
     varying vec3 vPosW;
     varying vec2 vUv;
     ${GLSL_HASH_NOISE}
     void main() {
-      float fres = pow(1.0 - max(dot(normalize(vNormalW), vec3(0.0, 0.0, 1.0)), 0.0), 2.2);
-      // brush stroke rings + soft ink bloom (c7 — richer on already-wired star meshes)
+      float nlen2 = dot(vNormalW, vNormalW);
+      vec3 nw = nlen2 > 1e-10 ? vNormalW * inversesqrt(nlen2) : vec3(0.0, 0.0, 1.0);
+      float fres = pow(1.0 - max(dot(nw, vec3(0.0, 0.0, 1.0)), 0.0), 2.2);
+      // brush stroke rings + soft ink bloom
       float rings = paintFbm(vUv * 18.0 + uTime * 0.08);
       float stroke = smoothstep(0.35, 0.75, rings) * uStroke;
       float bloom = smoothstep(0.15, 0.85, paintFbm(vUv * 6.0 - uTime * 0.05)) * 0.22;
@@ -43,10 +52,16 @@ export const WatercolorStarShader = {
       pigment += pigment * stroke * 0.35;
       pigment += uColor * bloom;
       pigment += grain;
-      // rim wash
-      pigment = mix(pigment, pigment * 1.25 + vec3(0.15, 0.18, 0.35), fres * 0.55);
-      float alpha = 0.92 + stroke * 0.08;
-      gl_FragColor = vec4(pigment, alpha);
+      // c12: painted brush-stroke halo — ragged corona on the rim from real uHalo
+      float haloAmt = clamp(uHalo, 0.0, 1.5);
+      float haloNoise = paintFbm(vUv * 10.0 + vec2(uTime * 0.06, -uTime * 0.04));
+      float haloRing = smoothstep(0.15, 0.55, fres) * (0.55 + haloNoise * 0.55);
+      float haloStroke = smoothstep(0.4, 0.85, paintNoise(vUv * 28.0 + uTime * 0.1));
+      vec3 haloCol = uColor * (0.85 + uEmissive * 0.4) + vec3(0.12, 0.14, 0.28) * fres;
+      pigment = mix(pigment, pigment + haloCol * haloRing * haloStroke, haloAmt * 0.85);
+      pigment = mix(pigment, pigment * 1.25 + vec3(0.15, 0.18, 0.35), fres * 0.45);
+      float alpha = clamp(0.9 + stroke * 0.08 + fres * haloAmt * 0.12, 0.0, 1.0);
+      gl_FragColor = vec4(clamp(pigment, 0.0, 1.6), alpha);
     }
   `,
 };

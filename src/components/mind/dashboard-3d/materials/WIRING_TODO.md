@@ -15,8 +15,9 @@ Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materi
 | `createLaneNebulae` | **done** | `rebuildNebulae` (Dashboard Bot wired) |
 | `setPassHealth` / `resizePass` | **done** | frame loop + `onResize` |
 | `createBuildingBrushMaterial` (+ c10 `uWindowGlow`) | **done** | `city-layer` rebuild with real `lit/floors` |
-| `tickPainterlyKit(kit, t, { reducedMotion })` | **pending** | scene calls `tickPainterlyKit(kit, t)` only inside `if (!reducedMotion)` — opts API unused |
-| `setBuildingProgress` / `setBuildingWindowGlow` | **pending** | city sets progress only at material create; no live setter |
+| `tickPainterlyKit(kit, t, { reducedMotion })` | **done** | frame loop passes `{ reducedMotion }` (still gated by `if (!reducedMotion)` so freeze path unused when reduced) |
+| `setBuildingProgress` | **done** | `city-layer` calls after create with real lit/floors |
+| `setBuildingWindowGlow` | optional | not required if progress drives glow |
 | `attachPainterlyContextHandlers` | check scene | confirm detach on unmount |
 
 ```ts
@@ -33,8 +34,8 @@ composer.addPass(kit.painterlyPass);
 const detachCtx = attachPainterlyContextHandlers(renderer.domElement, kit);
 // WIRED: stars kit.createBotStar; sky kit.createSkyMaterial; lore; Imagine; inkEdges; laneNebulae
 // WIRED: kit.setPassHealth({ healthy, total, reducedMotion }); kit.resizePass(w,h,dpr)
-// PENDING: tickPainterlyKit(kit, t, { reducedMotion }); // freeze clocks without skipping tick
-// PENDING: setBuildingProgress(mat, lit/floors) for live city updates without full rebuild
+// WIRED: tickPainterlyKit(kit, t, { reducedMotion }); setBuildingProgress(mat, progress)
+// OPTIONAL: when reducedMotion, still call tick with { reducedMotion:true } instead of skipping block
 // cleanup: detachCtx(); disposePainterlyKit(kit);
 ```
 
@@ -152,4 +153,14 @@ setBuildingProgress(mat, litFloors / floors); // also refreshes window glow
 // optional lock: setBuildingWindowGlow(mat, 0.4);
 
 // Lane nebulae: shared ≤4 mats; LANE_NEBULAE_MAX=32; NaN centers skipped.
+```
+
+## c12 — status-driven star brush-stroke halos
+
+```ts
+// Already wired via createBotStar — idle → low uHalo; active → stronger corona.
+const star = kit.createBotStar({ color: HEALTH_COLOR[bot.health], idle: bot.health === "idle" });
+// on health poll:
+star.setColor(HEALTH_COLOR[h], h === "idle" ? 0.25 : 0.9); // also refreshes halo
+// optional lock: star.setHalo(0.4);
 ```

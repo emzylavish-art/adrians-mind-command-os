@@ -8,6 +8,8 @@ export type StarSurfaceOptions = {
   emissiveIntensity?: number;
   grain?: number;
   stroke?: number;
+  /** Brush-stroke corona; defaults from emissive (real status). */
+  halo?: number;
 };
 
 function cloneUniforms(src: typeof WatercolorStarShader.uniforms) {
@@ -17,6 +19,7 @@ function cloneUniforms(src: typeof WatercolorStarShader.uniforms) {
     uTime: { value: 0 },
     uGrain: { value: src.uGrain.value as number },
     uStroke: { value: src.uStroke.value as number },
+    uHalo: { value: src.uHalo.value as number },
   };
 }
 
@@ -31,6 +34,13 @@ export function createStarWatercolorMaterial(
   }
   if (opts.grain != null) uniforms.uGrain.value = sanitizeFinite(opts.grain, 0.22, 0, 1);
   if (opts.stroke != null) uniforms.uStroke.value = sanitizeFinite(opts.stroke, 0.55, 0, 1);
+  const em = uniforms.uEmissive.value as number;
+  if (opts.halo != null) {
+    uniforms.uHalo.value = sanitizeFinite(opts.halo, 0.55, 0, 1.5);
+  } else {
+    // Neutral default from real emissive — idle/low → quiet halo; active → stronger
+    uniforms.uHalo.value = sanitizeFinite(0.2 + em * 0.55, 0.55, 0, 1.5);
+  }
   return new THREE.ShaderMaterial({
     name: "StarWatercolorMaterial",
     uniforms,
@@ -76,6 +86,13 @@ export function tickStarMaterial(mat: THREE.ShaderMaterial, timeSeconds: number)
 }
 
 /** Update star pigment from a health color without reallocating the material. */
+export function setStarHalo(mat: THREE.ShaderMaterial, halo: number): void {
+  if (mat.uniforms["uHalo"]) {
+    mat.uniforms["uHalo"].value = sanitizeFinite(halo, 0.55, 0, 1.5);
+  }
+  (mat.userData as { haloLocked?: boolean }).haloLocked = true;
+}
+
 export function setStarWatercolorColor(
   mat: THREE.ShaderMaterial,
   color: THREE.ColorRepresentation,
@@ -83,6 +100,11 @@ export function setStarWatercolorColor(
 ): void {
   if (mat.uniforms["uColor"]) mat.uniforms["uColor"].value.set(color);
   if (emissiveIntensity != null && mat.uniforms["uEmissive"]) {
-    mat.uniforms["uEmissive"].value = sanitizeFinite(emissiveIntensity, 0.85, 0, 3);
+    const em = sanitizeFinite(emissiveIntensity, 0.85, 0, 3);
+    mat.uniforms["uEmissive"].value = em;
+    // Keep halo honest to real status emissive unless locked
+    if (mat.uniforms["uHalo"] && !(mat.userData as { haloLocked?: boolean }).haloLocked) {
+      mat.uniforms["uHalo"].value = sanitizeFinite(0.2 + em * 0.55, 0.55, 0, 1.5);
+    }
   }
 }

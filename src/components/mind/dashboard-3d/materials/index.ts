@@ -33,6 +33,7 @@ export {
   createStarSpriteTexture,
   tickStarMaterial,
   setStarWatercolorColor,
+  setStarHalo,
   type StarSurfaceOptions,
 } from "./star-surface.ts";
 export {

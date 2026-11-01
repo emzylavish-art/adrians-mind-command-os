@@ -171,6 +171,19 @@ export function sanitizeImagineImageTexture(
       owned: false,
     };
   }
+  // HACKER (c12): TextureLoader race / HMR may hand a disposed Texture — never bind it
+  if ((tex as { disposed?: boolean }).disposed) {
+    return {
+      ok: false,
+      texture: null,
+      reason: "texture-disposed",
+      width: 0,
+      height: 0,
+      npot: false,
+      downscaled: false,
+      owned: false,
+    };
+  }
   let { width, height } = readTextureImageSize(tex);
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
     return {

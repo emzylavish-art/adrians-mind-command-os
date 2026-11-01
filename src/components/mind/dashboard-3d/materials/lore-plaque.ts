@@ -108,7 +108,15 @@ export function sanitizeLoreNotes(
 ): { notes: LoreNote[]; truncatedCount: number; inputCount: number } {
   const capN = Math.max(1, Math.min(32, Number.isFinite(maxNotes) ? Math.floor(maxNotes as number) : LORE_MAX_NOTES));
   const capC = Math.max(8, Math.min(512, Number.isFinite(maxChars) ? Math.floor(maxChars as number) : LORE_MAX_CHARS_PER_NOTE));
-  const arr = Array.isArray(notes) ? notes : [];
+  // HACKER (c12): universe-scene passes lock notes as a single string — wrap it.
+  // Previously a string became [] → empty atlas (silent blank plaque).
+  const arr = Array.isArray(notes)
+    ? notes
+    : typeof notes === "string"
+      ? [notes]
+      : notes == null
+        ? []
+        : [notes];
   const out: LoreNote[] = [];
   let truncatedCount = 0;
   for (const raw of arr) {
@@ -228,6 +236,12 @@ export function createLoreTextAtlas(
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, width, height);
+  // HACKER (c12): force LTR layout box so RTL/emoji runs do not invert canvas metrics wildly
+  try {
+    (ctx as CanvasRenderingContext2D & { direction?: string }).direction = "ltr";
+  } catch {
+    /* older canvas */
+  }
 
   // Soft parchment wash under glyphs (transparent so plaque parchment shows through)
   for (let i = 0; i < 5; i++) {
