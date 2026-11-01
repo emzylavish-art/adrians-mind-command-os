@@ -3960,3 +3960,66 @@ aside span.grid.size-11.rounded-2xl,
   box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
   filter: none !important;
 }
+
+/* —— Integration dock dual-class safety (floating-composer + composer-dock) —— */
+/* Grok Build merge d8c8ce1 kept BOTH class sets on one <section>. Not two nodes,
+   but .floating-composer min-height/margin can fight .composer-dock compact rules. */
+section.floating-composer.composer-dock,
+.floating-composer.command-card.composer-dock,
+form.floating-composer.composer-dock,
+[data-composer="floating"].floating-composer.composer-dock {
+  margin: 0 !important;
+  min-height: 0 !important;
+  border-radius: 1.15rem !important;
+  z-index: 45 !important;
+  /* ensure glass when bg-surface / rounded-panel utilities were dropped in merge */
+  background-color: rgb(10 10 12 / 0.96) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+html[data-theme="light"] section.floating-composer.composer-dock,
+html[data-theme="light"] .floating-composer.command-card.composer-dock,
+html[data-theme="light"] form.floating-composer.composer-dock {
+  background-color: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+}
+
+@media (max-width: 767.98px) {
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock,
+  form.floating-composer.composer-dock {
+    position: fixed !important;
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    max-height: 10.75rem !important;
+    overflow: auto !important;
+  }
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    display: none !important;
+  }
+  section.floating-composer.composer-dock:not(:focus-within) form > .mb-2.flex.flex-wrap.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) form > .mb-2.flex.flex-wrap.gap-2 {
+    display: none !important;
+  }
+  section.floating-composer.composer-dock:focus-within,
+  section.floating-composer.composer-dock:has(textarea:focus),
+  .floating-composer.command-card.composer-dock:focus-within,
+  .floating-composer.command-card.composer-dock:has(textarea:focus) {
+    max-height: min(58vh, 28rem) !important;
+  }
+  section.floating-composer.composer-dock:focus-within > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:focus-within > .grid.gap-2 {
+    display: grid !important;
+  }
+  section.floating-composer.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2,
+  .floating-composer.command-card.composer-dock:focus-within form > .mb-2.flex.flex-wrap.gap-2 {
+    display: flex !important;
+  }
+  body:has(aside.fixed.inset-0.z-40.flex) section.floating-composer.composer-dock,
+  body:has(aside.fixed.inset-0.z-40.flex) .floating-composer.command-card.composer-dock {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
