@@ -1,51 +1,54 @@
 # HP Pairing runbook (EliteBook)
 
-Do this once the HP EliteBook is online. Server-side code is on branch `hp-pairing`.
+Server-side code lives on branch `hp-pairing`. Management key: env `MIND_PAIRING_MANAGEMENT_KEY` **or** `/home/box/.secrets/mind_pairing_management.key` (mode 600). Never commit or paste the key.
 
-## One-line install (on the EliteBook)
+## Fast path when the laptop appears
+
+From the repo (server/ops box):
+
+```bash
+node --experimental-strip-types scripts/pairing/pair-elitebook.mjs --base "https://YOUR_DASHBOARD"
+```
+
+That prints only `PAIRING_CODE=…`, `EXPIRES_AT=…`, and the PowerShell line. Then on the EliteBook (from `agent/windows`):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-MindAgent.ps1 -DashboardUrl "https://YOUR_DASHBOARD" -PairingCode "ABCD-EFGH"
 ```
 
-Run from the repo's `agent/windows/` directory (or copy that folder to the laptop first). Dashboard URL must be **HTTPS** (localhost HTTP only for dev).
+Dashboard URL must be **HTTPS** (localhost HTTP only for lab).
 
-## Server side
+## What the installer does
 
-1. Set `MIND_PAIRING_MANAGEMENT_KEY` **or** place a key at `/home/box/.secrets/mind_pairing_management.key` (never commit; never paste into Notion).
-2. Deploy/merge `hp-pairing` so `/api/mind/pairing/*` is live.
-3. Signed-in owner: `POST /api/mind/pairing/code` → `{ code, expiresAt }` (5 minutes, one-time; mint rate-limited).
-4. Laptop install generates a local keypair, posts `{ code, publicKeyPem, deviceName, dashboardUrl }` to `POST /api/mind/pairing/handshake`, stores token + `publicKeyFingerprint` under `%LOCALAPPDATA%\MindCommandAgent\`, writes `agent.manifest.json`, starts heartbeat.
-5. Agent posts heartbeats ~30s with token + fingerprint; verifies manifest each loop.
+1. Generates a local RSA keypair under `%LOCALAPPDATA%\MindCommandAgent\keys\` (private key never uploaded).
+2. Handshakes with `/api/mind/pairing/handshake`.
+3. Fetches `/api/mind/pairing/manifest`, checks script hashes, POSTs `?op=verify` so the **server** validates the HMAC signature (management key never leaves the server).
+4. Writes signed `agent.manifest.json`, user Startup entry, starts heartbeat.
 
-## Verify the card flips
+## Verify the card
 
-1. Integrations / Service board: **Local computer** → `Connected` via `localComputer` prop from `GET /api/mind/pairing/status`.
-2. `PairingCard` shows the same (mount into Build when `command-app.tsx` is free).
-3. File-edit / terminal stay disabled unless `card.fileEditEnabled` / `terminalEnabled` are true.
+1. `GET /api/mind/pairing/status` (signed-in) → `card.paired === true` after heartbeat.
+2. ServiceBoard `localComputer` / `PairingCard` show Connected with device name + last seen.
+3. File-edit / terminal only when `fileEditEnabled` / `terminalEnabled`.
 
 ## Emergency stop
 
-**Dashboard:** `POST /api/mind/pairing/stop` (session auth).
+- Dashboard: `POST /api/mind/pairing/stop`
+- Laptop: `Emergency-Stop.ps1` under LocalAppData
+- Clear: `POST /api/mind/pairing/stop?op=clear` with `{ deviceId }`, then **re-pair** (token not restored)
 
-**Laptop:**
+## Dry-run on the box (no EliteBook)
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\MindCommandAgent\Emergency-Stop.ps1"
+```bash
+node --experimental-strip-types scripts/pairing/dry-run.mjs
+# with preview on :8191
+node --experimental-strip-types scripts/pairing/http-dry-run.mjs
 ```
 
-Effects: local `EMERGENCY_STOP` flag, process killed, token revoked. Model output cannot clear it.
-
-**Clear (human only):** `POST /api/mind/pairing/stop?op=clear` with `{ deviceId }` as the owner who engaged stop, then re-pair (old token is not restored).
+Evidence lands in `/workspace/audit/hp-pairing/`. Scripts wipe temp pairing store afterward so the card stays Not paired.
 
 ## Uninstall
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Uninstall-MindAgent.ps1
 ```
-
-## Security quick checks
-
-- Stolen token alone must not authorize actions (binding proof required).
-- Non-HTTPS dashboard URL must be refused by the installer.
-- Editing `MindAgent.ps1` after install must cause the agent to exit on integrity failure.
