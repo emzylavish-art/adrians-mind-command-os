@@ -2694,3 +2694,422 @@ html[data-theme="light"] [data-composer="floating"] {
     padding-bottom: calc(11rem + env(safe-area-inset-bottom)) !important;
   }
 }
+
+/* —— Cycle 32 / item 2: ComposerBar layout hooks (from pass-10, mono) —— */
+  --composer-speak-fg: #0a0a0b;
+  --composer-speak-bg: #f4f4f5;
+  --composer-bar-bg: #111113;
+  --composer-bar-border: rgb(255 255 255 / 0.1);
+  --composer-bar-ink: #f4f4f5;
+  --composer-bar-muted: rgb(255 255 255 / 0.45);
+}
+html[data-theme="light"] {
+  --composer-speak-fg: #0a0a0b;
+  --composer-speak-bg: #ffffff;
+  --composer-bar-bg: #f6f7f9;
+  --composer-bar-border: rgb(15 23 42 / 0.12);
+  --composer-bar-ink: #0f172a;
+  --composer-bar-muted: rgb(15 23 42 / 0.48);
+}
+
+.composer-bar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  width: 100%;
+  pointer-events: none;
+}
+.composer-bar__safe {
+  padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+.composer-bar__card {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: min(100%, 42rem);
+  margin: 0 auto;
+  padding: 0.85rem 0.9rem 0.75rem;
+  border-radius: 1.75rem; /* ~28px */
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 40%),
+    var(--composer-bar-bg);
+  border: 1px solid var(--composer-bar-border);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  color: var(--composer-bar-ink);
+}
+html[data-theme="light"] .composer-bar__card {
+  box-shadow:
+    0 14px 36px rgb(15 23 42 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+.composer-bar__ask {
+  min-height: 1.6rem;
+  padding: 0.15rem 0.35rem 0.1rem;
+}
+.composer-bar__ask-fake {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--composer-bar-muted);
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 450;
+  padding: 0.2rem 0;
+}
+
+.composer-bar__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+.composer-bar__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.composer-bar__plus {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.05);
+  color: var(--composer-bar-ink);
+  flex: 0 0 auto;
+}
+html[data-theme="light"] .composer-bar__plus {
+  border-color: rgb(15 23 42 / 0.12);
+  background: rgb(15 23 42 / 0.04);
+}
+.composer-bar__plus:focus-visible,
+.composer-bar__model:focus-visible,
+.composer-mic-dictation:focus-visible,
+.composer-speak-live:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--composer-bar-bg), 0 0 0 4px rgb(255 255 255 / 0.55);
+}
+.composer-bar__plus-glyph {
+  width: 0.85rem;
+  height: 0.85rem;
+  position: relative;
+  display: block;
+}
+.composer-bar__plus-glyph::before,
+.composer-bar__plus-glyph::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: currentColor;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+.composer-bar__plus-glyph::before { width: 1.7px; height: 100%; }
+.composer-bar__plus-glyph::after { width: 100%; height: 1.7px; }
+
+.composer-bar__model-wrap { position: relative; }
+.composer-bar__model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0 0.75rem 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.05);
+  color: var(--composer-bar-ink);
+  font-size: 0.88rem;
+  font-weight: 560;
+  white-space: nowrap;
+}
+html[data-theme="light"] .composer-bar__model {
+  border-color: rgb(15 23 42 / 0.12);
+  background: rgb(15 23 42 / 0.04);
+}
+.composer-bar__model-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 0.28rem;
+  background:
+    linear-gradient(135deg, #a78bfa, #60a5fa 55%, #34d399);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  flex: 0 0 auto;
+}
+.composer-bar__model-beta {
+  margin-left: 0.25rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0.12rem 0.28rem;
+  border-radius: 0.35rem;
+  background: rgb(251 191 36 / 0.18);
+  color: #fbbf24;
+  vertical-align: middle;
+}
+
+.composer-bar__model-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.55rem);
+  margin: 0;
+  padding: 0.4rem;
+  list-style: none;
+  min-width: 16.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--composer-bar-border);
+  background: rgb(18 18 22 / 0.96);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  z-index: 5;
+}
+html[data-theme="light"] .composer-bar__model-menu {
+  background: rgb(255 255 255 / 0.97);
+  box-shadow: 0 16px 36px rgb(15 23 42 / 0.16);
+}
+.composer-bar__model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--composer-bar-ink);
+  text-align: left;
+}
+.composer-bar__model-option:hover { background: rgb(255 255 255 / 0.06); }
+html[data-theme="light"] .composer-bar__model-option:hover { background: rgb(15 23 42 / 0.05); }
+.composer-bar__model-option.is-selected {
+  background: rgb(255 255 255 / 0.08);
+}
+html[data-theme="light"] .composer-bar__model-option.is-selected {
+  background: rgb(15 23 42 / 0.06);
+}
+.composer-bar__model-option-text { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
+.composer-bar__model-option-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.composer-bar__model-option-sub {
+  font-size: 0.72rem;
+  color: var(--composer-bar-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-bar__model-check {
+  width: 0.85rem;
+  height: 0.45rem;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  flex: 0 0 auto;
+  margin-right: 0.15rem;
+  opacity: 0.9;
+}
+
+/* Mic ≠ Speak */
+.composer-voice-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.composer-mic-dictation {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--composer-bar-ink);
+  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+html[data-theme="light"] .composer-mic-dictation {
+  border-color: rgb(15 23 42 / 0.14);
+  background: rgb(15 23 42 / 0.03);
+}
+.composer-mic-dictation:hover { border-color: rgb(255 255 255 / 0.28); }
+.composer-mic-dictation:active { transform: scale(0.96); }
+.composer-mic-dictation__glyph {
+  width: 0.62rem;
+  height: 0.88rem;
+  border-radius: 999px;
+  border: 1.7px solid currentColor;
+  position: relative;
+}
+.composer-mic-dictation__glyph::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.34rem;
+  width: 0.78rem;
+  height: 0.34rem;
+  border: 1.6px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 0.55rem 0.55rem;
+  transform: translateX(-50%);
+}
+.composer-mic-dictation__dot {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 0 rgb(239 68 68 / 0.45);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.composer-mic-dictation[data-state="recording"] {
+  border-color: rgb(239 68 68 / 0.45);
+  color: #fda4af;
+}
+.composer-mic-dictation[data-state="recording"] .composer-mic-dictation__dot {
+  opacity: 1;
+  transform: scale(1);
+  animation: composer-mic-pulse 1.2s ease-out infinite;
+}
+@keyframes composer-mic-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(239 68 68 / 0.5); }
+  100% { box-shadow: 0 0 0 8px rgb(239 68 68 / 0); }
+}
+
+.composer-speak-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.45rem;
+  padding: 0 0.95rem 0 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: var(--composer-speak-bg);
+  color: var(--composer-speak-fg);
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
+  transition: transform 120ms ease, box-shadow 160ms ease, filter 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.composer-speak-live:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.34), 0 0 18px rgb(255 255 255 / 0.08);
+}
+.composer-speak-live:active { transform: scale(0.97); }
+.composer-speak-live__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 0.85rem;
+}
+.composer-speak-live__bars i {
+  display: block;
+  width: 2.4px;
+  border-radius: 999px;
+  background: currentColor;
+  height: 40%;
+  transform-origin: center bottom;
+}
+.composer-speak-live__bars i:nth-child(1) { height: 42%; }
+.composer-speak-live__bars i:nth-child(2) { height: 72%; }
+.composer-speak-live__bars i:nth-child(3) { height: 95%; }
+.composer-speak-live__bars i:nth-child(4) { height: 58%; }
+
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i {
+  animation: composer-speak-breathe 1s ease-in-out infinite;
+}
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(2) { animation-delay: 0.08s; }
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(3) { animation-delay: 0.16s; }
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(4) { animation-delay: 0.24s; }
+
+.composer-speak-live[data-live-voice="listening"],
+.composer-speak-live[data-live-voice="user-speaking"],
+.composer-speak-live[data-live-voice="assistant-speaking"] {
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 0.32),
+    0 0 calc(10px + 14px * var(--live-level, 0)) rgb(167 139 250 / 0.28);
+}
+.composer-speak-live[data-live-voice="listening"] .composer-speak-live__bars i,
+.composer-speak-live[data-live-voice="user-speaking"] .composer-speak-live__bars i,
+.composer-speak-live[data-live-voice="assistant-speaking"] .composer-speak-live__bars i {
+
+/* Map existing tip composer controls toward Grok row */
+@media (max-width: 767.98px) {
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+    overflow-x: auto;
+    padding-top: 0.35rem;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button[aria-label="Dictate"] {
+    order: 8;
+    width: 2.65rem !important;
+    height: 2.65rem !important;
+    min-height: 2.65rem !important;
+    border-radius: 999px !important;
+    background: rgb(255 255 255 / 0.06) !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button[type="submit"] {
+    order: 9;
+    border-radius: 999px !important;
+    background: #f4f4f5 !important;
+    color: #09090b !important;
+    min-height: 2.65rem !important;
+    padding-inline: 1rem !important;
+    box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    /* Attach ≈ + */
+    width: 2.65rem !important;
+    min-height: 2.65rem !important;
+    border-radius: 999px !important;
+    padding-inline: 0 !important;
+    justify-content: center !important;
+  }
+}
+/* White Speak pill when present (live / Wiring mount) */
+.composer-speak-pill,
+.composer-speak-live,
+button.composer-speak-pill,
+button.composer-speak-live {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border-radius: 999px !important;
+  border: 1px solid rgb(255 255 255 / 0.2) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+  min-height: 2.65rem !important;
+  padding-inline: 0.95rem !important;
+  font-weight: 600 !important;
+}
+html[data-theme="light"] .composer-speak-pill,
+html[data-theme="light"] .composer-speak-live {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
