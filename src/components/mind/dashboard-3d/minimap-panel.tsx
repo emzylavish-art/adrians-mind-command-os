@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
-import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
+import { botWorldPosition, LANE_DEFS } from "@/lib/mind/dashboard/constellations";
 import { projectMinimap } from "@/lib/mind/dashboard/minimap";
+
+function laneForBot(id: string): string | undefined {
+  return LANE_DEFS.find((l) => (l.botIds as readonly string[]).includes(id))?.id;
+}
 
 export function MinimapPanel({ bots, focusId }: { bots: readonly BotNode[]; focusId?: string | null }) {
   const [look, setLook] = useState<[number, number, number]>([0, 0, 0]);
@@ -17,6 +21,7 @@ export function MinimapPanel({ bots, focusId }: { bots: readonly BotNode[]; focu
     id: b.id,
     pos: botWorldPosition(b.id),
     health: b.health,
+    lane: laneForBot(b.id),
   }));
   const { points, home } = projectMinimap(mapped, look);
   return (

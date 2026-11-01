@@ -11,7 +11,9 @@ import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib
 import { nhopBotIds } from "@/lib/mind/dashboard/nhop";
 import {
   captureCanvasFrame,
+  hideContextLossOverlay,
   hideLastFrameFreeze,
+  showContextLossOverlay,
   showLastFrameFreeze,
 } from "@/lib/mind/dashboard/last-frame-freeze";
 import {
@@ -26,7 +28,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, projectedRadiusUv, parseCssColor } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, formatMeterBadge, statsAtFocus, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -938,6 +940,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let focusDepthHandle: ReturnType<typeof createFocusDepthPass> | null = null;
     let focusBloomGuardHandle: ReturnType<typeof createFocusBloomGuard> | null = null;
     let detailDimHandle: ReturnType<typeof createDetailBackdropDimPass> | null = null;
+    let sceneKeyLiftHandle: ReturnType<typeof createSceneKeyLiftPass> | null = null;
     // Light lane focus readability: key/rim follow focused star (dispose on unmount / context loss).
     let focusLight = createFocusLight(scene);
     // Light #67 / #60: Imagine portrait colour bounce (neutral when texture unloaded).
@@ -998,6 +1001,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } catch {
         nextDetailDim = null;
       }
+      // Light #83: Imagine key lift AFTER detailDim (meter must see un-lifted frame), before painterly.
+      let nextKeyLift: typeof sceneKeyLiftHandle = null;
+      try {
+        nextKeyLift = createSceneKeyLiftPass();
+        composer.addPass(nextKeyLift.pass);
+      } catch {
+        nextKeyLift = null;
+      }
       composer.addPass(kit.painterlyPass);
       let nextGuard: typeof focusBloomGuardHandle = null;
       if (nextBloom) {
@@ -1013,6 +1024,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       focusDepthHandle = nextFocusDepth;
       focusBloomGuardHandle = nextGuard;
       detailDimHandle = nextDetailDim;
+      if (sceneKeyLiftHandle && sceneKeyLiftHandle !== nextKeyLift) {
+        try { sceneKeyLiftHandle.dispose(); } catch { /* */ }
+      }
+      sceneKeyLiftHandle = nextKeyLift;
       exposureRide = createExposureRide({ tone: "idle", reducedMotion });
       exposureRide.apply(renderer);
       return {
@@ -1442,9 +1457,28 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       });
     });
     // Gap#3: snapshot last frame on context lost so the stage does not flash splash/black.
-    const onCtxLostFreeze = () => {
+    const retryContextRebuild = () => {
+      showContextLossOverlay(mount, "restoring");
+      try {
+        postfxRecovery.notifyRestored();
+        hideContextLossOverlay(mount);
+        hideLastFrameFreeze(mount);
+      } catch {
+        showContextLossOverlay(mount, "failed", { onRetry: retryContextRebuild });
+      }
+      if (postfxRecovery.lastError) {
+        showContextLossOverlay(mount, "failed", { onRetry: retryContextRebuild });
+      }
+    };
+    const onCtxLostFreeze = (ev?: Event) => {
+      try {
+        (ev as WebGLContextEvent | undefined)?.preventDefault?.();
+      } catch {
+        /* ignore */
+      }
       const url = captureCanvasFrame(renderer.domElement);
       if (url) showLastFrameFreeze(mount, url);
+      showContextLossOverlay(mount, "lost");
       try {
         focusLight.dispose();
       } catch {
@@ -1455,8 +1489,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } catch {
         /* already gone */
       }
+      try {
+        sceneKeyLiftHandle?.dispose();
+      } catch {
+        /* already gone */
+      }
+      sceneKeyLiftHandle = null;
     };
     const onCtxRestoredFocusLight = () => {
+      showContextLossOverlay(mount, "restoring");
       try {
         focusLight = createFocusLight(scene);
       } catch {
@@ -1467,6 +1508,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } catch {
         /* restore race */
       }
+      // postfxRecovery listens too; give it a tick then surface failure honestly.
+      requestAnimationFrame(() => {
+        if (postfxRecovery.lost || postfxRecovery.lastError) {
+          showContextLossOverlay(mount, "failed", { onRetry: retryContextRebuild });
+        } else {
+          hideContextLossOverlay(mount);
+          hideLastFrameFreeze(mount);
+        }
+      });
     };
     renderer.domElement.addEventListener("webglcontextrestored", onCtxRestoredFocusLight, false);
     renderer.domElement.addEventListener("webglcontextlost", onCtxLostFreeze, false);
@@ -1843,7 +1893,49 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         liveFocusDepth?.tick(dt * 1000);
         liveBloomGuard?.tick(dt * 1000);
         portraitBounce.tick(dt * 1000);
+
         liveDetailDim?.tick(dt * 1000);
+        {
+          const lift = sceneKeyLiftHandle;
+          if (lift) {
+            if (focusedVis) {
+              const rad = projectedRadiusUv(focusedVis.mesh.position, cardRadiusWorld, camera);
+              lift.setFocus(focusedVis.mesh.position, camera, rad);
+              lift.setBackdrop(
+                statsAtFocus(liveDetailDim?.contrast ?? null, liveDetailDim?.rects ?? null, lift.focusUv),
+                { reducedMotion },
+              );
+            } else {
+              lift.setFocus(null, camera, null);
+              lift.setBackdrop(null, { reducedMotion });
+            }
+            lift.tick(dt * 1000);
+            // Debug badge only when ?dash3dDebug=1 (off by default).
+            try {
+              const debugOn =
+                typeof location !== "undefined" &&
+                new URLSearchParams(location.search).get("dash3dDebug") === "1";
+              let badge = mount.querySelector("[data-testid=dash3d-meter-badge]") as HTMLElement | null;
+              if (debugOn && liveDetailDim) {
+                if (!badge) {
+                  badge = document.createElement("div");
+                  badge.setAttribute("data-testid", "dash3d-meter-badge");
+                  badge.style.cssText =
+                    "position:absolute;left:0.75rem;bottom:0.75rem;z-index:4;max-width:min(92vw,28rem);padding:0.35rem 0.55rem;border-radius:8px;font:11px/1.35 ui-monospace,monospace;background:rgb(8 12 24 / 0.82);color:#e8eefc;pointer-events:none;";
+                  mount.appendChild(badge);
+                }
+                const b = formatMeterBadge(liveDetailDim.contrast, lift.report);
+                badge.textContent = b.text;
+                badge.dataset.level = b.level;
+                badge.hidden = false;
+              } else if (badge) {
+                badge.hidden = true;
+              }
+            } catch {
+              /* ignore badge */
+            }
+          }
+        }
       }
 
       if (composer) composer.render();
@@ -2061,6 +2153,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       try { portraitBounce.dispose(); } catch { /* */ }
       focusBloomGuardHandle?.dispose();
       detailDimHandle?.dispose();
+      try { sceneKeyLiftHandle?.dispose(); } catch { /* */ }
+      sceneKeyLiftHandle = null;
+      hideContextLossOverlay(mount);
       focusDepthHandle?.dispose();
       postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth/bloomGuard/detailDim
       renderer.dispose();
@@ -2070,5 +2165,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
   }, [reducedMotion, onUnavailable]);
 
-  return <div className="dash3d-canvas-wrap" ref={mountRef} />;
+  return (
+    <div
+      className="dash3d-canvas-wrap"
+      ref={mountRef}
+      data-testid="dash3d-canvas-host"
+      tabIndex={-1}
+      aria-label="Universe stage"
+    />
+  );
 }

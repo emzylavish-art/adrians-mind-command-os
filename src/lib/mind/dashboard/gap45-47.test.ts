@@ -20,9 +20,9 @@ describe("Gap#46 star detail a11y", () => {
   it("marks node-detail as dialog and focuses close; skybar is not a live region", () => {
     const detail = readFileSync(join(root, "src/components/mind/dashboard-3d/node-detail-panel.tsx"), "utf8");
     const app = readFileSync(join(root, "src/components/mind/dashboard-3d/dashboard-app.tsx"), "utf8");
-    assert.match(detail, /role=\{open && \(bot \|\| notionPage\) \? "dialog"/);
-    assert.match(detail, /aria-modal=\{open && \(bot \|\| notionPage\) \? true/);
-    assert.match(detail, /aria-labelledby=\{open \? "dash3d-node-detail-title"/);
+    assert.match(detail, /role=\{(?:openPanel|open && \(bot \|\| notionPage\)) \? "dialog"/);
+    assert.match(detail, /aria-modal=\{(?:openPanel|open && \(bot \|\| notionPage\)) \? true/);
+    assert.match(detail, /aria-labelledby=\{(?:openPanel|open) \? "dash3d-node-detail-title"/);
     assert.match(detail, /closeBtnRef\.current\?\.focus/);
     assert.match(detail, /id="dash3d-node-detail-title"/);
     assert.doesNotMatch(app, /dash3d-skybar"[^>]*aria-live="polite"/);

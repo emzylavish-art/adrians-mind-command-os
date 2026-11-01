@@ -1,6 +1,11 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { PORTRAIT_FALLBACK_URL, markPortraitMissing } from "@/lib/mind/dashboard/portrait-resolve";
 import { sanitizeNotionPlainText } from "@/lib/mind/dashboard/notion-plain";
+import {
+  isSafeFocusRestoreTarget,
+  pickDetailFocusRestoreKind,
+  sanitizeNotionHref,
+} from "@/lib/mind/dashboard/safe-notion-url";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import {
@@ -126,7 +131,7 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
         {detail.notionPages.length ? (
           detail.notionPages.map((p) => (
             <li key={p.id}>
-              <a className="dash3d-pill" href={p.url} target="_blank" rel="noreferrer">
+              <a className="dash3d-pill" href={sanitizeNotionHref(p.url, p.id) ?? undefined} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">
                 {sanitizeNotionPlainText(p.title || p.id, 120) || p.id}
               </a>
               <span className="dash3d-muted" style={{ display: "block", fontSize: "0.72rem" }}>
@@ -165,6 +170,56 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
   );
 }
 
+
+function restoreFocusAfterDetailClose(
+  preferred: HTMLElement | null,
+  panel: HTMLElement | null,
+): void {
+  const canvas = document.querySelector<HTMLElement>("[data-testid=dash3d-canvas-host], .dash3d-root canvas, [data-testid=dash3d-root] canvas");
+  const root = document.querySelector<HTMLElement>("[data-testid=dash3d-root], .dash3d-root");
+  const preferredOk = Boolean(
+    preferred &&
+      preferred !== document.body &&
+      preferred !== document.documentElement &&
+      preferred.tagName !== "BODY" &&
+      preferred.tagName !== "HTML" &&
+      isSafeFocusRestoreTarget({
+        connected: preferred.isConnected,
+        ariaHiddenAncestor: Boolean(preferred.closest('[aria-hidden="true"]')),
+      }) &&
+      !(panel && panel.contains(preferred)),
+  );
+  const canvasOk = Boolean(
+    canvas &&
+      isSafeFocusRestoreTarget({
+        connected: canvas.isConnected,
+        ariaHiddenAncestor: Boolean(canvas.closest('[aria-hidden="true"]')),
+      }),
+  );
+  const rootOk = Boolean(
+    root &&
+      isSafeFocusRestoreTarget({
+        connected: root.isConnected,
+        ariaHiddenAncestor: Boolean(root.closest('[aria-hidden="true"]')),
+      }),
+  );
+  const kind = pickDetailFocusRestoreKind({ preferredOk, canvasOk, rootOk });
+  const target =
+    kind === "preferred" ? preferred : kind === "canvas" ? canvas : kind === "root" ? root : null;
+  if (target) {
+    if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+    try {
+      target.focus({ preventScroll: true });
+    } catch {
+      target.focus();
+    }
+  }
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && panel?.contains(active)) {
+    active.blur();
+  }
+}
+
 export function NodeDetailPanel({
   bot,
   notionPage,
@@ -193,6 +248,16 @@ export function NodeDetailPanel({
   const panelRef = useRef<HTMLElement | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const openPanel = Boolean(open && (bot || notionPage));
+
+  useEffect(() => {
+    if (openPanel) return;
+    // Gap#57: if close left focus inside the now-hidden panel, move it to canvas/root.
+    const panel = panelRef.current;
+    const active = document.activeElement;
+    if (panel && active instanceof HTMLElement && panel.contains(active)) {
+      restoreFocusAfterDetailClose(restoreFocusRef.current, panel);
+    }
+  }, [openPanel]);
 
   useEffect(() => {
     if (!openPanel) return;
@@ -224,9 +289,14 @@ export function NodeDetailPanel({
         ev.preventDefault();
         ev.stopPropagation();
         const restore = restoreFocusRef.current;
+        // Blur before close so aria-hidden panel never keeps focus (Gap#57).
+        if (document.activeElement instanceof HTMLElement && panel.contains(document.activeElement)) {
+          document.activeElement.blur();
+        }
         onClose();
-        // Restore after close paints (Gap#54).
-        queueMicrotask(() => restore?.focus?.());
+        requestAnimationFrame(() => {
+          restoreFocusAfterDetailClose(restore, panel);
+        });
         return;
       }
       if (ev.key !== "Tab") return;
@@ -307,10 +377,11 @@ export function NodeDetailPanel({
     <aside
       ref={(el) => { panelRef.current = el; }}
       className={`dash3d-side dash3d-node-detail ${open && (bot || notionPage) ? "is-open" : ""}`}
-      aria-hidden={!open}
-      role={open && (bot || notionPage) ? "dialog" : undefined}
-      aria-modal={open && (bot || notionPage) ? true : undefined}
-      aria-labelledby={open ? "dash3d-node-detail-title" : undefined}
+      aria-hidden={!openPanel}
+      role={openPanel ? "dialog" : undefined}
+      aria-modal={openPanel ? true : undefined}
+      {...(!openPanel ? ({ inert: true } as React.HTMLAttributes<HTMLElement>) : {})}
+      aria-labelledby={openPanel ? "dash3d-node-detail-title" : undefined}
       data-testid="node-detail"
       data-dash3d-node={bot?.id ?? notionPage?.id ?? undefined}
     >
@@ -319,10 +390,12 @@ export function NodeDetailPanel({
           type="button"
           ref={closeBtnRef}
           className="dash3d-side-close"
+          tabIndex={openPanel ? 0 : -1}
           onClick={() => {
             const restore = restoreFocusRef.current;
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
             onClose();
-            queueMicrotask(() => restore?.focus?.());
+            requestAnimationFrame(() => restoreFocusAfterDetailClose(restore, panelRef.current));
           }}
           aria-label="Close details"
         >
@@ -354,7 +427,7 @@ export function NodeDetailPanel({
               {notionNeighbors && notionNeighbors.length ? (
                 notionNeighbors.map((n) => (
                   <li key={n.id}>
-                    <a className="dash3d-pill" href={n.url} target="_blank" rel="noreferrer">
+                    <a className="dash3d-pill" href={sanitizeNotionHref(n.url, n.id) ?? undefined} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">
                       {sanitizeNotionPlainText(n.title, 120) || n.id}
                     </a>
                   </li>
@@ -363,15 +436,22 @@ export function NodeDetailPanel({
                 <li className="dash3d-muted">{NO_SOURCE}</li>
               )}
             </ul>
-            <a
-              className="dash3d-pill"
-              href={notionPage.url}
-              target="_blank"
-              rel="noreferrer"
-              style={{ marginTop: "0.5rem", display: "inline-flex" }}
-            >
-              Open in Notion
-            </a>
+            {sanitizeNotionHref(notionPage.url, notionPage.id) ? (
+              <a
+                className="dash3d-pill"
+                href={sanitizeNotionHref(notionPage.url, notionPage.id)!}
+                target="_blank"
+                rel="noreferrer"
+                referrerPolicy="no-referrer"
+                style={{ marginTop: "0.5rem", display: "inline-flex" }}
+              >
+                Open in Notion
+              </a>
+            ) : (
+              <span className="dash3d-muted" style={{ marginTop: "0.5rem", display: "inline-flex" }}>
+                Notion link unavailable
+              </span>
+            )}
           </>
         ) : null}
       </div>
