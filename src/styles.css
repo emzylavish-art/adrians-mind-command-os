@@ -478,3 +478,75 @@ html[data-theme="light"] .badge-soft {
   border-color: rgb(9 9 11 / 0.1);
   color: #18181b;
 }
+
+/* —— Cycle 5: message bubbles + thread depth (mono glass) —— */
+.thread,
+.chat-thread,
+[data-thread] {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% 0%, rgb(255 255 255 / 0.03), transparent 60%),
+    transparent;
+}
+.message-bubble,
+.chat-bubble,
+[data-message-role] {
+  border-radius: 1.05rem;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+[data-message-role="assistant"],
+.message-bubble.assistant,
+.chat-bubble.assistant {
+  background: rgb(20 20 22 / 0.72);
+  color: #f4f4f5;
+}
+[data-message-role="user"],
+.message-bubble.user,
+.chat-bubble.user {
+  background: rgb(244 244 245 / 0.92);
+  color: #09090b;
+  border-color: rgb(255 255 255 / 0.2);
+}
+html[data-theme="light"] [data-message-role="assistant"],
+html[data-theme="light"] .message-bubble.assistant,
+html[data-theme="light"] .chat-bubble.assistant {
+  background: rgb(244 244 245 / 0.95);
+  color: #09090b;
+  border-color: rgb(9 9 11 / 0.08);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.06);
+}
+html[data-theme="light"] [data-message-role="user"],
+html[data-theme="light"] .message-bubble.user,
+html[data-theme="light"] .chat-bubble.user {
+  background: #18181b;
+  color: #fafafa;
+  border-color: rgb(9 9 11 / 0.2);
+}
+
+/* Code / prose blocks inside thread */
+.md-prose pre,
+.message-bubble pre,
+.chat-bubble pre {
+  background: rgb(0 0 0 / 0.45);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.75rem;
+}
+html[data-theme="light"] .md-prose pre,
+html[data-theme="light"] .message-bubble pre {
+  background: #f4f4f5;
+  border-color: rgb(9 9 11 / 0.1);
+}
+
+/* Separator hairlines */
+.thread-divider,
+.message-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.12), transparent);
+}
+html[data-theme="light"] .thread-divider,
+html[data-theme="light"] .message-divider {
+  background: linear-gradient(90deg, transparent, rgb(9 9 11 / 0.12), transparent);
+}
