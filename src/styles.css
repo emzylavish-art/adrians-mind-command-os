@@ -8053,3 +8053,39 @@ aside nav button:not(.bg-accent):not([class*="bg-accent"]) {
   border-color: rgb(255 255 255 / 0.1) !important;
 }
 
+/* —— Evolution c132: dropdown / popover / cmdk elevation unify —— */
+:root {
+  --menu-radius: 1.15rem;
+  --menu-blur: blur(24px) saturate(1.2);
+  --menu-bg: rgb(12 12 14 / 0.78);
+  --menu-border: 1px solid rgb(255 255 255 / 0.12);
+  --menu-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 16px 40px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(255 255 255 / 0.04);
+}
+#command-palette,
+.absolute.z-30.mt-2.max-h-80,
+[role="menu"],
+[role="listbox"],
+[data-radix-popper-content-wrapper] > *,
+.shadow-panel.rounded-panel.border.border-line.bg-surface {
+  border-radius: var(--menu-radius) !important;
+  background: var(--menu-bg) !important;
+  border: var(--menu-border) !important;
+  box-shadow: var(--menu-shadow) !important;
+  backdrop-filter: var(--menu-blur) !important;
+  -webkit-backdrop-filter: var(--menu-blur) !important;
+}
+#command-palette button,
+[role="menu"] [role="menuitem"],
+[role="listbox"] [role="option"] {
+  border-radius: 0.75rem !important;
+  min-height: 2.5rem !important;
+}
+#command-palette button:hover,
+[role="menu"] [role="menuitem"]:hover,
+[role="listbox"] [role="option"]:hover {
+  background: rgb(255 255 255 / 0.06) !important;
+}
+
