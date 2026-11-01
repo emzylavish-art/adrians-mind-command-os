@@ -34,7 +34,7 @@ export const BrushBuildingShader = {
     varying vec3 vPosLocal;
     ${GLSL_HASH_NOISE}
     void main() {
-      float floors = max(uFloors, 1.0);
+      float floors = clamp(max(uFloors, 1.0), 1.0, 128.0);
       float fy = fract(vUv.y * floors);
       float floorBand = step(0.12, fy) * step(fy, 0.88);
       float litFloor = step(vUv.y, clamp(uProgress, 0.0, 1.0));

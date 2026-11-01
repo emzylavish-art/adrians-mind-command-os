@@ -11,6 +11,10 @@ export {
   paperHash,
   makePaperGrainRGBA,
   createPaperGrainTexture,
+  sanitizePaperGrainSize,
+  sanitizeFinite,
+  PAPER_GRAIN_MIN_SIZE,
+  PAPER_GRAIN_MAX_SIZE,
   type PaperGrainTextureOptions,
 } from "./paper-grain.ts";
 export {

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { GLSL_HASH_NOISE } from "./glsl-noise.ts";
+import { sanitizeFinite } from "../materials/paper-grain.ts";
 
 /** Post-process: watercolor wash + paper grain + mild edge soft (no external textures). */
 export const PainterlyPassShader = {
@@ -63,12 +64,12 @@ export type PainterlyPassOptions = {
 
 export function createPainterlyPass(opts: PainterlyPassOptions = {}): ShaderPass {
   const pass = new ShaderPass(PainterlyPassShader);
-  if (opts.amount != null) pass.uniforms["amount"]!.value = opts.amount;
-  if (opts.grain != null) pass.uniforms["grain"]!.value = opts.grain;
-  if (opts.wash != null) pass.uniforms["wash"]!.value = opts.wash;
+  if (opts.amount != null) pass.uniforms["amount"]!.value = sanitizeFinite(opts.amount, 0.42, 0, 2);
+  if (opts.grain != null) pass.uniforms["grain"]!.value = sanitizeFinite(opts.grain, 0.09, 0, 1);
+  if (opts.wash != null) pass.uniforms["wash"]!.value = sanitizeFinite(opts.wash, 0.38, 0, 1);
   return pass;
 }
 
 export function tickPainterlyPass(pass: ShaderPass, timeSeconds: number): void {
-  if (pass.uniforms["time"]) pass.uniforms["time"].value = timeSeconds;
+  if (pass.uniforms["time"]) pass.uniforms["time"].value = sanitizeFinite(timeSeconds, 0);
 }

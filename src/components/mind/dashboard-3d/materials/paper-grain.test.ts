@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { makePaperGrainRGBA, paperHash } from "./paper-grain.ts";
-import { GLSL_HASH_NOISE, PAINTER_SHADER_VERSION, PainterlyPassShader, WatercolorStarShader, BrushBuildingShader } from "../shaders/index.ts";
+import {
+  makePaperGrainRGBA,
+  paperHash,
+  sanitizePaperGrainSize,
+  sanitizeFinite,
+  PAPER_GRAIN_MAX_SIZE,
+  PAPER_GRAIN_MIN_SIZE,
+} from "./paper-grain.ts";
+import {
+  GLSL_HASH_NOISE,
+  PAINTER_SHADER_VERSION,
+  PainterlyPassShader,
+  WatercolorStarShader,
+  BrushBuildingShader,
+} from "../shaders/index.ts";
 
 describe("painter paper grain", () => {
   it("hash is deterministic in 0..1", () => {
@@ -13,17 +26,41 @@ describe("painter paper grain", () => {
     const buf = makePaperGrainRGBA(32, 5, 12);
     assert.equal(buf.length, 32 * 32 * 4);
     assert.equal(buf[3], 255);
-    // not a flat fill
-    let distinct = 0;
     const seen = new Set<number>();
     for (let i = 0; i < buf.length; i += 4) {
       seen.add(buf[i]!);
-      if (seen.size > 4) {
-        distinct = seen.size;
-        break;
-      }
+      if (seen.size > 4) break;
     }
-    assert.ok(distinct > 4);
+    assert.ok(seen.size > 4);
+  });
+});
+
+describe("hacker pass: paper grain size / NaN / OOM", () => {
+  it("sanitizePaperGrainSize rejects NaN/Infinity/negatives and caps max", () => {
+    assert.equal(sanitizePaperGrainSize(NaN), 256);
+    assert.equal(sanitizePaperGrainSize(Infinity), 256);
+    assert.equal(sanitizePaperGrainSize(-20), PAPER_GRAIN_MIN_SIZE);
+    assert.equal(sanitizePaperGrainSize(0), PAPER_GRAIN_MIN_SIZE);
+    assert.equal(sanitizePaperGrainSize(1e9), PAPER_GRAIN_MAX_SIZE);
+    assert.equal(sanitizePaperGrainSize(128), 128);
+  });
+
+  it("makePaperGrainRGBA never returns empty or oversized buffers on hostile sizes", () => {
+    for (const size of [NaN, Infinity, -1, 0, 3, 1e7, Number.MAX_SAFE_INTEGER]) {
+      const buf = makePaperGrainRGBA(size as number);
+      const edge = Math.sqrt(buf.length / 4);
+      assert.ok(Number.isFinite(edge));
+      assert.ok(edge >= PAPER_GRAIN_MIN_SIZE && edge <= PAPER_GRAIN_MAX_SIZE);
+      assert.equal(buf.length, edge * edge * 4);
+      assert.equal(buf[3], 255);
+    }
+  });
+
+  it("sanitizeFinite clamps NaN progress/floors (building uniforms)", () => {
+    assert.equal(sanitizeFinite(NaN, 0, 0, 1), 0);
+    assert.equal(sanitizeFinite(Infinity, 8, 1, 128), 8);
+    assert.equal(sanitizeFinite(999, 8, 1, 128), 128);
+    assert.equal(sanitizeFinite(-4, 8, 1, 128), 1);
   });
 });
 
@@ -41,12 +78,13 @@ describe("painter shader modules", () => {
     assert.match(PainterlyPassShader.fragmentShader, /paintFbm/);
   });
 
-  it("star + building shaders expose required uniforms", () => {
+  it("star + building shaders expose required uniforms; floors clamped in GLSL", () => {
     assert.ok(WatercolorStarShader.uniforms.uColor);
     assert.ok(WatercolorStarShader.uniforms.uStroke);
     assert.match(WatercolorStarShader.fragmentShader, /brush stroke/);
     assert.ok(BrushBuildingShader.uniforms.uFloors);
     assert.ok(BrushBuildingShader.uniforms.uProgress);
     assert.match(BrushBuildingShader.fragmentShader, /vertical brush/);
+    assert.match(BrushBuildingShader.fragmentShader, /clamp\(max\(uFloors/);
   });
 });
