@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { databaseMode, describePersistence, hostedDatabaseSetup } from "./persistence.ts";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 describe("persistence", () => {
   it("does not treat a missing database as durable or cloud backup", () => {
@@ -33,9 +34,21 @@ describe("persistence", () => {
     assert.match(databaseMode("postgres").detail, /No restart test/);
     assert.equal(databaseMode("refused").pill, "Refused");
     const setup = hostedDatabaseSetup();
-    assert.deepEqual(setup.variables, ["DATABASE_URL"]);
+    assert.deepEqual(setup.variables, ["DATABASE_URL", "POSTGRES_URL"]);
     assert.equal(setup.migrate, "npm run db:migrate");
     assert.equal(setup.forbidden.includes("ybxowvzicirinpdcfyqe"), true);
     assert.equal(setup.forbidden.includes("espmxiitzucooxblmnpr"), true);
+  });
+});
+
+describe("resolveDatabaseUrl", () => {
+  it("prefers DATABASE_URL over POSTGRES_URL and ignores blanks", () => {
+    assert.equal(resolveDatabaseUrl({}), undefined);
+    assert.equal(resolveDatabaseUrl({ DATABASE_URL: "  " }), undefined);
+    assert.equal(resolveDatabaseUrl({ POSTGRES_URL: " postgres://pg " }), "postgres://pg");
+    assert.equal(
+      resolveDatabaseUrl({ DATABASE_URL: "postgres://db", POSTGRES_URL: "postgres://pg" }),
+      "postgres://db",
+    );
   });
 });

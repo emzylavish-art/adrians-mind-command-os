@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-const url = process.env.DATABASE_URL ?? "";
+import { resolveDatabaseUrl } from "./database-url.mjs";
+const url = resolveDatabaseUrl(process.env) ?? "";
 if (!url) {
-  console.error("No DATABASE_URL. The hosted worker has no queue to poll. Nothing ran.");
+  console.error("No DATABASE_URL/POSTGRES_URL. The hosted worker has no queue to poll. Nothing ran.");
   process.exit(2);
 }
 if (url.includes("ybxowvzicirinpdcfyqe") || url.includes("espmxiitzucooxblmnpr")) {

@@ -8,6 +8,7 @@ import { decideFetchSite } from "./request-guard";
 import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
 import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 const MAX_BODY = 2_500_000;
 
@@ -86,7 +87,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on. No new action can run.", log: [] });
   if (!allowMindRequest("agent", userId, 6)) return json({ ok: false, error: "Too many agent runs. Wait a minute and try again.", log: [] });
   const gate = guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
