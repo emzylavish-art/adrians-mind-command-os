@@ -60,6 +60,8 @@ describe("bot-normalize Gap#30 hostile branch/notes", () => {
           commits: [],
           notes: "x <img src=x onerror=alert(1)> y",
           worktree: null,
+          heartbeatAt: null,
+          task: null,
           raw: {},
         },
       }),

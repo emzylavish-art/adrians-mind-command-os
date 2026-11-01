@@ -22,6 +22,8 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
           commits: ["abc1234"],
           notes: "ok",
           worktree: null,
+          heartbeatAt: null,
+          task: null,
           raw: {},
         },
         branch: "logic-wiring",

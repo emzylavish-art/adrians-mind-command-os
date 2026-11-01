@@ -41,7 +41,7 @@ function publicizeLock(lock: Record<string, unknown> | null | undefined): Record
   if (!lock || typeof lock !== "object") return null;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(lock)) {
-    if (k === "raw") continue; // Gap#29: drop raw bag
+    if (k === "raw") continue; // Gap#29: drop raw bag (heartbeatAt/task stay)
     if (k === "worktree") {
       out.worktree = publicPathLabel(typeof v === "string" ? v : null);
       continue;

@@ -44,6 +44,8 @@ describe("status-publicize (Gap#29)", () => {
             commits: [],
             notes: "path /workspace/secrets/note.md",
             worktree: "/workspace/mind-command-os-logic",
+            heartbeatAt: "2026-11-01T12:05:00+01:00",
+            task: "do stuff",
             raw: { task: "do stuff", heartbeat_at: "2026-11-01T12:05:00+01:00", token: "sk-abcdefghijklmnopqrstuvwxyz1234" },
           },
         },
@@ -53,6 +55,8 @@ describe("status-publicize (Gap#29)", () => {
     const bot = pub.bots[0]!;
     assert.equal(bot.lock!.worktree, "mind-command-os-logic");
     assert.equal("raw" in bot.lock!, false);
+    assert.equal(bot.lock!.heartbeatAt, "2026-11-01T12:05:00+01:00");
+    assert.equal(bot.lock!.task, "do stuff");
     assert.ok(!JSON.stringify(pub).includes("/workspace"));
     assert.equal(pub.sources.locksDir, "locks");
     assert.equal(pub.sources.repoDir, "mind-command-os-dashboard");

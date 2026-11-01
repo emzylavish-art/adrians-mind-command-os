@@ -34,6 +34,8 @@ function lock(partial: Partial<LockRecord> & Pick<LockRecord, "file">): LockReco
     commits: partial.commits ?? [],
     notes: partial.notes ?? "",
     worktree: partial.worktree ?? null,
+    heartbeatAt: partial.heartbeatAt ?? null,
+    task: partial.task ?? null,
     raw: partial.raw ?? {},
   };
 }

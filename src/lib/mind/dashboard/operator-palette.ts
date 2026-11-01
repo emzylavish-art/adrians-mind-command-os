@@ -172,7 +172,7 @@ export function formatBotClipboardSummary(bot: BotNode): string {
     `status: ${sanitizePaletteText(bot.lock?.status || "none", 120)}`,
     `claimed_at: ${sanitizePaletteText(bot.lock?.claimed_at || "none", 64)}`,
     `released_at: ${sanitizePaletteText(bot.lock?.released_at || "none", 64)}`,
-    `heartbeat_at: ${sanitizePaletteText(bot.lock?.raw?.heartbeat_at || bot.lock?.raw?.heartbeat || "none", 64)}`,
+    `heartbeat_at: ${sanitizePaletteText(bot.lock?.heartbeatAt || bot.lock?.raw?.heartbeat_at || bot.lock?.raw?.heartbeat || "none", 64)}`,
     `reason: ${sanitizePaletteText(bot.reason || "", 160)}`,
   ];
   return lines.join("\n");

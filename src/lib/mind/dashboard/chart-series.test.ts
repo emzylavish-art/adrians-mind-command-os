@@ -69,6 +69,8 @@ describe("chart-series (real data + hacker)", () => {
           commits: [],
           notes: "",
           worktree: null,
+          heartbeatAt: null,
+          task: null,
           raw: {},
         },
       ],
