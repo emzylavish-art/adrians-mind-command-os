@@ -1,15 +1,20 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
-import { NodeDetailPanel } from "./node-detail-panel";
+import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
 import { UniverseScene } from "./universe-scene";
 import { useDashboardStatus } from "./use-dashboard-status";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
+import { createHealthSound, type SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
+import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
+import { TimeScrubber } from "./time-scrubber";
+import { FeedPanel } from "./feed-panel";
+import { MoneyPanel } from "./money-panel";
 import "./dashboard-3d.css";
 
-export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
+export function DashboardApp() {
   const { state } = useDashboardStatus();
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
@@ -33,6 +38,100 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }, []);
 
+  const soundRef = useRef<ReturnType<typeof createHealthSound> | null>(null);
+  const [soundMuted, setSoundMuted] = useState(true);
+  const [scrubMs, setScrubMs] = useState<number | null>(null);
+  useEffect(() => {
+    const sound = createHealthSound({ reducedMotion });
+    soundRef.current = sound;
+    setSoundMuted(sound.muted);
+    const onVis = () => sound.setHidden(document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    onVis();
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      sound.dispose();
+      soundRef.current = null;
+    };
+  }, [reducedMotion]);
+
+  useEffect(() => {
+    soundRef.current?.setReducedMotion(reducedMotion);
+  }, [reducedMotion]);
+
+  const unlockSound = useCallback(() => {
+    soundRef.current?.unlock();
+  }, []);
+
+  const spendView = useMemo(() => {
+    if (state.status !== "ready") return { available: false as const, reason: "no spend source yet" };
+    const m = state.data.money;
+    if (!m?.available) {
+      const reason =
+        m?.reason ||
+        (!state.data.spend.available ? state.data.spend.reason : null) ||
+        "no spend source yet";
+      return { available: false as const, reason };
+    }
+    const today = m.todayTotalUsd != null ? `today $${m.todayTotalUsd.toFixed(2)}` : "today —";
+    const burn = m.burnPerHourUsd != null ? `burn $${m.burnPerHourUsd.toFixed(2)}/hr` : "burn —";
+    return {
+      available: true as const,
+      summary: `${today} · ${burn} · ${m.eventCount} event(s)`,
+    };
+  }, [state]);
+
+  const nowMs = useMemo(() => Date.now(), [state]);
+  const scrubView = useMemo(() => {
+    if (state.status !== "ready") {
+      return { data: null as null, mode: "live" as const, message: null as string | null, scrubMs: null as number | null };
+    }
+    const timeline = state.data.timeline ?? {
+      events: [],
+      earliestMs: null,
+      latestMs: null,
+      droppedFuture: 0,
+      droppedInvalid: 0,
+      truncated: false,
+    };
+    const liveHealth = Object.fromEntries(
+      state.data.bots.map((b) => [b.id, { health: b.health, reason: b.reason }]),
+    );
+    const target = scrubMs == null ? nowMs : scrubMs;
+    const result = scrubAt({
+      timeline,
+      botIds: state.data.bots.map((b) => b.id),
+      liveHealth,
+      scrubMs: target,
+      nowMs,
+    });
+    if (result.mode === "live") {
+      return { data: state.data, mode: result.mode, message: result.message, scrubMs: null as number | null };
+    }
+    const bots = applyScrubToBots(state.data.bots, result);
+    return {
+      data: { ...state.data, bots },
+      mode: result.mode,
+      message: result.message,
+      scrubMs: result.scrubMs,
+    };
+  }, [state, scrubMs, nowMs]);
+
+  const sceneData = scrubView.data;
+
+  useEffect(() => {
+    if (!sceneData) {
+      soundRef.current?.sync([]);
+      return;
+    }
+    const voices: SoundVoiceSpec[] = sceneData.bots.map((b, i) => ({
+      id: b.id,
+      health: b.health,
+      pan: ((i % 7) - 3) / 3,
+    }));
+    soundRef.current?.sync(voices);
+  }, [sceneData]);
+
   const openNotion = (pageId: string) => {
     if (state.status !== "ready") return;
     const page = state.data.notionGraph.pages.find((p) => p.id === pageId) ?? null;
@@ -41,10 +140,10 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   };
 
   return (
-    <main className={`dash3d-root dash3d-universe${embedded ? " is-embedded" : ""}`} data-fly-level={fly.level}>
-      {state.status === "ready" && !webglError ? (
+    <main className="dash3d-root dash3d-universe" data-fly-level={fly.level} onPointerDownCapture={unlockSound}>
+      {state.status === "ready" && sceneData && !webglError ? (
         <UniverseScene
-          data={state.data}
+          data={sceneData}
           reducedMotion={reducedMotion}
           onSelectBot={(bot) => {
             setSelected(bot);
@@ -134,6 +233,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               {state.data.notionGraph.reason ? ` — ${state.data.notionGraph.reason.slice(0, 90)}` : ""}
             </p>
           </div>
+          <MoneyPanel money={state.data.money} />
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Fleet plan</h2>
             <p className="dash3d-title">
@@ -145,10 +245,40 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               {(state.data.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
             </p>
           </div>
+          <TimeScrubber
+            timeline={state.data.timeline ?? {
+              events: [],
+              earliestMs: null,
+              latestMs: null,
+              droppedFuture: 0,
+              droppedInvalid: 0,
+              truncated: false,
+            }}
+            scrubMs={scrubView.scrubMs}
+            nowMs={nowMs}
+            message={scrubView.message}
+            mode={scrubView.mode}
+            onScrubMs={setScrubMs}
+          />
+          <button
+            type="button"
+            className="dash3d-glass dash3d-zoomout"
+            data-testid="sound-mute"
+            aria-pressed={soundMuted}
+            onClick={() => {
+              unlockSound();
+              const next = !soundMuted;
+              soundRef.current?.setMuted(next);
+              setSoundMuted(next);
+            }}
+          >
+            {soundMuted ? "Sound muted" : "Sound on"}
+          </button>
           <button
             type="button"
             className="dash3d-glass dash3d-zoomout"
             onClick={() => {
+              unlockSound();
               setSelected(null);
               setNotionPage(null);
               // scene also listens for empty-space click; this is accessible control
@@ -169,10 +299,18 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         />
       ) : null}
 
+      {state.status === "ready" && sceneData ? (
+        <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
+      ) : null}
+
       <NodeDetailPanel
         bot={selected}
         notionPage={notionPage}
         open={Boolean(selected || notionPage)}
+        spend={spendView}
+        status={state.status === "ready" ? state.data : null}
+        notionNeighbors={resolveNotionNeighbors(state.status === "ready" ? state.data : null, notionPage?.id)}
+        portraitSrc={selected ? `/dashboard-3d/art/portrait-${selected.id}.webp` : null}
         onClose={() => {
           setSelected(null);
           setNotionPage(null);

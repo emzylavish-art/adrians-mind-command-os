@@ -104,8 +104,8 @@ export function focusBotTarget(
   level: CameraLevel = "universe",
 ): CameraTarget {
   const [x, y, z] = botPos;
-  // Sit slightly above and out from the star
-  const position: [number, number, number] = [x + 2.2, y + 1.6, z + 3.4];
+  // Click-and-zoom: glide in close enough for the detail card to feel attached to the star
+  const position: [number, number, number] = [x + 1.35, y + 1.05, z + 2.15];
   return {
     level,
     lookAt: [x, y, z],
@@ -129,4 +129,49 @@ export function zoomOutTarget(level: CameraLevel): CameraTarget {
     return { ...UNIVERSE_HOME };
   }
   return { ...UNIVERSE_HOME };
+}
+
+/** True while a camera transition is incomplete. */
+export function isGliding(rig: CameraRigState, epsilon = 1e-4): boolean {
+  return !(Number.isFinite(rig.t) && rig.t >= 1 - epsilon);
+}
+
+/**
+ * Hacker pass (click-zoom + animation): under rapid star clicks / CustomEvent spam while a
+ * glide is running, restarting flyTo every pointerup thrashes the camera, stacks ease work,
+ * and with 18 bots synthesizing events can freeze the main thread. Pointer picks must wait
+ * for the current glide to settle; escape events (sky / zoom-out) stay allowed.
+ */
+export function acceptPointerPick(rig: CameraRigState): boolean {
+  return !isGliding(rig);
+}
+
+/** Level-change fly events that must remain responsive even mid-glide. */
+export function acceptFlyDispatch(
+  rig: CameraRigState,
+  evType: string,
+): boolean {
+  if (evType === "SKY" || evType === "ZOOM_OUT") return true;
+  return !isGliding(rig);
+}
+
+/** Smoothstep ease for living camera transitions (pairs with motion/ease smootherstep). */
+export function smootherstep(t: number): number {
+  const x = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0));
+  return x * x * x * (x * (x * 6 - 15) + 10);
+}
+
+/** Advance transition with smootherstep (default) for softer star/level glides. */
+export function stepRigSmooth(
+  rig: CameraRigState,
+  dtSec: number,
+  durationSec = 1.35,
+): { rig: CameraRigState; position: [number, number, number]; lookAt: [number, number, number] } {
+  const dur = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 1.35;
+  const dt = Number.isFinite(dtSec) && dtSec > 0 ? Math.min(dtSec, 0.25) : 0;
+  const nextT = Math.min(1, rig.t + dt / dur);
+  const e = smootherstep(nextT);
+  const position = lerp3(rig.from.position, rig.to.position, e);
+  const lookAt = lerp3(rig.from.lookAt, rig.to.lookAt, e);
+  return { rig: { ...rig, t: nextT }, position, lookAt };
 }

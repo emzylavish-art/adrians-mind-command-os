@@ -80,6 +80,8 @@ export type DashboardStatus = {
     lockFile: string | null;
   };
   spend: { available: false; reason: string } | { available: true; entries: unknown[] };
+  /** Queue #7 — burn/today/warnings from real spend adapter only. */
+  money: import("./spend-core.ts").MoneyView;
   sources: {
     locksDir: string;
     repoDir: string;
@@ -98,4 +100,8 @@ export type DashboardStatus = {
   notionGraph: import("./notion-graph.ts").NotionGraph;
   projects: import("./projects.ts").ProjectsDashboard;
   fleetPlan: import("./fleet-plan.ts").FleetPlan;
+  /** Queue #5 — real git+lock timeline for the TIME scrubber. */
+  timeline: import("./time-scrub.ts").Timeline;
+  /** Queue #6 — drifting sky feed + glass list (real sources only). */
+  skyFeed: import("./sky-feed.ts").SkyFeed;
 };

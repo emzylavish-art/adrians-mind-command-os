@@ -96,7 +96,7 @@ function botBuilding(bot: BotNode): ProjectBuilding {
 }
 
 /** Build projects view from status + locks/git — never invents stats. */
-export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" | "fleetPlan">): ProjectsDashboard {
+export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" | "fleetPlan" | "skyFeed" | "money">): ProjectsDashboard {
   const gapTasks = tasksFromGapItems(status.gapDispatcher.items);
   const projects: ProjectBuilding[] = [];
 

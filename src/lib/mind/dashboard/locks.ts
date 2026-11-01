@@ -56,7 +56,7 @@ export function parseLockText(text: string, file = "lock.lock"): LockRecord {
         const next = lines[i] ?? "";
         const item = next.match(/^\s*-\s+(.*)$/);
         if (!item) break;
-        commits.push(item[1]!.trim());
+        if (commits.length < MAX_LOCK_COMMITS) commits.push(item[1]!.trim());
         i += 1;
       }
       continue;
@@ -114,6 +114,8 @@ function stripZoneParen(value: string | null): string | null {
 }
 
 const MAX_LOCK_BYTES = 256_000;
+/** Cap commits listed per lock — huge lists from churning bots DoS the 5s status rebuild. */
+export const MAX_LOCK_COMMITS = 64;
 
 export function readLocksDir(dir: string): LockRecord[] {
   let names: string[] = [];

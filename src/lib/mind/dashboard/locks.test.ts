@@ -39,3 +39,14 @@ status: done, released
     assert.equal(lock.claimed_at, "2026-11-01T12:28:50+01:00");
   });
 });
+
+import { MAX_LOCK_COMMITS } from "./locks.ts";
+
+describe("lock commit cap (hacker pass churn)", () => {
+  it("caps commits so a huge lock cannot flood the status rebuild", () => {
+    const lines = ["owner: Flood Bot", "status: claimed", "commits:"];
+    for (let i = 0; i < MAX_LOCK_COMMITS + 40; i++) lines.push(`  - deadbeef${i} (spam)`);
+    const lock = parseLockText(lines.join("\n"), "flood.lock");
+    assert.equal(lock.commits.length, MAX_LOCK_COMMITS);
+  });
+});

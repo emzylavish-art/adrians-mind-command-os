@@ -37,7 +37,96 @@ type CometState = {
   color: number;
   line: THREE.Line;
   positions: Float32Array;
+  head: THREE.Points;
+  headPos: Float32Array;
 };
+
+/** Tail brightness at u∈[0,1] (0 = head). Additive blending makes 0 fully transparent. */
+export function cometTailFade(u: number): number {
+  const x = Number.isFinite(u) ? Math.min(1, Math.max(0, u)) : 1;
+  return Math.pow(1 - x, 1.6);
+}
+
+// One soft radial sprite shared by every comet head; refcounted so the scene's 5s comet
+// rebuild never re-uploads it and the last dispose frees it.
+let headSprite: THREE.DataTexture | null = null;
+let headSpriteRefs = 0;
+const HEAD_SPRITE_SIZE = 32;
+
+function acquireHeadSprite(): THREE.DataTexture {
+  if (headSpriteTimer) {
+    clearTimeout(headSpriteTimer);
+    headSpriteTimer = null;
+  }
+  if (!headSprite) {
+    const n = HEAD_SPRITE_SIZE;
+    const data = new Uint8Array(n * n * 4);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const dx = (x + 0.5) / n - 0.5;
+        const dy = (y + 0.5) / n - 0.5;
+        const r = Math.min(1, Math.hypot(dx, dy) * 2);
+        const a = Math.pow(1 - r, 2.2);
+        const o = (y * n + x) * 4;
+        data[o] = 255;
+        data[o + 1] = 255;
+        data[o + 2] = 255;
+        data[o + 3] = Math.round(a * 255);
+      }
+    }
+    headSprite = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+    headSprite.magFilter = THREE.LinearFilter;
+    headSprite.minFilter = THREE.LinearFilter;
+    headSprite.needsUpdate = true;
+  }
+  headSpriteRefs++;
+  return headSprite;
+}
+
+let headSpriteTimer: ReturnType<typeof setTimeout> | null = null;
+/** Grace period before freeing the sprite at refcount 0: the scene disposes then recreates
+ * comets every 5s, so an immediate free would re-upload the texture on every rebuild. */
+export const HEAD_SPRITE_GRACE_MS = 2000;
+
+function releaseHeadSprite(): void {
+  if (headSpriteRefs <= 0) return;
+  headSpriteRefs--;
+  if (headSpriteRefs === 0 && headSprite && !headSpriteTimer) {
+    const t = setTimeout(() => {
+      headSpriteTimer = null;
+      if (headSpriteRefs === 0 && headSprite) {
+        headSprite.dispose();
+        headSprite = null;
+      }
+    }, HEAD_SPRITE_GRACE_MS);
+    (t as { unref?: () => void }).unref?.();
+    headSpriteTimer = t;
+  }
+}
+
+/** Test hook: free the idle sprite now (as the grace timer would). */
+export function flushCometHeadSprite(): boolean {
+  if (headSpriteTimer) {
+    clearTimeout(headSpriteTimer);
+    headSpriteTimer = null;
+  }
+  if (headSpriteRefs === 0 && headSprite) {
+    headSprite.dispose();
+    headSprite = null;
+    return true;
+  }
+  return false;
+}
+
+/** Test hook: live refcount of the shared comet-head sprite. */
+export function cometHeadSpriteRefs(): number {
+  return headSpriteRefs;
+}
+
+const LINE_OPACITY = 0.9;
+const LINE_OPACITY_REDUCED = 0.45;
+const HEAD_OPACITY = 0.95;
+const HEAD_OPACITY_REDUCED = 0.4;
 
 function hashHue(sha: string): number {
   let h = 0;
@@ -77,20 +166,52 @@ export function createCommitComets(
     dispose: () => {},
   };
 
+  const sprite = list.length > 0 ? acquireHeadSprite() : null;
   list.forEach((c, i) => {
     const positions = new Float32Array(segments * 3);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const hue = hashHue(c.sha!);
     const color = new THREE.Color(`hsl(${hue}, 70%, 65%)`);
+    // Head→tail gradient baked once into vertex colors (fade depends only on u).
+    const colors = new Float32Array(segments * 3);
+    const denom = segments - 1;
+    for (let sIdx = 0; sIdx < segments; sIdx++) {
+      const f = cometTailFade(sIdx / denom);
+      colors[sIdx * 3] = color.r * f;
+      colors[sIdx * 3 + 1] = color.g * f;
+      colors[sIdx * 3 + 2] = color.b * f;
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     const mat = new THREE.LineBasicMaterial({
-      color,
+      color: 0xffffff,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.55,
+      opacity: LINE_OPACITY,
+      blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     const line = new THREE.Line(geo, mat);
+    line.name = `motion-comet-${i}`;
     group.add(line);
+
+    const headPos = new Float32Array(3);
+    const headGeo = new THREE.BufferGeometry();
+    headGeo.setAttribute("position", new THREE.BufferAttribute(headPos, 3));
+    const headMat = new THREE.PointsMaterial({
+      color: color.clone().lerp(new THREE.Color(0xffffff), 0.45),
+      size: Math.max(0.18, radius * 0.045),
+      sizeAttenuation: true,
+      map: sprite,
+      transparent: true,
+      opacity: HEAD_OPACITY,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const head = new THREE.Points(headGeo, headMat);
+    head.name = `motion-comet-head-${i}`;
+    head.frustumCulled = false; // 1-vertex bounds go stale as the head moves
+    group.add(head);
     comets.push({
       phase: i * 1.7,
       speed: 0.22 + (i % 3) * 0.05,
@@ -99,6 +220,8 @@ export function createCommitComets(
       color: color.getHex(),
       line,
       positions,
+      head,
+      headPos,
     });
   });
   handle.count = comets.length;
@@ -120,6 +243,15 @@ export function createCommitComets(
     }
     const attr = c.line.geometry.getAttribute("position") as THREE.BufferAttribute;
     attr.needsUpdate = true;
+    c.headPos[0] = pos[0]!;
+    c.headPos[1] = pos[1]!;
+    c.headPos[2] = pos[2]!;
+    (c.head.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+  };
+
+  const setOpacity = (c: CometState, line: number, head: number) => {
+    (c.line.material as THREE.LineBasicMaterial).opacity = line;
+    (c.head.material as THREE.PointsMaterial).opacity = head;
   };
 
   for (const c of comets) writeArc(c, c.phase);
@@ -127,15 +259,13 @@ export function createCommitComets(
   handle.update = (tSeconds: number, reducedMotion: boolean) => {
     if (handle.disposed) return;
     if (reducedMotion) {
-      for (const c of comets) {
-        (c.line.material as THREE.LineBasicMaterial).opacity = 0.28;
-      }
+      for (const c of comets) setOpacity(c, LINE_OPACITY_REDUCED, HEAD_OPACITY_REDUCED);
       return;
     }
     if (isDocumentHidden()) return;
     const t = clock.map(tSeconds);
     for (const c of comets) {
-      (c.line.material as THREE.LineBasicMaterial).opacity = 0.55;
+      setOpacity(c, LINE_OPACITY, HEAD_OPACITY);
       writeArc(c, t * c.speed + c.phase);
     }
   };
@@ -147,8 +277,12 @@ export function createCommitComets(
       group.remove(c.line);
       c.line.geometry.dispose();
       (c.line.material as THREE.Material).dispose();
+      group.remove(c.head);
+      c.head.geometry.dispose();
+      (c.head.material as THREE.Material).dispose();
     }
     comets.length = 0;
+    if (sprite) releaseHeadSprite();
     scene.remove(group);
   };
 
