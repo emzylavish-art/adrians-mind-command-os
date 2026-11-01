@@ -59,3 +59,9 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - `traveler-ease.ts` — MotionClock-phased polyline travel; pause/resume; reduced-motion static
 - Hacker c12: edge-pulse self-loop/null endpoints; step* determinism; lazy shared clock (tree-shake)
 
+## Dust wind gust (c13)
+
+- `wind-gust.ts` — capped impulse superposition + decay; reduced-motion = no gust
+- `particles/dust-field` — `impulseGust` / `gust` hook (update API unchanged)
+- Hacker c13: traveler degenerate polylines; pause abuse; 1000-event gust flood capped
+

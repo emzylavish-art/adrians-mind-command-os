@@ -46,3 +46,8 @@ The motion clock now keeps one anchor per time base (≤4) and caps stutters at 
 - `dust.update(..., reducedMotion=true)` mid-session restores **full** rest poses (LOD must not leave a
   thinned static field). `dispose()` clears `onBeforeRender` so an unmounted mesh cannot keep writing LOD.
 
+## Wind gust (c13)
+
+`createDustField` handle gains `impulseGust(dx,dy,dz,strength?)` + `gust` sample. Call on comet/landing
+events; `update` decays. Existing `update(t, reducedMotion)` signature unchanged.
+
