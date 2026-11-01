@@ -33,6 +33,16 @@ type OauthStatus = {
   connectedAt?: string;
 };
 
+/** ServiceBoard row name → OAuth API connector id (Notion keeps dedicated routes). */
+const OAUTH_BOARD: Record<string, { connector: string; path: string; messageType: string }> = {
+  Notion: { connector: "notion", path: "notion", messageType: "notion-oauth" },
+  Gmail: { connector: "gmail", path: "gmail", messageType: "gmail-oauth" },
+  "Google Calendar": { connector: "google_calendar", path: "google_calendar", messageType: "google_calendar-oauth" },
+  "Google Drive": { connector: "google_drive", path: "google_drive", messageType: "google_drive-oauth" },
+  Slack: { connector: "slack", path: "slack", messageType: "slack-oauth" },
+  GitHub: { connector: "github", path: "github", messageType: "github-oauth" },
+};
+
 function boardState(oauth: OauthStatus | null, legacy?: { state: string; detail: string } | null): { state: string; detail: string } {
   if (oauth?.state === "connected") {
     return { state: "Connected", detail: oauth.detail };
@@ -41,7 +51,6 @@ function boardState(oauth: OauthStatus | null, legacy?: { state: string; detail:
     return { state: "Not connected", detail: oauth.detail };
   }
   if (oauth?.state === "not_connected") {
-    // Fall back to legacy integration-token status when OAuth is configured but unused
     if (legacy?.state === "connected") {
       return { state: "Connected", detail: legacy.detail };
     }
@@ -53,7 +62,7 @@ function boardState(oauth: OauthStatus | null, legacy?: { state: string; detail:
       detail: legacy.detail,
     };
   }
-  return { state: "Not connected", detail: "Checking Notion connection…" };
+  return { state: "Not connected", detail: "Checking connection…" };
 }
 
 export function ServiceBoard({
@@ -69,106 +78,125 @@ export function ServiceBoard({
   mcp?: { state: string; detail: string } | null;
   onDisconnect?: () => void;
 }) {
-  const [oauth, setOauth] = useState<OauthStatus | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  const [oauthByName, setOauthByName] = useState<Record<string, OauthStatus | null>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ name: string; text: string } | null>(null);
 
-  const refreshOauth = useCallback(() => {
-    void fetch("/api/mind/oauth/notion/status", { credentials: "include" })
+  const refreshOne = useCallback((name: string) => {
+    const meta = OAUTH_BOARD[name];
+    if (!meta) return;
+    void fetch(`/api/mind/oauth/${meta.path}/status`, { credentials: "include" })
       .then(async (res) => {
         const body = (await res.json().catch(() => null)) as OauthStatus & { ok?: boolean; error?: string } | null;
         if (!res.ok || !body) {
-          setOauth(null);
+          setOauthByName((prev) => ({ ...prev, [name]: null }));
           return;
         }
-        setOauth({
-          state: body.state,
-          detail: body.detail,
-          workspaceName: body.workspaceName,
-          accountLabel: body.accountLabel,
-          connectedAt: body.connectedAt,
-        });
+        setOauthByName((prev) => ({
+          ...prev,
+          [name]: {
+            state: body.state,
+            detail: body.detail,
+            workspaceName: body.workspaceName,
+            accountLabel: body.accountLabel,
+            connectedAt: body.connectedAt,
+          },
+        }));
       })
-      .catch(() => setOauth(null));
+      .catch(() => setOauthByName((prev) => ({ ...prev, [name]: null })));
   }, []);
 
+  const refreshAll = useCallback(() => {
+    for (const name of Object.keys(OAUTH_BOARD)) refreshOne(name);
+  }, [refreshOne]);
+
   useEffect(() => {
-    refreshOauth();
+    refreshAll();
     const onMsg = (event: MessageEvent) => {
-      if (event.data && typeof event.data === "object" && (event.data as { type?: string }).type === "notion-oauth") {
-        refreshOauth();
+      if (!event.data || typeof event.data !== "object") return;
+      const type = (event.data as { type?: string }).type;
+      if (!type) return;
+      for (const [name, meta] of Object.entries(OAUTH_BOARD)) {
+        if (type === meta.messageType) refreshOne(name);
       }
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [refreshOauth]);
+  }, [refreshAll, refreshOne]);
 
   const grok: Service = grokConfigured
     ? { name: "Grok", state: "Key present", detail: "Grok 4.5 can answer when you press Send. That is not a live-verified integration." }
     : { name: "Grok", state: "Not configured", detail: "No server key is visible to this page." };
 
-  const notionBoard = boardState(oauth, notion);
+  const services = SERVICES.map((service) => {
+    if (service.name === "MCP" && mcp) {
+      return { name: "MCP", state: mcp.state, detail: mcp.detail };
+    }
+    const meta = OAUTH_BOARD[service.name];
+    if (!meta) return service;
+    const legacy = service.name === "Notion" ? notion : null;
+    const board = boardState(oauthByName[service.name] ?? null, legacy);
+    return { name: service.name, state: board.state, detail: board.detail };
+  });
 
-  const services = SERVICES.map((service) =>
-    service.name === "Notion"
-      ? { name: "Notion", state: notionBoard.state, detail: notionBoard.detail }
-      : service.name === "MCP" && mcp
-        ? { name: "MCP", state: mcp.state, detail: mcp.detail }
-        : service,
-  );
-
-  async function connectNotion() {
-    setBusy(true);
+  async function connectOauth(name: string) {
+    const meta = OAUTH_BOARD[name];
+    if (!meta) return;
+    setBusy(name);
     setNote(null);
     try {
-      const res = await fetch("/api/mind/oauth/notion/start?format=json", {
+      const res = await fetch(`/api/mind/oauth/${meta.path}/start?format=json`, {
         credentials: "include",
         headers: { accept: "application/json" },
       });
       const body = (await res.json().catch(() => null)) as { ok?: boolean; url?: string; error?: string } | null;
       if (!res.ok || !body?.ok || !body.url) {
-        const message = body?.error || "Notion OAuth could not be started.";
-        setNote(message);
+        const message = body?.error || `${name} OAuth could not be started.`;
+        setNote({ name, text: message });
         onSetup(message);
-        setBusy(false);
+        setBusy(null);
         return;
       }
       window.location.assign(body.url);
     } catch {
-      const message = "Notion OAuth could not be started. Nothing was connected.";
-      setNote(message);
+      const message = `${name} OAuth could not be started. Nothing was connected.`;
+      setNote({ name, text: message });
       onSetup(message);
-      setBusy(false);
+      setBusy(null);
     }
   }
 
-  async function disconnectNotionOauth() {
-    setBusy(true);
+  async function disconnectOauth(name: string) {
+    const meta = OAUTH_BOARD[name];
+    if (!meta) return;
+    setBusy(name);
     setNote(null);
     try {
-      const res = await fetch("/api/mind/oauth/notion/disconnect", { method: "POST", credentials: "include" });
+      const res = await fetch(`/api/mind/oauth/${meta.path}/disconnect`, { method: "POST", credentials: "include" });
       const body = (await res.json().catch(() => null)) as OauthStatus & { ok?: boolean; error?: string } | null;
       if (body?.state) {
-        setOauth({ state: body.state, detail: body.detail });
-        setNote(body.detail);
+        setOauthByName((prev) => ({ ...prev, [name]: { state: body.state, detail: body.detail } }));
+        setNote({ name, text: body.detail });
       }
-      onDisconnect?.();
-      refreshOauth();
+      if (name === "Notion") onDisconnect?.();
+      refreshOne(name);
     } catch {
-      setNote("Disconnect failed. The board was not changed.");
+      setNote({ name, text: "Disconnect failed. The board was not changed." });
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {[grok, ...services].map((service) => {
-        const isNotion = service.name === "Notion";
-        const oauthConnected = isNotion && oauth?.state === "connected";
-        const legacyConnected = isNotion && !oauthConnected && notion?.state === "connected";
-        const showOauthConnect = isNotion && oauth?.state === "not_connected";
-        const showNotConfigured = isNotion && oauth?.state === "not_configured";
+        const meta = OAUTH_BOARD[service.name];
+        const oauth = meta ? oauthByName[service.name] : null;
+        const oauthConnected = Boolean(meta && oauth?.state === "connected");
+        const legacyConnected = service.name === "Notion" && !oauthConnected && notion?.state === "connected";
+        const showOauthConnect = Boolean(meta && oauth?.state === "not_connected");
+        const showNotConfigured = Boolean(meta && oauth?.state === "not_configured");
+        const isBusy = busy === service.name;
         return (
           <article key={service.name} className="rounded-panel border border-line bg-surface p-3">
             <div className="flex items-center justify-between gap-2">
@@ -176,19 +204,19 @@ export function ServiceBoard({
               <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
             </div>
             <p className="mt-2 text-sm text-muted">{service.detail}</p>
-            {isNotion && oauthConnected ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy} onClick={() => void disconnectNotionOauth()}>
+            {meta && oauthConnected ? (
+              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void disconnectOauth(service.name)}>
                 Disconnect
               </button>
-            ) : isNotion && showOauthConnect ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy} onClick={() => void connectNotion()}>
+            ) : meta && showOauthConnect ? (
+              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void connectOauth(service.name)}>
                 Connect
               </button>
-            ) : isNotion && showNotConfigured ? (
+            ) : meta && showNotConfigured ? (
               <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
                 Setup
               </button>
-            ) : isNotion && legacyConnected && onDisconnect ? (
+            ) : legacyConnected && onDisconnect ? (
               <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
                 Disconnect
               </button>
@@ -197,7 +225,7 @@ export function ServiceBoard({
                 {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
               </button>
             )}
-            {isNotion && note ? <p className="mt-2 text-xs text-muted">{note}</p> : null}
+            {note && note.name === service.name ? <p className="mt-2 text-xs text-muted">{note.text}</p> : null}
           </article>
         );
       })}
