@@ -6920,3 +6920,53 @@ html[data-theme="light"] .md-table th {
     border-color: rgb(255 255 255 / 0.16) !important;
   }
 }
+
+/* —— Evolution c98: icon set consistency — stroke / size / optical center —— */
+aside.rail nav button svg,
+aside.rail nav a svg,
+aside.rail .nav-item svg,
+.topbar button svg,
+.topbar a svg,
+.composer-bar button svg,
+.composer-bar a svg,
+.composer-dock button svg,
+.floating-composer button svg,
+.floating-menu svg,
+[role="menu"] svg,
+nav.fixed[aria-label="Primary"] button svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+  stroke-width: 1.75px !important;
+  vector-effect: non-scaling-stroke;
+}
+aside.rail nav button svg *,
+aside.rail nav a svg *,
+.topbar button svg *,
+.composer-bar button svg *,
+.composer-dock button svg *,
+.floating-composer button svg *,
+.floating-menu svg *,
+[role="menu"] svg *,
+nav.fixed[aria-label="Primary"] button svg * {
+  stroke-width: 1.75px !important;
+}
+aside.rail nav button:has(> svg:only-child),
+aside.rail button.size-11,
+.topbar button:has(> svg:only-child),
+.topbar button.grid,
+.composer-bar button:has(> svg:only-child),
+.composer-dock button:has(> svg:only-child),
+.floating-composer button:has(> svg:only-child) {
+  display: inline-grid !important;
+  place-items: center !important;
+  line-height: 0 !important;
+}
+aside.rail nav button.nav-item {
+  align-items: center !important;
+}
+aside.rail nav button.nav-item svg {
+  flex-shrink: 0 !important;
+  translate: 0 0.5px;
+}
