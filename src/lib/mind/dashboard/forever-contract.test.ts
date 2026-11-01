@@ -80,6 +80,8 @@ describe("forever-contract (hacker + queue #10)", () => {
           commits: [],
           notes: "",
           worktree: null,
+          heartbeatAt: null,
+          task: null,
           raw: {},
         },
       }),
@@ -108,6 +110,8 @@ describe("forever-contract (hacker + queue #10)", () => {
         commits: [],
         notes: "",
         worktree: null,
+          heartbeatAt: null,
+          task: null,
         raw: {},
       },
     });
@@ -130,6 +134,8 @@ describe("forever-contract (hacker + queue #10)", () => {
         commits: ["abc"],
         notes: "",
         worktree: null,
+          heartbeatAt: null,
+          task: null,
         raw: {},
       },
     });

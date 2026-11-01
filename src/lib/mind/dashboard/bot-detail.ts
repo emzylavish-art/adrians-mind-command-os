@@ -52,12 +52,25 @@ function stripQuotes(value: string | null | undefined): string | null {
 
 export function lockHeartbeat(lock: BotNode["lock"]): string | null {
   if (!lock) return null;
-  return stripQuotes(lock.raw.heartbeat_at ?? lock.raw.heartbeat ?? null);
+  // Gap#35: prefer promoted field; raw may be omitted after publicize
+  const fromTop = lock.heartbeatAt ?? null;
+  const raw = lock.raw;
+  const fromRaw =
+    raw && typeof raw === "object"
+      ? (raw.heartbeat_at ?? raw.heartbeat ?? raw.heartbeatAt ?? null)
+      : null;
+  return stripQuotes(fromTop ?? fromRaw);
 }
 
 export function lockTask(lock: BotNode["lock"]): string | null {
   if (!lock) return null;
-  return stripQuotes(lock.raw.task ?? lock.raw.working_on ?? lock.raw.workingOn ?? null);
+  const fromTop = lock.task ?? null;
+  const raw = lock.raw;
+  const fromRaw =
+    raw && typeof raw === "object"
+      ? (raw.task ?? raw.working_on ?? raw.workingOn ?? null)
+      : null;
+  return stripQuotes(fromTop ?? fromRaw);
 }
 
 /** Map a git branch name onto a dashboard bot id (shared with charts). */

@@ -94,6 +94,12 @@ export function parseLockText(text: string, file = "lock.lock"): LockRecord {
     raw.claimed_by?.trim() ||
     "";
 
+  const heartbeatAt = stripZoneParen(
+    raw.heartbeat_at?.trim() || raw.heartbeat?.trim() || raw.heartbeatAt?.trim() || null,
+  );
+  const task =
+    (raw.task ?? raw.working_on ?? raw.workingOn ?? "").trim() || null;
+
   return {
     file,
     owner,
@@ -104,6 +110,8 @@ export function parseLockText(text: string, file = "lock.lock"): LockRecord {
     commits,
     notes: notes || raw.notes || "",
     worktree: raw.worktree?.trim() || null,
+    heartbeatAt,
+    task,
     raw,
   };
 }

@@ -100,6 +100,8 @@ describe("notion-mirror (queue #9)", () => {
       commits: ["7a6e24f"],
       notes: "Paused by user order",
       worktree: "/workspace/mind-command-os-dashboard-painter",
+          heartbeatAt: null,
+          task: null,
       raw: { heartbeat_at: "2026-11-01T19:20:19+01:00", task: "cycle paused" },
     };
     painter.notes = "Paused by user order";

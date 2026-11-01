@@ -14,6 +14,8 @@ function lock(partial: Partial<LockRecord>): LockRecord {
     commits: [],
     notes: "",
     worktree: null,
+          heartbeatAt: null,
+          task: null,
     raw: {},
     ...partial,
   };

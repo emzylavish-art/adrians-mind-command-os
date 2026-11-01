@@ -187,7 +187,8 @@ export function buildTimeline(input: BuildTimelineInput): Timeline {
 
   for (const lock of input.locks ?? []) {
     const botId = botForLockFile(lock.file) ?? botForBranch(lock.branch);
-    const hb = lock.raw?.heartbeat_at ?? lock.raw?.heartbeat ?? null;
+    // Gap#35: prefer promoted heartbeatAt; raw may be omitted after publicize
+    const hb = lock.heartbeatAt ?? lock.raw?.heartbeat_at ?? lock.raw?.heartbeat ?? null;
     if (lock.claimed_at) {
       push({
         atMs: parseTimeMs(lock.claimed_at, nowMs),
@@ -390,6 +391,8 @@ export function scrubAt(input: ScrubInput): ScrubResult {
           commits: [],
           notes: "",
           worktree: null,
+          heartbeatAt: a.heartbeatAt ?? null,
+          task: null,
           raw: a.heartbeatAt ? { heartbeat_at: a.heartbeatAt } : {},
         }
       : null;

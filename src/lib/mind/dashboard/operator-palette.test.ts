@@ -51,6 +51,8 @@ describe("operator-palette (hacker + queue #8)", () => {
           commits: [],
           notes: "<script>x</script>",
           worktree: null,
+          heartbeatAt: null,
+          task: null,
           raw: { heartbeat_at: "t2" },
         },
       }),

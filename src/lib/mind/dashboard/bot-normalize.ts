@@ -48,6 +48,8 @@ export function dedupeBotsById(bots: readonly BotNode[]): BotNode[] {
           ...raw.lock,
           branch: raw.lock.branch != null ? sanitizeBranchLabel(raw.lock.branch) : null,
           notes: sanitizeHostileText(raw.lock.notes || "", 400),
+          heartbeatAt: raw.lock.heartbeatAt ?? null,
+          task: raw.lock.task != null ? sanitizeHostileText(raw.lock.task, 200) : null,
           // raw already stripped by publicize; keep defensive
         }
       : null;
