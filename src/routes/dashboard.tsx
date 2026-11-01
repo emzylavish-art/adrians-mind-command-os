@@ -5,7 +5,7 @@ export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
   head: () => ({
     meta: [
-      { title: "Mind Dashboard · Adrian's Mind" },
+      { title: "Adrian's Mind · Universe" },
       { name: "theme-color", content: "#070b16" },
     ],
   }),

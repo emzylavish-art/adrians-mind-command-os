@@ -234,3 +234,31 @@
     transition: none;
   }
 }
+
+.dash3d-universe .dash3d-hud { display: none; }
+
+.dash3d-skybar {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  right: 0.85rem;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  pointer-events: none;
+}
+.dash3d-skybar > * { pointer-events: auto; }
+.dash3d-skybar-card {
+  flex: 1 1 200px;
+  max-width: 320px;
+  max-height: 7.5rem;
+}
+.dash3d-zoomout {
+  border: 1px solid var(--dash3d-line);
+  color: var(--dash3d-fg);
+  cursor: pointer;
+  font: inherit;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.9rem;
+}
