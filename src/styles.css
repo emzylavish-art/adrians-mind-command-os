@@ -7468,3 +7468,37 @@ span[class*="124_92_255"]:not(.logo-mark):not(.logo-badge) {
   box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
   color: #fff !important;
 }
+
+/* —— Evolution c117: phone/tablet safe-area + keyboard clearance (375/430/768) —— */
+@media (max-width: 1023.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed.inset-x-0.bottom-0 {
+    padding-left: max(0.25rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.25rem, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 48 !important;
+  }
+  .floating-composer,
+  section[data-composer="floating"],
+  .composer-dock {
+    left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 46 !important;
+    max-width: none !important;
+  }
+  .main-stage,
+  .page-shell,
+  .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: max(0px, env(safe-area-inset-left, 0px));
+    padding-right: max(0px, env(safe-area-inset-right, 0px));
+  }
+  /* Soft keyboard: keep focused composer above home indicator */
+  .floating-composer:focus-within,
+  .composer-dock:focus-within,
+  section[data-composer="floating"]:focus-within {
+    bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    max-height: min(62vh, 26rem) !important;
+  }
+}
