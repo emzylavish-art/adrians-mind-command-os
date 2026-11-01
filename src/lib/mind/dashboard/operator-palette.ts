@@ -191,7 +191,10 @@ export function readOperatorPrefs(storage: Pick<Storage, "getItem"> | null | und
     return {
       layers,
       healthFilter,
-      lastNodeId: typeof parsed.lastNodeId === "string" ? parsed.lastNodeId.slice(0, 120) : null,
+      lastNodeId:
+        typeof parsed.lastNodeId === "string"
+          ? sanitizePaletteText(parsed.lastNodeId, 120) || null
+          : null,
       lastNodeKind:
         parsed.lastNodeKind === "bot" || parsed.lastNodeKind === "building" || parsed.lastNodeKind === "notion"
           ? parsed.lastNodeKind
@@ -212,6 +215,74 @@ export function writeOperatorPrefs(
   } catch {
     /* quota / private mode */
   }
+}
+
+
+export type LastNodeBreadcrumb = {
+  id: string;
+  kind: OperatorTargetKind;
+  label: string;
+  sub: string;
+  /** True when prefs point at an id that is no longer in the live graph. */
+  missing: boolean;
+};
+
+/**
+ * Resolve operator last-node prefs against live data for Flyover HUD.
+ * Hacker: never echo raw localStorage — sanitize id/label; mark missing targets.
+ */
+export function resolveLastNodeBreadcrumb(input: {
+  lastNodeId: string | null | undefined;
+  lastNodeKind: OperatorTargetKind | null | undefined;
+  bots?: readonly BotNode[] | null;
+  buildings?: readonly CityBuilding[] | null;
+  pages?: readonly NotionSnapPage[] | null;
+}): LastNodeBreadcrumb | null {
+  const kind = input.lastNodeKind;
+  const rawId = typeof input.lastNodeId === "string" ? input.lastNodeId : "";
+  const id = sanitizePaletteText(rawId, 120);
+  if (!kind || !id) return null;
+
+  if (kind === "bot") {
+    const bot = (input.bots ?? []).find((b) => b.id === id || `bot-${b.id}` === id);
+    if (bot) {
+      return {
+        id: bot.id,
+        kind,
+        label: sanitizePaletteText(bot.name || bot.id, 96),
+        sub: sanitizePaletteText(`${bot.health}${bot.branch ? ` · ${bot.branch}` : ""}`, 120),
+        missing: false,
+      };
+    }
+    return { id, kind, label: id, sub: "last target missing from live status", missing: true };
+  }
+
+  if (kind === "building") {
+    const b = (input.buildings ?? []).find((x) => x.id === id);
+    if (b) {
+      return {
+        id: b.id,
+        kind,
+        label: sanitizePaletteText(b.name || b.id, 96),
+        sub: sanitizePaletteText(`${b.kind} · ${b.health}`, 120),
+        missing: false,
+      };
+    }
+    return { id, kind, label: id, sub: "last building missing from city", missing: true };
+  }
+
+  // notion
+  const page = (input.pages ?? []).find((x) => x.id === id);
+  if (page) {
+    return {
+      id: page.id,
+      kind,
+      label: sanitizePaletteText(page.title || page.id, 96),
+      sub: sanitizePaletteText(page.kind || "page", 80),
+      missing: false,
+    };
+  }
+  return { id, kind, label: id, sub: "last Notion page missing from snapshot", missing: true };
 }
 
 // silence unused NotionStopPoint if tree-shaken — keep import for queue #9 sibling types

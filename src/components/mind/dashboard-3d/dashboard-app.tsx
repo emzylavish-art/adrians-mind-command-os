@@ -21,7 +21,7 @@ import {
 } from "./operator-console";
 import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
-import type { OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
+import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
@@ -338,7 +338,48 @@ export function DashboardApp() {
         </div>
       ) : null}
 
-      {state.status === "ready" && !webglError ? <FlyoverHud fly={fly} layout={layoutForHud} /> : null}
+      {state.status === "ready" && !webglError ? (
+        <FlyoverHud
+          fly={fly}
+          layout={layoutForHud}
+          lastNode={resolveLastNodeBreadcrumb({
+            lastNodeId: operatorPrefs.lastNodeId,
+            lastNodeKind: operatorPrefs.lastNodeKind,
+            bots: state.data.bots,
+            buildings: layoutForHud.buildings,
+            pages: state.data.notionGraph?.pages ?? null,
+          })}
+          onRevisitLast={() => {
+            const crumb = resolveLastNodeBreadcrumb({
+              lastNodeId: operatorPrefs.lastNodeId,
+              lastNodeKind: operatorPrefs.lastNodeKind,
+              bots: state.data.bots,
+              buildings: layoutForHud.buildings,
+              pages: state.data.notionGraph?.pages ?? null,
+            });
+            if (!crumb || crumb.missing) return;
+            if (crumb.kind === "bot") {
+              const bot = state.data.bots.find((b) => b.id === crumb.id);
+              if (bot) {
+                setSelected(bot);
+                setNotionPage(null);
+                document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId: bot.id } }));
+              }
+            } else if (crumb.kind === "building") {
+              setSelected(null);
+              setNotionPage(null);
+              sendFly({ type: "DIVE" });
+              sendFly({ type: "ENTER", buildingId: crumb.id, part: "door" });
+            } else if (crumb.kind === "notion") {
+              const page = state.data.notionGraph?.pages?.find((x) => x.id === crumb.id) ?? null;
+              if (page) {
+                setSelected(null);
+                setNotionPage(page);
+              }
+            }
+          }}
+        />
+      ) : null}
       {state.status === "ready" ? (
         <BuildingInteriorPanel
           fly={fly}

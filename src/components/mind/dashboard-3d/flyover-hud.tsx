@@ -3,6 +3,7 @@ import type { FlyEvent, FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import type { CityLayout } from "@/lib/mind/dashboard/city-layout";
 import type { AgentStat, ProjectBuilding, ProjectsDashboard } from "@/lib/mind/dashboard/projects";
 import type { BotNode } from "@/lib/mind/dashboard/types";
+import type { LastNodeBreadcrumb } from "@/lib/mind/dashboard/operator-palette";
 
 export function sendFly(ev: FlyEvent) {
   document.dispatchEvent(new CustomEvent<FlyEvent>("dash3d-fly", { detail: ev }));
@@ -15,11 +16,39 @@ const LEVEL_LABEL: Record<FlyState["level"], string> = {
 };
 
 /** Level breadcrumb + accessible doors (keyboard alternative to clicking a door in WebGL). */
-export function FlyoverHud({ fly, layout }: { fly: FlyState; layout: CityLayout }) {
+export function FlyoverHud({
+  fly,
+  layout,
+  lastNode,
+  onRevisitLast,
+}: {
+  fly: FlyState;
+  layout: CityLayout;
+  lastNode?: LastNodeBreadcrumb | null;
+  onRevisitLast?: () => void;
+}) {
   return (
     <nav className="dash3d-flyhud dash3d-glass" aria-label="Flyover camera" data-fly-level={fly.level}>
       <h2>Flyover</h2>
       <p className="dash3d-title">{LEVEL_LABEL[fly.level]}</p>
+      {lastNode ? (
+        <div className="dash3d-flyhud-last" data-testid="fly-last-node" data-missing={lastNode.missing ? "1" : "0"}>
+          <p className="dash3d-muted" style={{ fontSize: "0.68rem", margin: "0.35rem 0 0.15rem" }}>
+            Last palette · {lastNode.kind}
+          </p>
+          <p className="dash3d-title" style={{ fontSize: "0.85rem" }}>
+            {lastNode.label}
+          </p>
+          <p className="dash3d-muted" style={{ fontSize: "0.62rem" }}>
+            {lastNode.sub}
+          </p>
+          {!lastNode.missing && onRevisitLast ? (
+            <button type="button" className="dash3d-pill" data-testid="fly-revisit-last" onClick={onRevisitLast}>
+              ↺ Revisit
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="dash3d-flyhud-row">
         {fly.level === "universe" ? (
           <button type="button" className="dash3d-pill" data-testid="fly-dive" onClick={() => sendFly({ type: "DIVE" })}>

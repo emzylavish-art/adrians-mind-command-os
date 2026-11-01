@@ -7,8 +7,9 @@ import {
   formatBotClipboardSummary,
   readOperatorPrefs,
   sanitizePaletteText,
+  resolveLastNodeBreadcrumb,
   shouldIgnoreOperatorHotkey,
-  writeOperatorPrefs,
+  writeOperatorPrefs
 } from "./operator-palette.ts";
 import type { BotNode } from "./types.ts";
 
@@ -115,4 +116,54 @@ describe("operator-palette (hacker + queue #8)", () => {
     assert.equal(prefs.healthFilter, "stalled");
     assert.equal(prefs.lastNodeId, "bot:dashboard");
   });
+  it("last-node breadcrumb sanitizes XSS and marks missing targets", () => {
+    const dirty = '<img src=x onerror=alert(1)>evil';
+    const crumbMissing = resolveLastNodeBreadcrumb({
+      lastNodeId: dirty,
+      lastNodeKind: "bot",
+      bots: [],
+    });
+    assert.ok(crumbMissing);
+    assert.equal(crumbMissing!.missing, true);
+    assert.ok(!crumbMissing!.label.includes("<"));
+    assert.ok(!crumbMissing!.label.toLowerCase().includes("onerror"));
+
+    const crumb = resolveLastNodeBreadcrumb({
+      lastNodeId: "dashboard",
+      lastNodeKind: "bot",
+      bots: [
+        {
+          id: "dashboard",
+          name: "Dashboard Bot",
+          health: "healthy",
+          lock: null,
+          branch: "dashboard-3d",
+          lastActivityAt: null,
+          commits: [],
+          notes: "",
+          reason: "ok",
+        },
+      ],
+    });
+    assert.equal(crumb?.missing, false);
+    assert.equal(crumb?.label, "Dashboard Bot");
+    assert.ok((crumb?.sub || "").includes("healthy"));
+  });
+
+  it("readOperatorPrefs sanitizes poisoned lastNodeId from storage", () => {
+    const store = {
+      getItem: () =>
+        JSON.stringify({
+          lastNodeId: '<script>alert(1)</script>dashboard',
+          lastNodeKind: "bot",
+          layers: { feed: true },
+          healthFilter: "all",
+        }),
+    };
+    const prefs = readOperatorPrefs(store);
+    assert.ok(prefs.lastNodeId);
+    assert.ok(!prefs.lastNodeId!.includes("<"));
+    assert.ok(!prefs.lastNodeId!.toLowerCase().includes("script"));
+  });
+
 });
