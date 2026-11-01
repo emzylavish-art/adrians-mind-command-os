@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: painter c2 lore plaques (pending land). Prior: **405ef30** (hacker-pass + Light/Painter wire). Next after land: Camera/city + Projects.
+Last release: **29addee** Dashboard c8 — city flyover + Projects + hacker fixes (stale-while-error poll, honest gitOk, no fake progress, material leak). Next: #2 Click-and-zoom.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -17,7 +17,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 0b | **Light — health-tinted lights + bloom/color-grade** | **done** | Cosmos Light Bot; wired in 405ef30 |
 | 0c | **Painter kit (shaders/materials)** — brush/watercolor ShaderMaterials, star+building surfaces, paper grain, procedural nebula, painterly post-pass + `createPainterlyKit` | **done** | Cosmos Painter Bot; wired in 405ef30 |
 | 0d | **Painter — constellation lore plaques** — watercolor plaque ShaderMaterial + procedural parchment | **done** | Cosmos Painter Bot; `createLorePlaqueMaterial` + `makeParchmentRGBA`; sky dispose leak + mediump paintWrap hacker fixes |
-| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | queued | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; use `createBuildingBrushMaterial`; shots flyover-high/city/interior |
+| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | **done** | 29addee — `flyover-fsm.ts` + `city-layout.ts` + `city/city-layer.ts` (createBuildingBrushMaterial) + interior panel/HUD; wheel-push crosses levels, city pan clamped; shots flyover-high/city/interior. Remaining polish → folded into #2 (real canvas door/window click tuning, damped dolly) |
 | 2 | **Click-and-zoom** — star click eases camera in + detail; wheel/pinch dolly; empty-space/zoom-out → sky; reuse camera FSM | queued | Shots zoom-star.png, zoom-sky.png |
 | 3 | **Animation pass** — living motion: orbiting, drifting, pulsing, transition polish | queued | After click-zoom; tickPainterlyKit time uniforms |
 | 4 | **Sound** — WebAudio procedural only; health tones spatialized; muted by default + unmute toggle | queued | |
@@ -36,7 +36,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
-- **Motion LOD / visibility budget** — distance-based dust count + comet max when camera is sky vs interior; pause particle `update` when `document.hidden` (Cosmos Motion Bot next).
+- **City night-shift windows from lock timestamps** (Dashboard next after #2) — window glow per floor flickers on only for floors whose task/lock changed in the last 30 min (real claimed_at/released_at), so the city shows *where work is happening now*; static when no recent activity; reduced-motion = steady.
+- ~~**Motion LOD / visibility budget**~~ — **done (Cosmos Motion Bot c3)**: camera-distance dust LOD via `onBeforeRender`, frame-budget governor (EMA >24ms trims to 30% floor, recovers <18ms), active-slice instance upload, `document.hidden` pause; plus shared continuous `MotionClock` (no teleport on tab resume / 24h fold).
+- **Motion — comet tail fade** — additive vertex-color head→tail gradient + brighter head point on commit comets; dimmed static under reduced-motion (Cosmos Motion Bot next).
 
 - **Painter — ink-wash constellation edge ribbons** — ShaderMaterial/Line2 ribbons replacing LineBasic edges; health-tinted wash; mediump-safe (next painter cycle).
 - **Painter — lore plaque text atlas** — procedural canvas glyph atlas for lock-note body text on plaques (no external fonts/assets).

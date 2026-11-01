@@ -11,11 +11,31 @@ function runGit(repo: string, args: string[]): string {
     encoding: "utf8",
     maxBuffer: 4 * 1024 * 1024,
     timeout: 15_000,
+    stdio: ["ignore", "pipe", "pipe"],
   });
+}
+
+export type CommitsResult = { ok: true; commits: GitCommit[] } | { ok: false; commits: []; error: string };
+
+/**
+ * Hacker-pass (2026-11-01 c8): collectRecentCommits swallowed git failures and returned [],
+ * so status reported `gitOk: true` (green "git live") even when the repo was missing/broken.
+ * This variant reports the failure honestly.
+ */
+export function collectRecentCommitsResult(repo: string, limit = 20): CommitsResult {
+  try {
+    runGit(repo, ["rev-parse", "--git-dir"]);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message.split("\n")[0]! : String(error);
+    return { ok: false, commits: [], error: `git unavailable at ${repo}: ${msg}`.slice(0, 240) };
+  }
+  return { ok: true, commits: collectRecentCommits(repo, limit) };
 }
 
 /** Recent commits across branches via for-each-ref + log. */
 export function collectRecentCommits(repo: string, limit = 20): GitCommit[] {
+  const safeLimit = Number.isFinite(limit) ? Math.min(200, Math.max(1, Math.floor(limit))) : 20;
+  limit = safeLimit;
   let refs = "";
   try {
     refs = runGit(repo, [
@@ -79,7 +99,11 @@ export function collectRecentCommits(repo: string, limit = 20): GitCommit[] {
     // ignore
   }
 
-  fromRefs.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+  const ms = (d: string) => {
+    const v = Date.parse(d);
+    return Number.isFinite(v) ? v : 0;
+  };
+  fromRefs.sort((a, b) => ms(b.date) - ms(a.date));
   return fromRefs.slice(0, limit);
 }
 

@@ -101,3 +101,24 @@ describe("projects dashboard", () => {
     assert.ok(agent!.runs >= 1);
   });
 });
+
+describe("projects honesty (hacker pass c8)", () => {
+  it("does not fabricate bot progress or run results/timestamps", () => {
+    const status = baseStatus();
+    const claimed = {
+      ...status.bots[0]!,
+      id: "mcp-integration" as const,
+      name: "MCP Bot",
+      health: "healthy" as const,
+      lock: { ...status.bots[0]!.lock!, status: "claimed", released_at: null },
+    };
+    const dash = buildProjectsDashboard({ ...status, bots: [status.bots[0]!, claimed] });
+    const b = dash.projects.find((p) => p.id === "bot-mcp-integration")!;
+    assert.equal(b.progressKnown, false);
+    assert.equal(b.progress, 0);
+    const done = dash.projects.find((p) => p.id === "bot-logic")!;
+    assert.equal(done.progressKnown, true);
+    assert.equal(done.progress, 1);
+    assert.ok(done.recentRuns.every((r) => r.ok === null && r.at === null));
+  });
+});

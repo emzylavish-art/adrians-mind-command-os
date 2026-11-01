@@ -1,5 +1,7 @@
 import * as THREE from "three";
-import { clampInt, finiteOr, sanitizeTime } from "../motion/sanitize.ts";
+import { clampInt, finiteOr } from "../motion/sanitize.ts";
+import { sharedMotionClock, type MotionClock } from "../motion/motion-clock.ts";
+import { isDocumentHidden } from "./motion-lod.ts";
 
 export const COMET_SEGMENTS_MIN = 2;
 export const COMET_SEGMENTS_DEFAULT = 24;
@@ -23,6 +25,8 @@ export type CreateCommitCometsOpts = {
   max?: number;
   radius?: number;
   segments?: number;
+  /** Continuous clock (default shared) — survives the scene's 5s comet rebuild. */
+  clock?: MotionClock;
 };
 
 type CometState = {
@@ -54,6 +58,7 @@ export function createCommitComets(
   const max = clampInt(opts.max ?? COMET_MAX_DEFAULT, 0, COMET_MAX_HARD, COMET_MAX_DEFAULT);
   const radius = Math.max(0.01, finiteOr(opts.radius ?? 14, 14));
   const segments = clampInt(opts.segments ?? COMET_SEGMENTS_DEFAULT, COMET_SEGMENTS_MIN, 128, COMET_SEGMENTS_DEFAULT);
+  const clock = opts.clock ?? sharedMotionClock;
   const group = new THREE.Group();
   group.name = "motion-commit-comets";
   scene.add(group);
@@ -127,7 +132,8 @@ export function createCommitComets(
       }
       return;
     }
-    const t = sanitizeTime(tSeconds);
+    if (isDocumentHidden()) return;
+    const t = clock.map(tSeconds);
     for (const c of comets) {
       (c.line.material as THREE.LineBasicMaterial).opacity = 0.55;
       writeArc(c, t * c.speed + c.phase);

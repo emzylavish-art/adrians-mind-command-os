@@ -17,3 +17,15 @@ export {
   type CommitTrailInput,
   type CreateCommitCometsOpts,
 } from "./commit-comets.ts";
+export {
+  createFrameBudget,
+  dustDistanceFactor,
+  isDocumentHidden,
+  lodCount,
+  LOD_FAR,
+  LOD_FAR_FACTOR,
+  LOD_MIN_ACTIVE,
+  LOD_NEAR,
+  type FrameBudget,
+  type FrameBudgetOpts,
+} from "./motion-lod.ts";

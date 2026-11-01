@@ -1,8 +1,9 @@
 import { DASHBOARD_BOTS, matchBotForLock } from "./bots.ts";
 import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFromLocks } from "./feeds.ts";
-import { collectRecentCommits, latestCommitActivityForBranch, repoDirFromEnv } from "./git.ts";
+import { collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { locksDirFromEnvSafe, repoDirFromEnvSafe } from "./safe-paths.ts";
 import { classifyHealth } from "./health.ts";
-import { locksDirFromEnv, readLocksDir } from "./locks.ts";
+import { readLocksDir } from "./locks.ts";
 import { fetchNotionStopPoints } from "./notion.ts";
 import { buildConstellations, constellationEdges, systemWeather } from "./constellations.ts";
 import { loadNotionSnapshotFile } from "./notion-graph.ts";
@@ -36,15 +37,22 @@ export async function buildDashboardStatus(
   env: NodeJS.ProcessEnv = process.env,
   now = Date.now(),
 ): Promise<DashboardStatus> {
-  const locksDir = locksDirFromEnv(env);
-  const repoDir = repoDirFromEnv(env);
+  const locksSafe = locksDirFromEnvSafe(env);
+  const repoSafe = repoDirFromEnvSafe(env);
+  const locksDir = locksSafe.path;
+  const repoDir = repoSafe.path;
   const locks = readLocksDir(locksDir);
   let commits: DashboardStatus["commits"] = [];
-  let gitOk = true;
+  let gitOk = false;
+  let gitError: string | undefined;
   try {
-    commits = collectRecentCommits(repoDir, 20);
-  } catch {
+    const res = collectRecentCommitsResult(repoDir, 20);
+    gitOk = res.ok;
+    commits = res.commits;
+    if (!res.ok) gitError = res.error;
+  } catch (error) {
     gitOk = false;
+    gitError = error instanceof Error ? error.message : String(error);
     commits = [];
   }
 
@@ -104,6 +112,9 @@ export async function buildDashboardStatus(
       repoDir,
       locksOk: locks.length > 0,
       gitOk,
+      ...(gitError ? { gitError } : {}),
+      ...(locksSafe.rejected ? { locksRejected: locksSafe.rejected } : {}),
+      ...(repoSafe.rejected ? { repoRejected: repoSafe.rejected } : {}),
     },
     constellations,
     constellationEdges: edges,

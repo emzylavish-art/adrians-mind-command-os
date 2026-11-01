@@ -27,3 +27,9 @@ export {
   sanitizeDt,
   sanitizeTime,
 } from "./sanitize.ts";
+export {
+  createMotionClock,
+  sharedMotionClock,
+  type MotionClock,
+  type MotionClockOpts,
+} from "./motion-clock.ts";
