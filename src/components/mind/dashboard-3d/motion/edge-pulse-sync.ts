@@ -7,6 +7,12 @@
  * neighbor pulse. Reduced-motion → static highlight (no travel, steady strength).
  *
  * Dashboard Bot wires `hoverOut.edge` / focusId into `stepEdgePulseSync`.
+ *
+ * Hacker c20: pulse phase used to come from the *destination* endpoint, so a
+ * focus/hover flip between endpoints (or to null) jumped the phase and popped the
+ * ink-edge uPulse by up to ±2·amp·strength in one frame. Phase is now a symmetric
+ * per-edge value (independent of orientation / endpoint order); only `travel`
+ * direction follows focus.
  */
 import { clamp01 } from "./ease.ts";
 import { finiteOr } from "./sanitize.ts";
@@ -58,6 +64,21 @@ function normalizeId(id: string | null | undefined): string | null {
   if (typeof id !== "string") return null;
   const s = id.trim();
   return s.length === 0 ? null : s;
+}
+
+const TAU = Math.PI * 2;
+
+/**
+ * Orientation-independent phase for an edge: (phase(a) + phase(b)) mod 2π.
+ * Same value for (a,b) and (b,a) and for any focus — no alloc.
+ */
+export function edgePulsePhase(
+  fromId: string | null | undefined,
+  toId: string | null | undefined,
+): number {
+  const p = characterPhaseFromId(normalizeId(fromId) ?? "") + characterPhaseFromId(normalizeId(toId) ?? "");
+  const m = p % TAU;
+  return Number.isFinite(m) ? m : 0;
 }
 
 /**
@@ -128,9 +149,8 @@ export function stepEdgePulseSync(
 
   const t = clock.map(tSeconds);
   const towardTo = edgeTravelTowardTo(from, to, focusId);
-  // Phase from the destination endpoint so wave locks to that star's pulse phase.
-  const destId = towardTo ? to : from;
-  const phase = characterPhaseFromId(destId);
+  // c20: symmetric edge phase — orientation flips must not jump the pulse.
+  const phase = edgePulsePhase(from, to);
   const wave = Math.sin(t * pulseSpeed + phase);
   out.pulse = 1 + wave * amp;
 

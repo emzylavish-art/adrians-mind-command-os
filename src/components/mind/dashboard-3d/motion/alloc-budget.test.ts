@@ -7,13 +7,17 @@
  * and reused harness opts. HeapUsed deltas are noisy under scavenges, so we lock the
  * source invariant here and the heapΔ budget in cpu-budget.test.ts.
  *
- * Run with: node --expose-gc --experimental-strip-types --test …/alloc-budget.test.ts
+ * Hacker c19: the heap test used to *require* `--expose-gc`, so registering this file
+ * in the plain `npm test` strip-types chain would fail CI. `resolveGc()` now enables
+ * gc at runtime via v8 flags (works with or without --expose-gc).
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import { createMotionClock } from "./motion-clock.ts";
 import { createFocusEaseState } from "./focus-ease.ts";
 import { stepStarFieldBatch, STAR_BATCH_ORBIT_OPTS } from "./star-batch.ts";
@@ -26,6 +30,16 @@ const STARS = 500;
 const DT = 1 / 60;
 /** Steady-state budget after warmup (bytes/frame). */
 const BYTES_PER_FRAME_BUDGET = 64;
+
+/** Return a callable gc even when node was started without --expose-gc. */
+function resolveGc(): () => void {
+  const existing = (globalThis as { gc?: () => void }).gc;
+  if (typeof existing === "function") return existing;
+  setFlagsFromString("--expose-gc");
+  const fn = runInNewContext("gc") as unknown;
+  if (typeof fn !== "function") throw new Error("gc unavailable after --expose-gc flag");
+  return fn as () => void;
+}
 
 describe("hacker c18 — hot-path alloc budget", () => {
   it("star-batch source does not allocate orbit opts per star", () => {
@@ -56,12 +70,13 @@ describe("hacker c18 — hot-path alloc budget", () => {
     const after = STAR_BATCH_ORBIT_OPTS;
     assert.equal(before, mid);
     assert.equal(mid, after);
-    assert.equal(STAR_BATCH_ORBIT_OPTS.clock, clock);
+    // c19: the caller clock is released after each batch so an unmounted scene clock is not pinned.
+    assert.equal(STAR_BATCH_ORBIT_OPTS.clock, undefined);
   });
 
   it("stepStarFieldBatch steady-state heap growth stays under ~64 B/frame after warmup", () => {
-    const g = (globalThis as { gc?: () => void }).gc;
-    assert.equal(typeof g, "function", "requires node --expose-gc");
+    const g = resolveGc();
+    assert.equal(typeof g, "function", "gc must resolve without --expose-gc (c19)");
 
     const clock = createMotionClock();
     const ids = Array.from({ length: STARS }, (_, i) => `bot:${i}`);

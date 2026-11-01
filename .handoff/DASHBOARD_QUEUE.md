@@ -133,6 +133,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **queued** | gap-feed captures-20261101-172519 |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **queued** | gap-feed |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **queued** | gap-feed |
+| 79 | **Motion c19/c20 — fold crossfade + neighbor damp into `stepStarFieldBatch({ clock, xfade, neighbors })`** — pass the existing `healthXfade` states as a parallel array + `neighborSet`; drop the post-batch orbit re-sample, the separate crossfade loop and per-star `{ clock }` literals; register c19/c20 motion tests (motion/INTEGRATION.md Requests) | queued | Motion lane c19 7dfa502+ (flap-safe crossfade; neighbor damp no longer fights focus-ease — already fixes the c50 wiring's 0.71 vs 0.35 floor); also `pruneMotionStateMap(healthXfade, liveIds)` on bot-list change (c20); c20 edge-pulse symmetric phase needs no wiring |
 
 
 

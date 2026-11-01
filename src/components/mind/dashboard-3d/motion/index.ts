@@ -154,6 +154,7 @@ export {
   createEdgePulseSample,
   createEdgePulseState,
   edgeTravelTowardTo,
+  edgePulsePhase,
   stepEdgePulseSync,
   type EdgePulseOpts,
   type EdgePulseSample,
@@ -228,6 +229,7 @@ export {
 } from "./star-batch.ts";
 export {
   HEALTH_XFADE_LAMBDA,
+  XFADE_HEALTHS,
   createHealthPulseCrossfadeState,
   sampleStarPulseCrossfaded,
   setHealthPulseTarget,
@@ -244,4 +246,11 @@ export {
   stepNeighborDriftDamp,
   stepNeighborDriftDampBatch,
   type NeighborDriftDampOpts,
+  type NeighborDriftState,
 } from "./neighbor-drift-damp.ts";
+
+export {
+  MOTION_STATE_MAP_MAX,
+  pruneMotionStateMap,
+  type LiveIds,
+} from "./state-prune.ts";

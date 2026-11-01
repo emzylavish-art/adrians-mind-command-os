@@ -9,6 +9,11 @@
  *
  * Hacker c17: count 0 / 100k hard-cap, NaN bases → finite outs, id holes
  * skipped, mid-frame length shrink snapshotted, typed scratch reuse after dispose.
+ *
+ * c19: opt-in `xfade` (per-star HealthPulseCrossfadeState, parallel to ids) and
+ * `neighbors` (1-hop Set from collectOneHopNeighbors) so Dashboard wires the c17
+ * health crossfade + c18/c19 neighbor drift damp in this one call. Omitting them
+ * keeps the c16 behaviour bit-for-bit. Still zero hot-path allocation.
  */
 import { finiteOr } from "./sanitize.ts";
 import { sharedMotionClock, type MotionClock } from "./motion-clock.ts";
@@ -26,6 +31,14 @@ import {
   stepFocusEase,
   type FocusEaseState,
 } from "./focus-ease.ts";
+import {
+  sampleStarPulseCrossfaded,
+  setHealthPulseTarget,
+  stepHealthPulseCrossfade,
+  type HealthPulseCrossfadeOpts,
+  type HealthPulseCrossfadeState,
+} from "./health-pulse-crossfade.ts";
+import { stepNeighborDriftDamp } from "./neighbor-drift-damp.ts";
 
 /** Hard cap so a corrupt count=1e5 cannot stall a frame. */
 export const STAR_BATCH_MAX = 8192;
@@ -41,7 +54,20 @@ export type StarBatchSlot = {
 
 export type StarBatchOpts = {
   clock?: MotionClock;
+  /**
+   * c19 opt-in: per-star health crossfade states aligned with `ids`. When a slot
+   * is present, health changes ease (setHealthPulseTarget + step + crossfaded
+   * sample) instead of snapping. Null/missing slots fall back to sampleStarPulse.
+   */
+  xfade?: ReadonlyArray<HealthPulseCrossfadeState | null | undefined> | null;
+  /** c19 opt-in: 1-hop neighbor ids of `focusId` → soft drift floor. */
+  neighbors?: ReadonlySet<string> | null;
 };
+
+/** Reused crossfade temps/opts — no per-star allocation (c19). */
+const XF_TMP_FROM: PulseSample = { scale: 1, glow: 2, emissive: 0.5 };
+const XF_TMP_TO: PulseSample = { scale: 1, glow: 2, emissive: 0.5 };
+const XF_OPTS: HealthPulseCrossfadeOpts = {};
 
 const EMPTY_BATCH_OPTS: StarBatchOpts = Object.freeze({});
 
@@ -259,7 +285,12 @@ export function stepStarFieldBatch(
     ),
   );
 
+  const xfade = o.xfade ?? null;
+  const lenXf = xfade ? xfade.length : 0;
+  const neighbors = o.neighbors ?? null;
+
   STAR_BATCH_ORBIT_OPTS.clock = clock;
+  XF_OPTS.clock = clock;
   let stepped = 0;
   for (let i = 0; i < n; i++) {
     // Re-check live length in case caller shrunk arrays mid-frame.
@@ -278,8 +309,16 @@ export function stepStarFieldBatch(
 
     const ph = pulsePhaseFromId(id);
     const health = healths[i] ?? "idle";
-    sampleStarPulse(pulse, tSeconds, ph, health, reducedMotion, clock);
+    const xf = i < lenXf && xfade ? xfade[i] : null;
+    if (xf != null && typeof xf === "object") {
+      setHealthPulseTarget(xf, health, reducedMotion);
+      stepHealthPulseCrossfade(xf, dt, reducedMotion);
+      sampleStarPulseCrossfaded(pulse, XF_TMP_FROM, XF_TMP_TO, xf, tSeconds, ph, reducedMotion, XF_OPTS);
+    } else {
+      sampleStarPulse(pulse, tSeconds, ph, health, reducedMotion, clock);
+    }
     stepFocusEase(focusState, id, focusId, dt, reducedMotion);
+    if (neighbors) stepNeighborDriftDamp(focusState, id, focusId, neighbors, dt, reducedMotion);
     applyFocusPulse(pulse, focusState.pulseMul);
     sampleOrbitDrift(pos, base, tSeconds, ph, reducedMotion, STAR_BATCH_ORBIT_OPTS);
     applyFocusDrift(pos, base, focusState.driftMul);
@@ -294,5 +333,8 @@ export function stepStarFieldBatch(
 
     stepped++;
   }
+  // Do not pin the caller's clock in module scope after the frame (unmount leak).
+  STAR_BATCH_ORBIT_OPTS.clock = undefined;
+  XF_OPTS.clock = undefined;
   return stepped;
 }
