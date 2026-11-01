@@ -37,7 +37,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 ## Next researched (tail — keep non-empty)
 - **City night-shift windows from lock timestamps** (Dashboard next after #2) — window glow per floor flickers on only for floors whose task/lock changed in the last 30 min (real claimed_at/released_at), so the city shows *where work is happening now*; static when no recent activity; reduced-motion = steady.
-- **Motion LOD / visibility budget** — distance-based dust count + comet max when camera is sky vs interior; pause particle `update` when `document.hidden` (Cosmos Motion Bot next).
+- ~~**Motion LOD / visibility budget**~~ — **done (Cosmos Motion Bot c3)**: camera-distance dust LOD via `onBeforeRender`, frame-budget governor (EMA >24ms trims to 30% floor, recovers <18ms), active-slice instance upload, `document.hidden` pause; plus shared continuous `MotionClock` (no teleport on tab resume / 24h fold).
+- **Motion — comet tail fade** — additive vertex-color head→tail gradient + brighter head point on commit comets; dimmed static under reduced-motion (Cosmos Motion Bot next).
 
 - **Painter — ink-wash constellation edge ribbons** — ShaderMaterial/Line2 ribbons replacing LineBasic edges; health-tinted wash; mediump-safe (next painter cycle).
 - **Painter — lore plaque text atlas** — procedural canvas glyph atlas for lock-note body text on plaques (no external fonts/assets).

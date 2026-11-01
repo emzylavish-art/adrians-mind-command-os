@@ -1,5 +1,6 @@
 /** Soft orbital drift around a home position — writes into reusable xyz out. */
-import { finiteOr, finiteXyz, sanitizeTime } from "./sanitize.ts";
+import { finiteOr } from "./sanitize.ts";
+import { sharedMotionClock, type MotionClock } from "./motion-clock.ts";
 
 export type Xyz = { x: number; y: number; z: number };
 
@@ -12,6 +13,8 @@ export type OrbitDriftOpts = {
   radialAmp?: number;
   /** Absolute radial amp override. */
   radius?: number;
+  /** Continuous clock (default shared). */
+  clock?: MotionClock;
 };
 
 const DEFAULTS = {
@@ -32,24 +35,27 @@ export function sampleOrbitDrift(
   reducedMotion: boolean,
   opts: OrbitDriftOpts = {},
 ): Xyz {
-  const safeBase = finiteXyz(base.x, base.y, base.z);
+  // Inline finite guard: this runs per star per frame, so no temp objects.
+  const bx = Number.isFinite(base.x) ? base.x : 0;
+  const by = Number.isFinite(base.y) ? base.y : 0;
+  const bz = Number.isFinite(base.z) ? base.z : 0;
   if (reducedMotion || !Number.isFinite(tSeconds)) {
-    out.x = safeBase.x;
-    out.y = safeBase.y;
-    out.z = safeBase.z;
+    out.x = bx;
+    out.y = by;
+    out.z = bz;
     return out;
   }
   const yawSpeed = finiteOr(opts.yawSpeed ?? DEFAULTS.yawSpeed, DEFAULTS.yawSpeed);
   const bobAmp = finiteOr(opts.bobAmp ?? DEFAULTS.bobAmp, DEFAULTS.bobAmp);
   const radial = finiteOr(
-    opts.radius ?? Math.hypot(safeBase.x, safeBase.z) * (opts.radialAmp ?? DEFAULTS.radialAmp),
+    opts.radius ?? Math.hypot(bx, bz) * (opts.radialAmp ?? DEFAULTS.radialAmp),
     0,
   );
-  const t = sanitizeTime(tSeconds);
+  const t = (opts.clock ?? sharedMotionClock).map(tSeconds);
   const ph = finiteOr(phase, 0);
   const ang = t * yawSpeed + ph;
-  out.x = safeBase.x + Math.cos(ang) * radial;
-  out.z = safeBase.z + Math.sin(ang) * radial;
-  out.y = safeBase.y + Math.sin(t * (yawSpeed * 1.7) + ph * 1.3) * bobAmp;
+  out.x = bx + Math.cos(ang) * radial;
+  out.z = bz + Math.sin(ang) * radial;
+  out.y = by + Math.sin(t * (yawSpeed * 1.7) + ph * 1.3) * bobAmp;
   return out;
 }

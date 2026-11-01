@@ -1,5 +1,6 @@
 /** Health-aware star pulse math — no allocations in the hot path. */
-import { finiteOr, sanitizeTime } from "./sanitize.ts";
+import { finiteOr } from "./sanitize.ts";
+import { sharedMotionClock, type MotionClock } from "./motion-clock.ts";
 
 export type PulseHealth = "healthy" | "stalled" | "blocked" | "idle";
 
@@ -59,6 +60,8 @@ export function sampleStarPulse(
   phase: number,
   health: PulseHealth | string,
   reducedMotion: boolean,
+  /** Continuous clock (default shared). Pass a private clock in tests. */
+  clock: MotionClock = sharedMotionClock,
 ): PulseSample {
   const h = normalizePulseHealth(health);
   if (reducedMotion || h === "idle") {
@@ -67,7 +70,7 @@ export function sampleStarPulse(
     out.emissive = EMISSIVE_BASE[h];
     return out;
   }
-  const t = sanitizeTime(tSeconds);
+  const t = clock.map(tSeconds);
   const ph = finiteOr(phase, 0);
   const speed = SPEED[h];
   const wave = Math.sin(t * speed + ph);

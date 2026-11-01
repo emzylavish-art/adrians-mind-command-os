@@ -1,5 +1,7 @@
 import * as THREE from "three";
-import { clampInt, finiteOr, sanitizeTime } from "../motion/sanitize.ts";
+import { clampInt, finiteOr } from "../motion/sanitize.ts";
+import { sharedMotionClock, type MotionClock } from "../motion/motion-clock.ts";
+import { createFrameBudget, dustDistanceFactor, isDocumentHidden, lodCount } from "./motion-lod.ts";
 
 export const DUST_COUNT_MAX = 2048;
 export const DUST_COUNT_DEFAULT = 480;
@@ -8,6 +10,8 @@ export type DustFieldHandle = {
   mesh: THREE.InstancedMesh | null;
   count: number;
   disposed: boolean;
+  /** Live LOD state (read-only view for HUD/debug/tests). */
+  lod: { active: number; camDistance: number; budget: number };
   /** Advance drift. No allocations. Safe after dispose (no-op). */
   update: (tSeconds: number, reducedMotion: boolean) => void;
   dispose: () => void;
@@ -20,6 +24,10 @@ export type CreateDustFieldOpts = {
   color?: number;
   seed?: number;
   size?: number;
+  /** Continuous clock (default shared with star pulse / orbit drift). */
+  clock?: MotionClock;
+  /** Distance + frame-budget LOD on the active instance count. Default true. */
+  lod?: boolean;
 };
 
 type DustSeed = {
@@ -79,11 +87,13 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
   const size = Math.max(1e-4, finiteOr(opts.size ?? 0.09, 0.09));
   const color = finiteOr(opts.color ?? 0x7aa2ff, 0x7aa2ff);
   const seeds = seedDustParticles(count, radius, ySpread, seed);
+  const clock = opts.clock ?? sharedMotionClock;
 
   const handle: DustFieldHandle = {
     mesh: null,
     count,
     disposed: false,
+    lod: { active: count, camDistance: 0, budget: 1 },
     update: () => {},
     dispose: () => {},
   };
@@ -117,10 +127,31 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
   scene.add(mesh);
   handle.mesh = mesh;
 
+  const useLod = opts.lod !== false;
+  const budget = createFrameBudget();
+  let lastBudgetTime = Number.NaN;
+  // The renderer hands us the real camera each draw — no scene wiring needed for LOD.
+  mesh.onBeforeRender = (_r, _s, camera) => {
+    const d = camera.position.length();
+    if (Number.isFinite(d)) handle.lod.camDistance = d;
+  };
+
   handle.update = (tSeconds: number, reducedMotion: boolean) => {
     if (handle.disposed || reducedMotion || !handle.mesh) return;
-    const t = sanitizeTime(tSeconds);
-    for (let i = 0; i < count; i++) {
+    // Background tab: no CPU/GPU work; the motion clock absorbs the gap on resume.
+    if (isDocumentHidden()) return;
+    const t = clock.map(tSeconds);
+    let active = count;
+    if (useLod) {
+      if (t !== lastBudgetTime) {
+        lastBudgetTime = t;
+        handle.lod.budget = budget.sample(clock.lastWallDt);
+      }
+      active = lodCount(count, dustDistanceFactor(handle.lod.camDistance), handle.lod.budget);
+    }
+    handle.lod.active = active;
+    handle.mesh.count = active;
+    for (let i = 0; i < active; i++) {
       const s = seeds[i]!;
       const wobble = Math.sin(t * s.speed + s.phase) * s.amp;
       dummy.position.set(s.x + wobble * 0.4, s.y + wobble, s.z - wobble * 0.25);
@@ -128,7 +159,11 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
       dummy.updateMatrix();
       handle.mesh!.setMatrixAt(i, dummy.matrix);
     }
-    handle.mesh.instanceMatrix.needsUpdate = true;
+    // Upload only the active slice (LOD) instead of the whole 2048×16 float buffer.
+    const im = handle.mesh.instanceMatrix;
+    im.clearUpdateRanges();
+    im.addUpdateRange(0, active * 16);
+    im.needsUpdate = true;
   };
 
   handle.dispose = () => {
