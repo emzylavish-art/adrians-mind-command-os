@@ -30,6 +30,10 @@ import {
 } from "./use-painterly-kit.ts";
 import { createPainterlyBotStar } from "./painterly-bot-star.ts";
 import {
+  createPainterlyInkEdges,
+  buildMergedInkWashGeometry,
+} from "./painterly-ink-edges.ts";
+import {
   createImagineNodeMaterial,
   setImagineNodeMap,
   setImagineNodePaperMap,
@@ -51,6 +55,10 @@ import {
   buildInkWashRibbon,
   sanitizeHealthToneArray,
   HEALTH_RGB,
+  isDegenerateInkEdge,
+  measureInkEdgeLength,
+  INK_EDGES_MAX,
+  INK_EDGE_DEGENERATE_EPS,
 } from "./ink-wash-edge.ts";
 import { createStarWatercolorMaterial, tickStarMaterial } from "./star-surface.ts";
 import {
@@ -908,5 +916,152 @@ describe("painter c7: createBotStar one-line adopt helper", () => {
   it("WatercolorStarShader gained ink bloom without derivatives", () => {
     assert.match(WatercolorStarShader.fragmentShader, /bloom/);
     assert.doesNotMatch(WatercolorStarShader.fragmentShader, /dFdx|dFdy|fwidth/);
+  });
+});
+
+
+describe("hacker pass c8: ink-wash degenerate / NaN / flood edges", () => {
+  it("isDegenerateInkEdge catches zero-length, coincident, and NaN endpoints", () => {
+    assert.equal(isDegenerateInkEdge([0, 0, 0], [0, 0, 0]), true);
+    assert.equal(isDegenerateInkEdge([1, 2, 3], [1, 2, 3]), true);
+    // NaN/Inf sanitize to 0 via toVec3 — [NaN,0,0]→origin, [1,0,0] stays length 1 (not degenerate)
+    assert.equal(isDegenerateInkEdge([NaN, 0, 0], [1, 0, 0]), false);
+    assert.equal(isDegenerateInkEdge([NaN, 0, 0], [NaN, 0, 0]), true); // both → origin
+    assert.equal(isDegenerateInkEdge([0, 0, 0], [1, 0, 0]), false);
+    assert.ok(measureInkEdgeLength([0, 0, 0], [3, 4, 0]) === 5);
+    assert.ok(measureInkEdgeLength([NaN, Infinity, 0], [NaN, -Infinity, 0]) === 0);
+    assert.ok(INK_EDGE_DEGENERATE_EPS > 0 && INK_EDGES_MAX === 512);
+  });
+
+  it("flood of thousands of edges truncates; degenerates skipped; ≤4 draw calls", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+      createInkWashEdgeMaterial: (o?: object) => {
+        const m = createInkWashEdgeMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+    } as unknown as PainterlyKit;
+
+    const flood = [];
+    for (let i = 0; i < 5000; i++) {
+      // mix valid, zero-length, NaN
+      if (i % 7 === 0) flood.push({ from: [i, 0, 0] as const, to: [i, 0, 0] as const, health: "healthy" as const });
+      else if (i % 11 === 0) flood.push({ from: [NaN, 0, 0] as const, to: [1, NaN, 0] as const, health: "blocked" as const });
+      else {
+        const tone = (["healthy", "stalled", "blocked", "idle"] as const)[i % 4]!;
+        flood.push({
+          from: [i * 0.1, 0, 0] as const,
+          to: [i * 0.1 + 2, 1, 0] as const,
+          health: tone,
+          kind: i % 5 === 0 ? "hub" as const : "link" as const,
+        });
+      }
+    }
+    const ink = createPainterlyInkEdges(kit, flood, { maxEdges: INK_EDGES_MAX });
+    assert.equal(ink.truncated, true);
+    assert.ok(ink.edgeCount <= INK_EDGES_MAX);
+    assert.ok(ink.edgeCount > 0);
+    assert.ok(ink.skippedDegenerate > 0);
+    assert.ok(ink.drawCalls >= 1 && ink.drawCalls <= 4, `drawCalls=${ink.drawCalls}`);
+    assert.equal(tracked.length, 4, "exactly 4 shared health materials");
+    // update again must not grow tracked
+    ink.update(flood.slice(0, 100));
+    assert.equal(tracked.length, 4);
+    assert.ok(ink.drawCalls <= 4);
+    ink.dispose();
+    assert.equal(tracked.length, 0, "dispose releases all kit materials");
+    assert.equal(ink.group.children.length, 0);
+    // idempotent
+    ink.dispose();
+    assert.equal(tracked.length, 0);
+  });
+
+  it("buildMergedInkWashGeometry skips degenerates and yields finite attributes", () => {
+    const edges = [
+      { from: [0, 0, 0] as const, to: [0, 0, 0] as const, health: "idle" as const },
+      { from: [0, 0, 0] as const, to: [5, 0, 0] as const, health: "healthy" as const },
+      { from: [1, 1, 1] as const, to: [2, 3, 4] as const, health: "stalled" as const },
+    ];
+    const { geometry, used, skippedDegenerate } = buildMergedInkWashGeometry(edges, {
+      widthFor: () => 0.3,
+      segments: 8,
+    });
+    assert.equal(used, 2);
+    assert.equal(skippedDegenerate, 1);
+    const pos = geometry.getAttribute("position");
+    assert.ok(pos.count > 0);
+    for (let i = 0; i < pos.count * 3; i++) {
+      assert.ok(Number.isFinite((pos.array as Float32Array)[i]!));
+    }
+    geometry.dispose();
+  });
+
+  it("per-edge allocations are NOT created for flood — shared mats only", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+      createInkWashEdgeMaterial: (o?: object) => {
+        const m = createInkWashEdgeMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+    } as unknown as PainterlyKit;
+    const edges = Array.from({ length: 200 }, (_, i) => ({
+      from: [i, 0, 0] as const,
+      to: [i + 1, 0.5, 0] as const,
+      health: (["healthy", "stalled", "blocked", "idle"] as const)[i % 4]!,
+    }));
+    const ink = createPainterlyInkEdges(kit, edges);
+    assert.equal(tracked.length, 4);
+    assert.equal(ink.edgeCount, 200);
+    assert.equal(ink.drawCalls, 4);
+    ink.dispose();
+  });
+});
+
+describe("painter c8: createInkEdges one-call adopt helper", () => {
+  it("kit.createInkEdges shape: group + update + dispose; empty list is safe", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+      createInkWashEdgeMaterial: (o?: object) => {
+        const m = createInkWashEdgeMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+      createInkEdges(edges: never[] = [], opts?: object) {
+        return createPainterlyInkEdges(kit as never, edges, opts as never);
+      },
+    } as unknown as PainterlyKit;
+    const ink = kit.createInkEdges([]);
+    assert.equal(ink.edgeCount, 0);
+    assert.equal(ink.drawCalls, 0);
+    assert.equal(ink.group.name, "PainterlyInkEdges");
+    ink.update([
+      { from: [0, 0, 0], to: [2, 0, 0], health: "healthy", kind: "link" },
+      { from: [0, 1, 0], to: [2, 1, 0], health: "blocked", kind: "hub" },
+    ]);
+    assert.equal(ink.edgeCount, 2);
+    assert.equal(ink.drawCalls, 2);
+    ink.tick(1.5);
+    for (const m of tracked) {
+      assert.equal(m.uniforms["uTime"]!.value, 1.5);
+    }
+    ink.dispose();
+    assert.equal(tracked.length, 0);
   });
 });

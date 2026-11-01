@@ -17,7 +17,7 @@ const detachCtx = attachPainterlyContextHandlers(renderer.domElement, kit);
 // stars: kit.createStarMaterial({ color: healthColor })
 // sky: kit.createSkyMaterial()  // tracked + disposed
 // lore: kit.createLorePlaqueMaterial({ accent: healthColor })
-// edges: kit.createInkWashEdgeMaterial({ health: bot.health })  // ribbon mesh along constellation edge
+// edges: kit.createInkEdges(edges)  // batched ink-wash ribbons (≤4 draws); or createInkWashEdgeMaterial
 // Imagine people/characters/scenes (replace MeshBasicMaterial/SpriteMaterial on portraits):
 //   const mat = kit.createImagineNodeMaterial({ accent: healthColor }); // wash fallback until loaded
 //   loader.load(url, (tex) => { tex.colorSpace = SRGB; setImagineNodeMap(mat, tex); });
@@ -93,3 +93,27 @@ glow.material = star.glowMaterial;
 ## Next painter candidate
 - Dashboard Bot: swap bot MeshStandardMaterial → `kit.createBotStar`; wire `setPassHealth`/`resizePass`.
 - Ink-wash edges still pending scene adopt (`rebuildEdges` still LineDashed).
+
+
+## c8 — one-call batched ink-wash edges (replace LineDashedMaterial)
+
+```ts
+// universe-scene.tsx rebuildEdges — replace Line + LineDashedMaterial:
+const ink = kit.createInkEdges(
+  edges.map((e) => ({
+    from: posOf(e.from),
+    to: posOf(e.to),
+    health: e.health,
+    kind: e.kind,
+  })),
+);
+edgeGroup.clear(); // after disposing prior ink.handle
+edgeGroup.add(ink.group);
+// on status poll: ink.update(nextMappedEdges);
+// cleanup: ink.dispose();  // releases 4 shared mats from kit.tracked + geos
+```
+
+- Batches by health tone → **≤4 draw calls** (not one mesh per edge).
+- Skips zero-length / coincident / NaN-sanitized degenerates; truncates at `INK_EDGES_MAX` (512).
+- Do **not** call `createInkWashEdgeMaterial` per edge when using `createInkEdges`.
+- WebGL feedback-loop on `/dashboard` is **not** painter-lane (god-ray/depth RT) — see audit `c8-feedback-loop-evidence.md`.
