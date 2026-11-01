@@ -60,13 +60,13 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
   server.registerTool(
     "pc_run_shell",
     {
-      description: "Run a shell command on the paired PC. Allowlist or confirm required.",
+      description: "Run a shell command on the paired PC. Allowlisted commands run; others need human approval in Tools. confirm tool args are ignored.",
       inputSchema: {
         command: z.string().describe("Shell command"),
-        confirm: z.boolean().optional().describe("Explicit confirmation for non-allowlisted commands"),
+        confirm: z.boolean().optional().describe("Ignored. Human approval is required for non-allowlisted commands."),
       },
     },
-    async ({ command, confirm }) => asContent(await pcRunShell({ command, confirm, ownerId })),
+    async ({ command }) => asContent(await pcRunShell({ command, ownerId })),
   );
 
   server.registerTool(

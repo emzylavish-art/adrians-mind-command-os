@@ -51,6 +51,22 @@ export function FleetPanel({
   const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean; status?: string }[]>([]);
   const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
   const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
+  const [pcApprovals, setPcApprovals] = useState<
+    { id: string; token: string; command: string; agentId: string; agentLabel: string; expiresAt: string }[]
+  >([]);
+  const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
+
+  function refreshPcApprovals() {
+    void fetch("/api/mind/pc/approvals", { credentials: "include" })
+      .then(async (res) => {
+        const body = (await res.json().catch(() => null)) as
+          | { ok?: boolean; approvals?: typeof pcApprovals }
+          | null;
+        if (body?.ok && Array.isArray(body.approvals)) setPcApprovals(body.approvals);
+        else setPcApprovals([]);
+      })
+      .catch(() => setPcApprovals([]));
+  }
 
   useEffect(() => {
     if (mode !== "tools") return;
@@ -60,6 +76,9 @@ export function FleetPanel({
     void mcpRegistryTools()
       .then((result) => setMcpTools(result.tools))
       .catch(() => setMcpTools([]));
+    refreshPcApprovals();
+    const timer = window.setInterval(refreshPcApprovals, 15_000);
+    return () => window.clearInterval(timer);
   }, [mode]);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
@@ -315,6 +334,69 @@ export function FleetPanel({
           </li>
         ))}
       </ul>
+
+      <div className="mt-6 space-y-3">
+        <h3 className="font-semibold">PC shell approvals</h3>
+        <p className="text-sm text-muted">Non-allowlisted pc_run_shell commands wait here. Approve or deny from this panel only — tool confirm args cannot authorize them.</p>
+        <ul className="space-y-2 text-sm">
+          {pcApprovals.map((item) => (
+            <li key={item.id} className="rounded-panel border border-line bg-surface p-3">
+              <p className="font-semibold">{item.command}</p>
+              <p className="text-xs text-muted">Agent {item.agentLabel || item.agentId} · expires {item.expiresAt} · id {item.id}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    setPcApprovalNote(`approving ${item.id}`);
+                    void fetch("/api/mind/pc/approve", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ approvalId: item.id, token: item.token, command: item.command }),
+                    })
+                      .then(async (res) => {
+                        const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; error?: string } | null;
+                        setPcApprovalNote(body?.ok ? `ok: ${body.text ?? "ran"}` : `error: ${body?.error ?? res.status}`);
+                        refreshPcApprovals();
+                      })
+                      .catch((error: unknown) => {
+                        setPcApprovalNote(error instanceof Error ? error.message : "Approve failed.");
+                      });
+                  }}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    setPcApprovalNote(`denying ${item.id}`);
+                    void fetch("/api/mind/pc/deny", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ approvalId: item.id, token: item.token }),
+                    })
+                      .then(async (res) => {
+                        const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                        setPcApprovalNote(body?.ok ? `denied ${item.id}` : `error: ${body?.error ?? res.status}`);
+                        refreshPcApprovals();
+                      })
+                      .catch((error: unknown) => {
+                        setPcApprovalNote(error instanceof Error ? error.message : "Deny failed.");
+                      });
+                  }}
+                >
+                  Deny
+                </button>
+              </div>
+            </li>
+          ))}
+          {pcApprovals.length === 0 ? <li className="text-sm text-muted">No pending PC shell approvals.</li> : null}
+        </ul>
+        {pcApprovalNote ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
+      </div>
 
       <div className="mt-6 space-y-3">
         <h3 className="font-semibold">MCP servers</h3>

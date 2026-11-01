@@ -160,31 +160,125 @@ export function isShellAllowlisted(command: string, patterns: RegExp[] = DEFAULT
 
 /**
  * Run a command on a paired PC agent when MIND_PC_AGENT_URL (or similar) is set.
- * Requires allowlist match OR confirm=true. Never fakes success.
+ * Allowlisted commands run. Non-allowlisted commands require a server-issued
+ * human approval via the app UI — tool-arg confirm/approved/approvalId are ignored.
  */
 export async function pcRunShell(input: {
   command: string;
+  /** @deprecated Ignored — model/client confirm cannot authorize shell. */
   confirm?: boolean;
+  /** @deprecated Ignored */
+  approved?: boolean;
+  /** @deprecated Ignored — approvals are consumed only by the human approve route. */
+  approvalId?: string;
   ownerId?: string;
   env?: NodeJS.ProcessEnv;
   fetch?: NotionFetch;
   /** Injected for tests — when set, skips pairing store / HTTP */
   pairingRunner?: (args: { ownerId: string; command: string; confirm: boolean }) => Promise<ToolResult | null>;
+  /** Injected for tests */
+  isHalted?: (ownerId: string) => boolean | Promise<boolean>;
+  /** Injected for tests */
+  createApproval?: (args: {
+    ownerId: string;
+    command: string;
+    agentId: string;
+    agentLabel: string;
+  }) => { id: string };
+  /** Injected for tests */
+  onlineAgents?: (ownerId: string) => { id: string; label: string }[];
 }): Promise<ToolResult> {
   const command = input.command.trim().slice(0, 500);
   if (!command) return { ok: false, status: "error", text: "No command was provided. Nothing ran." };
-  const confirmed = input.confirm === true;
+
+  // Strip any client-supplied approval claims — they never authorize execution.
+  void input.confirm;
+  void input.approved;
+  void input.approvalId;
+
+  if (input.ownerId) {
+    const haltedFn =
+      input.isHalted ??
+      (async (ownerId: string) => {
+        const { readHaltFile } = await import("../halt-file.ts");
+        const file = readHaltFile(ownerId);
+        return Boolean(file.ownerId && file.halted);
+      });
+    if (await haltedFn(input.ownerId)) {
+      return {
+        ok: false,
+        status: "error",
+        text: "Emergency stop is on. pc_run_shell will not run or request approval. Nothing ran.",
+      };
+    }
+  }
+
   const allowed = isShellAllowlisted(command);
-  if (!allowed && !confirmed) {
+  const env = input.env ?? process.env;
+
+  // Non-allowlisted: create a pending human approval; do not run.
+  if (!allowed) {
+    if (!input.ownerId) {
+      return {
+        ok: false,
+        status: "error",
+        text: "That command is not on the allowlist and no signed-in owner is available to approve it. Nothing ran.",
+      };
+    }
+
+    let online: { id: string; label: string }[];
+    if (input.onlineAgents) {
+      online = input.onlineAgents(input.ownerId);
+    } else {
+      const { onlineAgents } = await import("../pc-pairing/store.ts");
+      online = onlineAgents(input.ownerId).map((a) => ({ id: a.id, label: a.label }));
+    }
+
+    if (online.length === 0) {
+      const endpoint = (env.MIND_PC_AGENT_URL || env.PC_AGENT_URL || env.PAIRED_PC_URL || "").trim();
+      if (!endpoint) {
+        return {
+          ok: false,
+          status: "error",
+          text: "That command is not on the allowlist. No paired PC online to approve against. Nothing ran.",
+        };
+      }
+      return {
+        ok: false,
+        status: "error",
+        text: "That command is not on the allowlist. Approve it in the Tools panel (human click). Tool confirm flags are ignored. Nothing ran.",
+      };
+    }
+
+    const agent = online[0];
+    let approvalId: string;
+    if (input.createApproval) {
+      approvalId = input.createApproval({
+        ownerId: input.ownerId,
+        command,
+        agentId: agent.id,
+        agentLabel: agent.label,
+      }).id;
+    } else {
+      const { createPcApproval } = await import("../pc-pairing/approvals.ts");
+      const record = createPcApproval({
+        ownerId: input.ownerId,
+        command,
+        agentId: agent.id,
+        agentLabel: agent.label,
+      });
+      approvalId = record.id;
+    }
+
     return {
       ok: false,
       status: "error",
-      text: "That command is not on the allowlist. Pass confirm=true after reviewing it. Nothing ran.",
+      text: `That command needs your approval before it can run on the paired PC. Open Tools and approve request ${approvalId}. Tool confirm/approved flags are ignored. Nothing ran.`,
+      data: { needsApproval: true, approvalId, command, agentId: agent.id },
     };
   }
-  const env = input.env ?? process.env;
 
-  // 1) In-app pairing contract (agent registers + polls). Never runs shell on this box.
+  // Allowlisted — run via pairing or legacy HTTP (confirm:true means server-authorized allowlist).
   if (input.ownerId) {
     const runner =
       input.pairingRunner ??
@@ -194,11 +288,10 @@ export async function pcRunShell(input: {
         if (!result) return null;
         return { ok: result.ok, status: result.status, text: result.text, data: result.data };
       });
-    const paired = await runner({ ownerId: input.ownerId, command, confirm: confirmed });
+    const paired = await runner({ ownerId: input.ownerId, command, confirm: true });
     if (paired) return paired;
   }
 
-  // 2) Legacy HTTP agent URL (MIND_PC_AGENT_URL)
   const endpoint = (env.MIND_PC_AGENT_URL || env.PC_AGENT_URL || env.PAIRED_PC_URL || "").trim();
   if (!endpoint) {
     return { ok: false, status: "error", text: "No paired PC online. Nothing ran on a laptop or phone." };
@@ -209,7 +302,7 @@ export async function pcRunShell(input: {
     response = await fetchImpl(endpoint.replace(/\/$/, "") + "/run", {
       method: "POST",
       headers: { "content-type": "application/json", ...(env.MIND_PC_AGENT_TOKEN ? { authorization: `Bearer ${env.MIND_PC_AGENT_TOKEN}` } : {}) },
-      body: JSON.stringify({ command, confirm: confirmed }),
+      body: JSON.stringify({ command, confirm: true }),
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
@@ -229,6 +322,7 @@ export async function pcRunShell(input: {
       : JSON.stringify(body).slice(0, 8000);
   return { ok: true, status: "ok", text: out || "(empty output)", data: body as Record<string, unknown> };
 }
+
 
 const WRITE_SQL =
   /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|call|do|execute|merge|vacuum|reindex|cluster|comment|security|owner|refresh|listen|notify|set\s+role|reset\s+role|load|discard)\b/i;
@@ -315,7 +409,7 @@ export const BUILTIN_TOOL_DEFS = [
   },
   {
     name: "pc_run_shell",
-    description: "Run a shell command on the paired PC agent. Allowlisted commands or confirm=true required. Honest failure when no PC is paired.",
+    description: "Run a shell command on the paired PC agent. Allowlisted commands run; others need a human approval in Tools (confirm tool args are ignored). Honest failure when no PC is paired.",
   },
   {
     name: "pglite_query",

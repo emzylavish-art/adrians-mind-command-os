@@ -40,14 +40,14 @@ describe("mcp tools", () => {
     assert.match(result.text, /No paired PC online/);
   });
 
-  it("requires confirm for non-allowlisted shell commands even when paired", async () => {
+  it("ignores confirm:true for non-allowlisted shell commands even when a PC URL is set", async () => {
     const result = await pcRunShell({
       command: "rm -rf /",
-      confirm: false,
+      confirm: true,
       env: { MIND_PC_AGENT_URL: "http://127.0.0.1:9" },
     });
     assert.equal(result.ok, false);
-    assert.match(result.text, /allowlist/i);
+    assert.match(result.text, /allowlist|Approve it in the Tools panel/i);
     assert.equal(isShellAllowlisted("pwd"), true);
   });
 

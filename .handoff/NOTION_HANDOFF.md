@@ -224,3 +224,24 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 ### Open
 - DNS rebinding / hostnames that resolve to private IPs are not checked (no DNS resolution at save or call time).
 - `pglite_query` guard: side-effect functions (`set_config()`, `nextval()`) still pass (PGLite-only impact).
+
+## Gap: H9 pc_run_shell confirm bypass (2026-11-01, Africa/Lagos)
+
+**Status:** complete (2026-11-01T14:52:06+01:00)  
+**Lock:** `mcp-integration-gap-pc-shell-confirm-bypass.lock` (released after push)
+
+### Fix
+- `pc_run_shell` **ignores** tool-arg `confirm` / `approved` / `approvalId`.
+- Non-allowlisted commands create a **server-issued** pending approval (command hash, agent id, owner, TTL 3 min) and return `needsApproval` + approval id (token **not** in MCP result).
+- Only authenticated human POST `/api/mind/pc/approve` (session cookie) can consume the one-time token (timing-safe compare); `/api/mind/pc/deny` rejects; list via GET `/api/mind/pc/approvals`.
+- Approvals are single-use, expire, reject forged/mismatched/reused tokens; emergency stop blocks create + approve.
+- Tools UI: minimal Approve/Deny under **PC shell approvals** (`fleet-panels.tsx`; not `service-board.tsx`).
+
+### Verification
+- `tsc --noEmit`: pass
+- mind/src tests: **296/296** pass (incl. `pc-pairing/approvals.test.ts` H9 regressions)
+- `npm run build`: pass
+
+### Commits (this gap)
+- (pending push) Harden pc_run_shell with human UI approvals; ignore client confirm.
+
