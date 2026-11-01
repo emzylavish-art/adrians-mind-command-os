@@ -85,6 +85,11 @@ export type DashboardStatus = {
     repoDir: string;
     locksOk: boolean;
     gitOk: boolean;
+    /** Honest reason git data is missing (never silently green). */
+    gitError?: string;
+    /** Env override rejected by the path allowlist (fallback used). */
+    locksRejected?: string;
+    repoRejected?: string;
   };
   /** Lane constellations for the universe view */
   constellations: import("./constellations.ts").Constellation[];

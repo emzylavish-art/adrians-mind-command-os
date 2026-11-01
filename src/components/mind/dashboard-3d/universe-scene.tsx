@@ -9,6 +9,7 @@ import {
   createPainterlyKit,
   tickPainterlyKit,
   disposePainterlyKit,
+  attachPainterlyContextHandlers,
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
@@ -28,9 +29,7 @@ import {
   flyTo,
   focusBotTarget,
   stepRig,
-  zoomOutTarget,
   type CameraRigState,
-  UNIVERSE_HOME,
 } from "@/lib/mind/dashboard/camera-rig";
 import {
   pulsePhaseFromId,
@@ -39,6 +38,19 @@ import {
   sanitizeDt,
 } from "./motion";
 import { createCommitComets, createDustField } from "./particles";
+import { createCityLayer } from "./city/city-layer";
+import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
+import {
+  FLY_HOME,
+  UNIVERSE_HIGH,
+  clampCityPan,
+  dollyLimits,
+  reconcileFlyover,
+  reduceFlyover,
+  targetForState,
+  type FlyEvent,
+  type FlyState,
+} from "@/lib/mind/dashboard/flyover-fsm";
 
 const HEALTH_COLOR: Record<Health, number> = {
   healthy: 0x3dd68c,
@@ -54,6 +66,7 @@ type Props = {
   onSelectNotion: (pageId: string) => void;
   onSkyView: () => void;
   onUnavailable: (reason: string) => void;
+  onFlyoverChange?: (state: FlyState, layout: CityLayout) => void;
 };
 
 const PainterlyShader = {
@@ -209,12 +222,12 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   return tex;
 }
 
-export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable }: Props) {
+export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const dataRef = useRef(data);
-  const cbs = useRef({ onSelectBot, onSelectNotion, onSkyView });
+  const cbs = useRef({ onSelectBot, onSelectNotion, onSkyView, onFlyoverChange });
   dataRef.current = data;
-  cbs.current = { onSelectBot, onSelectNotion, onSkyView };
+  cbs.current = { onSelectBot, onSelectNotion, onSkyView, onFlyoverChange };
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -238,8 +251,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     scene.fog = new THREE.FogExp2(0x050814, 0.018);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 200);
-    camera.position.set(...UNIVERSE_HOME.position);
-    camera.lookAt(0, 0, 0);
+    // Flyover: start high above the universe with every constellation in view.
+    camera.position.set(...UNIVERSE_HIGH.position);
+    camera.lookAt(...UNIVERSE_HIGH.lookAt);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
@@ -315,7 +329,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     scene.add(sunMesh);
 
     function rebuildBots(list: BotNode[]) {
-      while (botGroup.children.length) botGroup.remove(botGroup.children[0]!);
+      // Hacker-pass c8: dispose per-bot materials on each 5 s rebuild (previously leaked
+      // ~2 materials per bot per rebuild → thousands of orphaned materials per hour).
+      while (botGroup.children.length) {
+        const ch = botGroup.children[0]!;
+        botGroup.remove(ch);
+        if (ch instanceof THREE.Mesh || ch instanceof THREE.Sprite) {
+          (ch.material as THREE.Material).dispose();
+        }
+      }
       botVis.length = 0;
       botMeshes.length = 0;
       for (const bot of list) {
@@ -535,6 +557,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     }
     rebuildAll();
 
+    // --- Projects city (flyover queue #1) ---
+    const city = createCityLayer(scene);
+    let layout: CityLayout = buildCityLayout(dataRef.current.projects);
+    let layoutSig = "";
+    let fly: FlyState = { ...FLY_HOME };
+    const knownIds = () => new Set(layout.buildings.map((b) => b.id));
+    const syncCity = () => {
+      const next = buildCityLayout(dataRef.current.projects);
+      const sig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.litFloors, b.x, b.z]));
+      layout = next;
+      if (sig !== layoutSig) {
+        layoutSig = sig;
+        city.rebuild(layout);
+      }
+      const reconciled = reconcileFlyover(fly, knownIds());
+      if (reconciled !== fly) setFly(reconciled, true);
+      else city.setInterior(fly.level === "interior" ? fly.buildingId : null);
+    };
+
     const dust = createDustField(scene, { count: 480, seed: 42 });
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
@@ -561,9 +602,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       composer.addPass(kit.painterlyPass);
     }
 
-    let rig: CameraRigState = createRig();
-    let lookAt = new THREE.Vector3(...UNIVERSE_HOME.lookAt);
-    let freePos = new THREE.Vector3(...UNIVERSE_HOME.position);
+    let rig: CameraRigState = createRig(UNIVERSE_HIGH);
+    let lookAt = new THREE.Vector3(...UNIVERSE_HIGH.lookAt);
+    let freePos = new THREE.Vector3(...UNIVERSE_HIGH.position);
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
@@ -580,13 +621,58 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
+    function setFly(next: FlyState, fly2camera: boolean) {
+      fly = next;
+      city.setInterior(fly.level === "interior" ? fly.buildingId : null);
+      city.setLabelsVisible(fly.level === "city");
+      if (fly2camera) {
+        rig = flyTo(
+          rig,
+          targetForState(fly, layout),
+          [camera.position.x, camera.position.y, camera.position.z],
+          [lookAt.x, lookAt.y, lookAt.z],
+        );
+      }
+      cbs.current.onFlyoverChange?.(fly, layout);
+    }
+    const dispatchFly = (ev: FlyEvent) => {
+      const next = reduceFlyover(fly, ev, knownIds());
+      if (next === fly) return;
+      setFly(next, true);
+      if (next.level === "universe") cbs.current.onSkyView();
+    };
+    const onFlyEvent = (ev: Event) => {
+      const detail = (ev as CustomEvent<FlyEvent>).detail;
+      if (!detail || typeof detail !== "object" || typeof (detail as { type?: unknown }).type !== "string") return;
+      dispatchFly(detail);
+    };
+    document.addEventListener("dash3d-fly", onFlyEvent);
+    syncCity();
+    setFly(fly, false);
+
+    // Wheel: scroll up = in, down = out. Pushing against a clamp (accumulated) crosses levels.
+    let limitPush = 0;
     const onWheel = (ev: WheelEvent) => {
       ev.preventDefault();
-      const next = dollyPose(
-        [camera.position.x, camera.position.y, camera.position.z],
-        [lookAt.x, lookAt.y, lookAt.z],
-        ev.deltaY,
-      );
+      if (rig.t < 1) return;
+      const delta = Number.isFinite(ev.deltaY) ? Math.max(-400, Math.min(400, -ev.deltaY)) : 0;
+      const [minD, maxD] = dollyLimits(fly.level);
+      const cur: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z];
+      const look: [number, number, number] = [lookAt.x, lookAt.y, lookAt.z];
+      const dist = camera.position.distanceTo(lookAt);
+      const atMin = dist <= minD + 0.05 && delta > 0;
+      const atMax = dist >= maxD - 0.05 && delta < 0;
+      if (atMin || atMax || fly.level === "interior") {
+        limitPush += Math.abs(delta);
+        if (limitPush > 360) {
+          limitPush = 0;
+          dispatchFly({ type: "WHEEL_LIMIT", direction: delta > 0 ? "in" : "out" });
+        }
+        if (fly.level === "interior") return;
+      } else {
+        limitPush = 0;
+      }
+      const next = dollyPose(cur, look, delta, minD, maxD);
       // If transitioning, cancel into free dolly
       freePos.set(...next);
       camera.position.copy(freePos);
@@ -599,10 +685,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       dragging = true;
       lastX = ev.clientX;
       lastY = ev.clientY;
+      dragStartX = ev.clientX;
+      dragStartY = ev.clientY;
     };
     const onPointerUp = (ev: PointerEvent) => {
-      const dx = Math.abs(ev.clientX - lastX);
-      const dy = Math.abs(ev.clientY - lastY);
+      // measure from drag start (lastX is updated during moves, so drags looked like clicks)
+      const dx = Math.abs(ev.clientX - dragStartX);
+      const dy = Math.abs(ev.clientY - dragStartY);
       const wasDrag = dx > 4 || dy > 4;
       dragging = false;
       if (wasDrag) return;
@@ -611,6 +700,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
+
+      if (fly.level !== "universe") {
+        const cityHits = raycaster.intersectObjects(city.pickables, false);
+        const pick = cityHits.find((h) => h.object.visible)?.object.userData.cityPick as
+          | { buildingId: string; part: string; floor: number | null }
+          | undefined;
+        if (pick) {
+          dispatchFly({
+            type: "ENTER",
+            buildingId: pick.buildingId,
+            part: pick.part === "window" ? "window" : "door",
+            floor: pick.floor ?? undefined,
+          });
+          return;
+        }
+        if (fly.level === "interior") return; // clicks inside a room don't eject you; use zoom-out
+        dispatchFly({ type: "ZOOM_OUT" });
+        return;
+      }
 
       const hits = raycaster.intersectObjects([sunMesh, ...botMeshes], false);
       if (hits[0]) {
@@ -643,22 +751,39 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
       }
 
-      // empty space -> sky view
-      const up = zoomOutTarget(rig.level);
+      // empty space -> back up to the high universe view
       rig = flyTo(
         rig,
-        up,
+        { ...UNIVERSE_HIGH },
         [camera.position.x, camera.position.y, camera.position.z],
         [lookAt.x, lookAt.y, lookAt.z],
       );
       cbs.current.onSkyView();
     };
+    const panRight = new THREE.Vector3();
+    const panFwd = new THREE.Vector3();
+    let dragStartX = 0;
+    let dragStartY = 0;
     const onPointerMove = (ev: PointerEvent) => {
-      if (!dragging || rig.t < 1) return;
+      if (!dragging || rig.t < 1 || fly.level === "interior") return;
       const dx = ev.clientX - lastX;
       const dy = ev.clientY - lastY;
       lastX = ev.clientX;
       lastY = ev.clientY;
+      if (fly.level === "city") {
+        // pan across the city plaza (clamped)
+        const scale = camera.position.distanceTo(lookAt) * 0.0016;
+        panRight.setFromMatrixColumn(camera.matrix, 0).setY(0).normalize();
+        panFwd.set(-panRight.z, 0, panRight.x);
+        const move = panRight.multiplyScalar(-dx * scale).add(panFwd.multiplyScalar(-dy * scale));
+        const [nx, nz] = clampCityPan(lookAt.x + move.x, lookAt.z + move.z, layout);
+        const shift = new THREE.Vector3(nx - lookAt.x, 0, nz - lookAt.z);
+        lookAt.add(shift);
+        freePos.add(shift);
+        camera.position.copy(freePos);
+        camera.lookAt(lookAt);
+        return;
+      }
       spherical.theta -= dx * 0.005;
       spherical.phi = Math.min(Math.PI * 0.45, Math.max(0.12, spherical.phi + dy * 0.005));
       const offset = new THREE.Vector3().setFromSpherical(spherical);
@@ -671,11 +796,17 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
 
+    const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
+      layoutSig = ""; // force GPU resources to re-upload after restore
+      syncCity();
+    });
+
     let last = performance.now();
     let raf = 0;
     let sync = 0;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
+      if (kit.contextLost) return; // WebGL context lost: pause instead of throwing every frame
       const dt = sanitizeDt((now - last) / 1000);
       last = now;
 
@@ -700,7 +831,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
+        n.label.visible = fly.level === "universe"; // star labels don't bleed into the city/interior
       }
+      city.tick(t, reducedMotion);
       dust.update(t, reducedMotion);
       comets.update(t, reducedMotion);
       if (!reducedMotion) {
@@ -721,6 +854,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (now - sync > 5000) {
         sync = now;
         rebuildAll();
+        syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
       }
@@ -738,10 +872,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
     
     const onSkyEvent = () => {
-      const up = zoomOutTarget(rig.level);
+      if (fly.level !== "universe") {
+        dispatchFly({ type: "SKY" });
+        return;
+      }
       rig = flyTo(
         rig,
-        up,
+        { ...UNIVERSE_HIGH },
         [camera.position.x, camera.position.y, camera.position.z],
         [lookAt.x, lookAt.y, lookAt.z],
       );
@@ -754,6 +891,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     return () => {
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-sky", onSkyEvent);
+      document.removeEventListener("dash3d-fly", onFlyEvent);
+      detachContext();
+      city.dispose();
       renderer.domElement.removeEventListener("wheel", onWheel);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
@@ -766,6 +906,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       starTex.dispose();
       skyMat.map?.dispose();
       skyMat.dispose();
+      disposePainterlyKit(kit);
       renderer.dispose();
       composer?.dispose();
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);

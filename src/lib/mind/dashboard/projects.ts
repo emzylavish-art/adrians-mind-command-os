@@ -1,6 +1,4 @@
 import type { BotNode, DashboardStatus, GitCommit, Health, LockRecord } from "./types.ts";
-import { readLocksDir, locksDirFromEnv } from "./locks.ts";
-import { collectRecentCommits, repoDirFromEnv } from "./git.ts";
 
 export type ProjectTask = {
   id: string;
@@ -13,7 +11,9 @@ export type ProjectBuilding = {
   id: string;
   name: string;
   kind: "project" | "bot";
-  progress: number; // 0..1 from real done/(open+done) or health heuristic
+  progress: number; // 0..1 from real done/(open+done); 0 when unknown
+  /** False when there is no real task ratio — UI must say "unknown", not paint fake floors. */
+  progressKnown: boolean;
   openTasks: number;
   doneTasks: number;
   tasks: ProjectTask[];
@@ -56,36 +56,32 @@ function tasksFromGapItems(
 }
 
 function botBuilding(bot: BotNode): ProjectBuilding {
+  // Lock commits carry no timestamp or CI result — don't invent either.
   const commits = bot.commits.map((c, i) => ({
     id: `c-${bot.id}-${i}`,
     label: c,
-    at: bot.lastActivityAt,
-    ok: true as boolean | null,
+    at: null as string | null,
+    ok: null as boolean | null,
   }));
-  // Progress heuristic from health only when no task list — honest: progress unknown → 0 with note
-  let progress = 0;
-  let emptyReason: string | undefined;
-  if (bot.health === "healthy" && /done|released/i.test(bot.lock?.status ?? "")) progress = 1;
-  else if (bot.health === "healthy") progress = 0.55;
-  else if (bot.health === "stalled") progress = 0.35;
-  else if (bot.health === "blocked") progress = 0.15;
-  else {
-    progress = 0;
-    emptyReason = "No lock activity — idle lane (not fake progress).";
-  }
+  const released = /done|released/i.test(bot.lock?.status ?? "");
+  // Honest progress: only a released/done lock is a known completed unit of work.
+  // (Previously healthy=0.55 / stalled=0.35 / blocked=0.15 — fabricated percentages.)
+  const progressKnown = Boolean(bot.lock) && released;
+  const progress = progressKnown ? 1 : 0;
   return {
     id: `bot-${bot.id}`,
     name: bot.name,
     kind: "bot",
     progress,
-    openTasks: bot.health === "idle" || bot.health === "healthy" ? 0 : 1,
-    doneTasks: /done|released/i.test(bot.lock?.status ?? "") ? 1 : 0,
+    progressKnown,
+    openTasks: bot.lock && !released ? 1 : 0,
+    doneTasks: released ? 1 : 0,
     tasks: bot.lock
       ? [
           {
             id: `lock-${bot.id}`,
-            title: bot.lock.status ?? "lock present",
-            status: /done|released/i.test(bot.lock.status ?? "") ? "done" : "open",
+            title: bot.lock.status ?? "lock present (no status)",
+            status: released ? "done" : "open",
             source: bot.lock.file,
           },
         ]
@@ -95,7 +91,7 @@ function botBuilding(bot: BotNode): ProjectBuilding {
     lastActivityAt: bot.lastActivityAt,
     health: bot.health,
     notes: bot.notes.slice(0, 240),
-    emptyReason: bot.lock ? undefined : emptyReason ?? "No lock file for this bot.",
+    emptyReason: bot.lock ? undefined : "No lock file for this bot — idle lane (no fake progress).",
   };
 }
 
@@ -114,14 +110,15 @@ export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" 
       name: "Gap cycle (REA / Dispatcher)",
       kind: "project",
       progress,
+      progressKnown: done + open > 0,
       openTasks: open,
       doneTasks: done,
       tasks: gapTasks.slice(0, 24),
       recentRuns: status.commits.slice(0, 8).map((c) => ({
         id: c.sha,
         label: `${c.sha} ${c.subject} (${c.branch})`,
-        at: c.date,
-        ok: true,
+        at: c.date || null,
+        ok: null,
       })),
       bots: bots.slice(0, 12),
       lastActivityAt: status.commits[0]?.date ?? status.generatedAt,
@@ -134,6 +131,7 @@ export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" 
       name: "Gap cycle (REA / Dispatcher)",
       kind: "project",
       progress: 0,
+      progressKnown: false,
       openTasks: 0,
       doneTasks: 0,
       tasks: [],
@@ -152,7 +150,8 @@ export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" 
     id: "project-orchestrator",
     name: "Integration / Orchestrator",
     kind: "project",
-    progress: /done|released/i.test(orch.status ?? "") ? 1 : orch.status ? 0.4 : 0,
+    progress: /done|released/i.test(orch.status ?? "") ? 1 : 0,
+    progressKnown: /done|released/i.test(orch.status ?? ""),
     openTasks: orch.status && !/done|released/i.test(orch.status) ? 1 : 0,
     doneTasks: /done|released/i.test(orch.status ?? "") ? 1 : 0,
     tasks: orch.lockFile
@@ -168,7 +167,7 @@ export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" 
     recentRuns: status.commits
       .filter((c) => /integration|preview/i.test(c.branch))
       .slice(0, 5)
-      .map((c) => ({ id: c.sha, label: `${c.sha} ${c.subject}`, at: c.date, ok: true })),
+      .map((c) => ({ id: c.sha, label: `${c.sha} ${c.subject}`, at: c.date || null, ok: null })),
     bots: orch.owner ? [orch.owner] : [],
     lastActivityAt: orch.claimed_at,
     health: status.bots.find((b) => b.id === "grok-build")?.health ?? "idle",
@@ -188,7 +187,8 @@ export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" 
       botId: b.id,
       name: b.name,
       runs: runLabels || (b.lock ? 1 : 0),
-      success: released ? Math.max(1, runLabels) : b.health === "healthy" ? runLabels : 0,
+      // success = lock-reported commits on a released lock (or 1 released run with none listed)
+      success: released ? Math.max(1, runLabels) : 0,
       failure: blocked ? 1 : 0,
       lastActive: b.lastActivityAt,
       health: b.health,

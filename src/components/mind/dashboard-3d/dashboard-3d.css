@@ -262,3 +262,35 @@
   min-height: 2.75rem;
   padding: 0.55rem 0.9rem;
 }
+
+/* --- Flyover (queue #1): universe → city → interior --- */
+.dash3d-flyhud {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 6;
+  max-width: 300px;
+  max-height: 55vh;
+  overflow: auto;
+  pointer-events: auto;
+}
+.dash3d-flyhud-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.4rem 0; }
+.dash3d-flyhud-doors li { margin: 0.15rem 0; }
+.dash3d-flyhud-doors .dash3d-pill { width: 100%; text-align: left; font-size: 0.74rem; }
+.dash3d-pill.is-active { outline: 1px solid rgba(124, 92, 255, 0.8); }
+.dash3d-city-label { font-size: 0.66rem; opacity: 0.9; }
+.dash3d-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(91, 107, 140, 0.25);
+  overflow: hidden;
+  margin: 0.5rem 0 0.25rem;
+}
+.dash3d-progress-fill { height: 100%; border-radius: inherit; background: var(--dash3d-idle); }
+.dash3d-progress-fill.healthy { background: var(--dash3d-ok); }
+.dash3d-progress-fill.stalled { background: var(--dash3d-amber); }
+.dash3d-progress-fill.blocked { background: var(--dash3d-danger); }
+.dash3d-interior h3 { margin-top: 0.85rem; }
+.dash3d-stale {
+  border-color: rgba(251, 191, 36, 0.55) !important;
+}
