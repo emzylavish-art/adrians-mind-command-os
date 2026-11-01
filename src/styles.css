@@ -1098,3 +1098,202 @@ html[data-theme="light"] .voice-mode-launch[aria-pressed="true"] {
   background: rgb(109 77 255 / 0.18);
   box-shadow: 0 0 0 1px rgb(109 77 255 / 0.3), 0 6px 18px rgb(109 77 255 / 0.18);
 }
+
+/* Presentational composer chrome — scoped so the wired live bar keeps its layout. */
+.chat-empty-hero {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+}
+.chat-empty-title {
+  margin-top: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.md-prose { display: grid; gap: 0.45rem; }
+.md-p { white-space: pre-wrap; }
+.md-inline-code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.85em;
+}
+.md-ul, .md-ol { padding-left: 1.25rem; }
+.md-quote {
+  border-left: 2px solid rgb(124 92 255 / 0.45);
+  padding-left: 0.75rem;
+}
+.md-code-block, .md-table-wrap { overflow-x: auto; }
+.md-h { font-weight: 700; }
+.composer-voice-chrome {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+.composer-voice-chrome__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.composer-voice-chrome .composer-bar {
+  position: relative;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(14 18 28 / 0.45);
+}
+.composer-voice-chrome .composer-bar__row,
+.composer-voice-chrome .composer-bar__left,
+.composer-voice-chrome .composer-voice-btns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.composer-voice-chrome .composer-bar__plus,
+.composer-voice-chrome .composer-bar__model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(255 255 255 / 0.04);
+}
+.composer-voice-chrome .composer-bar__plus-glyph::before { content: "+"; }
+.composer-voice-chrome .composer-bar__model-menu {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 14rem;
+  margin-top: 0.35rem;
+  padding: 0.35rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(12 14 22 / 0.96);
+}
+.composer-voice-chrome .composer-bar__model-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.65rem;
+  text-align: left;
+}
+.composer-voice-chrome .composer-bar__model-option-title,
+.composer-voice-chrome .composer-bar__model-label { font-weight: 650; }
+.composer-voice-chrome .composer-bar__model-option-sub {
+  display: block;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+.composer-voice-chrome .composer-voice-btns,
+.composer-voice-chrome .live-voice-control,
+.composer-voice-chrome .dictation-pill,
+.composer-voice-chrome .live-voice-bar__controls,
+.composer-voice-chrome .live-voice-bar__composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.composer-voice-chrome .dictation-mic,
+.composer-voice-chrome .composer-mic-dictation,
+.composer-voice-chrome .composer-speak-pill,
+.composer-voice-chrome .live-voice-btn,
+.composer-voice-chrome .live-voice-bar__round,
+.composer-voice-chrome .live-voice-bar__plus,
+.composer-voice-chrome .live-voice-bar__end,
+.composer-voice-chrome .voice-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(255 255 255 / 0.04);
+}
+.composer-voice-chrome .dictation-mic__icon::before,
+.composer-voice-chrome .composer-mic-dictation__glyph::before {
+  content: "Mic";
+  font-size: 0.75rem;
+}
+.composer-voice-chrome .live-voice-btn::after {
+  content: "Live";
+  font-size: 0.7rem;
+}
+.composer-voice-chrome .live-voice-bars,
+.composer-voice-chrome .composer-speak-live__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.composer-voice-chrome .live-voice-bars i,
+.composer-voice-chrome .composer-speak-live__bars i {
+  display: block;
+  width: 2px;
+  height: 60%;
+  border-radius: 999px;
+  background: currentColor;
+}
+.composer-voice-chrome .voice-wave-bar {
+  display: block;
+  width: 3px;
+  border-radius: 999px;
+  background: #c4b5fd;
+}
+.composer-voice-chrome .voice-mode-stage,
+.composer-voice-chrome .live-voice-bar {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(14 18 28 / 0.45);
+}
+.composer-voice-chrome .voice-mode-orb {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(124 92 255 / 0.9), rgb(124 92 255 / 0.15));
+}
+.composer-voice-chrome .live-voice-bar__controls,
+.composer-voice-chrome .live-voice-bar__composer {
+  width: 100%;
+  justify-content: flex-start;
+}
+.composer-voice-chrome .live-voice-bar__round::after,
+.composer-voice-chrome .live-voice-bar__plus::after,
+.composer-voice-chrome .live-voice-bar__end::after {
+  content: attr(aria-label);
+  font-size: 0.68rem;
+  line-height: 1.1;
+  text-align: center;
+}
+.composer-voice-chrome .live-voice-bar__ask {
+  min-width: 0;
+  flex: 1;
+}
+html[data-theme="light"] .composer-voice-chrome {
+  border-top-color: rgb(15 23 42 / 0.1);
+}
+html[data-theme="light"] .composer-voice-chrome .voice-mode-stage,
+html[data-theme="light"] .composer-voice-chrome .live-voice-bar,
+html[data-theme="light"] .composer-voice-chrome .composer-bar,
+html[data-theme="light"] .composer-voice-chrome .composer-bar__model-menu {
+  background: rgb(255 255 255 / 0.88);
+  border-color: rgb(15 23 42 / 0.1);
+  color: var(--color-fg);
+}
+
