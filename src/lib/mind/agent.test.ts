@@ -251,3 +251,70 @@ describe("bounded agent", () => {
     assert.match(result.error ?? "", /prompt/);
   });
 });
+
+describe("adversarial: agent imagine cost metering", () => {
+  it("PoC: default imagine path must hit the shared rate limiter", async () => {
+    const { resetImagineRateLimitForTests, checkImagineRateLimit, imagineRateLimitKey, IMAGINE_MAX_PER_WINDOW } = await import("./media/harden.ts");
+    resetImagineRateLimitForTests();
+    const owner = "owner-agent-poc";
+    const key = imagineRateLimitKey({ ownerId: owner, sessionId: "agent-run" });
+    for (let i = 0; i < IMAGINE_MAX_PER_WINDOW; i++) assert.equal(checkImagineRateLimit(key).ok, true);
+
+    let calls = 0;
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw something expensive",
+      model: async () => {
+        calls += 1;
+        if (calls === 1) return { text: "", toolCalls: [{ id: "call-1", name: "imagine", arguments: { prompt: "burn credits" } }] };
+        return { text: "should not get here", toolCalls: [] };
+      },
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      imagineOwnerId: owner,
+      imagineSessionId: "agent-run",
+      // Force empty key so a missed meter cannot spend live credits.
+      execute: undefined,
+    });
+    // Override generate by saturating limiter — defaultExecuteTool must refuse before network.
+    assert.equal(result.ok, false);
+    assert.match(`${result.error ?? ""} ${result.log.map((entry) => entry.detail).join(" ")}`, /rate-limited|Wait a minute/i);
+    resetImagineRateLimitForTests();
+  });
+
+  it("caps imagine calls per agent run (loop protection)", async () => {
+    const { resetImagineRateLimitForTests } = await import("./media/harden.ts");
+    resetImagineRateLimitForTests();
+    let imagineTools = 0;
+    const tiny =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let calls = 0;
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw many pictures",
+      maxSteps: 8,
+      imagineOwnerId: "owner-loop",
+      imagineSessionId: "run-1",
+      maxImaginePerRun: 4,
+      model: async () => {
+        calls += 1;
+        if (calls <= 6) return { text: "", toolCalls: [{ id: `call-${calls}`, name: "imagine", arguments: { prompt: `pic ${calls}` } }] };
+        return { text: "done", toolCalls: [] };
+      },
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      execute: async (_ws, tool) => {
+        assert.equal(tool, "imagine");
+        imagineTools += 1;
+        return { ok: true, lines: ["imagine: ok"], images: [{ dataUrl: tiny, name: "x.png", mime: "image/png" }] };
+      },
+    });
+    assert.ok(imagineTools <= 4, `imagineTools=${imagineTools}`);
+    assert.match(`${result.error ?? ""} ${result.log.map((e) => e.detail).join(" ")}`, /imagine.*limit|Too many Imagine|4/i);
+    resetImagineRateLimitForTests();
+  });
+});

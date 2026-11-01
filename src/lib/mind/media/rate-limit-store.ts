@@ -1,6 +1,10 @@
 /**
  * Server-only file-backed Imagine rate-limit store (multi-process on one host).
- * Shared edge store remains a cross-lane infra request — see HARDENING.md.
+ *
+ * Multi-host / edge: keep `ImagineRateLimitStore` pluggable. A Redis (or similar)
+ * implementation belongs to infra/integration — this lane will call
+ * `setImagineRateLimitStore(...)` once that backend exists. Until then, file + memory
+ * only protect a single machine.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname } from "node:path";

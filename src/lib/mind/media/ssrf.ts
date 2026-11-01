@@ -127,12 +127,18 @@ export async function resolveAndPinUrl(raw: string, lookup: LookupFn = defaultLo
     return { ok: false, error: "Could not resolve that image host." };
   }
   if (!addresses.length) return { ok: false, error: "Could not resolve that image host." };
+  // Happy Eyeballs / dual-stack: validate EVERY answer. Mixed public+private is treated as rebinding.
+  const safe: string[] = [];
   for (const address of addresses) {
     if (isUnsafeResolvedAddress(address)) {
       return { ok: false, error: "Refusing to download that image URL (resolved to a private address)." };
     }
+    safe.push(normalizeIpString(address));
   }
-  return { ok: true, hostname: host, pinnedAddress: addresses[0]!, url };
+  if (!safe.length) return { ok: false, error: "Refusing to download that image URL (resolved to a private address)." };
+  // Prefer IPv4 when both families are present (stable pin for tests and simple agents).
+  const pinned = safe.find((addr) => !addr.includes(":")) ?? safe[0]!;
+  return { ok: true, hostname: host, pinnedAddress: pinned, url };
 }
 
 export async function fetchPinnedUrl(

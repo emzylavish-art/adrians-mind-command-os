@@ -50,4 +50,15 @@ describe("adversarial: DNS-rebinding / IP literal SSRF", () => {
     assert.equal(result.ok, false);
     if (!result.ok) assert.match(result.error, /private|refus|unsafe|resolve/i);
   });
+
+  it("validates every dual-stack answer and pins a public IPv4 when present", async () => {
+    const pinned = await resolveAndPinUrl("https://cdn.example/a.png", async () => ["2001:db8::1", "8.8.8.8"]);
+    assert.equal(pinned.ok, true);
+    if (pinned.ok) assert.equal(pinned.pinnedAddress, "8.8.8.8");
+  });
+
+  it("refuses mixed public+private answers (rebinding-shaped DNS)", async () => {
+    const pinned = await resolveAndPinUrl("https://cdn.example/a.png", async () => ["8.8.8.8", "169.254.169.254"]);
+    assert.equal(pinned.ok, false);
+  });
 });

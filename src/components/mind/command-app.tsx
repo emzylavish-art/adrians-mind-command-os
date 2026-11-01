@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
@@ -49,7 +49,7 @@ import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, createImagineTabLock, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
+import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -936,7 +936,35 @@ export function CommandApp() {
     void deliver(prepared.chat, prepared.text, ws, true, toImageAttachments(prepared.images));
   }
 
-  async function exportActive() {
+  function onComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const html = event.clipboardData?.getData("text/html") || "";
+    const text = event.clipboardData?.getData("text/plain") || "";
+    const safeImg = extractSafeImageSrcFromHtml(html) || sanitizePastedImageCandidate(text);
+    if (html && /<img/i.test(html) && !safeImg) {
+      event.preventDefault();
+      setError("That paste included an unsafe image link (javascript/data HTML). It was blocked.");
+      return;
+    }
+    if (/^(javascript|vbscript):/i.test(text.trim())) {
+      event.preventDefault();
+      setError("That paste looked like a script URL. It was blocked.");
+      return;
+    }
+    if (html && !safeImg) {
+      // Prefer sanitized plain text over raw HTML blobs in the composer.
+      const cleaned = sanitizeComposerPasteText(html || text);
+      if (cleaned !== text) {
+        event.preventDefault();
+        const target = event.currentTarget;
+        const start = target.selectionStart ?? draft.length;
+        const end = target.selectionEnd ?? draft.length;
+        const next = draft.slice(0, start) + cleaned + draft.slice(end);
+        setDraft(next);
+      }
+    }
+  }
+
+    async function exportActive() {
     if (!active) return;
     try {
       const store = tryCreateIndexedDbBlobStore();
@@ -2009,6 +2037,7 @@ export function CommandApp() {
                   </div>
                   <textarea
                     value={draft}
+                    onPaste={onComposerPaste}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
                     rows={3}

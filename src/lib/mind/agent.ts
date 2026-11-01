@@ -1,11 +1,14 @@
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
-import { generateImagineImages, GROK_IMAGINE_MODEL } from "./media/imagine.ts";
+import { checkImagineRateLimit, imagineRateLimitKey, IMAGINE_MAX_N, sanitizeImaginePrompt } from "./media/harden.ts";
+import { generateImagineImages, GROK_IMAGINE_MODEL, resolveImagineModel } from "./media/imagine.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
 import type { Autonomy } from "./policy.ts";
 import type { Workspace } from "./types.ts";
 
 export const AGENT_MAX_STEPS = 4;
 export const AGENT_DEADLINE_MS = 20_000;
+/** Cost brake: max Imagine tool calls per single agent run (loop protection). */
+export const AGENT_MAX_IMAGINE_PER_RUN = 4;
 
 export const AGENT_TOOLS = [
   {
@@ -142,15 +145,24 @@ export function buildAgentModelBody(
   };
 }
 
-async function defaultExecuteTool(
+function createDefaultExecuteTool(meter: { ownerId: string; sessionId: string }) {
+  return (ws: Workspace, tool: AgentToolName, args: AgentToolArgs) => defaultExecuteToolUnmetered(ws, tool, args, meter);
+}
+
+async function defaultExecuteToolUnmetered(
   ws: Workspace,
   tool: AgentToolName,
   args: AgentToolArgs,
+  meter: { ownerId: string; sessionId: string } = { ownerId: "anon", sessionId: "agent" },
 ): Promise<AgentToolResult> {
   if (tool === "imagine") {
-    const prompt = args.prompt?.trim() ?? "";
-    if (!prompt) return { ok: false, lines: ["imagine: Write a prompt for Imagine."] };
-    const generated = await generateImagineImages({ prompt, n: 1, model: GROK_IMAGINE_MODEL });
+    const normalized = sanitizeImaginePrompt(args.prompt ?? "");
+    if (!normalized.ok) return { ok: false, lines: [`imagine: ${normalized.error}`] };
+    const rateKey = imagineRateLimitKey({ ownerId: meter.ownerId, sessionId: meter.sessionId });
+    const rate = checkImagineRateLimit(rateKey);
+    if (!rate.ok) return { ok: false, lines: [`imagine: ${rate.error}`] };
+    const model = resolveImagineModel(GROK_IMAGINE_MODEL);
+    const generated = await generateImagineImages({ prompt: normalized.prompt, n: Math.min(1, IMAGINE_MAX_N), model });
     if (!generated.ok) return { ok: false, lines: [`imagine: ${generated.error}`] };
     const images: ImageAttachment[] = generated.images.map((image, index) => ({
       dataUrl: image.dataUrl,
@@ -190,9 +202,18 @@ export async function runBoundedAgent(input: {
   now?: () => number;
   /** Optional vision attachments for Orchestrator mode (same packaging as Direct). */
   images?: ImageAttachment[];
+  /** Owner id for shared Imagine rate limit (HTTP + agent). */
+  imagineOwnerId?: string;
+  /** Session id for shared Imagine rate limit. */
+  imagineSessionId?: string;
+  /** Max Imagine tool invocations in this run (default AGENT_MAX_IMAGINE_PER_RUN). */
+  maxImaginePerRun?: number;
   execute?: (ws: Workspace, tool: AgentToolName, args: AgentToolArgs) => AgentToolResult | Promise<AgentToolResult>;
 }): Promise<AgentRunResult> {
   const maxSteps = input.maxSteps ?? AGENT_MAX_STEPS;
+  const maxImaginePerRun = input.maxImaginePerRun ?? AGENT_MAX_IMAGINE_PER_RUN;
+  const imagineOwnerId = (input.imagineOwnerId || "anon").trim() || "anon";
+  const imagineSessionId = (input.imagineSessionId || "agent").trim() || "agent";
   const started = (input.now ?? Date.now)();
   const deadline = started + (input.deadlineMs ?? AGENT_DEADLINE_MS);
   const now = input.now ?? Date.now;
@@ -203,7 +224,8 @@ export async function runBoundedAgent(input: {
   if (input.halted) return { ok: false, text: "", log, error: "Emergency stop is on. No new action can run." };
   if (!input.approved) return { ok: false, text: "", log, error: "This agent run was not approved." };
 
-  const execute = input.execute ?? defaultExecuteTool;
+  const execute = input.execute ?? createDefaultExecuteTool({ ownerId: imagineOwnerId, sessionId: imagineSessionId });
+  let imagineCalls = 0;
   const images = sanitizeAttachments(input.images ?? []);
   const userContent = packageChatContent(goal, images);
   const messages: AgentMessage[] = [
@@ -238,6 +260,14 @@ export async function runBoundedAgent(input: {
     if (!parsed.ok) {
       log.push({ step: toolsRun, tool: call.name || "unknown", ok: false, detail: parsed.error });
       return { ok: false, text: "", log, error: parsed.error, images: collectedImages.length ? collectedImages : undefined };
+    }
+    if (parsed.tool === "imagine") {
+      if (imagineCalls >= maxImaginePerRun) {
+        const detail = `imagine: Too many Imagine calls in this run (limit ${maxImaginePerRun}).`;
+        log.push({ step: toolsRun, tool: "imagine", ok: false, detail });
+        return { ok: false, text: "", log, error: detail, images: collectedImages.length ? collectedImages : undefined };
+      }
+      imagineCalls += 1;
     }
     const executed = await Promise.resolve(
       execute(input.ws, parsed.tool, { query: parsed.query, prompt: parsed.prompt }),

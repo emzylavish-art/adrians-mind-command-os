@@ -120,6 +120,10 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const goal = typeof body.goal === "string" ? body.goal : "";
   const tier = resolveModelTier(body.modelTier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
+  const sessionId =
+    request.headers.get("x-amcos-session") ||
+    request.headers.get("x-session-id") ||
+    "agent";
   const result = await runBoundedAgent({
     ws,
     goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
@@ -134,6 +138,8 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     halted: false,
     approved: true,
     images,
+    imagineOwnerId: userId,
+    imagineSessionId: sessionId,
   });
   return json({
     ok: result.ok,
