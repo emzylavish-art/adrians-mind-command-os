@@ -359,6 +359,8 @@ Motion lane **does not edit `package.json`**. Please add these lane test files t
 - `src/components/mind/dashboard-3d/motion/star-batch-xfade.test.ts` (c19)
 - `src/components/mind/dashboard-3d/motion/edge-pulse-flip.test.ts` (c20)
 - `src/components/mind/dashboard-3d/motion/state-prune.test.ts` (c20)
+- `src/components/mind/dashboard-3d/motion/traveler-focus-churn.test.ts` (c21)
+- `src/components/mind/dashboard-3d/motion/traveler-trails.test.ts` (c21)
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
 
@@ -479,3 +481,29 @@ pruneMotionStateMap(healthXfade, liveBotIdSet); // currently never pruned in uni
   orbit re-sample still uses `sharedMotionClock` via the default. Passing
   `{ clock, xfade, neighbors }` to the batch lets you delete that re-sample and the
   separate crossfade loop (queue #79).
+
+## Traveler focus churn + trail batch (c21)
+
+- Hacker c21: `stepTravelerEase` resume no longer snaps to absolute clock phase. While the
+  shared clock kept advancing during a pause, the first resumed frame teleported the marker
+  (measured 0.40 lap after a 4s pause) and opacity popped 0.55↔1 in one frame; reduced-motion
+  also silently cleared `paused`. Now: resume re-anchors from the frozen progress
+  (`phaseOffset`, folded into `[0,duration)`), the paused dim eases (τ 0.18s, clock-mapped
+  dt), reduced-motion keeps `paused` and leaving it continues from the static pose. New
+  state fields are optional; API and call sites unchanged.
+- `stepTravelerTrails(trails, t, dt, reducedMotion, { hold })` — one call replaces the
+  per-trail loop in universe-scene and returns the count of **genuine** forward loop wraps
+  (`isTravelerWrap`: small forward step across 1→0; never on hold/reduced/teleport):
+
+```ts
+import { stepTravelerTrails } from "./motion";
+// landingTrails entries already have { ease, sample, points, lastProgress }
+const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, {
+  hold: detailOpen || fly.flying, // optional scene-wide hold; never resumes a caller-owned pause
+});
+if (wraps > 0) dust.impulseGust(0.55, 0.12, -0.35, 0.45);
+for (const tr of landingTrails) { /* mesh.position / opacity / visible from tr.sample as today */ }
+```
+
+Capped at `TRAVELER_TRAILS_MAX` (256). Zero per-frame alloc. No new deps.
+Queue rows: #90 (wire, Dashboard) and #91 (Motion c22 probe) — numbered past local c52 #83–#89; renumber freely on landing.
