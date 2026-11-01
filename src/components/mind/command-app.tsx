@@ -90,7 +90,14 @@ import {
   classifyHonestFailure,
   honestFailureAuditAction,
   HONEST_FAILURE_MESSAGES,
+  mcpToolFailure,
 } from "@/lib/mind/failure-states";
+import {
+  historyForDeliver,
+  resolveChatMessages,
+  shouldBlockForEmergencyStop,
+  snapshotImages,
+} from "@/lib/mind/retry-fidelity";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
   addLocalFile,
@@ -268,6 +275,7 @@ function humanAction(action: string) {
     model_unavailable: "Model unavailable",
     database_write_failed: "Database write failed",
     emergency_stop_active: "Emergency stop blocked an action",
+    mcp_tool_failed: "MCP tool failed",
     rea_doctor: "REA doctor ran",
     rea_inspect: "REA inspected a file",
   };
@@ -856,18 +864,45 @@ export function CommandApp() {
       const status = result.ok ? "ok" : "error";
       setToolResultStatus(status);
       recordToolTurn(chat, text, `[${status}] ${reply}`, undefined, { tool: "mcp", ok: result.ok, action: "chat" });
-    } catch {
+      if (!result.ok) {
+        const failed = mcpToolFailure({
+          ok: false,
+          status: "error",
+          error: result.error,
+          text: result.text,
+          tool: "mcp",
+          serverId: result.servers?.[0]?.id,
+        });
+        reportFailure(
+          failed?.message ?? result.error ?? HONEST_FAILURE_MESSAGES.mcp_tool_failed,
+          "mcp_tool_failed",
+          failed?.target ?? "mcp",
+          () => {
+            void askMcp(chat, text, confirmed);
+          },
+        );
+      } else {
+        clearFailure();
+      }
+    } catch (caught) {
       setBusy(false);
       setToolResultStatus("error");
-      setError("The MCP server could not be reached. Nothing was called.");
+      const message =
+        caught instanceof Error ? caught.message : "The MCP server could not be reached. Nothing was called.";
+      const failed = mcpToolFailure({ ok: false, status: "error", error: message, tool: "mcp" });
+      reportFailure(failed?.message ?? message, "mcp_tool_failed", failed?.target ?? "mcp", () => {
+        void askMcp(chat, text, confirmed);
+      });
     }
   }
 
   async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []): Promise<string | null> {
     const latest = wsRef.current;
-    if (latest.halted || source.halted) {
+    const imageSnapshot = snapshotImages(images) as ImageAttachment[];
+    // Live halt only — a stale source.halted must not block Retry after Clear stop.
+    if (shouldBlockForEmergencyStop(latest.halted, source.halted)) {
       reportEmergencyStop(chat.id, () => {
-        void deliver(chat, text, wsRef.current, resume, images);
+        void deliver(chat, text, wsRef.current, resume, imageSnapshot);
       });
       return null;
     }
@@ -881,20 +916,21 @@ export function CommandApp() {
     }
     if (!routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
-        void deliver(chat, text, wsRef.current, resume);
+        void deliver(chat, text, wsRef.current, resume, imageSnapshot);
       });
       return null;
     }
     const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
-    const history = (resume ? chat.messages.slice(0, -1) : chat.messages).slice(-12);
+    const liveMessages = resolveChatMessages(latest.chats, chat.id, chat);
+    const history = historyForDeliver(liveMessages, resume);
     if (!resume) {
-      const displayText = historyTextForImages(text, images);
+      const displayText = historyTextForImages(text, imageSnapshot);
       const userMsg = {
         id: crypto.randomUUID(),
         role: "user" as const,
         content: displayText,
         at: new Date().toISOString(),
-        images: images.length ? images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
+        images: imageSnapshot.length ? imageSnapshot.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
       };
       setWs((prev) => ({
         ...prev,
@@ -938,7 +974,7 @@ export function CommandApp() {
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
           modelTier,
-          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          images: imageSnapshot.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         },
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
@@ -953,7 +989,7 @@ export function CommandApp() {
         const message = result.ok ? "Grok returned an empty reply." : result.error;
         const kind = classifyHonestFailure(message);
         reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
-          void deliver(chat, text, wsRef.current, true);
+          void deliver(chat, text, wsRef.current, true, imageSnapshot);
         });
         return null;
       }
@@ -1020,7 +1056,7 @@ export function CommandApp() {
             : HONEST_FAILURE_MESSAGES.model_unreachable;
       const kind = classifyHonestFailure(message);
       reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
-        void deliver(chat, text, wsRef.current, resume);
+        void deliver(chat, text, wsRef.current, resume, imageSnapshot);
       });
       return null;
     }
@@ -1163,14 +1199,17 @@ export function CommandApp() {
     if (wsRef.current.halted) {
       const snapshot = text;
       const file = staged;
+      const imageSnapshot = snapshotImages(images) as ImageAttachment[];
       reportEmergencyStop("command", () => {
         setDraft(snapshot);
         if (file) setStaged(file);
+        setPendingImages(imageSnapshot);
         void sendCommand();
       });
       return;
     }
-    const made = createChat(ws, {
+    const live = wsRef.current;
+    const made = createChat(live, {
       memory: memoryChoice,
       autonomy,
       temporary,
@@ -1179,10 +1218,11 @@ export function CommandApp() {
     const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
+    const imageSnapshot = snapshotImages(images) as ImageAttachment[];
     setDraft("");
     setStaged(null);
     setPendingImages([]);
-    const source = { ...ws, chats: [made.chat, ...ws.chats] };
+    const source = { ...live, chats: [made.chat, ...live.chats] };
     if (settleIntent(made.chat, full, source)) {
       if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: projectChoice || null }));
       return;
@@ -1194,7 +1234,7 @@ export function CommandApp() {
       if (file) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
-    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, false, images);
+    await deliver(made.chat, full, source, false, imageSnapshot);
   }
 
   async function startResearch() {
@@ -1335,7 +1375,7 @@ export function CommandApp() {
     setDraft("");
     setStaged(null);
     setPendingImages([]);
-    const source = ws;
+    const source = wsRef.current;
     const action = voiceNext.current ? "voice" as const : "chat" as const;
     voiceNext.current = false;
     if (settleIntent(active, full, source, action)) {
@@ -1345,7 +1385,8 @@ export function CommandApp() {
     if (file) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
-    await deliver(active, full, ws, false, images);
+    const imageSnapshot = snapshotImages(images) as ImageAttachment[];
+    await deliver(active, full, source, false, imageSnapshot);
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active) {
