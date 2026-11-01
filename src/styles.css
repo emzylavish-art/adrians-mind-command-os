@@ -4748,3 +4748,55 @@ html[data-theme="light"] aside.rail .sidebar-plus * {
     align-self: stretch !important;
   }
 }
+
+/* —— Evolution c62: tablet (768–1023) composer density — stop 900px dock / 374px ASK —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock {
+    max-height: min(42vh, 22rem) !important;
+    overflow: auto !important;
+    height: auto !important;
+    inset: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+  }
+  section.composer-dock > .grid.gap-2,
+  section.command-card.composer-dock > .grid.gap-2,
+  section.floating-composer.composer-dock > .grid.gap-2 {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    gap: 0.45rem !important;
+    max-height: 3.25rem !important;
+    height: 3.25rem !important;
+    grid-template-rows: none !important;
+    overflow-x: auto !important;
+  }
+  section.composer-dock > .grid.gap-2 > button,
+  section.command-card.composer-dock > .grid.gap-2 > button,
+  section.floating-composer.composer-dock > .grid.gap-2 > button {
+    flex: 1 1 0 !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    height: 3.25rem !important;
+    max-height: 3.25rem !important;
+    overflow: hidden !important;
+    padding: 0.45rem 0.65rem !important;
+  }
+  /* Hide verbose tile subtitles on tablet (same as mobile idle) */
+  section.composer-dock > .grid.gap-2 > button .text-xs,
+  section.command-card.composer-dock > .grid.gap-2 > button .text-xs,
+  section.floating-composer.composer-dock > .grid.gap-2 > button .text-xs {
+    display: none !important;
+  }
+  section.composer-dock > .grid.gap-2 > button .text-sm,
+  section.command-card.composer-dock > .grid.gap-2 > button .text-sm {
+    font-size: 0.78rem !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+  }
+}
