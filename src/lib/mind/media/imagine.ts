@@ -1,10 +1,20 @@
 import { resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
+import {
+  GROK_IMAGINE_MODEL,
+  normalizeImaginePrompt,
+  XAI_IMAGES_EDITS_URL,
+  XAI_IMAGES_GENERATIONS_URL,
+} from "./imagine-shared.ts";
 
-/** Default Grok Imagine model (listed by GET /v1/image-generation-models). */
-export const GROK_IMAGINE_MODEL = "grok-imagine-image";
-
-export const XAI_IMAGES_GENERATIONS_URL = "https://api.x.ai/v1/images/generations";
+export {
+  GROK_IMAGINE_MODEL,
+  normalizeImaginePrompt,
+  parseImagineCommand,
+  XAI_IMAGES_EDITS_URL,
+  XAI_IMAGES_GENERATIONS_URL,
+  XAI_IMAGE_VARIATIONS_SUPPORTED,
+} from "./imagine-shared.ts";
 
 export type ImagineRequest = {
   prompt: string;
@@ -34,21 +44,6 @@ function clampCount(n: unknown): number {
   return Math.min(MAX_IMAGES_PER_TURN, Math.floor(num));
 }
 
-export function normalizeImaginePrompt(raw: unknown): { ok: true; prompt: string } | { ok: false; error: string } {
-  if (typeof raw !== "string") return { ok: false, error: "Write a prompt for Imagine." };
-  const prompt = raw.trim();
-  if (!prompt) return { ok: false, error: "Write a prompt for Imagine." };
-  if (prompt.length > 4000) return { ok: false, error: "That Imagine prompt is too long (max 4000 characters)." };
-  return { ok: true, prompt };
-}
-
-/** Parse `/imagine <prompt>` from composer draft. Returns null when not an imagine command. */
-export function parseImagineCommand(draft: string): string | null {
-  const trimmed = draft.trim();
-  const match = trimmed.match(/^\/imagine(?:\s+|$)([\s\S]*)$/i);
-  if (!match) return null;
-  return match[1]!.trim();
-}
 
 function mimeFromB64Header(b64: string, hinted?: string): string {
   if (hinted && /^image\/(png|jpeg|jpg|gif|webp)$/i.test(hinted)) {
@@ -203,7 +198,6 @@ export async function generateImagineImages(
 }
 
 
-export const XAI_IMAGES_EDITS_URL = "https://api.x.ai/v1/images/edits";
 
 export type ImagineEditRequest = {
   prompt: string;
@@ -322,5 +316,3 @@ export async function editImagineImage(
   };
 }
 
-/** OpenAI-style variations are not offered by xAI (POST /v1/images/variations → 405). */
-export const XAI_IMAGE_VARIATIONS_SUPPORTED = false;

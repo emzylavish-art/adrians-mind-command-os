@@ -153,3 +153,12 @@ See `/workspace/locks/media-integration.lock`.
 - Helper `editImagineImage`; generate route accepts `mode:"edit"` / `image` data URL.
 - UI: **Edit with Imagine** on inline bubble images + **Edit** on attachment chips (composer draft = edit instruction).
 
+
+## Hotfix: client media barrel Node crash — 2026-11-01T13:34 Africa/Lagos
+
+- **CRITICAL:** `@/lib/mind/media` re-exported `xai-key.ts` / server `imagine.ts` → Vite client crash `Cannot access node:fs.existsSync`.
+- Client barrel now exports only `types`, `data-url`, `pack`, `history`, `imagine-shared`.
+- Server helpers via direct imports or `index.server.ts`.
+- Guard: `client-barrel.test.ts` fails if barrel export lines pull Node-only modules.
+- Playwright: Attach/Camera visible, camera dialog opens, no pageErrors (`v2-barrel-fix-result.json`).
+
