@@ -24,12 +24,20 @@ export const CHAR_LOOK_LAMBDA = 7;
 export const CHAR_LOCOMOTION_LAMBDA = 6;
 /** Cap id length hashed per call (very long ids must not burn a frame). */
 export const CHAR_PHASE_ID_MAX = 256;
+/** c22: amplitude re-entry rate after reduced-motion turns off (~0.5s to 95%). */
+export const CHAR_AMP_LAMBDA = 6;
 
 export type CharacterMotionState = {
   /** Eased locomotion weight 0 (idle) → 1 (full walk). */
   loco: number;
   /** Current look yaw (radians, local Y). */
   lookYaw: number;
+  /**
+   * c22: motion amplitude weight 0..1. Reduced-motion parks it at 0; on exit it eases back
+   * so bob/breath don't pop from rest pose to full amplitude in one frame. Optional so
+   * hand-built / pose-hold states stay valid (undefined → 1).
+   */
+  amp?: number;
 };
 
 export type CharacterSample = {
@@ -65,7 +73,7 @@ export type CharacterMotionOpts = {
 const EMPTY_CHAR_OPTS: CharacterMotionOpts = Object.freeze({});
 
 export function createCharacterMotionState(): CharacterMotionState {
-  return { loco: 0, lookYaw: 0 };
+  return { loco: 0, lookYaw: 0, amp: 1 };
 }
 
 export function createCharacterSample(): CharacterSample {
@@ -121,6 +129,7 @@ export function stepCharacterMotion(
     yaw = lookTarget;
     state.loco = loco;
     state.lookYaw = yaw;
+    state.amp = 0;
     out.offsetY = 0;
     out.offsetX = 0;
     out.offsetZ = 0;
@@ -136,6 +145,14 @@ export function stepCharacterMotion(
   yaw = damp(yaw, lookTarget, CHAR_LOOK_LAMBDA, d);
   state.loco = loco;
   state.lookYaw = yaw;
+  const ampPrev = state.amp === undefined ? 1 : clamp01(finiteOr(state.amp, 1));
+  // dt=0 (sampleCharacterIdle / same-frame resample) holds amp; only real time ramps it.
+  let amp = 1;
+  if (ampPrev < 1) {
+    amp = damp(ampPrev, 1, CHAR_AMP_LAMBDA, d);
+    if (amp > 1 - 1e-3) amp = 1;
+  }
+  if (state.amp !== undefined) state.amp = amp;
 
   const t = clock.map(tSeconds);
   const idleBob = Math.sin(t * CHAR_IDLE_BOB_SPEED + phase) * bobAmp;
@@ -148,10 +165,10 @@ export function stepCharacterMotion(
   const sway = Math.sin(strideAng) * swayAmp;
   const strideZ = Math.sin(strideAng * 2) * (bounceAmp * 0.25);
 
-  out.offsetY = lerp(idleBob, bounce, loco);
-  out.offsetX = sway * loco;
-  out.offsetZ = strideZ * loco;
-  out.scaleY = lerp(breath, 1 + bounce * 0.15, loco);
+  out.offsetY = lerp(idleBob, bounce, loco) * amp;
+  out.offsetX = sway * loco * amp;
+  out.offsetZ = strideZ * loco * amp;
+  out.scaleY = 1 + (lerp(breath, 1 + bounce * 0.15, loco) - 1) * amp;
   out.yaw = yaw;
   out.stridePhase = stridePhase;
   out.loco = loco;
