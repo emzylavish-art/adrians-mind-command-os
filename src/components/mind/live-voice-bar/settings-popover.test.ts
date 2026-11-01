@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { shouldCloseSettingsOnEscape, shouldCloseSettingsOnOutsideClick } from "./settings-popover.ts";
+import { shouldCloseSettingsOnEscape, shouldCloseSettingsOnOutsideClick, shouldEndCallOnEscape } from "./settings-popover.ts";
 
 describe("live-voice settings popover", () => {
   it("closes on Esc only when open", () => {
@@ -36,3 +36,18 @@ describe("live-voice settings popover", () => {
     );
   });
 });
+
+  it("Esc ends call only when settings/modal are closed", () => {
+    assert.equal(
+      shouldEndCallOnEscape({ key: "Escape", settingsOpen: true, callActive: true, modalOpenInDom: false }),
+      false,
+    );
+    assert.equal(
+      shouldEndCallOnEscape({ key: "Escape", settingsOpen: false, callActive: true, modalOpenInDom: true }),
+      false,
+    );
+    assert.equal(
+      shouldEndCallOnEscape({ key: "Escape", settingsOpen: false, callActive: true, modalOpenInDom: false }),
+      true,
+    );
+  });

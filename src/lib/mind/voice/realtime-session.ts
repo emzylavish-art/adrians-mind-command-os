@@ -1,5 +1,7 @@
 import { SharedAudioOutput, sharedAudioOutput } from "./audio-output.ts";
 import { rmsFromTimeDomain } from "./level.ts";
+import { rmsLevel } from "./levels.ts";
+import { decodeWavPcm, resampleLinear, synthesizeTone } from "./test-audio.ts";
 import { resolveXaiVoiceId } from "./voices.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
@@ -22,6 +24,15 @@ export type RealtimeHandlers = {
 export type RealtimeSessionOptions = {
   /** Built-in or allowlisted voice id applied on session.update (default eve). */
   voice?: string;
+};
+
+export type RealtimeConnectOptions = {
+  /** When true, cancel auto model replies so the app owns Direct/Orchestrator routing. */
+  captureOnly?: boolean;
+  /** Dev-only: stream this WAV URL or tone:440 instead of the mic. */
+  testAudioUrl?: string | null;
+  /** Optional session instructions (e.g. personality + capture-only). */
+  instructions?: string;
 };
 
 type WsLike = {
@@ -77,6 +88,10 @@ export class RealtimeVoiceSession {
   private levelRaf = 0;
 
   private voiceId: string;
+  private captureOnly = true;
+  private testAudioUrl: string | null = null;
+  private testAudioTimer: ReturnType<typeof setInterval> | null = null;
+  private forceSpeak = false;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -115,9 +130,11 @@ export class RealtimeVoiceSession {
     if (muted) this.handlers.onLevel?.(0);
   }
 
-  async connect(ephemeralSecret: string) {
+  async connect(ephemeralSecret: string, options: RealtimeConnectOptions = {}) {
     if (!ephemeralSecret) throw new Error("Missing ephemeral voice secret.");
     this.intentionalClose = false;
+    this.captureOnly = options.captureOnly !== false;
+    this.testAudioUrl = options.testAudioUrl || null;
     this.handlers.onStatus?.("connecting");
     const ws = this.socketFactory(REALTIME_ENDPOINT, [`xai-client-secret.${ephemeralSecret}`]);
     this.ws = ws;
@@ -147,7 +164,11 @@ export class RealtimeVoiceSession {
       type: "session.update",
       session: {
         voice: this.voiceId,
-        instructions: "You are a voice capture helper. Prefer short replies when asked to speak.",
+        instructions:
+          options.instructions ||
+          (this.captureOnly
+            ? "You only listen for transcription. Do not answer unless a force_message is sent."
+            : "You are a voice capture helper. Prefer short replies when asked to speak."),
         turn_detection: { type: "server_vad" },
         audio: {
           input: { format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE } },
@@ -179,10 +200,19 @@ export class RealtimeVoiceSession {
     }
     const type = msg.type || "";
     if (type === "error") {
-      this.handlers.onError?.(msg.error?.message || "Voice realtime error.");
+      const message = msg.error?.message || "Voice realtime error.";
+      // Benign: response.cancel when nothing is active (capture-only / barge-in / force_message prep).
+      if (/no active response|cancell?ation failed: no active response/i.test(message)) {
+        return;
+      }
+      this.handlers.onError?.(message);
       return;
     }
     if (type === "input_audio_buffer.speech_started") {
+      if (this.forceSpeak) {
+        // Dev test-audio / force_message: ignore VAD barge while assistant audio plays.
+        return;
+      }
       this.interruptPlayback();
       this.handlers.onSpeechStarted?.();
       this.handlers.onStatus?.("listening");
@@ -216,12 +246,14 @@ export class RealtimeVoiceSession {
       return;
     }
     if (type === "response.done") {
+      this.forceSpeak = false;
       this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
     }
   }
 
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback() {
+    this.forceSpeak = false;
     this.output.interrupt();
     this.send({ type: "response.cancel" });
   }
@@ -229,6 +261,10 @@ export class RealtimeVoiceSession {
   async startCapture() {
     if (!this.open) throw new Error("Voice session is not connected.");
     if (this.capturing) return;
+    if (this.testAudioUrl) {
+      await this.startTestAudioCapture(this.testAudioUrl);
+      return;
+    }
     let media: MediaStream;
     try {
       media = await navigator.mediaDevices.getUserMedia({
@@ -263,6 +299,45 @@ export class RealtimeVoiceSession {
     this.startLevelPump();
   }
 
+
+  /** Dev-only: push decoded WAV/tone PCM into the realtime input buffer (no mic). */
+  private async startTestAudioCapture(url: string) {
+    let samples: Float32Array;
+    if (url.startsWith("tone:")) {
+      samples = synthesizeTone(REALTIME_SAMPLE_RATE, 1.25, Number(url.slice(5)) || 440);
+    } else {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Test audio ${url} returned ${res.status}.`);
+      const decoded = decodeWavPcm(await res.arrayBuffer());
+      samples = resampleLinear(decoded.samples, decoded.sampleRate, REALTIME_SAMPLE_RATE);
+    }
+    this.capturing = true;
+    this.handlers.onStatus?.("listening");
+    const frame = Math.floor(REALTIME_SAMPLE_RATE * 0.1); // 100ms
+    let offset = 0;
+    // Lead-in silence so VAD arms.
+    const lead = new Float32Array(frame);
+    this.send({ type: "input_audio_buffer.append", audio: bufferToBase64(floatTo16BitPCM(lead)) });
+    this.testAudioTimer = setInterval(() => {
+      if (!this.capturing || !this.open) return;
+      if (offset >= samples.length) {
+        this.send({ type: "input_audio_buffer.commit" });
+        if (this.testAudioTimer) {
+          clearInterval(this.testAudioTimer);
+          this.testAudioTimer = null;
+        }
+        this.handlers.onLevel?.(0);
+        return;
+      }
+      const slice = samples.subarray(offset, Math.min(samples.length, offset + frame));
+      offset += frame;
+      this.handlers.onLevel?.(this.muted ? 0 : rmsLevel(slice));
+      if (this.muted) return;
+      const pcm = floatTo16BitPCM(slice);
+      this.send({ type: "input_audio_buffer.append", audio: bufferToBase64(pcm) });
+    }, 100);
+  }
+
   private startLevelPump() {
     const tick = () => {
       if (!this.capturing || !this.analyser || this.muted) {
@@ -280,6 +355,10 @@ export class RealtimeVoiceSession {
 
   stopCapture() {
     this.capturing = false;
+    if (this.testAudioTimer) {
+      clearInterval(this.testAudioTimer);
+      this.testAudioTimer = null;
+    }
     if (this.levelRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.levelRaf);
     this.levelRaf = 0;
     this.handlers.onLevel?.(0);
@@ -305,7 +384,13 @@ export class RealtimeVoiceSession {
   speakText(text: string) {
     const trimmed = text.trim();
     if (!trimmed || !this.open) return;
-    this.interruptPlayback();
+    if (this.testAudioTimer) {
+      clearInterval(this.testAudioTimer);
+      this.testAudioTimer = null;
+    }
+    this.forceSpeak = true;
+    this.output.interrupt();
+    this.send({ type: "response.cancel" });
     this.send({
       type: "conversation.item.create",
       item: {

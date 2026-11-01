@@ -30,7 +30,12 @@ export type LockRecord = {
   commits: string[];
   notes: string;
   worktree: string | null;
-  raw: Record<string, string>;
+  /** Gap#35 — promoted from raw so publicize can drop raw safely */
+  heartbeatAt: string | null;
+  /** Gap#35 — promoted from raw.task / working_on */
+  task: string | null;
+  /** Omitted on publicized status payloads (Gap#29). */
+  raw?: Record<string, string>;
 };
 
 export type BotNode = {
@@ -111,4 +116,6 @@ export type DashboardStatus = {
   charts: import("./chart-series.ts").DashboardCharts;
   /** Queue #9 — per-bot Notion stop-point freshness from snapshot. */
   notionMirror: import("./notion-mirror.ts").NotionMirrorView;
+  /** Queue #10 — forever-contract queue health + lane-idle needs-next. */
+  foreverContract: import("./forever-contract.ts").ForeverContractGuard;
 };

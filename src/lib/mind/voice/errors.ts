@@ -41,3 +41,12 @@ export function formatMicCaptureError(err: unknown): string | null {
 export function shouldPersistVoiceMode(hydrated: boolean): boolean {
   return hydrated;
 }
+
+/** Map Web Speech Recognition error codes to honest UI copy (browser dictation only). */
+export function mapBrowserSpeechError(code: string): string {
+  const c = (code || "").toLowerCase();
+  if (c === "not-allowed" || c === "service-not-allowed") {
+    return "Microphone permission was denied for browser speech. Allow the mic for this site, then try Dictate again. Nothing was inserted. This is browser speech, not a realtime voice provider.";
+  }
+  return "Browser speech failed. Nothing was inserted. This is not a realtime voice provider.";
+}

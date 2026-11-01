@@ -40,3 +40,14 @@ Commit comets are additive `LineBasicMaterial` arcs with a baked vertex-color fa
 (`cometTailFade(u) = (1-u)^1.6`, bright head → black tail) plus a `Points` head using one shared
 radial sprite (refcounted; freed 2s after the last handle disposes — `flushCometHeadSprite()` frees now).
 The motion clock now keeps one anchor per time base (≤4) and caps stutters at 250ms.
+
+## Hacker c5
+
+- `dust.update(..., reducedMotion=true)` mid-session restores **full** rest poses (LOD must not leave a
+  thinned static field). `dispose()` clears `onBeforeRender` so an unmounted mesh cannot keep writing LOD.
+
+## Wind gust (c13)
+
+`createDustField` handle gains `impulseGust(dx,dy,dz,strength?)` + `gust` sample. Call on comet/landing
+events; `update` decays. Existing `update(t, reducedMotion)` signature unchanged.
+

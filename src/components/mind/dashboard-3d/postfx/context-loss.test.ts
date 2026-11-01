@@ -119,4 +119,43 @@ describe("context-loss recovery (queue #13)", () => {
     recovery.dispose();
     assert.doesNotThrow(() => recovery.dispose());
   });
+
+  it("retries once when factory throws on restore; clears lost so the scene can tick", () => {
+    const first = bundleOf();
+    let builds = 0;
+    const recovery = createContextLossRecovery({
+      initial: first.bundle,
+      factory: () => {
+        builds += 1;
+        if (builds === 1) throw new Error("gl half-restored");
+        const h = fakeHandle();
+        return { bloom: h as never, grade: null, godRays: null, exposure: null };
+      },
+    });
+    recovery.notifyLost();
+    assert.equal(recovery.lost, true);
+    recovery.notifyRestored();
+    assert.equal(recovery.lost, false, "lost cleared even across the throw");
+    assert.equal(builds, 2, "one retry after the first throw");
+    assert.ok(recovery.bundle.bloom);
+    recovery.dispose();
+  });
+
+  it("after two factory throws leaves lost false and a null bundle (no hang)", () => {
+    const first = bundleOf();
+    let builds = 0;
+    const recovery = createContextLossRecovery({
+      initial: first.bundle,
+      factory: () => {
+        builds += 1;
+        throw new Error("still dead");
+      },
+    });
+    recovery.notifyLost();
+    recovery.notifyRestored();
+    assert.equal(recovery.lost, false);
+    assert.equal(builds, 2);
+    assert.equal(recovery.bundle.bloom, null);
+    recovery.dispose();
+  });
 });

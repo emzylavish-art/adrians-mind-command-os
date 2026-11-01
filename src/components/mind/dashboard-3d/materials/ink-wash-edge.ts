@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { InkWashEdgeShader } from "../shaders/ink-wash-edge.ts";
 import { sanitizeFinite, sanitizeShaderTime } from "./paper-grain.ts";
+import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 
 export type HealthTone = "healthy" | "stalled" | "blocked" | "idle";
 
@@ -57,6 +58,7 @@ export function createInkWashEdgeMaterial(opts: InkWashEdgeOptions = {}): THREE.
   if (opts.pulse != null) uniforms.uPulse.value = sanitizeFinite(opts.pulse, 0.35, 0, 1);
   return new THREE.ShaderMaterial({
     name: "InkWashEdgeMaterial",
+    precision: PAINTER_SHADER_PRECISION,
     uniforms,
     vertexShader: InkWashEdgeShader.vertexShader,
     fragmentShader: InkWashEdgeShader.fragmentShader,
@@ -118,6 +120,11 @@ export type InkWashRibbonOptions = {
 };
 
 export const INK_RIBBON_MAX_SEGMENTS = 256;
+/** Edges shorter than this (after sanitize) are degenerate — skip in batch helpers. */
+export const INK_EDGE_DEGENERATE_EPS = 1e-5;
+/** Hard cap for one-call ink edge adopt (prevents OOM on flood graphs). */
+export const INK_EDGES_MAX = 512;
+
 
 type Vec3Like = readonly [number, number, number] | { x: number; y: number; z: number };
 
@@ -128,6 +135,18 @@ function toVec3(v: Vec3Like): THREE.Vector3 {
     sanitizeFinite(Number(arr[1]), 0, -1e6, 1e6),
     sanitizeFinite(Number(arr[2]), 0, -1e6, 1e6),
   );
+}
+
+/** Finite edge length after coordinate sanitize; 0 for coincident/NaN endpoints. */
+export function measureInkEdgeLength(from: Vec3Like, to: Vec3Like): number {
+  const a = toVec3(from);
+  const b = toVec3(to);
+  const d = a.distanceTo(b);
+  return Number.isFinite(d) ? d : 0;
+}
+
+export function isDegenerateInkEdge(from: Vec3Like, to: Vec3Like, eps = INK_EDGE_DEGENERATE_EPS): boolean {
+  return measureInkEdgeLength(from, to) < eps;
 }
 
 /**

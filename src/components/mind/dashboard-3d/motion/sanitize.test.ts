@@ -8,6 +8,9 @@ describe("sanitize (hacker pass)", () => {
     assert.equal(sanitizeDt(-1), 0);
     assert.equal(sanitizeDt(5), 0.05);
     assert.equal(sanitizeDt(1 / 60), 1 / 60);
+    // Hacker c6: +Infinity must cap like a huge finite gap (was 0 → damp freeze)
+    assert.equal(sanitizeDt(Number.POSITIVE_INFINITY), 0.05);
+    assert.equal(sanitizeDt(Number.NEGATIVE_INFINITY), 0);
   });
 
   it("sanitizeTime rejects NaN and folds absurd absolute times", () => {

@@ -51,23 +51,31 @@ export function personalityPrompt(personality: VoicePersonality): string {
   return "You are a calm, supportive therapist-style listener. You do not diagnose.";
 }
 
-/** Fields stored for later live-voice wiring. Not consumed by browser speech. */
+/** Prefs that are stored but do not drive runtime yet (honest UI labels). */
 export const VOICE_SETTINGS_UNUSED_UNTIL_LIVE = [
-  "personality",
   "activation",
   "speed",
-  "openInVoiceMode",
-  "voiceId",
   "audioSource",
 ] as const;
 
+/** Prefs that are saved on this device and consumed by realtime/voice UI. */
+export const VOICE_SETTINGS_ACTIVE = [
+  "personality",
+  "openInVoiceMode",
+  "voiceId",
+] as const;
+
 export function unusedUntilLiveNotice(): string {
-  return "Saved; not used until live voice is connected.";
+  return "Saved on this device. Some prefs are labels only until wired to live voice.";
+}
+
+export function savedOnThisDeviceNotice(): string {
+  return "Saved on this device. Not synced to the server.";
 }
 
 export function liveVoiceMissingNotice(hasServerKey: boolean): string {
   if (!hasServerKey) {
-    return "No XAI_API_KEY is configured on the server. Live voice was not started. Nothing was invented.";
+    return "Voice provider is not configured on the server. No speech key is available. Live voice was not started. Nothing was invented.";
   }
   return "No live voice session is available. Live voice was not started.";
 }

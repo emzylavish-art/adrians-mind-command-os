@@ -50,3 +50,32 @@ describe("god-rays", () => {
     );
   });
 });
+
+describe("god-rays feedback unbind (hacker)", () => {
+  it("clears tDepth after render so later FBO writes cannot feedback", () => {
+    const g = createGodRayPass({ healthy: 1, total: 1 });
+    const depth = new THREE.DepthTexture(4, 4);
+    g.setDepthTexture(depth);
+    assert.equal(g.pass.uniforms.tDepth.value, null, "setDepthTexture does not leave sampler bound");
+    const readBuf = { texture: {}, depthTexture: depth } as any;
+    const writeBuf = { texture: {}, depthTexture: new THREE.DepthTexture(4, 4) } as any;
+    const renderer = {
+      setRenderTarget() {},
+      getRenderTarget: () => null,
+      getClearColor: () => ({ r: 0, g: 0, b: 0 }),
+      getClearAlpha: () => 1,
+      clear: () => {},
+      render: () => {},
+      getContext: () => ({ getParameter: () => 0, getExtension: () => null }),
+    } as any;
+    // During render, ShaderPass path may throw without full WebGL — still assert post-unbind via our wrapper
+    try {
+      (g.pass as any).render(renderer, writeBuf, readBuf, 0, false);
+    } catch {
+      /* jsdom / incomplete renderer */
+    }
+    assert.equal(g.pass.uniforms.tDepth.value, null);
+    assert.equal(g.pass.uniforms.useDepth.value, 0);
+    g.dispose();
+  });
+});

@@ -11,7 +11,9 @@
   --dash3d-idle: #5b6b8c;
   position: relative;
   isolation: isolate;
-  min-height: 100vh;
+  /* Gap#52: fill the viewport after resize/rotation (not the first-load aspect). */
+  min-height: 100dvh;
+  height: 100dvh;
   width: 100%;
   overflow: hidden;
   background:
@@ -22,15 +24,13 @@
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
 }
 
-.dash3d-root.is-embedded {
-  min-height: 100%;
-  height: 100%;
-}
-
 .dash3d-canvas-wrap {
   position: absolute;
   inset: 0;
   z-index: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
 }
 
 .dash3d-canvas-wrap canvas {
@@ -680,4 +680,513 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.65rem;
+}
+
+.dash3d-forever[data-tone="green"] .dash3d-forever-dot { background: #4ade80; box-shadow: 0 0 8px #4ade80aa; }
+.dash3d-forever[data-tone="amber"] .dash3d-forever-dot { background: #fbbf24; box-shadow: 0 0 8px #fbbf24aa; }
+.dash3d-forever[data-tone="red"] .dash3d-forever-dot { background: #fb7185; box-shadow: 0 0 8px #fb7185aa; }
+.dash3d-forever-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+  background: #94a3b8;
+}
+.dash3d-forever-idle {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 5.5rem;
+  overflow: auto;
+}
+.dash3d-forever-idle li {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+  font-size: 0.65rem;
+}
+.dash3d-forever-marker {
+  color: #fbbf24;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.58rem;
+}
+.dash3d-forever-queue {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.66rem;
+}
+.dash3d-forever-queue li {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash3d-forever-idx {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+.dash3d-skybar-card.dash3d-forever {
+  max-height: 11rem;
+  overflow: auto;
+}
+
+/* --- Queue #15: mobile / touch pass (dashboard-3d only; never styles.css) --- */
+.dash3d-skybar {
+  top: max(0.85rem, env(safe-area-inset-top, 0px));
+  left: max(0.85rem, env(safe-area-inset-left, 0px));
+  right: max(0.85rem, env(safe-area-inset-right, 0px));
+}
+.dash3d-flyhud {
+  left: max(1rem, env(safe-area-inset-left, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+.dash3d-zoomout,
+.dash3d-pill,
+.dash3d-side-close,
+.dash3d-operator-row,
+.dash3d-operator-layer,
+[data-testid="operator-open"],
+[data-testid="sound-mute"],
+[data-testid="fly-dive"],
+[data-testid="fly-out"],
+[data-testid="fly-sky"],
+[data-testid="fly-revisit-last"] {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}
+.dash3d-operator-input {
+  min-height: 44px;
+  font-size: 16px; /* iOS: avoid focus zoom */
+  touch-action: manipulation;
+}
+@media (max-width: 720px) {
+  .dash3d-skybar {
+    gap: 0.5rem;
+  }
+  .dash3d-skybar-card {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .dash3d-flyhud {
+    max-width: min(100vw - 1.5rem, 340px);
+    max-height: 42vh;
+  }
+  .dash3d-operator-panel {
+    width: min(100vw - 1rem, 420px);
+    max-height: min(88vh, 640px);
+  }
+  [data-testid="operator-open"] {
+    font-weight: 600;
+  }
+}
+
+/* --- Queue #16: accessibility — skip-link + focus-visible --- */
+.dash3d-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.5rem;
+  z-index: 40;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.55rem;
+  background: #0b1020;
+  color: #f8fafc;
+  border: 1px solid rgba(124, 92, 255, 0.7);
+  text-decoration: none;
+  font-size: 0.8rem;
+  transform: translateY(-200%);
+}
+.dash3d-skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+.dash3d-root :is(button, a, input, [tabindex]):focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+.dash3d-forever:focus-within {
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.55);
+}
+
+/* Status soft-error overlay — never wipe the last-good WebGL stage */
+.dash3d-status-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgb(5 8 18 / 0.55);
+}
+.dash3d-status-overlay.is-soft {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: max(0.85rem, env(safe-area-inset-top, 0px)) max(0.85rem, env(safe-area-inset-right, 0px)) 0 0;
+  background: transparent;
+}
+.dash3d-status-card {
+  pointer-events: auto;
+  max-width: min(360px, 92vw);
+  padding: 0.85rem 1rem;
+}
+.dash3d-status-overlay.is-soft .dash3d-status-card {
+  max-width: 280px;
+}
+
+.dash3d-feed-glyph.is-alert .dash3d-feed-glyph-mark {
+  box-shadow: 0 0 10px rgba(251, 113, 133, 0.75);
+}
+.dash3d-feed-glyph.is-alert {
+  border-color: rgba(251, 113, 133, 0.55);
+}
+
+/* Gap #3 — last WebGL frame freeze (context-loss / remount).
+   Keep absolute inset fill from the base .dash3d-canvas-wrap rule (Gap#52);
+   only style the freeze img here — relative wrap was sizing to the first canvas aspect. */
+.dash3d-canvas-wrap img[data-dash3d-last-frame] {
+  background: #050814;
+}
+
+.dash3d-star-tooltip {
+  position: absolute;
+  z-index: 6;
+  min-width: 140px;
+  max-width: 240px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(8, 12, 24, 0.92);
+  color: #e8eefc;
+  font-size: 0.78rem;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.dash3d-star-tooltip strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+.dash3d-star-tooltip-meta {
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+
+/* Gap#27: clear of Notion Mirror (left) AND soft status overlay (top-right z20) */
+.dash3d-graph-filters {
+  position: absolute;
+  top: auto;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  right: auto;
+  z-index: 14;
+  width: min(280px, calc(100vw - 1.5rem));
+  max-height: min(42vh, 360px);
+  padding: 0.55rem 0.65rem;
+  pointer-events: auto;
+}
+.dash3d-graph-filters .dash3d-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.2rem;
+  background: rgba(8, 12, 24, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #e8eefc;
+  border-radius: 8px;
+  padding: 0.35rem 0.45rem;
+}
+.dash3d-flyhud-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.dash3d-flyhud-focus {
+  min-width: 120px;
+}
+
+.dash3d-hud-focus-toggle {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 8;
+}
+.dash3d-root[data-hud-focus="1"] .dash3d-skybar,
+.dash3d-root[data-hud-focus="1"] .dash3d-charts-panel,
+.dash3d-root[data-hud-focus="1"] .dash3d-feed-panel,
+.dash3d-root[data-hud-focus="1"] .dash3d-graph-filters,
+.dash3d-root[data-hud-focus="1"] .dash3d-flyhud,
+.dash3d-root[data-hud-focus="1"] .dash3d-side,
+.dash3d-root[data-hud-focus="1"] .dash3d-money-panel,
+.dash3d-root[data-hud-focus="1"] .dash3d-notion-mirror,
+.dash3d-root[data-hud-focus="1"] .dash3d-operator,
+.dash3d-root[data-hud-focus="1"] .dash3d-time-scrub {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+.dash3d-root[data-hud-focus="1"] .dash3d-hud-focus-toggle {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.dash3d-charts-panel { z-index: 4; }
+.dash3d-node-detail.is-open { z-index: 10; } /* Gap#36 raised */
+.dash3d-node-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.dash3d-minimap {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 5;
+  width: 140px;
+  padding: 0.4rem 0.5rem;
+}
+.dash3d-minimap-map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-top: 0.25rem;
+  border-radius: 8px;
+  background: rgba(8,12,24,0.75);
+  border: 1px solid rgba(148,163,184,0.3);
+  overflow: hidden;
+}
+.dash3d-minimap-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: #7dd3fc;
+  cursor: pointer;
+}
+.dash3d-minimap-dot[data-health="stalled"] { background: #fbbf24; }
+.dash3d-minimap-dot[data-health="blocked"] { background: #fb7185; }
+.dash3d-minimap-dot[data-health="idle"] { background: #94a3b8; }
+.dash3d-minimap-dot.is-focus { box-shadow: 0 0 0 2px #fff; }
+.dash3d-minimap-home {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 1px solid rgba(255,255,255,0.7);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.dash3d-root[data-hud-focus="1"] .dash3d-minimap { opacity: 0; pointer-events: none; visibility: hidden; }
+
+/* Gap #24 — readable floor for feed / commits / focus chip (never <11px meta, 12px body) */
+.dash3d-feed-panel,
+.dash3d-feed-panel .dash3d-muted,
+.dash3d-feed-panel li,
+.dash3d-feed-panel button {
+  font-size: max(12px, 0.75rem);
+}
+.dash3d-feed-panel .dash3d-mono,
+.dash3d-feed-panel code {
+  font-size: max(11px, 0.6875rem);
+}
+.dash3d-hud-focus-toggle {
+  font-size: max(12px, 0.75rem);
+}
+.dash3d-feed-glyph-text {
+  font-size: max(11px, 0.6875rem);
+}
+
+/* Gap #23 — short / 200% zoom viewports: scrollable stack, pin operator */
+@media (max-height: 520px), (max-width: 720px) and (max-height: 640px) {
+  .dash3d-root {
+    overflow: auto;
+  }
+  .dash3d-skybar,
+  .dash3d-charts-panel,
+  .dash3d-feed-panel,
+  .dash3d-graph-filters,
+  .dash3d-mirror-panel,
+  .dash3d-flyhud,
+  .dash3d-minimap {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: min(100%, 420px);
+    margin: 0.35rem 0.5rem;
+    max-height: none;
+  }
+  .dash3d-hud-focus-toggle,
+  .dash3d-operator-open,
+  [data-testid="operator-open"] {
+    position: sticky;
+    top: 0.35rem;
+    z-index: 12;
+  }
+}
+
+
+/* Gap #36 — Star Detail close must sit above HUD focus toggle on mobile */
+.dash3d-node-detail.is-open {
+  z-index: 10;
+}
+.dash3d-node-detail.is-open .dash3d-side-close {
+  position: relative;
+  z-index: 11;
+}
+.dash3d-root:has(.dash3d-node-detail.is-open) .dash3d-hud-focus-toggle {
+  /* Move out of the close-button corner while detail is open */
+  right: auto;
+  left: 0.75rem;
+  z-index: 9;
+}
+
+/* Gap #37 — bound detail height on short / landscape viewports */
+.dash3d-side.dash3d-node-detail.is-open {
+  max-height: min(100dvh, 100%);
+  overflow: auto;
+  overscroll-behavior: contain; /* Gap #38 */
+}
+@media (max-height: 500px), (orientation: landscape) and (max-height: 520px) {
+  .dash3d-side.dash3d-node-detail.is-open {
+    max-height: 100dvh;
+    overflow: auto;
+  }
+  .dash3d-root:has(.dash3d-node-detail.is-open) {
+    overflow: hidden; /* keep page from scrolling away */
+  }
+}
+
+/* Gap #38 — let the scene own pinch/pan; don't chain scroll out of sheets */
+.dash3d-universe canvas,
+.dash3d-universe .dash3d-canvas,
+[data-testid="universe-canvas"],
+.dash3d-root canvas {
+  touch-action: none;
+}
+
+/* Gap #39 — WCAG 2.5.8 minimap tap targets ≥24×24 */
+.dash3d-minimap-dot {
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  background: transparent;
+  box-shadow: inset 0 0 0 7px #7dd3fc;
+}
+.dash3d-minimap-dot[data-health="stalled"] { box-shadow: inset 0 0 0 7px #fbbf24; }
+.dash3d-minimap-dot[data-health="blocked"] { box-shadow: inset 0 0 0 7px #fb7185; }
+.dash3d-minimap-dot[data-health="idle"] { box-shadow: inset 0 0 0 7px #94a3b8; }
+.dash3d-minimap-dot.is-focus { box-shadow: inset 0 0 0 7px #7dd3fc, 0 0 0 2px #fff; }
+
+/* Gap #41 — reserve skybar strip + card heights (capture CLS was money/sky shifts) */
+.dash3d-skybar {
+  min-height: 7.5rem;
+}
+.dash3d-skybar-card {
+  min-height: 4.75rem;
+}
+.dash3d-money,
+.dash3d-skybar-card.dash3d-money {
+  min-height: 5.5rem;
+}
+.dash3d-skybar-card.dash3d-forever,
+.dash3d-fleet-plan,
+[data-testid="forever-contract"],
+[data-testid="money-panel"] {
+  min-height: 5.5rem;
+}
+
+
+/* Gap #45 — mirror must not steal Time clicks; zoomout pills must not stretch into scene slabs */
+.dash3d-skybar {
+  z-index: 7;
+  align-items: flex-start;
+}
+.dash3d-time-scrub {
+  position: relative;
+  z-index: 8;
+  pointer-events: auto;
+}
+.dash3d-mirror-panel {
+  z-index: 4; /* under skybar (7) so Time / Live remain clickable */
+  max-height: min(28vh, 240px);
+}
+button.dash3d-zoomout.dash3d-glass,
+.dash3d-skybar > button.dash3d-zoomout {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  height: auto;
+  max-height: 2.75rem;
+  min-height: 44px;
+  min-width: 44px;
+  width: auto;
+  padding: 0.45rem 0.85rem;
+  line-height: 1.2;
+}
+
+
+/* Gap #51 — Compass must not cover Charts at 1280×800 */
+.dash3d-charts-panel {
+  bottom: calc(0.75rem + 158px);
+  max-height: min(42vh, 360px);
+  z-index: 6;
+}
+.dash3d-minimap {
+  z-index: 5;
+  /* stay in the bottom-right under the charts stack */
+}
+
+
+/* Gap #52 — host fills root; canvas follows container, never first-load aspect */
+.dash3d-canvas-wrap canvas {
+  object-fit: contain;
+}
+
+/* Gap #60 — Focus stage chip must not cover System weather title */
+.dash3d-skybar {
+  /* reserve the top-right pill so wrapped cards never sit under it */
+  padding-right: 9.5rem;
+}
+.dash3d-hud-focus-toggle {
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 9;
+  max-width: 8.75rem;
+}
+
+/* Gap #57 / queue #87 — visible ring when Escape restores focus to the stage */
+.dash3d-canvas-wrap[data-testid="dash3d-canvas-host"]:focus {
+  outline: none;
+}
+.dash3d-canvas-wrap[data-testid="dash3d-canvas-host"]:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 2px rgb(124 92 255 / 0.35);
+}
+
+/* Gap #59 — context-loss overlay sits above last-frame freeze */
+.dash3d-canvas-wrap [data-dash3d-ctx-loss] {
+  z-index: 3;
 }

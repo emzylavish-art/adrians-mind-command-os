@@ -36,6 +36,21 @@ describe("ollama conductor", () => {
     }
   });
 
+  it("rejects non-loopback Ollama hosts unless allowRemote is set", async () => {
+    const result = await runOllamaConductor("hello", {
+      baseUrl: "http://192.168.1.10:11434/",
+      allowRemote: false,
+      fetchImpl: async () => {
+        throw new TypeError("should not fetch");
+      },
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.unreachable, false);
+      assert.match(result.error, /loopback|local|remote|allow/i);
+    }
+  });
+
   it("returns conductor text from a mocked Ollama chat response", async () => {
     const result = await runOllamaConductor("say hi", {
       model: "mock-llama",

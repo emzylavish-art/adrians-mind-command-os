@@ -181,7 +181,7 @@ describe("provider relay", () => {
 describe("relay model body follows model tiers", () => {
   it("emits a different model id for each concrete tier in the provider JSON", async () => {
     const seen = new Set<string>();
-    for (const tier of ["Fast", "Expert", "Heavy", "Build"] as const) {
+    for (const tier of ["Fast", "Expert", "Heavy", "Build", "Orchestrator"] as const) {
       const resolved = resolveModelTier(tier, "probe", {});
       const captured: { body: { model?: string } | null } = { body: null };
       const response = relayModelStream({

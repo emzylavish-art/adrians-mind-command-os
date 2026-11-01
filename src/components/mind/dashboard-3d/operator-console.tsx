@@ -110,11 +110,11 @@ export function OperatorConsole({
   if (!open) return null;
 
   return (
-    <div className="dash3d-operator-root" data-testid="operator-console" role="dialog" aria-modal="true" aria-label="Operator console">
+    <div className="dash3d-operator-root" data-testid="operator-console" role="dialog" aria-modal="true" aria-labelledby="dash3d-operator-title" aria-label="Operator console">
       <button type="button" className="dash3d-operator-backdrop" aria-label="Close operator" onClick={() => onOpenChange(false)} />
       <div className="dash3d-glass dash3d-operator-panel">
         <div className="dash3d-operator-head">
-          <h2>Operator</h2>
+          <h2 id="dash3d-operator-title">Operator</h2>
           <p className="dash3d-muted" style={{ fontSize: "0.65rem" }}>
             Cmd/Ctrl-K · Esc closes · no shell / no lock writes
           </p>
@@ -215,11 +215,16 @@ export function OperatorConsole({
 
 export function useOperatorHotkey(onToggle: () => void) {
   useEffect(() => {
+    let lastToggleMs = 0;
     const onKey = (e: KeyboardEvent) => {
       if (shouldIgnoreOperatorHotkey(e.target)) return;
       const meta = e.metaKey || e.ctrlKey;
       if (meta && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
+        // Hacker: ignore repeat / double-fire within 300ms (OS key-repeat + some Bluetooth boards).
+        const now = Date.now();
+        if (now - lastToggleMs < 300) return;
+        lastToggleMs = now;
         onToggle();
       }
     };

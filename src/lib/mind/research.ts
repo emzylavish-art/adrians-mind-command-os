@@ -264,14 +264,8 @@ export async function performDeepResearch(input: {
   try {
     for (const q of queries) {
       if (overall.signal.aborted) {
-        const timedOut = isTimeoutAbort(overall.signal, overall.signal.reason);
-        return {
-          ok: false,
-          configured: true,
-          citations: [],
-          error: timedOut || sawTimeout ? SEARCH_TIMEOUT_REPLY : "Research stopped. No citations were saved as a success.",
-          steps,
-        };
+        sawTimeout = sawTimeout || isTimeoutAbort(overall.signal, overall.signal.reason);
+        break;
       }
       const one = await performSingleSearch({
         ...input,
@@ -283,7 +277,7 @@ export async function performDeepResearch(input: {
       if (one.error === SEARCH_TIMEOUT_REPLY) {
         sawTimeout = true;
         if (isTimeoutAbort(overall.signal, overall.signal.reason)) {
-          return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY, steps };
+          break; // keep any citations already collected; finalize below
         }
       }
       if (one.ok) collected.push(...one.citations);

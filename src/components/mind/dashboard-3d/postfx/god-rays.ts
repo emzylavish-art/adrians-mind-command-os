@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";
 import { KEY_RGB, normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.ts";
 
 /**
@@ -177,6 +178,9 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
   u.tint.value = new THREE.Color(...KEY_RGB.healthy);
   let base = godRayIntensity({ healthy: 0, total: 0, reducedMotion: false, ...init });
   let fade = 1;
+  /** Sticky depth from setDepthTexture; rebound per-frame from active readBuffer when possible. */
+  let depthTex: THREE.Texture | null = null;
+  let depthCam: THREE.PerspectiveCamera | null = null;
   const apply = () => {
     const eff = base * fade;
     u.intensity.value = eff;
@@ -184,6 +188,24 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
   };
   apply();
   let disposed = false;
+  // HACKER: WebGL feedback loop — sampling a DepthTexture still attached to an FBO that a
+  // later composer pass (or the next swap) renders into. Bind depth from the *current*
+  // readBuffer at render time, then unbind so bloom/grade/painterly write-targets stay clean.
+  const baseRender = pass.render.bind(pass);
+  pass.render = ((renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
+    if (disposed) return;
+    const liveDepth = liveSceneDepth(renderer, readBuffer as THREE.WebGLRenderTarget, depthTex);
+    u.tDepth.value = liveDepth;
+    u.useDepth.value = liveDepth ? 1 : 0;
+    if (depthCam) {
+      u.cameraNear.value = depthCam.near;
+      u.cameraFar.value = depthCam.far;
+    }
+    baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+    if (!pass.renderToScreen) markDepthClobbered(renderer, writeBuffer);
+    u.tDepth.value = null;
+    u.useDepth.value = 0;
+  }) as typeof pass.render;
   return {
     pass,
     get intensity() {
@@ -212,9 +234,12 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
     },
     setDepthTexture(tex, camera) {
       if (disposed) return;
-      u.tDepth.value = tex;
-      u.useDepth.value = tex ? 1 : 0;
+      depthTex = tex;
+      // Do not leave tDepth bound between frames — render() rebinds from readBuffer.
+      u.tDepth.value = null;
+      u.useDepth.value = 0;
       if (camera) {
+        depthCam = camera;
         u.cameraNear.value = camera.near;
         u.cameraFar.value = camera.far;
       }

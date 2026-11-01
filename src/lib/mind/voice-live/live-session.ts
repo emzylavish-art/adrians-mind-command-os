@@ -15,7 +15,9 @@ import { OLLAMA_UNREACHABLE, runOllamaConductor } from "../voice/ollama-conducto
 import { getVoiceMode } from "../voice/mode-store.ts";
 import type { VoiceRoutingMode } from "../voice/mode.ts";
 import { voiceModeLabel } from "../voice/mode.ts";
+import { liveVoiceInstructionsForMode, shouldSpeakOrchestratorResult } from "./mode-routing.ts";
 import { sanitizeVoiceTranscript } from "../voice/limits.ts";
+import { attachedImagePrompt, isInternalSessionPrompt } from "./session-context.ts";
 import {
   phaseToLabel,
   phaseToUiAttr,
@@ -281,6 +283,10 @@ export class LiveVoiceSession {
     const trimmed = text.trim().slice(0, 4000);
     if (!trimmed) return false;
     if (!this.open) return false;
+    // Defense: never treat internal frame prompts as user Ask/transcript.
+    if (isInternalSessionPrompt(trimmed)) {
+      return this.sendSessionContext(trimmed);
+    }
     this.send({
       type: "conversation.item.create",
       item: {
@@ -297,13 +303,34 @@ export class LiveVoiceSession {
   }
 
   /**
+   * Session-only context (screen/camera frames). Goes to the model without
+   * calling onUserTranscript / filling Ask Anything.
+   */
+  sendSessionContext(text: string) {
+    const trimmed = text.trim().slice(0, 4000);
+    if (!trimmed) return false;
+    if (!this.open) return false;
+    this.send({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: trimmed }],
+      },
+    });
+    this.send({ type: "response.create" });
+    this.setPhase("thinking");
+    return true;
+  }
+
+  /**
    * Attach image context. Native input_image is unsupported on grok-voice (ignored);
    * returns { native: false } so UI can run chat/vision fallback.
    */
   attachImageContext(_jpegBase64: string, caption?: string): { native: boolean; note: string } {
     void _jpegBase64;
     if (caption?.trim()) {
-      this.sendText(`(Attached image) ${caption.trim()}`);
+      this.sendSessionContext(attachedImagePrompt(caption));
     }
     return {
       native: false,
@@ -467,10 +494,7 @@ export class LiveVoiceSession {
       type: "session.update",
       session: {
         voice: voiceId,
-        instructions:
-          mode === "orchestrator"
-            ? "You are a silent speech-to-text capture helper. Do not speak replies; only transcribe the user."
-            : "You are a helpful voice assistant. Keep spoken replies concise.",
+        instructions: liveVoiceInstructionsForMode(mode),
         turn_detection: { type: "server_vad" },
         audio: {
           input: {
@@ -685,6 +709,32 @@ export class LiveVoiceSession {
     }
   }
 
+
+  /**
+   * Mode badge toggle mid-call / mid-connect: cut audio, refresh instructions,
+   * and re-emit modeBadge so UI matches getMode() for the next transcript.
+   */
+  notifyModeChange() {
+    this.emit();
+    if (!this.open) return;
+    this.playback.interrupt();
+    this.assistantPlaying = false;
+    this.speakingStartedAtMs = null;
+    this.send({ type: "response.cancel" });
+    const mode = this.deps.getMode?.() ?? getVoiceMode();
+    this.send({
+      type: "session.update",
+      session: {
+        instructions: liveVoiceInstructionsForMode(mode),
+      },
+    });
+    if (this.phase === "assistant_speaking" || this.phase === "thinking" || this.phase === "interrupted") {
+      this.setPhase(this.muted ? "muted" : "listening");
+    } else {
+      this.emit();
+    }
+  }
+
   private async handleUserTranscript(text: string) {
     const now = this.deps.now?.() ?? Date.now();
     if (!shouldAcceptTranscript(this.dedupe, text, now)) return;
@@ -713,6 +763,11 @@ export class LiveVoiceSession {
         (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
     });
     if (this.intentionalClose || this.phase === "off") return;
+    const modeNow = this.deps.getMode?.() ?? getVoiceMode();
+    if (!shouldSpeakOrchestratorResult(modeNow, this.open)) {
+      this.setPhase(this.muted ? "muted" : "listening");
+      return;
+    }
     if (!result.ok) {
       this.handlers.onNotice?.(result.error || OLLAMA_UNREACHABLE);
       // Keep session alive; send nothing to a cloud model.

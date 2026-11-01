@@ -1,16 +1,3 @@
-# Voice Integration Bot — local handoff mirror
-Notion page https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d used (Error Banners Bot mirror page in connected workspace).
-
-## 2026-11-01T12:03:11+01:00 — Voice Integration Bot — end-to-end voice
-- Lane: voice-integration / worktree /workspace/mind-command-os-voice-integration
-- Base: voice-wiring f2f6b60
-- Commits: feaae3f, 1625912, 6362940, 6314004
-- Works: capture-only STT via realtime (auto-reply cancelled) → Direct/Orchestrator → force_message/TTS speak; real level waveform; mute; secrets-file voice key; docs-correct client_secrets
-- Live verified: client_secrets 200; TTS 200/91724 bytes; STT 200 "Say hello in one word."; capture-only+force 45600 PCM bytes. See /workspace/voice-test/integration-verify.json
-- Mocked/blocked: Ollama unreachable (honest); browser mic not headless-tested; visual polish CSS untouched
-- Tests: typecheck pass; 222/222 mind tests; build pass; scripts/** .grok/skills/og pre-existing fail
-- Notion: appended to page 40bb95f3-3e42-814a-acf8-c3281b4f528d (Error Banners Bot mirror page)
-
 # Notion handoff mirror
 
 Primary page `https://app.notion.com/p/40b1aa27632381768d58cde0731f142a` returned **404** from the connected Notion workspace (same as other lanes).
@@ -483,4 +470,143 @@ command on Zack's PC.
 - Checks: typecheck pass; TS 833/836 (3 pre-existing); lint our files 0e; build pass.
 - Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child: https://app.notion.com/p/40bb95f33e42812b841ece22e9e38f99
 - Pushed origin/error-banners → 413595890690100e7b5d710ba40da8a8aa4a4aee
+- Lock releasing.
+
+## Voice Integration lane note (preserved from voice-integration branch)
+
+---
+
+## Voice Integration Bot notes (preserved from voice-integration merge)
+
+## 2026-11-01T12:33:00+01:00 — Voice Integration Bot — overlay + dictation + Orchestrator messaging (NOT complete)
+- Lane: voice-integration / worktree /workspace/mind-command-os-voice-integration
+- Status: in progress — browser click-test still pending; do not mark lane complete yet
+- Commits (pushed): 4630b61 (Ollama URL error), ac4efdd (STT + dictation helpers + transcribeAudio), e66e12e (voice overlay + dictation pill + testids)
+- Dev preview: http://127.0.0.1:8091/ (Vite host 0.0.0.0 port 8091; log /workspace/voice-test/dev-server.log)
+- Works: overlay realtime round trip; dictation pill → POST /v1/stt → composer insert without send; mute/close testids; Orchestrator names unreachable URL + Switch to Direct
+- Tests: typecheck pass; 226/226 listed src unit tests; build pass
+- Did not touch Visual Polish styles.css or voice-ui/
+- Click path: / → composer-input → mic-button/dictation-pill (Stop/Cancel) → voice-overlay-open → voice-overlay → voice-mute → voice-overlay-close/end. Mic needs localhost secure context.
+- Sign-in: live STT/TTS/client_secrets need authenticated session via server fns
+
+### Orchestrator blocker
+- Blocking: Ollama binary not installed on box; nothing listening on :11434
+- Conductor expects: http://127.0.0.1:11434 (DEFAULT_OLLAMA_BASE), model llama3.2 (localStorage amcos.ollama.base / amcos.ollama.model), POST {base}/api/chat
+- User error: Orchestrator needs Ollama running locally; not reachable at <url>. Switch Voice mode to Direct, or start Ollama and try again.
+- Unblock: install + ollama serve on :11434, ollama pull llama3.2 (or set model), then use Orchestrator; until then use Direct
+- Notion: appended to page 40bb95f3-3e42-814a-acf8-c3281b4f528d
+
+## 2026-11-01T12:43:00+01:00 — Voice Integration Bot — click-test fixes + barge-in (NOT complete)
+- Commits: 6ae7ce1, 412074d, 060cde8 (pushed)
+- Dev: http://127.0.0.1:8091/ restarted; curl 200
+- Dictation: immediate pill with Stop/Cancel; mic toggle-stop; overlay cancels dictation; No speech detected; dictation-status isolated from overlay
+- Waveform: dictation RMS labels; levels→bars test
+- Orchestrator: probe on toggle + overlay; voice-mode-hint "Ollama not reachable"
+- Barge-in: speech_started / RMS 150ms / voice-interrupt → Interrupted — listening
+- Tests: typecheck; 239/239; build; no styles.css/voice-ui
+- Tester barge-in: voice-overlay-open → get TTS speaking → voice-interrupt or talk over → Interrupted — listening
+- Notion: page 40bb95f3-3e42-814a-acf8-c3281b4f528d
+
+---
+
+## Merged from logic-wiring (16814da)
+
+# Notion handoff mirror
+
+Primary page `https://app.notion.com/p/40b1aa27632381768d58cde0731f142a` returned **404** from the connected Notion workspace (same as other lanes).
+
+Appended instead to mirror page `https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d`:
+- **Media Integration — results** (2026-11-01)
+- **Media Integration — stop-point** (status: **complete**)
+
+Full local write-up: `MEDIA_HANDOFF.md`.
+
+## 2026-11-01T12:40:00+01:00 (Africa/Lagos) — Logic Bot — stop point: complete
+- Branch tip: 62e4948 on origin/logic-wiring
+- Chip mounted; live tiers 4/4; failover + Run verified via tests
+- Web search deep + chat Research intent wired; missing env refuses
+- typecheck/230 tests/build pass
+
+## 2026-11-01T13:15:00+01:00 (Africa/Lagos) — Logic Bot — upgrade cycle complete (item 2 skipped)
+- Commits: 1716008 Auto hints; 8cef6fe timeouts; 4c343b8 tierReason + chip↔SSE contract
+- Mobile chip skipped: command-app claimed by media + voice
+- typecheck / 242 tests / build pass; tip 4c343b8
+
+## 2026-11-01T13:36:00+01:00 (Africa/Lagos) — Logic Bot — timeout wiring complete
+- Commit beebc80: chatTurnTimeoutMs through handleMindTurn/relay; CHAT_TIMEOUT_REPLY single source; env overrides; hang tests; package.json gate (+5 test files)
+- mind tests 251 pass; tip origin/logic-wiring
+
+## 2026-11-01T13:46:00+01:00 (Africa/Lagos) — Logic Bot — verifier beebc80 gaps fixed
+- Split `npm test` into `test:mind` + `test:scripts`; combined exit `$((m||s))` so scripts failures never skip mind
+- Skip og-dependent brand-check/write-atomic tests cleanly when gitignored `.grok/skills/og` is absent
+- Isolate gate-identity from ambient `VITE_AUTH_ENABLED` / `GROK_*` via beforeEach/afterEach
+- Counts: mind 248 pass / 0 fail; scripts 198 pass / 0 fail / 4 skipped; typecheck pass; build pass
+
+## 2026-11-01T14:30:07+01:00 (Africa/Lagos) — Logic Bot — stop point: null-body + search timeout done
+- Branch tip: 6bb0b7b on origin/logic-wiring
+- Commits: 57b9219 shared request-body 400 guard; d507e30 search/deep timeouts + citation hardening; 6bb0b7b gate adversarial + test:mind entries
+- Fixed: POST /api/mind/turn + /api/mind/agent with non-object bodies (incl. literal null) → 400 "That request could not be read."; web search / deep research bounded via MIND_SEARCH_TIMEOUT_MS / MIND_SEARCH_DEEP_TIMEOUT_MS with honest SEARCH_TIMEOUT_REPLY (no invented citations)
+- Deferred: env model-id validation (modelTierEnvIssues); chip/relay probes (done-without-model invents grok-4.5; disconnect/network mislabeled as timeout)
+- Counts: typecheck pass; mind 298 pass / 0 fail; scripts 198 pass / 0 fail / 4 skipped; build pass
+- Locks: logic-wiring.lock + logic-wiring-gap-search-timeout.lock → done, released
+- Notion mirror: https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d
+
+### Notion note
+- Parent mirror `40bb95f3-3e42-814a-acf8-c3281b4f528d` rejects content insert/update (page ~3.7MB; validation_error).
+- Stop point recorded as child page: https://app.notion.com/p/40bb95f33e42811dba85f915672db536
+
+## 2026-11-01T14:36:54+01:00 (Africa/Lagos) — Logic Bot — stop point: unknown-model + disconnect + env issues done
+- Branch tip: 5c98bf7 on origin/logic-wiring
+- Commits: 18aa83c model unknown; 07ad71d CHAT_DISCONNECT_REPLY; 5c98bf7 modelTierEnvIssues
+- Fixed: done without model → "model unknown"; disconnect ≠ timeout; MIND_MODEL_* validated without echoing secrets
+- Counts: typecheck pass; mind 314 pass; scripts 198 pass / 4 skipped; build pass
+- Notion child: https://app.notion.com/p/40bb95f33e42817a9615c1a4549d43fb
+- Lock: logic-wiring.lock → done, released
+
+## 2026-11-01T14:48:28+01:00 (Africa/Lagos) — Logic Bot — stop point: verifier fixes done
+- Branch tip: f8db0a3 on origin/logic-wiring
+- Commits: d2ef414 proto-key 400 reject; 886d759 with-app-env ambient isolation; f8db0a3 done.model coerce + 404 fail-closed
+- Fixed: __proto__/constructor/prototype at any depth → 400; scripts tests green under ambient VITE_AUTH_ENABLED=false; null/number/object model → model unknown; provider 404 never done/chip
+- Counts: typecheck pass; mind 326 pass; scripts 198 pass / 4 skipped; build pass
+- Notion child: https://app.notion.com/p/40bb95f33e4281c9ab52d1c445d273d3
+- Lock: logic-wiring.lock → done, released
+
+## 2026-11-01T15:00:30+01:00 (Africa/Lagos) — Logic Bot — stop point: F2 429 + deep partial timeout
+- Branch tip: 2f09eb8 on origin/logic-wiring
+- Commits: e6b0c62 429+Retry-After (body before rate limit); 2f09eb8 deep research partial timeout honesty
+- Choice: malformed bodies do not consume rate-limit tokens; stay 400 even while limited
+- Counts: typecheck pass; mind 333 pass; scripts 198 pass / 4 skipped; build pass
+- Notion child: https://app.notion.com/p/40bb95f33e42817c8ed0e8b11340e7e7
+- Lock: logic-wiring.lock → done, released
+
+## 2026-11-01T15:16:16+01:00 (Africa/Lagos) — Logic Bot — stop point: H13 forged execution + LOW provider status
+- Branch tip: 6a6308c on origin/logic-wiring
+- H13: `execution-ledger.ts` — server-issued one-shot receipts; `recordAgentExecution` ignores client ok/detail; unknown/replay rejected; record flood → 429 + Retry-After; ledger TTL + size cap; rate-limit map prune/bound
+- Fail-closed for command-app until that lane mints/uses server ids (no command-app / service-board edits)
+- LOW: non-Grok `handleMindTurn` branch calls `consumeMindRateLimit` (same chat bucket); missing/unknown provider → HTTP 503/400 via `httpStatusForProviderSelection`; Grok missing key → 503; live-turn still surfaces JSON error
+- Counts: typecheck pass; mind 345 pass / 0 fail; scripts 198 pass / 0 fail / 4 skipped; build pass
+- Locks: logic-wiring.lock + logic-wiring-gap-forged-execution-records.lock → done, released
+- Notion mirror: https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d
+
+## 2026-11-01T22:44:48+01:00 (Africa/Lagos) — Logic Bot — Orchestrator tier + preview deploy
+- Branch tip: fd613cc on origin/logic-wiring
+- Orchestrator: default `grok-4.7` (reasoning_effort high, max_tokens 1200); override `MIND_MODEL_ORCHESTRATOR`; Auto never selects it; resolveModelTier → turn.server + agent-run.server
+- Live check: requested `grok-4.7` returned `grok-4.7` — **pass**
+- Counts: typecheck pass; mind 351 pass; scripts 198 pass / 4 skipped; build pass
+- Preview: blocked — Vercel hobby 24h deployment cap (402 api-deployments-young-hobby-team-24h); MCP lacks adrian-8a30; no dpl for logic-wiring@fd613cc
+- Production waits on Merge Gate
+- Still open: H13 independent verification; live search (no MIND_SEARCH keys); mobile header chip / command-app.tsx locked
+- Notion child: https://app.notion.com/p/40bb95f33e4281429484c3d7179ee7f6
+- Lock: logic-wiring.lock → done, released
+
+## 2026-11-01T22:44:00+01:00 (Africa/Lagos) — Error Banners Bot — Final push
+- Sweep: allowed files only; no new silent-empty / swallowed-catch gaps beyond H16–H23. No code fix this round.
+- Lock: /workspace/locks/error-banners-final-push.lock (timestamp refreshed; releasing at end).
+- Merge: origin/preview/integration @ 6d5779c fast-forwarded into error-banners (H16–H23 still ancestors). No forbidden conflicts.
+- Gates: typecheck pass; TS strip-types 1042/1042 pass (0 fail); scripts 202 pass / 4 skipped; prior known fails (c16 Imagine, voice/attack-pass, ollama-conductor) absent; lint our files 0e/4w; build pass.
+- Pushed origin/error-banners → 6d5779c40fcf1253dbf4e1924a760f777ac47d21 (ls-remote matches).
+- Preview deploy BLOCKED: vercel CLI auth.json empty (logged out); user-Vercel MCP no teams / authorize_team_access(adrian-8a30) 404; Git status “GitHub couldn’t verify an account for the commit” on Vercel – adrians-mind. Never --prod.
+- Production: https://adrians-mind.vercel.app HTTP 200; production branch unknown (inspect blocked).
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e428173be4be400afbaedfa
+- Blocked: command-app.tsx shouldShowFailureBanner at loadMcpLists catch ≈603–613 + reload after sign-in (Grok Build); View log for MessageBody/MemoryManager; voice/, media/, agent-planner banners; Vercel team auth.
 - Lock releasing.

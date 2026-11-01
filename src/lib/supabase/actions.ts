@@ -82,15 +82,17 @@ export const getSupabaseAuthUser = createServerFn({ method: "GET" }).handler(
 
 export const requireDashboardUser = createServerFn({ method: "GET" }).handler(
   async () => {
-    const result = await probeAuthUser();
-    const decision = decideDashboardGate(result);
-    if (decision.action === "redirect_login") {
+    // Dynamic import keeps *.server modules out of the client graph (TanStack
+    // Start import-protection). Accepts Better Auth or Supabase sessions.
+    const { getSessionUser } = await import("@/lib/auth/verify.server");
+    const user = await getSessionUser();
+    if (!user) {
       throw redirect({
         to: "/login",
         search: dashboardLoginSearch(),
       });
     }
-    return decision.user;
+    return { id: user.id, email: user.email ?? null };
   },
 );
 

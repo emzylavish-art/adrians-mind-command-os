@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { createBuildingBrushMaterial, tickBuildingMaterial } from "../materials";
+import {
+  createBuildingBrushMaterial,
+  tickBuildingMaterial,
+  setBuildingProgress,
+} from "../materials";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { Health } from "@/lib/mind/dashboard/types";
 import type { CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -16,10 +20,14 @@ export const CITY_HEALTH_COLOR: Record<Health, number> = {
 export type CityPick = { buildingId: string; part: "door" | "window" | "facade"; floor: number | null };
 
 export type CityLayerHandle = {
+  /** Gap#43 — load city/interior/building art on first Dive (no-op after). */
+  ensureDiveArt: () => void;
   group: THREE.Group;
   clouds: THREE.Group;
   pickables: THREE.Object3D[];
   rebuild(layout: CityLayout): void;
+  /** Live window wash from real progress only (no full rebuild). */
+  applyBuildingProgress(layout: CityLayout): void;
   setInterior(buildingId: string | null): void;
   setLabelsVisible(v: boolean): void;
   tick(t: number, reducedMotion: boolean): void;
@@ -107,6 +115,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   group.add(dyn);
   const pickables: THREE.Object3D[] = [];
   const brushMats: THREE.ShaderMaterial[] = [];
+  const brushById = new Map<string, THREE.ShaderMaterial>();
   const ownedMats: THREE.Material[] = [];
   const ownedGeos: THREE.BufferGeometry[] = [];
   const backdropMats: THREE.Material[] = [];
@@ -117,49 +126,57 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   let buildingCount = 0;
   let labelsVisible = true;
 
-  // Painted city skyline + interior room backdrops (Grok Imagine webp)
-  // Kept out of ownedMats so rebuild()/clearDynamic does not dispose them.
+  // Gap#43: Dive art stays cold until ensureDiveArt() (city/interior fly level).
   const cityBackdropGroup = new THREE.Group();
   cityBackdropGroup.name = "dash3d-city-backdrop";
   group.add(cityBackdropGroup);
   const texLoader = new THREE.TextureLoader();
   let interiorBackdropMat: THREE.MeshBasicMaterial | null = null;
-  texLoader.load(
-    "/dashboard-3d/art/backdrop-city.webp",
-    (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.92,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      backdropMats.push(mat);
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), mat);
-      backdropGeos.push(plane.geometry);
-      plane.position.set(0, CITY_Y + 7.5, -22);
-      cityBackdropGroup.add(plane);
-    },
-    undefined,
-    () => { /* no source */ },
-  );
-  texLoader.load(
-    "/dashboard-3d/art/backdrop-interior.webp",
-    (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      interiorBackdropMat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.85,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      backdropMats.push(interiorBackdropMat);
-    },
-    undefined,
-    () => { /* no source */ },
-  );
+  let diveArtRequested = false;
+  let lastLayout: CityLayout | null = null;
+
+  function ensureDiveArt() {
+    if (diveArtRequested) return;
+    diveArtRequested = true;
+    texLoader.load(
+      "/dashboard-3d/art/backdrop-city.webp",
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        backdropMats.push(mat);
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), mat);
+        backdropGeos.push(plane.geometry);
+        plane.position.set(0, CITY_Y + 7.5, -22);
+        cityBackdropGroup.add(plane);
+      },
+      undefined,
+      () => { /* no source */ },
+    );
+    texLoader.load(
+      "/dashboard-3d/art/backdrop-interior.webp",
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        interiorBackdropMat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        backdropMats.push(interiorBackdropMat);
+      },
+      undefined,
+      () => { /* no source */ },
+    );
+    // Facades were skipped while diveArtRequested was false — rebuild once to attach them.
+    if (lastLayout) rebuild(lastLayout);
+  }
 
   function clearDynamic() {
     for (const l of labels) {
@@ -168,6 +185,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     labels.length = 0;
     while (dyn.children.length) dyn.remove(dyn.children[0]!);
     for (const m of brushMats) m.dispose();
+    brushById.clear();
     for (const m of ownedMats) m.dispose();
     for (const g of ownedGeos) g.dispose();
     brushMats.length = 0;
@@ -180,6 +198,8 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   }
 
   function rebuild(layout: CityLayout) {
+    // Gap#43: do NOT ensureDiveArt here — rebuild runs in universe too.
+    lastLayout = layout;
     clearDynamic();
     for (const b of layout.buildings) {
       const color = CITY_HEALTH_COLOR[b.health];
@@ -190,14 +210,18 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
 
       const bodyGeo = new THREE.BoxGeometry(b.width, b.height, b.depth);
       ownedGeos.push(bodyGeo);
+      // Painter c10: real progress only — unknown → 0 so window wash stays dark
+      const progress = b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0;
       const mat = createBuildingBrushMaterial({
         base: 0x121a30,
         accent,
         floors: b.floors,
-        progress: b.progressKnown ? b.litFloors / b.floors : 0,
+        progress,
         paper: 0.16,
       });
+      setBuildingProgress(mat, progress);
       brushMats.push(mat);
+      brushById.set(b.id, mat);
       const body = new THREE.Mesh(bodyGeo, mat);
       body.position.y = b.height / 2;
       body.userData.cityPick = { buildingId: b.id, part: "facade", floor: null } satisfies CityPick;
@@ -214,7 +238,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
             : b.id.startsWith("bot-")
               ? "/dashboard-3d/art/building-guild.webp"
               : null;
-      if (facadeUrl) {
+      if (facadeUrl && diveArtRequested) {
         texLoader.load(
           facadeUrl,
           (tex: THREE.Texture) => {
@@ -245,9 +269,13 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       ownedGeos.push(winGeo);
       const litMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 });
       const dimMat = new THREE.MeshBasicMaterial({ color: 0x24304f, transparent: true, opacity: 0.85 });
-      ownedMats.push(litMat, dimMat);
+      const nightMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: b.nightShiftSteady ? 0.92 : 0.8 });
+      ownedMats.push(litMat, dimMat, nightMat);
+      const nightSet = new Set(b.nightShiftFloors ?? []);
       for (let f = 1; f < b.floors; f++) {
-        const w = new THREE.Mesh(winGeo, f < b.litFloors ? litMat : dimMat);
+        const night = nightSet.has(f);
+        const w = new THREE.Mesh(winGeo, night ? nightMat : f < b.litFloors ? litMat : dimMat);
+        if (night) w.userData.nightShift = true;
         w.position.set(0, 0.15 + f * b.floorHeight + b.floorHeight / 2, b.depth / 2 + 0.01);
         w.userData.cityPick = { buildingId: b.id, part: "window", floor: f } satisfies CityPick;
         shell.add(w);
@@ -367,6 +395,16 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     for (const l of labels) l.visible = v;
   }
 
+  /** Painter c11: live window wash from real lit/floors only — no source → 0. */
+  function applyBuildingProgress(layout: CityLayout) {
+    for (const b of layout.buildings) {
+      const mat = brushById.get(b.id);
+      if (!mat) continue;
+      const progress = b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0;
+      setBuildingProgress(mat, progress);
+    }
+  }
+
   function tick(t: number, reducedMotion: boolean) {
     if (reducedMotion) return;
     for (const m of brushMats) tickBuildingMaterial(m, t);
@@ -402,6 +440,8 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     clouds,
     pickables,
     rebuild,
+    ensureDiveArt,
+    applyBuildingProgress,
     setInterior,
     setLabelsVisible,
     tick,

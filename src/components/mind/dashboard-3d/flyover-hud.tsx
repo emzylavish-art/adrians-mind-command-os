@@ -1,8 +1,15 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { FlyEvent, FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import type { CityLayout } from "@/lib/mind/dashboard/city-layout";
 import type { AgentStat, ProjectBuilding, ProjectsDashboard } from "@/lib/mind/dashboard/projects";
 import type { BotNode } from "@/lib/mind/dashboard/types";
+import type { LastNodeBreadcrumb } from "@/lib/mind/dashboard/operator-palette";
+import {
+  createBreadcrumbEaseSample,
+  createBreadcrumbEaseState,
+  setBreadcrumbFocus,
+  stepBreadcrumbEase,
+} from "./motion";
 
 export function sendFly(ev: FlyEvent) {
   document.dispatchEvent(new CustomEvent<FlyEvent>("dash3d-fly", { detail: ev }));
@@ -15,11 +22,100 @@ const LEVEL_LABEL: Record<FlyState["level"], string> = {
 };
 
 /** Level breadcrumb + accessible doors (keyboard alternative to clicking a door in WebGL). */
-export function FlyoverHud({ fly, layout }: { fly: FlyState; layout: CityLayout }) {
+export function FlyoverHud({
+  fly,
+  layout,
+  lastNode,
+  onRevisitLast,
+  focusBot,
+}: {
+  fly: FlyState;
+  layout: CityLayout;
+  lastNode?: LastNodeBreadcrumb | null;
+  onRevisitLast?: () => void;
+  /** Queue #21 / motion c8 — live focus twin beside last-palette crumb. */
+  focusBot?: BotNode | null;
+}) {
+  const crumbRef = useRef<HTMLDivElement | null>(null);
+  const easeRef = useRef(createBreadcrumbEaseState());
+  const sampleRef = useRef(createBreadcrumbEaseSample());
+  const reduced = useRef(
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+
+  useEffect(() => {
+    setBreadcrumbFocus(easeRef.current, focusBot?.id ?? null);
+  }, [focusBot?.id]);
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = now;
+      stepBreadcrumbEase(easeRef.current, sampleRef.current, dt, reduced.current);
+      const el = crumbRef.current;
+      if (!el) return;
+      const s = sampleRef.current;
+      el.style.opacity = String(s.opacity);
+      el.style.transform = `translateX(${s.offsetX}px)`;
+      el.hidden = s.opacity < 0.02 && !focusBot;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [focusBot]);
+
   return (
     <nav className="dash3d-flyhud dash3d-glass" aria-label="Flyover camera" data-fly-level={fly.level}>
       <h2>Flyover</h2>
       <p className="dash3d-title">{LEVEL_LABEL[fly.level]}</p>
+      <div className="dash3d-flyhud-crumbs">
+        {lastNode ? (
+          <div className="dash3d-flyhud-last" data-testid="fly-last-node" data-missing={lastNode.missing ? "1" : "0"}>
+            <p className="dash3d-muted" style={{ fontSize: "0.68rem", margin: "0.35rem 0 0.15rem" }}>
+              Last palette · {lastNode.kind}
+            </p>
+            <p className="dash3d-title" style={{ fontSize: "0.85rem" }}>
+              {lastNode.label}
+            </p>
+            <p className="dash3d-muted" style={{ fontSize: "0.62rem" }}>
+              {lastNode.sub}
+            </p>
+            {!lastNode.missing && onRevisitLast ? (
+              <button type="button" className="dash3d-pill" data-testid="fly-revisit-last" onClick={onRevisitLast}>
+                ↺ Revisit
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        <div
+          ref={crumbRef}
+          className="dash3d-flyhud-focus"
+          data-testid="fly-focus-crumb"
+          hidden={!focusBot}
+        >
+          <p className="dash3d-muted" style={{ fontSize: "0.68rem", margin: "0.35rem 0 0.15rem" }}>
+            Focus · {focusBot ? focusBot.health : "none"}
+          </p>
+          <p className="dash3d-title" style={{ fontSize: "0.85rem" }} data-testid="fly-focus-name">
+            {focusBot?.name || focusBot?.id || "no source yet"}
+          </p>
+          <p className="dash3d-muted" style={{ fontSize: "0.62rem" }}>
+            {[focusBot?.branch, focusBot?.lock?.task || focusBot?.reason].filter(Boolean).join(" · ") || focusBot?.id || ""}
+          </p>
+          {focusBot ? (
+            <button
+              type="button"
+              className="dash3d-pill"
+              data-testid="fly-back-sky"
+              onClick={() => sendFly({ type: "SKY" })}
+            >
+              Back to sky
+            </button>
+          ) : null}
+        </div>
+      </div>
       <div className="dash3d-flyhud-row">
         {fly.level === "universe" ? (
           <button type="button" className="dash3d-pill" data-testid="fly-dive" onClick={() => sendFly({ type: "DIVE" })}>
@@ -68,6 +164,7 @@ export function FlyoverHud({ fly, layout }: { fly: FlyState; layout: CityLayout 
     </nav>
   );
 }
+
 
 function fmtTime(at: string | null): string {
   if (!at) return "time not recorded";

@@ -81,18 +81,22 @@ export function buildNotionMirrorView(input: {
     if (!page) {
       // No Notion page mapped — surface real lock/notes content when present (never invent pages).
       const lock = bot.lock;
-      const hbRaw =
+      // Gap#35: prefer promoted heartbeatAt; raw may be omitted after publicize
+      const hbRawTop = lock?.heartbeatAt ? String(lock.heartbeatAt) : "";
+      const hbRawBag =
         lock?.raw && typeof lock.raw === "object"
           ? String((lock.raw as Record<string, unknown>).heartbeat_at ?? (lock.raw as Record<string, unknown>).heartbeatAt ?? "")
           : "";
-      const hb = hbRaw || lock?.claimed_at || bot.lastActivityAt || null;
+      const hb = hbRawTop || hbRawBag || lock?.claimed_at || bot.lastActivityAt || null;
       const hbMs = parseTimeMs(hb, nowMs);
       const ageMs = hbMs != null ? Math.max(0, nowMs - hbMs) : null;
       const notes = sanitizeLabelText(bot.notes || lock?.notes || "", 140) || null;
-      const task =
+      const taskTop = lock?.task ? sanitizeLabelText(String(lock.task), 100) || null : null;
+      const taskRaw =
         lock?.raw && typeof lock.raw === "object"
           ? sanitizeLabelText(String((lock.raw as Record<string, unknown>).task ?? ""), 100) || null
           : null;
+      const task = taskTop || taskRaw;
       const hasLockContent = Boolean(lock || notes || task || hb);
       rows.push({
         botId: bot.id,

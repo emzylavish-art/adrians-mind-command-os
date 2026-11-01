@@ -3,6 +3,7 @@ import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFrom
 import { loadMoneyView } from "./spend.ts";
 import { buildDashboardCharts } from "./chart-series.ts";
 import { buildNotionMirrorView } from "./notion-mirror.ts";
+import { buildForeverContractGuard } from "./forever-contract.ts";
 import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
 import { loadCommitsSnapshot } from "./commits-snapshot.ts";
 import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
@@ -39,6 +40,8 @@ function pickPrimaryLock(locks: LockRecord[], fileRe: RegExp[], ownerRe: RegExp[
   const byOwner = locks.filter((l) => ownerRe.some((re) => re.test(l.owner)));
   return byOwner[0] ?? null;
 }
+
+export const MAX_STATUS_BOTS = 96; // Gap#33: keep status JSON + edge build bounded
 
 export async function buildDashboardStatus(
   env: NodeJS.ProcessEnv = process.env,
@@ -119,9 +122,15 @@ export async function buildDashboardStatus(
   const spend = loadSpend();
   const money = loadMoneyView({ nowMs: now });
   // charts built after fleetPlan below
-  const constellations = buildConstellations(bots);
-  const edges = constellationEdges(bots);
-  const weather = systemWeather(bots);
+  let statusBots = bots;
+  let botsTruncated = false;
+  if (statusBots.length > MAX_STATUS_BOTS) {
+    statusBots = statusBots.slice(0, MAX_STATUS_BOTS);
+    botsTruncated = true;
+  }
+  const constellations = buildConstellations(statusBots);
+  const edges = constellationEdges(statusBots);
+  const weather = systemWeather(statusBots);
 
   // Queue #5 TIME: fleet+dashboard commits + lock timestamps + transition log
   let transitionText = "";
@@ -145,7 +154,7 @@ export async function buildDashboardStatus(
 
   const base = {
     generatedAt: new Date(now).toISOString(),
-    bots,
+    bots: statusBots,
     commits,
     notion,
     conductor,
@@ -156,6 +165,7 @@ export async function buildDashboardStatus(
       locksDir,
       repoDir,
       locksOk: locks.length > 0,
+      ...(botsTruncated ? { botsTruncated: true, botsCap: MAX_STATUS_BOTS } : {}),
       gitOk,
       commitsSource,
       ...(commitsSnapshotAt ? { commitsSnapshotAt } : {}),
@@ -171,7 +181,7 @@ export async function buildDashboardStatus(
     money,
   };
 
-  const fleetPlan = buildFleetPlan(bots, env);
+  const fleetPlan = buildFleetPlan(statusBots, env);
   const skyFeed = buildSkyFeed({
     conductor,
     gapDispatcher,
@@ -189,7 +199,7 @@ export async function buildDashboardStatus(
       timeline: base.timeline,
       landings: fleetPlan.landings,
       money,
-      bots,
+      bots: statusBots,
       nowMs: now,
     });
   } catch {
@@ -198,9 +208,21 @@ export async function buildDashboardStatus(
 
   let notionMirror;
   try {
-    notionMirror = buildNotionMirrorView({ bots, graph: notionGraph, nowMs: now });
+    notionMirror = buildNotionMirrorView({ bots: statusBots, graph: notionGraph, nowMs: now });
   } catch {
     notionMirror = buildNotionMirrorView({ bots: [], graph: null, nowMs: now });
+  }
+
+  let foreverContract;
+  try {
+    foreverContract = buildForeverContractGuard({
+      queue: fleetPlan.queue,
+      bots: statusBots,
+      nowMs: now,
+      queueSource: fleetPlan.queueSource,
+    });
+  } catch {
+    foreverContract = buildForeverContractGuard({ queue: [], bots: [], nowMs: now, queueSource: "unavailable" });
   }
 
   return {
@@ -210,5 +232,6 @@ export async function buildDashboardStatus(
     skyFeed,
     charts,
     notionMirror,
+    foreverContract,
   };
 }

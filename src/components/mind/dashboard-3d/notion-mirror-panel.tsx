@@ -1,10 +1,31 @@
 import type { NotionMirrorView } from "@/lib/mind/dashboard/notion-mirror";
 import { NO_MIRROR_SOURCE } from "@/lib/mind/dashboard/notion-mirror";
+import { extractIsoPrefix, formatRelativeWhen } from "@/lib/mind/dashboard/format-when";
 
 type Props = {
   mirror: NotionMirrorView;
   onOpenPage?: (pageId: string) => void;
 };
+
+
+function MirrorTitle({ title }: { title: string | null | undefined }) {
+  const raw = title || NO_MIRROR_SOURCE;
+  const { iso, rest } = extractIsoPrefix(raw);
+  if (!iso) {
+    return (
+      <span className="dash3d-muted dash3d-mirror-title" title={raw}>
+        {raw}
+      </span>
+    );
+  }
+  const when = formatRelativeWhen(iso);
+  const label = rest ? `${when.label} — ${rest}` : when.label;
+  return (
+    <span className="dash3d-muted dash3d-mirror-title" title={when.title}>
+      {label}
+    </span>
+  );
+}
 
 export function NotionMirrorPanel({ mirror, onOpenPage }: Props) {
   return (
@@ -16,6 +37,16 @@ export function NotionMirrorPanel({ mirror, onOpenPage }: Props) {
             ? `${mirror.mappedCount} mapped · ${mirror.staleCount} stale · ${mirror.mode}`
             : mirror.reason || NO_MIRROR_SOURCE}
         </p>
+        {!mirror.available ? (
+          <span
+            className="dash3d-pill dash3d-mirror-outage"
+            data-testid="mirror-outage"
+            data-mirror-available="0"
+            title={mirror.reason || NO_MIRROR_SOURCE}
+          >
+            Offline
+          </span>
+        ) : null}
       </div>
       {!mirror.available ? (
         <p className="dash3d-muted" data-testid="mirror-empty">
@@ -35,9 +66,7 @@ export function NotionMirrorPanel({ mirror, onOpenPage }: Props) {
                 <span className={`dash3d-mirror-fresh${r.stale ? " is-stale" : ""}`}>
                   {r.freshLabel}
                 </span>
-                <span className="dash3d-muted dash3d-mirror-title">
-                  {r.title || NO_MIRROR_SOURCE}
-                </span>
+                <MirrorTitle title={r.title} />
               </button>
             </li>
           ))}

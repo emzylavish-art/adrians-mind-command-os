@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
+import { inspectWebPage, mcpConnectorVerify, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -30,14 +30,19 @@ import {
   McpToolsListStatusRows,
   PcApprovalsListStatusRows,
   WorkerHealthStatusRows,
+  formatVerifyBadge,
   isCurrentListGeneration,
   isListAuthRequiredNotice,
+  loadConnectorVerify,
   loadMcpList,
   loadMcpToolsList,
   loadPcApprovalsList,
   loadWorkerHealthStatus,
   nextListGeneration,
   onceListRetry,
+  verifyResultFor,
+  type ConnectorVerifyResult,
+  type ConnectorVerifyUiState,
   type FleetListState,
   type McpListState,
   type McpToolRow,
@@ -122,6 +127,20 @@ export function FleetPanel({
   const pcApprovalsGeneration = useRef(0);
   const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
   const [pcApprovalActionState, setPcApprovalActionState] = useState<PcApprovalActionState>({ status: "idle" });
+  const [connectorVerifyState, setConnectorVerifyState] = useState<ConnectorVerifyUiState>({ status: "idle" });
+  const [connectorVerifyResults, setConnectorVerifyResults] = useState<ConnectorVerifyResult[]>([]);
+  const connectorVerifyInFlight = useRef(false);
+  const connectorVerifyGeneration = useRef(0);
+  const oauthConnectorIds = ["notion", "gmail", "google_calendar", "google_drive", "slack", "github"] as const;
+  const oauthConnectorLabels: Record<(typeof oauthConnectorIds)[number], string> = {
+    notion: "Notion",
+    gmail: "Gmail",
+    google_calendar: "Google Calendar",
+    google_drive: "Google Drive",
+    slack: "Slack",
+    github: "GitHub",
+  };
+
 
   /** One MCP server list load: loading → ready (maybe empty) or error banner. Timeout + stale guard. */
   function loadMcpServers() {
@@ -136,6 +155,14 @@ export function FleetPanel({
         setMcpListState(next);
         if (next.status === "ready") {
           setMcpServers(next.servers);
+          // Automatic verify on load when signed in — never trusts stored badges.
+          runConnectorVerify({ target: "all" });
+          return;
+        }
+        if (next.status === "unauthenticated") {
+          setMcpServers([]);
+          setConnectorVerifyState({ status: "unauthenticated" });
+          setConnectorVerifyResults([]);
           return;
         }
         setMcpServers([]);
@@ -171,6 +198,39 @@ export function FleetPanel({
       })
       .finally(() => {
         if (generation === mcpToolsGeneration.current) mcpToolsInFlight.current = false;
+      });
+  }
+
+
+  /** Backend-verified connector states. Signed-out → quiet unauthenticated, no probes. */
+  function runConnectorVerify(target: { target?: "all" | "mcp" | "oauth"; id?: string } = { target: "all" }) {
+    if (connectorVerifyInFlight.current) return;
+    // Soft-auth on the server: signed-out returns unauthenticated with no probes.
+    connectorVerifyInFlight.current = true;
+    const generation = nextListGeneration(connectorVerifyGeneration.current);
+    connectorVerifyGeneration.current = generation;
+    setConnectorVerifyState({ status: "loading" });
+    void loadConnectorVerify(
+      () => mcpConnectorVerify({ data: { target: target.target ?? "all", id: target.id } }),
+      { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS },
+    )
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, connectorVerifyGeneration.current)) return;
+        setConnectorVerifyState(next);
+        if (next.status === "ready") {
+          setConnectorVerifyResults((prev) => {
+            if (!target.id || target.target === "all") return next.results;
+            const others = prev.filter((row) => row.id !== target.id);
+            return [...others, ...next.results];
+          });
+          return;
+        }
+        if (next.status === "unauthenticated") {
+          setConnectorVerifyResults([]);
+        }
+      })
+      .finally(() => {
+        if (generation === connectorVerifyGeneration.current) connectorVerifyInFlight.current = false;
       });
   }
 
@@ -217,6 +277,7 @@ export function FleetPanel({
       mcpListGeneration.current = nextListGeneration(mcpListGeneration.current);
       mcpToolsGeneration.current = nextListGeneration(mcpToolsGeneration.current);
       pcApprovalsGeneration.current = nextListGeneration(pcApprovalsGeneration.current);
+      connectorVerifyGeneration.current = nextListGeneration(connectorVerifyGeneration.current);
       mcpListInFlight.current = false;
       mcpToolsInFlight.current = false;
       pcApprovalsInFlight.current = false;
@@ -690,29 +751,48 @@ export function FleetPanel({
 
       <div className="mt-6 space-y-3">
         <h3 className="font-semibold">MCP servers</h3>
-        <p className="text-sm text-muted">Every registered server is listed. Disabled servers keep their tools visible but calls refuse honestly. Toggles persist on the server.</p>
+        <p className="text-sm text-muted">Every registered server is listed with a backend-verified state (never a stored badge). Disabled servers keep their tools visible but calls refuse honestly. Toggles persist on the server.</p>
         <ul className="space-y-2 text-sm">
           {mcpListState.status === "ready" ? mcpServers.map((server) => {
             const tools = mcpToolsState.status === "ready" ? mcpTools.filter((tool) => tool.serverId === server.id) : [];
             return (
-              <li key={server.id} className="rounded-panel border border-line bg-surface p-3">
+              <li key={server.id} className="rounded-panel border border-line bg-surface p-3" data-testid={`mcp-server-${server.id}`} data-verify-state={verifyResultFor(connectorVerifyResults, server.id)?.state ?? "unverified"}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{server.label}</p>
                     <p className="text-xs text-muted">{server.kind} · {server.enabled ? "Enabled" : "Disabled"} · {tools.filter((t) => !t.name.startsWith("(")).length} tool(s)</p>
+                    <p className="text-xs text-muted" data-testid={`mcp-verify-badge-${server.id}`}>
+                      {connectorVerifyState.status === "loading" && !verifyResultFor(connectorVerifyResults, server.id)
+                        ? "Verifying…"
+                        : formatVerifyBadge(verifyResultFor(connectorVerifyResults, server.id))}
+                      {verifyResultFor(connectorVerifyResults, server.id)?.detail
+                        ? ` — ${verifyResultFor(connectorVerifyResults, server.id)?.detail}`
+                        : ""}
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    className="min-h-11 rounded-panel border border-line px-3 text-sm"
-                    onClick={() => {
-                      void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
-                        setMcpServers(result.servers);
-                        loadMcpTools();
-                      });
-                    }}
-                  >
-                    {server.enabled ? "Turn off" : "Turn on"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                      data-testid={`mcp-verify-${server.id}`}
+                      disabled={connectorVerifyState.status === "loading"}
+                      onClick={() => runConnectorVerify({ target: "mcp", id: server.id })}
+                    >
+                      Verify
+                    </button>
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                      onClick={() => {
+                        void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
+                          setMcpServers(result.servers);
+                          loadMcpTools();
+                        });
+                      }}
+                    >
+                      {server.enabled ? "Turn off" : "Turn on"}
+                    </button>
+                  </div>
                 </div>
                 <ul className="mt-2 space-y-1">
                   {tools.map((tool) => (
@@ -798,6 +878,47 @@ export function FleetPanel({
           }
         />
         {mcpCallNote && mcpCallActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
+      </div>
+
+      <div className="mt-6 space-y-3" data-testid="oauth-connectors">
+        <h3 className="font-semibold">OAuth connectors</h3>
+        <p className="text-sm text-muted">Backend-verified states only. Stored badges are never trusted. No tokens are shown here.</p>
+        <ul className="space-y-2 text-sm">
+          {mcpListState.status === "unauthenticated" ? (
+            <li className="text-sm text-muted" data-testid="oauth-verify-signed-out">Sign in to verify OAuth connectors.</li>
+          ) : (
+            oauthConnectorIds.map((id) => {
+              const verified = verifyResultFor(connectorVerifyResults, id);
+              return (
+                <li key={id} className="rounded-panel border border-line bg-surface p-3" data-testid={`oauth-connector-${id}`} data-verify-state={verified?.state ?? "unverified"}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{oauthConnectorLabels[id]}</p>
+                      <p className="text-xs text-muted" data-testid={`oauth-verify-badge-${id}`}>
+                        {connectorVerifyState.status === "loading" && !verified
+                          ? "Verifying…"
+                          : formatVerifyBadge(verified)}
+                        {verified?.detail ? ` — ${verified.detail}` : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                      data-testid={`oauth-verify-${id}`}
+                      disabled={connectorVerifyState.status === "loading" || mcpListState.status !== "ready"}
+                      onClick={() => runConnectorVerify({ target: "oauth", id })}
+                    >
+                      Verify
+                    </button>
+                  </div>
+                </li>
+              );
+            })
+          )}
+        </ul>
+        {connectorVerifyState.status === "error" ? (
+          <p className="text-sm text-danger" role="status" data-testid="connector-verify-error">{connectorVerifyState.message}</p>
+        ) : null}
       </div>
 
       <ul className="mt-4 space-y-2 text-sm">

@@ -17,6 +17,7 @@ import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiIntentOutcomesRouteImport } from './routes/api/intent/outcomes'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
@@ -91,6 +92,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiIntentOutcomesRoute = ApiIntentOutcomesRouteImport.update({
+  id: '/api/intent/outcomes',
+  path: '/api/intent/outcomes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
@@ -287,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/personas': typeof PersonasRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
@@ -332,6 +339,7 @@ export interface FileRoutesByTo {
   '/personas': typeof PersonasRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
@@ -378,6 +386,7 @@ export interface FileRoutesById {
   '/personas': typeof PersonasRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
@@ -425,6 +434,7 @@ export interface FileRouteTypes {
     | '/personas'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
@@ -470,6 +480,7 @@ export interface FileRouteTypes {
     | '/personas'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
@@ -515,6 +526,7 @@ export interface FileRouteTypes {
     | '/personas'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
@@ -561,6 +573,7 @@ export interface RootRouteChildren {
   PersonasRoute: typeof PersonasRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiIntentOutcomesRoute: typeof ApiIntentOutcomesRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
@@ -654,6 +667,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/intent/outcomes': {
+      id: '/api/intent/outcomes'
+      path: '/api/intent/outcomes'
+      fullPath: '/api/intent/outcomes'
+      preLoaderRoute: typeof ApiIntentOutcomesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/agent': {
@@ -913,6 +933,7 @@ const rootRouteChildren: RootRouteChildren = {
   PersonasRoute: PersonasRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiIntentOutcomesRoute: ApiIntentOutcomesRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,

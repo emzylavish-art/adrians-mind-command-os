@@ -63,3 +63,10 @@ Stop point: **complete** (typed-chat 400 regression fixed)
 ## Other worktrees
 
 Until they merge this branch (or cherry-pick the adapter + turn/agent/server/startup/with-app-env changes), they still pick up the management key for typed chat if their server process inherited box env. Running servers (e.g. voice `:8095`, dashboard `:8100`/`:8110`) need restart **after** those trees get the fix or after launching via a script that sources `xai_inference.env` (voice-wiring `scripts/voice/dev-preview.sh` already does).
+
+## Re-verification 2026-11-01 19:22 WAT
+- Key resolved through the adapter from the untracked secrets file (len 84; not the management key).
+- One live call through the typed-chat path: model grok-4.5, reply `VERIFY-OK`, 1025 ms, 501 prompt / 3 completion tokens, request id 0094e1bd-ba28-969c-943c-0c427ab79dcf.
+- PGLite persistence read-back: byte-for-byte match, sha256 7d18b48ff73e9b7672256fc0fdb82543568351810874ea4fbe49fae8cc0d061e, length 9.
+- Missing-key path: unavailable, no fetch, no fabricated reply, nothing persisted.
+- Stop point: complete. No code changes.

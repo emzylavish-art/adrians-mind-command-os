@@ -13,3 +13,92 @@ Universe / node-graph should call:
 - `easeInOutCubic` / `smootherstep` for any local transition polish alongside camera-rig
 
 Do not allocate inside the rAF tick. See INTEGRATION.md.
+
+## Focus-aware star easing (c5)
+
+- `stepFocusEase(state, starId, focusId, dt, reducedMotion)` — per-star `pulseMul`→1.25 / `driftMul`→0
+- `applyFocusPulse` / `applyFocusDrift` after the usual samplers
+- Unknown/empty `focusId` = no focus; reduced-motion snaps. Wire `focusId` from `rig.subjectId` (see INTEGRATION.md).
+
+## Node open/close + scene transitions (c6)
+
+- `stepNodeOpen` — interruptible scale/opacity/offsetY (reverse mid-open resumes from current)
+- `stepSceneTransition` — crossfade (`fadeOut`/`fadeIn`) + `dolly` progress; `begin`/`cancel`
+- Reduced-motion snaps. See INTEGRATION.md for UniverseScene wiring.
+
+## Character idle / walk (c7)
+
+- `stepCharacterMotion` — idle bob/breath + walk bounce/sway/stride, look-yaw damp, loco blend
+- `characterPhaseFromId` — stable crowd desync; reduced-motion = static pose
+- Targets Imagine-zone billboard characters (`kind: "character"`) and scene walk arts
+
+## Star focus breadcrumb ease (c8)
+
+- `stepBreadcrumbEase` — interruptible slide+fade for Flyover HUD focus crumb (`rig.subjectId`)
+- Complements Dashboard queue #21; markup/styles not owned here
+- Hacker c8: hot-path `opts = {}` → frozen empty (no per-frame alloc); `+Infinity` walk speed; `hardResetSharedMotionClockForTests`
+
+## Pan / remount pose hold (c9)
+
+- `capture*Pose` / `restore*Pose` + `MotionPoseBag` — keep focus/character/breadcrumb/node/scene easing across UniverseScene remount
+- Complements Dashboard #25 last-frame freeze (canvas snapshot); this covers motion state
+- Hacker c9: remount without restore snaps mid-ease; sprite refs ≥0 under double dispose; 100k-frame stress
+
+## Star hover tooltip motion (c10)
+
+- `hover-tooltip-motion.ts` — intent delay + fade/lift/scale + edge strength; reduced-motion snaps
+- Hacker c10: pose-hold corrupted/stale/__proto__ JSON; known-id restore; tab-hidden dt spike
+
+## Constellation edge pulse sync (c11)
+
+- `edge-pulse-sync.ts` — phase-lock edge highlight to MotionClock / star pulse; travel toward focus; neighbor damp; reduced-motion static
+- Hacker c11: hover 1kHz thrash; pose-hold 100k-id for-in cap; `lastWallDt >= 0` on backwards wall
+
+## Landing-trail traveler ease (c12)
+
+- `traveler-ease.ts` — MotionClock-phased polyline travel; pause/resume; reduced-motion static
+- Hacker c12: edge-pulse self-loop/null endpoints; step* determinism; lazy shared clock (tree-shake)
+
+## Dust wind gust (c13)
+
+- `wind-gust.ts` — capped impulse superposition + decay; reduced-motion = no gust
+- `particles/dust-field` — `impulseGust` / `gust` hook (update API unchanged)
+- Hacker c13: traveler degenerate polylines; pause abuse; 1000-event gust flood capped
+
+## Comet launch ease (c14)
+
+- `comet-launch-ease.ts` — staggered burst schedule, concurrent cap, ease-out opacity/scale; reduced-motion static
+- Hacker c14: gust huge/NaN dirs; mid-RM residual clear; dust dispose clears gust; sub-ε snap
+- **Do not edit package.json** — list unregistered tests under INTEGRATION.md → Requests for Dashboard Bot
+
+## Focus-ring breathe (c15)
+
+- `focus-ring-breathe.ts` — MotionClock-phased opacity/scale breathe; ease in/out; reduced-motion static
+- Hacker c15 (from REA): comet-launch `maxConcurrent=0` + 10k burst clamp; multi-system clock resume finite
+- package.json owned by Dashboard Bot — see INTEGRATION Requests
+
+## Star-field batch + CPU budget (c16)
+
+- `star-batch.ts` — `stepStarFieldBatch` for N stars (pulse/focus/orbit)
+- `cpu-budget.test.ts` — 10k-frame CPU budget (mean < 2ms); camera dolly stays Dashboard-owned
+
+
+## Star-batch harden + health pulse crossfade (c17)
+
+- Hacker c17 on `star-batch`: count 0 / 100k→`STAR_BATCH_MAX`, NaN bases finite, id holes skipped, mid-frame shrink snapshot, `createStarBatchScratch` / `disposeStarBatchScratch` typed-array reuse
+- `health-pulse-crossfade.ts` — ease pulse amp/speed on health flip; reduced-motion snaps; star-batch + focus-ring APIs unchanged
+
+## Alloc budget + neighbor drift damp (c18)
+
+- Hacker c18: eliminate per-star orbit opts alloc in `stepStarFieldBatch` (`STAR_BATCH_ORBIT_OPTS`); cpu-budget harness reuses opts. Before ~14MB/10k (~1.4KB/frame, max~8.7ms) → after ~4MB, max~4.4ms; best bpf ~33 &lt; 64.
+- `neighbor-drift-damp.ts` — 1-hop soft drift floor when a star is focused; RM = no extra damp; star-batch / health-xfade APIs unchanged
+
+## Flap-safe crossfade + batch wiring (c19)
+
+- Hacker c19: health crossfade flapping pops (~10% scale) fixed with a per-health weight vector; neighbor damp vs focus-ease tug-of-war (0.71 vs 0.35 floor) fixed; alloc-budget test runs without `--expose-gc`; star-batch releases the caller clock after each frame
+- `stepStarFieldBatch(..., { clock, xfade, neighbors })` — opt-in crossfade + neighbor damp in the universe tick; zero-alloc (<128 B/frame @500 stars flapping)
+
+## Edge flip continuity + state prune (c20)
+
+- Hacker c20: edge pulse phase symmetric per edge — no uPulse pop on focus/hover flip
+- `state-prune.ts` — `pruneMotionStateMap` evicts per-bot motion state for departed bots + caps size

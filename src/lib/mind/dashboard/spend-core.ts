@@ -294,3 +294,29 @@ export function buildMoneyView(input: BuildMoneyInput): MoneyView {
     todayKey,
   };
 }
+
+
+/** Gap#34 — after a long hidden tab, wall-clock burn is misleading until a fresh visible window. */
+export function adjustBurnForHiddenGap<T extends MoneyView>(
+  money: T,
+  hiddenGapMs: number,
+  burnWindowMs = BURN_WINDOW_MS,
+): T {
+  if (!money?.available || money.burnPerHourUsd == null) return money;
+  const gap = Number.isFinite(hiddenGapMs) ? Math.max(0, hiddenGapMs) : 0;
+  if (gap < burnWindowMs * 0.5) return money;
+  // Keep todayTotal; clear burn and surface why (no invented burn after lunch tab).
+  return {
+    ...money,
+    burnPerHourUsd: null,
+    warnings: [
+      ...money.warnings,
+      {
+        level: "warn" as const,
+        message: `Burn paused — tab was hidden ~${Math.round(gap / 60000)}m (Gap#34)`,
+        thresholdUsd: burnWindowMs,
+        observedUsd: gap,
+      },
+    ],
+  };
+}

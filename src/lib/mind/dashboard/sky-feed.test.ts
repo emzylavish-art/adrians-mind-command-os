@@ -76,6 +76,8 @@ describe("sky-feed (hacker + queue #6)", () => {
         commits: [],
         notes: "preview/integration wait — dashboard-3d.lock busy",
         worktree: null,
+          heartbeatAt: null,
+          task: null,
         raw: {},
       },
     ];
@@ -110,6 +112,7 @@ describe("sky-feed (hacker + queue #6)", () => {
         ],
         queue: [],
         queueHead: null,
+        queueSource: ".handoff/DASHBOARD_QUEUE.md",
         mergeGateNote: "Merge Gate watches dashboard-3d",
       },
       notionGraph: {

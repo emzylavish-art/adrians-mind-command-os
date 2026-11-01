@@ -100,6 +100,8 @@ describe("notion-mirror (queue #9)", () => {
       commits: ["7a6e24f"],
       notes: "Paused by user order",
       worktree: "/workspace/mind-command-os-dashboard-painter",
+          heartbeatAt: null,
+          task: null,
       raw: { heartbeat_at: "2026-11-01T19:20:19+01:00", task: "cycle paused" },
     };
     painter.notes = "Paused by user order";
@@ -111,4 +113,39 @@ describe("notion-mirror (queue #9)", () => {
     assert.ok((row.title || "").includes("cycle paused") || (row.excerpt || "").includes("Paused"));
   });
 
+});
+
+
+describe("notion-mirror Gap#31 outage", () => {
+  it("forces available=false and empty rows when graph.available is false", () => {
+    const view = buildNotionMirrorView({
+      bots: [
+        {
+          id: "logic",
+          name: "Logic",
+          health: "healthy",
+          lock: null,
+          branch: null,
+          lastActivityAt: null,
+          commits: [],
+          notes: "",
+          reason: "",
+        },
+      ],
+      graph: {
+        available: false,
+        mode: "unavailable",
+        reason: "MCP timeout",
+        generatedAt: "2026-11-01T12:00:00+01:00",
+        pages: [{ id: "stale", title: "should not show", url: "u", parentId: null, lastEdited: null, excerpt: "x", kind: "page" }],
+        edges: [],
+        botPageMap: { logic: "stale" },
+        stats: { pages: 1, edges: 0, botsMapped: 1 },
+      },
+      nowMs: Date.parse("2026-11-01T18:00:00+01:00"),
+    });
+    assert.equal(view.available, false);
+    assert.equal(view.rows.length, 0);
+    assert.match(view.reason || "", /MCP timeout|no source/i);
+  });
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildProjectsDashboard } from "./projects.ts";
+import { buildForeverContractGuard } from "./forever-contract.ts";
 import type { DashboardStatus } from "./types.ts";
 
 function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
@@ -21,6 +22,8 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
           commits: ["abc1234"],
           notes: "ok",
           worktree: null,
+          heartbeatAt: null,
+          task: null,
           raw: {},
         },
         branch: "logic-wiring",
@@ -68,6 +71,7 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
       landings: [],
       queue: [],
       queueHead: null,
+      queueSource: ".handoff/DASHBOARD_QUEUE.md",
       mergeGateNote: "",
     },
     timeline: {
@@ -127,6 +131,7 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
       staleCount: 0,
       mappedCount: 0,
     },
+    foreverContract: buildForeverContractGuard({ queue: [], bots: [], nowMs: 0, queueSource: "unavailable" }),
     ...partial,
   };
 }
