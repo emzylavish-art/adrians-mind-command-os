@@ -122,6 +122,19 @@ import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers"
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import { COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { canSend } from "@/lib/mind/send-gate";
+import { saveFailureMessage } from "@/lib/mind/save-error";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  loadVoiceSettings,
+  saveVoiceSettings,
+  unusedUntilLiveNotice,
+  type VoiceActivation,
+  type VoicePersonality,
+  type VoiceSettings,
+  type VoiceSpeed,
+} from "@/lib/mind/voice/settings";
 import {
   classifyHonestFailure,
   honestFailureAuditAction,
@@ -249,6 +262,13 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
 
 const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
+/** Shown on an empty Build view. Click selects only — mounting this list does not run a tool. */
+const BUILD_SUGGESTIONS = [
+  { id: "outline", label: "Outline a change" },
+  { id: "tests", label: "Plan the tests" },
+  { id: "notes", label: "Review a local note" },
+] as const;
+
 const TITLES: Record<View, string> = {
   command: "Chat",
   chat: "Thread",
@@ -330,7 +350,7 @@ function formatBytes(bytes: number) {
 }
 
 export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -377,6 +397,10 @@ export function CommandApp() {
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
+  const [pcAgentOnline, setPcAgentOnline] = useState(false);
+  const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
+  const [buildPick, setBuildPick] = useState<string | null>(null);
   const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
@@ -438,6 +462,50 @@ export function CommandApp() {
   }, []);
 
   useEffect(() => {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    setComposerEffort(loadComposerEffort(storage));
+  }, []);
+
+  useEffect(() => {
+    if (view !== "build") return;
+    let cancel = false;
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    const controller = new AbortController();
+    void fetch(`${prefix}/api/mind/pc/status`, {
+      method: "GET",
+      signal: controller.signal,
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as { ok?: boolean; onlineAgentIds?: unknown; detail?: unknown };
+      })
+      .then((body) => {
+        if (cancel) return;
+        const online = body?.ok && Array.isArray(body.onlineAgentIds) ? body.onlineAgentIds.length : 0;
+        setPcAgentOnline(online > 0);
+        setPcAgentDetail(
+          body?.ok && typeof body.detail === "string" && body.detail.trim()
+            ? body.detail
+            : online > 0
+              ? `${online} paired PC agent(s) online.`
+              : "No paired PC agent is online.",
+        );
+      })
+      .catch(() => {
+        if (cancel) return;
+        setPcAgentOnline(false);
+        setPcAgentDetail("No paired PC agent is online.");
+      });
+    return () => {
+      cancel = true;
+      controller.abort();
+    };
+  }, [view]);
+
+  useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 
@@ -485,6 +553,16 @@ export function CommandApp() {
     voiceChoiceRef.current = committed;
     setVoiceChoice(committed);
     voiceSession.current?.setVoice(committed);
+  }
+
+  function chooseComposerEffort(mode: ComposerModeId) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    saveComposerEffort(storage, mode);
+    setComposerEffort(mode);
+    const resolved = resolveSendPath(mode);
+    if (resolved.notice) setNotice(resolved.notice);
+    // Effort does not change modelTier. The server model stays on the Direct path.
+    if (mode === "build") setView("build");
   }
 
   function interruptSpeakPlayback() {
@@ -1343,8 +1421,23 @@ export function CommandApp() {
   }
 
   async function sendCommand() {
-    if (busy) return;
     const text = draft.trim();
+    const images = pendingImages;
+    const file = staged;
+    const gate = canSend({ halted: wsRef.current.halted, busy });
+    if (!gate.ok) {
+      if (wsRef.current.halted) {
+        reportEmergencyStop("command", () => {
+          setDraft(text);
+          if (file) setStaged(file);
+          setPendingImages(images);
+          void sendCommand();
+        });
+      } else {
+        setError(gate.reason);
+      }
+      return;
+    }
     const imaginePrompt = parseImagineCommand(text);
     if (imaginePrompt !== null) {
       if (!imaginePrompt) {
@@ -1354,19 +1447,8 @@ export function CommandApp() {
       await runImagine(imaginePrompt, null);
       return;
     }
-    const images = pendingImages;
     if (!text && images.length === 0) {
       setError("Write what you want to work on.");
-      return;
-    }
-    if (wsRef.current.halted) {
-      const snapshot = text;
-      const file = staged;
-      reportEmergencyStop("command", () => {
-        setDraft(snapshot);
-        if (file) setStaged(file);
-        void sendCommand();
-      });
       return;
     }
     const made = createChat(ws, {
@@ -1375,7 +1457,6 @@ export function CommandApp() {
       temporary,
       projectId: projectChoice || null,
     });
-    const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
     setDraft("");
@@ -1393,6 +1474,8 @@ export function CommandApp() {
       if (file) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
+    const effortPath = resolveSendPath(composerEffort);
+    if (effortPath.notice) setNotice(effortPath.notice);
     await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, false, images);
   }
 
@@ -1502,8 +1585,24 @@ export function CommandApp() {
   }
 
   async function sendInChat() {
-    if (!active || busy) return;
+    if (!active) return;
     const text = draft.trim();
+    const images = pendingImages;
+    const file = staged;
+    const gate = canSend({ halted: wsRef.current.halted, busy });
+    if (!gate.ok) {
+      if (wsRef.current.halted) {
+        reportEmergencyStop(active.id, () => {
+          setDraft(text);
+          if (file) setStaged(file);
+          setPendingImages(images);
+          void sendInChat();
+        });
+      } else {
+        setError(gate.reason);
+      }
+      return;
+    }
     const imaginePrompt = parseImagineCommand(text);
     if (imaginePrompt !== null) {
       if (!imaginePrompt) {
@@ -1513,22 +1612,7 @@ export function CommandApp() {
       await runImagine(imaginePrompt, active);
       return;
     }
-    const images = pendingImages;
-    if (!text && !staged && images.length === 0) return;
-    if (wsRef.current.halted) {
-      const snapshot = text;
-      const file = staged;
-      const chatId = active.id;
-      const imageSnapshot = images;
-      reportEmergencyStop(chatId, () => {
-        setDraft(snapshot);
-        if (file) setStaged(file);
-        setPendingImages(imageSnapshot);
-        void sendInChat();
-      });
-      return;
-    }
-    const file = staged;
+    if (!text && !file && images.length === 0) return;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
     setDraft("");
@@ -1544,6 +1628,8 @@ export function CommandApp() {
     if (file) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
+    const effortPath = resolveSendPath(composerEffort);
+    if (effortPath.notice) setNotice(effortPath.notice);
     await deliver(active, full, ws, false, images);
   }
 
@@ -2799,6 +2885,20 @@ export function CommandApp() {
             </div>
           </div>
         )}
+        {saveError ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-2" role="status" data-testid="save-retry">
+            <p className="text-sm text-muted">{saveError}</p>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm"
+              onClick={() => {
+                void retrySave();
+              }}
+            >
+              Retry save
+            </button>
+          </div>
+        ) : null}
 
         <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" ? "overflow-hidden" : "overflow-auto"}`}>
           {view === "dashboard" && (
@@ -2883,6 +2983,7 @@ export function CommandApp() {
                       </button>
                     ))}
                   </div>
+                  <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
@@ -3240,6 +3341,8 @@ export function CommandApp() {
                   chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, autonomy: next } : chat)),
                 }));
               }}
+              composerEffort={composerEffort}
+              onComposerEffort={chooseComposerEffort}
               stagedName={staged?.name ?? null}
               pendingImages={pendingImages}
               onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
@@ -3703,6 +3806,34 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
+              <div className="empty-state" data-testid="build-empty">
+                <img src="/empty/empty-folder.svg" alt="" />
+                <p className="font-semibold">Let's build</p>
+                <p className="text-sm text-muted">No build is running. Suggestion cards do not run anything just by appearing.</p>
+                <p className="text-sm font-semibold">{pcAgentOnline ? "PC agent online" : "Not paired"}</p>
+                <p className="text-sm text-muted">{pcAgentDetail}</p>
+                <p className="text-xs text-muted">Build effort is not wired to a different model. Send stays on Direct.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {BUILD_SUGGESTIONS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="suggestion-chip"
+                    onClick={() => {
+                      setBuildPick(item.label);
+                      if (!pcAgentOnline) {
+                        setNotice(`${item.label} was not run. Not paired. Nothing was executed.`);
+                        return;
+                      }
+                      setNotice(`${item.label} is selected. Nothing was executed.`);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {buildPick ? <p className="text-sm text-muted">Selected {buildPick}. Nothing was executed.</p> : null}
               <div className="promo-banner text-sm">
                 <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
                 <div className="min-w-0 flex-1">
@@ -4002,22 +4133,28 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
+              <VoiceSettingsBlock />
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
                 <button
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() => {
-                    const run = () =>
-                      void publishServerCopy().then((result) => {
-                        if (!result.ok) {
-                          reportFailure(result.error || HONEST_FAILURE_MESSAGES.database_write_failed, "database_write_failed", "server-copy", run);
-                          return;
-                        }
-                        clearFailure();
-                      }).catch(() => {
-                        reportFailure(HONEST_FAILURE_MESSAGES.database_write_failed, "database_write_failed", "server-copy", run);
-                      });
+                    const run = () => {
+                      void retrySave()
+                        .then((result) => {
+                          const message = saveFailureMessage(result);
+                          if (message) {
+                            reportFailure(message, "database_write_failed", "server-copy", run);
+                            return;
+                          }
+                          clearFailure();
+                        })
+                        .catch(() => {
+                          const message = saveFailureMessage({ ok: false });
+                          if (message) reportFailure(message, "database_write_failed", "server-copy", run);
+                        });
+                    };
                     run();
                   }}
                 >
@@ -4390,6 +4527,8 @@ function ChatPane({
   mode,
   onComposerMemory,
   onComposerMode,
+  composerEffort,
+  onComposerEffort,
   stagedName,
   pendingImages,
   onRemoveImage,
@@ -4458,6 +4597,8 @@ function ChatPane({
   mode: Autonomy;
   onComposerMemory: () => void;
   onComposerMode: (mode: Autonomy) => void;
+  composerEffort: ComposerModeId;
+  onComposerEffort: (mode: ComposerModeId) => void;
   stagedName: string | null;
   pendingImages: ImageAttachment[];
   onRemoveImage: (index: number) => void;
@@ -4718,6 +4859,7 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
+          <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -4867,6 +5009,121 @@ function ChatPane({
           </button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function ComposerEffortControl({
+  mode,
+  onChoose,
+}: {
+  mode: ComposerModeId;
+  onChoose: (mode: ComposerModeId) => void;
+}) {
+  const resolved = resolveSendPath(mode);
+  const current = COMPOSER_MODES.find((item) => item.id === mode) ?? COMPOSER_MODES[0];
+  return (
+    <div className="mb-2" data-testid="composer-effort">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted">Effort</span>
+        {COMPOSER_MODES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-pressed={mode === item.id}
+            className={`min-h-11 rounded-full px-3 text-sm ${mode === item.id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
+            onClick={() => onChoose(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{resolved.badge}</span>
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        {current?.detail} This effort is not wired to a different model.
+        {resolved.notice ? ` ${resolved.notice}` : ""}
+      </p>
+    </div>
+  );
+}
+
+const VOICE_PERSONALITIES: { id: VoicePersonality; label: string }[] = [
+  { id: "new", label: "New" },
+  { id: "adrian", label: "Adrian" },
+  { id: "assistant", label: "Assistant" },
+  { id: "therapist", label: "Therapist" },
+];
+
+const VOICE_ACTIVATIONS: { id: VoiceActivation; label: string }[] = [
+  { id: "default", label: "Default" },
+  { id: "isolation", label: "Isolation" },
+  { id: "push_to_talk", label: "Push to talk" },
+];
+
+const VOICE_SPEEDS: { id: VoiceSpeed; label: string }[] = [
+  { id: "slow", label: "Slow" },
+  { id: "normal", label: "Normal" },
+  { id: "fast", label: "Fast" },
+];
+
+function VoiceSettingsBlock() {
+  const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
+  useEffect(() => {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    setSettings(loadVoiceSettings(storage));
+  }, []);
+  function update(patch: Partial<VoiceSettings>) {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      const storage = typeof localStorage === "undefined" ? null : localStorage;
+      saveVoiceSettings(storage, next);
+      return next;
+    });
+  }
+  return (
+    <div className="settings-card card-texture rounded-panel p-4 text-sm" data-testid="voice-settings">
+      <p className="font-semibold">Voice</p>
+      <p className="text-muted">{unusedUntilLiveNotice()}</p>
+      <p className="mt-1 text-xs text-muted">Stored in this browser only. No speech provider is called.</p>
+      <div className="settings-row mt-3">
+        <div>
+          <p className="font-semibold">Personality</p>
+          <p className="text-muted">Saved locally. Not sent to a voice service.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {VOICE_PERSONALITIES.map((item) => (
+            <button key={item.id} type="button" aria-pressed={settings.personality === item.id} className={`min-h-11 rounded-panel border px-3 ${settings.personality === item.id ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => update({ personality: item.id })}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <p className="font-semibold">Activation</p>
+          <p className="text-muted">Saved locally. Does not start the microphone.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {VOICE_ACTIVATIONS.map((item) => (
+            <button key={item.id} type="button" aria-pressed={settings.activation === item.id} className={`min-h-11 rounded-panel border px-3 ${settings.activation === item.id ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => update({ activation: item.id })}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <p className="font-semibold">Speed</p>
+          <p className="text-muted">Saved locally. Playback speed is unchanged.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {VOICE_SPEEDS.map((item) => (
+            <button key={item.id} type="button" aria-pressed={settings.speed === item.id} className={`min-h-11 rounded-panel border px-3 ${settings.speed === item.id ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => update({ speed: item.id })}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

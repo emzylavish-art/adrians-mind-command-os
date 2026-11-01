@@ -4,7 +4,7 @@ import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
 import { emptyWorkspace, loadWorkspace, WORKSPACE_KEY } from "./workspace";
-import { SAVE_FAIL } from "./save-error";
+import { SAVE_FAIL, saveFailureMessage } from "./save-error";
 
 function hasContent(ws: Workspace) {
   return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + ws.audit.length > 0;
@@ -62,7 +62,8 @@ export function useMindWorkspace() {
           followServer.current = true;
           savedJson.current = JSON.stringify(local);
           void saveMindCopy({ data: { workspace: local } }).then((saved) => {
-            if (!saved.ok) setSaveError(saved.error || SAVE_FAIL);
+            const message = saveFailureMessage(saved);
+            if (message) setSaveError(message);
           });
           setSyncNote("This browser's copy was sent to the local server database. It is not cloud backup.");
           return;
@@ -117,14 +118,19 @@ export function useMindWorkspace() {
     const id = window.setTimeout(() => {
       void saveMindCopy({ data: { workspace: ws } })
         .then((result) => {
-          if (result.ok) {
+          const message = saveFailureMessage(result);
+          if (!message) {
             savedJson.current = packed;
+            setSaveError(null);
             return;
           }
-          setSyncNote(result.error || "The server copy could not be saved. The browser copy was kept.");
+          setSaveError(message);
+          setSyncNote(message);
         })
         .catch(() => {
-          setSyncNote("The server copy could not be saved. The browser copy was kept.");
+          const message = saveFailureMessage({ ok: false }) ?? SAVE_FAIL;
+          setSaveError(message);
+          setSyncNote(message);
         });
     }, 1500);
     return () => window.clearTimeout(id);
@@ -134,7 +140,8 @@ export function useMindWorkspace() {
     const current = latest.current;
     try {
       const result = await saveMindCopy({ data: { workspace: current } });
-      if (result.ok) {
+      const message = saveFailureMessage(result);
+      if (!message) {
         followServer.current = true;
         savedJson.current = JSON.stringify(current);
         setServerHeld(false);
@@ -142,12 +149,12 @@ export function useMindWorkspace() {
         setSyncNote("This browser copy replaced the server copy. It is still not cloud backup.");
         return result;
       }
-      const message = result.error || SAVE_FAIL;
       setSaveError(message);
       return { ok: false as const, error: message };
     } catch {
-      setSaveError(SAVE_FAIL);
-      return { ok: false as const, error: SAVE_FAIL };
+      const message = saveFailureMessage({ ok: false }) ?? SAVE_FAIL;
+      setSaveError(message);
+      return { ok: false as const, error: message };
     }
   }
 
