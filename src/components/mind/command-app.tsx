@@ -55,15 +55,16 @@ import {
 } from "@/lib/mind/voice/mode-store";
 import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
-import { createListenGuard } from "@/lib/mind/voice/listen-guard";
+import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
 import { formatMicCaptureError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
 import {
-  isEditableKeyboardTarget,
-  matchesVoiceToggleShortcut,
   voiceMicAriaLabel,
   VOICE_TOGGLE_SHORTCUT,
 } from "@/lib/mind/voice/shortcut";
-import { createHoldToTalkController } from "@/lib/mind/voice/hold-to-talk";
+import {
+  createHoldToTalkController,
+  shouldToggleVoiceShortcut,
+} from "@/lib/mind/voice/hold-to-talk";
 import { clampLiveTranscript, shouldClearLiveTranscriptOnModeSwitch } from "@/lib/mind/voice/live-transcript";
 import {
   DEFAULT_XAI_VOICE,
@@ -276,7 +277,7 @@ export function CommandApp() {
   const turnAbort = useRef<AbortController | null>(null);
   const voiceNext = useRef(false);
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
-  const listenRef = useRef<() => void>(() => undefined);
+  const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
@@ -524,10 +525,9 @@ export function CommandApp() {
         searchRef.current?.focus();
       }
       if (event.key === "Escape") setPaletteOpen(false);
-      if (matchesVoiceToggleShortcut(event)) {
-        if (isEditableKeyboardTarget(event.target)) return;
+      if (shouldToggleVoiceShortcut(event, document)) {
         event.preventDefault();
-        void listenRef.current();
+        void listenRef.current({ mode: "toggle" });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -537,14 +537,18 @@ export function CommandApp() {
   useEffect(() => {
     const hold = createHoldToTalkController({
       start: () => {
-        if (voiceSession.current?.isOpen || voiceSession.current?.isCapturing) return;
-        void listenRef.current();
+        void listenRef.current({ mode: "start" });
       },
       stop: () => {
         stopVoiceSession();
         setNotice("Voice capture stopped.");
       },
-      isListening: () => Boolean(voiceSession.current?.isOpen || voiceSession.current?.isCapturing),
+      isListening: () =>
+        Boolean(
+          voiceSession.current?.isOpen ||
+            voiceSession.current?.isCapturing ||
+            listenMintAbortRef.current,
+        ),
     });
     // stopVoiceSession is stable enough via refs; hold controller owns blur/hide.
     const onDown = (event: KeyboardEvent) => hold.onKeyDown(event);
@@ -1425,11 +1429,23 @@ export function CommandApp() {
     }
   }
 
-  async function listen() {
-    if (voiceListening) {
+  async function listen(opts?: { mode?: "toggle" | "start" | "stop" }) {
+    const mode = opts?.mode ?? "toggle";
+    const active = Boolean(
+      voiceListening ||
+        voiceSession.current?.isOpen ||
+        voiceSession.current?.isCapturing ||
+        listenMintAbortRef.current,
+    );
+    const action = resolveListenAction(mode, active);
+    if (action === "stop") {
       stopVoiceSession();
       listenGuardRef.current.end();
       setNotice("Voice capture stopped.");
+      return;
+    }
+    if (action === "ignore") {
+      // Already listening or minting — do not toggle-stop (fixes reconnect/PTT race).
       return;
     }
     if (!listenGuardRef.current.begin()) {
@@ -1538,8 +1554,8 @@ export function CommandApp() {
               voiceReconnectRef.current += 1;
               setNotice("Voice connection dropped. Reconnecting once…");
               window.setTimeout(() => {
-                void listenRef.current();
-              }, 400);
+              void listenRef.current({ mode: "start" });
+            }, 400);
             }
           },
         },
@@ -1570,8 +1586,8 @@ export function CommandApp() {
       if (!voiceSession.current?.isOpen) listenGuardRef.current.end();
     }
   }
-  listenRef.current = () => {
-    void listen();
+  listenRef.current = (opts) => {
+    void listen(opts);
   };
 
   async function checkRea() {

@@ -22,3 +22,18 @@ export function createListenGuard(): ListenGuard {
     },
   };
 }
+
+export type ListenInvokeMode = "toggle" | "start" | "stop";
+
+/**
+ * Decide whether an invoke should start, stop, or ignore.
+ * `start` never toggles off an in-flight mint/connect (PTT + reconnect race fix).
+ */
+export function resolveListenAction(
+  mode: ListenInvokeMode,
+  active: boolean,
+): "start" | "stop" | "ignore" {
+  if (mode === "stop" || (mode === "toggle" && active)) return "stop";
+  if (mode === "start" && active) return "ignore";
+  return "start";
+}

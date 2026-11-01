@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createListenGuard } from "./listen-guard.ts";
+import { createListenGuard, resolveListenAction } from "./listen-guard.ts";
 
 describe("listen guard (spam / single-flight)", () => {
   it("rejects a second begin until end (no duplicate sessions)", () => {
@@ -10,5 +10,14 @@ describe("listen guard (spam / single-flight)", () => {
     assert.equal(g.busy, true);
     g.end();
     assert.equal(g.begin(), true);
+  });
+
+  it("start mode ignores when already active (no mid-connect toggle-stop)", () => {
+    assert.equal(resolveListenAction("start", true), "ignore");
+    assert.equal(resolveListenAction("start", false), "start");
+    assert.equal(resolveListenAction("toggle", true), "stop");
+    assert.equal(resolveListenAction("toggle", false), "start");
+    assert.equal(resolveListenAction("stop", true), "stop");
+    assert.equal(resolveListenAction("stop", false), "stop");
   });
 });

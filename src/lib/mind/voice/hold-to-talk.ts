@@ -5,6 +5,38 @@ export const HOLD_TO_TALK_TAP_THRESHOLD_MS = 180;
 
 export const HOLD_TO_TALK_KEY = " ";
 
+/**
+ * ARIA roles that use Space as the native activation / control key.
+ * Holding Space on these must never open the mic (H14).
+ */
+export const HOLD_TO_TALK_BLOCKED_ROLES = [
+  "tab",
+  "option",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "checkbox",
+  "radio",
+  "switch",
+  "slider",
+  "spinbutton",
+  "listbox",
+  "combobox",
+  "treeitem",
+  "gridcell",
+  "button",
+  "link",
+  "summary",
+  "searchbox",
+  "textbox",
+] as const;
+
+const BLOCKED_ROLE_SET = new Set<string>(HOLD_TO_TALK_BLOCKED_ROLES);
+
+/** Selector for closest() — interactive hosts + open modal ancestors. */
+export const HOLD_TO_TALK_BLOCKED_CLOSEST =
+  "button, a, summary, input, textarea, select, [contenteditable='true'], [role='button'], [role='link'], [role='tab'], [role='option'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider'], [role='spinbutton'], [role='listbox'], [role='combobox'], [role='treeitem'], [role='gridcell'], [role='summary'], [role='searchbox'], [role='textbox'], [aria-modal='true'], [role='dialog'], [role='alertdialog']";
+
 function tagNameOf(target: EventTarget | null): string {
   if (!target || typeof target !== "object") return "";
   const el = target as { tagName?: unknown; nodeName?: unknown };
@@ -12,23 +44,52 @@ function tagNameOf(target: EventTarget | null): string {
   return raw.toUpperCase();
 }
 
-/** Space must not fire hold-to-talk in inputs, textareas, selects, contenteditable, or buttons. */
+function roleOf(el: { getAttribute?: (name: string) => string | null }): string {
+  if (typeof el.getAttribute !== "function") return "";
+  try {
+    return (el.getAttribute("role") || "").trim().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * True when the document has an open modal dialog (Cmd-K palette, confirms, sheets).
+ * Safe for jsdom/node stubs when document/querySelector is missing.
+ */
+export function isVoiceModalOpen(doc: {
+  querySelector?: (selectors: string) => unknown;
+} | null = typeof document !== "undefined" ? document : null): boolean {
+  if (!doc || typeof doc.querySelector !== "function") return false;
+  try {
+    return Boolean(
+      doc.querySelector("[aria-modal='true'], [role='dialog'], [role='alertdialog']"),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Space must not fire hold-to-talk on editables, buttons/links, ARIA widgets, or inside modals. */
 export function isHoldToTalkBlockedTarget(target: EventTarget | null): boolean {
   if (isEditableKeyboardTarget(target)) return true;
   const tag = tagNameOf(target);
   if (tag === "BUTTON" || tag === "A" || tag === "SUMMARY") return true;
   if (!target || typeof target !== "object") return false;
-  const el = target as { closest?: (selector: string) => unknown; getAttribute?: (name: string) => string | null };
+  const el = target as {
+    isContentEditable?: unknown;
+    closest?: (selector: string) => unknown;
+    getAttribute?: (name: string) => string | null;
+  };
+  if (el.isContentEditable === true) return true;
+  const ownRole = roleOf(el);
+  if (ownRole && BLOCKED_ROLE_SET.has(ownRole)) return true;
   if (typeof el.closest === "function") {
     try {
-      if (el.closest("button, a, [role='button'], [role='textbox'], [contenteditable='true']")) return true;
+      if (el.closest(HOLD_TO_TALK_BLOCKED_CLOSEST)) return true;
     } catch {
       /* ignore */
     }
-  }
-  if (typeof el.getAttribute === "function") {
-    const role = el.getAttribute("role");
-    if (role === "button" || role === "textbox" || role === "combobox") return true;
   }
   return false;
 }
@@ -39,18 +100,21 @@ export function isHoldToTalkSpaceKey(event: { key?: string; code?: string }): bo
 
 /**
  * Returns whether a keydown should begin hold-to-talk.
- * Ignores auto-repeat, editable/button targets, and Ctrl+Shift+V (toggle remains separate).
+ * Ignores auto-repeat, ARIA/editable targets, open modals, and Ctrl+Shift+V.
  */
-export function shouldBeginHoldToTalk(event: {
-  key: string;
-  code?: string;
-  repeat?: boolean;
-  ctrlKey?: boolean;
-  metaKey?: boolean;
-  altKey?: boolean;
-  shiftKey?: boolean;
-  target?: EventTarget | null;
-}): boolean {
+export function shouldBeginHoldToTalk(
+  event: {
+    key: string;
+    code?: string;
+    repeat?: boolean;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+    target?: EventTarget | null;
+  },
+  doc?: { querySelector?: (selectors: string) => unknown } | null,
+): boolean {
   if (matchesVoiceToggleShortcut({
     key: event.key,
     shiftKey: !!event.shiftKey,
@@ -63,6 +127,7 @@ export function shouldBeginHoldToTalk(event: {
   if (!isHoldToTalkSpaceKey(event)) return false;
   if (event.repeat) return false;
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (isVoiceModalOpen(doc)) return false;
   if (isHoldToTalkBlockedTarget(event.target ?? null)) return false;
   return true;
 }
@@ -79,6 +144,27 @@ export function heldLongEnough(downAtMs: number, upAtMs: number, thresholdMs = H
   return upAtMs - downAtMs >= thresholdMs;
 }
 
+/**
+ * Ctrl/Cmd+Shift+V must not toggle voice while a modal dialog is open (H14).
+ * Still matches the key chord; callers gate with this helper.
+ */
+export function shouldToggleVoiceShortcut(
+  event: {
+    key: string;
+    shiftKey: boolean;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey?: boolean;
+    target?: EventTarget | null;
+  },
+  doc?: { querySelector?: (selectors: string) => unknown } | null,
+): boolean {
+  if (!matchesVoiceToggleShortcut(event)) return false;
+  if (isEditableKeyboardTarget(event.target ?? null)) return false;
+  if (isVoiceModalOpen(doc)) return false;
+  return true;
+}
+
 export type HoldToTalkController = {
   onKeyDown: (event: KeyboardEvent) => void;
   onKeyUp: (event: KeyboardEvent) => void;
@@ -88,19 +174,24 @@ export type HoldToTalkController = {
 };
 
 /**
- * Wire Space hold-to-talk. start() / stop() are invoked only for holds past the tap threshold
- * (start on threshold crossed while still down, or stop on release after a real hold).
- * Ctrl+Shift+V is left alone for the existing toggle path.
+ * Wire Space hold-to-talk. start() / stop() are invoked only for holds past the tap threshold.
+ * stop() always runs on release after a real hold (cancels in-flight mint too).
+ * Ctrl+Shift+V is left to the separate toggle path (also modal-gated).
  */
 export function createHoldToTalkController(input: {
   start: () => void;
   stop: () => void;
+  /** True when a session is up OR a start/mint is in flight (so release can cancel). */
   isListening: () => boolean;
   now?: () => number;
   thresholdMs?: number;
+  getDocument?: () => { querySelector?: (selectors: string) => unknown } | null;
 }): HoldToTalkController {
   const now = input.now ?? (() => Date.now());
   const threshold = input.thresholdMs ?? HOLD_TO_TALK_TAP_THRESHOLD_MS;
+  const getDocument =
+    input.getDocument ??
+    (() => (typeof document !== "undefined" ? document : null));
   let downAt: number | null = null;
   let armed = false;
   let holdStarted = false;
@@ -125,12 +216,12 @@ export function createHoldToTalkController(input: {
     downAt = null;
     armed = false;
     holdStarted = false;
-    if (wasHolding && input.isListening()) input.stop();
+    if (wasHolding) input.stop();
   };
 
   return {
     onKeyDown(event) {
-      if (!shouldBeginHoldToTalk(event)) return;
+      if (!shouldBeginHoldToTalk(event, getDocument())) return;
       if (downAt != null) return;
       event.preventDefault();
       downAt = now();
@@ -141,6 +232,12 @@ export function createHoldToTalkController(input: {
         thresholdTimer = null;
         if (!armed || downAt == null) return;
         if (!heldLongEnough(downAt, now(), threshold)) return;
+        // Modal may have opened after keydown (e.g. palette); re-check.
+        if (isVoiceModalOpen(getDocument())) {
+          cancelPending();
+          holdStarted = false;
+          return;
+        }
         holdStarted = true;
         if (!input.isListening()) input.start();
       }, threshold);
@@ -153,9 +250,9 @@ export function createHoldToTalkController(input: {
       cancelPending();
       holdStarted = false;
       if (started) {
-        if (input.isListening()) input.stop();
+        // Always stop/cancel on release after a real hold (including in-flight mint).
+        input.stop();
       }
-      // Tap below threshold: ignore (do not toggle).
     },
     onBlurOrHide() {
       forceStopIfHolding();

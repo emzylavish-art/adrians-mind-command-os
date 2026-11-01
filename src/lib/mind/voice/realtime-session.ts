@@ -1,5 +1,6 @@
 import { SharedAudioOutput, sharedAudioOutput } from "./audio-output.ts";
 import { rmsFromTimeDomain } from "./level.ts";
+import { resolveXaiVoiceId } from "./voices.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 export const REALTIME_MODEL = "grok-voice-latest";
@@ -85,11 +86,11 @@ export class RealtimeVoiceSession {
     this.handlers = handlers;
     this.output = output;
     this.socketFactory = socketFactory;
-    this.voiceId = (options.voice || "eve").trim() || "eve";
+    this.voiceId = resolveXaiVoiceId(options.voice);
   }
 
   setVoice(voice: string) {
-    const next = (voice || "eve").trim() || "eve";
+    const next = resolveXaiVoiceId(voice);
     this.voiceId = next;
     if (this.open) {
       this.send({ type: "session.update", session: { voice: next } });
