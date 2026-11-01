@@ -13,6 +13,7 @@ import { emailAndPasswordEnabled } from "@/lib/auth/email-password";
 import {
   emailPasswordGate,
   loginErrorBannerFromSearch,
+  resolveEmailPasswordBackend,
   resolveLoginProviderAction,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
@@ -197,14 +198,20 @@ function Login() {
     setBusy(true);
     setBanner(null);
     setInfo(null);
-    const gate = emailPasswordGate(supabaseConfigured || emailAndPasswordEnabled);
+    const backend = resolveEmailPasswordBackend({
+      supabaseConfigured,
+      betterAuthEmailEnabled: emailAndPasswordEnabled,
+    });
+    const gate = emailPasswordGate(backend !== "none");
     if (!gate.ok) {
       setInfo(gate.message);
       setBusy(false);
       return;
     }
     try {
-      if (emailAndPasswordEnabled) {
+      // Prefer Supabase when configured so existing Auth users keep working.
+      // Better Auth email is only used when Supabase env is absent.
+      if (backend === "better_auth") {
         const name = email.split("@")[0] || "Owner";
         const result =
           mode === "sign-up"

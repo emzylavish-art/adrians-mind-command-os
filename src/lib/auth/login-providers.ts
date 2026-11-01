@@ -84,6 +84,22 @@ export function resolveLoginProviderAction(
   };
 }
 
+export type EmailPasswordBackend = "supabase" | "better_auth" | "none";
+
+/**
+ * Prefer Supabase email/password when configured so existing Auth users keep
+ * working. Fall back to Better Auth local email only when Supabase env is absent.
+ * (4371f0e had flipped /login to Better Auth-first; live E2E users are on Supabase.)
+ */
+export function resolveEmailPasswordBackend(input: {
+  supabaseConfigured: boolean;
+  betterAuthEmailEnabled: boolean;
+}): EmailPasswordBackend {
+  if (input.supabaseConfigured) return "supabase";
+  if (input.betterAuthEmailEnabled) return "better_auth";
+  return "none";
+}
+
 export function emailPasswordGate(supabaseConfigured: boolean): {
   ok: true
 } | { ok: false; message: string } {

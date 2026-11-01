@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   dashboardLoginSearch,
   emailPasswordGate,
+  resolveEmailPasswordBackend,
   isOwnerBrokerConfigured,
   loginErrorBannerFromSearch,
   parseSupabaseOAuthProviders,
@@ -171,5 +172,37 @@ describe("resolveLoginProviderAction supabase OAuth allowlist", () => {
     });
     assert.equal(apple.kind, "not_configured");
     assert.equal((apple as { message: string }).message, "Not enabled yet");
+  });
+});
+
+describe("resolveEmailPasswordBackend", () => {
+  it("prefers Supabase when configured so existing Auth users keep working", () => {
+    assert.equal(
+      resolveEmailPasswordBackend({
+        supabaseConfigured: true,
+        betterAuthEmailEnabled: true,
+      }),
+      "supabase",
+    );
+  });
+
+  it("uses Better Auth email only when Supabase env is absent", () => {
+    assert.equal(
+      resolveEmailPasswordBackend({
+        supabaseConfigured: false,
+        betterAuthEmailEnabled: true,
+      }),
+      "better_auth",
+    );
+  });
+
+  it("returns none when neither backend is available", () => {
+    assert.equal(
+      resolveEmailPasswordBackend({
+        supabaseConfigured: false,
+        betterAuthEmailEnabled: false,
+      }),
+      "none",
+    );
   });
 });
