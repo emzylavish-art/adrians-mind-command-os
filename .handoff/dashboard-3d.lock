@@ -1,5 +1,6 @@
-owner: dashboard-3d-loop
+owner: none
 cycle: 47
-heartbeat: 2026-11-01T23:19:38+01:00
+released: 2026-11-01T23:21:20+01:00
 branch: dashboard-3d
-work: land Light e65a052 #67 wire; attacker; release
+tip: 7c68e44
+last: #48-51 + Light #67 e65a052; ctx-loss harden+retry; attacker
