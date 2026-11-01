@@ -93,7 +93,8 @@ export function createMotionClock(opts: MotionClockOpts = {}): MotionClock {
         }
         if (a.used < slot.used) slot = a;
       }
-      lastWallDt = mru ? wall - mru.wall : 0;
+      // Hacker c11: backwards worker clocks must not publish negative lastWallDt (LOD budget).
+      lastWallDt = mru ? Math.max(0, wall - mru.wall) : 0;
       const nextTime = mru ? mru.time + nominal : sanitizeTime(wall);
       slot.live = true;
       slot.wall = wall;

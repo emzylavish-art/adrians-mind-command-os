@@ -158,8 +158,10 @@ function cleanIdMap<T>(
 ): Record<string, T> {
   const out = Object.create(null) as Record<string, T>;
   if (!isPlainRecord(raw)) return out;
+  // Hacker c11: for-in + early break — Object.keys(100k) allocates a huge array first.
   let n = 0;
-  for (const id of Object.keys(raw)) {
+  for (const id in raw) {
+    if (!Object.prototype.hasOwnProperty.call(raw, id)) continue;
     if (DANGEROUS_KEYS.has(id)) continue;
     if (typeof id !== "string" || id.length === 0) continue;
     if (n >= POSE_HOLD_MAX_IDS) break;

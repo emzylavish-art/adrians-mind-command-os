@@ -146,4 +146,17 @@ export {
   type HoverTooltipSample,
   type HoverTooltipState,
 } from "./hover-tooltip-motion.ts";
+export {
+  EDGE_PULSE_SPEED,
+  EDGE_TRAVEL_SPEED,
+  EDGE_PULSE_AMP,
+  EDGE_NEIGHBOR_DAMP,
+  createEdgePulseSample,
+  createEdgePulseState,
+  edgeTravelTowardTo,
+  stepEdgePulseSync,
+  type EdgePulseOpts,
+  type EdgePulseSample,
+  type EdgePulseState,
+} from "./edge-pulse-sync.ts";
 
