@@ -25,17 +25,30 @@ const DANGEROUS_SCHEME = /^(javascript|data|vbscript|file):/i;
 export function safeHref(raw: string): string | null {
   const href = raw.trim();
   if (!href) return null;
-  if (DANGEROUS_SCHEME.test(href)) return null;
-  // Protocol-relative and bare schemes we don't recognize → inert
-  if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^(https?:|mailto:|tel:)/i.test(href)) {
+  // Browsers strip ASCII whitespace/control chars inside a scheme ("java\tscript:"),
+  // so check the scheme on a normalized copy.
+  // eslint-disable-next-line no-control-regex
+  const normalized = href.replace(/[\u0000-\u0020\u007f-\u009f]/g, "");
+  if (DANGEROUS_SCHEME.test(normalized)) return null;
+  // Bare schemes we don't recognize → inert
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) && !/^(https?:|mailto:|tel:)/i.test(normalized)) {
     return null;
   }
+  if (/[\u0000-\u001f\u007f]/.test(href)) return null;
   return href;
 }
 
 function parseInlines(source: string): InlineNode[] {
   const out: InlineNode[] = [];
   let i = 0;
+  // Markers known to have no further occurrence — keeps huge/unbalanced replies linear-ish.
+  const exhausted = new Set<string>();
+  const find = (marker: string, from: number): number => {
+    if (exhausted.has(marker)) return -1;
+    const at = source.indexOf(marker, from);
+    if (at === -1) exhausted.add(marker);
+    return at;
+  };
   const pushText = (value: string) => {
     if (!value) return;
     const last = out[out.length - 1];
@@ -46,7 +59,7 @@ function parseInlines(source: string): InlineNode[] {
   while (i < source.length) {
     // inline code
     if (source[i] === "`") {
-      const end = source.indexOf("`", i + 1);
+      const end = find("`", i + 1);
       if (end !== -1) {
         out.push({ type: "code", value: source.slice(i + 1, end) });
         i = end + 1;
@@ -55,9 +68,9 @@ function parseInlines(source: string): InlineNode[] {
     }
     // links [text](url)
     if (source[i] === "[") {
-      const close = source.indexOf("]", i + 1);
+      const close = find("]", i + 1);
       if (close !== -1 && source[close + 1] === "(") {
-        const urlEnd = source.indexOf(")", close + 2);
+        const urlEnd = find(")", close + 2);
         if (urlEnd !== -1) {
           const label = source.slice(i + 1, close);
           const url = source.slice(close + 2, urlEnd);
@@ -76,7 +89,7 @@ function parseInlines(source: string): InlineNode[] {
     // strong ** or __
     if ((source[i] === "*" && source[i + 1] === "*") || (source[i] === "_" && source[i + 1] === "_")) {
       const marker = source.slice(i, i + 2);
-      const end = source.indexOf(marker, i + 2);
+      const end = find(marker, i + 2);
       if (end !== -1) {
         out.push({ type: "strong", children: parseInlines(source.slice(i + 2, end)) });
         i = end + 2;
@@ -86,7 +99,7 @@ function parseInlines(source: string): InlineNode[] {
     // em * or _
     if (source[i] === "*" || source[i] === "_") {
       const marker = source[i]!;
-      const end = source.indexOf(marker, i + 1);
+      const end = find(marker, i + 1);
       if (end !== -1 && end > i + 1) {
         out.push({ type: "em", children: parseInlines(source.slice(i + 1, end)) });
         i = end + 1;

@@ -105,3 +105,47 @@ describe("code fences unchanged via splitBlocks", () => {
     if (blocks[2]?.kind === "text") assert.match(blocks[2].text, /\*\*bold\*\*/);
   });
 });
+
+describe("markdown hardening (pass 9)", () => {
+  it("neutralizes obfuscated dangerous schemes", () => {
+    assert.equal(safeHref("java\tscript:alert(1)"), null);
+    assert.equal(safeHref(" JAVASCRIPT:alert(1)"), null);
+    assert.equal(safeHref("\u0001javascript:alert(1)"), null);
+    assert.equal(safeHref("DaTa:text/html;base64,PHNjcmlwdD4="), null);
+    assert.equal(safeHref("VBScript:msgbox"), null);
+    assert.equal(safeHref("mailto:a@b.co"), "mailto:a@b.co");
+  });
+
+  it("keeps img onerror / script tags as literal text", () => {
+    const blocks = parseMarkdownBlocks('<img src=x onerror="alert(1)"> and <script>alert(1)</script>');
+    assert.equal(blocks.length, 1);
+    if (blocks[0]?.type === "paragraph") {
+      assert.equal(inlineText(blocks[0].children), '<img src=x onerror="alert(1)"> and <script>alert(1)</script>');
+      assert.ok(blocks[0].children.every((n) => n.type === "text"));
+    }
+  });
+
+  it("parses huge unbalanced input quickly", () => {
+    const big = "[`*_".repeat(50_000);
+    const t0 = Date.now();
+    const blocks = parseMarkdownBlocks(big);
+    assert.ok(Date.now() - t0 < 2000);
+    assert.equal(blocks[0]?.type, "paragraph");
+  });
+
+  it("renders a link marked inert when scheme is data:", () => {
+    const blocks = parseMarkdownBlocks("[x](data:text/html,hi)");
+    if (blocks[0]?.type === "paragraph") {
+      const link = blocks[0].children[0];
+      assert.equal(link?.type, "link");
+      if (link?.type === "link") {
+        assert.equal(link.href, null);
+        assert.equal(link.inert, true);
+      }
+    }
+  });
+
+  it("splits unclosed fences without throwing", () => {
+    assert.doesNotThrow(() => splitBlocks("before\n```js\nconst a = 1;\n"));
+  });
+});

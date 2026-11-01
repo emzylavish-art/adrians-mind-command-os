@@ -79,7 +79,7 @@ function renderBlocks(blocks: BlockNode[], keyPrefix = "b"): ReactNode[] {
       }
       case "table":
         return (
-          <div key={key} className="md-table-wrap">
+          <div key={key} className="md-table-wrap" role="region" aria-label="Table" tabIndex={0}>
             <table className="md-table">
               <thead>
                 <tr>
