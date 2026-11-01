@@ -330,3 +330,13 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - typecheck pass; TS tests 555/555; lint 1 error (pre-existing research.ts:39) + 8 warnings; build pass.
 - Notion: https://app.notion.com/p/40bb95f33e4281d7a921c1780538952d
 - Open: the onFailure target in command-app is "browser" (owned by another lane). The inline banner has no View log; the top banner provides it.
+
+## 2026-11-01T17:30:59+01:00 (Africa/Lagos) — Error Banners Bot — H16 fleet-panels silent lists
+- Lock check: no ACTIVE exclusive claim on fleet-panels.tsx; claimed error-banners-gap-fleet-panels-silent-lists.lock.
+- Merged origin/preview/integration @ 7518a1d into error-banners as b00088e (package.json test union; no forbidden conflicts).
+- 9fe7482: MCP tools + PC approvals distinct loading/empty/error (red banner + Retry); mcp-list-state timeout 15s + stale generation guards; failure-states mcp_tools_list_failed / pc_approvals_list_failed. onFailure→reportFailure for audit + top View log (826aa99 pattern).
+- Checks: typecheck pass; TS 797/799 (2 pre-existing: integration-security-c16 Imagine allowlist deferred; voice/ollama-conductor — present without H16 edits); lint 32e/55w other lanes (our files 0e/1w hooks); build pass.
+- Pushed origin/error-banners → 9fe7482b0d91dc90992de376eb18ff3774d21c2e (ls-remote matches).
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281d0b385c9a20bbae697
+- Open: inline View log needs command-app.tsx (forbidden); FleetPanel onFailure still tagged open_page_failed/browser there.
+- Lock releasing.
