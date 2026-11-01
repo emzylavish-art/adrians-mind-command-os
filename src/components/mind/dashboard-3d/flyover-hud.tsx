@@ -39,9 +39,18 @@ export function FlyoverHud({
   const crumbRef = useRef<HTMLDivElement | null>(null);
   const easeRef = useRef(createBreadcrumbEaseState());
   const sampleRef = useRef(createBreadcrumbEaseSample());
-  const reduced = useRef(
-    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+  // Gap#65 / #21: never read matchMedia during render/useRef init (SSR vs client text).
+  const reduced = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      reduced.current = !!mq.matches;
+    };
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
 
   useEffect(() => {
     setBreadcrumbFocus(easeRef.current, focusBot?.id ?? null);

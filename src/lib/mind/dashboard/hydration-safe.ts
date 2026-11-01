@@ -25,3 +25,33 @@ export function isUnsafeFirstPaintSource(source: string): boolean {
     /\bperformance\.now\s*\(/.test(s)
   );
 }
+
+/**
+ * Gap#65 — catch useRef/useState initializers that branch on window / matchMedia
+ * (SSR false vs client true → intermittent hydration text mismatch).
+ */
+export function findUnsafeFirstPaintInitializers(source: string): string[] {
+  const hits: string[] = [];
+  const patterns: Array<{ name: string; re: RegExp }> = [
+    {
+      name: "useRef(typeof window…)",
+      re: /useRef\s*\(\s*(?:\([^)]*\)\s*=>\s*)?[^)]*typeof\s+window[^)]*\)/g,
+    },
+    {
+      name: "useRef(matchMedia…)",
+      re: /useRef\s*\(\s*[^)]*matchMedia\s*\(/g,
+    },
+    {
+      name: "useState(matchMedia…)",
+      re: /useState\s*(?:<[^>]*>)?\s*\(\s*(?:\([^)]*\)\s*=>\s*)?[^)]*matchMedia\s*\(/g,
+    },
+    {
+      name: "useState(typeof window…)",
+      re: /useState\s*(?:<[^>]*>)?\s*\(\s*(?:\([^)]*\)\s*=>\s*)?[^)]*typeof\s+window[^)]*\)/g,
+    },
+  ];
+  for (const { name, re } of patterns) {
+    if (re.test(source)) hits.push(name);
+  }
+  return hits;
+}

@@ -1,6 +1,5 @@
-owner: 
+owner: dashboard-3d-loop
 cycle: 53
-released: 2026-11-02T00:10:48+01:00
+heartbeat: 2026-11-02T00:18:25+01:00
 branch: dashboard-3d
-tip: d08d69c
-work: released locally — NO PUSH (Vercel build gate)
+work: batch c53 Painter+Light#93+Gap65+progressive; test+push
