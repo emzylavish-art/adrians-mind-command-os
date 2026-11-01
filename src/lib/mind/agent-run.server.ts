@@ -8,6 +8,7 @@ import { decideFetchSite } from "./request-guard";
 import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
 import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
+import { parseModelTierField, readJsonObjectBody } from "./request-body";
 
 const MAX_BODY = 2_500_000;
 
@@ -74,14 +75,11 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message, log: [] }, message === "Unauthorized" ? 401 : 403);
   }
-  const raw = await request.text();
-  if (raw.length > MAX_BODY) return json({ ok: false, error: "That request is too large.", log: [] }, 413);
-  let body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown };
-  try {
-    body = JSON.parse(raw) as typeof body;
-  } catch {
-    return json({ ok: false, error: "That request could not be read.", log: [] }, 400);
-  }
+  const read = await readJsonObjectBody(request, MAX_BODY);
+  if (!read.ok) return json({ ok: false, error: read.error, log: [] }, read.status);
+  const body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown } = read.body;
+  const tierField = parseModelTierField(body.modelTier);
+  if (!tierField.ok) return json({ ok: false, error: tierField.error, log: [] }, 400);
   const { haltIsOn } = await import("./halt.server");
   if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on. No new action can run.", log: [] });
   if (!allowMindRequest("agent", userId, 6)) return json({ ok: false, error: "Too many agent runs. Wait a minute and try again.", log: [] });
@@ -119,7 +117,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     versions: [],
   }));
   const goal = typeof body.goal === "string" ? body.goal : "";
-  const tier = resolveModelTier(body.modelTier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
+  const tier = resolveModelTier(tierField.tier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
   const bound = boundAbortSignal(request.signal, agentRunTimeoutMs());
   try {

@@ -12,6 +12,7 @@ import { callConfiguredProvider, selectProvider } from "./provider-call";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
+import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { readModelPayload } from "./stream";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
@@ -190,14 +191,11 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
   }
-  const limited = await readLimited(request);
-  if (!limited.ok) return json({ ok: false, error: limited.error }, 413);
-  let body: TurnBody;
-  try {
-    body = JSON.parse(limited.text) as TurnBody;
-  } catch {
-    return json({ ok: false, error: "That request could not be read." }, 400);
-  }
+  const read = await readJsonObjectBody(request, MAX_BODY);
+  if (!read.ok) return json({ ok: false, error: read.error }, read.status);
+  const body = read.body as TurnBody;
+  const tierField = parseModelTierField(body.modelTier);
+  if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
   const pendingImages = sanitizeAttachments(body.images);
   const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
   // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.
