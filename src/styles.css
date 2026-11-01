@@ -7809,3 +7809,30 @@ nav.fixed[aria-label="Primary"] button.bg-accent {
   color: #f4f6fb !important;
   text-shadow: 0 0 12px rgb(255 255 255 / 0.25);
 }
+
+/* —— Evolution c124: hover/press motion timing + reduced-motion off —— */
+:where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card) {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 160ms ease,
+    transform 120ms ease,
+    filter 120ms ease,
+    opacity 140ms ease !important;
+}
+:where(button, a[href], [role="button"]):active:not(:disabled) {
+  transition-duration: 80ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card),
+  :where(button, a[href], [role="button"]):active:not(:disabled),
+  .main-stage article.max-w-3xl.rounded-panel,
+  .chat-stream article.max-w-3xl,
+  .page-enter,
+  .skeleton::after {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
