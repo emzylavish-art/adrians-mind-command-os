@@ -45,10 +45,13 @@ export type FleetListState<T> =
 export type McpListState =
   | { status: "loading" }
   | { status: "ready"; servers: McpListServer[] }
+  | { status: "unauthenticated" }
   | { status: "error"; kind: HonestFailureKind; message: string };
 
 export const MCP_LIST_EMPTY_COPY = "No MCP servers are registered.";
 export const MCP_LIST_LOADING_COPY = "Loading MCP servers…";
+/** One quiet signed-out notice (Tools + MCP list). */
+export const MCP_LIST_SIGN_IN_COPY = MCP_AUTH_REQUIRED_NOTICE;
 export const MCP_TOOLS_EMPTY_COPY = "No MCP tools are registered.";
 export const MCP_TOOLS_LOADING_COPY = "Loading MCP tools…";
 export const PC_APPROVALS_EMPTY_COPY = "No pending PC shell approvals.";
@@ -185,13 +188,28 @@ export async function loadMcpList(
 ): Promise<McpListState> {
   const timeoutMs = options?.timeoutMs ?? MCP_LIST_LOAD_TIMEOUT_MS;
   try {
-    const result = (await withListTimeout(fetchList(), timeoutMs, "The MCP server list")) as { servers?: unknown } | null;
-    if (!result || typeof result !== "object" || !Array.isArray(result.servers) || !result.servers.every(isServer)) {
+    const result = (await withListTimeout(fetchList(), timeoutMs, "The MCP server list")) as {
+      servers?: unknown;
+      status?: unknown;
+    } | null;
+    if (!result || typeof result !== "object") {
+      return { status: "error", kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)` };
+    }
+    // Soft-auth path from mcpRegistryList — quiet signed-out, never a red banner.
+    if (result.status === "unauthenticated") {
+      return { status: "unauthenticated" };
+    }
+    if (!Array.isArray(result.servers) || !result.servers.every(isServer)) {
       return { status: "error", kind: "network_failure", message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)` };
     }
     return { status: "ready", servers: result.servers as McpListServer[] };
   } catch (caught) {
-    return { status: "error", ...classifyListFailure(caught, "mcp_list") };
+    const classified = classifyListFailure(caught, "mcp_list");
+    // Thrown 401 / Unauthorized → same quiet state as soft-auth (one notice, not two).
+    if (classified.kind === "auth_required") {
+      return { status: "unauthenticated" };
+    }
+    return { status: "error", ...classified };
   }
 }
 
@@ -252,7 +270,13 @@ export function onceListRetry(action: () => void): () => void {
 }
 
 /** Local-only dismissible notice for auth_required list loads (no persistence, no Retry). */
-function AuthRequiredNoticeRow({ message }: { message: string }): ReactNode {
+function AuthRequiredNoticeRow({
+  message,
+  testId = "auth-required-notice",
+}: {
+  message: string;
+  testId?: string;
+}): ReactNode {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
   return createElement(
@@ -260,9 +284,9 @@ function AuthRequiredNoticeRow({ message }: { message: string }): ReactNode {
     {
       className: "flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted",
       role: "status",
-      "data-testid": "auth-required-notice",
+      "data-testid": testId,
       "data-failure-kind": "auth_required",
-      "data-mcp-list-state": "auth_notice",
+      "data-mcp-list-state": "unauthenticated",
     },
     createElement("p", { className: "text-sm text-muted" }, message),
     createElement(
@@ -354,6 +378,12 @@ export function McpListStatusRows({
   onRetry: () => void;
   onViewLog?: (() => void) | null;
 }) {
+  if (state.status === "unauthenticated") {
+    return createElement(AuthRequiredNoticeRow, {
+      message: MCP_LIST_SIGN_IN_COPY,
+      testId: "mcp-list-sign-in",
+    });
+  }
   const normalized =
     state.status === "ready"
       ? ({ status: "ready", empty: state.servers.length === 0 } as const)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, workerHealth } from "@/lib/mind/server";
+import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -246,6 +246,31 @@ export function FleetPanel({
         if (generation === workerHealthGeneration.current) workerHealthInFlight.current = false;
       });
   }
+
+  // After sign-in, refetch MCP list so servers appear without a full reload (one quiet notice).
+  useEffect(() => {
+    if (mode !== "tools") return;
+    if (mcpListState.status !== "unauthenticated") return;
+    const refetchIfSignedIn = () => {
+      void mindStatus()
+        .then((status) => {
+          if (status.signedIn === true) loadMcpServers();
+        })
+        .catch(() => undefined);
+    };
+    const onFocus = () => refetchIfSignedIn();
+    const onVis = () => {
+      if (document.visibilityState === "visible") refetchIfSignedIn();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    const poll = window.setInterval(refetchIfSignedIn, 4_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(poll);
+    };
+  }, [mode, mcpListState.status]);
 
   useEffect(() => {
     if (mode !== "scheduled") return;
