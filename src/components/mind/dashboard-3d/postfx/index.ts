@@ -30,3 +30,17 @@ export {
   type GodRayInputs,
   type SunScreen,
 } from "./god-rays.ts";
+export {
+  EXPOSURE_BY_TONE,
+  EXPOSURE_EASE_MS,
+  EXPOSURE_MAX,
+  EXPOSURE_MIN,
+  bloomThresholdFor,
+  clampExposure,
+  createExposureRide,
+  exposureTargetFor,
+  timeOfDayExposureScale,
+  type ExposureRideHandle,
+  type ExposureRideInputs,
+  type ExposureRideState,
+} from "./exposure-ride.ts";

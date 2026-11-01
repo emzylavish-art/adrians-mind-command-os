@@ -40,3 +40,22 @@ Off (pass.enabled = false) under reduced motion, with no/zero-healthy data, or w
 - `bloom.setSize(w, h)` clamps 0/NaN/huge (≤4096) — prefer it over raw `composer.setSize` for the bloom pass on resize/high DPR.
 - `bloom.dispose()` / `grade.dispose()` free render targets + materials on unmount.
 - Initial bloom/grade tone should be `"idle"` until data arrives (currently created as `"healthy"` in universe-scene → green before data).
+
+## Exposure ride (cycle 3, queue #12) — wire-up for Dashboard Bot
+
+```ts
+import { createExposureRide } from "./postfx";
+const ride = createExposureRide({ tone: "idle" }); // idle until real weather arrives
+// on weather/health change (and optional local hour 0..23):
+ride.setTarget({ tone: weather?.tone, hour: localHour, reducedMotion });
+// each frame:
+ride.tick(dtMs);
+ride.apply(renderer, bloom); // sets toneMappingExposure + bloom.pass.threshold
+// unmount: ride.dispose();
+```
+
+Eases over 400ms; snaps (static) under reduced-motion; clamps to [0.6, 1.4]; junk/missing tone → idle.
+
+## Hacker-pass notes (cycle 3)
+- After `dispose()`, god-ray `update` / `setSun` / `setDepthTexture` no-op and leave `pass.enabled = false` (StrictMode remount / late RAF must not revive a disposed ShaderPass).
+- Bloom `setSize` / `update` and color-grade `update` also no-op after dispose; color-grade dispose is idempotent.

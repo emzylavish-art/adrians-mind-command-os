@@ -187,9 +187,10 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
   return {
     pass,
     get intensity() {
-      return u.intensity.value;
+      return disposed ? 0 : u.intensity.value;
     },
     update(inputs) {
+      if (disposed) return;
       base = godRayIntensity(inputs);
       if (inputs.tone !== undefined) {
         u.tint.value.setRGB(...KEY_RGB[normalizeHealthTone(inputs.tone)]);
@@ -197,6 +198,7 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
       apply();
     },
     setSun(sunWorld, camera) {
+      if (disposed) return;
       const s = sunScreenUv(sunWorld, camera);
       u.sunUv.value.set(s.uv[0], s.uv[1]);
       fade = s.visible ? s.edgeFade : 0;
@@ -209,6 +211,7 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
       apply();
     },
     setDepthTexture(tex, camera) {
+      if (disposed) return;
       u.tDepth.value = tex;
       u.useDepth.value = tex ? 1 : 0;
       if (camera) {
@@ -220,6 +223,9 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
       if (disposed) return;
       disposed = true;
       u.tDepth.value = null;
+      u.useDepth.value = 0;
+      u.intensity.value = 0;
+      pass.enabled = false;
       pass.dispose();
     },
   };

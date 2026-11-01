@@ -28,7 +28,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 9 | **Notion mirror** — render handoff `40b1aa27…` stop-point + next task in-world (snapshot/MCP; live if token) | queued | Fallback old mirror `40bb95f3…` |
 | 10 | **Forever-contract guard** — keep this queue non-empty; append next researched upgrade after each ship; show queue head in-world | queued | |
 | 11 | **Light — depth-aware god-ray shafts** | **done** | Cosmos Light Bot c2: `createGodRayPass` (postfx/god-rays.ts) — sun-relative depth occlusion, intensity ↔ healthy/total, off under reduced-motion/no data/sun behind camera; **wire-up TODO** (Dashboard Bot): see `postfx/README.md` |
-| 12 | **Light — health-reactive exposure ride** | queued | Cosmos Light Bot next: ease toneMappingExposure + bloom threshold over ~400ms on weather.tone change; neutral on missing tone; pairs with color-grade |
+| 12 | **Light — health-reactive exposure ride** | **done** | Cosmos Light Bot c3: `createExposureRide` (postfx/exposure-ride.ts) — eases toneMappingExposure + bloom threshold over 400ms on tone/ToD change; clamp [0.6,1.4]; snap under reduced-motion; junk→idle; **wire-up TODO** (Dashboard Bot): see `postfx/README.md` |
+| 13 | **Light — WebGL context-loss recovery helper** | queued | Cosmos Light Bot next: postfx `onContextLost/Restored` that rebuilds bloom/grade/god-ray/exposure handles; honest "renderer lost" state instead of a frozen frame |
 
 ## After each upgrade
 1. Commit + push `origin/dashboard-3d` (never main, no force).
@@ -43,9 +44,10 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 - **Painter — ink-wash constellation edge ribbons** — ShaderMaterial/Line2 ribbons replacing LineBasic edges; health-tinted wash; mediump-safe (next painter cycle).
 - **Painter — lore plaque text atlas** — procedural canvas glyph atlas for lock-note body text on plaques (no external fonts/assets).
-- **Health-reactive exposure ride** (next light-lane, queue #12) — ACES exposure + bloom threshold ease over 400ms when weather.tone changes (pairs with color-grade).
-- **Light — WebGL context-loss recovery helper** — postfx `onContextLost/Restored` that rebuilds bloom/grade/god-ray passes; honest "renderer lost" state instead of a frozen frame.
+- ~~**Health-reactive exposure ride**~~ — **done (Cosmos Light Bot c3, queue #12)**: `createExposureRide` eases ACES exposure + bloom threshold over 400ms; ToD scale; reduced-motion snap; wire-up TODO.
+- **Light — WebGL context-loss recovery helper** (next light-lane, queue #13) — postfx `onContextLost/Restored` that rebuilds bloom/grade/god-ray/exposure handles; honest "renderer lost" state instead of a frozen frame.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
+- **Light — volumetric fog density ride** — FogExp2 density eases with altitude (universe→city→interior) using real flyover FSM level; pairs with exposure ride; static under reduced-motion.
 
 ## Visual Fleet
 
