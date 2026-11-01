@@ -39,13 +39,16 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText, transcribeAudio } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
-import { runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
+import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
+import { DictationPill, type DictationUiState } from "@/components/mind/dictation-pill";
+import { runOllamaConductor, DEFAULT_OLLAMA_BASE } from "@/lib/mind/voice/ollama-conductor";
 import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
+import { appendDictationText, blobToBase64, createDictationRecorder, type DictationRecorder } from "@/lib/mind/voice/dictation";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -303,6 +306,15 @@ export function CommandApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
+  const [voicePhase, setVoicePhase] = useState<VoiceOverlayPhase>("idle");
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [dictationState, setDictationState] = useState<DictationUiState>("idle");
+  const [dictationLevel, setDictationLevel] = useState(0);
+  const [dictationElapsed, setDictationElapsed] = useState(0);
+  const dictationRef = useRef<DictationRecorder | null>(null);
+  const dictationLevelTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dictationClockTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
@@ -320,6 +332,10 @@ export function CommandApp() {
       voiceSession.current?.close();
       voiceSession.current = null;
       sharedAudioOutput.interrupt();
+      dictationRef.current?.cancel();
+      dictationRef.current = null;
+      if (dictationLevelTimer.current) clearInterval(dictationLevelTimer.current);
+      if (dictationClockTimer.current) clearInterval(dictationClockTimer.current);
     };
   }, []);
 
@@ -1186,6 +1202,109 @@ export function CommandApp() {
     setVoiceListening(false);
     setVoiceMuted(false);
     setVoiceLevel(0);
+    setVoicePhase("idle");
+  }
+
+  function clearDictationTimers() {
+    if (dictationLevelTimer.current) {
+      clearInterval(dictationLevelTimer.current);
+      dictationLevelTimer.current = null;
+    }
+    if (dictationClockTimer.current) {
+      clearInterval(dictationClockTimer.current);
+      dictationClockTimer.current = null;
+    }
+  }
+
+  function resetDictationUi() {
+    clearDictationTimers();
+    dictationRef.current = null;
+    setDictationState("idle");
+    setDictationLevel(0);
+    setDictationElapsed(0);
+  }
+
+  async function startDictation() {
+    if (dictationState !== "idle") return;
+    if (voiceListening || voiceOverlayOpen) {
+      setVoiceOverlayOpen(false);
+      stopVoiceSession();
+    }
+    setError(null);
+    setNotice("Dictation recording… Stop to insert text into the composer (nothing is sent).");
+    try {
+      const recorder = await createDictationRecorder();
+      dictationRef.current = recorder;
+      await recorder.start();
+      setDictationState("recording");
+      setDictationElapsed(0);
+      const startedAt = Date.now();
+      dictationLevelTimer.current = setInterval(() => {
+        setDictationLevel(dictationRef.current?.getLevel() ?? 0);
+      }, 80);
+      dictationClockTimer.current = setInterval(() => {
+        setDictationElapsed(Math.floor((Date.now() - startedAt) / 1000));
+      }, 250);
+    } catch (caught) {
+      resetDictationUi();
+      setError(caught instanceof Error ? caught.message : "Microphone dictation could not start.");
+    }
+  }
+
+  async function stopDictation() {
+    const recorder = dictationRef.current;
+    if (!recorder || dictationState !== "recording") return;
+    clearDictationTimers();
+    setDictationState("transcribing");
+    setDictationLevel(0);
+    try {
+      const { blob, mime } = await recorder.stop();
+      dictationRef.current = null;
+      if (blob.size < 64) {
+        resetDictationUi();
+        setNotice("Dictation was too short. Nothing was inserted.");
+        return;
+      }
+      const audioBase64 = await blobToBase64(blob);
+      const result = await transcribeAudio({ data: { audioBase64, mime } });
+      if (!result.ok) {
+        resetDictationUi();
+        setError(result.error);
+        return;
+      }
+      setDraft((prev) => appendDictationText(prev, result.text));
+      resetDictationUi();
+      setNotice("Dictation inserted into the composer. Nothing was sent.");
+    } catch (caught) {
+      resetDictationUi();
+      setError(caught instanceof Error ? caught.message : "Dictation could not be transcribed.");
+    }
+  }
+
+  function cancelDictation() {
+    dictationRef.current?.cancel();
+    resetDictationUi();
+    setNotice("Dictation cancelled. Nothing was inserted.");
+  }
+
+  async function openVoiceOverlay() {
+    if (voiceOverlayOpen) {
+      closeVoiceOverlay();
+      return;
+    }
+    if (dictationState !== "idle") {
+      dictationRef.current?.cancel();
+      resetDictationUi();
+    }
+    setVoiceOverlayOpen(true);
+    setVoiceTranscript("");
+    if (!voiceListening) await listen({ openOverlay: true });
+  }
+
+  function closeVoiceOverlay() {
+    setVoiceOverlayOpen(false);
+    stopVoiceSession();
+    setNotice("Voice mode closed.");
   }
 
   function toggleVoiceMute() {
@@ -1201,11 +1320,15 @@ export function CommandApp() {
       setNotice("No words were recognized. Nothing was sent.");
       return;
     }
+    setVoiceTranscript(text);
     setDraft(text);
     voiceNext.current = true;
     setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
     if (voiceModeRef.current === "orchestrator") {
       setBusy(true);
+      setVoicePhase("processing");
+      const ollamaBase =
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || DEFAULT_OLLAMA_BASE;
       const conducted = await runOllamaConductor(text, {
         baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
         model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
@@ -1213,6 +1336,8 @@ export function CommandApp() {
       setBusy(false);
       if (!conducted.ok) {
         setError(conducted.error);
+        setVoicePhase(voiceListening ? "listening" : "idle");
+        setNotice(`Orchestrator blocked. Switch Voice mode to Direct, or start Ollama at ${ollamaBase}.`);
         return;
       }
       if (active) {
@@ -1254,9 +1379,10 @@ export function CommandApp() {
     }
   }
 
-  async function listen() {
+  async function listen(options?: { openOverlay?: boolean }) {
     if (voiceListening) {
       stopVoiceSession();
+      if (!options?.openOverlay) setVoiceOverlayOpen(false);
       setNotice("Voice capture stopped.");
       return;
     }
@@ -1264,9 +1390,15 @@ export function CommandApp() {
       setError("Emergency stop is on. Voice was not started.");
       return;
     }
+    if (dictationState !== "idle") {
+      dictationRef.current?.cancel();
+      resetDictationUi();
+    }
     setError(null);
+    if (options?.openOverlay) setVoiceOverlayOpen(true);
     sharedAudioOutput.interrupt();
     voiceSession.current?.interruptPlayback();
+    setVoicePhase("idle");
     const secret = await createVoiceClientSecret();
     if (!secret.ok) {
       setError(secret.error);
@@ -1284,8 +1416,19 @@ export function CommandApp() {
       onLevel: (level) => setVoiceLevel(level),
       onStatus: (status) => {
         setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
-        if (status === "speaking") setSpeaking(true);
-        if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+        if (status === "speaking") {
+          setSpeaking(true);
+          setVoicePhase("speaking");
+        } else if (status === "processing") {
+          setSpeaking(false);
+          setVoicePhase("processing");
+        } else if (status === "listening" || status === "connecting") {
+          setSpeaking(false);
+          setVoicePhase("listening");
+        } else {
+          setSpeaking(false);
+          setVoicePhase("idle");
+        }
         if (status === "idle" || status === "closed") setVoiceLevel(0);
       },
     });
@@ -1295,7 +1438,8 @@ export function CommandApp() {
       session.setMuted(voiceMuted);
       await session.startCapture();
       setVoiceListening(true);
-      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Press mic again to stop.`);
+      setVoicePhase("listening");
+      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Close the overlay or press End to stop.`);
     } catch (caught) {
       stopVoiceSession();
       setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
@@ -1693,6 +1837,8 @@ export function CommandApp() {
                     placeholder="What would you like to work on?"
                     rows={3}
                     className="w-full resize-none rounded-panel border border-line bg-bg px-3 py-3 text-sm"
+                    data-testid="composer-input"
+                    aria-label="Composer input"
                   />
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
@@ -1728,8 +1874,24 @@ export function CommandApp() {
                       <Folder className="size-4" /> Projects
                     </button>
                     <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
-                    <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
-                      {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
+                    <DictationPill
+                      state={dictationState}
+                      level={dictationLevel}
+                      elapsedSec={dictationElapsed}
+                      onStart={() => void startDictation()}
+                      onStop={() => void stopDictation()}
+                      onCancel={cancelDictation}
+                      disabled={busy || ws.halted}
+                    />
+                    <button
+                      type="button"
+                      className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening || voiceOverlayOpen ? "bg-accent text-accent-ink" : "text-muted"}`}
+                      onClick={() => void openVoiceOverlay()}
+                      aria-label={voiceOverlayOpen ? "Voice mode open" : "Open voice mode"}
+                      aria-pressed={voiceOverlayOpen}
+                      data-testid="voice-overlay-open"
+                    >
+                      {voiceListening || voiceOverlayOpen ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
@@ -1943,7 +2105,15 @@ export function CommandApp() {
               }}
               onNew={openChat}
               onSpeak={(text) => void speak(text)}
-              onListen={() => void listen()}
+              onListen={() => void openVoiceOverlay()}
+              voiceOverlayOpen={voiceOverlayOpen}
+              onOpenVoiceOverlay={() => void openVoiceOverlay()}
+              dictationState={dictationState}
+              dictationLevel={dictationLevel}
+              dictationElapsed={dictationElapsed}
+              onStartDictation={() => void startDictation()}
+              onStopDictation={() => void stopDictation()}
+              onCancelDictation={cancelDictation}
               speaking={speaking}
               voiceMode={voiceMode}
               voiceListening={voiceListening}
@@ -2717,6 +2887,19 @@ export function CommandApp() {
         }}
       />
 
+      <VoiceModeOverlay
+        open={voiceOverlayOpen}
+        phase={voicePhase}
+        level={voiceLevel}
+        muted={voiceMuted}
+        mode={voiceMode}
+        transcript={voiceTranscript}
+        notice={notice}
+        error={error}
+        onMute={toggleVoiceMute}
+        onClose={closeVoiceOverlay}
+      />
+
       {projectOpen && (
         <Overlay>
           <h3 className="font-display text-2xl font-bold">Create project</h3>
@@ -2903,6 +3086,14 @@ function ChatPane({
   voiceLevel,
   onToggleMute,
   onToggleVoiceMode,
+  voiceOverlayOpen,
+  onOpenVoiceOverlay,
+  dictationState,
+  dictationLevel,
+  dictationElapsed,
+  onStartDictation,
+  onStopDictation,
+  onCancelDictation,
   memoryChoice,
   mode,
   onComposerMemory,
@@ -2947,6 +3138,14 @@ function ChatPane({
   voiceLevel: number;
   onToggleMute: () => void;
   onToggleVoiceMode: () => void;
+  voiceOverlayOpen: boolean;
+  onOpenVoiceOverlay: () => void;
+  dictationState: DictationUiState;
+  dictationLevel: number;
+  dictationElapsed: number;
+  onStartDictation: () => void;
+  onStopDictation: () => void;
+  onCancelDictation: () => void;
   memoryChoice: "off" | "on";
   mode: Autonomy;
   onComposerMemory: () => void;
@@ -3139,7 +3338,7 @@ function ChatPane({
             onSend();
           }}
         >
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="min-h-11 w-full bg-transparent text-sm outline-none" />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="min-h-11 w-full bg-transparent text-sm outline-none" data-testid="composer-input" aria-label="Composer input" />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -3162,8 +3361,24 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
             <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
-            <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
-              {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
+            <DictationPill
+              state={dictationState}
+              level={dictationLevel}
+              elapsedSec={dictationElapsed}
+              onStart={onStartDictation}
+              onStop={onStopDictation}
+              onCancel={onCancelDictation}
+              disabled={busy || halted}
+            />
+            <button
+              type="button"
+              className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening || voiceOverlayOpen ? "bg-accent text-accent-ink" : ""}`}
+              onClick={onOpenVoiceOverlay}
+              aria-label={voiceOverlayOpen ? "Voice mode open" : "Open voice mode"}
+              aria-pressed={voiceOverlayOpen}
+              data-testid="voice-overlay-open"
+            >
+              {voiceListening || voiceOverlayOpen ? <Square className="size-4" /> : <Mic className="size-4" />}
             </button>
             <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
               {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
