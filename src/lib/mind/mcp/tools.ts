@@ -1,3 +1,4 @@
+import { resolveNotionToken } from "../connectors/notion-oauth.ts";
 /**
  * Built-in MCP tool handlers for Adrian's Mind.
  * Honest failures only — never invent success for Notion, PC, or SQL.
@@ -22,6 +23,7 @@ export function notionTokenFromEnv(env: NodeJS.ProcessEnv = process.env): string
   const token = env.NOTION_TOKEN?.trim() || env.NOTION_API_KEY?.trim();
   return token || undefined;
 }
+
 
 /** Accept a raw Notion page id or a notion.so / notion.site URL. */
 export function parseNotionPageId(pageIdOrUrl: string): string | null {
@@ -86,9 +88,10 @@ async function notionApi(
 export async function notionReadPage(input: {
   pageIdOrUrl: string;
   token?: string;
+  ownerId?: string;
   fetch?: NotionFetch;
 }): Promise<ToolResult> {
-  const token = input.token ?? notionTokenFromEnv();
+  const token = input.token ?? resolveNotionToken(input.ownerId) ?? notionTokenFromEnv();
   if (!token) {
     return {
       ok: false,
@@ -110,9 +113,10 @@ export async function notionAppendSection(input: {
   heading: string;
   markdown: string;
   token?: string;
+  ownerId?: string;
   fetch?: NotionFetch;
 }): Promise<ToolResult> {
-  const token = input.token ?? notionTokenFromEnv();
+  const token = input.token ?? resolveNotionToken(input.ownerId) ?? notionTokenFromEnv();
   if (!token) {
     return {
       ok: false,

@@ -306,16 +306,17 @@ export async function listRegistryTools(
 async function callBuiltin(
   name: string,
   args: Record<string, unknown>,
-  deps: { getSql: () => Promise<SqlLike> },
+  deps: { getSql: () => Promise<SqlLike>; ownerId?: string },
 ): Promise<ToolResult> {
   switch (name as BuiltinToolName) {
     case "notion_read_page":
-      return notionReadPage({ pageIdOrUrl: String(args.page_id ?? args.pageIdOrUrl ?? args.url ?? "") });
+      return notionReadPage({ pageIdOrUrl: String(args.page_id ?? args.pageIdOrUrl ?? args.url ?? ""), ownerId: deps.ownerId });
     case "notion_append_section":
       return notionAppendSection({
         pageIdOrUrl: String(args.page_id ?? args.pageIdOrUrl ?? args.url ?? ""),
         heading: String(args.heading ?? ""),
         markdown: String(args.markdown ?? args.content ?? ""),
+        ownerId: deps.ownerId,
       });
     case "pc_run_shell":
       return pcRunShell({
@@ -353,7 +354,7 @@ export async function callRegistryTool(input: {
   }
   const args = input.args && typeof input.args === "object" ? input.args : {};
   if (server.kind === "builtin") {
-    const result = await callBuiltin(input.tool, args, { getSql: input.getSql });
+    const result = await callBuiltin(input.tool, args, { getSql: input.getSql, ownerId: input.userId });
     return {
       status: result.status,
       ok: result.ok,
