@@ -7,6 +7,7 @@ import { callConfiguredProvider, selectProvider } from "./provider-call";
 import { relayModelStream } from "./relay";
 import { decideFetchSite } from "./request-guard";
 import { readModelPayload } from "./stream";
+import { readXaiApiKey } from "./xai-adapter";
 
 export const MIND_MODEL = "grok-4.5";
 const MAX_BODY = 200_000;
@@ -86,8 +87,9 @@ function modelBody(model: string, messages: { role: string; content: string }[])
 
 export async function completeModelReply(prepared: { assembled: { messages: { role: "system" | "user" | "assistant"; content: string }[]; usedIds: string[] }; memory: "off" | "on"; model: "grok-4.5" }) {
   if (prepared.model !== MIND_MODEL) return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return { ok: false as const, error: "Grok is not configured on the server." };
+  const keyed = readXaiApiKey(process.env);
+  if (!keyed.ok) return { ok: false as const, error: keyed.error };
+  const apiKey = keyed.key;
   let res: Response;
   try {
     res = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -176,8 +178,9 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const prepared = await prepareMindTurn(userId, body);
   if (!prepared.ok) return json(prepared);
   if (prepared.model !== MIND_MODEL) return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
+  const keyed = readXaiApiKey(process.env);
+  if (!keyed.ok) return json({ ok: false, error: keyed.error });
+  const apiKey = keyed.key;
   return relayModelStream({
     apiKey,
     model: prepared.model,
