@@ -4382,3 +4382,69 @@ button.is-coming-soon::after,
   text-transform: uppercase;
   opacity: 0.9;
 }
+
+/* —— Cycle 39: chart mono gradients, grid, tooltips —— */
+.dash3d-charts-panel.dash3d-glass,
+.dash3d-charts-panel {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/chart-grid-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 300px 300px !important;
+  background-blend-mode: soft-light, multiply, soft-light !important;
+  padding: 1rem !important;
+  border-radius: 1.15rem !important;
+}
+.dash3d-chart-card {
+  border-radius: 1rem !important;
+  padding: 0.85rem 0.9rem !important;
+}
+.dash3d-chart-card svg {
+  filter: grayscale(1) contrast(1.05) !important;
+}
+.dash3d-chart-card svg rect,
+.dash3d-chart-card svg path,
+.dash3d-chart-card svg circle {
+  fill: #d4d4d8 !important;
+  stroke: #a1a1aa !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-chart-card svg .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.12) !important;
+  stroke-dasharray: 3 4 !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-chart-card .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+  font-size: 11px !important;
+}
+.dash3d-chart-card .recharts-tooltip-wrapper .recharts-default-tooltip,
+.dash3d-chart-card [class*="tooltip"] {
+  background: rgb(10 10 12 / 0.94) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.65rem !important;
+  color: #f4f4f5 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.5) !important;
+}
+.dash3d-progress,
+aside .mt-3.h-1\.5,
+.main-stage .h-1\.5.rounded-full.bg-surface-2 {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+}
+.dash3d-progress-fill,
+.dash3d-progress-fill-ok,
+.dash3d-progress > div,
+aside .mt-3.h-1\.5 > div {
+  background: linear-gradient(90deg, #71717a, #f4f4f5) !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg rect,
+html[data-theme="light"] .dash3d-chart-card svg path {
+  fill: #3f3f46 !important;
+  stroke: #52525b !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg line {
+  stroke: rgb(9 9 11 / 0.12) !important;
+}
