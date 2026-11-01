@@ -1,6 +1,20 @@
 import { SharedAudioOutput, sharedAudioOutput } from "./audio-output.ts";
 import { rmsLevel } from "./levels.ts";
-import { BARGE_IN_HOLD_MS, BARGE_IN_RMS_THRESHOLD } from "./barge-in.ts";
+import { BARGE_IN_ECHO_GUARD_MS, BARGE_IN_HOLD_MS, BARGE_IN_RMS_THRESHOLD } from "./barge-in.ts";
+import {
+  allowCancel,
+  createCancelBudget,
+  createSpeakQueue,
+  createTranscriptDedupe,
+  enqueueSpeak,
+  completeSpeak,
+  shouldAcceptTranscript,
+  secretNeedsRemint,
+  allTracksEnded,
+  type CancelBudget,
+  type SpeakQueue,
+  type TranscriptDedupe,
+} from "./spam-guard.ts";
 import { decodeWavPcm, resampleLinear, synthesizeTone } from "./test-audio.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
@@ -81,6 +95,13 @@ export class RealtimeVoiceSession {
   private speakingHotMs = 0;
   private lastProcessAt = 0;
   private bargeInArmed = false;
+  private speakingStartedAt = 0;
+  private cancelBudget = createCancelBudget();
+  private transcriptDedupe = createTranscriptDedupe();
+  private speakQ = createSpeakQueue();
+  private secretExpiresAtMs = 0;
+  private reminting = false;
+  private intentionalClose = false;
   private testAudioUrl: string | null = null;
   private testAudioTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -133,9 +154,18 @@ export class RealtimeVoiceSession {
       ws.addEventListener("error", onError);
       ws.addEventListener("message", (event) => this.onMessage(event as MessageEvent));
       ws.addEventListener("close", () => {
+        const wasOpen = this.open;
         this.open = false;
         this.capturing = false;
         this.handlers.onStatus?.("closed");
+        if (wasOpen && !this.intentionalClose) {
+          this.handlers.onError?.(
+            this.needsSecretRemint()
+              ? "Voice session ended (secret expired). Tap Retry to re-mint and reconnect."
+              : "Voice websocket dropped. Tap Retry to reconnect.",
+          );
+        }
+        this.intentionalClose = false;
       });
     });
     this.send({
@@ -179,7 +209,11 @@ export class RealtimeVoiceSession {
     });
     this.speakingHotMs = 0;
     this.bargeInArmed = true;
-    this.handlers.onStatus?.("speaking");
+    this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (!this.speakingStartedAt) {
+          this.speakingStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+        }
+        this.handlers.onStatus?.("speaking");
   }
 
   private onMessage(event: MessageEvent) {
@@ -207,6 +241,7 @@ export class RealtimeVoiceSession {
       return;
     }
     if (type === "input_audio_buffer.speech_started") {
+      if (!allowCancel(this.cancelBudget)) return;
       this.interruptPlayback({ reason: "speech" });
       this.handlers.onSpeechStarted?.();
       this.handlers.onStatus?.("listening");
@@ -252,6 +287,11 @@ export class RealtimeVoiceSession {
     }
     if (type === "response.done") {
       this.responseBusy = false;
+      const nextSpeak = completeSpeak(this.speakQ);
+      if (nextSpeak) {
+        if (!this.speakQueue.includes(nextSpeak)) this.speakQueue.push(nextSpeak);
+        this.flushSpeakQueue();
+      }
       this.pendingForce = false;
       this.bargeInArmed = this.speakQueue.length > 0;
       this.speakingHotMs = 0;
@@ -262,11 +302,13 @@ export class RealtimeVoiceSession {
 
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback(options?: { reason?: "speech" | "manual" | "rms" | "stop" }) {
+    this.speakingStartedAt = 0;
     const wasSpeaking = this.responseBusy || this.pendingForce || this.speakQueue.length > 0;
     this.output.interrupt();
     this.speakQueue = [];
     this.pendingForce = false;
     this.responseBusy = false;
+    this.speakQ = createSpeakQueue();
     this.speakingHotMs = 0;
     this.send({ type: "response.cancel" });
     if (wasSpeaking && options?.reason && options.reason !== "stop") {
@@ -293,6 +335,7 @@ export class RealtimeVoiceSession {
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
+        autoGainControl: true,
       },
     });
     this.media = media;
@@ -312,11 +355,18 @@ export class RealtimeVoiceSession {
         const now = typeof performance !== "undefined" ? performance.now() : Date.now();
         const dt = this.lastProcessAt ? Math.min(50, now - this.lastProcessAt) : 0;
         this.lastProcessAt = now;
-        if (level >= BARGE_IN_RMS_THRESHOLD) this.speakingHotMs += dt;
-        else this.speakingHotMs = 0;
-        if (this.speakingHotMs >= BARGE_IN_HOLD_MS) {
-          this.bargeInArmed = false;
+        // Echo-guard: ignore local RMS for a short window after TTS starts.
+        if (now - this.speakingStartedAt < BARGE_IN_ECHO_GUARD_MS) {
           this.speakingHotMs = 0;
+        } else if (level >= BARGE_IN_RMS_THRESHOLD) {
+          this.speakingHotMs += dt;
+        } else {
+          this.speakingHotMs = 0;
+        }
+        if (this.speakingHotMs >= BARGE_IN_HOLD_MS) {
+          this.speakingHotMs = 0;
+          if (!allowCancel(this.cancelBudget)) return;
+          this.bargeInArmed = false;
           this.interruptPlayback({ reason: "rms" });
           this.handlers.onSpeechStarted?.();
           this.handlers.onStatus?.("listening");
@@ -375,6 +425,19 @@ export class RealtimeVoiceSession {
     }, 100);
   }
 
+  /** Test/diagnostic: after close/stop, media tracks should be ended. */
+  tracksEndedAfterClose(): boolean {
+    return allTracksEnded(this.media);
+  }
+
+  setSecretExpiresAt(expiresAtMs: number) {
+    this.secretExpiresAtMs = expiresAtMs;
+  }
+
+  needsSecretRemint(now = Date.now()): boolean {
+    return secretNeedsRemint(this.secretExpiresAtMs, now);
+  }
+
   stopCapture() {
     this.capturing = false;
     if (this.testAudioTimer) {
@@ -408,15 +471,25 @@ export class RealtimeVoiceSession {
   speakText(text: string) {
     const trimmed = text.trim();
     if (!trimmed || !this.open) return;
+    const action = enqueueSpeak(this.speakQ, trimmed);
+    if (action === "ignore") return;
     this.output.interrupt();
-    this.speakQueue.push(trimmed);
+    if (!this.responseBusy) {
+      this.speakQueue = [trimmed];
+      this.pendingForce = true;
+      this.flushSpeakQueue();
+      return;
+    }
+    // Busy: keep the in-flight utterance; replace any single pending slot.
+    this.speakQueue = [trimmed];
     this.pendingForce = true;
-    if (!this.responseBusy) this.flushSpeakQueue();
   }
 
   close() {
+    this.intentionalClose = true;
     this.stopCapture();
     this.speakQueue = [];
+    this.speakQ = createSpeakQueue();
     try {
       this.ws?.close();
     } catch {
