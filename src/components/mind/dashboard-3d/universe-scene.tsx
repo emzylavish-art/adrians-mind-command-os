@@ -786,13 +786,22 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let layoutSig = "";
     let fly: FlyState = { ...FLY_HOME };
     const knownIds = () => new Set(layout.buildings.map((b) => b.id));
+    let layoutProgressSig = "";
     const syncCity = () => {
       const next = buildCityLayout(dataRef.current.projects);
-      const sig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.litFloors, b.x, b.z]));
+      // Structure vs progress: live setBuildingProgress without full rebuild (Painter c11)
+      const structSig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.x, b.z]));
+      const progressSig = JSON.stringify(
+        next.buildings.map((b) => [b.id, b.progressKnown ? b.litFloors : 0, b.progressKnown]),
+      );
       layout = next;
-      if (sig !== layoutSig) {
-        layoutSig = sig;
+      if (structSig !== layoutSig) {
+        layoutSig = structSig;
+        layoutProgressSig = progressSig;
         city.rebuild(layout);
+      } else if (progressSig !== layoutProgressSig) {
+        layoutProgressSig = progressSig;
+        city.applyBuildingProgress(layout);
       }
       const reconciled = reconcileFlyover(fly, knownIds());
       if (reconciled !== fly) setFly(reconciled, true);
@@ -1415,10 +1424,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const liveExposure = postfxRecovery.bundle.exposure ?? exposureRide;
       liveExposure.apply(renderer, liveBloom ?? undefined);
 
+      // Painter c11: always tick (freezes uTime under RM; also flushes throttled resizePass)
+      tickPainterlyKit(kit, t, { reducedMotion });
+      kit.setPassHealth({ healthy, total, reducedMotion });
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
-        tickPainterlyKit(kit, t, { reducedMotion });
-        kit.setPassHealth({ healthy, total, reducedMotion });
         if (atm) atm.update(tone);
         liveBloom?.update(tone);
         liveGrade?.update(tone);

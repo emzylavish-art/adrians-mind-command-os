@@ -10,6 +10,8 @@ export const PAINTER_PASS_MAX_DPR = 3;
 export const PAINTER_AMOUNT_MIN = 0.08;
 export const PAINTER_AMOUNT_MAX = 0.85;
 export const PAINTER_AMOUNT_DEFAULT = 0.42;
+/** Coalesce rapid resizePass storms — min ms between actual setSize calls. */
+export const PAINTER_RESIZE_MIN_INTERVAL_MS = 48;
 
 /** Post-process: watercolor wash + paper grain + mild edge soft (no external textures). */
 export const PainterlyPassShader = {
@@ -54,11 +56,20 @@ export const PainterlyPassShader = {
       // paper grain
       float g = (n - 0.5) * grain * amount;
       c.rgb += g;
-      // watercolor edge darken / vignette
-      float vig = smoothstep(1.15, 0.32, length(uv - 0.5));
-      c.rgb *= mix(0.78, 1.0, vig);
-      // slight pigment shift toward indigo wash
-      c.rgb = mix(c.rgb, c.rgb * vec3(0.94, 0.96, 1.05), 0.12 * amount);
+      // Unified painterly palette (c11): warm paper midtones + cool indigo shadows
+      // driven only by real amount (from setPassHealth) — no fabricated scene data.
+      float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      vec3 paperWarm = vec3(1.02, 0.97, 0.90);
+      vec3 indigoCool = vec3(0.90, 0.93, 1.08);
+      float warmAmt = smoothstep(0.15, 0.65, luma) * amount;
+      float coolAmt = (1.0 - smoothstep(0.05, 0.45, luma)) * amount;
+      c.rgb *= mix(vec3(1.0), paperWarm, warmAmt * 0.22);
+      c.rgb *= mix(vec3(1.0), indigoCool, coolAmt * 0.18);
+      // Soft pigment lift on mids so sky/stars/city share one wash grade
+      c.rgb = mix(c.rgb, c.rgb * vec3(0.96, 0.98, 1.04), 0.14 * amount);
+      // Paper vignette (tuned): stronger edge pool, softer center
+      float vig = smoothstep(1.22, 0.28, length(uv - 0.5));
+      c.rgb *= mix(0.72, 1.0, vig);
       gl_FragColor = c;
     }
   `,
@@ -112,6 +123,12 @@ type PassMeta = {
   lastDh: number;
   resizeCount: number;
   skippedResize: number;
+  /** HACKER (c11): resizes deferred during DPR/resize storms. */
+  stormSkipped: number;
+  lastResizeAt: number;
+  pendingDw: number;
+  pendingDh: number;
+  hasPending: boolean;
   compileError: string | null;
   fallback: boolean;
   /** Scratch — never reallocated in tick/setHealth hot paths. */
@@ -130,6 +147,11 @@ function metaOf(pass: ShaderPass): PassMeta {
       lastDh: 0,
       resizeCount: 0,
       skippedResize: 0,
+      stormSkipped: 0,
+      lastResizeAt: 0,
+      pendingDw: 0,
+      pendingDh: 0,
+      hasPending: false,
       compileError: null,
       fallback: false,
       _healthHealthy: 0,
@@ -169,6 +191,24 @@ export function safePainterlyPassSize(
  * Resize helper: no-ops when drawing size unchanged (avoids RT thrash / leaks on
  * spurious resize events). Safe after dispose. Does not allocate Vectors.
  */
+function applyPainterlyPassDrawingSize(pass: ShaderPass, m: PassMeta, dw: number, dh: number): void {
+  m.lastDw = dw;
+  m.lastDh = dh;
+  m.resizeCount += 1;
+  m.lastResizeAt = Date.now();
+  m.hasPending = false;
+  try {
+    pass.setSize(dw, dh);
+  } catch (err) {
+    m.compileError = err instanceof Error ? err.message : String(err);
+  }
+}
+
+/**
+ * Resize helper: no-ops when drawing size unchanged; coalesces DPR/resize storms
+ * (HACKER c11) so rapid alternating sizes cannot thrash RTs. Safe after dispose.
+ * Pending size is flushed from tickPainterlyPass / flushPainterlyPassResize.
+ */
 export function resizePainterlyPass(
   pass: ShaderPass,
   width: number,
@@ -178,20 +218,39 @@ export function resizePainterlyPass(
   const m = metaOf(pass);
   const size = safePainterlyPassSize(width, height, dpr);
   if (m.disposed) return size;
-  if (size.drawingWidth === m.lastDw && size.drawingHeight === m.lastDh) {
+  if (size.drawingWidth === m.lastDw && size.drawingHeight === m.lastDh && !m.hasPending) {
     m.skippedResize += 1;
     return size;
   }
-  m.lastDw = size.drawingWidth;
-  m.lastDh = size.drawingHeight;
-  m.resizeCount += 1;
-  // ShaderPass.setSize is a no-op by default; still call for subclasses / future RTs
-  try {
-    pass.setSize(size.drawingWidth, size.drawingHeight);
-  } catch (err) {
-    m.compileError = err instanceof Error ? err.message : String(err);
+  const now = Date.now();
+  if (
+    m.lastResizeAt > 0 &&
+    now - m.lastResizeAt < PAINTER_RESIZE_MIN_INTERVAL_MS &&
+    (size.drawingWidth !== m.lastDw || size.drawingHeight !== m.lastDh)
+  ) {
+    // Storm: remember latest desired size; do not call setSize yet
+    m.pendingDw = size.drawingWidth;
+    m.pendingDh = size.drawingHeight;
+    m.hasPending = true;
+    m.stormSkipped += 1;
+    return size;
   }
+  applyPainterlyPassDrawingSize(pass, m, size.drawingWidth, size.drawingHeight);
   return size;
+}
+
+/** Apply coalesced pending resize (call from tick). Returns true if applied. */
+export function flushPainterlyPassResize(pass: ShaderPass): boolean {
+  const m = metaOf(pass);
+  if (m.disposed || !m.hasPending) return false;
+  const now = Date.now();
+  if (m.lastResizeAt > 0 && now - m.lastResizeAt < PAINTER_RESIZE_MIN_INTERVAL_MS) return false;
+  if (m.pendingDw === m.lastDw && m.pendingDh === m.lastDh) {
+    m.hasPending = false;
+    return false;
+  }
+  applyPainterlyPassDrawingSize(pass, m, m.pendingDw, m.pendingDh);
+  return true;
 }
 
 export type PainterlyHealthInputs = {
@@ -297,6 +356,8 @@ export function createPainterlyPass(opts: PainterlyPassOptions = {}): ShaderPass
 export function tickPainterlyPass(pass: ShaderPass, timeSeconds: number): void {
   const m = metaOf(pass);
   if (m.disposed) return;
+  // HACKER (c11): apply coalesced resize after storm window
+  flushPainterlyPassResize(pass);
   if (pass.uniforms["time"]) pass.uniforms["time"].value = sanitizeShaderTime(timeSeconds);
 }
 
@@ -315,6 +376,8 @@ export function disposePainterlyPass(pass: ShaderPass): void {
 export function painterlyPassResizeStats(pass: ShaderPass): {
   resizeCount: number;
   skippedResize: number;
+  stormSkipped: number;
+  hasPending: boolean;
   lastDw: number;
   lastDh: number;
   disposed: boolean;
@@ -325,6 +388,8 @@ export function painterlyPassResizeStats(pass: ShaderPass): {
   return {
     resizeCount: m.resizeCount,
     skippedResize: m.skippedResize,
+    stormSkipped: m.stormSkipped,
+    hasPending: m.hasPending,
     lastDw: m.lastDw,
     lastDh: m.lastDh,
     disposed: m.disposed,

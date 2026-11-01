@@ -170,7 +170,11 @@ export function createPainterlyLaneNebulae(
     for (const mat of matsByTone.values()) {
       const i = kit.tracked.indexOf(mat);
       if (i >= 0) kit.tracked.splice(i, 1);
-      mat.dispose();
+      try {
+        mat.dispose();
+      } catch {
+        /* already disposed */
+      }
     }
     matsByTone.clear();
   };
@@ -217,12 +221,21 @@ export function createPainterlyLaneNebulae(
     for (const mat of matsByTone.values()) tickLaneNebulaMaterial(mat, time);
   };
 
+  let geoDisposed = false;
   const dispose = () => {
+    // HACKER (c11): idempotent — double dispose must not throw / double-free geo
     if (disposed) return;
     disposed = true;
     clearMeshes();
     releaseMats();
-    sharedGeo.dispose();
+    if (!geoDisposed) {
+      try {
+        sharedGeo.dispose();
+      } catch {
+        /* */
+      }
+      geoDisposed = true;
+    }
     while (group.children.length) group.remove(group.children[0]!);
   };
 

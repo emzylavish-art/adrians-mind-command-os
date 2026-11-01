@@ -156,6 +156,7 @@ export {
   tickPainterlyPass,
   disposePainterlyPass,
   resizePainterlyPass,
+  flushPainterlyPassResize,
   safePainterlyPassSize,
   painterlyAmountFromHealth,
   setPainterlyPassHealth,
@@ -165,6 +166,7 @@ export {
   PAINTER_AMOUNT_MIN,
   PAINTER_AMOUNT_MAX,
   PAINTER_AMOUNT_DEFAULT,
+  PAINTER_RESIZE_MIN_INTERVAL_MS,
   type PainterlyPassOptions,
   type PainterlyHealthInputs,
 } from "../shaders/painterly-pass.ts";

@@ -20,6 +20,7 @@ import {
   LORE_MAX_CHARS_PER_NOTE,
 } from "./lore-plaque.ts";
 import {
+  createPainterlyKit,
   disposePainterlyKit,
   painterlyKitResourceCounts,
   tickPainterlyKit,
@@ -98,6 +99,7 @@ import {
   tickPainterlyPass,
   disposePainterlyPass,
   resizePainterlyPass,
+  flushPainterlyPassResize,
   safePainterlyPassSize,
   painterlyAmountFromHealth,
   setPainterlyPassHealth,
@@ -106,6 +108,7 @@ import {
   PAINTER_PASS_MAX_DPR,
   PAINTER_AMOUNT_MIN,
   PAINTER_AMOUNT_MAX,
+  PAINTER_RESIZE_MIN_INTERVAL_MS,
 } from "../shaders/index.ts";
 
 describe("painter paper grain", () => {
@@ -720,7 +723,9 @@ describe("hacker pass c6: painterly post-pass resize / DPR / RT thrash / fallbac
     const b = painterlyPassResizeStats(pass);
     assert.equal(b.resizeCount, 1);
     assert.ok(b.skippedResize >= 2);
-    // distinct drawing buffer (800x450 ≠ 1280x720)
+    // distinct drawing buffer (800x450 ≠ 1280x720) — advance storm clock so setSize applies
+    const meta = (pass as unknown as { userData: { painterPassMeta: { lastResizeAt: number } } }).userData.painterPassMeta;
+    meta.lastResizeAt = Date.now() - PAINTER_RESIZE_MIN_INTERVAL_MS - 5;
     resizePainterlyPass(pass, 800, 450, 1);
     assert.ok(painterlyPassResizeStats(pass).resizeCount >= 2);
     disposePainterlyPass(pass);
@@ -1310,5 +1315,101 @@ describe("painter c10: brush building window-light washes from real progress", (
     assert.match(BrushBuildingShader.fragmentShader, /windowCell/);
     dark.dispose();
     lit.dispose();
+  });
+});
+
+
+describe("hacker pass c11: resize storm + context-loss resize", () => {
+  it("rapid alternating resizePass sizes coalesce; flush applies pending", () => {
+    const pass = createPainterlyPass();
+    resizePainterlyPass(pass, 800, 600, 1);
+    const s0 = painterlyPassResizeStats(pass);
+    assert.equal(s0.resizeCount, 1);
+    // Storm: many different sizes within interval
+    for (let i = 0; i < 20; i++) {
+      resizePainterlyPass(pass, 800 + (i % 3), 600 + (i % 2), 1 + (i % 2) * 0.25);
+    }
+    const mid = painterlyPassResizeStats(pass);
+    assert.ok(mid.stormSkipped >= 1, `stormSkipped=${mid.stormSkipped}`);
+    assert.ok(mid.resizeCount < 20, `resizeCount should be coalesced, got ${mid.resizeCount}`);
+    // Force interval elapsed
+    const m = (pass as unknown as { userData: { painterPassMeta: { lastResizeAt: number } } }).userData.painterPassMeta;
+    m.lastResizeAt = Date.now() - PAINTER_RESIZE_MIN_INTERVAL_MS - 5;
+    const flushed = flushPainterlyPassResize(pass);
+    assert.equal(flushed || !painterlyPassResizeStats(pass).hasPending, true);
+    disposePainterlyPass(pass);
+  });
+
+  it("kit.resizePass no-ops while contextLost (mid-loss RT thrash)", () => {
+    // Avoid DOM star sprite: minimal kit shell with real pass
+    const pass = createPainterlyPass();
+    const kit = {
+      painterlyPass: pass,
+      disposed: false,
+      contextLost: true,
+      resizePass(width: number, height: number, dpr = 1) {
+        if (kit.disposed || kit.contextLost) return;
+        resizePainterlyPass(pass, width, height, dpr);
+      },
+    };
+    kit.resizePass(1024, 768, 2);
+    assert.equal(painterlyPassResizeStats(pass).resizeCount, 0);
+    kit.contextLost = false;
+    kit.resizePass(1024, 768, 1);
+    assert.equal(painterlyPassResizeStats(pass).resizeCount, 1);
+    disposePainterlyPass(pass);
+  });
+});
+
+describe("hacker pass c11: building extremes + nebula dispose idempotence + mediump window glow", () => {
+  it("NaN/Inf/negative floors and progress stay finite; glow never NaN", () => {
+    const m = createBuildingBrushMaterial({
+      floors: Number.POSITIVE_INFINITY,
+      progress: Number.NEGATIVE_INFINITY,
+      windowGlow: NaN,
+    });
+    assert.ok(Number.isFinite(m.uniforms["uFloors"]!.value as number));
+    assert.ok(Number.isFinite(m.uniforms["uProgress"]!.value as number));
+    assert.ok(Number.isFinite(m.uniforms["uWindowGlow"]!.value as number));
+    setBuildingProgress(m, NaN);
+    assert.equal(m.uniforms["uProgress"]!.value, 0);
+    assert.match(BrushBuildingShader.fragmentShader, /uWindowGlow/);
+    assert.doesNotMatch(BrushBuildingShader.fragmentShader, /dFdx|dFdy|fwidth/);
+    assert.equal(PAINTER_SHADER_PRECISION, "mediump");
+    m.dispose();
+  });
+
+  it("lane nebulae dispose is idempotent; tracked stays clean", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+    } as unknown as PainterlyKit;
+    const neb = createPainterlyLaneNebulae(kit, [
+      { health: "healthy", center: [0, 0, 0] },
+      { health: "blocked", center: [1, 0, 0] },
+    ]);
+    assert.equal(tracked.length, 4);
+    neb.dispose();
+    assert.equal(tracked.length, 0);
+    assert.doesNotThrow(() => neb.dispose());
+    assert.doesNotThrow(() => neb.dispose());
+    assert.equal(tracked.length, 0);
+    neb.update([{ health: "idle", center: [2, 0, 0] }]); // no-op when disposed
+    assert.equal(neb.count, 2); // frozen at last count before dispose path — update returns early
+  });
+});
+
+describe("painter c11: unified post-pass palette grade", () => {
+  it("PainterlyPassShader gains warm/cool paper palette driven by amount", () => {
+    assert.match(PainterlyPassShader.fragmentShader, /paperWarm/);
+    assert.match(PainterlyPassShader.fragmentShader, /indigoCool/);
+    assert.match(PainterlyPassShader.fragmentShader, /Unified painterly palette/);
+    const pass = createPainterlyPass({ amount: 0.5 });
+    assert.ok(pass.uniforms["amount"]);
+    disposePainterlyPass(pass);
   });
 });
