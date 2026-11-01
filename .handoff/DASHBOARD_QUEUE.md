@@ -10,7 +10,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 | # | Upgrade | Status | Notes |
 |---|---------|--------|-------|
-| 0 | **Universe** (+ Visual Fleet stars + extension folders) — painterly cosmos, constellations, Notion galaxy snapshot, weather, fly-to camera rig foundation | **active** | Current ship |
+| 0 | **Universe** (+ Visual Fleet stars + extension folders) — painterly cosmos, constellations, Notion galaxy snapshot, weather, fly-to camera rig foundation | **done** | Landed on dashboard-3d; light/painter/motion fill lane folders |
+| 0b | **Light — health-tinted lights + bloom/color-grade** | **done** | Cosmos Light Bot `dashboard-3d-visual-light`; awaits `universe-scene` hook (see below) |
 | 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | **active** | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; shots flyover-high/city/interior |
 | 2 | **Click-and-zoom** — star click eases camera in + detail; wheel/pinch dolly; empty-space/zoom-out → sky; reuse camera FSM | queued | Shots zoom-star.png, zoom-sky.png |
 | 3 | **Animation pass** — living motion: orbiting, drifting, pulsing, transition polish | queued | After click-zoom |
@@ -21,6 +22,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 8 | **Operator layer** — in-dashboard camera/focus/last-node in localStorage only (no geolocation) | queued | |
 | 9 | **Notion mirror** — render handoff `40b1aa27…` stop-point + next task in-world (snapshot/MCP; live if token) | queued | Fallback old mirror `40bb95f3…` |
 | 10 | **Forever-contract guard** — keep this queue non-empty; append next researched upgrade after each ship; show queue head in-world | queued | |
+| 11 | **Light — depth-aware god-ray shafts** | queued | Soft volumetric shafts from orchestrator sun; intensity ↔ healthy count; off under reduced-motion |
 
 ## After each upgrade
 1. Commit + push `origin/dashboard-3d` (never main, no force).
@@ -29,9 +31,10 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
+- **Depth-aware god-ray shafts** (next light-lane) — soft volumetric shafts from orchestrator sun, intensity tied to healthy count; honest off when WebGL/reduced-motion.
+- **Health-reactive exposure ride** — ACES exposure + bloom threshold ease over 400ms when weather.tone changes (pairs with color-grade).
 - **Constellation lore plaques** — short painted plaques per lane with last 3 lock notes + health reason, readable when camera is mid-dolly.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
-
 
 ## Visual Fleet
 
@@ -48,3 +51,11 @@ Rules:
 2. Fleet **never** edits files outside its lane folders (or its own lock).
 3. Fleet bots appear as stars in the **Visual Fleet** constellation; health comes from their lane lock (no lock ⇒ idle).
 4. Hold `dashboard-3d.lock` only while actively merging/editing the shared worktree; **release between milestones** so fleet can land.
+
+## Light-lane hook (required outside lane dirs — Dashboard Bot must apply)
+In `universe-scene.tsx` after scene + composer setup:
+`import { createHealthAtmosphere, deriveFleetTone } from "./atmosphere";`
+`import { createTunedBloomPass, createColorGradePass } from "./postfx";`
+then `const atm = createHealthAtmosphere(scene, { attachFog: false });` (replace static Ambient/Point lights);
+replace bare `UnrealBloomPass(...)` with `createTunedBloomPass(size, tone).pass` + add `createColorGradePass(tone).pass`;
+call `atm.update` / `bloom.update` / `grade.update` from `status.weather.tone` (or `deriveFleetTone`) on rebuild.

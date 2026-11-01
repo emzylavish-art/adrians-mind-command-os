@@ -1,2 +1,17 @@
-/** Light lane atmosphere hooks — fleet fills this in. */
-export const LIGHT_ATMOSPHERE = {} as const;
+/** atmosphere/ — Cosmos Light Bot lane (health-tinted lights + fog sync). */
+export {
+  AMBIENT_RGB,
+  FOG_PARAMS,
+  HEALTH_HEX,
+  KEY_RGB,
+  RIM_RGB,
+  deriveFleetTone,
+  isHealthTone,
+  type HealthTone,
+  type Rgb,
+} from "./health-tone.ts";
+export {
+  createHealthAtmosphere,
+  type CreateHealthAtmosphereOpts,
+  type HealthAtmosphereHandle,
+} from "./health-lights.ts";
