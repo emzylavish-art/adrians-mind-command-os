@@ -23,6 +23,9 @@ const DEFAULTS = {
   radialAmp: 0.04,
 };
 
+/** Hacker c8: default `= {}` allocated a fresh object every call. */
+const EMPTY_ORBIT_OPTS: OrbitDriftOpts = Object.freeze({});
+
 /**
  * Drift a star around its base position. When reducedMotion, copies base → out.
  * out must be a preallocated {x,y,z}. NaN bases collapse to 0; NaN time freezes at base.
@@ -33,7 +36,7 @@ export function sampleOrbitDrift(
   tSeconds: number,
   phase: number,
   reducedMotion: boolean,
-  opts: OrbitDriftOpts = {},
+  opts: OrbitDriftOpts = EMPTY_ORBIT_OPTS,
 ): Xyz {
   // Inline finite guard: this runs per star per frame, so no temp objects.
   const bx = Number.isFinite(base.x) ? base.x : 0;

@@ -148,3 +148,14 @@ export const sharedMotionClock: MotionClock = {
     /* intentionally empty — see comment above */
   },
 };
+
+/**
+ * Explicit hard reset of the process-wide shared clock.
+ * Prefer `createMotionClock()` for production isolation. Use this only in tests or a
+ * deliberate full-dashboard teardown when you accept a one-frame phase snap for every
+ * sampler still reading `sharedMotionClock`.
+ * Grep of origin/dashboard-3d (c8): nothing calls `sharedMotionClock.reset()` for effect.
+ */
+export function hardResetSharedMotionClockForTests(): void {
+  _sharedMotionClockInner.reset();
+}
