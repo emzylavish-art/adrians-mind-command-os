@@ -7,6 +7,7 @@
  *  3) tools/call echo + add return ok with real output
  *  4) slow tools/call times out with status=timeout
  *  5) hung initialize times out on connect with status=timeout
+ *  0) enabled server whose command is NOT on MIND_MCP_STDIO_ALLOW never spawns
  *  6) no fixture child process left alive afterwards
  * Writes /workspace/audit/mcp-integration/stdio-e2e.log. Exit 1 on any failure.
  */
@@ -47,6 +48,8 @@ async function main() {
   const noSql = async () => ({ query: async () => [] });
   const notHalted = () => false;
   const procsBefore = fixtureProcs().length;
+  // Operator allowlist: only this node binary may be spawned in the e2e.
+  process.env.MIND_MCP_STDIO_ALLOW = process.execPath;
 
   const marker = join(mkdtempSync(join(tmpdir(), "mind-mcp-marker-")), "spawned");
   const saved = registry.registerExternalServer(owner, {
@@ -67,6 +70,17 @@ async function main() {
   check("disabled never spawned", stdio.stdioSpawnCount() === spawnsBefore && !existsSync(marker), `spawns=${stdio.stdioSpawnCount() - spawnsBefore} marker=${existsSync(marker)}`);
 
   registry.setServerEnabled(owner, server.id, true);
+  const savedAllow = process.env.MIND_MCP_STDIO_ALLOW;
+  delete process.env.MIND_MCP_STDIO_ALLOW;
+  const deniedList = await registry.listRegistryTools(owner, undefined, { isHalted: notHalted });
+  const deniedCall = await registry.callRegistryTool({ userId: owner, serverId: server.id, tool: "echo", args: { text: "x" }, getSql: noSql, isHalted: notHalted });
+  check(
+    "not allowlisted -> refused, never spawned",
+    deniedList.some((t) => t.serverId === server.id && t.status === "error" && /allowlist/.test(t.description)) &&
+      deniedCall.ok === false && /allowlist/.test(deniedCall.text) && stdio.stdioSpawnCount() === spawnsBefore && !existsSync(marker),
+    deniedCall.text,
+  );
+  process.env.MIND_MCP_STDIO_ALLOW = savedAllow ?? process.execPath;
   let t0 = Date.now();
   const listed = await registry.listRegistryTools(owner, undefined, { isHalted: notHalted });
   const names = listed.filter((t) => t.serverId === server.id).map((t) => t.name).sort();

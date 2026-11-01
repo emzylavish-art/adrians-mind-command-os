@@ -10,6 +10,14 @@
  * - child env is NOT the app env: only the SDK's safe base (PATH, HOME, plus the
  *   sudo-style LOGNAME/SHELL/TERM/USER the SDK always adds) and the server's own env
  * - stdout protocol buffer and stderr capture are capped
+ * - SECURITY: any signed-in user (or anyone, in auth-disabled dev mode) can
+ *   register a command server, so registration alone must never be enough to
+ *   run a binary on this host. A child is spawned ONLY when the exact command
+ *   is on the operator allowlist MIND_MCP_STDIO_ALLOW (server env, never user
+ *   input). Default: empty -> stdio execution is refused. Loader-injection env
+ *   keys (LD_PRELOAD, NODE_OPTIONS, ...) from the server config are dropped.
+ *   Allowlisting an interpreter (node, python, npx, sh) with user-chosen args
+ *   is equivalent to giving every signed-in user shell on this host.
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -32,6 +40,8 @@ export type StdioOptions = {
   stderrCapBytes?: number;
   /** Max bytes buffered from stdout before the session is aborted. */
   stdoutCapBytes?: number;
+  /** Env used to read the operator allowlist (tests). Defaults to process.env. */
+  allowEnv?: NodeJS.ProcessEnv;
 };
 
 export type StdioStatus = "ok" | "error" | "timeout";
@@ -58,6 +68,35 @@ const MAX_TEXT_CHARS = 8_000;
 const CLOSE_GRACE_MS = 5_000;
 
 const ALLOWED_PARENT_ENV = ["PATH", "HOME"] as const;
+
+/** Operator allowlist env var: exact command strings separated by newline, ";" or ",". */
+export const STDIO_ALLOW_ENV = "MIND_MCP_STDIO_ALLOW";
+
+/** Parse the operator allowlist. Empty/unset -> no command may run. */
+export function stdioAllowlist(env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = env[STDIO_ALLOW_ENV];
+  if (typeof raw !== "string") return [];
+  return raw
+    .split(/[\n;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+}
+
+/** True only when the exact (trimmed) command string is on the operator allowlist. */
+export function stdioCommandAllowed(command: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const wanted = command.trim();
+  if (!wanted) return false;
+  return stdioAllowlist(env).includes(wanted);
+}
+
+/* Env keys that let a config hijack an allowlisted binary (dynamic loader / runtime injection). */
+const BLOCKED_CHILD_ENV = /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|NODE_REPL_EXTERNAL_MODULE$|PYTHONSTARTUP$|PYTHONPATH$|PYTHONHOME$|PERL5OPT$|PERL5LIB$|RUBYOPT$|RUBYLIB$|BASH_ENV$|ENV$|PROMPT_COMMAND$|GIT_SSH_COMMAND$|GIT_EXEC_PATH$|PATH$|HOME$|MIND_MCP_STDIO_ALLOW$)/;
+
+/** True for env keys a server config may NOT set on its child. */
+export function isBlockedChildEnvKey(key: string): boolean {
+  return BLOCKED_CHILD_ENV.test(key.toUpperCase());
+}
 
 function clampMs(value: unknown, fallback: number, min = 100, max = 300_000): number {
   const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : Number.NaN;
@@ -93,6 +132,7 @@ export function buildStdioChildEnv(
     if (typeof value === "string" && !value.startsWith("()")) env[key] = value;
   }
   for (const [key, value] of Object.entries(serverEnv ?? {})) {
+    if (isBlockedChildEnvKey(key)) continue;
     if (typeof value === "string") env[key] = value;
   }
   return env;
@@ -181,6 +221,14 @@ async function withStdioSession<T>(
 ): Promise<SessionOutcome<T>> {
   const command = server.command?.trim();
   if (!command) return { ok: false, status: "error", error: "No command is configured. Nothing was started.", stderr: "" };
+  if (!stdioCommandAllowed(command, options.allowEnv ?? process.env)) {
+    return {
+      ok: false,
+      status: "error",
+      error: `Command “${command.slice(0, 120)}” is not on the server operator allowlist (${STDIO_ALLOW_ENV}). Nothing was started.`,
+      stderr: "",
+    };
+  }
   const { connectTimeoutMs, callTimeoutMs } = resolveStdioTimeouts(server, options);
   const stderrCap = options.stderrCapBytes ?? DEFAULT_STDERR_CAP_BYTES;
   let stderr = "";

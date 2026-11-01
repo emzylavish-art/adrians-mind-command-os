@@ -8,9 +8,15 @@ import {
   activeStdioChildren,
   buildStdioChildEnv,
   callStdioTool,
+  isBlockedChildEnvKey,
   listStdioTools,
   resolveStdioTimeouts,
+  stdioCommandAllowed,
+  stdioSpawnCount,
 } from "./stdio.ts";
+
+// The operator allowlist is required for any spawn. Tests allow only this node binary.
+process.env.MIND_MCP_STDIO_ALLOW = process.execPath;
 
 const FIXTURE = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../scripts/mcp/fixture-stdio-server.mjs");
 
@@ -22,6 +28,64 @@ describe("stdio MCP runner", () => {
   it("passes only PATH/HOME from the app env plus the server env", () => {
     const env = buildStdioChildEnv({ OWN: "1" }, { PATH: "/bin", HOME: "/h", XAI_API_KEY: "s", NOTION_TOKEN: "t" });
     assert.deepEqual(env, { PATH: "/bin", HOME: "/h", OWN: "1" });
+  });
+
+  it("drops loader-injection env keys from server config (LD_PRELOAD, NODE_OPTIONS, PATH override)", () => {
+    const env = buildStdioChildEnv(
+      { LD_PRELOAD: "/tmp/evil.so", NODE_OPTIONS: "--require /tmp/evil.js", PATH: "/tmp/evil", DYLD_INSERT_LIBRARIES: "x", BASH_ENV: "/tmp/x", OK_KEY: "1" },
+      { PATH: "/bin", HOME: "/h" },
+    );
+    assert.deepEqual(env, { PATH: "/bin", HOME: "/h", OK_KEY: "1" });
+    assert.equal(isBlockedChildEnvKey("ld_preload"), true);
+    assert.equal(isBlockedChildEnvKey("API_KEY"), false);
+  });
+
+  it("allowlist is exact-match only and empty by default", () => {
+    assert.equal(stdioCommandAllowed("/usr/bin/node", {}), false);
+    assert.equal(stdioCommandAllowed("/usr/bin/node", { MIND_MCP_STDIO_ALLOW: "/usr/bin/node;/opt/mcp/server" }), true);
+    assert.equal(stdioCommandAllowed("/opt/mcp/server", { MIND_MCP_STDIO_ALLOW: "/usr/bin/node, /opt/mcp/server" }), true);
+    assert.equal(stdioCommandAllowed("/usr/bin/node; touch /tmp/x", { MIND_MCP_STDIO_ALLOW: "/usr/bin/node" }), false);
+    assert.equal(stdioCommandAllowed("/usr/bin/nodejs", { MIND_MCP_STDIO_ALLOW: "/usr/bin/node" }), false);
+  });
+
+  it("REGRESSION: refuses to spawn a command that is not on the operator allowlist", async () => {
+    const marker = join(mkdtempSync(join(tmpdir(), "mind-stdio-allow-")), "spawned");
+    const before = stdioSpawnCount();
+    const listed = await listStdioTools(fixture({ MCP_FIXTURE_MARKER: marker }), { allowEnv: {} });
+    assert.equal(listed.status, "error");
+    assert.match((listed as { error?: string }).error ?? "", /allowlist/);
+    const called = await callStdioTool(fixture({ MCP_FIXTURE_MARKER: marker }), "echo", { text: "x" }, { allowEnv: { MIND_MCP_STDIO_ALLOW: "/bin/true" } });
+    assert.equal(called.ok, false);
+    assert.equal(called.status, "error");
+    assert.match(called.text, /allowlist/);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(existsSync(marker), false, "child must never have started");
+    assert.equal(stdioSpawnCount(), before);
+  });
+
+  it("passes shell metacharacters in args/arguments literally (no shell)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mind-stdio-inj-"));
+    const pwned = join(dir, "pwned");
+    const called = await callStdioTool(fixture(), "echo", { text: `$(touch ${pwned}); \`touch ${pwned}\` | touch ${pwned}` });
+    assert.equal(called.status, "ok");
+    assert.match(called.text, /\$\(touch/);
+    const injected = await listStdioTools({ ...fixture(), args: [FIXTURE, `; touch ${pwned}`, `&& touch ${pwned}`] });
+    assert.equal(injected.status, "ok");
+    assert.equal(existsSync(pwned), false);
+  });
+
+  it("bounds a flood of newline-less stdout and kills the child", async () => {
+    const started = Date.now();
+    const listed = await listStdioTools(fixture({ MCP_FIXTURE_FLOOD: "1" }), { connectTimeoutMs: 1500, stdoutCapBytes: 256 * 1024 });
+    assert.notEqual(listed.status, "ok");
+    assert.ok(Date.now() - started < 15_000);
+    assert.equal(activeStdioChildren(), 0);
+  });
+
+  it("treats malformed JSON-RPC output as failure, not success", async () => {
+    const listed = await listStdioTools(fixture({ MCP_FIXTURE_GARBAGE: "1" }), { connectTimeoutMs: 1000 });
+    assert.notEqual(listed.status, "ok");
+    assert.equal(activeStdioChildren(), 0);
   });
 
   it("resolves timeouts: option > server > env > default", () => {
@@ -97,9 +161,10 @@ describe("stdio MCP runner", () => {
       { id: "x", label: "Missing", command: join(dir, "no-such-binary") },
       "echo",
       { text: "hi" },
-      { connectTimeoutMs: 2000 },
+      { connectTimeoutMs: 2000, allowEnv: { MIND_MCP_STDIO_ALLOW: join(dir, "no-such-binary") } },
     );
     assert.equal(called.status, "error");
+    assert.doesNotMatch(called.text, /allowlist/);
     assert.equal(called.ok, false);
     assert.equal(existsSync(join(dir, "no-such-binary")), false);
   });

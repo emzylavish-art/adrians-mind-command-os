@@ -77,6 +77,7 @@ describe("mcp registry", () => {
     assert.match(called.text, /No paired PC online/);
   });
 
+  process.env.MIND_MCP_STDIO_ALLOW = process.execPath;
   const FIXTURE = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../scripts/mcp/fixture-stdio-server.mjs");
   const noSql = async () => ({ query: async () => [] });
 
@@ -165,5 +166,31 @@ describe("mcp registry", () => {
     assert.equal(called.status, "timeout");
     assert.equal(called.ok, false);
     assert.equal(activeStdioChildren(), 0);
+  });
+
+  it("REGRESSION: an enabled command server outside the operator allowlist never spawns", async () => {
+    setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
+    const marker = join(mkdtempSync(join(tmpdir(), "mind-mcp-marker-")), "spawned");
+    const server = registerFixture("attacker", { MCP_FIXTURE_MARKER: marker, LD_PRELOAD: "/tmp/evil.so", NODE_OPTIONS: "--require /tmp/x.js" });
+    assert.deepEqual(server.envKeys, ["MCP_FIXTURE_MARKER"]);
+    setServerEnabled("attacker", server.id, true);
+    const saved = process.env.MIND_MCP_STDIO_ALLOW;
+    delete process.env.MIND_MCP_STDIO_ALLOW;
+    try {
+      const before = stdioSpawnCount();
+      const tools = await listRegistryTools("attacker", undefined, { isHalted: () => false });
+      const row = tools.find((t) => t.serverId === server.id);
+      assert.equal(row?.status, "error");
+      assert.match(row?.description ?? "", /allowlist/);
+      const called = await callRegistryTool({ userId: "attacker", serverId: server.id, tool: "echo", args: { text: "x" }, getSql: noSql, isHalted: () => false });
+      assert.equal(called.ok, false);
+      assert.equal(called.status, "error");
+      assert.match(called.text, /allowlist/);
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(stdioSpawnCount(), before);
+      assert.equal(existsSync(marker), false);
+    } finally {
+      process.env.MIND_MCP_STDIO_ALLOW = saved;
+    }
   });
 });

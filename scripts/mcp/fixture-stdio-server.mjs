@@ -4,6 +4,8 @@
  * Tools: echo, add, sleep (for timeout tests), env_probe (reports whether env keys are visible).
  * If MCP_FIXTURE_MARKER is set, writes that file on startup so tests can prove (non-)spawn.
  * If MCP_FIXTURE_HANG_INIT=1, never connects (for connect-timeout tests).
+ * If MCP_FIXTURE_FLOOD=1, floods stdout with one giant newline-less line (buffer-cap tests).
+ * If MCP_FIXTURE_GARBAGE=1, writes malformed JSON-RPC lines and never answers.
  */
 import { writeFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -15,7 +17,22 @@ if (process.env.MCP_FIXTURE_MARKER) {
 }
 process.stderr.write("fixture-stdio-server starting\n");
 
-if (process.env.MCP_FIXTURE_HANG_INIT === "1") {
+if (process.env.MCP_FIXTURE_FLOOD === "1") {
+  const chunk = "x".repeat(64 * 1024);
+  const pump = () => {
+    while (process.stdout.write(chunk)) {
+      /* keep writing until backpressure */
+    }
+    process.stdout.once("drain", pump);
+  };
+  pump();
+  setInterval(() => undefined, 1_000);
+} else if (process.env.MCP_FIXTURE_GARBAGE === "1") {
+  process.stdout.write('{"jsonrpc":"2.0","id":0,"result":\n');
+  process.stdout.write("not json at all\n");
+  process.stdout.write('{"jsonrpc":"1.0","weird":true}\n');
+  setInterval(() => undefined, 1_000);
+} else if (process.env.MCP_FIXTURE_HANG_INIT === "1") {
   // Keep the process alive without speaking MCP.
   setInterval(() => undefined, 1_000);
 } else {

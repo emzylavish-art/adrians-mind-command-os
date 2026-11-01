@@ -12,7 +12,7 @@ import {
   type SqlLike,
   type ToolResult,
 } from "./tools.ts";
-import { callStdioTool, listStdioTools, type StdioOptions } from "./stdio.ts";
+import { callStdioTool, isBlockedChildEnvKey, listStdioTools, type StdioOptions } from "./stdio.ts";
 import { readHaltFile } from "../halt-file.ts";
 
 export type McpServerKind = "builtin" | "http" | "command";
@@ -106,7 +106,7 @@ export function sanitizeServerEnv(input: unknown): Record<string, string> | unde
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>).slice(0, 20)) {
-    if (!ENV_KEY.test(key)) continue;
+    if (!ENV_KEY.test(key) || isBlockedChildEnvKey(key)) continue;
     if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
     out[key] = String(value).slice(0, 1000);
   }
