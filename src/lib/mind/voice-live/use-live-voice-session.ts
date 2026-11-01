@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createVoiceClientSecret } from "../server.ts";
-import { getVoiceMode } from "../voice/mode-store.ts";
+import { getVoiceMode, subscribeVoiceMode } from "../voice/mode-store.ts";
 import { readStoredVoiceChoice } from "../voice/voices.ts";
 import { formatVoiceClientError } from "../voice/errors.ts";
 import { LiveVoiceSession, type LiveSessionDeps, type MintSecretResult } from "./live-session.ts";
@@ -144,7 +144,14 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     return () => document.removeEventListener("keydown", onKey, true);
   }, [end]);
 
+  // Keep live routing + badge in sync with header toggles (including rapid fire).
   useEffect(() => {
+    return subscribeVoiceMode(() => {
+      sessionRef.current?.notifyModeChange();
+    });
+  }, []);
+
+    useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "hidden" && isLiveVoiceOccupied()) {
         sessionRef.current?.end();

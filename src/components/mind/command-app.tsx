@@ -388,6 +388,8 @@ export function CommandApp() {
     const previous = voiceModeRef.current;
     const committed = setVoiceModeStore(next, storage);
     voiceModeRef.current = committed;
+    // Mode toggle always cuts local Speak / TTS immediately (live session also cancels via store subscribe).
+    interruptSpeakPlayback();
     if (shouldClearLiveTranscriptOnModeSwitch(previous, committed)) {
       setVoiceLiveTranscript("");
     }
@@ -1845,14 +1847,16 @@ export function CommandApp() {
             <Menu className="size-4" />
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
+          <div className="shrink-0">
+            <VoiceModeBadge
+              mode={voiceMode}
+              listening={voiceListening}
+              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+            />
+          </div>
           <div className="hidden shrink-0 md:block">
             <div className="flex items-center gap-2">
               <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-              <VoiceModeBadge
-                mode={voiceMode}
-                listening={voiceListening}
-                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-              />
               <VoiceLiveTranscript text={voiceLiveTranscript} />
               <VoicePicker value={voiceChoice} onChange={applyVoiceChoice} disabled={voiceListening} />
             </div>
@@ -2124,14 +2128,6 @@ export function CommandApp() {
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
-              <div className="flex items-center gap-2">
-                <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-                <VoiceModeBadge
-                  mode={voiceMode}
-                  listening={voiceListening}
-                  onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-                />
-              </div>
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
               {error && <p className="text-sm text-danger">{error}</p>}
               <ServiceBoard
@@ -2277,10 +2273,8 @@ export function CommandApp() {
               onLiveVoiceError={(message) => setError(message)}
               onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
-              voiceMode={voiceMode}
               voiceListening={voiceListening}
               voiceLevel={voiceLevel}
-              onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
@@ -3295,10 +3289,8 @@ function ChatPane({
   onLiveVoiceError,
   onLiveVoiceNotice,
   speaking,
-  voiceMode,
   voiceListening,
   voiceLevel,
-  onToggleVoiceMode,
   memoryChoice,
   mode,
   onComposerMemory,
@@ -3342,10 +3334,8 @@ function ChatPane({
   onLiveVoiceError?: (message: string) => void;
   onLiveVoiceNotice?: (message: string) => void;
   speaking: boolean;
-  voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
   voiceLevel: number;
-  onToggleVoiceMode: () => void;
   memoryChoice: "off" | "on";
   mode: Autonomy;
   onComposerMemory: () => void;
@@ -3529,7 +3519,6 @@ function ChatPane({
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
-          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
         </div>
         <form
           className="command-card m-3 hidden rounded-panel bg-surface p-3"

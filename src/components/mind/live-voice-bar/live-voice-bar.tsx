@@ -3,7 +3,7 @@
  * Self-contained Tailwind so it works without Visual Polish styles.css.
  * Keep VP class names for post-merge CSS override.
  */
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   AudioLines,
   Mic,
@@ -26,8 +26,8 @@ import {
   validateAttachment,
 } from "@/lib/mind/voice-live/attachments";
 import { barRootStyle } from "@/lib/mind/voice-live/bar-state";
-import { getVoiceMode, setVoiceModeStore } from "@/lib/mind/voice/mode-store";
-import { toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { getVoiceMode, getServerVoiceMode, setVoiceModeStore, subscribeVoiceMode } from "@/lib/mind/voice/mode-store";
+import { toggleVoiceMode } from "@/lib/mind/voice/mode";
 import {
   readStoredVoiceChoice,
   writeStoredVoiceChoice,
@@ -91,7 +91,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [attachMsg, setAttachMsg] = useState<string | null>(null);
   const [screenOn, setScreenOn] = useState(false);
-  const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>(() => getVoiceMode());
+  const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
   const [voiceChoice, setVoiceChoice] = useState<XaiBuiltinVoice>(() =>
     readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage),
   );
@@ -469,7 +469,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       <VoiceModeBadge
         mode={voiceMode}
         listening={uiAttr === "listening" || uiAttr === "user-speaking" || uiAttr === "assistant-speaking"}
-        onToggle={() => setVoiceMode(setVoiceModeStore(toggleVoiceMode(voiceMode)))}
+        onToggle={() => setVoiceModeStore(toggleVoiceMode(voiceMode))}
       />
       <div className="mt-3">
         <VoicePicker
