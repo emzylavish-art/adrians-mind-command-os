@@ -552,7 +552,7 @@ html[data-theme="light"] .promo-banner {
   body {
     font-size: var(--text-base);
     line-height: var(--leading-body);
-    letter-spacing: -0.011em;
+    letter-spacing: 0;
   }
   h1, .font-display.text-4xl, .font-display.text-3xl {
     letter-spacing: var(--tracking-tight);
@@ -1168,17 +1168,22 @@ html[data-theme="light"] .dictation-pill {
   animation: toast-in var(--dur-slow) var(--ease-out);
 }
 .voice-mode-overlay-shell .voice-mode-stage {
-  width: min(34rem, 100%);
-  min-height: 26rem;
-  padding: 2.5rem 2rem 2rem;
+  width: 100%;
+  min-height: 100dvh;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 2.5rem 1.5rem 3rem;
 }
 .voice-mode-overlay-shell .voice-mode-orb {
-  width: 9rem;
-  height: 9rem;
+  width: min(42vw, 280px);
+  height: min(42vw, 280px);
 }
 .voice-mode-overlay-shell .voice-mode-orb__core {
-  width: 3.75rem;
-  height: 3.75rem;
+  width: 42%;
+  height: 42%;
+  box-shadow: 0 0 80px rgb(124 92 255 / 0.55), 0 0 140px rgb(45 212 191 / 0.25);
 }
 .chat-stream {
   position: relative;
@@ -1369,4 +1374,146 @@ html[data-theme="light"] .command-palette-panel {
 }
 html[data-theme="light"] .shortcut-sheet-group kbd {
   background: rgb(15 23 42 / 0.05);
+}
+
+
+/* —— Pass 7 verifier P1–P3 —— */
+/* P1 Voice Mode — full-bleed immersive stage (ChatGPT-like) */
+.voice-mode-overlay-shell {
+  padding: 0 !important;
+  background: rgb(4 6 12 / 0.94) !important;
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+.voice-mode-overlay-shell .voice-mode-stage {
+  width: 100% !important;
+  min-height: 100dvh !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 2.75rem 1.5rem 3.25rem !important;
+}
+.voice-mode-overlay-shell .voice-mode-orb {
+  width: min(42vw, 280px) !important;
+  height: min(42vw, 280px) !important;
+}
+.voice-mode-overlay-shell .voice-mode-orb__core {
+  width: 42% !important;
+  height: 42% !important;
+  box-shadow: 0 0 90px rgb(124 92 255 / 0.6), 0 0 160px rgb(45 212 191 / 0.28) !important;
+}
+.voice-mode-overlay-shell .voice-mode-stage__status {
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+}
+/* Dim competing chrome while voice overlay open */
+body:has([data-testid="voice-overlay"]) .voice-zone,
+body:has([data-testid="voice-overlay"]) .voice-zone-rail,
+body:has([data-testid="voice-overlay"]) .topbar .glass-panel {
+  opacity: 0.22;
+  filter: saturate(0.5);
+  pointer-events: none;
+}
+body:has([data-testid="voice-overlay"]) [role="alert"],
+body:has([data-testid="voice-overlay"]) .toast-motion {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* P1 Mobile letter-spacing / word-spacing */
+body {
+  letter-spacing: 0;
+}
+@media (max-width: 480px) {
+  body,
+  .text-sm,
+  textarea,
+  input,
+  button {
+    letter-spacing: 0.01em;
+    word-spacing: 0.02em;
+  }
+}
+
+/* P1/P2 Calm home / empty chat hero toward Grok chat-hero */
+.chat-stream:has([data-testid="chat-empty"]),
+section:has(> .chat-stream) {
+  /* hook for empty */
+}
+[data-testid="chat-empty"],
+.chat-empty-hero {
+  display: grid;
+  place-items: center;
+  min-height: min(62vh, 28rem);
+  padding: 2.5rem 1rem 3rem;
+  text-align: center;
+  gap: 0.75rem;
+}
+.chat-empty-hero .chat-empty-title {
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+/* Soften competing home integration grid above the fold (presentational) */
+.main-stage .glow-card p.text-xs,
+.main-stage .glow-card .text-xs {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (min-width: 900px) {
+  /* Give command greeting more air */
+  .main-stage .masthead {
+    margin-bottom: 1.25rem;
+  }
+  .main-stage .floating-composer.command-card {
+    margin-top: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+}
+
+/* P2 Model picker density */
+.model-chip + .floating-menu,
+div.relative > .floating-menu[role="menu"] {
+  min-width: 17.5rem;
+  width: max(17.5rem, 100%);
+}
+.floating-menu[role="menu"] [role="menuitemradio"] {
+  min-height: 2.75rem;
+}
+
+/* P2 Mobile bottom nav crowding */
+@media (max-width: 480px) {
+  nav[aria-label="Primary"] button {
+    font-size: 10px;
+    line-height: 1.15;
+  }
+  nav[aria-label="Primary"] button span,
+  nav[aria-label="Primary"] {
+    letter-spacing: 0.01em;
+  }
+}
+
+/* P2 Tools / connected card noise reduction */
+.dense-card .text-xs.text-muted,
+.glow-card .text-xs.text-muted {
+  max-height: 2.6em;
+  overflow: hidden;
+}
+
+/* P3 Help / prose cardify */
+.help-prose,
+.main-stage article.prose-card {
+  max-width: 42rem;
+}
+details.glass-panel,
+.glass-panel details {
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+/* P3 Scroll FAB / msg-in already present — ensure visibility */
+.scroll-bottom-fab {
+  position: absolute;
+  z-index: 25;
 }
