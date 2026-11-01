@@ -5519,3 +5519,75 @@ aside.rail nav button {
     z-index: 46 !important;
   }
 }
+
+/* —— Evolution c75: pixel polish — radii, 1px borders, shadows, icon align —— */
+:root {
+  --radius-panel: 1.15rem;
+  --radius-pill: 999px;
+  --border-hairline: 1px solid rgb(255 255 255 / 0.14);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 14px 36px rgb(0 0 0 / 0.38);
+}
+
+.main-stage .rounded-panel,
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .settings-card,
+.main-stage .page-hero,
+.main-stage .masthead,
+.page-shell .page-hero,
+.page-shell .glow-card,
+.page-shell .dense-card {
+  border-radius: var(--radius-panel) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+.main-stage button.rounded-full,
+.main-stage .rounded-full,
+.topbar .rounded-full,
+aside .sidebar-plus {
+  border-radius: var(--radius-pill) !important;
+}
+
+/* Kill double-shadow banding — single soft stack */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .settings-card,
+.main-stage .rounded-panel.border {
+  box-shadow: var(--shadow-card) !important;
+}
+
+/* Topbar / chrome icon alignment */
+.topbar button.grid,
+.topbar button.size-9,
+.topbar button.size-11,
+.topbar [class*="size-9"],
+.topbar [class*="size-11"] {
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+.topbar button svg,
+.topbar a svg {
+  width: 1.05rem !important;
+  height: 1.05rem !important;
+}
+.topbar {
+  align-items: center !important;
+  gap: 0.5rem !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+/* Hairline consistency on inputs */
+.main-stage input,
+.main-stage textarea,
+.main-stage select {
+  border-width: 1px !important;
+  border-radius: var(--radius-panel) !important;
+}
