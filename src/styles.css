@@ -4029,3 +4029,47 @@ aside.rail nav button span {
     max-height: 4.1rem !important;
   }
 }
+
+/* —— Evolution c47: translucent glass so blur/frost reads; tablet dual-composer —— */
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+article.rounded-panel.border,
+.dash3d-chart-card,
+.dash3d-node-detail,
+[data-dash3d-node],
+.composer-dock,
+.floating-composer,
+.composer-bar__card {
+  background-color: rgb(12 12 14 / 0.55) !important;
+  backdrop-filter: blur(24px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+}
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.7) !important;
+}
+/* Tablet (md, < lg): treat like mobile stack for dual composers */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    max-width: calc(100vw - 1.5rem) !important;
+  }
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    max-height: none !important;
+  }
+}
