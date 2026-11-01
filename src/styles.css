@@ -7933,3 +7933,18 @@ aside nav button.bg-accent.text-white svg * {
   stroke: currentColor !important;
   stroke-width: 1.75px !important;
 }
+/* —— Evolution c129: BA 375/768-home — no accidental revert; tighten phone masthead fold —— */
+@media (max-width: 429.98px) {
+  .main-stage .masthead h1,
+  .page-shell .masthead h1,
+  .main-stage h1.font-display {
+    font-size: clamp(1.45rem, 1.2rem + 2.2vw, 1.75rem) !important;
+    line-height: 1.15 !important;
+  }
+  .main-stage .masthead .text-muted,
+  .main-stage .masthead p {
+    font-size: 0.8125rem !important;
+    line-height: 1.45 !important;
+  }
+}
+
