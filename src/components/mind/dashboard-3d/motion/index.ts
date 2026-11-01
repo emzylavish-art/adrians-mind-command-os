@@ -217,8 +217,21 @@ export {
   type FocusRingBreatheState,
 } from "./focus-ring-breathe.ts";
 export {
+  STAR_BATCH_MAX,
+  createStarBatchScratch,
+  disposeStarBatchScratch,
   stepStarFieldBatch,
   type StarBatchOpts,
+  type StarBatchScratch,
   type StarBatchSlot,
 } from "./star-batch.ts";
+export {
+  HEALTH_XFADE_LAMBDA,
+  createHealthPulseCrossfadeState,
+  sampleStarPulseCrossfaded,
+  setHealthPulseTarget,
+  stepHealthPulseCrossfade,
+  type HealthPulseCrossfadeOpts,
+  type HealthPulseCrossfadeState,
+} from "./health-pulse-crossfade.ts";
 

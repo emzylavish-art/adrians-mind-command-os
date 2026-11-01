@@ -351,6 +351,7 @@ Motion lane **does not edit `package.json`**. Please add these lane test files t
 - `src/components/mind/dashboard-3d/motion/cpu-budget.test.ts`
 - `src/components/mind/dashboard-3d/motion/focus-ring-breathe.test.ts`
 - `src/components/mind/dashboard-3d/motion/star-batch.test.ts`
+- `src/components/mind/dashboard-3d/motion/health-pulse-crossfade.test.ts`
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
 
@@ -360,3 +361,36 @@ Lane CI locally: `node --experimental-strip-types --test src/components/mind/das
 - Node CPU-only 10k frames @ 500 stars / 2k dust / 20 comets / 50 travelers / 30 chars / 80 edges.
 - See `/workspace/audit/dashboard-3d/fleet/motion/c16/` for numbers (mean ≪ 2ms/frame).
 
+## Health pulse crossfade (c17)
+
+When bot health flips, ease pulse amp/speed instead of snapping:
+
+```ts
+import {
+  createHealthPulseCrossfadeState,
+  setHealthPulseTarget,
+  stepHealthPulseCrossfade,
+  sampleStarPulseCrossfaded,
+} from "./motion";
+
+const xf = createHealthPulseCrossfadeState(bot.health);
+// on status update:
+setHealthPulseTarget(xf, bot.health, reducedMotion);
+// each frame:
+stepHealthPulseCrossfade(xf, dt, reducedMotion);
+sampleStarPulseCrossfaded(pulseOut, tmpFrom, tmpTo, xf, t, phase, reducedMotion, { clock });
+```
+
+Works alongside `stepStarFieldBatch` (per-star xf state array) and focus-ring breathe.
+Reduced-motion → snap. Camera dolly remains Dashboard-owned.
+
+### Star-batch harden (c17 hacker)
+
+- `STAR_BATCH_MAX` (8192) hard-caps corrupt huge counts
+- Null/empty id holes skipped; lengths snapshotted at entry
+- `createStarBatchScratch` / `disposeStarBatchScratch` — Float32 packed bases/pos; reuse after dispose
+
+### Health pulse crossfade wiring (c17)
+- Keep one `HealthPulseCrossfadeState` per bot (parallel to focus-ease).
+- On status/health change call `setHealthPulseTarget`; each tick `step` + `sampleStarPulseCrossfaded` (or lerp after dual `sampleStarPulse`).
+- Register `health-pulse-crossfade.test.ts` in package.json test glob when landing (Motion lane does not edit package.json).
