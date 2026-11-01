@@ -4859,3 +4859,24 @@ aside.rail nav button:not(.bg-accent) svg * {
   background: #7c5cff !important;
   color: #fff !important;
 }
+
+/* —— Evolution c52: GPT-like stage rhythm (masthead → actions → dock) —— */
+.main-stage .mx-auto.flex.max-w-6xl.flex-col {
+  gap: 1.25rem !important;
+}
+.main-stage .masthead {
+  margin-bottom: 0.25rem !important;
+}
+.main-stage .flex.flex-wrap.gap-2.pb-1,
+.main-stage .flex.gap-2.overflow-x-auto.pb-1 {
+  padding-bottom: 0.5rem !important;
+  gap: 0.6rem !important;
+}
+@media (min-width: 1024px) {
+  .composer-bar.is-fixed .composer-bar__card {
+    box-shadow:
+      0 22px 56px rgb(0 0 0 / 0.55),
+      inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+    border-color: rgb(255 255 255 / 0.14) !important;
+  }
+}
