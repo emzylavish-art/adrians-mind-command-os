@@ -4010,3 +4010,22 @@ aside.rail nav button span {
     transform: none;
   }
 }
+
+/* —— Blueprint c46: force dock above Speak strip (specificity win) —— */
+@media (max-width: 767.98px) {
+  .main-stage section.command-card.composer-dock,
+  .main-stage section.floating-composer.composer-dock,
+  .main-stage .floating-composer.command-card.composer-dock,
+  section.floating-composer.command-card.composer-dock.rounded-panel,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.floating-composer.composer-dock[data-composer="floating"] {
+    bottom: calc(2.75rem + 4.25rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(2.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    height: auto !important;
+    max-height: 4.1rem !important;
+  }
+}
