@@ -24,3 +24,7 @@ Continuous back-to-back (no 2h interval). 5-minute safety restart skips if a cyc
 
 ## Queue
 See `.handoff/DASHBOARD_QUEUE.md` — next: Camera/city + Projects.
+
+## Nav gap (no command-app / styles.css edits)
+No in-app nav entry to  yet ( claimed by other lanes;  claimed by visual-polish).
+**Options without claimed files:** (1)  on  (unclaimed), (2) tiny chrome link in  (unclaimed, avoid importing styles.css tokens beyond existing). Not applied this milestone — left for a quiet unlock or Merge Gate companion.

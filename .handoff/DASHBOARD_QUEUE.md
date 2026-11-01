@@ -11,7 +11,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | # | Upgrade | Status | Notes |
 |---|---------|--------|-------|
 | 0 | **Universe** (+ Visual Fleet stars + extension folders) — painterly cosmos, constellations, Notion galaxy snapshot, weather, fly-to camera rig foundation | **active** | Current ship |
-| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | queued | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; shots flyover-high/city/interior |
+| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | **active** | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; shots flyover-high/city/interior |
 | 2 | **Click-and-zoom** — star click eases camera in + detail; wheel/pinch dolly; empty-space/zoom-out → sky; reuse camera FSM | queued | Shots zoom-star.png, zoom-sky.png |
 | 3 | **Animation pass** — living motion: orbiting, drifting, pulsing, transition polish | queued | After click-zoom |
 | 4 | **Sound** — WebAudio procedural only; health tones spatialized; muted by default + unmute toggle | queued | |
