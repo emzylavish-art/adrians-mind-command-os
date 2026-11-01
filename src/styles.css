@@ -4189,3 +4189,34 @@ html[data-theme="light"] textarea:focus-visible {
   text-underline-offset: 0.2em;
   opacity: 1 !important;
 }
+
+/* —— Evolution c51: denser empty panels + Connected mono warning chrome —— */
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted) {
+  min-height: 8rem !important;
+  padding: 1.35rem 1.25rem !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+.main-stage p.text-sm.text-danger,
+.main-stage .text-danger,
+.main-stage [class*="border-danger"] {
+  color: #e4e4e7 !important;
+  border-color: rgb(255 255 255 / 0.22) !important;
+  background: rgb(255 255 255 / 0.04) !important;
+}
+/* Rail mono assert after other lanes */
+aside.rail nav button:not(.bg-accent) {
+  color: #d4d4d8 !important;
+}
+aside.rail nav button:not(.bg-accent) svg,
+aside.rail nav button:not(.bg-accent) svg * {
+  stroke: #a1a1aa !important;
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+}
+.logo-mark, .logo-badge, aside span.grid.size-11.rounded-2xl {
+  background: #7c5cff !important;
+  color: #fff !important;
+}
