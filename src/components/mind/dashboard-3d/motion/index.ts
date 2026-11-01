@@ -33,3 +33,17 @@ export {
   type MotionClock,
   type MotionClockOpts,
 } from "./motion-clock.ts";
+export {
+  FOCUS_DRIFT_LAMBDA,
+  FOCUS_PULSE_LAMBDA,
+  FOCUS_PULSE_SCALE,
+  applyFocusDrift,
+  applyFocusPulse,
+  createFocusEaseState,
+  isFocusedStar,
+  stepFocusDriftMul,
+  stepFocusEase,
+  stepFocusPulseMul,
+  type FocusEaseState,
+} from "./focus-ease.ts";
+

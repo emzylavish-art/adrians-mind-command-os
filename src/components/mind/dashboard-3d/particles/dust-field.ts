@@ -136,8 +136,36 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
     if (Number.isFinite(d)) handle.lod.camDistance = d;
   };
 
+  // Hacker c5: reduced-motion mid-session must not freeze a LOD-thinned field — snap to
+  // full rest poses once, then idle. Cleared when motion resumes so LOD can thin again.
+  let restPoseApplied = false;
+
+  const writeRestPoses = () => {
+    for (let i = 0; i < count; i++) {
+      const s = seeds[i]!;
+      dummy.position.set(s.x, s.y, s.z);
+      dummy.scale.setScalar(s.scale);
+      dummy.updateMatrix();
+      handle.mesh!.setMatrixAt(i, dummy.matrix);
+    }
+    handle.lod.active = count;
+    handle.mesh!.count = count;
+    const im = handle.mesh!.instanceMatrix;
+    im.clearUpdateRanges();
+    im.addUpdateRange(0, count * 16);
+    im.needsUpdate = true;
+  };
+
   handle.update = (tSeconds: number, reducedMotion: boolean) => {
-    if (handle.disposed || reducedMotion || !handle.mesh) return;
+    if (handle.disposed || !handle.mesh) return;
+    if (reducedMotion) {
+      if (!restPoseApplied) {
+        writeRestPoses();
+        restPoseApplied = true;
+      }
+      return;
+    }
+    restPoseApplied = false;
     // Background tab: no CPU/GPU work; the motion clock absorbs the gap on resume.
     if (isDocumentHidden()) return;
     const t = clock.map(tSeconds);
@@ -170,6 +198,8 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
     if (handle.disposed) return;
     handle.disposed = true;
     if (handle.mesh) {
+      // Drop the LOD camera callback so an unmounted mesh cannot keep writing handle.lod.
+      handle.mesh.onBeforeRender = () => {};
       scene.remove(handle.mesh);
       geo.dispose();
       mat.dispose();
