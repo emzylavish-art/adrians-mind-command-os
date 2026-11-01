@@ -59,3 +59,31 @@ export function emailPasswordGate(supabaseConfigured: boolean): {
       "Email sign-in isn’t configured yet (needs SUPABASE_URL and SUPABASE_ANON_KEY on the server).",
   };
 }
+
+/**
+ * Red danger banner must never appear from a URL query alone (stale links,
+ * session restore, or a bounce that left ?error=). Only in-page failed attempts
+ * set the danger banner.
+ */
+export function loginErrorBannerFromSearch(
+  _error: string | undefined,
+): string | null {
+  return null;
+}
+
+/** /dashboard → /login search params. Never append error. */
+export function dashboardLoginSearch(): { next: "/dashboard" } {
+  return { next: "/dashboard" };
+}
+
+/** Owner-broker Google/X are usable only when real GROK_AUTH_* env is set. */
+export function isOwnerBrokerConfigured(env: {
+  VITE_AUTH_ENABLED?: string;
+  GROK_AUTH_CLIENT_ID?: string;
+  GROK_AUTH_CLIENT_SECRET?: string;
+}): boolean {
+  if ((env.VITE_AUTH_ENABLED ?? "").trim() === "false") return false;
+  const id = (env.GROK_AUTH_CLIENT_ID ?? "").trim();
+  const secret = (env.GROK_AUTH_CLIENT_SECRET ?? "").trim();
+  return Boolean(id && secret);
+}

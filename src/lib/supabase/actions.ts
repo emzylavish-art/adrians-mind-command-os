@@ -7,6 +7,10 @@ import { redirect } from "@tanstack/react-router";
 import { safeRedirectPath } from "./safe-redirect";
 import { buildAuthCallbackUrl } from "./oauth-redirect";
 import { decideDashboardGate, type SupabaseGateUser } from "./gate";
+import {
+  dashboardLoginSearch,
+  isOwnerBrokerConfigured,
+} from "@/lib/auth/login-providers";
 
 function asString(value: unknown, max = 320): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -22,19 +26,29 @@ async function requestOrigin(): Promise<string> {
   return url.origin;
 }
 
+function probeBrokerConfigured(): boolean {
+  return isOwnerBrokerConfigured({
+    VITE_AUTH_ENABLED: process.env.VITE_AUTH_ENABLED,
+    GROK_AUTH_CLIENT_ID: process.env.GROK_AUTH_CLIENT_ID,
+    GROK_AUTH_CLIENT_SECRET: process.env.GROK_AUTH_CLIENT_SECRET,
+  });
+}
+
 async function probeAuthUser(): Promise<{
   configured: boolean;
   user: SupabaseGateUser | null;
+  brokerConfigured: boolean;
 }> {
+  const brokerConfigured = probeBrokerConfigured();
   const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
   if (!readSupabaseEnv()) {
-    return { configured: false, user: null };
+    return { configured: false, user: null, brokerConfigured };
   }
   const supabase = createSupabaseServerClient();
   // Prefer getUser() over getSession() — validates the JWT with the Auth server.
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
-    return { configured: true, user: null };
+    return { configured: true, user: null, brokerConfigured };
   }
   return {
     configured: true,
@@ -42,12 +56,14 @@ async function probeAuthUser(): Promise<{
       id: data.user.id,
       email: data.user.email ?? null,
     },
+    brokerConfigured,
   };
 }
 
 export type AuthUserResult = {
   configured: boolean;
   user: SupabaseGateUser | null;
+  brokerConfigured: boolean;
 };
 
 export const getSupabaseAuthUser = createServerFn({ method: "GET" }).handler(
@@ -61,7 +77,7 @@ export const requireDashboardUser = createServerFn({ method: "GET" }).handler(
     if (decision.action === "redirect_login") {
       throw redirect({
         to: "/login",
-        search: { next: "/dashboard" },
+        search: dashboardLoginSearch(),
       });
     }
     return decision.user;

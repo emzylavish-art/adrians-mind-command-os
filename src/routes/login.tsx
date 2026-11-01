@@ -10,6 +10,7 @@ import { safeRedirectPath } from "@/lib/supabase/safe-redirect";
 import { authEnabled, signIn } from "@/lib/auth/client";
 import {
   emailPasswordGate,
+  loginErrorBannerFromSearch,
   resolveLoginProviderAction,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
@@ -169,11 +170,15 @@ function Login() {
   const search = Route.useSearch();
   const next = safeRedirectPath(search.next);
   const supabaseConfigured = Boolean(data.configured);
+  const brokerConfigured = Boolean(data.brokerConfigured);
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [banner, setBanner] = useState<string | null>(search.error ?? null);
+  // Never seed the red banner from ?error= (stale restore / bounce). Only in-page failures.
+  const [banner, setBanner] = useState<string | null>(
+    () => loginErrorBannerFromSearch(search.error),
+  );
   const [info, setInfo] = useState<string | null>(null);
 
   async function onPasswordSubmit(event: FormEvent) {
@@ -183,7 +188,7 @@ function Login() {
     setInfo(null);
     const gate = emailPasswordGate(supabaseConfigured);
     if (!gate.ok) {
-      setBanner(gate.message);
+      setInfo(gate.message);
       setBusy(false);
       return;
     }
@@ -217,11 +222,11 @@ function Login() {
     setInfo(null);
     const action = resolveLoginProviderAction(provider, {
       supabaseConfigured,
-      betterAuthEnabled: authEnabled,
+      betterAuthEnabled: brokerConfigured && authEnabled,
     });
     try {
       if (action.kind === "not_configured") {
-        setBanner(action.message);
+        setInfo(action.message);
         return;
       }
       if (action.kind === "supabase_oauth") {
@@ -327,6 +332,7 @@ function Login() {
           <div
             className="mt-4 rounded-panel border border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-muted"
             role="status"
+            data-testid="login-inline-notice"
           >
             {info}
           </div>
