@@ -242,6 +242,7 @@ export function DashboardApp() {
       ) : null}
 
       {state.status === "ready" ? (
+        <>
         <a className="dash3d-skip-link" href="#dash3d-skybar" data-testid="dash3d-skip-skybar">
           Skip to skybar
         </a>
@@ -343,6 +344,7 @@ export function DashboardApp() {
             Zoom to sky
           </button>
         </div>
+        </>
       ) : null}
 
       {state.status === "ready" && !webglError ? (
