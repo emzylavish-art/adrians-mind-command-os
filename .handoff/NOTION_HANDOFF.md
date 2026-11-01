@@ -28,3 +28,16 @@ Full local write-up: `MEDIA_HANDOFF.md`.
 - Skip og-dependent brand-check/write-atomic tests cleanly when gitignored `.grok/skills/og` is absent
 - Isolate gate-identity from ambient `VITE_AUTH_ENABLED` / `GROK_*` via beforeEach/afterEach
 - Counts: mind 248 pass / 0 fail; scripts 198 pass / 0 fail / 4 skipped; typecheck pass; build pass
+
+## 2026-11-01T14:30:07+01:00 (Africa/Lagos) — Logic Bot — stop point: null-body + search timeout done
+- Branch tip: 6bb0b7b on origin/logic-wiring
+- Commits: 57b9219 shared request-body 400 guard; d507e30 search/deep timeouts + citation hardening; 6bb0b7b gate adversarial + test:mind entries
+- Fixed: POST /api/mind/turn + /api/mind/agent with non-object bodies (incl. literal null) → 400 "That request could not be read."; web search / deep research bounded via MIND_SEARCH_TIMEOUT_MS / MIND_SEARCH_DEEP_TIMEOUT_MS with honest SEARCH_TIMEOUT_REPLY (no invented citations)
+- Deferred: env model-id validation (modelTierEnvIssues); chip/relay probes (done-without-model invents grok-4.5; disconnect/network mislabeled as timeout)
+- Counts: typecheck pass; mind 298 pass / 0 fail; scripts 198 pass / 0 fail / 4 skipped; build pass
+- Locks: logic-wiring.lock + logic-wiring-gap-search-timeout.lock → done, released
+- Notion mirror: https://app.notion.com/p/40bb95f33e42814aacf8c3281b4f528d
+
+### Notion note
+- Parent mirror `40bb95f3-3e42-814a-acf8-c3281b4f528d` rejects content insert/update (page ~3.7MB; validation_error).
+- Stop point recorded as child page: https://app.notion.com/p/40bb95f33e42811dba85f915672db536
