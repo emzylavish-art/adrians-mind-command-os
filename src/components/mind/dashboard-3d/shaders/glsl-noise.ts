@@ -36,7 +36,7 @@ float paintFbm(vec2 p) {
 }
 `;
 
-export const PAINTER_SHADER_VERSION = "painter-1.2.0";
+export const PAINTER_SHADER_VERSION = "painter-1.3.0";
 
 /** Marker string tests assert is present for mediump hardening. */
 export const GLSL_MEDIUMP_GUARD = "paintWrap";

@@ -6,9 +6,10 @@
  * 2. const kit = createPainterlyKit(); composer.addPass(kit.painterlyPass);
  * 3. Stars: kit.createStarMaterial({ color }); Buildings: kit.createBuildingMaterial({...});
  * 4. Lore plaques: kit.createLorePlaqueMaterial({ accent }); edges: kit.createInkWashEdgeMaterial({ health });
- * 5. Sky: kit.createSkyMaterial();
- * 5. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
- * 6. Each frame: tickPainterlyKit(kit, t); on unmount: disposePainterlyKit(kit).
+ * 5. Imagine cards/sprites: kit.createImagineNodeMaterial({ map }); setImagineNodeMap when load completes
+ * 6. Sky: kit.createSkyMaterial();
+ * 7. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
+ * 8. Each frame: tickPainterlyKit(kit, t); on unmount: disposePainterlyKit(kit).
  */
 import * as THREE from "three";
 import type { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
@@ -38,12 +39,32 @@ import {
   tickInkWashEdgeMaterial,
   type InkWashEdgeOptions,
 } from "./ink-wash-edge.ts";
-import { createNebulaSkyMaterial, type NebulaTextureOptions } from "./nebula-sky.ts";
+import {
+  createImagineNodeMaterial as createImagineNodeMaterialImpl,
+  tickImagineNodeMaterial,
+  setImagineNodePaperMap,
+  type ImagineNodeOptions,
+} from "./imagine-node.ts";
+import { createNebulaSkyMaterial, createNebulaTexture, type NebulaTextureOptions } from "./nebula-sky.ts";
 import { createPaperGrainTexture, sanitizeShaderTime } from "./paper-grain.ts";
 
 export type PainterlyKitOptions = {
   pass?: PainterlyPassOptions;
   nebula?: NebulaTextureOptions;
+};
+
+/** Shared kit texture slots that survive context restore via rebind. */
+export type PainterlyTextureSlot = "paperGrain" | "starSprite";
+
+export type PainterlyTextureBinding = {
+  /** Material that holds a reference to a kit-owned texture. */
+  material: THREE.Material;
+  slot: PainterlyTextureSlot;
+  /**
+   * ShaderMaterial uniform name (e.g. "uPaperMap"), or "map" for MeshBasic/Sprite.
+   * Defaults to "map".
+   */
+  target?: string;
 };
 
 export type PainterlyKit = {
@@ -53,24 +74,41 @@ export type PainterlyKit = {
   tracked: THREE.ShaderMaterial[];
   /** Sky materials created via createSkyMaterial — MUST be disposed (was a leak). */
   trackedSkies: THREE.MeshBasicMaterial[];
+  /**
+   * External consumers (e.g. SpriteMaterial.map = kit.starSpriteTexture) that must
+   * be re-pointed after context restore recreates kit textures.
+   */
+  textureBindings: PainterlyTextureBinding[];
   disposed: boolean;
   contextLost: boolean;
   createStarMaterial: (opts?: StarSurfaceOptions) => THREE.ShaderMaterial;
   createBuildingMaterial: (opts?: BuildingSurfaceOptions) => THREE.ShaderMaterial;
   createLorePlaqueMaterial: (opts?: LorePlaqueOptions) => THREE.ShaderMaterial;
   createInkWashEdgeMaterial: (opts?: InkWashEdgeOptions) => THREE.ShaderMaterial;
+  createImagineNodeMaterial: (opts?: ImagineNodeOptions) => THREE.ShaderMaterial;
   createSkyMaterial: (opts?: NebulaTextureOptions) => THREE.MeshBasicMaterial;
+  /**
+   * Register a material that captured kit.starSpriteTexture / paperGrainTexture
+   * (Dashboard Bot SpriteMaterials). Required so restore can re-attach.
+   */
+  bindSharedTexture: (
+    material: THREE.Material,
+    slot: PainterlyTextureSlot,
+    target?: string,
+  ) => void;
 };
 
 export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit {
   const tracked: THREE.ShaderMaterial[] = [];
   const trackedSkies: THREE.MeshBasicMaterial[] = [];
+  const textureBindings: PainterlyTextureBinding[] = [];
   const kit: PainterlyKit = {
     painterlyPass: createPainterlyPass(opts.pass),
     starSpriteTexture: createStarSpriteTexture(),
     paperGrainTexture: createPaperGrainTexture({ size: 256, seed: 7 }),
     tracked,
     trackedSkies,
+    textureBindings,
     disposed: false,
     contextLost: false,
     createStarMaterial(starOpts) {
@@ -93,13 +131,109 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       tracked.push(m);
       return m;
     },
+    createImagineNodeMaterial(iOpts) {
+      const m = createImagineNodeMaterialImpl({
+        ...iOpts,
+        paperMap: iOpts?.paperMap === undefined ? kit.paperGrainTexture : iOpts.paperMap,
+      });
+      tracked.push(m);
+      // Auto-bind paper slot so restore re-attaches the NEW paperGrainTexture object
+      textureBindings.push({ material: m, slot: "paperGrain", target: "uPaperMap" });
+      return m;
+    },
     createSkyMaterial(skyOpts) {
       const m = createNebulaSkyMaterial(skyOpts ?? opts.nebula);
       trackedSkies.push(m);
       return m;
     },
+    bindSharedTexture(material, slot, target = "map") {
+      // Replace existing binding for same material+slot
+      for (let i = textureBindings.length - 1; i >= 0; i--) {
+        const b = textureBindings[i]!;
+        if (b.material === material && b.slot === slot) textureBindings.splice(i, 1);
+      }
+      textureBindings.push({ material, slot, target });
+      applyTextureBinding(kit, { material, slot, target });
+    },
   };
   return kit;
+}
+
+function textureForSlot(
+  kit: PainterlyKit,
+  slot: PainterlyTextureSlot,
+): THREE.Texture {
+  return slot === "paperGrain" ? kit.paperGrainTexture : kit.starSpriteTexture;
+}
+
+/** Apply one binding to a live material (uniform or .map). */
+export function applyTextureBinding(kit: PainterlyKit, binding: PainterlyTextureBinding): boolean {
+  if (kit.disposed) return false;
+  const tex = textureForSlot(kit, binding.slot);
+  const target = binding.target ?? "map";
+  const mat = binding.material as THREE.ShaderMaterial & {
+    map?: THREE.Texture | null;
+    needsUpdate?: boolean;
+    uniforms?: Record<string, { value: unknown }>;
+  };
+  if (mat.uniforms && target in mat.uniforms) {
+    mat.uniforms[target]!.value = tex;
+    if (target === "uPaperMap" && mat.uniforms["uHasPaper"]) {
+      mat.uniforms["uHasPaper"].value = 1;
+    }
+    return true;
+  }
+  if (target === "map" && "map" in mat) {
+    mat.map = tex;
+    mat.needsUpdate = true;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * HACKER FIX (c4): after webglcontextrestored the kit recreates paperGrain /
+ * starSprite (and sky nebula) textures. Materials that captured the OLD objects
+ * (SpriteMaterial.map, Imagine uPaperMap, etc.) would stay blank unless rebound.
+ * Returns how many attachments were refreshed.
+ */
+export function rebindPainterlyKitTextures(kit: PainterlyKit): number {
+  if (kit.disposed) return 0;
+  let n = 0;
+  // Force CPU→GPU re-upload of kit-owned textures
+  kit.starSpriteTexture.needsUpdate = true;
+  kit.paperGrainTexture.needsUpdate = true;
+  n += 2;
+
+  for (const b of kit.textureBindings) {
+    if (applyTextureBinding(kit, b)) n += 1;
+  }
+
+  // Imagine materials: mark loaded image textures for re-upload + refresh paper slot
+  for (const m of kit.tracked) {
+    if (m.name !== "ImagineNodeMaterial") continue;
+    const img = m.uniforms?.["uImage"]?.value as THREE.Texture | null | undefined;
+    if (img) {
+      img.needsUpdate = true;
+      n += 1;
+    }
+    setImagineNodePaperMap(m, kit.paperGrainTexture);
+    n += 1;
+  }
+
+  // Sky nebula CanvasTextures are also invalid after context loss — recreate maps
+  for (const sky of kit.trackedSkies) {
+    try {
+      sky.map?.dispose();
+    } catch {
+      /* already invalid */
+    }
+    sky.map = createNebulaTexture();
+    sky.needsUpdate = true;
+    n += 1;
+  }
+
+  return n;
 }
 
 export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
@@ -110,6 +244,7 @@ export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
     else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, timeSeconds);
     else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, timeSeconds);
     else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, timeSeconds);
+    else if (m.name === "ImagineNodeMaterial") tickImagineNodeMaterial(m, timeSeconds);
     else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
   }
 }
@@ -117,6 +252,7 @@ export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
 /**
  * Dispose all kit-owned GPU resources. Idempotent.
  * HACKER FIX: previously createSkyMaterial maps/materials were never disposed.
+ * Does NOT dispose Imagine image maps (caller-owned TextureLoader results).
  */
 export function disposePainterlyKit(kit: PainterlyKit): void {
   if (kit.disposed) return;
@@ -130,6 +266,7 @@ export function disposePainterlyKit(kit: PainterlyKit): void {
     sky.dispose();
   }
   kit.trackedSkies.length = 0;
+  kit.textureBindings.length = 0;
 }
 
 /**
@@ -144,6 +281,10 @@ export function releasePainterlyMaterial(
   const i = kit.tracked.indexOf(mat as THREE.ShaderMaterial);
   if (i >= 0) {
     kit.tracked.splice(i, 1);
+    // Drop texture bindings for this material
+    for (let b = kit.textureBindings.length - 1; b >= 0; b--) {
+      if (kit.textureBindings[b]!.material === mat) kit.textureBindings.splice(b, 1);
+    }
     mat.dispose();
     return true;
   }
@@ -161,19 +302,21 @@ export function releasePainterlyMaterial(
 export function painterlyKitResourceCounts(kit: PainterlyKit): {
   materials: number;
   skies: number;
+  bindings: number;
   disposed: boolean;
 } {
   return {
     materials: kit.tracked.length,
     skies: kit.trackedSkies.length,
+    bindings: kit.textureBindings.length,
     disposed: kit.disposed,
   };
 }
 
 /**
  * WebGL context loss/restore: pause ticks on loss; on restore recreate CPU textures
- * that hold canvas/data uploads (star sprite + paper grain). Does not silently
- * swallow errors — sets kit.contextLost and returns whether restore rebuilt.
+ * that hold canvas/data uploads (star sprite + paper grain) and REBIND consumers
+ * so surfaces do not go blank. Does not silently swallow errors.
  */
 export function attachPainterlyContextHandlers(
   canvas: HTMLCanvasElement,
@@ -199,6 +342,8 @@ export function attachPainterlyContextHandlers(
     }
     kit.starSpriteTexture = createStarSpriteTexture();
     kit.paperGrainTexture = createPaperGrainTexture({ size: 256, seed: 7 });
+    // HACKER FIX (c4): re-attach new texture objects to every consumer
+    rebindPainterlyKitTextures(kit);
     rebuild?.();
   };
   canvas.addEventListener("webglcontextlost", onLost, false);
@@ -215,6 +360,7 @@ export function usePainterlyKitFactory() {
     tickPainterlyKit,
     disposePainterlyKit,
     attachPainterlyContextHandlers,
+    rebindPainterlyKitTextures,
     painterlyKitResourceCounts,
     releasePainterlyMaterial,
   };

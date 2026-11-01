@@ -8,6 +8,7 @@ import {
   tickPainterlyKit,
   disposePainterlyKit,
   attachPainterlyContextHandlers,
+  setImagineNodeMap,
 } from "@/components/mind/dashboard-3d/materials";
 
 const kit = createPainterlyKit({ pass: { amount: 0.42 } });
@@ -17,6 +18,11 @@ const detachCtx = attachPainterlyContextHandlers(renderer.domElement, kit);
 // sky: kit.createSkyMaterial()  // tracked + disposed
 // lore: kit.createLorePlaqueMaterial({ accent: healthColor })
 // edges: kit.createInkWashEdgeMaterial({ health: bot.health })  // ribbon mesh along constellation edge
+// Imagine people/characters/scenes (replace MeshBasicMaterial/SpriteMaterial on portraits):
+//   const mat = kit.createImagineNodeMaterial({ accent: healthColor }); // wash fallback until loaded
+//   loader.load(url, (tex) => { tex.colorSpace = SRGB; setImagineNodeMap(mat, tex); });
+//   // glow sprites that use kit.starSpriteTexture MUST register:
+//   glowMat.map = kit.starSpriteTexture; kit.bindSharedTexture(glowMat, "starSprite");
 // buildings: kit.createBuildingMaterial({ floors, progress })
 // animate: tickPainterlyKit(kit, t)
 // cleanup: detachCtx(); disposePainterlyKit(kit);
@@ -39,9 +45,15 @@ edgeGroup.add(mesh);
 ```
 
 - MUST use `releasePainterlyMaterial` (not bare `.dispose()`) for kit materials that are rebuilt per poll, or `kit.tracked` grows forever.
-- `tickPainterlyKit(kit, t)` already ticks `InkWashEdgeMaterial`; shader time is wrapped to `PAINTER_TIME_PERIOD` (600s) so long-running wall sessions don't overflow mediump.
+- `tickPainterlyKit(kit, t)` already ticks `InkWashEdgeMaterial` + `ImagineNodeMaterial`; shader time is wrapped to `PAINTER_TIME_PERIOD` (600s).
 - Optional: `getMaxTextureSize` → `createPaperGrainTexture({ maxTextureSize: renderer.capabilities.maxTextureSize })`.
 
+## c4 — context-restore rebind + Imagine node cards
+
+- After `webglcontextrestored`, kit recreates `paperGrainTexture` / `starSpriteTexture` and calls `rebindPainterlyKitTextures(kit)` so consumers do not keep disposed texture objects (blank surfaces).
+- Dashboard Bot: any `SpriteMaterial` / `MeshBasicMaterial` that assigns `kit.starSpriteTexture` or `kit.paperGrainTexture` **must** call `kit.bindSharedTexture(mat, "starSprite"|"paperGrain")`.
+- Imagine portraits/characters/scenes: use `kit.createImagineNodeMaterial` instead of plain `MeshBasicMaterial({ map })`. Missing/loading art shows a watercolor wash fallback; `setImagineNodeMap(mat, tex)` when load completes. Do not dispose the TextureLoader map from the material — only `releasePainterlyMaterial` / `disposePainterlyKit`.
+
 ## Next painter candidate
-- Context-restore rebinding: after `webglcontextrestored`, the kit recreates `paperGrainTexture`/`starSpriteTexture`, but materials that captured the old texture objects (e.g. star `map`) still reference disposed ones; add a rebind pass over `kit.tracked`.
-- Lore plaque text atlas (queue tail).
+- Lore plaque text atlas (queue tail) — procedural canvas glyph atlas for lock-note body text.
+- Wire Imagine materials in universe-scene (Dashboard Bot) once this branch lands.
