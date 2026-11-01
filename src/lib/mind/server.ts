@@ -387,3 +387,58 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
     return mintRealtimeClientSecret({});
   });
+export const mcpRegistryList = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { listRegistryServers } = await import("./mcp/registry");
+    return { servers: listRegistryServers(context.userId) };
+  });
+
+export const mcpRegistryToggle = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; enabled?: boolean }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
+    enabled: input.enabled === true,
+  }))
+  .handler(async ({ data, context }) => {
+    const { setServerEnabled } = await import("./mcp/registry");
+    return { servers: setServerEnabled(context.userId, data.id, data.enabled) };
+  });
+
+export const mcpRegistryTools = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { listRegistryTools } = await import("./mcp/registry");
+    return { tools: await listRegistryTools(context.userId) };
+  });
+
+export const mcpRegistryCall = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { serverId?: string; tool?: string; args?: Record<string, unknown> }) => ({
+    serverId: typeof input.serverId === "string" ? input.serverId.slice(0, 80) : "",
+    tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
+    args: input.args && typeof input.args === "object" ? input.args : {},
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false, status: "error" as const, serverId: data.serverId, tool: data.tool, text: "Emergency stop is on. No MCP tool was called." };
+    }
+    const { callRegistryTool } = await import("./mcp/registry");
+    const { getSql } = await import("../db");
+    const result = await callRegistryTool({
+      userId: context.userId,
+      serverId: data.serverId,
+      tool: data.tool,
+      args: data.args,
+      getSql,
+    });
+    return {
+      ok: result.ok,
+      status: result.status,
+      serverId: result.serverId,
+      tool: result.tool,
+      text: result.text,
+    };
+  });
+

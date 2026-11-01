@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { inspectWebPage, workerHealth } from "@/lib/mind/server";
+import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -69,6 +69,10 @@ export function FleetPanel({
   const [workerNote, setWorkerNote] = useState("Checking the worker.");
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
+  const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean }[]>([]);
+  const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
+  const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
@@ -314,6 +318,17 @@ export function FleetPanel({
     );
   }
 
+
+  useEffect(() => {
+    if (mode !== "tools") return;
+    void mcpRegistryList()
+      .then((result) => setMcpServers(result.servers))
+      .catch(() => setMcpServers([]));
+    void mcpRegistryTools()
+      .then((result) => setMcpTools(result.tools))
+      .catch(() => setMcpTools([]));
+  }, [mode]);
+
   return (
     <section className="page-shell">
       <div className="page-hero mb-4">
@@ -355,6 +370,69 @@ export function FleetPanel({
           </li>
         ))}
       </ul>
+
+      <div className="mt-6 space-y-3">
+        <h3 className="font-semibold">MCP servers</h3>
+        <p className="text-sm text-muted">Built-in tools run in this app. External servers stay off until enabled. Toggles do not invent a handshake.</p>
+        <ul className="space-y-2 text-sm">
+          {mcpServers.map((server) => (
+            <li key={server.id} className="rounded-panel border border-line bg-surface p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold">{server.label}</p>
+                  <p className="text-xs text-muted">{server.kind} · {server.enabled ? "Enabled" : "Disabled"}</p>
+                </div>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
+                      setMcpServers(result.servers);
+                      void mcpRegistryTools().then((tools) => setMcpTools(tools.tools)).catch(() => undefined);
+                    });
+                  }}
+                >
+                  {server.enabled ? "Turn off" : "Turn on"}
+                </button>
+              </div>
+            </li>
+          ))}
+          {mcpServers.length === 0 && <li className="text-sm text-muted">No MCP servers loaded yet.</li>}
+        </ul>
+        <ul className="space-y-2 text-sm">
+          {mcpTools.filter((tool) => tool.name !== "(disabled)").map((tool) => (
+            <li key={`${tool.serverId}:${tool.name}`} className="rounded-panel border border-line bg-surface p-3">
+              <p className="font-semibold">{tool.name} · {tool.enabled ? "Available" : "Disabled"}</p>
+              <p className="text-xs text-muted">{tool.serverLabel}. {tool.description}</p>
+              {tool.name === "pglite_query" && tool.enabled ? (
+                <button
+                  type="button"
+                  className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm"
+                  disabled={mcpCallStatus === "running"}
+                  onClick={() => {
+                    setMcpCallStatus("running");
+                    setMcpCallNote("running: pglite_query SELECT 1");
+                    void mcpRegistryCall({ data: { serverId: tool.serverId, tool: "pglite_query", args: { sql: "SELECT 1 AS n" } } })
+                      .then((result) => {
+                        const row = result as { status: string; text: string };
+                        setMcpCallStatus(row.status === "ok" ? "ok" : "error");
+                        setMcpCallNote(`${row.status}: ${row.text}`);
+                      })
+                      .catch((error: unknown) => {
+                        setMcpCallStatus("error");
+                        setMcpCallNote(error instanceof Error ? error.message : "MCP call failed.");
+                      });
+                  }}
+                >
+                  Try SELECT 1
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        {mcpCallNote ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
+      </div>
+
       <ul className="mt-4 space-y-2 text-sm">
         {ws.browserSessions.length === 0 && <li className="rounded-panel border border-line bg-surface p-3 text-muted">No browser sessions yet. Open page records one only after a successful inspect.</li>}
         {ws.browserSessions.map((session) => (
