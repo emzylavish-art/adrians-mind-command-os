@@ -4529,10 +4529,6 @@ form.composer-dock button.min-h-10,
   min-width: 2.75rem !important;
   min-height: 2.75rem !important;
 }
-.main-stage button:has(> span):is([class*="Attach"]),
-.composer-dock .flex button {
-  /* ensure attach-like icon buttons in dock row */
-}
 .composer-dock .flex.items-center.gap-2 > button,
 .composer-dock .flex.gap-2 > button,
 .floating-composer .flex.gap-2 > button {
