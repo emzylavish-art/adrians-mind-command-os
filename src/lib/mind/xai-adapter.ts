@@ -9,10 +9,12 @@ export const DEFAULT_XAI_MODEL = "grok-4.5";
 /** Box-local secrets file (gitignored / outside the repo). Same pattern as voice. */
 export const XAI_INFERENCE_SECRETS_PATH = "/home/box/.secrets/xai_inference.env";
 
+export type XaiUnavailableReason = "missing_key" | "misconfigured_management_key" | "api_error" | "empty_reply" | "unreachable";
+
 export type XaiUnavailable = {
   ok: false;
   state: "unavailable";
-  reason: "missing_key" | "api_error" | "empty_reply" | "unreachable";
+  reason: XaiUnavailableReason;
   error: string;
   status: number | null;
   requestId: string | null;
@@ -50,6 +52,29 @@ function missingKey(): XaiUnavailable {
   };
 }
 
+function managementKeyMisconfigured(): XaiUnavailable {
+  return {
+    ok: false,
+    state: "unavailable",
+    reason: "misconfigured_management_key",
+    error:
+      "misconfigured: management key. XAI_API_KEY matches XAI_MANAGEMENT_KEY and cannot be used for inference. Nothing was sent and nothing was persisted as a model reply.",
+    status: null,
+    requestId: null,
+    latencyMs: 0,
+    text: "",
+    model: null,
+    usage: null,
+  };
+}
+
+/** True when the candidate chat key is byte-identical to the management key. Never logs values. */
+export function isManagementKeyAsInference(key: string, env: Record<string, string | undefined> = process.env): boolean {
+  const candidate = key.trim();
+  const management = env.XAI_MANAGEMENT_KEY?.trim() ?? "";
+  return Boolean(candidate && management && candidate === management);
+}
+
 /** Read `export XAI_API_KEY=...` or `XAI_API_KEY=...` from the box secrets file. */
 export function readXaiInferenceSecretsFile(path: string = XAI_INFERENCE_SECRETS_PATH): string | undefined {
   if (!existsSync(path)) return undefined;
@@ -69,12 +94,10 @@ export function readXaiInferenceSecretsFile(path: string = XAI_INFERENCE_SECRETS
 }
 
 /**
- * If `XAI_API_KEY` is unset, load it from the box secrets file into `env` (default: process.env).
- * Returns whether a non-empty key is available afterward. Never prints the value.
+ * Load the box inference secrets file into `env` when present (authoritative override).
+ * Returns whether a non-empty XAI_API_KEY is set afterward. Never prints the value.
  */
 export function applyXaiInferenceSecrets(env: Record<string, string | undefined> = process.env, path: string = XAI_INFERENCE_SECRETS_PATH): boolean {
-  // Box secrets file is authoritative for Mind inference when present (avoids a stale
-  // process env key shadowing the minted inference key). Never logs the value.
   const fromFile = readXaiInferenceSecretsFile(path);
   if (fromFile) {
     env.XAI_API_KEY = fromFile;
@@ -83,20 +106,39 @@ export function applyXaiInferenceSecrets(env: Record<string, string | undefined>
   return Boolean(env.XAI_API_KEY?.trim());
 }
 
+/**
+ * Validate the current `env.XAI_API_KEY` for inference use.
+ * Refuses a key that equals `XAI_MANAGEMENT_KEY`. Does not load the secrets file by itself.
+ */
 export function readXaiApiKey(env: Record<string, string | undefined> = process.env): { ok: true; key: string } | XaiUnavailable {
   const key = env.XAI_API_KEY?.trim() ?? "";
   if (!key) return missingKey();
+  if (isManagementKeyAsInference(key, env)) return managementKeyMisconfigured();
   return { ok: true, key };
+}
+
+/**
+ * Canonical resolver for every typed-chat / agent / models path:
+ * secrets file overrides process env, then management-key equality is refused.
+ */
+export function resolveXaiInferenceApiKey(
+  env: Record<string, string | undefined> = process.env,
+  path: string = XAI_INFERENCE_SECRETS_PATH,
+): { ok: true; key: string } | XaiUnavailable {
+  applyXaiInferenceSecrets(env, path);
+  return readXaiApiKey(env);
 }
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 export async function listXaiModels(input: {
   env?: Record<string, string | undefined>;
+  secretsPath?: string;
   fetchImpl?: FetchLike;
   timeoutMs?: number;
 }): Promise<{ ok: true; ids: string[] } | XaiUnavailable> {
-  const keyed = readXaiApiKey(input.env ?? process.env);
+  const env = input.env ?? process.env;
+  const keyed = resolveXaiInferenceApiKey(env, input.secretsPath ?? XAI_INFERENCE_SECRETS_PATH);
   if (!keyed.ok) return keyed;
   const fetchImpl = input.fetchImpl ?? fetch;
   const started = Date.now();
@@ -146,10 +188,14 @@ export async function callXaiChat(input: {
   temperature?: number;
   maxTokens?: number;
   env?: Record<string, string | undefined>;
+  secretsPath?: string;
   fetchImpl?: FetchLike;
   timeoutMs?: number;
+  /** When true, skip secrets-file load (tests that pass an explicit env only). */
+  skipSecretsFile?: boolean;
 }): Promise<XaiResult> {
-  const keyed = readXaiApiKey(input.env ?? process.env);
+  const env = input.env ?? process.env;
+  const keyed = input.skipSecretsFile ? readXaiApiKey(env) : resolveXaiInferenceApiKey(env, input.secretsPath ?? XAI_INFERENCE_SECRETS_PATH);
   if (!keyed.ok) return keyed;
   const model = input.model ?? DEFAULT_XAI_MODEL;
   const fetchImpl = input.fetchImpl ?? fetch;

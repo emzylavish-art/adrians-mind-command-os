@@ -6,7 +6,7 @@ import { describePersistence } from "./persistence";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
-import { applyXaiInferenceSecrets } from "./xai-adapter";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
 
 const MODEL = "grok-4.5";
 
@@ -53,7 +53,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const mindUrl = process.env.MIND_SUPABASE_URL;
   return {
     ok: true as const,
-    grok: (applyXaiInferenceSecrets(process.env), process.env.XAI_API_KEY) ? ("configured" as const) : ("unconfigured" as const),
+    grok: resolveXaiInferenceApiKey(process.env).ok ? ("configured" as const) : ("unconfigured" as const),
     model: MODEL,
     database: mindUrl
       ? "A Mind project URL is set and is not a forbidden project."

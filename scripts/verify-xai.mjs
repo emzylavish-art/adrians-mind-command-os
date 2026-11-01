@@ -74,9 +74,11 @@ const {
   applyXaiInferenceSecrets,
   callXaiChat,
   listXaiModels,
-  readXaiApiKey,
+  resolveXaiInferenceApiKey,
   XAI_INFERENCE_SECRETS_PATH,
 } = await loadTs("src/lib/mind/xai-adapter.ts");
+const { relayModelStream } = await loadTs("src/lib/mind/relay.ts");
+const { pullMindEvents } = await loadTs("src/lib/mind/stream.ts");
 const { writeSnapshot, readSnapshot } = await loadTs("src/lib/mind/store.ts");
 const { emptyWorkspace, normalizeWorkspace } = await loadTs("src/lib/mind/workspace.ts");
 const { applyAgentTurn } = await loadTs("src/lib/mind/agent-session.ts");
@@ -91,6 +93,8 @@ const { shouldStoreReply } = await loadTs("src/lib/mind/live-turn.ts");
   const missing = await callXaiChat({
     prompt: "Reply with exactly: VERIFY-OK",
     env,
+    secretsPath: missingPath,
+    skipSecretsFile: true,
     fetchImpl: async () => {
       throw new Error("fetch must not run when the key is missing");
     },
@@ -115,18 +119,30 @@ if (!LIVE) {
   report.stopPoint = "live_skipped";
   console.log("live: skipped (MIND_LIVE_XAI!=1)");
 } else {
-  // Load minted inference key from box secrets (authoritative)
-  const loaded = applyXaiInferenceSecrets(process.env, XAI_INFERENCE_SECRETS_PATH);
-  const keyed = readXaiApiKey(process.env);
-  if (!loaded || !keyed.ok) {
-    report.live = { ok: false, error: "Inference secrets file missing or empty; nothing sent." };
-    report.stopPoint = "secrets_missing";
-    console.error("live: secrets missing");
+  // Credential probe (models list only — not the chat call)
+  const processEnvKeyLen = (process.env.XAI_API_KEY || "").length;
+  const mgmtLen = (process.env.XAI_MANAGEMENT_KEY || "").length;
+  const equalsMgmtBefore = Boolean(process.env.XAI_API_KEY) && process.env.XAI_API_KEY === process.env.XAI_MANAGEMENT_KEY;
+  report.credentialProbe = {
+    processApiKeyLen: processEnvKeyLen,
+    managementKeyLen: mgmtLen,
+    equalsManagementKeyBeforeResolve: equalsMgmtBefore,
+  };
+  console.log(`probe: process_api_len=${processEnvKeyLen} equals_mgmt_before=${equalsMgmtBefore}`);
+
+  const keyed = resolveXaiInferenceApiKey(process.env, XAI_INFERENCE_SECRETS_PATH);
+  if (!keyed.ok) {
+    report.live = { ok: false, error: keyed.error, reason: keyed.reason };
+    report.stopPoint = keyed.reason === "misconfigured_management_key" ? "management_key_refused" : "secrets_missing";
+    console.error(`live: resolve failed reason=${keyed.reason}`);
     process.exit(1);
   }
-  console.log(`secrets: loaded from ${XAI_INFERENCE_SECRETS_PATH} (value not printed)`);
+  const equalsMgmtAfter = process.env.XAI_API_KEY === process.env.XAI_MANAGEMENT_KEY;
+  report.credentialProbe.equalsManagementKeyAfterResolve = equalsMgmtAfter;
+  report.credentialProbe.resolvedKeyLen = keyed.key.length;
+  console.log(`secrets: resolved via adapter from ${XAI_INFERENCE_SECRETS_PATH} (value not printed); equals_mgmt_after=${equalsMgmtAfter}`);
 
-  // Optional models list (does not count as the model call)
+  // Optional models list with resolved key (does not count as the model chat call)
   const models = await listXaiModels({});
   if (!models.ok) {
     report.modelsList = { ok: false, status: models.status, error: models.error };
@@ -137,43 +153,90 @@ if (!LIVE) {
   }
   const preferred = process.env.MIND_XAI_MODEL || "grok-4.5";
   const model = models.ids.includes(preferred) ? preferred : models.ids.find((id) => id.startsWith("grok-4")) || models.ids[0];
-  report.modelsList = { ok: true, count: models.ids.length, chosen: model, sample: models.ids.slice(0, 12) };
+  report.modelsList = { ok: true, count: models.ids.length, chosen: model, sample: models.ids.slice(0, 12), httpOk: true };
   console.log(`models: ${models.ids.length} listed; chosen=${model}`);
 
-  // Exactly one chat call
-  const live = await callXaiChat({
-    prompt: "Reply with exactly: VERIFY-OK",
-    temperature: 0,
-    maxTokens: 16,
+  // Exactly one chat call through the typed-chat server path: relayModelStream (same as handleMindTurn)
+  const started = Date.now();
+  const response = relayModelStream({
+    apiKey: keyed.key,
     model,
+    messages: [{ role: "user", content: "Reply with exactly: VERIFY-OK" }],
+    usedIds: [],
+    requestSignal: AbortSignal.timeout(25_000),
+    timeoutMs: 25_000,
   });
-  report.live = {
-    ok: live.ok,
-    state: live.state,
-    model: live.model,
-    requestId: live.requestId,
-    latencyMs: live.latencyMs,
-    status: live.status,
-    usage: live.usage,
-    text: live.ok ? live.text : "",
-    textLength: live.ok ? live.text.length : 0,
-    textSha256: live.ok ? sha256(live.text) : null,
-    error: live.ok ? null : live.error,
-    reason: live.ok ? null : live.reason,
-  };
-  if (!live.ok) {
+  // Override max tokens/temperature by using adapter non-stream if relay hardcodes 500/0.4 —
+  // typed-chat production path uses relay; keep that for fidelity.
+  if (!response.ok || !response.body) {
+    report.live = { ok: false, error: `typed-chat relay returned ${response.status}`, status: response.status };
     report.stopPoint = "live_api_error";
-    console.error(`live: failed status=${live.status} reason=${live.reason}`);
-    // still write report
+    console.error(`live: relay http ${response.status}`);
   } else {
-    console.log(`live: ok model=${live.model} latencyMs=${live.latencyMs} len=${live.text.length}`);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let carry = "";
+    let finished = null;
+    while (true) {
+      const step = await reader.read();
+      if (step.done) break;
+      carry += decoder.decode(step.value, { stream: true });
+      const pulled = pullMindEvents(carry);
+      carry = pulled.rest;
+      for (const event of pulled.events) {
+        if (event.event === "error" || event.event === "canceled") {
+          finished = { ok: false, error: event.error, status: null, reason: "api_error" };
+        }
+        if (event.event === "done") {
+          finished = {
+            ok: true,
+            text: event.text,
+            model: event.model,
+            usage: event.usage,
+            requestId: event.requestId,
+            status: 200,
+          };
+        }
+      }
+    }
+    const latencyMs = Date.now() - started;
+    if (!finished || !finished.ok) {
+      report.live = {
+        ok: false,
+        path: "relayModelStream(handleMindTurn)",
+        error: finished?.error || "empty stream",
+        reason: finished?.reason || "empty_reply",
+        latencyMs,
+      };
+      report.stopPoint = "live_api_error";
+      console.error(`live: typed-chat path failed: ${report.live.error}`);
+    } else {
+      const live = finished;
+      report.live = {
+        ok: true,
+        path: "relayModelStream(handleMindTurn)",
+        state: "ok",
+        model: live.model,
+        requestId: live.requestId,
+        latencyMs,
+        status: 200,
+        usage: live.usage,
+        text: live.text,
+        textLength: live.text.length,
+        textSha256: sha256(live.text),
+        error: null,
+        reason: null,
+      };
+      console.log(`live: ok path=typed-chat/relay model=${live.model} latencyMs=${latencyMs} len=${live.text.length}`);
+    }
   }
+  const live = report.live;
 
   const dir = mkdtempSync(join(tmpdir(), "mind-xai-"));
   try {
     const pg = await openDatabase(dir);
     const sql = toSql(pg);
-    if (live.ok && live.text.trim()) {
+    if (live && live.ok && live.text && live.text.trim()) {
       const raw = live.text;
       const rawSha = sha256(raw);
       const now = new Date().toISOString();

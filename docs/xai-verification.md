@@ -2,50 +2,64 @@
 
 Date: 2026-11-01 (Africa/Lagos, UTC+1)
 Branch: `xai-verification`
-Stop point: **complete**
+Stop point: **complete** (typed-chat 400 regression fixed)
 
-## Key creation and storage
+## Root cause (typed chat HTTP 400)
 
-- Minted via Management API `POST /auth/teams/{teamId}/api-keys` using `XAI_MANAGEMENT_KEY`.
-- Team ID: `c5078e86-a42f-4f3c-93d9-be513103966b`
-- Key id: `0922b6a4-e716-4e29-9b40-a1b9ee217964`
-- Name: `Adrian's Mind inference`
-- Redacted: `xai-...IA44`
-- ACLs: `api-key:endpoint:chat`, `api-key:endpoint:models`, `api-key:model:*` (inference/chat + models list only; no image/voice/etc.)
-- Propagation: all listed clusters `true`
-- **Stored at (not in git):** `/home/box/.secrets/xai_inference.env` as `export XAI_API_KEY=…` (dir `0700`, file `0600`)
-- Meta (no secret): `/home/box/.secrets/xai_inference_meta.json`
-- **Loaded by:** `applyXaiInferenceSecrets()` in `src/lib/mind/xai-adapter.ts` (secrets file is authoritative when present). Wired from `turn.server.ts`, `server.ts`, and `agent-run.server.ts`. Template: `.env.example` (placeholder only).
+- Process env often has `XAI_API_KEY` **identical** to `XAI_MANAGEMENT_KEY` (len 90). Management keys are rejected by inference (`GET /v1/models` and chat → **400** Incorrect API key).
+- Inference key lives at `/home/box/.secrets/xai_inference.env` (len 84) and returns **200** on models-list.
+- On `main` / `logic-wiring` / most worktrees, typed chat reads `process.env.XAI_API_KEY` directly in:
+  - `src/lib/mind/turn.server.ts` (`completeModelReply`, `handleMindTurn`)
+  - `src/lib/mind/agent-run.server.ts`
+  - `src/lib/mind/server.ts` (grok configured flag)
+- So Send/typed chat used the management key → 400.
 
-## Adapter / persistence path
+## Fix (this branch)
 
-- Adapter: `src/lib/mind/xai-adapter.ts` (+ existing `relay.ts` / `turn.server.ts`)
-- Persist: `applyAgentTurn` → `writeSnapshot` / `readSnapshot` (`store.ts`) on file PGLite
-- Script: `MIND_LIVE_XAI=1 node --experimental-strip-types scripts/verify-xai.mjs`
+- `resolveXaiInferenceApiKey()` in `src/lib/mind/xai-adapter.ts`:
+  1. Loads `/home/box/.secrets/xai_inference.env` (overrides process env)
+  2. Refuses a key equal to `XAI_MANAGEMENT_KEY` → `unavailable` / `misconfigured_management_key` (no fabricate)
+- Wired into `turn.server.ts`, `agent-run.server.ts`, `server.ts`
+- `scripts/with-app-env.mjs` applies inference secrets before spawning Vite
+- `startup.sh` unsets stale `XAI_API_KEY` then sources the secrets file
+- Regression tests: env holds management key (with and without secrets file)
 
-## Live call (exactly one chat completion)
+## Key storage / load
 
+- Stored: `/home/box/.secrets/xai_inference.env` (`export XAI_API_KEY=…`, chmod 600) — outside git
+- Key id (from mint): `0922b6a4-e716-4e29-9b40-a1b9ee217964` name `Adrian's Mind inference` redacted `xai-...IA44`
+- ACLs: `api-key:endpoint:chat`, `api-key:endpoint:models`, `api-key:model:*`
+
+## Live typed-chat path (exactly one chat call)
+
+- Path: `relayModelStream` (same as `handleMindTurn` after auth)
 - Models listed first (14); chosen `grok-4.5`
-- Response text: `VERIFY-OK`
-- Latency: `1146` ms
-- Usage: prompt_tokens `501`, completion_tokens `3`
-- Request id: `8311fb70-341a-9631-9fa0-ed0521e6f6b5`
+- Before resolve: process key equals management = true
+- After resolve: equals management = false
+- Response: `VERIFY-OK`
+- Latency: 978 ms
+- Request id: `452dfd76-56f0-9cf8-b76d-7b32e5653a2a`
+- Usage: prompt 501 / completion 3
 
-## Persistence read-back
+## Persistence
 
-- Byte-for-byte match: **true**
+- Byte-for-byte match: true
 - sha256: `7d18b48ff73e9b7672256fc0fdb82543568351810874ea4fbe49fae8cc0d061e`
-- length: `9`
+- length: 9
 
-## Missing-key path
+## Missing-key
 
-- Isolated env + absent secrets path → `state: unavailable`, `reason: missing_key`
-- No network fetch, no fabricated text, nothing persisted as a model reply
+- Isolated env + no secrets file → `unavailable` / `missing_key`; no fetch; nothing persisted
 
-## Earlier stop (superseded)
+## Rebase onto logic-wiring
 
-- First attempt used the box `XAI_API_KEY` which matched the management key and was rejected by the inference API (`400 incorrect API key`). That was the previous stop point before minting this inference key.
+- logic-wiring tip (as of this write) still uses raw `process.env.XAI_API_KEY` and also imports `chatTurnTimeoutMs` / `CHAT_TIMEOUT_REPLY` from `./turn-timeouts` (Voice handoff cited `beebc80`).
+- This branch does **not** yet include `turn-timeouts`. When merging/rebasing:
+  - Keep logic-wiring timeout wiring on `relayModelStream({ timeoutMs: chatTurnTimeoutMs(), ... })`
+  - Replace raw `process.env.XAI_API_KEY` reads with `resolveXaiInferenceApiKey(process.env)`
+  - Add `src/lib/mind/xai-adapter.ts` (+ tests) and the `with-app-env` / `startup.sh` secrets load
+- Expected conflict hotspots: `turn.server.ts` key + timeout hunks; `agent-run.server.ts` key block; `package.json` test list
 
-## Locks
+## Other worktrees
 
-- `/workspace/locks` had unrelated bots (`error-banners` released, `voice-wiring` on other paths). No lock on xAI verification files. No repo `locks/` dir.
+Until they merge this branch (or cherry-pick the adapter + turn/agent/server/startup/with-app-env changes), they still pick up the management key for typed chat if their server process inherited box env. Running servers (e.g. voice `:8095`, dashboard `:8100`/`:8110`) need restart **after** those trees get the fix or after launching via a script that sources `xai_inference.env` (voice-wiring `scripts/voice/dev-preview.sh` already does).

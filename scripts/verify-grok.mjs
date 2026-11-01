@@ -4,9 +4,30 @@ if (!optedIn) {
   process.exit(2);
 }
 
-const key = process.env.XAI_API_KEY;
+import { readFileSync, existsSync } from "node:fs";
+
+function loadInferenceKey() {
+  const path = process.env.XAI_INFERENCE_ENV_FILE || "/home/box/.secrets/xai_inference.env";
+  if (existsSync(path)) {
+    for (const line of readFileSync(path, "utf8").split(/\n/)) {
+      const m = line.trim().match(/^(?:export\s+)?XAI_API_KEY=(.*)$/);
+      if (!m) continue;
+      let value = m[1].trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+      if (value) return value;
+    }
+  }
+  return process.env.XAI_API_KEY?.trim() || "";
+}
+
+const key = loadInferenceKey();
+const mgmt = process.env.XAI_MANAGEMENT_KEY?.trim() || "";
 if (!key) {
   console.error("XAI_API_KEY is not set. Nothing was sent.");
+  process.exit(1);
+}
+if (mgmt && key === mgmt) {
+  console.error("XAI_API_KEY matches XAI_MANAGEMENT_KEY. Nothing was sent.");
   process.exit(1);
 }
 
