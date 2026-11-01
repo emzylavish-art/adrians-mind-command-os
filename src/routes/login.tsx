@@ -7,7 +7,8 @@ import {
   startOAuth,
 } from "@/lib/supabase/actions";
 import { safeRedirectPath } from "@/lib/supabase/safe-redirect";
-import { authEnabled, signIn } from "@/lib/auth/client";
+import { authEnabled, authClient, signIn } from "@/lib/auth/client";
+import { emailAndPasswordEnabled } from "@/lib/auth/email-password";
 import {
   emailPasswordGate,
   loginErrorBannerFromSearch,
@@ -186,13 +187,31 @@ function Login() {
     setBusy(true);
     setBanner(null);
     setInfo(null);
-    const gate = emailPasswordGate(supabaseConfigured);
+    const gate = emailPasswordGate(supabaseConfigured || emailAndPasswordEnabled);
     if (!gate.ok) {
       setInfo(gate.message);
       setBusy(false);
       return;
     }
     try {
+      if (emailAndPasswordEnabled) {
+        const name = email.split("@")[0] || "Owner";
+        const result =
+          mode === "sign-up"
+            ? await authClient.signUp.email({ email, password, name })
+            : await authClient.signIn.email({ email, password });
+        if (result.error) {
+          const message = result.error.message || "Sign-in failed.";
+          setBanner(
+            mode === "sign-in" && /invalid|credential|password/i.test(message)
+              ? "That email and password do not match. If this is your first time, switch to Sign up."
+              : message,
+          );
+          return;
+        }
+        window.location.assign(next);
+        return;
+      }
       const action = mode === "sign-in" ? signInWithPassword : signUpWithPassword;
       const result = await action({
         data: { email, password, next },

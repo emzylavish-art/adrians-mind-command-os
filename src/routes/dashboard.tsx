@@ -1,17 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { DashboardApp } from "@/components/mind/dashboard-3d/dashboard-app";
-import { requireDashboardUser } from "@/lib/supabase/actions";
+import { dashboardLoginSearch } from "@/lib/auth/login-providers";
+import { getSessionUser } from "@/lib/auth/verify.server";
 
 /**
- * Universe dashboard, gated by owner session (Supabase or Better Auth via
- * requireDashboardUser → getUser / shared session). Anonymous visitors never
- * receive the dashboard document. Missing Supabase env still fails closed to
- * /login so the polished sign-in surface is reachable.
+ * Universe dashboard. A Better Auth or Supabase session may enter.
+ * No session goes to sign-in.
  */
 export const Route = createFileRoute("/dashboard")({
   beforeLoad: async () => {
-    const user = await requireDashboardUser();
-    return { supabaseUser: user };
+    const user = await getSessionUser();
+    if (!user) {
+      throw redirect({
+        to: "/login",
+        search: dashboardLoginSearch(),
+      });
+    }
+    return { sessionUser: user };
   },
   component: DashboardPage,
   head: () => ({
