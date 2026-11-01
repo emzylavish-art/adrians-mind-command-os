@@ -719,3 +719,86 @@ html[data-theme="light"] .min-h-0.flex-1.overflow-auto .bg-accent\/15 {
   background: rgb(9 9 11 / 0.06) !important;
   color: #18181b !important;
 }
+
+/* —— Cycle 8: hover / press micro-interactions (mono) —— */
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a.rounded-panel,
+  a.rounded-2xl {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease,
+      transform 100ms ease,
+      opacity 140ms ease;
+  }
+  button:not(:disabled):hover,
+  [role="button"]:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: translateY(1px) scale(0.985);
+    filter: brightness(0.96);
+  }
+  html[data-theme="light"] button:not(:disabled):hover,
+  html[data-theme="light"] [role="button"]:not(:disabled):hover {
+    filter: brightness(0.97);
+  }
+}
+
+/* Nav row hover/press */
+aside nav button {
+  position: relative;
+}
+aside nav button:hover {
+  background: rgb(255 255 255 / 0.07) !important;
+  color: #f4f4f5 !important;
+}
+aside nav button:active {
+  background: rgb(255 255 255 / 0.11) !important;
+}
+aside nav button.bg-accent:hover,
+aside nav button.bg-accent {
+  filter: none;
+}
+html[data-theme="light"] aside nav button:hover {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #09090b !important;
+}
+
+/* Primary / accent CTAs */
+button.bg-accent,
+.bg-accent.rounded-panel,
+.bg-accent.rounded-full,
+.bg-accent.rounded-2xl {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.2) inset, 0 8px 18px rgb(0 0 0 / 0.35);
+}
+button.bg-accent:hover {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.28) inset, 0 10px 22px rgb(0 0 0 / 0.4);
+}
+button.bg-accent:active {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15) inset;
+}
+
+/* Bordered controls lift */
+button.border.border-line:hover,
+.rounded-panel.border.border-line:hover {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  background-color: rgb(255 255 255 / 0.04);
+}
+html[data-theme="light"] button.border.border-line:hover,
+html[data-theme="light"] .rounded-panel.border.border-line:hover {
+  border-color: rgb(9 9 11 / 0.22) !important;
+  background-color: rgb(9 9 11 / 0.03);
+}
+
+/* Icon-only rounds */
+button.grid.size-11:hover,
+button.size-11.rounded-full:hover,
+button.size-11.rounded-panel:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.2) !important;
+}
