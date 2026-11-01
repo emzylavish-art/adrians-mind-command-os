@@ -6406,3 +6406,87 @@ aside nav button:disabled,
     transform: none !important;
   }
 }
+
+/* —— Evolution c86: landscape phone + ultrawide desktop layout —— */
+/* Landscape phone 844×390 (and similar short viewports) */
+@media (max-height: 480px) and (orientation: landscape) {
+  .shell,
+  .main-stage {
+    padding-bottom: 0 !important;
+  }
+  .main-stage { pb: unset; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    bottom: 0.35rem !important;
+  }
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    min-height: 2.75rem !important;
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+    padding-block: 0.35rem !important;
+  }
+  .topbar { padding-block: 0.35rem !important; }
+  .masthead { margin-top: 0.35rem !important; padding: 0.65rem 0.85rem !important; }
+  .main-stage .page-hero,
+  .main-stage .masthead h2.font-display {
+    font-size: 1.35rem !important;
+  }
+}
+
+/* Very wide: cap content, center, no stretched cards */
+@media (min-width: 1600px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl,
+  .main-stage section.mx-auto {
+    max-width: 72rem !important; /* ~1152px */
+    margin-inline: auto !important;
+    width: 100% !important;
+  }
+  .main-stage .dense-card,
+  .main-stage .glow-card,
+  .main-stage .settings-card,
+  .main-stage .rounded-panel.border {
+    max-width: 100% !important;
+  }
+  /* Thread columns: don't let center pane balloon past ~48rem inside stage */
+  .main-stage section.flex.min-w-0.flex-1.flex-col {
+    max-width: 56rem !important;
+    margin-inline: auto !important;
+  }
+}
+@media (min-width: 1920px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl {
+    max-width: 76rem !important;
+  }
+  .shell {
+    /* subtle side letterbox wash — prevents infinite stretch feel */
+    background-image:
+      radial-gradient(ellipse 40% 60% at 0% 40%, rgb(255 255 255 / 0.03), transparent 55%),
+      radial-gradient(ellipse 40% 60% at 100% 40%, rgb(255 255 255 / 0.03), transparent 55%) !important;
+  }
+}
+@media (min-width: 2560px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl {
+    max-width: 80rem !important; /* 1280 */
+  }
+  aside.rail {
+    max-width: 18rem !important;
+  }
+}
+
+/* Help 2-col grid: don't stretch single cards on ultrawide */
+@media (min-width: 1600px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 {
+    max-width: 48rem !important;
+  }
+}
