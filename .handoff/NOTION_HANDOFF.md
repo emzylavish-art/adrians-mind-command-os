@@ -408,5 +408,6 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Root cause: mcp-list-state FleetListStatusRowsInner treated auth_required as failure-banner; fleet-panels onFailure escalated; command-app loadMcpLists catch ≈603–613 also reportFailure (owning lane — not edited).
 - Fix: AuthRequiredNoticeRow + LIST_AUTH_NOTICE_COPY; skip onFailure for auth; shouldShowFailureBanner(false) for auth_required; mount hint for command-app.
 - Checks: typecheck pass; TS 833/836 (3 pre-existing); lint our files 0e; build pass.
-- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror (URL filled after create).
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child: https://app.notion.com/p/40bb95f33e42812b841ece22e9e38f99
+- Pushed origin/error-banners → 413595890690100e7b5d710ba40da8a8aa4a4aee
 - Lock releasing.
