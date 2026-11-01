@@ -355,7 +355,8 @@ export const speakText = createServerFn({ method: "POST" })
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = data.text.trim().slice(0, 500);
     if (!text) return { ok: false as const, error: "Nothing to read." };
-    const apiKey = process.env.VOICE_API_KEY;
+    const { resolveVoiceApiKey } = await import("./voice/keys");
+    const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
     let res: Response;
     try {
@@ -372,4 +373,16 @@ export const speakText = createServerFn({ method: "POST" })
     const bytes = Buffer.from(await res.arrayBuffer());
     if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };
+  });
+
+export const createVoiceClientSecret = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Voice was not started." };
+    if (!allowMindRequest("voice_secret", context.userId, 20)) {
+      return { ok: false as const, error: "Too many voice requests. Wait a minute." };
+    }
+    const { mintRealtimeClientSecret } = await import("./voice/client-secret");
+    return mintRealtimeClientSecret({});
   });
