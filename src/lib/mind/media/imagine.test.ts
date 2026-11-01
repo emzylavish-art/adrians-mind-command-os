@@ -148,3 +148,31 @@ describe("editImagineImage", () => {
     assert.equal(result.ok, false);
   });
 });
+
+describe("multi-image editImagineImage", () => {
+  it("sends image_urls when multiple inputs are provided", async () => {
+    const { editImagineImage, collectEditImageUrls } = await import("./imagine.ts");
+    const a = "data:image/png;base64,aaa";
+    const b = "data:image/png;base64,bbb";
+    assert.deepEqual(collectEditImageUrls({ prompt: "x", imageDataUrls: [a, b] }), [a, b]);
+    let seen: Record<string, unknown> = {};
+    const result = await editImagineImage(
+      { prompt: "combine", imageDataUrls: [a, b] },
+      {
+        apiKey: "test-key",
+        fetchImpl: async (_url, init) => {
+          seen = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+          return new Response(
+            JSON.stringify({
+              data: [{ b64_json: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", mime_type: "image/png" }],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        },
+      },
+    );
+    assert.deepEqual(seen.image_urls, [a, b]);
+    assert.equal(seen.image_url, undefined);
+    assert.equal(result.ok, true);
+  });
+});

@@ -9,6 +9,9 @@ export const XAI_IMAGES_EDITS_URL = "https://api.x.ai/v1/images/edits";
 /** OpenAI-style variations are not offered by xAI (POST /v1/images/variations → 405). */
 export const XAI_IMAGE_VARIATIONS_SUPPORTED = false;
 
+/** Live-probed 2026-11-01: POST /v1/images/edits accepts image_urls[]. */
+export const XAI_MULTI_IMAGE_EDITS_SUPPORTED = true;
+
 export function normalizeImaginePrompt(raw: unknown): { ok: true; prompt: string } | { ok: false; error: string } {
   if (typeof raw !== "string") return { ok: false, error: "Write a prompt for Imagine." };
   const prompt = raw.trim();

@@ -1241,14 +1241,15 @@ export function CommandApp() {
     }
   }
 
-  async function runImagineEdit(imageDataUrl: string, promptRaw?: string) {
+  async function runImagineEdit(imageDataUrl: string, promptRaw?: string, extraImages: string[] = []) {
     if (busy || ws.halted) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
       setError("Write an edit instruction in the composer, then press Edit with Imagine.");
       return;
     }
-    if (!imageDataUrl.startsWith("data:image/")) {
+    const inputImages = [imageDataUrl, ...extraImages].filter((url, index, all) => typeof url === "string" && url.startsWith("data:image/") && all.indexOf(url) === index).slice(0, 4);
+    if (inputImages.length === 0) {
       setError("Edit with Imagine only works on images kept as data URLs in this chat.");
       return;
     }
@@ -1264,7 +1265,11 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1 }),
+        body: JSON.stringify(
+          inputImages.length === 1
+            ? { prompt, image: inputImages[0], mode: "edit", n: 1 }
+            : { prompt, images: inputImages, mode: "edit", n: 1 },
+        ),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -1296,7 +1301,7 @@ export function CommandApp() {
                     {
                       id: crypto.randomUUID(),
                       role: "user" as const,
-                      content: `Edit with Imagine: ${prompt}`,
+                      content: inputImages.length > 1 ? `Edit with Imagine (${inputImages.length} images): ${prompt}` : `Edit with Imagine: ${prompt}`,
                       at: new Date().toISOString(),
                     },
                     {
@@ -1961,6 +1966,23 @@ export function CommandApp() {
                     >
                       Imagine
                     </button>
+                    {pendingImages.length > 1 && (
+                      <button
+                        type="button"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                        disabled={busy || ws.halted}
+                        onClick={() => {
+                          const urls = pendingImages.map((image) => image.dataUrl).filter((url) => url.startsWith("data:image/"));
+                          if (urls.length < 2) {
+                            setError("Attach at least two images to edit them together.");
+                            return;
+                          }
+                          void runImagineEdit(urls[0]!, undefined, urls.slice(1));
+                        }}
+                      >
+                        Edit all with Imagine
+                      </button>
+                    )}
                     <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
                       type="button"

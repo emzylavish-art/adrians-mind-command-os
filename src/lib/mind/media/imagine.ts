@@ -14,6 +14,7 @@ export {
   XAI_IMAGES_EDITS_URL,
   XAI_IMAGES_GENERATIONS_URL,
   XAI_IMAGE_VARIATIONS_SUPPORTED,
+  XAI_MULTI_IMAGE_EDITS_SUPPORTED,
 } from "./imagine-shared.ts";
 
 export type ImagineRequest = {
@@ -201,15 +202,29 @@ export async function generateImagineImages(
 
 export type ImagineEditRequest = {
   prompt: string;
-  /** data:image/...;base64,... input image */
-  imageDataUrl: string;
+  /** Single input (legacy). Prefer imageDataUrls for one or many. */
+  imageDataUrl?: string;
+  /** One or more data:image/... inputs. Live-confirmed: API accepts `image_urls: string[]`. */
+  imageDataUrls?: string[];
   model?: string;
   responseFormat?: "b64_json" | "url";
 };
 
+
+export function collectEditImageUrls(input: ImagineEditRequest): string[] {
+  const urls: string[] = [];
+  for (const value of input.imageDataUrls ?? []) {
+    if (typeof value === "string" && value.startsWith("data:image/")) urls.push(value);
+  }
+  if (typeof input.imageDataUrl === "string" && input.imageDataUrl.startsWith("data:image/")) {
+    if (!urls.includes(input.imageDataUrl)) urls.unshift(input.imageDataUrl);
+  }
+  return urls.slice(0, 4);
+}
+
 /**
- * Edit an existing image with Grok Imagine via POST /v1/images/edits.
- * Body shape confirmed live: `{ model, prompt, image_url: dataUrl, response_format }`.
+ * Edit one or more images with Grok Imagine via POST /v1/images/edits.
+ * Single: `{ image_url }`. Multi (live-probed): `{ image_urls: [...] }`.
  * Multipart and raw-string `image` fields are rejected by the API.
  */
 export async function editImagineImage(
@@ -222,8 +237,9 @@ export async function editImagineImage(
 ): Promise<ImagineResult> {
   const normalized = normalizeImaginePrompt(input.prompt);
   if (!normalized.ok) return normalized;
-  if (typeof input.imageDataUrl !== "string" || !input.imageDataUrl.startsWith("data:image/")) {
-    return { ok: false, error: "Edit with Imagine needs an image data URL as input." };
+  const imageUrls = collectEditImageUrls(input);
+  if (imageUrls.length === 0) {
+    return { ok: false, error: "Edit with Imagine needs at least one image data URL as input." };
   }
 
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
@@ -240,6 +256,14 @@ export async function editImagineImage(
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_EDITS_URL;
 
+  const requestBody: Record<string, unknown> = {
+    model,
+    prompt: normalized.prompt,
+    response_format: responseFormat,
+  };
+  if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
+  else requestBody.image_urls = imageUrls;
+
   let response: Response;
   try {
     response = await fetchImpl(endpoint, {
@@ -248,20 +272,15 @@ export async function editImagineImage(
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        prompt: normalized.prompt,
-        response_format: responseFormat,
-        image_url: input.imageDataUrl,
-      }),
+      body: JSON.stringify(requestBody),
     });
   } catch {
     return { ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 };
   }
 
-  let body: unknown;
+  let responseJson: unknown;
   try {
-    body = await response.json();
+    responseJson = await response.json();
   } catch {
     return {
       ok: false,
@@ -270,7 +289,7 @@ export async function editImagineImage(
     };
   }
 
-  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const record = responseJson && typeof responseJson === "object" ? (responseJson as Record<string, unknown>) : {};
   if (!response.ok) {
     const err = record.error;
     const message =

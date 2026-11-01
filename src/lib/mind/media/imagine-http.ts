@@ -53,13 +53,19 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   const n = typeof record.n === "number" ? record.n : typeof record.count === "number" ? record.count : 1;
   const model = typeof record.model === "string" ? record.model : GROK_IMAGINE_MODEL;
   const imageDataUrl = typeof record.image === "string" ? record.image : typeof record.imageDataUrl === "string" ? record.imageDataUrl : "";
-  const mode = record.mode === "edit" || imageDataUrl ? "edit" : "generate";
+  const imageDataUrls = Array.isArray(record.images)
+    ? record.images.filter((item): item is string => typeof item === "string" && item.startsWith("data:image/"))
+    : Array.isArray(record.imageDataUrls)
+      ? record.imageDataUrls.filter((item): item is string => typeof item === "string" && item.startsWith("data:image/"))
+      : [];
+  const mode = record.mode === "edit" || imageDataUrl || imageDataUrls.length ? "edit" : "generate";
 
   const result =
     mode === "edit"
       ? await editImagineImage({
           prompt: normalized.prompt,
-          imageDataUrl,
+          imageDataUrl: imageDataUrl || undefined,
+          imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
           model,
           responseFormat: "b64_json",
         })
