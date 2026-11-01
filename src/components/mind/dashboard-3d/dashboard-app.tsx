@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
@@ -7,6 +7,7 @@ import { useDashboardStatus } from "./use-dashboard-status";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
+import { createHealthSound, type SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
@@ -33,6 +34,43 @@ export function DashboardApp() {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }, []);
 
+  const soundRef = useRef<ReturnType<typeof createHealthSound> | null>(null);
+  const [soundMuted, setSoundMuted] = useState(true);
+  useEffect(() => {
+    const sound = createHealthSound({ reducedMotion });
+    soundRef.current = sound;
+    setSoundMuted(sound.muted);
+    const onVis = () => sound.setHidden(document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    onVis();
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      sound.dispose();
+      soundRef.current = null;
+    };
+  }, [reducedMotion]);
+
+  useEffect(() => {
+    soundRef.current?.setReducedMotion(reducedMotion);
+  }, [reducedMotion]);
+
+  useEffect(() => {
+    if (state.status !== "ready") {
+      soundRef.current?.sync([]);
+      return;
+    }
+    const voices: SoundVoiceSpec[] = state.data.bots.map((b, i) => ({
+      id: b.id,
+      health: b.health,
+      pan: ((i % 7) - 3) / 3,
+    }));
+    soundRef.current?.sync(voices);
+  }, [state]);
+
+  const unlockSound = useCallback(() => {
+    soundRef.current?.unlock();
+  }, []);
+
   const spendView = useMemo(() => {
     if (state.status !== "ready") return { available: false as const, reason: "No source." };
     const s = state.data.spend;
@@ -52,7 +90,7 @@ export function DashboardApp() {
   };
 
   return (
-    <main className="dash3d-root dash3d-universe" data-fly-level={fly.level}>
+    <main className="dash3d-root dash3d-universe" data-fly-level={fly.level} onPointerDownCapture={unlockSound}>
       {state.status === "ready" && !webglError ? (
         <UniverseScene
           data={state.data}
@@ -159,7 +197,22 @@ export function DashboardApp() {
           <button
             type="button"
             className="dash3d-glass dash3d-zoomout"
+            data-testid="sound-mute"
+            aria-pressed={soundMuted}
             onClick={() => {
+              unlockSound();
+              const next = !soundMuted;
+              soundRef.current?.setMuted(next);
+              setSoundMuted(next);
+            }}
+          >
+            {soundMuted ? "Sound muted" : "Sound on"}
+          </button>
+          <button
+            type="button"
+            className="dash3d-glass dash3d-zoomout"
+            onClick={() => {
+              unlockSound();
               setSelected(null);
               setNotionPage(null);
               // scene also listens for empty-space click; this is accessible control
