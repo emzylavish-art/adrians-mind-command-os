@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c33 — Gap#15 charts ticks (#38). Next: Gap#4 hover / #26.
+Last release: Dashboard c34 — Gap#4 star hover tooltip (#26). Next: Gap#5 filters / #27.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -46,7 +46,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 32 | **Slow status as pending not error (Gap#9)** — ignore StrictMode/unmount AbortError; first-load stays loading | **done** | c28 — aborted+stopped / first-load abort ignored |
 | 33 | **Focus during flight (Gap#10)** — preserve latest selection; queue camera retarget until glide settles | **done** | c28 — onSelectBot always; pendingFocusBotId until acceptPointerPick |
 | 25 | **Pan/drag remount splash (Gap#3)** — keep last WebGL frame across context-loss/remount; no full splash on pan | **done** | c30 — preserveDrawingBuffer + last-frame freeze; splash suppressed after stage primed |
-| 26 | **Star hover tooltip + edge highlight (Gap#4)** — health/lane/branch/heartbeat tooltip; highlight constellation edges | queued | Obsidian/Kepler hover literacy |
+| 26 | **Star hover tooltip + edge highlight (Gap#4)** — health/lane/branch/heartbeat tooltip; highlight constellation edges | **done** | c34 — dash3d-star-tooltip + edge opacity highlight on hover |
 | 27 | **Constellation Filters/Groups drawer (Gap#5)** — search, orphans, lane/health groups beyond Operator filter | queued | Obsidian Filters & Groups; Bloom Filter drawer |
 | 28 | **N-hop / expand neighbors (Gap#6)** — local graph depth around focused star | queued | Obsidian Local Graph; Bloom Expand |
 | 29 | **HUD focus mode / collapsible layers (Gap#7)** — one-gesture collapse Mirror/Feed/Charts/sky chrome | queued | Linear sidebar; Kepler layers; mobile chrome |

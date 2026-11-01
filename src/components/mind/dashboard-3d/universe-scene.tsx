@@ -578,6 +578,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         });
         const line = new THREE.Line(geo, mat);
         line.computeLineDistances();
+        line.userData.from = e.from;
+        line.userData.to = e.to;
         edgeGroup.add(line);
         flowLines.push({
           line,
@@ -878,6 +880,66 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let hoverPageId: string | null = null;
+    let hoverBotId: string | null = null;
+    const tipEl = document.createElement("div");
+    tipEl.className = "dash3d-star-tooltip";
+    tipEl.dataset.testid = "star-hover-tooltip";
+    tipEl.setAttribute("role", "tooltip");
+    tipEl.hidden = true;
+    mount.appendChild(tipEl);
+    const setEdgeHover = (botId: string | null) => {
+      for (const ch of edgeGroup.children) {
+        if (!(ch instanceof THREE.Line)) continue;
+        const mat = ch.material as THREE.LineDashedMaterial;
+        const connected = botId != null && (ch.userData.from === botId || ch.userData.to === botId);
+        const base = flowLines.find((f) => f.line === ch)?.baseOpacity ?? 0.5;
+        if (!botId) {
+          mat.opacity = base;
+          ch.visible = true;
+        } else if (connected) {
+          mat.opacity = Math.min(1, base + 0.45);
+          ch.visible = true;
+        } else {
+          mat.opacity = Math.max(0.08, base * 0.25);
+        }
+      }
+    };
+    const showBotTip = (botId: string | null, clientX: number, clientY: number) => {
+      if (!botId) {
+        tipEl.hidden = true;
+        tipEl.textContent = "";
+        setEdgeHover(null);
+        hoverBotId = null;
+        return;
+      }
+      const bot = dataRef.current.bots.find((b) => b.id === botId);
+      if (!bot) {
+        showBotTip(null, clientX, clientY);
+        return;
+      }
+      hoverBotId = botId;
+      setEdgeHover(botId);
+      const heartbeat = bot.lastActivityAt
+        ? new Date(bot.lastActivityAt).toLocaleString("en-GB", { timeZone: "Africa/Lagos", hour12: false }) + " WAT"
+        : "—";
+      tipEl.innerHTML = "";
+      const title = document.createElement("strong");
+      title.textContent = bot.name;
+      const meta = document.createElement("div");
+      meta.className = "dash3d-star-tooltip-meta";
+      meta.textContent = `${bot.health} · ${bot.branch || "no branch"} · ${heartbeat}`;
+      const lane = document.createElement("div");
+      lane.className = "dash3d-muted";
+      lane.style.fontSize = "0.68rem";
+      lane.textContent = bot.id;
+      tipEl.appendChild(title);
+      tipEl.appendChild(meta);
+      tipEl.appendChild(lane);
+      tipEl.hidden = false;
+      const rect = mount.getBoundingClientRect();
+      tipEl.style.left = `${Math.min(rect.width - 200, Math.max(8, clientX - rect.left + 12))}px`;
+      tipEl.style.top = `${Math.min(rect.height - 80, Math.max(8, clientY - rect.top + 12))}px`;
+    };
     const pageIndexById = () => {
       const m = new Map<string, number>();
       pageIdByIndex.forEach((id, i) => m.set(id, i));
@@ -1118,7 +1180,21 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       camera.position.copy(freePos);
       camera.lookAt(lookAt);
     };
-    const onPointerHoverNotion = (ev: PointerEvent) => {
+    const onPointerHoverStars = (ev: PointerEvent) => {
+      if (dragging || fly.level !== "universe") {
+        if (hoverBotId) showBotTip(null, ev.clientX, ev.clientY);
+        return;
+      }
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(botMeshes, false);
+      const id = (hits[0]?.object.userData.botId as string | undefined) ?? null;
+      if (id !== hoverBotId) showBotTip(id, ev.clientX, ev.clientY);
+      else if (id) showBotTip(id, ev.clientX, ev.clientY); // refresh position
+    };
+        const onPointerHoverNotion = (ev: PointerEvent) => {
       if (dragging || fly.level !== "universe" || !pageMesh) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1135,6 +1211,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointermove", onPointerHoverNotion);
+    renderer.domElement.addEventListener("pointermove", onPointerHoverStars);
     renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
 
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
@@ -1378,6 +1455,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointermove", onPointerHoverNotion);
+      renderer.domElement.removeEventListener("pointermove", onPointerHoverStars);
+      tipEl.remove();
       cancelAnimationFrame(raf);
       dust.dispose();
       comets.dispose();

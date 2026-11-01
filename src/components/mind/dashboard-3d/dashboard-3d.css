@@ -858,3 +858,26 @@
 .dash3d-canvas-wrap img[data-dash3d-last-frame] {
   background: #050814;
 }
+
+.dash3d-star-tooltip {
+  position: absolute;
+  z-index: 6;
+  min-width: 140px;
+  max-width: 240px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(8, 12, 24, 0.92);
+  color: #e8eefc;
+  font-size: 0.78rem;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.dash3d-star-tooltip strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+.dash3d-star-tooltip-meta {
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
