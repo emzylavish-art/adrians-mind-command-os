@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { createBuildingBrushMaterial, tickBuildingMaterial } from "../materials";
+import {
+  createBuildingBrushMaterial,
+  tickBuildingMaterial,
+  setBuildingProgress,
+} from "../materials";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { Health } from "@/lib/mind/dashboard/types";
 import type { CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -190,13 +194,16 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
 
       const bodyGeo = new THREE.BoxGeometry(b.width, b.height, b.depth);
       ownedGeos.push(bodyGeo);
+      // Painter c10: real progress only — unknown → 0 so window wash stays dark
+      const progress = b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0;
       const mat = createBuildingBrushMaterial({
         base: 0x121a30,
         accent,
         floors: b.floors,
-        progress: b.progressKnown ? b.litFloors / b.floors : 0,
+        progress,
         paper: 0.16,
       });
+      setBuildingProgress(mat, progress);
       brushMats.push(mat);
       const body = new THREE.Mesh(bodyGeo, mat);
       body.position.y = b.height / 2;

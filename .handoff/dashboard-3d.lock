@@ -1,5 +1,5 @@
-owner: released
-cycle: 41
-released: 2026-11-01T22:24:19+01:00
+owner: dashboard-3d-loop
+cycle: 42
+heartbeat: 2026-11-01T22:28:07+01:00
 branch: dashboard-3d
-last: c41b/c41c Painter c9 + Motion traveler + Gap#26/#27 + clean :8102 console @ fe4c3e6+
+work: committing #29/#28 Motion831225f Painter94c28c7

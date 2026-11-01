@@ -208,10 +208,10 @@ export function buildBotDetailView(input: {
     lockStatus: bot.lock?.status ?? null,
     claimedAt: bot.lock?.claimed_at ?? null,
     releasedAt: bot.lock?.released_at ?? null,
-    heartbeatAt: lockHeartbeat(bot.lock),
+    heartbeatAt: lockHeartbeat(bot.lock) ?? bot.lastActivityAt,
     task: lockTask(bot.lock),
     branch: bot.branch,
-    worktree: bot.lock?.worktree ?? null,
+    worktree: bot.lock?.worktree ?? null, // already public-label when API-publicized
     lockCommits: bot.commits ?? [],
     branchCommits: commitsForBranch(input.commits, bot.branch, 8, bot.id),
     queueItems: queueItemsForBot(input.fleetPlan?.queue ?? [], bot, laneName),

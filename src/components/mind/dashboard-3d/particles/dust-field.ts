@@ -1,6 +1,14 @@
 import * as THREE from "three";
 import { clampInt, finiteOr } from "../motion/sanitize.ts";
 import { sharedMotionClock, type MotionClock } from "../motion/motion-clock.ts";
+import {
+  createWindGustSample,
+  createWindGustState,
+  impulseWindGust,
+  stepWindGust,
+  type WindGustSample,
+  type WindGustState,
+} from "../motion/wind-gust.ts";
 import { createFrameBudget, dustDistanceFactor, isDocumentHidden, lodCount } from "./motion-lod.ts";
 
 export const DUST_COUNT_MAX = 2048;
@@ -14,6 +22,14 @@ export type DustFieldHandle = {
   lod: { active: number; camDistance: number; budget: number };
   /** Advance drift. No allocations. Safe after dispose (no-op). */
   update: (tSeconds: number, reducedMotion: boolean) => void;
+  /**
+   * Fleet-event gust impulse (comet/landing). Directional unit vector; strength 0..1.
+   * No-op after dispose / under reduced-motion (caller passes flag into update).
+   * Capped superposition — 1000 calls in one frame cannot exceed GUST_MAX_SPEED.
+   */
+  impulseGust: (dx: number, dy: number, dz: number, strength?: number) => void;
+  /** Live gust sample (read-only debug). */
+  gust: WindGustSample;
   dispose: () => void;
 };
 
@@ -89,13 +105,26 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
   const seeds = seedDustParticles(count, radius, ySpread, seed);
   const clock = opts.clock ?? sharedMotionClock;
 
+  const gustState: WindGustState = createWindGustState();
+  const gustOut: WindGustSample = createWindGustSample();
+  let gustReduced = false;
+
   const handle: DustFieldHandle = {
     mesh: null,
     count,
     disposed: false,
     lod: { active: count, camDistance: 0, budget: 1 },
     update: () => {},
+    impulseGust: () => {},
+    gust: gustOut,
     dispose: () => {},
+  };
+
+  handle.impulseGust = (dx, dy, dz, strength = 1) => {
+    if (handle.disposed) return;
+    impulseWindGust(gustState, dx, dy, dz, gustReduced, strength);
+    // Reflect capped state immediately for callers that read handle.gust mid-frame.
+    stepWindGust(gustState, gustOut, 0, gustReduced);
   };
 
   if (count === 0) {
@@ -158,7 +187,9 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
 
   handle.update = (tSeconds: number, reducedMotion: boolean) => {
     if (handle.disposed || !handle.mesh) return;
+    gustReduced = reducedMotion;
     if (reducedMotion) {
+      stepWindGust(gustState, gustOut, 0, true);
       if (!restPoseApplied) {
         writeRestPoses();
         restPoseApplied = true;
@@ -169,6 +200,10 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
     // Background tab: no CPU/GPU work; the motion clock absorbs the gap on resume.
     if (isDocumentHidden()) return;
     const t = clock.map(tSeconds);
+    stepWindGust(gustState, gustOut, clock.lastWallDt, false);
+    const gx = gustOut.x;
+    const gy = gustOut.y;
+    const gz = gustOut.z;
     let active = count;
     if (useLod) {
       if (t !== lastBudgetTime) {
@@ -182,7 +217,7 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
     for (let i = 0; i < active; i++) {
       const s = seeds[i]!;
       const wobble = Math.sin(t * s.speed + s.phase) * s.amp;
-      dummy.position.set(s.x + wobble * 0.4, s.y + wobble, s.z - wobble * 0.25);
+      dummy.position.set(s.x + wobble * 0.4 + gx, s.y + wobble + gy, s.z - wobble * 0.25 + gz);
       dummy.scale.setScalar(s.scale);
       dummy.updateMatrix();
       handle.mesh!.setMatrixAt(i, dummy.matrix);

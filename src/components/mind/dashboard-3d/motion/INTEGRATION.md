@@ -268,3 +268,18 @@ resumeTraveler(st);
 Uses MotionClock so tab-resume does not teleport. Reduced-motion → static seed pose.
 Hacker c12: edge-pulse self-loop parks travel; shared clock is lazy (no import side effect).
 
+## Dust wind gust on fleet events (c13)
+
+Pure gust math in `wind-gust.ts`; dust-field exposes `impulseGust` without changing `update()`.
+
+```ts
+import { createDustField } from "./particles";
+// after createDustField(scene, opts):
+dust.impulseGust(dx, dy, dz, strength?); // on comet fire / landing hop
+dust.update(tSeconds, reducedMotion);    // decays + applies offset
+// read dust.gust.speed for HUD/debug
+```
+
+1000 impulses in one frame stay ≤ `GUST_MAX_SPEED`. Reduced-motion clears / ignores.
+`sharedMotionClock` remains the same exported name/type (lazy inner; importers unchanged).
+

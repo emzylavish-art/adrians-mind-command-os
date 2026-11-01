@@ -4,7 +4,12 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c41 — Gap#26 TDZ + Painter c9 createLaneNebulae + Motion traveler (motion/-only from a65cd9a; package.json skipped) + Gap#27 Filters dock + :8102 capture clean. Next: #29 status redact / #28 status cache.
+Last release: Dashboard c42 — Gap#29 publicize+405 + Gap#28 server TTL/single-flight + Motion 831225f (motion/+particles/, skip package.json) + Painter c10 94c28c7. Next: probe-ranked gaps + fleet tips.
+
+## Motion / Painter lane notes (c42)
+- Motion tip `831225f` also listed `package.json` — **skipped**; registered `wind-gust.test.ts` in dashboard lane (no new runtime deps).
+- Painter tip `94c28c7` rebased on dashboard-3d (wide MB diff); landed **materials/shaders only** from the c10 commit; `styles.css` not taken.
+
 
 ## Gap Dispatcher 20261101-220802 ranked into queue (c41)
 

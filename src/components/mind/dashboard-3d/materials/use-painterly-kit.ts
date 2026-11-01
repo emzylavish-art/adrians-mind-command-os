@@ -9,7 +9,7 @@
  * 5. Imagine cards/sprites: kit.createImagineNodeMaterial({ map }); setImagineNodeMap when load completes
  * 6. Sky: kit.createSkyMaterial(); lane clouds: kit.createLaneNebulae(lanes);
  * 7. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
- * 8. Each frame: tickPainterlyKit(kit, t); kit.setPassHealth({ healthy, total }) from real status.
+ * 8. Each frame: tickPainterlyKit(kit, t, { reducedMotion }); kit.setPassHealth({ healthy, total, reducedMotion }).
  * 9. On resize: kit.resizePass(cssW, cssH, dpr); on unmount: disposePainterlyKit(kit).
  */
 import * as THREE from "three";
@@ -89,6 +89,12 @@ export type PainterlyKitOptions = {
   textureBudgetBytes?: number;
 };
 
+/** Options for tickPainterlyKit — reducedMotion freezes all painter uTime washes. */
+export type PainterlyTickOptions = {
+  /** When true, do not advance uTime / pass animation (low-power / a11y). */
+  reducedMotion?: boolean;
+};
+
 /** Shared kit texture slots that survive context restore via rebind. */
 export type PainterlyTextureSlot = "paperGrain" | "starSprite";
 
@@ -164,6 +170,10 @@ export type PainterlyKit = {
   lastTickError: string | null;
   /** How many materials threw inside the last tickPainterlyKit call. */
   lastTickErrorCount: number;
+  /** How many uTime (or pass) uniform writes the last tick performed. */
+  lastTickUniformWrites: number;
+  /** Frozen clock used while reducedMotion is honored. */
+  frozenTickTime: number;
 };
 
 /** HACKER (c7): track live kits so StrictMode double-mount leaks can be audited/disposed. */
@@ -204,6 +214,8 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     detachContext: null,
     lastTickError: null,
     lastTickErrorCount: 0,
+    lastTickUniformWrites: 0,
+    frozenTickTime: 0,
     textureBudgetBytes,
     createStarMaterial(starOpts) {
       const m = createStarWatercolorMaterial(starOpts);
@@ -356,25 +368,44 @@ export function rebindPainterlyKitTextures(kit: PainterlyKit): number {
   return n;
 }
 
-export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
+/**
+ * Drive all kit material clocks.
+ * HACKER (c10): `reducedMotion` freezes uTime at kit.frozenTickTime (no wash/flicker
+ * animation) and still reports lastTickUniformWrites so cost stays visible.
+ * Pass animation is also frozen under reducedMotion.
+ */
+export function tickPainterlyKit(
+  kit: PainterlyKit,
+  timeSeconds: number,
+  opts: PainterlyTickOptions = {},
+): void {
   if (kit.disposed || kit.contextLost) return;
   kit.lastTickError = null;
   kit.lastTickErrorCount = 0;
+  kit.lastTickUniformWrites = 0;
+  const reduced = !!opts.reducedMotion;
+  const t = reduced ? kit.frozenTickTime : timeSeconds;
+  if (!reduced) kit.frozenTickTime = timeSeconds;
   try {
-    tickPainterlyPass(kit.painterlyPass, timeSeconds);
+    tickPainterlyPass(kit.painterlyPass, t);
+    kit.lastTickUniformWrites += 1;
   } catch (err) {
     kit.lastTickErrorCount += 1;
     kit.lastTickError = err instanceof Error ? err.message : String(err);
   }
   for (const m of kit.tracked) {
     try {
-      if (m.name === "StarWatercolorMaterial") tickStarMaterial(m, timeSeconds);
-      else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, timeSeconds);
-      else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, timeSeconds);
-      else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, timeSeconds);
-      else if (m.name === "ImagineNodeMaterial") tickImagineNodeMaterial(m, timeSeconds);
-      else if (m.name === "LaneNebulaMaterial") tickLaneNebulaMaterial(m, timeSeconds);
-      else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
+      // Skip materials without a time uniform when reduced — still count tracked
+      if (reduced && !m.uniforms?.["uTime"]) continue;
+      if (m.name === "StarWatercolorMaterial") tickStarMaterial(m, t);
+      else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, t);
+      else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, t);
+      else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, t);
+      else if (m.name === "ImagineNodeMaterial") tickImagineNodeMaterial(m, t);
+      else if (m.name === "LaneNebulaMaterial") tickLaneNebulaMaterial(m, t);
+      else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(t);
+      else continue;
+      kit.lastTickUniformWrites += 1;
     } catch (err) {
       // HACKER (c7): one bad material must not abort the whole frame / freeze the dashboard
       kit.lastTickErrorCount += 1;

@@ -563,7 +563,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     type EdgeRec = { from: string; to: string; health: string; kind: string; fromPos: [number, number, number]; toPos: [number, number, number] };
     let edgeRecs: EdgeRec[] = [];
     let inkEdges: ReturnType<typeof kit.createInkEdges> | null = null;
-    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number; ease: TravelerEaseState; sample: TravelerEaseSample };
+    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number; ease: TravelerEaseState; sample: TravelerEaseSample; lastProgress: number };
     const landingTrails: LandingTrail[] = [];
     const travelerGeo = new THREE.SphereGeometry(0.16, 12, 12);
 
@@ -774,7 +774,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const mesh = new THREE.Mesh(travelerGeo, mat);
           mesh.position.set(points[0]!.x, points[0]!.y, points[0]!.z);
           landingGroup.add(mesh);
-          landingTrails.push({ points, mesh, seed: li * 1.7, ease: createTravelerEaseState(li * 1.7), sample: createTravelerEaseSample() });
+          landingTrails.push({ points, mesh, seed: li * 1.7, ease: createTravelerEaseState(li * 1.7), sample: createTravelerEaseSample(), lastProgress: 0 });
         });
       }
     }
@@ -1386,6 +1386,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         for (const tr of landingTrails) {
           stepTravelerEase(tr.ease, tr.sample, tr.points, t, dt, reducedMotion);
+          // Motion c13: gust dust when a landing traveler wraps a hop loop (real event)
+          if (!reducedMotion && tr.sample.progress + 0.5 < tr.lastProgress) {
+            dust.impulseGust(0.55, 0.12, -0.35, 0.45);
+          }
+          tr.lastProgress = tr.sample.progress;
           tr.mesh.position.set(tr.sample.x, tr.sample.y + 0.35, tr.sample.z);
           (tr.mesh.material as THREE.MeshStandardMaterial).opacity = tr.sample.opacity;
           tr.mesh.visible = fly.level === "universe";
@@ -1412,7 +1417,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
-        tickPainterlyKit(kit, t);
+        tickPainterlyKit(kit, t, { reducedMotion });
         kit.setPassHealth({ healthy, total, reducedMotion });
         if (atm) atm.update(tone);
         liveBloom?.update(tone);

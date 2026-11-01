@@ -173,4 +173,16 @@ export {
   type TravelerEaseState,
   type TravelerXyz,
 } from "./traveler-ease.ts";
+export {
+  GUST_MAX_SPEED,
+  GUST_DECAY_LAMBDA,
+  GUST_IMPULSE,
+  createWindGustSample,
+  createWindGustState,
+  impulseWindGust,
+  stepWindGust,
+  type WindGustOpts,
+  type WindGustSample,
+  type WindGustState,
+} from "./wind-gust.ts";
 
