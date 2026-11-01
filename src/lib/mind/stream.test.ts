@@ -81,3 +81,22 @@ describe("done.model honesty", () => {
     if (done?.event === "done") assert.equal(done.model, "model unknown");
   });
 });
+
+
+describe("done.model null / number / object", () => {
+  for (const [label, model] of [
+    ["null", null],
+    ["number", 45],
+    ["object", { id: "grok-4.5" }],
+  ] as const) {
+    it(`coerces ${label} to model unknown without inventing grok-4.5`, () => {
+      const { events } = pullMindEvents(`event: done\ndata: ${JSON.stringify({ text: "hi", model, usedIds: [] })}\n\n`);
+      const done = events[0];
+      assert.equal(done?.event, "done");
+      if (done?.event === "done") {
+        assert.equal(done.model, "model unknown");
+        assert.equal(done.model.includes("grok"), false);
+      }
+    });
+  }
+});

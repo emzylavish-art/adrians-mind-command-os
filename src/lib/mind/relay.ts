@@ -135,7 +135,11 @@ export function relayModelStream(input: {
         }
         if (!res.ok || !res.body) {
           await res.body?.cancel().catch(() => undefined);
-          send("error", { error: `Grok returned ${res.status}. Nothing was saved as a success.` });
+          const error =
+            res.status === 404
+              ? "That model is not available. Nothing was saved as a success."
+              : `Grok returned ${res.status}. Nothing was saved as a success.`;
+          send("error", { error });
           finish();
           return;
         }

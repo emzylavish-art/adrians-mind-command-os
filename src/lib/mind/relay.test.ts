@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { decide } from "./policy.ts";
-import { resolveModelTier } from "./model-tiers.ts";
+import { chipLabelForTier, resolveModelTier } from "./model-tiers.ts";
 import { buildRelayModelBody, CHAT_DISCONNECT_REPLY, relayModelStream, STOPPED_REPLY } from "./relay.ts";
 import { CHAT_TIMEOUT_REPLY } from "./turn-timeouts.ts";
 import { pullMindEvents } from "./stream.ts";
@@ -282,5 +282,39 @@ describe("relay disconnect vs timeout", () => {
     assert.equal(raw.includes(CHAT_DISCONNECT_REPLY), true);
     assert.equal(raw.includes(secret), false);
     assert.match(raw, /Connection to the model dropped|could not be reached/i);
+  });
+});
+
+
+describe("nonexistent model id fails closed", () => {
+  it("provider 404 never emits done and never advertises the missing model on the chip path", async () => {
+    const missing = "grok-not-a-real-model-xyz";
+    const raw = await readAll(
+      relayModelStream({
+        apiKey: "test-key",
+        model: missing,
+        messages: [{ role: "user", content: "hi" }],
+        usedIds: [],
+        requestSignal: new AbortController().signal,
+        timeoutMs: 5_000,
+        fetchImpl: (async () => new Response("no such model", { status: 404 })) as typeof fetch,
+      }),
+    );
+    assert.equal(raw.includes("event: done"), false);
+    assert.match(raw, /event: error/);
+    assert.match(raw, /That model is not available/);
+    // Chip lastModel comes from done.model — with no done, the missing id must not be confirmed.
+    const events = pullMindEvents(raw).events;
+    assert.equal(events.some((event) => event.event === "done"), false);
+    const err = events.find((event) => event.event === "error");
+    assert.equal(err?.event, "error");
+    if (err?.event === "error") {
+      assert.equal(err.error.includes(missing), false, "error must not echo the missing model as if it answered");
+    }
+    // Even if a caller mistakenly passed the requested id as lastModel, honesty requires
+    // not treating a failed turn as a confirmed answer — no done means chip keeps prior/empty.
+    const label = chipLabelForTier({ selected: "Heavy", lastModel: null });
+    assert.equal(label.includes(missing), false);
+    assert.equal(label, "Heavy");
   });
 });
