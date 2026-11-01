@@ -29,6 +29,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
+- **Motion: wire dust + commit comets + shared pulse/orbit into UniverseScene** — Dashboard Bot scene should import `createDustField` / `createCommitComets` / `sampleStarPulse` / `sampleOrbitDrift` from motion+particles lanes; gate on prefers-reduced-motion; verify 60fps with REA frame sequence (Cosmos Motion Bot follow-up after universe lands).
 - **Constellation lore plaques** — short painted plaques per lane with last 3 lock notes + health reason, readable when camera is mid-dolly.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
 
