@@ -2,7 +2,9 @@
 export const PAINTER_MATERIALS = {
   starWatercolor: "StarWatercolorMaterial",
   buildingBrush: "BuildingBrushMaterial",
+  lorePlaque: "LorePlaqueMaterial",
   paperGrain: "PaperGrainTexture",
+  parchment: "ParchmentTexture",
   nebulaSky: "NebulaSkyMaterial",
   kit: "PainterlyKit",
 } as const;
@@ -30,6 +32,13 @@ export {
   type BuildingSurfaceOptions,
 } from "./building-surface.ts";
 export {
+  createLorePlaqueMaterial,
+  tickLorePlaqueMaterial,
+  makeParchmentRGBA,
+  createParchmentTexture,
+  type LorePlaqueOptions,
+} from "./lore-plaque.ts";
+export {
   createNebulaTexture,
   createNebulaSkyMaterial,
   type NebulaTextureOptions,
@@ -38,6 +47,8 @@ export {
   createPainterlyKit,
   tickPainterlyKit,
   disposePainterlyKit,
+  attachPainterlyContextHandlers,
+  painterlyKitResourceCounts,
   usePainterlyKitFactory,
   type PainterlyKit,
   type PainterlyKitOptions,

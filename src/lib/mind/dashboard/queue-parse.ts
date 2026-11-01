@@ -43,11 +43,11 @@ export function queueHead(items: QueueItem[]): QueueItem | null {
 /** Fibonacci-ish sky road positions for queue waypoints */
 export function queueWaypointPositions(
   count: number,
-  origin: [number, number, number] = [-12, 7.5, -8],
+  origin: [number, number, number] = [-14, 8.8, -5],
 ): Array<[number, number, number]> {
   const out: Array<[number, number, number]> = [];
   for (let i = 0; i < count; i++) {
-    out.push([origin[0] + i * 2.15, origin[1] + Math.sin(i * 0.55) * 0.65, origin[2] + (i % 2) * 0.8]);
+    out.push([origin[0] + i * 2.45, origin[1] + Math.sin(i * 0.55) * 0.65, origin[2] + (i % 2) * 0.8]);
   }
   return out;
 }

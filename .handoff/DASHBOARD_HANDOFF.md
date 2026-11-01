@@ -28,3 +28,17 @@ See `.handoff/DASHBOARD_QUEUE.md` — next: Camera/city + Projects.
 ## Nav gap (no command-app / styles.css edits)
 No in-app nav entry to  yet ( claimed by other lanes;  claimed by visual-polish).
 **Options without claimed files:** (1)  on  (unclaimed), (2) tiny chrome link in  (unclaimed, avoid importing styles.css tokens beyond existing). Not applied this milestone — left for a quiet unlock or Merge Gate companion.
+
+## Preview ports (reserved)
+- **8100** — reserved for **dashboard-3d main preview** (`/workspace/mind-command-os-dashboard`, tip on `dashboard-3d`). Fleet bots must **not** bind 8100.
+- **8110 / 8111 / 8112** — reserved for Cosmos Painter / Light / Motion fleet worktree previews.
+- 8098 may be occupied by a fleet worktree; do not assume it is the main dashboard.
+
+## Security / preview
+The Vite **dev server exposes server functions**. It must **never be tunneled publicly without auth**.
+Main preview reserved on **:8100**; fleet previews **8110–8112**.
+
+## Hacker pass (2026-11-01)
+- Fixed false red health when lock **notes** mention BLOCKED/404/Unauthorized, or status=blocked with **released_at** (ended cycle) → stalled/not active red.
+- Allowlisted `MIND_LOCKS_DIR` / `MIND_REPO_DIR`; refuse huge lock files; sanitize CSS2D labels.
+

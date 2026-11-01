@@ -3,9 +3,14 @@ export const PAINTER_SHADERS = {
   painterlyPass: "PainterlyPassShader",
   watercolorStar: "WatercolorStarShader",
   brushBuilding: "BrushBuildingShader",
+  lorePlaque: "LorePlaqueShader",
 } as const;
 
-export { GLSL_HASH_NOISE, PAINTER_SHADER_VERSION } from "./glsl-noise.ts";
+export {
+  GLSL_HASH_NOISE,
+  GLSL_MEDIUMP_GUARD,
+  PAINTER_SHADER_VERSION,
+} from "./glsl-noise.ts";
 export {
   PainterlyPassShader,
   createPainterlyPass,
@@ -14,3 +19,4 @@ export {
 } from "./painterly-pass.ts";
 export { WatercolorStarShader } from "./watercolor-star.ts";
 export { BrushBuildingShader } from "./brush-building.ts";
+export { LorePlaqueShader } from "./lore-plaque.ts";

@@ -5,6 +5,15 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import {
+  createPainterlyKit,
+  tickPainterlyKit,
+  disposePainterlyKit,
+  type PainterlyKit,
+} from "./materials";
+import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
+import { createTunedBloomPass, createColorGradePass } from "./postfx";
+import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
@@ -23,6 +32,13 @@ import {
   type CameraRigState,
   UNIVERSE_HOME,
 } from "@/lib/mind/dashboard/camera-rig";
+import {
+  pulsePhaseFromId,
+  sampleOrbitDrift,
+  sampleStarPulse,
+  sanitizeDt,
+} from "./motion";
+import { createCommitComets, createDustField } from "./particles";
 
 const HEALTH_COLOR: Record<Health, number> = {
   healthy: 0x3dd68c,
@@ -241,23 +257,33 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     mount.appendChild(labelRenderer.domElement);
 
     // Sky dome with painterly nebula
-    const skyMat = new THREE.MeshBasicMaterial({
-      map: makeNebulaTexture(3),
-      side: THREE.BackSide,
-      depthWrite: false,
-    });
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), skyMat);
-    scene.add(sky);
-
-    scene.add(new THREE.AmbientLight(0x8ea0d0, 0.55));
+    const kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 } });
+    let atm: HealthAtmosphereHandle | null = null;
+    try {
+      atm = createHealthAtmosphere(scene, { attachFog: false, tone: "idle" });
+    } catch {
+      atm = null;
+    }
+    // Ambient/key/rim owned by Light atmosphere when available; keep sun mesh light separate.
+    if (!atm) {
+      scene.add(new THREE.AmbientLight(0x8ea0d0, 0.55));
+    }
     const sun = new THREE.PointLight(0xffe6a8, 90, 60);
     sun.position.set(0, 2, 0);
     scene.add(sun);
     const rim = new THREE.PointLight(0x7c5cff, 40, 50);
     rim.position.set(-8, 6, 10);
-    scene.add(rim);
+    if (!atm) scene.add(rim);
 
-    const starTex = makeStarSpriteTexture();
+    const skyMat = kit.createSkyMaterial({ seed: 3 });
+    skyMat.side = THREE.BackSide;
+    skyMat.depthWrite = false;
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), skyMat);
+    scene.add(sky);
+
+
+
+    const starTex = kit.starSpriteTexture;
     const botGroup = new THREE.Group();
     scene.add(botGroup);
     const edgeGroup = new THREE.Group();
@@ -330,7 +356,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
         const el = document.createElement("div");
         el.className = "dash3d-label";
-        el.textContent = bot.name.replace(/ Bot$/, "").replace(" / Orchestrator", "");
+        el.textContent = sanitizeLabelText(bot.name.replace(/ Bot$/, "").replace(" / Orchestrator", ""));
         const label = new CSS2DObject(el);
         label.position.set(pos.x, pos.y + 0.75, pos.z);
         botGroup.add(label);
@@ -509,14 +535,30 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     }
     rebuildAll();
 
+    const dust = createDustField(scene, { count: 480, seed: 42 });
+    let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
+    const driftOut = { x: 0, y: 0, z: 0 };
+
     let composer: EffectComposer | null = null;
-    let paintPass: ShaderPass | null = null;
+    let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
+    let gradeHandle: ReturnType<typeof createColorGradePass> | null = null;
     if (!reducedMotion) {
       composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(scene, camera));
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.62, 0.75, 0.22));
-      paintPass = new ShaderPass(PainterlyShader);
-      composer.addPass(paintPass);
+      try {
+        bloomHandle = createTunedBloomPass(new THREE.Vector2(width, height), "healthy");
+        composer.addPass(bloomHandle.pass);
+      } catch {
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), 0.62, 0.75, 0.22));
+      }
+      try {
+        gradeHandle = createColorGradePass("healthy");
+        composer.addPass(gradeHandle.pass);
+      } catch {
+        /* optional */
+      }
+      composer.addPass(kit.painterlyPass);
     }
 
     let rig: CameraRigState = createRig();
@@ -634,7 +676,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let sync = 0;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = sanitizeDt((now - last) / 1000);
       last = now;
 
       if (rig.t < 1) {
@@ -648,17 +690,28 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         ch.lookAt(camera.position);
       }
 
+      const t = now * 0.001;
+      for (const n of botVis) {
+        const phase = pulsePhaseFromId(n.id);
+        sampleStarPulse(pulseOut, t, phase, n.health, reducedMotion);
+        n.mesh.scale.setScalar(pulseOut.scale);
+        n.glow.scale.setScalar(pulseOut.glow);
+        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, t, phase, reducedMotion);
+        n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
+        n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
+        n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
+      }
+      dust.update(t, reducedMotion);
+      comets.update(t, reducedMotion);
       if (!reducedMotion) {
-        const t = now * 0.001;
-        for (const n of botVis) {
-          if (n.health === "idle") continue;
-          const speed = n.health === "stalled" ? 1.1 : n.health === "blocked" ? 3.2 : 2.2;
-          const pulse = 1 + Math.sin(t * speed + n.base.x) * (n.health === "stalled" ? 0.05 : 0.1);
-          n.mesh.scale.setScalar(pulse);
-          n.glow.scale.setScalar(2.0 + Math.sin(t * speed) * 0.3);
-        }
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
-        if (paintPass) paintPass.uniforms.time.value = t;
+        tickPainterlyKit(kit, t);
+        if (atm) {
+          const tone = dataRef.current.weather?.tone ?? deriveFleetTone(dataRef.current.bots.map((b) => b.health));
+          atm.update(tone);
+          bloomHandle?.update(tone);
+          gradeHandle?.update(tone);
+        }
       }
 
       if (composer) composer.render();
@@ -668,13 +721,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (now - sync > 5000) {
         sync = now;
         rebuildAll();
+        comets.dispose();
+        comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
       }
     };
     tick(performance.now());
 
     const onResize = () => {
-      const w = mount.clientWidth || window.innerWidth;
-      const h = mount.clientHeight || window.innerHeight;
+      const w = Math.max(1, mount.clientWidth || window.innerWidth || 1);
+      const h = Math.max(1, mount.clientHeight || window.innerHeight || 1);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -704,6 +759,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       cancelAnimationFrame(raf);
+      dust.dispose();
+      comets.dispose();
       sphereGeo.dispose();
       pageGeo.dispose();
       starTex.dispose();

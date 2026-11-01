@@ -2,22 +2,23 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-In `universe-scene.tsx` (Dashboard Bot):
-
 ```ts
 import {
   createPainterlyKit,
   tickPainterlyKit,
   disposePainterlyKit,
+  attachPainterlyContextHandlers,
 } from "@/components/mind/dashboard-3d/materials";
 
 const kit = createPainterlyKit({ pass: { amount: 0.42 } });
 composer.addPass(kit.painterlyPass);
+const detachCtx = attachPainterlyContextHandlers(renderer.domElement, kit);
 // stars: kit.createStarMaterial({ color: healthColor })
-// sky: kit.createSkyMaterial()
-// buildings (queue #1): kit.createBuildingMaterial({ floors, progress })
+// sky: kit.createSkyMaterial()  // tracked + disposed
+// lore: kit.createLorePlaqueMaterial({ accent: healthColor })
+// buildings: kit.createBuildingMaterial({ floors, progress })
 // animate: tickPainterlyKit(kit, t)
-// cleanup: disposePainterlyKit(kit)
+// cleanup: detachCtx(); disposePainterlyKit(kit);
 ```
 
-Replace inlined `PainterlyShader` / `makeStarSpriteTexture` / `makeNebulaTexture` once imported.
+Replace inlined `PainterlyShader` / `makeStarSpriteTexture` / `makeNebulaTexture` / paint cards once imported.
