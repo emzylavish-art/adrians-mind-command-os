@@ -10,9 +10,33 @@ export type LoginProviderAction =
   | { kind: "better_auth"; providerId: string; label: string }
   | { kind: "not_configured"; message: string };
 
+/** Supabase Auth OAuth providers enabled in the project (server env). Defaults to none. */
+export type SupabaseOAuthProviderId = "google" | "github" | "apple";
+
+export function parseSupabaseOAuthProviders(
+  raw: string | undefined | null,
+): SupabaseOAuthProviderId[] {
+  const allowed = new Set<SupabaseOAuthProviderId>(["google", "github", "apple"]);
+  const out: SupabaseOAuthProviderId[] = [];
+  for (const part of String(raw ?? "")
+    .split(/[,\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)) {
+    if (allowed.has(part as SupabaseOAuthProviderId) && !out.includes(part as SupabaseOAuthProviderId)) {
+      out.push(part as SupabaseOAuthProviderId);
+    }
+  }
+  return out;
+}
+
 export function resolveLoginProviderAction(
   provider: LoginProviderId,
-  input: { supabaseConfigured: boolean; betterAuthEnabled: boolean },
+  input: {
+    supabaseConfigured: boolean;
+    betterAuthEnabled: boolean;
+    /** Empty / omitted = no Supabase OAuth providers enabled (honest disabled buttons). */
+    supabaseOAuthProviders?: readonly SupabaseOAuthProviderId[];
+  },
 ): LoginProviderAction {
   if (provider === "x") {
     if (!input.betterAuthEnabled) {
@@ -25,7 +49,11 @@ export function resolveLoginProviderAction(
     return { kind: "better_auth", providerId: "grok-x", label: "X" };
   }
 
-  if (input.supabaseConfigured) {
+  const supabaseOauth =
+    input.supabaseConfigured &&
+    (input.supabaseOAuthProviders ?? []).includes(provider as SupabaseOAuthProviderId);
+
+  if (supabaseOauth) {
     return {
       kind: "supabase_oauth",
       provider: provider as "google" | "github" | "apple",
@@ -34,6 +62,13 @@ export function resolveLoginProviderAction(
 
   if (provider === "google" && input.betterAuthEnabled) {
     return { kind: "better_auth", providerId: "grok-google", label: "Google" };
+  }
+
+  if (input.supabaseConfigured) {
+    return {
+      kind: "not_configured",
+      message: "Not enabled yet",
+    };
   }
 
   const needs =

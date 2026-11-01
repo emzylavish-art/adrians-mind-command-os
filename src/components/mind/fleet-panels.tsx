@@ -370,7 +370,7 @@ export function FleetPanel({
         <p className="text-sm text-muted">Events come from the local worker. This does not call a model, send mail, or invent browser screenshots.</p>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <select value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+          <select aria-label="Choose agent" value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
             <option value="">Choose agent</option>
             {ws.agents.filter((agent) => !agent.archived).map((agent) => (
               <option key={agent.id} value={agent.id}>{agent.name}</option>
@@ -441,7 +441,7 @@ export function FleetPanel({
           <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Gmail stays not connected until Google OAuth is configured.</p>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <select value={provider} onChange={(event) => setProvider(event.target.value as ProviderConnection["provider"])} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+          <select aria-label="Connection provider" value={provider} onChange={(event) => setProvider(event.target.value as ProviderConnection["provider"])} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
             {["grok", "openai", "anthropic", "gemini", "openrouter", "ollama"].map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}

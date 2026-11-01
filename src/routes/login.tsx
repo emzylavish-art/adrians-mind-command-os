@@ -35,7 +35,7 @@ export const Route = createFileRoute("/login")({
       return await getSupabaseAuthUser();
     } catch {
       // Keep shape aligned with AuthUserResult so broker Google/X stays gated.
-      return { configured: false, user: null, brokerConfigured: false };
+      return { configured: false, user: null, brokerConfigured: false, supabaseOAuthProviders: [] };
     }
   },
   component: Login,
@@ -180,6 +180,7 @@ function Login() {
   const next = safeRedirectPath(search.next);
   const supabaseConfigured = Boolean(data.configured);
   const brokerConfigured = Boolean(data.brokerConfigured);
+  const supabaseOAuthProviders = data.supabaseOAuthProviders ?? [];
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -232,6 +233,7 @@ function Login() {
     const action = resolveLoginProviderAction(provider, {
       supabaseConfigured,
       betterAuthEnabled: brokerConfigured && authEnabled,
+      supabaseOAuthProviders,
     });
     try {
       if (action.kind === "not_configured") {
@@ -415,18 +417,33 @@ function Login() {
         <div className="flex flex-col gap-2">
           {oauthButtons.map((item) => {
             const Icon = item.icon;
+            const action = resolveLoginProviderAction(item.id, {
+              supabaseConfigured,
+              betterAuthEnabled: brokerConfigured && authEnabled,
+              supabaseOAuthProviders,
+            });
+            const disabled = busy || action.kind === "not_configured";
+            const note = action.kind === "not_configured" ? action.message : undefined;
             return (
-              <button
-                key={item.id}
-                type="button"
-                disabled={busy}
-                data-testid={`login-oauth-${item.id}`}
-                onClick={() => void onProvider(item.id)}
-                className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                <Icon />
-                {item.label}
-              </button>
+              <div key={item.id} className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  title={note}
+                  aria-label={note ? `${item.label} (${note})` : item.label}
+                  data-testid={`login-oauth-${item.id}`}
+                  onClick={() => void onProvider(item.id)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <Icon />
+                  {item.label}
+                </button>
+                {note ? (
+                  <p className="px-1 text-xs text-muted" data-testid={`login-oauth-${item.id}-note`}>
+                    {note}
+                  </p>
+                ) : null}
+              </div>
             );
           })}
         </div>
