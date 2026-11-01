@@ -122,6 +122,26 @@ type Staged = { name: string; text: string };
 const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build"] as const;
 type ModelTier = (typeof MODEL_TIERS)[number];
 
+const NAV_ICON_SRC: Partial<Record<View, string>> = {
+  command: "/icons/chat.svg",
+  agents: "/icons/bots.svg",
+  build: "/icons/build.svg",
+  projects: "/icons/projects.svg",
+  research: "/icons/research.svg",
+  files: "/icons/library.svg",
+  chat: "/icons/thread.svg",
+  runs: "/icons/runs.svg",
+  connected: "/icons/systems.svg",
+  tools: "/icons/systems.svg",
+  scheduled: "/icons/systems.svg",
+  skills: "/icons/systems.svg",
+  memory: "/icons/library.svg",
+  activity: "/icons/runs.svg",
+  settings: "/icons/systems.svg",
+  help: "/icons/systems.svg",
+  integrations: "/icons/systems.svg",
+};
+
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
@@ -1282,7 +1302,7 @@ export function CommandApp() {
                     }}
                     className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"}`}
                   >
-                    <Icon className="size-4 shrink-0 opacity-90" />
+                    {NAV_ICON_SRC[item.id] ? <img src={NAV_ICON_SRC[item.id]} alt="" className="nav-icon-img" /> : <Icon className="size-4 shrink-0 opacity-90" />}
                     {!railCollapsed && item.label}
                   </button>
                 );
@@ -1726,6 +1746,11 @@ export function CommandApp() {
                 )}
               </section>
 
+              <div className="flex flex-wrap gap-2 pb-1">
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("Summarize my projects on this device")}>Summarize my projects</button>
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
+                <button type="button" className="suggestion-chip" onClick={() => setView("connected")}>Review connected services</button>
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
                 <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
@@ -1923,10 +1948,10 @@ export function CommandApp() {
           )}
 
           {view === "projects" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card flex flex-wrap items-center justify-between gap-3 rounded-panel border border-line bg-surface px-4 py-4">
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-12 place-items-center rounded-2xl bg-accent/20 text-accent"><Folder className="size-5" /></span>
+                  <img src="/icons/projects.svg" alt="" className="size-10" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
                     <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
@@ -1942,9 +1967,10 @@ export function CommandApp() {
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 {ws.projects.length === 0 && (
-                  <article className="glow-card rounded-panel border border-line bg-surface p-4 lg:col-span-2">
+                  <article className="empty-state lg:col-span-2">
+                    <img src="/empty/empty-folder.svg" alt="" />
                     <p className="font-semibold">No projects on this device yet.</p>
-                    <p className="mt-1 text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
+                    <p className="text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
                   </article>
                 )}
                 {ws.projects.map((project) => {
@@ -1952,7 +1978,7 @@ export function CommandApp() {
                   const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
                   return (
-                    <article key={project.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={project.id} className="dense-card card-texture p-4">
                       <div className="flex items-start gap-3">
                         <span className="grid size-11 place-items-center rounded-2xl bg-accent/15 text-accent"><Folder className="size-5" /></span>
                         <div className="min-w-0 flex-1">
@@ -2215,9 +2241,8 @@ export function CommandApp() {
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
           {view === "connected" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Connected</h2>
-              <p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex items-center gap-3"><img src="/icons/systems.svg" alt="" className="size-8" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -2308,30 +2333,56 @@ export function CommandApp() {
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
           {view === "build" && (
-            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Build</h2>
-              <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
-              <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">Edit files, run tests, and use git. Not available. No files were changed.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">HP EliteBook and iPhone control. Not paired.</li>
+            <section className="page-shell space-y-4">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/build.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Build</h2>
+                    <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="promo-banner text-sm">
+                <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Local Companion not paired</p>
+                  <p className="text-muted">Pair a computer to unlock file edits, tests, and git. Nothing runs until then.</p>
+                </div>
+              </div>
+              <ul className="dense-grid space-y-0 text-sm">
+                <li className="dense-card dense-row">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
+                <li className="dense-card dense-row">Edit files, run tests, and use git. Not available. No files were changed.</li>
+                <li className="dense-card dense-row">HP EliteBook and iPhone control. Not paired.</li>
               </ul>
             </section>
           )}
           {view === "research" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
-                <h2 className="font-display text-3xl font-bold">Research</h2>
-                <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
-                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+            <section className="page-shell">
+              <div className="page-hero card-texture">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/research.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Research</h2>
+                    <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
+                  </div>
+                </div>
+                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
                   Check research
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
+                {researchCitations.length === 0 && !researchNote ? (
+                  <div className="empty-state mt-4">
+                    <img src="/empty/empty-search.svg" alt="" />
+                    <p className="font-semibold">No citations yet</p>
+                    <p className="text-sm text-muted">Run a check when a search provider is configured.</p>
+                  </div>
+                ) : null}
                 {researchCitations.length > 0 && (
                   <ul className="mt-3 space-y-2 text-sm">
                     {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
-                      <li key={item.url}>
+                      <li key={item.url} className="dense-row">
                         <a className="text-accent underline" href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
                       </li>
                     ))}
@@ -2351,15 +2402,15 @@ export function CommandApp() {
             </section>
           )}
           {view === "skills" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Skills</h2>
-              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p>
+            <section className="page-shell space-y-4">
+              <div className="page-hero"><h2 className="font-display text-3xl font-bold">Skills</h2>
+              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p></div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <div className="grid gap-3 md:grid-cols-2">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
                   const on = skill.kind === "built-in" && enabledSkills[skill.id] !== false;
                   return (
-                    <article key={skill.id} className="rounded-panel border border-line bg-surface p-3">
+                    <article key={skill.id} className="dense-card p-3">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-semibold">{skill.name}</h3>
                         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "built-in" ? (on ? "On" : "Off") : "Not installed"}</span>
@@ -2400,31 +2451,45 @@ export function CommandApp() {
             </section>
           )}
           {view === "files" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-3xl font-bold">Library</h2>
-                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/library.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Library</h2>
+                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+                  </div>
                 </div>
                 <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
-                <aside className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
+                <aside className="dense-card card-texture p-3 text-sm">
                   <p className="font-semibold">Text copies</p>
                   <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
                   <ul className="mt-3 space-y-1">
-                    {ws.files.length === 0 && <li className="text-muted">No files yet.</li>}
+                    {ws.files.length === 0 && (
+                      <li className="empty-state py-6">
+                        <img src="/empty/empty-folder.svg" alt="" />
+                        <p className="text-muted">No files yet.</p>
+                      </li>
+                    )}
                     {ws.files.map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`min-h-11 w-full rounded-panel px-2 text-left ${openFileId === file.id ? "bg-accent text-white" : ""}`}>
+                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
                           {file.name}
                         </button>
                       </li>
                     ))}
                   </ul>
                 </aside>
-                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
-                  {!ws.files.find((file) => file.id === openFileId) && <p className="text-muted">Select a file to read the text copy. Upload text from the button above, or attach a file on Command.</p>}
+                <div className="dense-card p-4 text-sm">
+                  {!ws.files.find((file) => file.id === openFileId) && (
+                    <div className="empty-state">
+                      <img src="/empty/empty-folder.svg" alt="" />
+                      <p className="font-semibold">Select a file</p>
+                      <p className="text-muted">Upload text from the button above, or attach a file on Command.</p>
+                    </div>
+                  )}
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold">{file.name}</p>
@@ -2453,8 +2518,8 @@ export function CommandApp() {
             </section>
           )}
           {view === "integrations" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
+            <section className="page-shell">
+              <div className="page-hero">
                 <h2 className="font-display text-3xl font-bold">Integrations</h2>
                 <p className="text-sm text-muted">{system}</p>
                 <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
@@ -2463,7 +2528,7 @@ export function CommandApp() {
                 {CAPABILITIES.map((item) => {
                   const live = isVerifiedCapability(item.status);
                   return (
-                    <article key={item.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={item.id} className="dense-card card-texture p-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold">{item.name}</h3>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
@@ -2478,19 +2543,30 @@ export function CommandApp() {
             </section>
           )}
           {view === "activity" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
-                <h2 className="font-display text-3xl font-bold">Activity</h2>
-                <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+            <section className="page-shell">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/runs.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Activity</h2>
+                    <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+                  </div>
+                </div>
               </div>
-              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="mt-4 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" aria-label="Filter activity" />
+              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="input-glow mt-4 min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm" aria-label="Filter activity" />
               <ul className="mt-4 space-y-2">
-                {ws.audit.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No events yet.</li>}
+                {ws.audit.length === 0 && (
+                  <li className="empty-state">
+                    <img src="/empty/empty-activity.svg" alt="" />
+                    <p className="font-semibold">No events yet</p>
+                    <p className="text-sm text-muted">Actions you take will appear here.</p>
+                  </li>
+                )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).length === 0 && ws.audit.length > 0 && (
                   <li className="text-sm text-muted">No events match that filter.</li>
                 )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).map((entry) => (
-                  <li key={entry.id} className="glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface p-3 text-sm">
+                  <li key={entry.id} className="dense-card dense-row flex-wrap justify-between text-sm">
                     <div>
                       <p className="font-semibold">{humanAction(entry.action)}</p>
                       <p className="text-muted">{entry.result}</p>
@@ -2506,28 +2582,42 @@ export function CommandApp() {
               <h2 className="font-display text-3xl font-bold">Help</h2>
               <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
               <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
               </ul>
             </section>
           )}
           {view === "settings" && (
-            <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Settings</h2>
-              <div className="settings-card rounded-panel p-4 text-sm">
-                <p className="font-semibold">Appearance</p>
-                <p className="mt-1 text-muted">The theme is saved in this browser. It does not change a server setting.</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(["dark", "light", "system"] as const).map((choice) => (
-                    <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink" : "border-line"}`} onClick={() => setTheme(choice)}>
-                      {choice}
-                    </button>
-                  ))}
+            <section className="page-shell mx-auto max-w-3xl space-y-4">
+              <div className="page-hero">
+                <h2 className="font-display text-3xl font-bold">Settings</h2>
+                <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+              </div>
+              <div className="settings-card card-texture rounded-panel p-4 text-sm">
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Appearance</p>
+                    <p className="text-muted">Theme for the app UI. Saved in this browser only.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["dark", "light", "system"] as const).map((choice) => (
+                      <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Provider failover</p>
+                    <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
+                  </div>
+                  <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
                 </div>
               </div>
-              <div className="settings-card rounded-panel p-4 text-sm">
+              <div className="settings-card rounded-panel p-4 text-sm hidden">
                 <p className="font-semibold">Provider failover</p>
                 <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
               </div>
