@@ -7997,3 +7997,59 @@ aside nav button:not(.bg-accent):not([class*="bg-accent"]) {
   color: var(--text-secondary) !important;
 }
 
+/* —— Evolution c131: Library / Runs / Projects density, dividers, empty wells —— */
+/* Runs (+ agents) bare empty li → dashed well like Library */
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.text-sm.text-muted,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.text-sm.text-muted,
+.main-stage ul.mt-4.space-y-3 > li.text-sm.text-muted:only-child,
+.main-stage ul.space-y-3 > li.text-sm.text-muted:only-child {
+  text-align: center !important;
+  min-height: 7.5rem !important;
+  padding: 1.75rem 1.25rem !important;
+  border-radius: 1.1rem !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(255 255 255 / 0.05), transparent 65%),
+    rgb(12 16 24 / 0.92) !important;
+  display: grid !important;
+  place-items: center !important;
+  color: var(--text-tertiary) !important;
+}
+/* Library "No files yet." inside list */
+.main-stage aside.glow-card ul.mt-3.space-y-1 > li.text-muted:only-child,
+.main-stage aside.rounded-panel ul li.text-muted:only-child {
+  text-align: center !important;
+  min-height: 6.5rem !important;
+  margin-top: 0.5rem !important;
+  padding: 1.5rem 1rem !important;
+  border-radius: 1rem !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+  background: rgb(8 10 16 / 0.85) !important;
+  color: var(--text-tertiary) !important;
+  display: grid !important;
+  place-items: center !important;
+}
+/* Projects empty + list-row density */
+.main-stage article.glow-card.rounded-panel,
+.main-stage article.rounded-panel.border.border-line.bg-surface {
+  padding: 1rem 1.05rem !important;
+}
+.main-stage article.rounded-panel.border.border-line.bg-surface + article.rounded-panel,
+.main-stage .grid.gap-3 > article.rounded-panel {
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+/* Runs list rows when present */
+.main-stage ul.mt-4.space-y-3 > li.rounded-panel {
+  padding: 0.85rem 1rem !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  background: rgb(12 12 14 / 0.55) !important;
+}
+.main-stage ul.mt-4.space-y-3 > li.rounded-panel + li.rounded-panel {
+  margin-top: 0.65rem !important;
+}
+/* Divider tonality between stacked panels */
+.main-stage .grid.gap-3 > *,
+.main-stage section .mt-4.grid > * {
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+
