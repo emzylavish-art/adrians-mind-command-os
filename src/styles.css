@@ -1073,3 +1073,120 @@ html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30[aria-label="Primary"]
 html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30[aria-label="Primary"] button.text-accent {
   color: #09090b !important;
 }
+
+/* —— Cycle 12: light theme parity + monochrome icon set —— */
+
+/* Light shell wash */
+html[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse 55% 40% at 85% -5%, rgb(9 9 11 / 0.04), transparent 55%),
+    var(--color-bg);
+}
+html[data-theme="light"] aside {
+  background: linear-gradient(180deg, #ffffff, #f4f4f5) !important;
+  border-right: 1px solid rgb(9 9 11 / 0.08);
+  box-shadow: 8px 0 28px rgb(0 0 0 / 0.04);
+}
+
+/* Force semantic utility colors to mono gray (icons + labels) */
+.text-info,
+.text-ok,
+.text-warn,
+.text-accent,
+.text-danger {
+  color: var(--color-muted) !important;
+}
+button.bg-accent .text-accent,
+button.bg-accent,
+.bg-accent,
+.bg-accent.text-accent-ink,
+.text-accent-ink {
+  /* keep accent-ink readable on accent fills */
+}
+button.bg-accent,
+.bg-accent.text-accent-ink,
+button.bg-accent .text-accent-ink,
+.text-accent-ink {
+  color: var(--color-accent-ink) !important;
+}
+aside nav button.bg-accent,
+aside nav button.bg-accent .text-accent,
+aside nav button.bg-accent svg {
+  color: var(--color-accent-ink) !important;
+}
+aside nav button:not(.bg-accent) svg {
+  color: var(--color-muted);
+  opacity: 0.9;
+}
+aside nav button.bg-accent svg {
+  opacity: 1;
+}
+
+/* Lucide / icon buttons — mono strokes */
+button svg.lucide,
+a svg.lucide,
+.rounded-panel svg.lucide,
+.rounded-2xl svg.lucide {
+  stroke: currentColor;
+}
+html[data-theme="light"] .text-info,
+html[data-theme="light"] .text-ok,
+html[data-theme="light"] .text-warn {
+  color: #52525b !important;
+}
+html[data-theme="light"] aside nav button.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+html[data-theme="light"] aside nav button.bg-accent svg {
+  color: #fafafa !important;
+}
+
+/* Light search / status chips in header */
+html[data-theme="light"] header.flex.items-center.border-b.border-line input,
+html[data-theme="light"] header.flex.items-center.border-b.border-line .rounded-full,
+html[data-theme="light"] header.flex.items-center.border-b.border-line .rounded-panel {
+  border-color: rgb(9 9 11 / 0.12);
+}
+html[data-theme="light"] header.flex.items-center.border-b.border-line {
+  color: #09090b;
+}
+
+/* Light page stage cards already covered; reinforce empty copy contrast */
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto .text-muted {
+  color: #52525b !important;
+}
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto h1,
+html[data-theme="light"] .min-h-0.flex-1.overflow-auto h2.font-display {
+  color: #09090b;
+}
+
+/* Dashboard route shell (CSS only around 3D canvas host) */
+[class*="dashboard-3d"],
+.dashboard-3d-shell,
+#dashboard-3d-root {
+  border-color: rgb(255 255 255 / 0.08);
+}
+html[data-theme="light"] [class*="dashboard-3d"],
+html[data-theme="light"] .dashboard-3d-shell,
+html[data-theme="light"] #dashboard-3d-root {
+  border-color: rgb(9 9 11 / 0.1);
+  background: #fafafa;
+}
+
+/* Kill any leftover colored glow utilities on non-logo nodes */
+[class*="shadow-[0_0_18px_rgb(124_92_255"]:not(.logo-mark):not(aside span.grid.size-11) {
+  box-shadow: 0 0 18px rgb(255 255 255 / 0.12) !important;
+}
+html[data-theme="light"] [class*="shadow-[0_0_18px_rgb(124_92_255"]:not(.logo-mark):not(aside span.grid.size-11) {
+  box-shadow: 0 0 18px rgb(9 9 11 / 0.08) !important;
+}
+/* Re-assert logo purple after the kill switch */
+aside > div.flex.items-center > span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent,
+.logo-mark {
+  background: #7c5cff !important;
+  background-image: none !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
