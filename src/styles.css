@@ -3783,3 +3783,28 @@ aside .text-xs.text-muted,
     display: flex !important;
   }
 }
+
+/* —— Round e3b6ec4 / fix2: quick-action pills scroll, no clip —— */
+.main-stage .flex.gap-2.overflow-x-auto,
+.flex.gap-2.overflow-x-auto.pb-1,
+div.flex.gap-2.overflow-x-auto {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 0.55rem !important;
+  padding-bottom: 0.35rem !important;
+  margin-inline: 0 !important;
+  max-width: 100%;
+}
+.main-stage .flex.gap-2.overflow-x-auto::-webkit-scrollbar,
+div.flex.gap-2.overflow-x-auto::-webkit-scrollbar {
+  display: none;
+}
+.main-stage .flex.gap-2.overflow-x-auto > button,
+div.flex.gap-2.overflow-x-auto > button {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}
