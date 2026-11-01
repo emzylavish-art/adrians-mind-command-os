@@ -4800,3 +4800,76 @@ html[data-theme="light"] aside.rail .sidebar-plus * {
     white-space: nowrap !important;
   }
 }
+
+/* —— Evolution c63: mono hard-kill remaining purple chrome; loading status; aria-current —— */
+
+/* Kill ambient purple wash on body (B/W shell) */
+body {
+  background:
+    radial-gradient(ellipse 55% 45% at 78% -8%, rgb(255 255 255 / 0.04), transparent 55%),
+    radial-gradient(ellipse 40% 40% at 8% 18%, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-bg) !important;
+}
+
+/* Active nav (aria-current) — markup may omit bg-accent but keep purple utility shadows */
+aside.rail nav button[aria-current="page"],
+aside.rail nav a[aria-current="page"],
+aside nav button[aria-current="page"],
+aside.rail nav button[class*="shadow-[0_0_18px_rgb(124_92_255"],
+aside.rail nav button[class*="124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+  filter: none !important;
+}
+aside.rail nav button[aria-current="page"] *,
+aside.rail nav button[aria-current="page"] svg,
+aside.rail nav button[aria-current="page"] svg * {
+  color: #09090b !important;
+  stroke: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"],
+html[data-theme="light"] aside.rail nav button[class*="124_92_255"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.12) !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"] * {
+  color: #fafafa !important;
+  stroke: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Settings / Help selected pills — force mono borders (no purple glow) */
+.main-stage button.tile-active,
+.main-stage button.border-accent,
+.main-stage button[aria-pressed="true"],
+.main-stage .tile-active {
+  border-color: #f4f4f5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 0 1px rgb(255 255 255 / 0.18) !important;
+}
+.main-stage button.tile-active.bg-accent,
+.main-stage button[aria-pressed="true"].bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] .main-stage button.tile-active.bg-accent,
+html[data-theme="light"] .main-stage button[aria-pressed="true"].bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+  border-color: #18181b !important;
+}
+
+/* Loading shell on /explore /memory — presentational only (no focusables yet) */
+main.min-h-screen > p.text-sm.text-muted:only-child {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.72;
+  letter-spacing: 0.01em;
+}
+main.min-h-screen:has(> p.text-sm.text-muted:only-child) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
