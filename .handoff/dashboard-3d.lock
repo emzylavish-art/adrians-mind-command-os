@@ -1,6 +1,5 @@
-owner: none
-cycle: 47
-released: 2026-11-01T23:21:20+01:00
+owner: dashboard-3d-loop
+cycle: 48
+heartbeat: 2026-11-01T23:23:31+01:00
 branch: dashboard-3d
-tip: 7c68e44
-last: #48-51 + Light #67 e65a052; ctx-loss harden+retry; attacker
+work: test chain; Gap#52-53; #68 wait Light; attacker

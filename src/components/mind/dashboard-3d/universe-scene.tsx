@@ -323,6 +323,26 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const maxTexSize = renderer.capabilities.maxTextureSize || 2048;
 
     mount.appendChild(renderer.domElement);
+    // Gap#53: name the main stage for assistive tech (updated each tick from live bots).
+    const canvasEl = renderer.domElement;
+    canvasEl.setAttribute("role", "img");
+    canvasEl.setAttribute("data-testid", "dash3d-stage-canvas");
+    const syncCanvasAria = () => {
+      const bots = dataRef.current.bots ?? [];
+      let healthy = 0, stalled = 0, blocked = 0, idle = 0;
+      for (const b of bots) {
+        if (b.health === "healthy") healthy += 1;
+        else if (b.health === "stalled") stalled += 1;
+        else if (b.health === "blocked") blocked += 1;
+        else idle += 1;
+      }
+      const weather = dataRef.current.weather?.label || dataRef.current.weather?.tone || "weather unknown";
+      canvasEl.setAttribute(
+        "aria-label",
+        `Mind Command 3D stage — ${bots.length} bots, ${healthy} healthy, ${stalled} stalled, ${blocked} blocked, ${idle} idle — ${weather}`,
+      );
+    };
+    syncCanvasAria();
     // Gap#3: keep prior freeze visible until first successful frame after (re)mount.
     let freezePendingClear = true;
 
@@ -1638,6 +1658,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
+      syncCanvasAria();
       const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
       const healthy = botsNow.filter((b) => b.health === "healthy").length;
       const total = botsNow.length;
@@ -1763,15 +1784,22 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
     tick(performance.now());
 
+    // Gap#52: size from the host's client box (ResizeObserver), never first-load aspect.
+    let lastResizeW = 0;
+    let lastResizeH = 0;
     const onResize = () => {
-      const w = Math.max(1, mount.clientWidth || window.innerWidth || 1);
-      const h = Math.max(1, mount.clientHeight || window.innerHeight || 1);
-      camera.aspect = w / h;
+      const w = Math.max(1, mount.clientWidth || 1);
+      const h = Math.max(1, mount.clientHeight || 1);
+      if (w === lastResizeW && h === lastResizeH) return;
+      lastResizeW = w;
+      lastResizeH = h;
+      camera.aspect = w / Math.max(1, h);
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      renderer.setSize(w, h, false);
       labelRenderer.setSize(w, h);
       composer?.setSize(w, h);
       const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      renderer.setPixelRatio(dpr);
       bloomHandle?.setSize?.(w, h, dpr);
       kit.resizePass(w, h, dpr);
       if (raysHandle && composer?.readBuffer?.depthTexture) {
@@ -1781,6 +1809,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         focusDepthHandle.setDepthTexture(composer.readBuffer.depthTexture);
       }
     };
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            onResize();
+          })
+        : null;
+    resizeObserver?.observe(mount);
     
     const onSkyEvent = () => {
       if (fly.level !== "universe") {
@@ -1877,6 +1912,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     return () => {
       window.removeEventListener("resize", onResize);
+      resizeObserver?.disconnect();
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
       document.removeEventListener("dash3d-graph-filter", onGraphFilter);
