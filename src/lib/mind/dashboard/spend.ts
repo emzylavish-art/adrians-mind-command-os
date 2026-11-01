@@ -55,6 +55,8 @@ export function createFilesystemSpendAdapter(opts?: { roots?: string[] }): Spend
           if (!exists(root)) continue;
           for (const name of listNames(root)) {
             if (!SPEND_FILE_RE.test(name) || !SPEND_EXT_RE.test(name)) continue;
+            // Skip test fixtures / mocha output mistaken for spend ledgers.
+            if (/test-spend|\.test\.|spec\./i.test(name)) continue;
             hits.push(join(root, name));
           }
           if (root === "/workspace") {
@@ -64,6 +66,7 @@ export function createFilesystemSpendAdapter(opts?: { roots?: string[] }): Spend
               try {
                 for (const f of listNames(dir)) {
                   if (!SPEND_FILE_RE.test(f) || !SPEND_EXT_RE.test(f)) continue;
+                  if (/test-spend|\.test\.|spec\./i.test(f)) continue;
                   hits.push(join(dir, f));
                 }
               } catch {

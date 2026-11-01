@@ -1,0 +1,428 @@
+{
+  "generatedAt": "2026-11-01T19:39:53.521Z",
+  "timezoneNote": "Commit author dates are ISO from git; snapshot stamped UTC.",
+  "source": "git log --all",
+  "repoHint": "mind-command-os-dashboard worktree at snapshot time",
+  "commits": [
+    {
+      "sha": "14d3c52",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:39:33-05:00",
+      "branch": "preview/integration",
+      "subject": "chore: redeploy to pick up Supabase Marketplace env vars"
+    },
+    {
+      "sha": "c7ee46a",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:39:19-05:00",
+      "branch": "mcp-integration",
+      "subject": "fix(mcp): always resolve MCP list via getSessionUser (Supabase first)"
+    },
+    {
+      "sha": "3a38938",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:14:22-05:00",
+      "branch": "main",
+      "subject": "Merge origin/dashboard-3d (32de552): idle composer CSS fix"
+    },
+    {
+      "sha": "32de552",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:13:27-05:00",
+      "branch": "dashboard-3d",
+      "subject": "visual(c34): collapse idle composer effort/autonomy on mobile"
+    },
+    {
+      "sha": "34201e2",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:05:04-05:00",
+      "branch": "unknown",
+      "subject": "Composer wrapper: single floating-composer dock node with rounded-panel"
+    },
+    {
+      "sha": "1d6ed3f",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:04:54-05:00",
+      "branch": "unknown",
+      "subject": "Merge origin/dashboard-3d (f469869): composer dock safety net"
+    },
+    {
+      "sha": "f469869",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T14:03:35-05:00",
+      "branch": "unknown",
+      "subject": "visual(c33g): CSS safety for floating-composer+composer-dock dual classes"
+    },
+    {
+      "sha": "cfd788c",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:58:07-05:00",
+      "branch": "unknown",
+      "subject": "visual(c33f): idle +/mic/Send row; kill purple active-nav glow"
+    },
+    {
+      "sha": "da5a51b",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:58:07-05:00",
+      "branch": "unknown",
+      "subject": "visual(c33e): light-theme mobile dock, tabs, and composer ink"
+    },
+    {
+      "sha": "915b135",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:58:07-05:00",
+      "branch": "unknown",
+      "subject": "visual(c33d): frost texture glass fallbacks when backdrop-filter is noop"
+    },
+    {
+      "sha": "f9cf94d",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:57:37-05:00",
+      "branch": "unknown",
+      "subject": "visual(c33c): glass drawer over composer; hide dock while menu open"
+    },
+    {
+      "sha": "8f55abd",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:57:37-05:00",
+      "branch": "unknown",
+      "subject": "visual(c33b): quick-action pill row scrolls instead of clipping"
+    },
+    {
+      "sha": "9060147",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:57:37-05:00",
+      "branch": "unknown",
+      "subject": "visual(c33a): compact idle mobile composer to slim Ask dock"
+    },
+    {
+      "sha": "d8c8ce1",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:51:20-05:00",
+      "branch": "unknown",
+      "subject": "Merge origin/dashboard-3d (e3b6ec4): mobile composer/tab bar fix"
+    },
+    {
+      "sha": "e3b6ec4",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:49:54-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32k): fixed composer-dock selectors for real DOM ancestors"
+    },
+    {
+      "sha": "cd2f1ba",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:48:42-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32j): fixed mobile composer dock (sticky overflow fallback)"
+    },
+    {
+      "sha": "576ec65",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:47:29-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32i): fix styles.css syntax (composer :root vars, brace balance)"
+    },
+    {
+      "sha": "7a1ea7a",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:46:41-05:00",
+      "branch": "unknown",
+      "subject": "Merge origin/mcp-integration (e3bd7f7): CSRF same-origin, DNS pinning, query timeouts"
+    },
+    {
+      "sha": "f56dd09",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:46:16-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32h): contrast, card glass/padding, ASK crop, pills, top align"
+    },
+    {
+      "sha": "49f85b0",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:46:16-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32g): expanded composer as bottom sheet above tab dock"
+    },
+    {
+      "sha": "1c9cb4d",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:46:16-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32f): voice grid, dedicated end-call row, kill double header"
+    },
+    {
+      "sha": "c181afc",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:45:43-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32e): mono high-contrast warning/error cards"
+    },
+    {
+      "sha": "80e2ac7",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:45:43-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32d): force monochrome icons; purple only on logo-mark"
+    },
+    {
+      "sha": "3a78de4",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:45:43-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32c): ComposerBar layout CSS (+ / model / mic / Speak pill)"
+    },
+    {
+      "sha": "efdda3e",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:45:15-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32b): slim mobile tab bar + sticky composer glass dock"
+    },
+    {
+      "sha": "9476583",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:45:15-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32a): solid glass composer + main-stage bottom padding"
+    },
+    {
+      "sha": "51e2e27",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:45:15-05:00",
+      "branch": "unknown",
+      "subject": "visual(c32): mark hero/thread composers as composer-dock"
+    },
+    {
+      "sha": "e3bd7f7",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:44:34-05:00",
+      "branch": "unknown",
+      "subject": "fix(types): add optional Sql.exec for PGLite exclusive path"
+    },
+    {
+      "sha": "76c00c2",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:44:11-05:00",
+      "branch": "unknown",
+      "subject": "fix(mcp): H15 pglite_query CPU freeze — complexity limits + Neon timeout"
+    },
+    {
+      "sha": "5405fa9",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:39:27-05:00",
+      "branch": "unknown",
+      "subject": "fix(mcp): DNS resolve+pin for external HTTP MCP (rebinding guard)"
+    },
+    {
+      "sha": "dc8cb44",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:38:28-05:00",
+      "branch": "unknown",
+      "subject": "test(auth): match configured-yet copy with curly apostrophe"
+    },
+    {
+      "sha": "4164174",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:38:00-05:00",
+      "branch": "unknown",
+      "subject": "merge: origin/dashboard-3d 35ccfa9 into preview/integration"
+    },
+    {
+      "sha": "3067611",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:37:37-05:00",
+      "branch": "unknown",
+      "subject": "fix(mcp): CSRF Origin/Sec-Fetch-Site on MCP state-changing POSTs"
+    },
+    {
+      "sha": "434d59d",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:37:16-05:00",
+      "branch": "unknown",
+      "subject": "fix(auth): no red login banner until an in-page sign-in fails"
+    },
+    {
+      "sha": "a213cdf",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:36:47-05:00",
+      "branch": "unknown",
+      "subject": "docs(mcp): keep GET /api/mind/mcp/servers 401; UI uses soft-auth"
+    },
+    {
+      "sha": "0353ea3",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:36:22-05:00",
+      "branch": "unknown",
+      "subject": "test(mcp): expect quiet unauthenticated for signed-out MCP list"
+    },
+    {
+      "sha": "1565a83",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:35:53-05:00",
+      "branch": "unknown",
+      "subject": "merge: origin/preview/integration into mcp-integration (loose-ends prep)"
+    },
+    {
+      "sha": "35ccfa9",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:33:26-05:00",
+      "branch": "unknown",
+      "subject": "visual(c31d): mono coming-soon CSS, chart glass deepen, empty wells"
+    },
+    {
+      "sha": "59da215",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:33:26-05:00",
+      "branch": "unknown",
+      "subject": "visual(c31c): Connect Google coming-soon chrome"
+    },
+    {
+      "sha": "bf2c60d",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:33:26-05:00",
+      "branch": "unknown",
+      "subject": "visual(c31b): ServiceBoard Setup coming-soon look"
+    },
+    {
+      "sha": "93ab73b",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:33:18-05:00",
+      "branch": "unknown",
+      "subject": "visual(c31): coming-soon chrome for Generate Image/Video quicks"
+    },
+    {
+      "sha": "dba63a1",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:30:14-05:00",
+      "branch": "unknown",
+      "subject": "merge: origin/dashboard-3d 538d3db into preview/integration (post-auth 7aedb18)"
+    },
+    {
+      "sha": "538d3db",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T08:58:50-05:00",
+      "branch": "unknown",
+      "subject": "motion(c4): comet tail fade + head glow; MotionClock per-time-base anchors + stutter cap (hacker)"
+    },
+    {
+      "sha": "8f6fa2e",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:29:19-05:00",
+      "branch": "refs/stash",
+      "subject": "On dashboard-3d: c17 forever-contract guard WIP (paused for deploy merge 2026-11-01T19:29:19+01:00)"
+    },
+    {
+      "sha": "a216f2c",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:29:19-05:00",
+      "branch": "unknown",
+      "subject": "index on dashboard-3d: 8e32e20 merge: origin/dashboard-3d before operator push"
+    },
+    {
+      "sha": "8a5bbcd",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:29:19-05:00",
+      "branch": "unknown",
+      "subject": "untracked files on dashboard-3d: 8e32e20 merge: origin/dashboard-3d before operator push"
+    },
+    {
+      "sha": "7aedb18",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:22:31-05:00",
+      "branch": "unknown",
+      "subject": "fix(routes): sync routeTree.gen.ts for /auth/callback"
+    },
+    {
+      "sha": "ec1719a",
+      "author": "Cosmos Motion Bot",
+      "date": "2026-11-01T13:21:46-05:00",
+      "branch": "dashboard-3d-visual-motion",
+      "subject": "merge: keep clean land tip 0ac1c77 over prior motion lane history"
+    },
+    {
+      "sha": "a5c9291",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:21:40-05:00",
+      "branch": "dashboard-3d-visual-light",
+      "subject": "merge: sync light branch with origin/dashboard-3d (final sync)"
+    },
+    {
+      "sha": "cf734cb",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:21:38-05:00",
+      "branch": "xai-verification",
+      "subject": "Record 2026-11-01 19:22 WAT live xAI re-verification."
+    },
+    {
+      "sha": "0ac1c77",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T08:58:50-05:00",
+      "branch": "dashboard-3d-visual-motion",
+      "subject": "motion(c4): comet tail fade + head glow; MotionClock per-time-base anchors + stutter cap (hacker)"
+    },
+    {
+      "sha": "4c44cce",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T13:20:38-05:00",
+      "branch": "dashboard-3d-visual-painter",
+      "subject": "painter: reconcile stale remote branch (no file changes)"
+    },
+    {
+      "sha": "00dea54",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:15:30-05:00",
+      "branch": "deploy/dashboard-live",
+      "subject": "merge: origin/dashboard-3d 8e32e20 into preview/integration deploy lane"
+    },
+    {
+      "sha": "7eb0db4",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:15:22-05:00",
+      "branch": "unknown",
+      "subject": "merge: mcp soft-auth 525212e — quiet unauthenticated MCP list"
+    },
+    {
+      "sha": "148a1d7",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:10:47-05:00",
+      "branch": "unknown",
+      "subject": "merge: error-banners H23 — calm MCP auth_required notice"
+    },
+    {
+      "sha": "8e32e20",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:10:09-05:00",
+      "branch": "unknown",
+      "subject": "merge: origin/dashboard-3d before operator push"
+    },
+    {
+      "sha": "635c328",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:10:08-05:00",
+      "branch": "unknown",
+      "subject": "dashboard(c16): queue #8 Operator console + #9 Notion mirror"
+    },
+    {
+      "sha": "5ac5fab",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:09:55-05:00",
+      "branch": "unknown",
+      "subject": "merge: preview/ui-completion auth into preview/integration"
+    },
+    {
+      "sha": "33604cd",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:09:31-05:00",
+      "branch": "unknown",
+      "subject": "merge: latest dashboard-3d a89e1a7 into preview/integration deploy lane"
+    },
+    {
+      "sha": "7b84809",
+      "author": "emzylavish-art",
+      "date": "2026-11-01T12:08:28-05:00",
+      "branch": "error-banners",
+      "subject": "docs(handoff): H23 Notion child URL + pushed SHA"
+    }
+  ]
+}

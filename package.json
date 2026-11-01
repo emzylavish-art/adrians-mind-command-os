@@ -25,7 +25,8 @@
     "oauth:e2e": "node --experimental-strip-types scripts/mcp/oauth-e2e.mjs",
     "mcp:verify-live": "node --experimental-strip-types scripts/mcp/verify-live.mjs",
     "oauth:beyond-e2e": "node --experimental-strip-types scripts/mcp/oauth-beyond-notion-e2e.mjs",
-    "mcp:stdio-e2e": "node --experimental-strip-types scripts/mcp/stdio-e2e.mjs"
+    "mcp:stdio-e2e": "node --experimental-strip-types scripts/mcp/stdio-e2e.mjs",
+    "dashboard:commits-snapshot": "node --experimental-strip-types scripts/dashboard/write-commits-snapshot.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
