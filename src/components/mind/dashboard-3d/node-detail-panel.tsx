@@ -192,6 +192,41 @@ export function NodeDetailPanel({
               <Field label="edited" value={notionPage.lastEdited ? formatWat(notionPage.lastEdited) : null} />
               <Field label="id" value={notionPage.id} />
             </p>
+            
+          {bot ? (
+            <div className="dash3d-nhop" data-testid="nhop-controls">
+              <label className="dash3d-muted" style={{ fontSize: "0.68rem" }}>
+                Local graph depth
+                <input
+                  type="range"
+                  min={0}
+                  max={3}
+                  step={1}
+                  defaultValue={1}
+                  data-testid="nhop-depth"
+                  onChange={(e) => {
+                    const depth = Number(e.target.value) || 0;
+                    document.dispatchEvent(
+                      new CustomEvent("dash3d-nhop", {
+                        detail: { botId: bot.id, depth, isolate: depth > 0 },
+                      }),
+                    );
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="dash3d-pill"
+                data-testid="nhop-clear"
+                onClick={() =>
+                  document.dispatchEvent(new CustomEvent("dash3d-nhop", { detail: { botId: null, depth: 0, isolate: false } }))
+                }
+              >
+                Expand all
+              </button>
+            </div>
+          ) : null}
+
             <h3 style={{ marginTop: "0.75rem" }}>Linked neighbors</h3>
             <ul className="dash3d-list">
               {notionNeighbors && notionNeighbors.length ? (

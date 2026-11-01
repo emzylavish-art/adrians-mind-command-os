@@ -7,6 +7,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { evaluatePerfBudget, nextEmaFrameMs } from "@/lib/mind/dashboard/perf-budget";
 import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
+import { nhopBotIds } from "@/lib/mind/dashboard/nhop";
 import {
   captureCanvasFrame,
   hideLastFrameFreeze,
@@ -801,6 +802,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let starHealthFilter: string = "all";
     let graphFilter: GraphFilterState = { ...DEFAULT_GRAPH_FILTER };
     let graphVisibleIds: Set<string> | null = null; // null = no graph filter active
+    let nhopVisibleIds: Set<string> | null = null; // Gap#6 local graph isolate
 
     let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
@@ -1293,7 +1295,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       for (const n of botVis) {
         const healthOk = starHealthFilter === "all" || n.health === starHealthFilter;
         const graphOk = !graphVisibleIds || graphVisibleIds.has(n.id);
-        const show = healthOk && graphOk;
+        const nhopOk = !nhopVisibleIds || nhopVisibleIds.has(n.id);
+        const show = healthOk && graphOk && nhopOk;
         n.mesh.visible = show;
         n.glow.visible = show;
         n.label.visible = show && labelsOn && fly.level === "universe" && !labelsPaused;
@@ -1483,6 +1486,30 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     };
     document.addEventListener("dash3d-graph-filter", onGraphFilter);
+    const onNhop = (ev: Event) => {
+      const d = (ev as CustomEvent<{ botId?: string | null; depth?: number; isolate?: boolean }>).detail || {};
+      if (!d.isolate || !d.botId) {
+        nhopVisibleIds = null;
+      } else {
+        nhopVisibleIds = nhopBotIds(
+          d.botId,
+          dataRef.current.constellationEdges ?? [],
+          Number(d.depth) || 0,
+        );
+      }
+      for (const ch of edgeGroup.children) {
+        if (!(ch instanceof THREE.Line)) continue;
+        if (!nhopVisibleIds) {
+          // leave graph-filter edge visibility alone when nhop cleared — re-run graph filter path
+          if (!graphVisibleIds) ch.visible = true;
+          continue;
+        }
+        const a = String(ch.userData.from || "");
+        const b = String(ch.userData.to || "");
+        ch.visible = nhopVisibleIds.has(a) && nhopVisibleIds.has(b);
+      }
+    };
+    document.addEventListener("dash3d-nhop", onNhop);
 
 
     document.addEventListener("dash3d-sky", onSkyEvent);
@@ -1494,6 +1521,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
       document.removeEventListener("dash3d-graph-filter", onGraphFilter);
+      document.removeEventListener("dash3d-nhop", onNhop);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);
