@@ -6,6 +6,9 @@ import type { HealthTone } from "./ink-wash-edge.ts";
 import { HEALTH_RGB } from "./ink-wash-edge.ts";
 import type { PainterlyKit } from "./use-painterly-kit.ts";
 
+/** Hard cap — hostile/huge constellation dumps must not spawn unbounded mats/meshes. */
+export const LANE_NEBULAE_MAX = 32;
+
 export type LaneNebulaOptions = {
   health?: HealthTone | THREE.ColorRepresentation;
   opacity?: number;
@@ -78,9 +81,13 @@ export type LaneNebulaInput = {
 export type PainterlyLaneNebulaeHandle = {
   group: THREE.Group;
   update: (lanes: LaneNebulaInput[]) => void;
-  tick: (timeSeconds: number) => void;
+  tick: (timeSeconds: number, reducedMotion?: boolean) => void;
   dispose: () => void;
   count: number;
+  truncated: boolean;
+  skippedInvalid: number;
+  /** Shared health materials in kit.tracked for this handle (≤4). */
+  materialCount: number;
 };
 
 function asTone(h: unknown): HealthTone {
@@ -88,31 +95,45 @@ function asTone(h: unknown): HealthTone {
   return "idle";
 }
 
-function toArr(c: LaneNebulaInput["center"]): [number, number, number] {
+function toArr(c: LaneNebulaInput["center"] | null | undefined): [number, number, number] | null {
+  if (c == null) return null;
   if (Array.isArray(c)) {
+    if (c.length < 3) return null;
+    const x = Number(c[0]);
+    const y = Number(c[1]);
+    const z = Number(c[2]);
+    // All-NaN / non-finite → invalid (do not silently place at origin as a "real" lane)
+    if (![x, y, z].every((n) => Number.isFinite(n))) return null;
     return [
-      sanitizeFinite(Number(c[0]), 0, -1e5, 1e5),
-      sanitizeFinite(Number(c[1]), 0, -1e5, 1e5),
-      sanitizeFinite(Number(c[2]), 0, -1e5, 1e5),
+      sanitizeFinite(x, 0, -1e5, 1e5),
+      sanitizeFinite(y, 0, -1e5, 1e5),
+      sanitizeFinite(z, 0, -1e5, 1e5),
     ];
   }
+  if (typeof c !== "object") return null;
   const o = c as { x: number; y: number; z: number };
+  const x = Number(o.x);
+  const y = Number(o.y);
+  const z = Number(o.z);
+  if (![x, y, z].every((n) => Number.isFinite(n))) return null;
   return [
-    sanitizeFinite(Number(o.x), 0, -1e5, 1e5),
-    sanitizeFinite(Number(o.y), 0, -1e5, 1e5),
-    sanitizeFinite(Number(o.z), 0, -1e5, 1e5),
+    sanitizeFinite(x, 0, -1e5, 1e5),
+    sanitizeFinite(y, 0, -1e5, 1e5),
+    sanitizeFinite(z, 0, -1e5, 1e5),
   ];
 }
 
+const TONES: HealthTone[] = ["healthy", "stalled", "blocked", "idle"];
+
 /**
  * One-call constellation lane nebulae for Dashboard Bot `rebuildNebulae`.
+ * HACKER (c10): caps at LANE_NEBULAE_MAX; skips NaN/invalid centers; shares ≤4
+ * health materials (not one mat per lane) so tick uniform cost stays bounded.
  *
  * ```ts
  * const neb = kit.createLaneNebulae(status.constellations.map(l => ({
  *   health: l.health, center: l.center,
  * })));
- * scene.add(neb.group);
- * // on poll: neb.update(...); cleanup: neb.dispose();
  * ```
  */
 export function createPainterlyLaneNebulae(
@@ -122,66 +143,85 @@ export function createPainterlyLaneNebulae(
   const group = new THREE.Group();
   group.name = "PainterlyLaneNebulae";
   const sharedGeo = new THREE.SphereGeometry(1, 24, 16);
-  const mats: THREE.ShaderMaterial[] = [];
+  const matsByTone = new Map<HealthTone, THREE.ShaderMaterial>();
   const meshes: THREE.Mesh[] = [];
   let disposed = false;
   let count = 0;
+  let truncated = false;
+  let skippedInvalid = 0;
+  let frozenTime = 0;
+
+  for (const tone of TONES) {
+    const idle = tone === "idle";
+    const mat = createLaneNebulaMaterial({
+      health: tone,
+      opacity: idle ? 0.1 : 0.32,
+    });
+    kit.tracked.push(mat);
+    matsByTone.set(tone, mat);
+  }
 
   const clearMeshes = () => {
-    for (const mesh of meshes) {
-      group.remove(mesh);
-      // geometry is shared — don't dispose per mesh
-    }
+    for (const mesh of meshes) group.remove(mesh);
     meshes.length = 0;
-    for (const m of mats) {
-      const i = kit.tracked.indexOf(m);
+  };
+
+  const releaseMats = () => {
+    for (const mat of matsByTone.values()) {
+      const i = kit.tracked.indexOf(mat);
       if (i >= 0) kit.tracked.splice(i, 1);
-      m.dispose();
+      mat.dispose();
     }
-    mats.length = 0;
+    matsByTone.clear();
   };
 
   const update = (next: LaneNebulaInput[]) => {
     if (disposed) return;
     clearMeshes();
     const arr = Array.isArray(next) ? next : [];
-    // Cap lanes — constellation count is small; hard cap for hostility
-    const slice = arr.slice(0, 64);
+    truncated = arr.length > LANE_NEBULAE_MAX;
+    skippedInvalid = 0;
+    const slice = truncated ? arr.slice(0, LANE_NEBULAE_MAX) : arr;
     for (const lane of slice) {
+      const center = toArr(lane.center);
+      if (!center) {
+        skippedInvalid += 1;
+        continue;
+      }
       const tone = asTone(lane.health);
+      const mat = matsByTone.get(tone)!;
       const idle = tone === "idle";
-      const opacity =
-        lane.opacity != null
-          ? sanitizeFinite(lane.opacity, idle ? 0.08 : 0.28, 0.02, 0.85)
-          : idle
-            ? 0.1
-            : 0.32;
-      const mat = createLaneNebulaMaterial({ health: tone, opacity });
-      kit.tracked.push(mat);
-      mats.push(mat);
+      if (lane.opacity != null) {
+        // per-mesh opacity not in shared mat — keep tone default; explicit per-lane
+        // opacity would need unique mats; flood path prioritizes shared cost.
+      }
+      void idle;
       const mesh = new THREE.Mesh(sharedGeo, mat);
-      const [x, y, z] = toArr(lane.center);
       const radius = sanitizeFinite(lane.radius ?? 2.4, 2.4, 0.2, 40);
-      mesh.position.set(x, y, z);
+      mesh.position.set(center[0], center[1], center[2]);
       mesh.scale.setScalar(radius);
       mesh.renderOrder = -1;
       mesh.frustumCulled = true;
       if (lane.id) mesh.userData.laneId = lane.id;
+      mesh.userData.laneHealth = tone;
       group.add(mesh);
       meshes.push(mesh);
     }
     count = meshes.length;
   };
 
-  const tick = (t: number) => {
+  const tick = (t: number, reducedMotion = false) => {
     if (disposed) return;
-    for (const m of mats) tickLaneNebulaMaterial(m, t);
+    const time = reducedMotion ? frozenTime : t;
+    if (!reducedMotion) frozenTime = t;
+    for (const mat of matsByTone.values()) tickLaneNebulaMaterial(mat, time);
   };
 
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     clearMeshes();
+    releaseMats();
     sharedGeo.dispose();
     while (group.children.length) group.remove(group.children[0]!);
   };
@@ -195,6 +235,15 @@ export function createPainterlyLaneNebulae(
     dispose,
     get count() {
       return count;
+    },
+    get truncated() {
+      return truncated;
+    },
+    get skippedInvalid() {
+      return skippedInvalid;
+    },
+    get materialCount() {
+      return matsByTone.size;
     },
   };
 }
