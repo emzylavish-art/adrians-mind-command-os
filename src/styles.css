@@ -5050,3 +5050,187 @@ button:not(:disabled):active,
   box-shadow: 0 18px 48px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
   padding: 0.75rem 1rem !important;
 }
+
+/* —— Evolution c67: login depth/glass (AuthCard has no .login-card class) —— */
+main.grid.min-h-screen.place-items-center {
+  background:
+    radial-gradient(ellipse 55% 45% at 70% 8%, rgb(255 255 255 / 0.05), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 15% 85%, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-bg) !important;
+}
+main.grid.min-h-screen.place-items-center > div[class*="max-w-"],
+main.grid.min-h-screen.place-items-center > div.rounded-panel {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.72) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    0 28px 80px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+  backdrop-filter: blur(24px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.15) !important;
+  border-radius: 1.35rem !important;
+}
+main.grid.min-h-screen.place-items-center input,
+main.grid.min-h-screen.place-items-center [data-testid="auth-not-configured"],
+main.grid.min-h-screen.place-items-center [data-testid="login-inline-notice"] {
+  background-color: rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+}
+/* Keep fa50cf6 login tabs ≥44px; mono selected pill */
+main.grid.min-h-screen.place-items-center button.min-h-10,
+main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center a[data-testid^="login-oauth"] {
+  min-height: 2.75rem !important;
+}
+.login-shell {
+  background:
+    radial-gradient(ellipse 50% 40% at 70% 10%, rgb(255 255 255 / 0.05), transparent 55%),
+    var(--color-bg) !important;
+}
+html[data-theme="light"] main.grid.min-h-screen.place-items-center > div[class*="max-w-"] {
+  background: rgb(255 255 255 / 0.88) !important;
+  background-image: none !important;
+  box-shadow: 0 24px 64px rgb(15 23 42 / 0.12) !important;
+}
+
+/* —— Evolution c68: explore/memory page-shell depth + inner card glass —— */
+.page-shell,
+[data-testid="persona-directory"],
+[data-testid="memory-manager"] {
+  min-height: 100dvh;
+}
+.page-shell .page-hero,
+[data-testid="persona-directory"] .page-hero,
+[data-testid="memory-manager"] .page-hero {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(10 10 12 / 0.7) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  backdrop-filter: blur(20px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1.25rem !important;
+  padding: 1.15rem 1.25rem !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 16px 40px rgb(0 0 0 / 0.35) !important;
+}
+.page-shell .glow-card,
+.page-shell .dense-card,
+[data-testid="persona-directory"] .glow-card,
+[data-testid="persona-directory"] .dense-card,
+[data-testid="memory-manager"] .glow-card,
+[data-testid="memory-manager"] .dense-card,
+[data-testid="memory-row"],
+[data-testid="persona-empty"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 45%),
+    url("/brand/textures/panel-noise-mono.jpg"),
+    rgb(12 12 14 / 0.68) !important;
+  background-size: auto, 220px 220px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  backdrop-filter: blur(16px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.08) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.32) !important;
+}
+/* Settings / Tools / Connected card depth bump */
+.main-stage .settings-card,
+.main-stage .tool-card,
+.main-stage .service-card,
+.main-stage .dense-card.card-texture {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 14px 36px rgb(0 0 0 / 0.4) !important;
+}
+
+/* —— Evolution c69: charts/viz consistency (dash3d + any main-stage SVG) —— */
+.dash3d-chart-card,
+.dash3d-charts-panel .dash3d-chart-card,
+.main-stage [data-testid="charts-panel"] .rounded-panel,
+.main-stage .recharts-wrapper,
+.main-stage svg.chart,
+.main-stage [data-testid="chart-empty"] {
+  border-radius: 1rem !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-charts-panel svg text,
+.main-stage svg text.axis,
+.main-stage .recharts-cartesian-axis-tick text,
+.main-stage .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  font-size: 0.65rem !important;
+  font-family: var(--font-sans), system-ui, sans-serif !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-charts-panel svg .domain,
+.main-stage .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.1) !important;
+}
+.dash3d-chart-card [role="tooltip"],
+.dash3d-chart-tooltip,
+.main-stage .recharts-default-tooltip,
+.main-stage [role="tooltip"].chart-tooltip {
+  background: rgb(10 10 12 / 0.92) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.55rem !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  font-size: 0.75rem !important;
+  padding: 0.4rem 0.6rem !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.main-stage [data-testid="chart-empty"],
+.dash3d-charts-panel [data-empty="true"] {
+  min-height: 8.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  text-align: center !important;
+  color: #a1a1aa !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 50%),
+    url("/brand/textures/chart-grid-mono.jpg") !important;
+  background-size: auto, cover !important;
+  border: 1px dashed rgb(255 255 255 / 0.12) !important;
+  border-radius: 0.85rem !important;
+  padding: 1.25rem !important;
+}
+.dash3d-charts-panel .dash3d-muted,
+.dash3d-chart-card h3 {
+  color: #d4d4d8 !important;
+  letter-spacing: -0.01em;
+}
+/* Legend mono chips */
+.dash3d-charts-panel .legend,
+.main-stage .recharts-legend-wrapper {
+  color: #a1a1aa !important;
+  font-size: 0.72rem !important;
+}
+
+/* —— Evolution c70: guard fa50cf6 a11y hit targets (do not regress) —— */
+[data-testid="alerts-toggle"],
+button[aria-label="Alerts"],
+[data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center button.min-h-10 {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
