@@ -1,6 +1,6 @@
 /**
- * Fleet Tools panel lists: MCP servers, MCP tools, PC approvals.
- * A failed list load (401/403, 5xx, network, timeout, non-JSON) must never look like an empty list.
+ * Fleet panel async loads: MCP servers, MCP tools, PC approvals, and Scheduled worker health.
+ * A failed load (401/403, 5xx, network, timeout, non-JSON) must never look like an empty/offline success.
  * Classification reuses failure-states.ts kinds; the banner follows the standard red failure banner.
  */
 import { createElement } from "react";
@@ -51,6 +51,7 @@ export const MCP_TOOLS_EMPTY_COPY = "No MCP tools are registered.";
 export const MCP_TOOLS_LOADING_COPY = "Loading MCP tools…";
 export const PC_APPROVALS_EMPTY_COPY = "No pending PC shell approvals.";
 export const PC_APPROVALS_LOADING_COPY = "Loading PC shell approvals…";
+export const WORKER_HEALTH_LOADING_COPY = "Checking the worker…";
 
 function statusOf(caught: unknown): number | null {
   if (!caught || typeof caught !== "object") return null;
@@ -70,12 +71,13 @@ function isTimeoutFailure(caught: unknown, raw: string): boolean {
   return /timed out|timeout/i.test(raw);
 }
 
-type ListFailureScope = "mcp_list" | "mcp_tools" | "pc_approvals";
+type ListFailureScope = "mcp_list" | "mcp_tools" | "pc_approvals" | "worker_health";
 
 const LIST_FAILED_COPY: Record<ListFailureScope, string> = {
   mcp_list: HONEST_FAILURE_MESSAGES.mcp_list_failed,
   mcp_tools: HONEST_FAILURE_MESSAGES.mcp_tools_list_failed,
   pc_approvals: HONEST_FAILURE_MESSAGES.pc_approvals_list_failed,
+  worker_health: HONEST_FAILURE_MESSAGES.worker_health_failed,
 };
 
 /** Map a rejected list load to one honest banner message + failure-states kind. */
@@ -367,6 +369,70 @@ export function PcApprovalsListStatusRows({
     emptyCopy: PC_APPROVALS_EMPTY_COPY,
     loadingTestId: "pc-approvals-list-loading",
     emptyTestId: "pc-approvals-list-empty",
+    onRetry,
+    onViewLog,
+  });
+}
+
+export type WorkerHealthSnapshot = {
+  state: "offline" | "local";
+  detail: string;
+  localOnly?: boolean;
+  hosted?: boolean;
+};
+
+export type WorkerHealthState =
+  | { status: "loading" }
+  | { status: "ready"; health: WorkerHealthSnapshot }
+  | { status: "error"; kind: HonestFailureKind; message: string };
+
+function isWorkerHealth(value: unknown): value is WorkerHealthSnapshot {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return (row.state === "offline" || row.state === "local") && typeof row.detail === "string" && row.detail.trim().length > 0;
+}
+
+/**
+ * Run one workerHealth probe for the Scheduled panel.
+ * Honest offline/local detail is ready; rejected/hung/malformed probes are error (never muted "nothing online").
+ */
+export async function loadWorkerHealthStatus(
+  fetchHealth: () => Promise<unknown>,
+  options?: { timeoutMs?: number },
+): Promise<WorkerHealthState> {
+  const timeoutMs = options?.timeoutMs ?? MCP_LIST_LOAD_TIMEOUT_MS;
+  try {
+    const result = await withListTimeout(fetchHealth(), timeoutMs, "The worker status");
+    if (!isWorkerHealth(result)) {
+      return {
+        status: "error",
+        kind: "network_failure",
+        message: `${HONEST_FAILURE_MESSAGES.worker_health_failed} (response was not JSON)`,
+      };
+    }
+    return { status: "ready", health: result };
+  } catch (caught) {
+    return { status: "error", ...classifyListFailure(caught, "worker_health") };
+  }
+}
+
+/** Loading / error rows for Scheduled worker health. Ready detail is rendered by the panel hero. */
+export function WorkerHealthStatusRows({
+  state,
+  onRetry,
+  onViewLog,
+}: {
+  state: WorkerHealthState;
+  onRetry: () => void;
+  onViewLog?: (() => void) | null;
+}) {
+  if (state.status === "ready") return null;
+  return FleetListStatusRowsInner({
+    state,
+    loadingCopy: WORKER_HEALTH_LOADING_COPY,
+    emptyCopy: "",
+    loadingTestId: "worker-health-loading",
+    emptyTestId: "worker-health-empty",
     onRetry,
     onViewLog,
   });

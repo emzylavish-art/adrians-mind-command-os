@@ -44,6 +44,8 @@ export const HONEST_FAILURE_MESSAGES = {
   mcp_list_failed: "The MCP server list could not be loaded.",
   mcp_tools_list_failed: "The MCP tools list could not be loaded.",
   pc_approvals_list_failed: "The PC shell approvals list could not be loaded.",
+  /** Scheduled panel: workerHealth() rejected / timed out / non-JSON — not the same as honest offline. */
+  worker_health_failed: "The worker status could not be read.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -182,6 +184,8 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text.includes("MCP tools list could not be loaded")
     || text === HONEST_FAILURE_MESSAGES.pc_approvals_list_failed
     || text.includes("PC shell approvals list could not be loaded")
+    || text === HONEST_FAILURE_MESSAGES.worker_health_failed
+    || text.includes("worker status could not be read")
   ) {
     return "network_failure";
   }

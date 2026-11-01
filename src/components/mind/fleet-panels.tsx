@@ -29,16 +29,19 @@ import {
   McpListStatusRows,
   McpToolsListStatusRows,
   PcApprovalsListStatusRows,
+  WorkerHealthStatusRows,
   isCurrentListGeneration,
   loadMcpList,
   loadMcpToolsList,
   loadPcApprovalsList,
+  loadWorkerHealthStatus,
   nextListGeneration,
   onceListRetry,
   type FleetListState,
   type McpListState,
   type McpToolRow,
   type PcApprovalRow,
+  type WorkerHealthState,
 } from "@/lib/mind/mcp-list-state";
 
 
@@ -82,7 +85,9 @@ export function FleetPanel({
   const [jobName, setJobName] = useState("");
   const [jobZone, setJobZone] = useState("America/Chicago");
   const [jobHour, setJobHour] = useState("");
-  const [workerNote, setWorkerNote] = useState("Checking the worker.");
+  const [workerHealthState, setWorkerHealthState] = useState<WorkerHealthState>({ status: "loading" });
+  const workerHealthInFlight = useRef(false);
+  const workerHealthGeneration = useRef(0);
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
@@ -198,11 +203,31 @@ export function FleetPanel({
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
   const active = ws.agents.find((agent) => agent.id === agentId && !agent.archived) ?? ws.agents.find((agent) => !agent.archived) ?? null;
 
+  /** One workerHealth probe: loading → ready (offline/local detail) or error banner. Timeout + stale guard. */
+  function loadWorkerHealth() {
+    if (workerHealthInFlight.current) return;
+    workerHealthInFlight.current = true;
+    const generation = nextListGeneration(workerHealthGeneration.current);
+    workerHealthGeneration.current = generation;
+    setWorkerHealthState({ status: "loading" });
+    void loadWorkerHealthStatus(() => workerHealth(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, workerHealthGeneration.current)) return;
+        setWorkerHealthState(next);
+        if (next.status === "error") onFailure?.(next.message, onceListRetry(loadWorkerHealth));
+      })
+      .finally(() => {
+        if (generation === workerHealthGeneration.current) workerHealthInFlight.current = false;
+      });
+  }
+
   useEffect(() => {
     if (mode !== "scheduled") return;
-    void workerHealth()
-      .then((health) => setWorkerNote(health.detail))
-      .catch(() => setWorkerNote("Worker status could not be read. Nothing is reported as online."));
+    loadWorkerHealth();
+    return () => {
+      workerHealthGeneration.current = nextListGeneration(workerHealthGeneration.current);
+      workerHealthInFlight.current = false;
+    };
   }, [mode]);
 
 
@@ -398,9 +423,18 @@ export function FleetPanel({
   }
 
   if (mode === "scheduled") {
+    const workerDetail =
+      workerHealthState.status === "ready"
+        ? workerHealthState.health.detail
+        : workerHealthState.status === "loading"
+          ? "Checking the worker."
+          : null;
     return (
       <section className="page-shell">
-        <div className="page-hero mb-4"><h2 className="font-display text-3xl font-bold">Scheduled tasks</h2><p className="text-sm text-muted">{workerNote} This database is local. It is not hosted scheduling.</p></div>
+        <div className="page-hero mb-4"><h2 className="font-display text-3xl font-bold">Scheduled tasks</h2><p className="text-sm text-muted">{workerDetail ? `${workerDetail} ` : ""}This database is local. It is not hosted scheduling.</p></div>
+        <ul className="mb-2 space-y-2">
+          <WorkerHealthStatusRows state={workerHealthState} onRetry={onceListRetry(loadWorkerHealth)} />
+        </ul>
         <p className="mt-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />

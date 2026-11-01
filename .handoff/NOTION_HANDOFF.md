@@ -340,3 +340,13 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e4281d0b385c9a20bbae697
 - Open: inline View log needs command-app.tsx (forbidden); FleetPanel onFailure still tagged open_page_failed/browser there.
 - Lock releasing.
+
+## 2026-11-01T17:35:39+01:00 (Africa/Lagos) — Error Banners Bot — H17 worker-health silent status
+- Gap: Scheduled panel `workerHealth().catch` → muted "Nothing is reported as online" with no red Retry/View log (gap audit #12 / H16 follow-on).
+- Lock: /workspace/locks/error-banners-gap-worker-health-silent.lock
+- Lock check: no ACTIVE exclusive claim on fleet-panels.tsx / failure-states / mcp-list-state; claimed worker-health gap.
+- Merged origin/preview/integration @ 7f3e641 into error-banners as dd1e237 (nav Dashboard Link; no forbidden conflicts).
+- Fix: loadWorkerHealthStatus + WorkerHealthStatusRows (loading/ready/error); timeout 15s + stale generation; honest offline/local stays ready; load failures → red banner + onceListRetry + onFailure→reportFailure. failure-states worker_health_failed → network_failure.
+- Checks: typecheck pass; TS 806/808 (2 pre-existing: integration-security-c16 Imagine allowlist deferred; voice/ollama-conductor — present without H17 edits); lint our files 0e/2w hooks; build pass.
+- Notion: (pending append/child)
+- Lock releasing.

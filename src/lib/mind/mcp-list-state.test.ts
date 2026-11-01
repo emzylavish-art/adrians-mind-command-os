@@ -14,11 +14,14 @@ import {
   PC_APPROVALS_EMPTY_COPY,
   PC_APPROVALS_LOADING_COPY,
   PcApprovalsListStatusRows,
+  WORKER_HEALTH_LOADING_COPY,
+  WorkerHealthStatusRows,
   classifyMcpListFailure,
   isCurrentListGeneration,
   loadMcpList,
   loadMcpToolsList,
   loadPcApprovalsList,
+  loadWorkerHealthStatus,
   nextListGeneration,
   onceListRetry,
   withListTimeout,
@@ -26,6 +29,7 @@ import {
   type McpListState,
   type McpToolRow,
   type PcApprovalRow,
+  type WorkerHealthState,
 } from "./mcp-list-state.ts";
 
 const renderServers = (state: McpListState, viewLog = true) =>
@@ -36,6 +40,9 @@ const renderTools = (state: FleetListState<McpToolRow>, viewLog = true) =>
 
 const renderApprovals = (state: FleetListState<PcApprovalRow>, viewLog = true) =>
   renderToStaticMarkup(createElement(PcApprovalsListStatusRows, { state, onRetry: () => {}, onViewLog: viewLog ? () => {} : null }));
+
+const renderWorkerHealth = (state: WorkerHealthState, viewLog = true) =>
+  renderToStaticMarkup(createElement(WorkerHealthStatusRows, { state, onRetry: () => {}, onViewLog: viewLog ? () => {} : null }));
 
 function httpError(status: number, message = `HTTP ${status}`) {
   return Object.assign(new Error(message), { status });
@@ -282,6 +289,115 @@ describe("MCP list Retry button", () => {
     let clicked = 0;
     const el = McpListStatusRows({ state: { status: "error", kind: "network_failure", message: "x" }, onRetry: () => { clicked += 1; } });
     const buttons = (el as unknown as { props: { children: unknown[] } }).props.children[1] as { props: { children: { props: { onClick: () => void } }[] } };
+    buttons.props.children[0].props.onClick();
+    assert.equal(clicked, 1);
+  });
+});
+
+
+describe("Worker health status: offline vs load error", () => {
+  it("rejected workerHealth shows the red banner, not muted offline copy", async () => {
+    const state = await loadWorkerHealthStatus(async () => {
+      throw httpError(500);
+    });
+    assert.equal(state.status, "error");
+    if (state.status !== "error") return;
+    assert.equal(state.kind, "network_failure");
+    assert.match(state.message, /worker status could not be read/i);
+    const html = renderWorkerHealth(state);
+    assert.match(html, /failure-banner/);
+    assert.match(html, /failure-retry/);
+    assert.doesNotMatch(html, /Nothing is reported as online|No worker process is running/);
+  });
+
+  it("401 is auth_required, not offline", async () => {
+    const state = await loadWorkerHealthStatus(async () => {
+      throw httpError(401, "Unauthorized");
+    });
+    assert.equal(state.status, "error");
+    if (state.status !== "error") return;
+    assert.equal(state.kind, "auth_required");
+    const html = renderWorkerHealth(state);
+    assert.match(html, /failure-banner/);
+    assert.match(html, /Sign in is required/);
+  });
+
+  it("honest offline detail is ready, not an error banner", async () => {
+    const state = await loadWorkerHealthStatus(async () => ({
+      state: "offline",
+      detail: "No worker process is running. Schedules stay saved. Nothing is running in the background.",
+      localOnly: true,
+      hosted: false,
+    }));
+    assert.equal(state.status, "ready");
+    if (state.status !== "ready") return;
+    assert.equal(state.health.state, "offline");
+    assert.equal(renderWorkerHealth(state), "");
+  });
+
+  it("honest local worker detail is ready", async () => {
+    const state = await loadWorkerHealthStatus(async () => ({
+      state: "local",
+      detail: "A local worker is polling this machine. It is not a hosted worker.",
+      localOnly: true,
+      hosted: false,
+    }));
+    assert.equal(state.status, "ready");
+    assert.equal(renderWorkerHealth(state), "");
+  });
+
+  it("malformed payload is an error, not offline", async () => {
+    const state = await loadWorkerHealthStatus(async () => ({ ok: true }));
+    assert.equal(state.status, "error");
+    const html = renderWorkerHealth(state as WorkerHealthState);
+    assert.match(html, /failure-banner/);
+    assert.match(html, /not JSON/);
+  });
+
+  it("hung probe times out into error and Retry can succeed", async () => {
+    let calls = 0;
+    const fetcher = () => {
+      calls += 1;
+      if (calls === 1) return new Promise(() => {});
+      return Promise.resolve({
+        state: "offline" as const,
+        detail: "No worker process is running. Schedules stay saved. Nothing is running in the background.",
+      });
+    };
+    let state = await loadWorkerHealthStatus(fetcher, { timeoutMs: 30 });
+    assert.equal(state.status, "error");
+    if (state.status === "error") assert.match(state.message, /timed out/i);
+    const pending: Promise<WorkerHealthState>[] = [];
+    const retry = onceListRetry(() => {
+      pending.push(loadWorkerHealthStatus(fetcher, { timeoutMs: 30 }));
+    });
+    retry();
+    retry();
+    assert.equal(pending.length, 1);
+    state = await pending[0];
+    assert.equal(calls, 2);
+    assert.equal(state.status, "ready");
+  });
+
+  it("loading copy is distinct from offline success copy", () => {
+    const html = renderWorkerHealth({ status: "loading" });
+    assert.match(html, new RegExp(WORKER_HEALTH_LOADING_COPY));
+    assert.match(html, /worker-health-loading/);
+    assert.doesNotMatch(html, /failure-banner|No worker process/);
+  });
+
+  it("Retry button in the worker health banner invokes the handler once", () => {
+    let clicked = 0;
+    const el = WorkerHealthStatusRows({
+      state: { status: "error", kind: "network_failure", message: "x" },
+      onRetry: onceListRetry(() => {
+        clicked += 1;
+      }),
+    });
+    const buttons = (el as unknown as { props: { children: unknown[] } }).props.children[1] as {
+      props: { children: { props: { onClick: () => void } }[] };
+    };
+    buttons.props.children[0].props.onClick();
     buttons.props.children[0].props.onClick();
     assert.equal(clicked, 1);
   });
