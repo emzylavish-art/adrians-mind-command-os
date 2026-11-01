@@ -5,6 +5,7 @@ export const PAINTER_MATERIALS = {
   lorePlaque: "LorePlaqueMaterial",
   inkWashEdge: "InkWashEdgeMaterial",
   imagineNode: "ImagineNodeMaterial",
+  botStar: "PainterlyBotStarBundle",
   paperGrain: "PaperGrainTexture",
   parchment: "ParchmentTexture",
   nebulaSky: "NebulaSkyMaterial",
@@ -29,8 +30,14 @@ export {
   createStarWatercolorMaterial,
   createStarSpriteTexture,
   tickStarMaterial,
+  setStarWatercolorColor,
   type StarSurfaceOptions,
 } from "./star-surface.ts";
+export {
+  createPainterlyBotStar,
+  type PainterlyBotStarOptions,
+  type PainterlyBotStarBundle,
+} from "./painterly-bot-star.ts";
 export {
   createBuildingBrushMaterial,
   tickBuildingMaterial,
@@ -92,6 +99,8 @@ export {
   createPainterlyKit,
   tickPainterlyKit,
   disposePainterlyKit,
+  disposeAllPainterlyKits,
+  livePainterlyKitCount,
   attachPainterlyContextHandlers,
   rebindPainterlyKitTextures,
   applyTextureBinding,

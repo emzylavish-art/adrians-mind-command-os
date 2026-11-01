@@ -54,6 +54,11 @@ import {
 } from "./imagine-node.ts";
 import { createNebulaSkyMaterial, createNebulaTexture, type NebulaTextureOptions } from "./nebula-sky.ts";
 import { createPaperGrainTexture, sanitizeShaderTime } from "./paper-grain.ts";
+import {
+  createPainterlyBotStar,
+  type PainterlyBotStarOptions,
+  type PainterlyBotStarBundle,
+} from "./painterly-bot-star.ts";
 
 export type PainterlyKitOptions = {
   pass?: PainterlyPassOptions;
@@ -107,7 +112,37 @@ export type PainterlyKit = {
   setPassHealth: (input: PainterlyHealthInputs) => number;
   /** Sanitize CSS×DPR resize; skips RT thrash when drawing size unchanged. */
   resizePass: (width: number, height: number, dpr?: number) => void;
+  /**
+   * One-line bot star adopt: watercolor mesh + glow sprite (replaces MeshStandardMaterial).
+   * Glow is auto bindSharedTexture'd to kit.starSpriteTexture.
+   */
+  createBotStar: (opts?: PainterlyBotStarOptions) => PainterlyBotStarBundle;
+  /** Detach context listeners (set by attachPainterlyContextHandlers). */
+  detachContext: (() => void) | null;
+  /** Last per-material tick error message (null if healthy). Never throws out of tick. */
+  lastTickError: string | null;
+  /** How many materials threw inside the last tickPainterlyKit call. */
+  lastTickErrorCount: number;
 };
+
+/** HACKER (c7): track live kits so StrictMode double-mount leaks can be audited/disposed. */
+const LIVE_PAINTER_KITS = new Set<PainterlyKit>();
+
+export function livePainterlyKitCount(): number {
+  return LIVE_PAINTER_KITS.size;
+}
+
+/** Dispose every undisposed kit (tests / emergency). Returns how many were disposed. */
+export function disposeAllPainterlyKits(): number {
+  let n = 0;
+  for (const k of [...LIVE_PAINTER_KITS]) {
+    if (!k.disposed) {
+      disposePainterlyKit(k);
+      n += 1;
+    }
+  }
+  return n;
+}
 
 export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit {
   const tracked: THREE.ShaderMaterial[] = [];
@@ -122,6 +157,9 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     textureBindings,
     disposed: false,
     contextLost: false,
+    detachContext: null,
+    lastTickError: null,
+    lastTickErrorCount: 0,
     createStarMaterial(starOpts) {
       const m = createStarWatercolorMaterial(starOpts);
       tracked.push(m);
@@ -174,7 +212,11 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       if (kit.disposed) return;
       resizePainterlyPass(kit.painterlyPass, width, height, dpr);
     },
+    createBotStar(starOpts) {
+      return createPainterlyBotStar(kit, starOpts);
+    },
   };
+  LIVE_PAINTER_KITS.add(kit);
   return kit;
 }
 
@@ -257,14 +299,27 @@ export function rebindPainterlyKitTextures(kit: PainterlyKit): number {
 
 export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
   if (kit.disposed || kit.contextLost) return;
-  tickPainterlyPass(kit.painterlyPass, timeSeconds);
+  kit.lastTickError = null;
+  kit.lastTickErrorCount = 0;
+  try {
+    tickPainterlyPass(kit.painterlyPass, timeSeconds);
+  } catch (err) {
+    kit.lastTickErrorCount += 1;
+    kit.lastTickError = err instanceof Error ? err.message : String(err);
+  }
   for (const m of kit.tracked) {
-    if (m.name === "StarWatercolorMaterial") tickStarMaterial(m, timeSeconds);
-    else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, timeSeconds);
-    else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, timeSeconds);
-    else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, timeSeconds);
-    else if (m.name === "ImagineNodeMaterial") tickImagineNodeMaterial(m, timeSeconds);
-    else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
+    try {
+      if (m.name === "StarWatercolorMaterial") tickStarMaterial(m, timeSeconds);
+      else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, timeSeconds);
+      else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, timeSeconds);
+      else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, timeSeconds);
+      else if (m.name === "ImagineNodeMaterial") tickImagineNodeMaterial(m, timeSeconds);
+      else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
+    } catch (err) {
+      // HACKER (c7): one bad material must not abort the whole frame / freeze the dashboard
+      kit.lastTickErrorCount += 1;
+      kit.lastTickError = err instanceof Error ? err.message : String(err);
+    }
   }
 }
 
@@ -276,6 +331,14 @@ export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
 export function disposePainterlyKit(kit: PainterlyKit): void {
   if (kit.disposed) return;
   kit.disposed = true;
+  // HACKER (c7): always drop context listeners (StrictMode remount / forgotten detach)
+  try {
+    kit.detachContext?.();
+  } catch {
+    /* */
+  }
+  kit.detachContext = null;
+  LIVE_PAINTER_KITS.delete(kit);
   disposePainterlyPass(kit.painterlyPass);
   kit.starSpriteTexture.dispose();
   kit.paperGrainTexture.dispose();
@@ -353,11 +416,21 @@ export function attachPainterlyContextHandlers(
   kit: PainterlyKit,
   rebuild?: () => void,
 ): () => void {
+  // HACKER (c7): StrictMode / double-attach — detach previous listeners for this kit first
+  if (kit.detachContext) {
+    try {
+      kit.detachContext();
+    } catch {
+      /* */
+    }
+    kit.detachContext = null;
+  }
   const onLost = (ev: Event) => {
     ev.preventDefault();
     kit.contextLost = true;
   };
   const onRestored = () => {
+    if (kit.disposed) return;
     kit.contextLost = false;
     // Recreate upload textures (old GPU ids are invalid after context loss)
     try {
@@ -374,14 +447,24 @@ export function attachPainterlyContextHandlers(
     kit.paperGrainTexture = createPaperGrainTexture({ size: 256, seed: 7 });
     // HACKER FIX (c4): re-attach new texture objects to every consumer
     rebindPainterlyKitTextures(kit);
-    rebuild?.();
+    try {
+      rebuild?.();
+    } catch (err) {
+      kit.lastTickError = err instanceof Error ? err.message : String(err);
+    }
   };
   canvas.addEventListener("webglcontextlost", onLost, false);
   canvas.addEventListener("webglcontextrestored", onRestored, false);
-  return () => {
+  let detached = false;
+  const detach = () => {
+    if (detached) return;
+    detached = true;
     canvas.removeEventListener("webglcontextlost", onLost, false);
     canvas.removeEventListener("webglcontextrestored", onRestored, false);
+    if (kit.detachContext === detach) kit.detachContext = null;
   };
+  kit.detachContext = detach;
+  return detach;
 }
 
 export function usePainterlyKitFactory() {
@@ -389,6 +472,8 @@ export function usePainterlyKitFactory() {
     createPainterlyKit,
     tickPainterlyKit,
     disposePainterlyKit,
+    disposeAllPainterlyKits,
+    livePainterlyKitCount,
     attachPainterlyContextHandlers,
     rebindPainterlyKitTextures,
     painterlyKitResourceCounts,

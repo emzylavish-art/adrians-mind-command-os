@@ -8,6 +8,7 @@ import {
   paperHash,
   GPU_SAFE_TEXTURE_DEFAULT,
 } from "./paper-grain.ts";
+import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 
 export type LorePlaqueOptions = {
   base?: THREE.ColorRepresentation;
@@ -42,6 +43,7 @@ export function createLorePlaqueMaterial(opts: LorePlaqueOptions = {}): THREE.Sh
   if (opts.wash != null) uniforms.uWash.value = sanitizeFinite(opts.wash, 0.45, 0, 1);
   const mat = new THREE.ShaderMaterial({
     name: "LorePlaqueMaterial",
+    precision: PAINTER_SHADER_PRECISION,
     uniforms,
     vertexShader: LorePlaqueShader.vertexShader,
     fragmentShader: LorePlaqueShader.fragmentShader,

@@ -34,12 +34,14 @@ export const WatercolorStarShader = {
     ${GLSL_HASH_NOISE}
     void main() {
       float fres = pow(1.0 - max(dot(normalize(vNormalW), vec3(0.0, 0.0, 1.0)), 0.0), 2.2);
-      // brush stroke rings
+      // brush stroke rings + soft ink bloom (c7 — richer on already-wired star meshes)
       float rings = paintFbm(vUv * 18.0 + uTime * 0.08);
       float stroke = smoothstep(0.35, 0.75, rings) * uStroke;
+      float bloom = smoothstep(0.15, 0.85, paintFbm(vUv * 6.0 - uTime * 0.05)) * 0.22;
       float grain = (paintNoise(vUv * 90.0 + uTime * 0.05) - 0.5) * uGrain;
       vec3 pigment = uColor * (0.55 + uEmissive * 0.65);
       pigment += pigment * stroke * 0.35;
+      pigment += uColor * bloom;
       pigment += grain;
       // rim wash
       pigment = mix(pigment, pigment * 1.25 + vec3(0.15, 0.18, 0.35), fres * 0.55);

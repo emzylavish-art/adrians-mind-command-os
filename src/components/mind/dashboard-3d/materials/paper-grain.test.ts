@@ -28,6 +28,7 @@ import {
   attachPainterlyContextHandlers,
   type PainterlyKit,
 } from "./use-painterly-kit.ts";
+import { createPainterlyBotStar } from "./painterly-bot-star.ts";
 import {
   createImagineNodeMaterial,
   setImagineNodeMap,
@@ -56,6 +57,7 @@ import {
   GLSL_HASH_NOISE,
   GLSL_MEDIUMP_GUARD,
   PAINTER_SHADER_VERSION,
+  PAINTER_SHADER_PRECISION,
   PainterlyPassShader,
   PainterlyPassFallbackShader,
   WatercolorStarShader,
@@ -752,6 +754,159 @@ describe("painter c6: post-pass amount from constellation health", () => {
 
   it("PainterlyPassShader still exposes amount/grain/wash; version bumped", () => {
     assert.ok(PainterlyPassShader.uniforms.amount);
-    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.5/);
+    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.6/);
+    assert.equal(PAINTER_SHADER_PRECISION, "mediump");
+  });
+});
+
+
+describe("hacker pass c7: kit StrictMode / listener leak / tick throws / mediump", () => {
+  it("double attachPainterlyContextHandlers detaches prior listeners (no leak)", () => {
+    const listeners = new Map<string, Set<EventListener>>();
+    const canvas = {
+      addEventListener: (t: string, fn: EventListener) => {
+        if (!listeners.has(t)) listeners.set(t, new Set());
+        listeners.get(t)!.add(fn);
+      },
+      removeEventListener: (t: string, fn: EventListener) => {
+        listeners.get(t)?.delete(fn);
+      },
+    } as unknown as HTMLCanvasElement;
+    const kit = {
+      disposed: false,
+      contextLost: false,
+      detachContext: null as null | (() => void),
+      lastTickError: null,
+      lastTickErrorCount: 0,
+      starSpriteTexture: { dispose() {}, needsUpdate: false },
+      paperGrainTexture: { dispose() {}, needsUpdate: false },
+      tracked: [],
+      trackedSkies: [],
+      textureBindings: [],
+    } as unknown as PainterlyKit;
+    const d1 = attachPainterlyContextHandlers(canvas, kit);
+    assert.equal(listeners.get("webglcontextlost")!.size, 1);
+    const d2 = attachPainterlyContextHandlers(canvas, kit);
+    // still exactly one of each (old removed)
+    assert.equal(listeners.get("webglcontextlost")!.size, 1);
+    assert.equal(listeners.get("webglcontextrestored")!.size, 1);
+    d2();
+    assert.equal(listeners.get("webglcontextlost")!.size, 0);
+    void d1;
+  });
+
+  it("disposePainterlyKit detaches context handlers even if caller forgot detach()", () => {
+    const listeners = new Map<string, Set<EventListener>>();
+    const canvas = {
+      addEventListener: (t: string, fn: EventListener) => {
+        if (!listeners.has(t)) listeners.set(t, new Set());
+        listeners.get(t)!.add(fn);
+      },
+      removeEventListener: (t: string, fn: EventListener) => {
+        listeners.get(t)?.delete(fn);
+      },
+    } as unknown as HTMLCanvasElement;
+    // Use a minimal kit shell with real attach/dispose path for detachContext
+    const kit = {
+      painterlyPass: { uniforms: {}, dispose() {} },
+      starSpriteTexture: { dispose() {} },
+      paperGrainTexture: { dispose() {} },
+      tracked: [],
+      trackedSkies: [],
+      textureBindings: [],
+      disposed: false,
+      contextLost: false,
+      detachContext: null as null | (() => void),
+      lastTickError: null,
+      lastTickErrorCount: 0,
+    } as unknown as PainterlyKit;
+    attachPainterlyContextHandlers(canvas, kit);
+    assert.ok(kit.detachContext);
+    assert.equal(listeners.get("webglcontextlost")!.size, 1);
+    disposePainterlyKit(kit);
+    assert.equal(listeners.get("webglcontextlost")!.size, 0);
+    assert.equal(kit.detachContext, null);
+  });
+
+  it("tickPainterlyKit isolates per-material exceptions (frame continues)", () => {
+    const good = createStarWatercolorMaterial();
+    const bad = {
+      name: "StarWatercolorMaterial",
+      uniforms: { uTime: { value: 0 } },
+      dispose() {},
+    } as unknown as import("three").ShaderMaterial;
+    // poison: make tickStarMaterial throw by replacing uTime setter... instead use custom name path
+    const exploding = {
+      name: "CustomBoom",
+      get uniforms() {
+        throw new Error("tick-boom");
+      },
+      dispose() {},
+    } as unknown as import("three").ShaderMaterial;
+    const kit = {
+      painterlyPass: { uniforms: { time: { value: 0 } } },
+      tracked: [good, exploding],
+      trackedSkies: [],
+      textureBindings: [],
+      disposed: false,
+      contextLost: false,
+      lastTickError: null,
+      lastTickErrorCount: 0,
+    } as unknown as PainterlyKit;
+    assert.doesNotThrow(() => tickPainterlyKit(kit, 3));
+    assert.ok(kit.lastTickErrorCount >= 1);
+    assert.match(String(kit.lastTickError), /tick-boom/);
+    // good material still ticked
+    assert.equal(good.uniforms["uTime"]!.value, 3);
+    good.dispose();
+    void bad;
+  });
+
+  it("StarWatercolorMaterial uses mediump precision (iOS/WebGL1)", () => {
+    const m = createStarWatercolorMaterial();
+    assert.equal((m as { precision?: string }).precision, "mediump");
+    assert.equal(PAINTER_SHADER_PRECISION, "mediump");
+    assert.match(WatercolorStarShader.fragmentShader, /bloom/);
+    m.dispose();
+  });
+});
+
+describe("painter c7: createBotStar one-line adopt helper", () => {
+  it("createPainterlyBotStar returns mesh+glow with shared star texture binding", () => {
+    // Avoid DOM star sprite: mock kit factories
+    const tracked: import("three").ShaderMaterial[] = [];
+    const textureBindings: { material: unknown; slot: string; target?: string }[] = [];
+    const starTex = { id: "star", dispose() {} };
+    const kit = {
+      starSpriteTexture: starTex,
+      paperGrainTexture: { dispose() {} },
+      tracked,
+      textureBindings,
+      disposed: false,
+      contextLost: false,
+      createStarMaterial: (o?: object) => {
+        const m = createStarWatercolorMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+      bindSharedTexture(material: unknown, slot: string, target = "map") {
+        textureBindings.push({ material, slot, target });
+        (material as { map: unknown }).map = starTex;
+      },
+    } as unknown as PainterlyKit;
+    const star = createPainterlyBotStar(kit, { color: 0x3dd68c, idle: false });
+    assert.equal(star.meshMaterial.name, "StarWatercolorMaterial");
+    assert.ok(star.glowMaterial);
+    assert.equal((star.glowMaterial as { map: unknown }).map, starTex);
+    assert.ok(textureBindings.some((b) => b.slot === "starSprite"));
+    star.setColor(0xff6b8a, 0.5);
+    assert.ok((star.meshMaterial.uniforms["uEmissive"]!.value as number) === 0.5);
+    star.meshMaterial.dispose();
+    star.glowMaterial.dispose();
+  });
+
+  it("WatercolorStarShader gained ink bloom without derivatives", () => {
+    assert.match(WatercolorStarShader.fragmentShader, /bloom/);
+    assert.doesNotMatch(WatercolorStarShader.fragmentShader, /dFdx|dFdy|fwidth/);
   });
 });
