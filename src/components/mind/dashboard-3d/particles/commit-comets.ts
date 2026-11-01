@@ -16,6 +16,8 @@ export type CommitTrailInput = {
 export type CommitCometsHandle = {
   group: THREE.Group;
   count: number;
+  /** c22: sha per comet index (keys for reconcileCometLaunch). Optional for hand-built handles. */
+  shas?: readonly string[];
   disposed: boolean;
   update: (tSeconds: number, reducedMotion: boolean) => void;
   dispose: () => void;
@@ -211,6 +213,8 @@ export function createCommitComets(
     const head = new THREE.Points(headGeo, headMat);
     head.name = `motion-comet-head-${i}`;
     head.frustumCulled = false; // 1-vertex bounds go stale as the head moves
+    // c22: fixed base for cometHeadSize (scene must not compound mat.size per frame).
+    head.userData.baseSize = headMat.size;
     group.add(head);
     comets.push({
       phase: i * 1.7,
@@ -225,6 +229,7 @@ export function createCommitComets(
     });
   });
   handle.count = comets.length;
+  handle.shas = list.map((c) => c.sha as string);
 
   const writeArc = (c: CometState, head: number) => {
     const pos = c.positions;

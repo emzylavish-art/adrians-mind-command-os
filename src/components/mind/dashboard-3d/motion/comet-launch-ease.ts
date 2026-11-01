@@ -25,6 +25,11 @@ export type CometLaunchSlot = {
 
 export type CometLaunchState = {
   slots: CometLaunchSlot[];
+  /**
+   * c22: identity per slot (commit sha) for reconcileCometLaunch. Optional so
+   * hand-built states stay valid; null = no identity (virgin / cleared).
+   */
+  keys?: (string | null)[];
 };
 
 export type CometLaunchSample = {
@@ -47,8 +52,12 @@ const EMPTY_LAUNCH_OPTS: CometLaunchOpts = Object.freeze({});
 export function createCometLaunchState(capacity = COMET_LAUNCH_MAX_BURST): CometLaunchState {
   const n = clampInt(capacity, 0, COMET_LAUNCH_MAX_BURST, COMET_LAUNCH_MAX_BURST);
   const slots: CometLaunchSlot[] = new Array(n);
-  for (let i = 0; i < n; i++) slots[i] = { amount: 0, delay: 0, live: false };
-  return { slots };
+  const keys: (string | null)[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    slots[i] = { amount: 0, delay: 0, live: false };
+    keys[i] = null;
+  }
+  return { slots, keys };
 }
 
 export function createCometLaunchSample(): CometLaunchSample {
@@ -62,6 +71,7 @@ export function clearCometLaunch(state: CometLaunchState): void {
     s.delay = 0;
     s.live = false;
   }
+  if (state.keys) for (let i = 0; i < state.keys.length; i++) state.keys[i] = null;
 }
 
 /**
@@ -186,4 +196,105 @@ export function stepCometLaunchEase(
     // Free concurrency slot once fully launched (mesh stays at amount=1 via sample).
     if (sample.done) s.live = false;
   }
+}
+
+/** Max chars of a key compared per slot (hostile mega-sha must not burn a frame). */
+export const COMET_LAUNCH_KEY_MAX = 128;
+
+function normKey(k: unknown): string | null {
+  if (typeof k !== "string" || k.length === 0) return null;
+  return k.length > COMET_LAUNCH_KEY_MAX ? k.slice(0, COMET_LAUNCH_KEY_MAX) : k;
+}
+
+/**
+ * Hacker c22 (#91 comet churn): keyed reconcile for the scene's periodic comet rebuild.
+ *
+ * The scene rebuilt comets every 5s and called clearCometLaunch + scheduleCometLaunchBurst,
+ * so every already-landed comet blinked to opacity 0 and re-launched every sync even when
+ * the commit list was unchanged. reconcileCometLaunch compares slot i's key (commit sha)
+ * with `keys[i]`:
+ *  - same key → slot untouched (parked comets stay at amount=1, in-flight keep easing);
+ *  - new/changed key → staggered launch (respecting maxConcurrent; overflow parks visible
+ *    at amount=1 — never left hidden forever);
+ *  - slot past keys.length (or empty key) → cleared hidden.
+ * Reduced-motion → changed slots snap to amount=1. Returns how many slots animate a launch.
+ * Zero allocation in steady state.
+ */
+export function reconcileCometLaunch(
+  state: CometLaunchState,
+  keys: readonly (string | null | undefined)[] | null | undefined,
+  reducedMotion: boolean,
+  opts: CometLaunchOpts = EMPTY_LAUNCH_OPTS,
+): number {
+  const o = opts ?? EMPTY_LAUNCH_OPTS;
+  const stagger = Math.max(0, finiteOr(o.stagger ?? COMET_LAUNCH_STAGGER, COMET_LAUNCH_STAGGER));
+  let maxConc: number;
+  if (o.maxConcurrent === undefined || o.maxConcurrent === null) maxConc = COMET_LAUNCH_MAX_CONCURRENT;
+  else if (!Number.isFinite(o.maxConcurrent as number) || (o.maxConcurrent as number) <= 0) maxConc = 0;
+  else maxConc = clampInt(o.maxConcurrent as number, 1, COMET_LAUNCH_MAX_BURST, COMET_LAUNCH_MAX_CONCURRENT);
+
+  const slots = state.slots;
+  if (!state.keys || state.keys.length !== slots.length) {
+    const prev = state.keys;
+    const next: (string | null)[] = new Array(slots.length);
+    for (let i = 0; i < slots.length; i++) next[i] = prev && i < prev.length ? prev[i] ?? null : null;
+    state.keys = next;
+  }
+  const cur = state.keys;
+  const list = Array.isArray(keys) ? keys : null;
+  const n = list ? Math.min(list.length, slots.length) : 0;
+
+  let live = 0;
+  for (let i = 0; i < slots.length; i++) {
+    const k = i < n ? normKey(list![i]) : null;
+    if (k !== null && k === cur[i]) {
+      if (slots[i]!.live) live++;
+    }
+  }
+
+  let launched = 0;
+  let delayCursor = 0;
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i]!;
+    const k = i < n ? normKey(list![i]) : null;
+    if (k === null) {
+      s.amount = 0;
+      s.delay = 0;
+      s.live = false;
+      cur[i] = null;
+      continue;
+    }
+    if (k === cur[i]) continue;
+    cur[i] = k;
+    if (reducedMotion || live >= maxConc) {
+      // Static mark (reduced) or over concurrency budget: show landed, never hidden forever.
+      s.amount = 1;
+      s.delay = 0;
+      s.live = false;
+      continue;
+    }
+    s.amount = 0;
+    s.delay = delayCursor;
+    s.live = true;
+    delayCursor += stagger;
+    live++;
+    launched++;
+  }
+  return launched;
+}
+
+/** Base comet head point size (matches particles/commit-comets material default floor). */
+export const COMET_HEAD_SIZE_MIN = 0.12;
+
+/**
+ * Hacker c22: non-compounding head size. The scene did `mat.size = max(0.12, mat.size *
+ * (0.85 + 0.15 * scale))` every frame, so each launch (scale < 1) shrank the head
+ * permanently and the 5s relaunch pinned every head at the 0.12 floor. Derive from a fixed
+ * base instead. Non-finite base → floor; reduced-motion → base.
+ */
+export function cometHeadSize(baseSize: number, sample: Readonly<CometLaunchSample> | null | undefined, reducedMotion: boolean): number {
+  const base = Math.max(COMET_HEAD_SIZE_MIN, finiteOr(baseSize, COMET_HEAD_SIZE_MIN));
+  if (reducedMotion || !sample) return base;
+  const sc = clamp01((finiteOr(sample.scale, 1) - 0.6) / 0.4);
+  return Math.max(COMET_HEAD_SIZE_MIN, base * (0.85 + 0.15 * sc));
 }

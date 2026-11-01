@@ -79,9 +79,9 @@ import {
   stepEdgePulseSync,
   createCometLaunchState,
   createCometLaunchSample,
-  scheduleCometLaunchBurst,
+  reconcileCometLaunch,
+  cometHeadSize,
   stepCometLaunchEase,
-  clearCometLaunch,
   createTravelerEaseState,
   createTravelerEaseSample,
   stepTravelerEase,
@@ -914,7 +914,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     const cometLaunch = createCometLaunchState(24);
     const cometLaunchSamples = Array.from({ length: 24 }, () => createCometLaunchSample());
-    scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
+    // Motion c22: sha-keyed reconcile — no 5s blink when the commit list is unchanged.
+    reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
 
@@ -1752,7 +1753,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const mat = (head as THREE.Points).material as THREE.PointsMaterial;
           if (mat && "opacity" in mat) {
             mat.opacity = (reducedMotion ? 0.35 : 0.95) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
-            mat.size = Math.max(0.12, (mat.size || 0.2) * (0.85 + 0.15 * sample.scale));
+            const base = typeof head.userData.baseSize === "number" ? head.userData.baseSize : (mat.size || 0.2);
+            mat.size = cometHeadSize(base, sample, reducedMotion);
           }
         }
       }
@@ -1964,8 +1966,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
-        clearCometLaunch(cometLaunch);
-        scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
+        reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
         feedGlyphs.dispose();
       inkEdges?.dispose();
       inkEdges = null;

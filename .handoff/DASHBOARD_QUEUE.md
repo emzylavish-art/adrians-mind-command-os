@@ -152,6 +152,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 98 | **Gap Dispatcher #64 — Chart focus tooltip** — shared visible tip on :focus-visible (not 1×1 foreignObject) | **done** | c53 chart-focus-tip |
 | 99 | **Perf — dynamic import shell** — lazy DashboardApp / UniverseScene / ChartsPanel; deferred health-sound; glass Suspense shell | **done** | c53; no vite.config / vercel.json edits (Grok Build owns) |
 | 100 | **Light #93 — card edge separation** | **queued** | Light tip e046153 follow-up |
+| 101 | **Motion c22 — comet reconcile + character re-entry wired** — reconcileCometLaunch(shas); cometHeadSize; reduced-motion exit amp ramp | **done** | c53 land af715e6/ec9cb41; comet-churn.test registered |
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |
