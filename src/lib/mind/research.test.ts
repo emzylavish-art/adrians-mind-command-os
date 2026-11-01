@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import {
+  DEFAULT_DEEP_SEARCH_TIMEOUT_MS,
+  DEFAULT_SEARCH_TIMEOUT_MS,
+  deepSearchTimeoutMs,
   normalizeCitations,
   performDeepResearch,
   performSearch,
   planDeepQueries,
   runResearch,
+  SEARCH_TIMEOUT_REPLY,
   searchConfigError,
+  searchTimeoutMs,
   shouldRunDeepResearch,
 } from "./research.ts";
 
@@ -134,5 +139,70 @@ describe("deep research", () => {
     assert.equal(result.ok, false);
     assert.deepEqual(result.citations, []);
     assert.match(result.error, /MIND_SEARCH_KEY/);
+  });
+});
+
+describe("search timeouts", () => {
+  const hangForeverFetch = ((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) return;
+      if (signal.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    })) as typeof fetch;
+
+  it("single search aborts a hang-forever fetch at the per-query budget (fake timers)", async () => {
+    mock.timers.enable({ apis: ["setTimeout"], now: 0 });
+    try {
+      const pending = performSearch({
+        query: "pier",
+        endpoint: "https://search.example/query",
+        key: "test-key",
+        deep: false,
+        timeoutMs: 1_000,
+        fetchImpl: hangForeverFetch,
+      });
+      mock.timers.tick(1_000);
+      const result = await pending;
+      assert.equal(result.ok, false);
+      assert.deepEqual(result.citations, []);
+      assert.equal(result.error, SEARCH_TIMEOUT_REPLY);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it("deep research aborts when the overall budget elapses (fake timers)", async () => {
+    mock.timers.enable({ apis: ["setTimeout"], now: 0 });
+    try {
+      const pending = performDeepResearch({
+        query: "Toledo Bend marina zoning overview",
+        endpoint: "https://search.example/query",
+        key: "test-key",
+        timeoutMs: 5_000,
+        deepTimeoutMs: 2_000,
+        fetchImpl: hangForeverFetch,
+      });
+      mock.timers.tick(2_000);
+      const result = await pending;
+      assert.equal(result.ok, false);
+      assert.deepEqual(result.citations, []);
+      assert.equal(result.error, SEARCH_TIMEOUT_REPLY);
+      assert.equal(JSON.stringify(result).includes("test-key"), false);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it("env overrides apply (≥1000) and reject tiny values", () => {
+    assert.equal(searchTimeoutMs({}), DEFAULT_SEARCH_TIMEOUT_MS);
+    assert.equal(deepSearchTimeoutMs({}), DEFAULT_DEEP_SEARCH_TIMEOUT_MS);
+    assert.equal(searchTimeoutMs({ MIND_SEARCH_TIMEOUT_MS: "12000" }), 12_000);
+    assert.equal(deepSearchTimeoutMs({ MIND_SEARCH_DEEP_TIMEOUT_MS: "60000" }), 60_000);
+    assert.equal(searchTimeoutMs({ MIND_SEARCH_TIMEOUT_MS: "50" }), DEFAULT_SEARCH_TIMEOUT_MS);
+    assert.equal(deepSearchTimeoutMs({ MIND_SEARCH_DEEP_TIMEOUT_MS: "nope" }), DEFAULT_DEEP_SEARCH_TIMEOUT_MS);
   });
 });
