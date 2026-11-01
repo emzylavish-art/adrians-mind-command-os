@@ -82,3 +82,5 @@ E2E mock flow logged at `/workspace/audit/mcp-integration/oauth-e2e.log`.
 Live provider connect **unverified** — no `NOTION_OAUTH_CLIENT_*` on box env
 (did not read other apps/browsers/connectors).
 Avoided `command-app.tsx` / `server.ts` / `styles.css` / voice / media / research.
+
+Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
