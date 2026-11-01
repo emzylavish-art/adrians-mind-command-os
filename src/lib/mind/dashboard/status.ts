@@ -2,6 +2,7 @@ import { DASHBOARD_BOTS, matchBotForLock } from "./bots.ts";
 import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFromLocks } from "./feeds.ts";
 import { loadMoneyView } from "./spend.ts";
 import { buildDashboardCharts } from "./chart-series.ts";
+import { buildNotionMirrorView } from "./notion-mirror.ts";
 import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
 import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
 import { buildSkyFeed } from "./sky-feed.ts";
@@ -175,11 +176,19 @@ export async function buildDashboardStatus(
     charts = buildDashboardCharts({ nowMs: now });
   }
 
+  let notionMirror;
+  try {
+    notionMirror = buildNotionMirrorView({ bots, graph: notionGraph, nowMs: now });
+  } catch {
+    notionMirror = buildNotionMirrorView({ bots: [], graph: null, nowMs: now });
+  }
+
   return {
     ...base,
     projects: buildProjectsDashboard(base),
     fleetPlan,
     skyFeed,
     charts,
+    notionMirror,
   };
 }

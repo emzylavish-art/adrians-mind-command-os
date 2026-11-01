@@ -116,6 +116,15 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
       spend: { id: "spend", title: "Spend", unit: "USD", points: [], source: "no source yet", emptyReason: "no source yet" },
       generatedAtMs: 0,
     },
+    notionMirror: {
+      available: false,
+      reason: "no source yet",
+      mode: "unavailable",
+      generatedAt: null,
+      rows: [],
+      staleCount: 0,
+      mappedCount: 0,
+    },
     ...partial,
   };
 }
