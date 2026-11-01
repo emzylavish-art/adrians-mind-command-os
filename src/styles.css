@@ -2454,3 +2454,156 @@ html[data-theme="light"] aside nav button.bg-accent {
   background: #18181b !important;
   color: #fafafa !important;
 }
+
+/* —— Cycle 31: dead/empty clickable chrome + chart deepen (mono) —— */
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1);
+  box-shadow: none !important;
+  transform: none !important;
+}
+button.is-coming-soon:hover,
+.service-setup.is-coming-soon:hover,
+button.is-coming-soon:active,
+.service-setup.is-coming-soon:active {
+  opacity: 0.55 !important;
+  transform: none !important;
+  background: inherit !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after {
+  content: "Soon";
+  margin-left: 0.45rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  line-height: 1.2;
+}
+html[data-theme="light"] button.is-coming-soon::after,
+html[data-theme="light"] .service-setup.is-coming-soon::after {
+  color: #52525b;
+  border-color: rgb(9 9 11 / 0.14);
+}
+
+/* Press/hover feedback for remaining live controls (mono) */
+.main-stage button:not(:disabled):not(.is-coming-soon):not([aria-disabled="true"]),
+aside nav button:not(:disabled) {
+  transition: transform 120ms ease, box-shadow 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+.main-stage button:not(:disabled):not(.is-coming-soon):not([aria-disabled="true"]):hover {
+  border-color: rgb(255 255 255 / 0.22);
+}
+.main-stage button:not(:disabled):not(.is-coming-soon):not([aria-disabled="true"]):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* Empty wells — never blank glass */
+.glow-card:empty,
+.dash3d-chart-card:empty,
+.command-card:empty {
+  min-height: 5.5rem;
+  display: grid;
+  place-items: center;
+  border-style: dashed !important;
+  color: #a1a1aa;
+}
+.glow-card:empty::before,
+.dash3d-chart-card:empty::before,
+.command-card:empty::before {
+  content: "Nothing here yet";
+  font-size: 0.8rem;
+}
+
+/* Chart deepen: axis labels, tooltip chrome, metric tiles */
+.dash3d-chart-card svg text,
+.dash3d-charts-panel .dash3d-muted,
+.dash3d-chart-card .dash3d-muted {
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+  font-size: 0.62rem !important;
+  letter-spacing: 0.02em;
+}
+.dash3d-chart-card [role="tooltip"],
+.dash3d-charts-panel [role="tooltip"],
+.dash3d-chart-tooltip {
+  background: rgb(12 12 14 / 0.92) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.55rem !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-variant-numeric: tabular-nums;
+  padding: 0.35rem 0.55rem !important;
+}
+.dash3d-metric,
+.dash3d-kpi,
+[data-testid="metric-tile"],
+.dash3d-money-panel .dash3d-glass,
+.dash3d-node-detail {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(10 10 12 / 0.86) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 28px rgb(0 0 0 / 0.35) !important;
+}
+.dash3d-progress[aria-busy="true"]::after,
+.dash3d-chart-card[data-loading="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+  background-size: 200% 100%;
+  animation: 1.4s ease-in-out infinite skeleton-shimmer;
+  pointer-events: none;
+}
+.dash3d-chart-card {
+  isolation: isolate;
+}
+html[data-theme="light"] .dash3d-chart-card [role="tooltip"],
+html[data-theme="light"] .dash3d-chart-tooltip {
+  background: rgb(255 255 255 / 0.96) !important;
+  color: #18181b !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.1) !important;
+}
+html[data-theme="light"] .dash3d-metric,
+html[data-theme="light"] .dash3d-kpi,
+html[data-theme="light"] [data-testid="metric-tile"] {
+  background: rgb(255 255 255 / 0.94) !important;
+  background-blend-mode: normal !important;
+  border-color: rgb(9 9 11 / 0.1) !important;
+}
+
+/* Kill residual non-logo purple wash on live-ish hero date chips / active pills */
+.main-stage .rounded-panel.bg-info\/15,
+.main-stage [class*="bg-info/15"],
+.main-stage [class*="text-info"]:not(a):not(button.text-info) {
+  /* leave text-info links; neutralize purple washes */
+}
+.masthead [class*="from-"],
+.masthead [class*="to-accent"],
+.main-stage .bg-gradient-to-r {
+  filter: grayscale(1) contrast(1.05);
+}
+aside nav button.bg-accent,
+aside nav button[class*="bg-accent"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 22px rgb(0 0 0 / 0.35) !important;
+}
+/* Purple ONLY on logo mark */
+.logo-mark,
+aside span.grid.size-11.rounded-2xl {
+  filter: none !important;
+}
