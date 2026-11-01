@@ -1924,3 +1924,1150 @@ aside nav button[class*="bg-accent"] {
 aside span.grid.size-11.rounded-2xl {
   filter: none !important;
 }
+
+/* —— Cycle 32 / item 1: solid glass composer + scroll clearance —— */
+.composer-dock,
+.command-card.composer-dock,
+.floating-composer,
+[data-composer="floating"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
+    rgb(10 10 12 / 0.94) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 22px 56px rgb(0 0 0 / 0.62),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+.composer-dock textarea,
+.command-card.composer-dock textarea,
+.floating-composer textarea {
+  background: rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+.main-stage {
+  padding-bottom: calc(7.5rem + env(safe-area-inset-bottom)) !important;
+}
+@media (min-width: 768px) {
+  .main-stage {
+    padding-bottom: 2.5rem !important;
+  }
+}
+html[data-theme="light"] .composer-dock,
+html[data-theme="light"] .command-card.composer-dock,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] [data-composer="floating"] {
+  background: rgb(255 255 255 / 0.94) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.12), inset 0 1px 0 #fff !important;
+}
+
+/* —— Cycle 32 / item 3: unified mobile glass dock (composer + slim tabs) —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+    min-height: 2.75rem !important;
+    height: auto !important;
+    padding-top: 0.15rem;
+    padding-bottom: calc(0.15rem + env(safe-area-inset-bottom)) !important;
+    background: rgb(8 8 10 / 0.92) !important;
+    border-top: 1px solid rgb(255 255 255 / 0.1) !important;
+    backdrop-filter: blur(22px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+    box-shadow: 0 -10px 28px rgb(0 0 0 / 0.45);
+    z-index: 40 !important;
+  }
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+    min-height: 2.55rem !important;
+    font-size: 0.62rem !important;
+    gap: 0.1rem;
+    color: #a1a1aa !important;
+  }
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button svg {
+    width: 0.95rem !important;
+    height: 0.95rem !important;
+  }
+  /* Seat hero composer as dock above slim tabs */
+  .main-stage > section.command-card.composer-dock,
+  .main-stage section.command-card.composer-dock {
+    position: sticky;
+    bottom: calc(2.75rem + env(safe-area-inset-bottom));
+    z-index: 35;
+    margin-bottom: 0.35rem;
+    border-radius: 1.15rem !important;
+  }
+  /* When composer focused, collapse tab labels into icon-only and dim */
+  body:has(.composer-dock:focus-within) nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button {
+    font-size: 0 !important;
+    line-height: 0 !important;
+    min-height: 2.25rem !important;
+  }
+  body:has(.composer-dock:focus-within) nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] > button svg {
+    width: 1.05rem !important;
+    height: 1.05rem !important;
+  }
+  .main-stage {
+    padding-bottom: calc(11rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* —— Cycle 32 / item 2: ComposerBar layout hooks (from pass-10, mono) —— */
+:root {
+  --composer-speak-fg: #0a0a0b;
+  --composer-speak-bg: #f4f4f5;
+  --composer-bar-bg: #111113;
+  --composer-bar-border: rgb(255 255 255 / 0.1);
+  --composer-bar-ink: #f4f4f5;
+  --composer-bar-muted: rgb(255 255 255 / 0.45);
+}
+html[data-theme="light"] {
+  --composer-speak-fg: #0a0a0b;
+  --composer-speak-bg: #ffffff;
+  --composer-bar-bg: #f6f7f9;
+  --composer-bar-border: rgb(15 23 42 / 0.12);
+  --composer-bar-ink: #0f172a;
+  --composer-bar-muted: rgb(15 23 42 / 0.48);
+}
+
+.composer-bar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  width: 100%;
+  pointer-events: none;
+}
+.composer-bar__safe {
+  padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+.composer-bar__card {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: min(100%, 42rem);
+  margin: 0 auto;
+  padding: 0.85rem 0.9rem 0.75rem;
+  border-radius: 1.75rem; /* ~28px */
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 40%),
+    var(--composer-bar-bg);
+  border: 1px solid var(--composer-bar-border);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  color: var(--composer-bar-ink);
+}
+html[data-theme="light"] .composer-bar__card {
+  box-shadow:
+    0 14px 36px rgb(15 23 42 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+.composer-bar__ask {
+  min-height: 1.6rem;
+  padding: 0.15rem 0.35rem 0.1rem;
+}
+.composer-bar__ask-fake {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--composer-bar-muted);
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 450;
+  padding: 0.2rem 0;
+}
+
+.composer-bar__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+.composer-bar__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.composer-bar__plus {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.05);
+  color: var(--composer-bar-ink);
+  flex: 0 0 auto;
+}
+html[data-theme="light"] .composer-bar__plus {
+  border-color: rgb(15 23 42 / 0.12);
+  background: rgb(15 23 42 / 0.04);
+}
+.composer-bar__plus:focus-visible,
+.composer-bar__model:focus-visible,
+.composer-mic-dictation:focus-visible,
+.composer-speak-live:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--composer-bar-bg), 0 0 0 4px rgb(255 255 255 / 0.55);
+}
+.composer-bar__plus-glyph {
+  width: 0.85rem;
+  height: 0.85rem;
+  position: relative;
+  display: block;
+}
+.composer-bar__plus-glyph::before,
+.composer-bar__plus-glyph::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: currentColor;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+.composer-bar__plus-glyph::before { width: 1.7px; height: 100%; }
+.composer-bar__plus-glyph::after { width: 100%; height: 1.7px; }
+
+.composer-bar__model-wrap { position: relative; }
+.composer-bar__model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0 0.75rem 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.05);
+  color: var(--composer-bar-ink);
+  font-size: 0.88rem;
+  font-weight: 560;
+  white-space: nowrap;
+}
+html[data-theme="light"] .composer-bar__model {
+  border-color: rgb(15 23 42 / 0.12);
+  background: rgb(15 23 42 / 0.04);
+}
+.composer-bar__model-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 0.28rem;
+  background:
+    linear-gradient(135deg, #a78bfa, #60a5fa 55%, #34d399);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  flex: 0 0 auto;
+}
+.composer-bar__model-beta {
+  margin-left: 0.25rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0.12rem 0.28rem;
+  border-radius: 0.35rem;
+  background: rgb(251 191 36 / 0.18);
+  color: #fbbf24;
+  vertical-align: middle;
+}
+
+.composer-bar__model-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.55rem);
+  margin: 0;
+  padding: 0.4rem;
+  list-style: none;
+  min-width: 16.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--composer-bar-border);
+  background: rgb(18 18 22 / 0.96);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  z-index: 5;
+}
+html[data-theme="light"] .composer-bar__model-menu {
+  background: rgb(255 255 255 / 0.97);
+  box-shadow: 0 16px 36px rgb(15 23 42 / 0.16);
+}
+.composer-bar__model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--composer-bar-ink);
+  text-align: left;
+}
+.composer-bar__model-option:hover { background: rgb(255 255 255 / 0.06); }
+html[data-theme="light"] .composer-bar__model-option:hover { background: rgb(15 23 42 / 0.05); }
+.composer-bar__model-option.is-selected {
+  background: rgb(255 255 255 / 0.08);
+}
+html[data-theme="light"] .composer-bar__model-option.is-selected {
+  background: rgb(15 23 42 / 0.06);
+}
+.composer-bar__model-option-text { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
+.composer-bar__model-option-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.composer-bar__model-option-sub {
+  font-size: 0.72rem;
+  color: var(--composer-bar-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-bar__model-check {
+  width: 0.85rem;
+  height: 0.45rem;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  flex: 0 0 auto;
+  margin-right: 0.15rem;
+  opacity: 0.9;
+}
+
+/* Mic ≠ Speak */
+.composer-voice-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.composer-mic-dictation {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--composer-bar-ink);
+  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+html[data-theme="light"] .composer-mic-dictation {
+  border-color: rgb(15 23 42 / 0.14);
+  background: rgb(15 23 42 / 0.03);
+}
+.composer-mic-dictation:hover { border-color: rgb(255 255 255 / 0.28); }
+.composer-mic-dictation:active { transform: scale(0.96); }
+.composer-mic-dictation__glyph {
+  width: 0.62rem;
+  height: 0.88rem;
+  border-radius: 999px;
+  border: 1.7px solid currentColor;
+  position: relative;
+}
+.composer-mic-dictation__glyph::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.34rem;
+  width: 0.78rem;
+  height: 0.34rem;
+  border: 1.6px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 0.55rem 0.55rem;
+  transform: translateX(-50%);
+}
+.composer-mic-dictation__dot {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 0 rgb(239 68 68 / 0.45);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.composer-mic-dictation[data-state="recording"] {
+  border-color: rgb(239 68 68 / 0.45);
+  color: #fda4af;
+}
+.composer-mic-dictation[data-state="recording"] .composer-mic-dictation__dot {
+  opacity: 1;
+  transform: scale(1);
+  animation: composer-mic-pulse 1.2s ease-out infinite;
+}
+@keyframes composer-mic-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(239 68 68 / 0.5); }
+  100% { box-shadow: 0 0 0 8px rgb(239 68 68 / 0); }
+}
+
+.composer-speak-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.45rem;
+  padding: 0 0.95rem 0 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: var(--composer-speak-bg);
+  color: var(--composer-speak-fg);
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
+  transition: transform 120ms ease, box-shadow 160ms ease, filter 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.composer-speak-live:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.34), 0 0 18px rgb(255 255 255 / 0.08);
+}
+.composer-speak-live:active { transform: scale(0.97); }
+.composer-speak-live__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 0.85rem;
+}
+.composer-speak-live__bars i {
+  display: block;
+  width: 2.4px;
+  border-radius: 999px;
+  background: currentColor;
+  height: 40%;
+  transform-origin: center bottom;
+}
+.composer-speak-live__bars i:nth-child(1) { height: 42%; }
+.composer-speak-live__bars i:nth-child(2) { height: 72%; }
+.composer-speak-live__bars i:nth-child(3) { height: 95%; }
+.composer-speak-live__bars i:nth-child(4) { height: 58%; }
+
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i {
+  animation: composer-speak-breathe 1s ease-in-out infinite;
+}
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(2) { animation-delay: 0.08s; }
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(3) { animation-delay: 0.16s; }
+.composer-speak-live[data-live-voice="connecting"] .composer-speak-live__bars i:nth-child(4) { animation-delay: 0.24s; }
+
+.composer-speak-live[data-live-voice="listening"],
+.composer-speak-live[data-live-voice="user-speaking"],
+.composer-speak-live[data-live-voice="assistant-speaking"] {
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 0.32),
+    0 0 calc(10px + 14px * var(--live-level, 0)) rgb(167 139 250 / 0.28);
+}
+.composer-speak-live[data-live-voice="listening"] .composer-speak-live__bars i,
+.composer-speak-live[data-live-voice="user-speaking"] .composer-speak-live__bars i,
+.composer-speak-live[data-live-voice="assistant-speaking"] .composer-speak-live__bars i {
+
+/* Map existing tip composer controls toward Grok row */
+@media (max-width: 767.98px) {
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+    overflow-x: auto;
+    padding-top: 0.35rem;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button[aria-label="Dictate"] {
+    order: 8;
+    width: 2.65rem !important;
+    height: 2.65rem !important;
+    min-height: 2.65rem !important;
+    border-radius: 999px !important;
+    background: rgb(255 255 255 / 0.06) !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button[type="submit"] {
+    order: 9;
+    border-radius: 999px !important;
+    background: #f4f4f5 !important;
+    color: #09090b !important;
+    min-height: 2.65rem !important;
+    padding-inline: 1rem !important;
+    box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    /* Attach ≈ + */
+    width: 2.65rem !important;
+    min-height: 2.65rem !important;
+    border-radius: 999px !important;
+    padding-inline: 0 !important;
+    justify-content: center !important;
+  }
+}
+/* White Speak pill when present (live / Wiring mount) */
+.composer-speak-pill,
+.composer-speak-live,
+button.composer-speak-pill,
+button.composer-speak-live {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border-radius: 999px !important;
+  border: 1px solid rgb(255 255 255 / 0.2) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+  min-height: 2.65rem !important;
+  padding-inline: 0.95rem !important;
+  font-weight: 600 !important;
+}
+html[data-theme="light"] .composer-speak-pill,
+html[data-theme="light"] .composer-speak-live {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* —— Cycle 32 / item 4: monochrome icons (purple only .logo-mark) —— */
+.main-stage .text-info,
+.main-stage .text-warn,
+.main-stage .text-ok,
+.main-stage .text-danger,
+.main-stage .text-accent:not(button.bg-accent):not(.composer-speak-pill),
+aside nav .text-info,
+aside nav .text-warn,
+aside nav .text-ok,
+.rail .text-info,
+.rail .text-warn,
+nav.fixed .text-info,
+nav.fixed .text-warn {
+  color: #e4e4e7 !important;
+}
+.main-stage svg,
+.rail svg,
+nav.fixed svg,
+.topbar svg,
+header svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+/* neutralize utility washes */
+.main-stage .bg-info\/15,
+.main-stage .bg-warn\/15,
+.main-stage .bg-ok\/15,
+.main-stage .bg-danger\/15,
+.main-stage [class*="bg-info/"],
+.main-stage [class*="bg-warn/"],
+.main-stage [class*="bg-ok/"],
+.main-stage [class*="bg-danger/"] {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e4e4e7 !important;
+}
+.logo-mark,
+.logo-badge,
+aside span.grid.size-11.rounded-2xl {
+  color: #7c5cff !important;
+  filter: none !important;
+}
+
+/* —— Cycle 32 / item 5: mono high-contrast warning / error cards —— */
+.main-stage p.text-danger,
+.main-stage .text-danger {
+  color: #f4f4f5 !important;
+}
+.main-stage [class*="bg-danger"],
+.main-stage .bg-danger\/15,
+.main-stage .border-danger\/40,
+.main-stage .rounded-panel.border-danger\/40 {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 55%),
+    rgb(24 24 27 / 0.95) !important;
+  border: 1px solid rgb(255 255 255 / 0.28) !important;
+  color: #fafafa !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+/* Connected / status pills that read as errors */
+.main-stage span.rounded-full.border-danger\/40,
+.main-stage span.text-danger {
+  border-color: rgb(255 255 255 / 0.35) !important;
+  color: #fafafa !important;
+  background: rgb(255 255 255 / 0.08) !important;
+}
+/* Neutral warning glyph via CSS on Setup coming-soon / error notices */
+.main-stage p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted,
+.main-stage p.text-sm.text-danger {
+  position: relative;
+  padding-left: 2.1rem !important;
+  border: 1px solid rgb(255 255 255 / 0.22) !important;
+  background: rgb(24 24 27 / 0.92) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage p.rounded-panel.border.border-line.bg-surface.px-3.py-2.text-sm.text-muted::before,
+.main-stage p.text-sm.text-danger::before {
+  content: "!";
+  position: absolute;
+  left: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.45);
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fafafa;
+}
+
+/* —— Cycle 32 / items 6–8: voice chrome grid, end-call row, no double header —— */
+/* —— Pass 10b: LiveVoiceBar (Grok/GPT-like live voice chrome) —— */
+.live-voice-bar {
+  --lvb-bg: rgb(12 12 14 / 0.72);
+  --lvb-border: rgb(255 255 255 / 0.1);
+  --lvb-fill: rgb(255 255 255 / 0.06);
+  --lvb-ink: #f4f4f5;
+  --lvb-muted: rgb(255 255 255 / 0.55);
+  --lvb-end: #ef4444;
+  --lvb-end-ink: #fff;
+  --lvb-mic-glow: transparent;
+  --lvb-mic-ring: transparent;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(100%, 28rem);
+  padding: 0.85rem 0.9rem 0.95rem;
+  border-radius: 1.35rem;
+  color: var(--lvb-ink);
+  isolation: isolate;
+}
+.live-voice-bar__glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    var(--lvb-bg);
+  border: 1px solid var(--lvb-border);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 0 24px rgb(124 92 255 / 0.04);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  z-index: -1;
+  pointer-events: none;
+}
+html[data-theme="light"] .live-voice-bar {
+  --lvb-bg: rgb(255 255 255 / 0.78);
+  --lvb-border: rgb(15 23 42 / 0.1);
+  --lvb-fill: rgb(15 23 42 / 0.05);
+  --lvb-ink: #0f172a;
+  --lvb-muted: rgb(15 23 42 / 0.55);
+  --lvb-end: #dc2626;
+}
+html[data-theme="light"] .live-voice-bar__glass {
+  box-shadow:
+    0 16px 40px rgb(15 23 42 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    inset 0 0 20px rgb(124 92 255 / 0.04);
+}
+
+.live-voice-bar__controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.65rem;
+}
+.live-voice-bar__round {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background:
+    radial-gradient(circle at 50% 30%, rgb(255 255 255 / 0.08), transparent 65%),
+    var(--lvb-fill);
+  color: var(--lvb-ink);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 6px 16px rgb(0 0 0 / 0.25);
+  transition: transform 120ms cubic-bezier(.2,.8,.2,1), border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.live-voice-bar__round:hover { transform: translateY(-1px); border-color: rgb(255 255 255 / 0.22); }
+.live-voice-bar__round:active { transform: scale(0.96); }
+.live-voice-bar__round:focus-visible,
+.live-voice-bar__plus:focus-visible,
+.live-voice-bar__end:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg, #0a0a0b), 0 0 0 4px rgb(255 255 255 / 0.55);
+}
+
+.live-voice-bar__mic { overflow: visible; }
+.live-voice-bar__mic-ring {
+  position: absolute;
+  inset: calc(-4px - (10px * var(--live-level, 0)));
+  border-radius: 999px;
+  border: 2px solid var(--lvb-mic-ring);
+  box-shadow: 0 0 0 calc(4px + 10px * var(--live-level, 0)) var(--lvb-mic-glow);
+  opacity: 0;
+  pointer-events: none;
+  transition: inset 80ms linear, box-shadow 80ms linear, opacity 160ms ease;
+}
+.live-voice-bar__mic-dot {
+  position: absolute;
+  bottom: 0.22rem;
+  left: 50%;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: currentColor;
+  opacity: 0.35;
+}
+
+/* state skins on mic */
+.live-voice-bar[data-live-voice="connecting"] .live-voice-bar__mic {
+  border-color: rgb(167 139 250 / 0.45);
+}
+.live-voice-bar[data-live-voice="connecting"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  border-color: rgb(167 139 250 / 0.55);
+  animation: lvb-spin-ring 0.9s linear infinite;
+}
+.live-voice-bar[data-live-voice="listening"],
+.live-voice-bar[data-live-voice="user-speaking"] {
+  --lvb-mic-ring: var(--voice-listen);
+  --lvb-mic-glow: color-mix(in srgb, var(--voice-listen) 28%, transparent);
+}
+.live-voice-bar[data-live-voice="listening"] .live-voice-bar__mic,
+.live-voice-bar[data-live-voice="user-speaking"] .live-voice-bar__mic {
+  border-color: color-mix(in srgb, var(--voice-listen) 55%, transparent);
+  color: var(--voice-listen);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 0 calc(12px + 18px * var(--live-level, 0)) color-mix(in srgb, var(--voice-listen) 35%, transparent);
+}
+.live-voice-bar[data-live-voice="listening"] .live-voice-bar__mic-ring,
+.live-voice-bar[data-live-voice="user-speaking"] .live-voice-bar__mic-ring {
+  opacity: 1;
+}
+.live-voice-bar[data-live-voice="listening"] .live-voice-bar__mic-dot,
+.live-voice-bar[data-live-voice="user-speaking"] .live-voice-bar__mic-dot {
+  background: var(--voice-listen);
+  opacity: 1;
+  box-shadow: 0 0 8px var(--voice-listen);
+}
+.live-voice-bar[data-live-voice="assistant-speaking"] {
+  --lvb-mic-ring: var(--voice-speak);
+  --lvb-mic-glow: color-mix(in srgb, var(--voice-speak) 30%, transparent);
+}
+.live-voice-bar[data-live-voice="assistant-speaking"] .live-voice-bar__mic {
+  border-color: color-mix(in srgb, var(--voice-speak) 55%, transparent);
+  color: var(--voice-speak);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 0 calc(14px + 20px * var(--live-level, 0)) color-mix(in srgb, var(--voice-speak) 40%, transparent);
+}
+.live-voice-bar[data-live-voice="assistant-speaking"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  animation: lvb-pulse-ring 1.2s ease-out infinite;
+}
+.live-voice-bar[data-live-voice="interrupted"] {
+  --lvb-mic-ring: #fbbf24;
+  --lvb-mic-glow: rgb(251 191 36 / 0.28);
+}
+.live-voice-bar[data-live-voice="interrupted"] .live-voice-bar__mic {
+  border-color: rgb(251 191 36 / 0.55);
+  color: #fbbf24;
+}
+.live-voice-bar[data-live-voice="interrupted"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  animation: lvb-flash-ring 0.55s ease-in-out 2;
+}
+.live-voice-bar[data-live-voice="muted"] .live-voice-bar__mic {
+  border-color: rgb(251 113 133 / 0.45);
+  color: #fb7185;
+  background: rgb(251 113 133 / 0.1);
+}
+.live-voice-bar[data-live-voice="error"] .live-voice-bar__mic {
+  border-color: rgb(239 68 68 / 0.55);
+  color: #f87171;
+  background: rgb(239 68 68 / 0.12);
+}
+.live-voice-bar[data-live-voice="error"] .live-voice-bar__mic-ring {
+  opacity: 1;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 4px rgb(239 68 68 / 0.2);
+}
+
+@keyframes lvb-spin-ring {
+  to { transform: rotate(360deg); }
+}
+@keyframes lvb-pulse-ring {
+  0% { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+@keyframes lvb-flash-ring {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.live-voice-bar__composer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+.live-voice-bar__plus-wrap { position: relative; }
+.live-voice-bar__plus {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: var(--lvb-fill);
+  color: var(--lvb-ink);
+}
+.live-voice-bar__plus-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.45rem);
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  min-width: 9.5rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--lvb-border);
+  background: rgb(18 18 22 / 0.94);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(16px);
+  z-index: 3;
+}
+html[data-theme="light"] .live-voice-bar__plus-menu {
+  background: rgb(255 255 255 / 0.96);
+}
+.live-voice-bar__plus-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--lvb-ink);
+  font-size: 0.82rem;
+  text-align: left;
+}
+.live-voice-bar__plus-item:hover { background: rgb(124 92 255 / 0.14); }
+
+.live-voice-bar__ask {
+  min-height: 2.55rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(0 0 0 / 0.28);
+  display: flex;
+  align-items: center;
+  padding: 0 0.95rem;
+  overflow: hidden;
+}
+html[data-theme="light"] .live-voice-bar__ask {
+  background: rgb(15 23 42 / 0.04);
+  border-color: rgb(15 23 42 / 0.1);
+}
+.live-voice-bar__ask-fake {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--lvb-muted);
+  text-align: left;
+  font-size: 0.95rem;
+  padding: 0.55rem 0;
+}
+
+.live-voice-bar__end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.6rem;
+  height: 2.55rem;
+  padding: 0 1.05rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--lvb-end) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--lvb-end) 92%, #fff), var(--lvb-end));
+  color: var(--lvb-end-ink);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--lvb-end) 35%, transparent);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.live-voice-bar__end:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.live-voice-bar__end:active { transform: scale(0.97); }
+
+.live-voice-bar__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+.live-call-grid,
+.live-voice-bar__controls,
+.live-voice-bar .live-call-grid,
+[data-live-voice] .live-call-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.55rem !important;
+  align-items: center !important;
+  justify-items: center !important;
+}
+@media (max-width: 420px) {
+  .live-call-grid,
+  .live-voice-bar__controls,
+  [data-live-voice] .live-call-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+.live-call-end,
+.live-voice-bar__end,
+.live-voice-end,
+button.live-call-end,
+[data-testid="live-voice-end"],
+button[aria-label*="End call" i],
+button[aria-label="End"] {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 22rem;
+  margin: 0.75rem auto 0 !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-height: 2.75rem !important;
+  border-radius: 999px !important;
+  background: rgb(255 255 255 / 0.1) !important;
+  color: #fafafa !important;
+  border: 1px solid rgb(255 255 255 / 0.28) !important;
+  grid-column: 1 / -1 !important;
+}
+/* Kill staggered absolute children inside voice overlays */
+[data-live-voice] button,
+.live-voice-bar button,
+.voice-mode-stage button {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+}
+/* Double header under URL bar: hide duplicate floating icon strip if present */
+.voice-mode-stage__floating-header,
+[data-voice-header="duplicate"],
+.live-voice-bar + .live-voice-bar__header,
+header.voice-floating-icons {
+  display: none !important;
+}
+/* Align top voice icon cluster */
+.topbar .flex.items-center.gap-2,
+header .flex.items-center.gap-1,
+.topbar [aria-label*="Voice" i],
+.topbar .inline-flex.items-center {
+  align-items: center !important;
+}
+.topbar button,
+.topbar a,
+header button.grid {
+  vertical-align: middle;
+}
+
+/* —— Cycle 32 / item 9: expanded composer as keyboard-anchored bottom sheet —— */
+@media (max-width: 767.98px) {
+  .composer-dock:focus-within,
+  .composer-dock[data-expanded="true"],
+  .floating-composer:focus-within,
+  .floating-composer[data-expanded="true"],
+  [data-composer="floating"]:focus-within {
+    position: fixed !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    bottom: calc(2.75rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 45 !important;
+    max-height: min(58vh, 28rem) !important;
+    overflow: auto !important;
+    border-bottom-left-radius: 1.1rem !important;
+    border-bottom-right-radius: 1.1rem !important;
+    transform: translateY(0) !important;
+  }
+  .composer-dock:focus-within textarea,
+  .floating-composer:focus-within textarea {
+    min-height: 6.5rem !important;
+  }
+}
+
+/* —— Cycle 32 / items 10–15: contrast, glass depth, padding, crop, pills, top align —— */
+/* 10 — dark-on-dark actions */
+.main-stage button.text-accent,
+.main-stage button.block.min-h-11.text-left.text-accent,
+.main-stage .text-accent.underline,
+.main-stage button.min-h-11.text-xs.text-accent {
+  color: #fafafa !important;
+  text-decoration-color: rgb(255 255 255 / 0.45) !important;
+}
+.main-stage button.block.min-h-11.text-left.text-accent,
+.main-stage button.min-h-11.rounded-panel.border.border-line.px-3.text-sm {
+  background: rgb(255 255 255 / 0.05) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage button.block.min-h-11.text-left.text-accent:hover,
+.main-stage button.min-h-11.rounded-panel.border.border-line.px-3.text-sm:hover {
+  background: rgb(255 255 255 / 0.1) !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
+
+/* 11 — glass depth on cards */
+.glow-card,
+.dense-card,
+.settings-card,
+.main-stage article.rounded-panel,
+.main-stage section.rounded-panel.border,
+.main-stage li.rounded-panel.border {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 50%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.88) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 14px 36px rgb(0 0 0 / 0.4) !important;
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+}
+
+/* 12 — card padding */
+.command-card.composer-dock,
+.main-stage .command-card {
+  padding: 1rem !important;
+}
+.command-card .min-h-16 {
+  min-height: 4.25rem !important;
+  padding: 0.85rem 1rem !important;
+}
+.main-stage article.rounded-panel.border.border-line.bg-surface.p-3,
+.main-stage article.rounded-panel.border.border-line.bg-surface.p-4 {
+  padding: 1rem !important;
+}
+
+/* 13 — first dashboard/ASK card crop */
+.main-stage > .masthead,
+.main-stage > div.masthead,
+.main-stage section.command-card.composer-dock {
+  scroll-margin-bottom: 8rem;
+}
+@media (max-width: 767.98px) {
+  .main-stage section.command-card.composer-dock {
+    max-height: none;
+    overflow: visible;
+  }
+  .main-stage .command-card .grid.gap-2.md\:grid-cols-\[1fr_1fr_auto\] {
+    gap: 0.65rem !important;
+  }
+}
+
+/* 14 — pill cluster spacing */
+.command-card .mb-2.flex.flex-wrap.gap-2,
+.main-stage .flex.flex-wrap.gap-2,
+.main-stage .flex.gap-2.overflow-x-auto {
+  gap: 0.55rem !important;
+}
+.command-card .mb-2.flex.flex-wrap.gap-2 > button,
+.main-stage .flex.flex-wrap.gap-2 > button.rounded-full {
+  margin: 0 !important;
+  padding-inline: 0.9rem !important;
+}
+
+/* 15 — top floating icons vertical align */
+.topbar,
+header.topbar,
+.main-stage > header,
+aside + .flex.flex-1 .sticky.top-0 {
+  display: flex !important;
+  align-items: center !important;
+}
+.topbar > *,
+.sticky.top-0.z-20.flex,
+.sticky.top-0.flex.items-center {
+  align-items: center !important;
+}
+.topbar button,
+.sticky.top-0 button.grid,
+.sticky.top-0 .grid.size-9,
+.sticky.top-0 .grid.size-10,
+.sticky.top-0 .grid.size-11 {
+  display: grid !important;
+  place-items: center !important;
+  align-self: center !important;
+}
+
+/* Sidebar + New / storage footer polish (bonus from analysis) */
+aside button.bg-accent,
+.rail button.bg-accent {
+  border-radius: 999px !important;
+}
+aside .text-xs.text-muted,
+.rail .text-xs.text-muted {
+  opacity: 0.85;
+  letter-spacing: 0.01em;
+}
+
+}}
+
+/* —— Cycle 32 / item 1+3 harden: fixed mobile composer dock (sticky fails under overflow) —— */
+@media (max-width: 767.98px) {
+  .main-stage section.command-card.composer-dock,
+  .main-stage > section.command-card.composer-dock {
+    position: fixed !important;
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 35 !important;
+    max-height: min(52vh, 26rem) !important;
+    overflow: auto !important;
+    margin: 0 !important;
+  }
+  .composer-dock,
+  .command-card.composer-dock {
+    backdrop-filter: blur(28px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+    background: rgb(10 10 12 / 0.96) !important;
+  }
+}
+
+/* —— Cycle 32k: composer-dock fixed dock (correct ancestors) —— */
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock,
+  .command-card.composer-dock[data-composer="floating"],
+  form.composer-dock.command-card {
+    position: fixed !important;
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 45 !important;
+    max-height: min(52vh, 26rem) !important;
+    overflow: auto !important;
+    margin: 0 !important;
+    background: rgb(10 10 12 / 0.96) !important;
+    backdrop-filter: blur(28px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+  }
+  .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
+  }
+  .flex.min-h-0.min-w-0.flex-1.flex-col.pb-16 {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
+  }
+}

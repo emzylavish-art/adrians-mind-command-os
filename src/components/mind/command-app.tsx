@@ -3753,7 +3753,7 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="floating-composer command-card p-3 md:p-4">
+              <section className="floating-composer command-card composer-dock p-3 md:p-4" data-composer="floating">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
@@ -5824,7 +5824,7 @@ function ChatPane({
           <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
         </div>
         <form
-          className="floating-composer command-card m-3 p-3"
+          className="floating-composer command-card composer-dock m-3 p-3" data-composer="floating"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
