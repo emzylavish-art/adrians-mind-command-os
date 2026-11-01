@@ -4,6 +4,8 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
+Last release: **405ef30** (hacker-pass + Light/Painter wire). Next: Camera/city + Projects.
+
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
 Painter lane branch: `dashboard-3d-visual-painter` · Worktree: `/workspace/mind-command-os-dashboard-painter`  
@@ -14,7 +16,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 0 | **Universe** (+ Visual Fleet stars + extension folders) — painterly cosmos, constellations, Notion galaxy snapshot, weather, fly-to camera rig foundation | **done** | Landed on dashboard-3d; light/painter/motion fill lane folders |
 | 0b | **Light — health-tinted lights + bloom/color-grade** | **done** | Cosmos Light Bot `dashboard-3d-visual-light`; awaits `universe-scene` hook |
 | 0c | **Painter kit (shaders/materials)** — brush/watercolor ShaderMaterials, star+building surfaces, paper grain, procedural nebula, painterly post-pass + `createPainterlyKit` | **done** | Cosmos Painter Bot; wire-up TODO in `materials/WIRING_TODO.md` |
-| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | **active** | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; use `createBuildingBrushMaterial`; shots flyover-high/city/interior |
+| 1 | **Camera / city flyover + Projects** — universe→city→interior FSM; projects as painted buildings (progress floors, tasks, bots, agent stats); real local data only | queued | Gap lock `dashboard-3d-gap-projects-dashboard.lock`; use `createBuildingBrushMaterial`; shots flyover-high/city/interior |
 | 2 | **Click-and-zoom** — star click eases camera in + detail; wheel/pinch dolly; empty-space/zoom-out → sky; reuse camera FSM | queued | Shots zoom-star.png, zoom-sky.png |
 | 3 | **Animation pass** — living motion: orbiting, drifting, pulsing, transition polish | queued | After click-zoom; tickPainterlyKit time uniforms |
 | 4 | **Sound** — WebAudio procedural only; health tones spatialized; muted by default + unmute toggle | queued | |
