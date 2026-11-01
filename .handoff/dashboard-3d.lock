@@ -1,6 +1,5 @@
 owner: none
-cycle: 49
-released: 2026-11-01T23:28:28+01:00
+cycle: 50
+released: 2026-11-01T23:33:22+01:00
 branch: dashboard-3d
-tip: 5635e21
-last: #34 harden; lock history; chart drilldown; #68 still waiting Light
+note: c50 Motion c17/c18 + Light #68 landed; :8102 nohup; Gap#10+#54-56 queued
