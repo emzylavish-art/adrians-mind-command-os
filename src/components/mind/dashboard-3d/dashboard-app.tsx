@@ -22,6 +22,7 @@ import {
 import { NotionMirrorPanel } from "./notion-mirror-panel";
 import type { OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import "./dashboard-3d.css";
+import { IntentPredictionChip } from "@/components/mind/intent-prediction-chip";
 
 export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const { state } = useDashboardStatus();
@@ -377,6 +378,14 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         />
       ) : null}
 
+      <IntentPredictionChip
+        className="dash3d-intent-predict"
+        handlers={{
+          navigate: (href) => {
+            window.location.assign(href);
+          },
+        }}
+      />
       <NodeDetailPanel
         bot={selected}
         notionPage={notionPage}
