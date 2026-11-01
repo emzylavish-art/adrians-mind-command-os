@@ -49,10 +49,12 @@ export function FleetPanel({
   mode,
   ws,
   setWs,
+  onFailure,
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
+  onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [goal, setGoal] = useState("");
@@ -324,11 +326,21 @@ export function FleetPanel({
           type="button"
           className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
           onClick={() => {
-            void inspectWebPage({ data: { url: pageUrl } }).then((result) => {
-              setPageNote(result.ok ? `${result.title}\n${result.excerpt}` : result.error);
-            }).catch((error: unknown) => {
-              setPageNote(error instanceof Error ? error.message : "The page was not opened.");
-            });
+            const run = () => {
+              void inspectWebPage({ data: { url: pageUrl } }).then((result) => {
+                if (result.ok) {
+                  setPageNote(`${result.title}\n${result.excerpt}`);
+                  return;
+                }
+                setPageNote(result.error);
+                onFailure?.(result.error, run);
+              }).catch((error: unknown) => {
+                const message = error instanceof Error ? error.message : "The page was not opened.";
+                setPageNote(message);
+                onFailure?.(message, run);
+              });
+            };
+            run();
           }}
         >
           Open page
@@ -344,6 +356,7 @@ export function FleetPanel({
         ))}
       </ul>
       <ul className="mt-4 space-y-2 text-sm">
+        {ws.browserSessions.length === 0 && <li className="rounded-panel border border-line bg-surface p-3 text-muted">No browser sessions yet. Open page records one only after a successful inspect.</li>}
         {ws.browserSessions.map((session) => (
           <li key={session.id} className="dense-card p-3">
             <p className="font-semibold">{session.title || "No title"} · {session.status}</p>
