@@ -3468,3 +3468,351 @@ html[data-theme="light"] form.floating-composer.composer-dock {
     display: none !important;
   }
 }
+
+/* —— Cycle 35: desk main-stage crushed by .composer-bar width:100% flex sibling ——
+   LiveVoiceBar mounts `composer-bar is-fixed` as a .shell flex-row child. Base
+   `.composer-bar { position:sticky; width:100% }` made it ~1152px wide and stole
+   all free space from `.main-stage` (computed width 0 / inner column ~48px).
+   `is-fixed` had no CSS. Take the bar out of flow; restore main-stage flex. */
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed,
+.shell > [data-testid="composer-bar"].composer-bar {
+  position: fixed !important;
+  left: 0.75rem !important;
+  right: 0.75rem !important;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom)) !important;
+  top: auto !important;
+  width: auto !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  z-index: 46 !important;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .shell > [data-testid="composer-bar"].composer-bar {
+    left: calc(18rem + 1.25rem) !important; /* clear md:w-72 rail */
+    right: 1.5rem !important;
+    bottom: 1.5rem !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card,
+  .shell > .composer-bar.is-fixed .composer-bar__card {
+    width: min(100%, 42rem) !important;
+    margin-inline: auto !important;
+  }
+}
+.shell > .main-stage,
+.shell > .main-stage.flex-1,
+div.shell > div.main-stage {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+/* —— Cycle 36: force visible glass / backdrop-blur on every surface —— */
+.shell .rail,
+.shell aside.rail,
+.topbar,
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+.composer-dock,
+.floating-composer,
+[data-composer="floating"],
+.composer-bar__card,
+.masthead,
+.empty-state,
+.dash3d-glass,
+.dash3d-chart-card {
+  backdrop-filter: blur(22px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+}
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+article.rounded-panel.border.border-line,
+li.rounded-panel.border.border-line,
+.dash3d-chart-card,
+.empty-state {
+  background-color: rgb(12 12 14 / 0.72) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 320px 320px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 16px 40px rgb(0 0 0 / 0.45) !important;
+}
+.composer-dock,
+.floating-composer,
+[data-composer="floating"],
+.composer-bar__card {
+  background-color: rgb(10 10 12 / 0.78) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+}
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .rounded-panel.border.border-line.bg-surface,
+html[data-theme="light"] article.rounded-panel.border.border-line,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .empty-state {
+  background-color: rgb(255 255 255 / 0.82) !important;
+  background-image: linear-gradient(180deg, #fff, rgb(244 244 245 / 0.9)) !important;
+  background-blend-mode: normal !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.1), inset 0 1px 0 #fff !important;
+}
+html[data-theme="light"] .composer-dock,
+html[data-theme="light"] .floating-composer,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.88) !important;
+}
+
+/* —— Cycle 37: mono shell — kill remaining color leaks (purple only .logo-mark) —— */
+aside.rail nav svg,
+aside.rail nav button svg,
+.main-stage svg:not(.logo-mark svg),
+.topbar svg,
+nav.fixed[aria-label="Primary"] svg,
+.composer-bar svg,
+.composer-dock svg {
+  color: #e4e4e7 !important;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+aside.rail nav button.bg-accent svg,
+aside.rail nav button[aria-current="page"] svg {
+  color: #09090b !important;
+  stroke: currentColor !important;
+}
+.text-danger,
+.text-ok,
+.text-warn,
+.text-info,
+.main-stage .text-danger,
+.main-stage .text-ok,
+.main-stage .text-warn,
+.main-stage .text-info,
+p.text-sm.text-danger,
+span.text-danger,
+span.text-ok {
+  color: #e4e4e7 !important;
+}
+html[data-theme="light"] .text-danger,
+html[data-theme="light"] .text-ok,
+html[data-theme="light"] .text-warn,
+html[data-theme="light"] .text-info,
+html[data-theme="light"] p.text-sm.text-danger {
+  color: #27272a !important;
+}
+.composer-mic-dictation__dot,
+[class*="dictation__dot"],
+span.bg-danger,
+span.bg-red-500,
+.bg-\[\#ef4444\],
+.bg-red-500 {
+  background: #a1a1aa !important;
+  background-color: #a1a1aa !important;
+  box-shadow: none !important;
+}
+/* Active rail / Connected purple bloom → mono chip */
+aside.rail nav button.bg-accent,
+aside.rail nav button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+}
+/* Re-assert logo purple */
+.logo-mark,
+.logo-badge,
+aside span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent {
+  color: #fff !important;
+  background: #7c5cff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+  filter: none !important;
+}
+
+/* —— Cycle 38: spacing rhythm + contrast + empty/disabled wells —— */
+.main-stage .mx-auto.flex.max-w-6xl.flex-col.gap-4 {
+  gap: 1.15rem !important;
+}
+.main-stage .masthead {
+  padding: 1.15rem 1.25rem !important;
+  border-radius: 1.25rem !important;
+}
+/* Quick-action / suggestion pills — GPT-level contrast */
+.main-stage button.rounded-full.border,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage button.min-h-11.rounded-panel.border.border-line {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: #f4f4f5 !important;
+}
+.main-stage button.rounded-full.border:hover,
+.main-stage .flex.flex-wrap.gap-2 > button:hover {
+  background: rgb(255 255 255 / 0.14) !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
+html[data-theme="light"] .main-stage button.rounded-full.border,
+html[data-theme="light"] .main-stage .flex.flex-wrap.gap-2 > button {
+  background: rgb(9 9 11 / 0.04) !important;
+  border-color: rgb(9 9 11 / 0.14) !important;
+  color: #18181b !important;
+}
+/* Empty wells with texture */
+.empty-state,
+[data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted:only-child),
+.dash3d-chart-card [data-testid="chart-empty"] {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
+    url("/brand/textures/empty-well-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 280px 280px !important;
+  background-position: center, center, center !important;
+  min-height: 7.5rem !important;
+  padding: 1.25rem !important;
+}
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1) !important;
+  box-shadow: none !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after {
+  content: "Soon" !important;
+  letter-spacing: 0.04em;
+  font-size: 0.62rem !important;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+/* —— Cycle 39: chart mono gradients, grid, tooltips —— */
+.dash3d-charts-panel.dash3d-glass,
+.dash3d-charts-panel {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/chart-grid-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 300px 300px !important;
+  background-blend-mode: soft-light, multiply, soft-light !important;
+  padding: 1rem !important;
+  border-radius: 1.15rem !important;
+}
+.dash3d-chart-card {
+  border-radius: 1rem !important;
+  padding: 0.85rem 0.9rem !important;
+}
+.dash3d-chart-card svg {
+  filter: grayscale(1) contrast(1.05) !important;
+}
+.dash3d-chart-card svg rect,
+.dash3d-chart-card svg path,
+.dash3d-chart-card svg circle {
+  fill: #d4d4d8 !important;
+  stroke: #a1a1aa !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-chart-card svg .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.12) !important;
+  stroke-dasharray: 3 4 !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-chart-card .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+  font-size: 11px !important;
+}
+.dash3d-chart-card .recharts-tooltip-wrapper .recharts-default-tooltip,
+.dash3d-chart-card [class*="tooltip"] {
+  background: rgb(10 10 12 / 0.94) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.65rem !important;
+  color: #f4f4f5 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.5) !important;
+}
+.dash3d-progress,
+aside .mt-3.h-1\.5,
+.main-stage .h-1\.5.rounded-full.bg-surface-2 {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+}
+.dash3d-progress-fill,
+.dash3d-progress-fill-ok,
+.dash3d-progress > div,
+aside .mt-3.h-1\.5 > div {
+  background: linear-gradient(90deg, #71717a, #f4f4f5) !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg rect,
+html[data-theme="light"] .dash3d-chart-card svg path {
+  fill: #3f3f46 !important;
+  stroke: #52525b !important;
+}
+html[data-theme="light"] .dash3d-chart-card svg line {
+  stroke: rgb(9 9 11 / 0.12) !important;
+}
+
+/* —— Cycle 40: brand Imagine textures mounted —— */
+.command-card,
+.glow-card,
+.dense-card,
+.composer-bar__card {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    url("/brand/textures/panel-noise-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 220px 220px, 320px 320px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+}
+
+/* —— Cycle 41: rail workspace icon mono (hardcoded fills / emoji-like marks) —— */
+aside.rail nav button,
+aside.rail nav a,
+aside.rail [class*="text-"] {
+  color: #d4d4d8 !important;
+}
+aside.rail nav button.bg-accent,
+aside.rail nav button.bg-accent * {
+  color: #09090b !important;
+}
+aside.rail nav svg *,
+aside.rail nav button svg * {
+  stroke: currentColor !important;
+  fill: currentColor !important;
+  color: inherit !important;
+}
+/* Prefer outline icons: if fill paints blobs, keep muted gray */
+aside.rail nav button:not(.bg-accent) svg *[fill]:not([fill="none"]) {
+  fill: #a1a1aa !important;
+  stroke: #a1a1aa !important;
+}
+aside.rail nav .text-info,
+aside.rail nav .text-ok,
+aside.rail nav .text-warn,
+aside.rail nav .text-danger,
+aside.rail nav .text-accent {
+  color: #d4d4d8 !important;
+}
+/* Logo exception */
+aside.rail .logo-mark,
+aside.rail .logo-badge,
+aside.rail span.grid.size-11.rounded-2xl,
+aside.rail span.grid.size-11.rounded-2xl * {
+  color: #fff !important;
+  fill: #fff !important;
+  background: #7c5cff !important;
+}
