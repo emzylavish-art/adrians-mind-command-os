@@ -59,3 +59,25 @@ describe("Gap#57 focus restore after Escape", () => {
     assert.equal(isSafeFocusRestoreTarget({ connected: true, ariaHiddenAncestor: false }), true);
   });
 });
+
+describe("attacker pass c52 — Notion href + focus restore", () => {
+  it("rejects userinfo, empty subdomain tricks, and nested lookalikes", () => {
+    // Trailing dot is normalized away (matches URL hostname behaviour).
+    assert.equal(isAllowedNotionHost("www.notion.so."), true);
+    assert.equal(isAllowedNotionHost(".notion.site"), false);
+    assert.equal(isAllowedNotionHost("notion.site.evil.com"), false);
+    const evil = sanitizeNotionHref("https://evil:pw@www.notion.so/page", PAGE);
+    assert.ok(evil && !evil.includes("evil") && !evil.includes("@"));
+    assert.match(evil!, /^https:\/\/www\.notion\.so\//);
+  });
+
+  it("strips credentials from otherwise-allowed hosts", () => {
+    const u = sanitizeNotionHref("https://user:pass@www.notion.so/0123456789abcdef0123456789abcdef");
+    assert.equal(u, "https://www.notion.so/0123456789abcdef0123456789abcdef");
+  });
+
+  it("never restores focus into a disabled or disconnected target", () => {
+    assert.equal(isSafeFocusRestoreTarget({ connected: false, ariaHiddenAncestor: false }), false);
+    assert.equal(isSafeFocusRestoreTarget({ connected: true, ariaHiddenAncestor: false, disabled: true }), false);
+  });
+});

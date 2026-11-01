@@ -69,3 +69,74 @@ export function hideLastFrameFreeze(host: ParentNode | null | undefined): void {
 export function hasLastFrameFreeze(host: ParentNode | null | undefined): boolean {
   return !!findLastFrameEl(host);
 }
+
+
+/** Gap#59 — honest overlay while WebGL context is lost / restoring / failed. */
+export const CONTEXT_LOSS_OVERLAY_ATTR = "data-dash3d-ctx-loss";
+export const CONTEXT_LOSS_MSG_PAUSED =
+  "3D view paused — graphics context lost, restoring…";
+export const CONTEXT_LOSS_MSG_FAILED =
+  "3D view paused — graphics context restore failed. Retry to rebuild the stage.";
+
+export type ContextLossOverlayPhase = "lost" | "restoring" | "failed" | "ok";
+
+export function findContextLossOverlay(host: ParentNode | null | undefined): HTMLElement | null {
+  if (!host || typeof (host as Element).querySelector !== "function") return null;
+  return (host as Element).querySelector(`[${CONTEXT_LOSS_OVERLAY_ATTR}]`) as HTMLElement | null;
+}
+
+export function showContextLossOverlay(
+  host: HTMLElement | null | undefined,
+  phase: Exclude<ContextLossOverlayPhase, "ok">,
+  opts?: { onRetry?: () => void },
+): HTMLElement | null {
+  if (!host) return null;
+  let root = findContextLossOverlay(host);
+  if (!root) {
+    root = document.createElement("div");
+    root.setAttribute(CONTEXT_LOSS_OVERLAY_ATTR, "1");
+    root.setAttribute("data-testid", "dash3d-ctx-loss-overlay");
+    root.setAttribute("role", "status");
+    root.style.cssText =
+      "position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;padding:1.25rem;pointer-events:auto;background:rgb(7 11 22 / 0.55);";
+    const card = document.createElement("div");
+    card.className = "dash3d-glass";
+    card.style.cssText = "max-width:28rem;text-align:center;pointer-events:auto;";
+    const title = document.createElement("h2");
+    title.textContent = "Graphics context";
+    title.style.cssText = "margin:0;font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:#93a0c2;";
+    const msg = document.createElement("p");
+    msg.setAttribute("data-testid", "dash3d-ctx-loss-msg");
+    msg.style.cssText = "margin:0.45rem 0 0;font-size:1rem;font-weight:600;color:#f3f5ff;";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "dash3d-pill";
+    retry.setAttribute("data-testid", "dash3d-ctx-loss-retry");
+    retry.textContent = "Retry";
+    retry.style.cssText = "margin-top:0.85rem;display:none;";
+    card.appendChild(title);
+    card.appendChild(msg);
+    card.appendChild(retry);
+    root.appendChild(card);
+    host.appendChild(root);
+  }
+  root.setAttribute("data-phase", phase);
+  const msgEl = root.querySelector('[data-testid="dash3d-ctx-loss-msg"]') as HTMLElement | null;
+  const retryEl = root.querySelector('[data-testid="dash3d-ctx-loss-retry"]') as HTMLButtonElement | null;
+  if (msgEl) {
+    msgEl.textContent = phase === "failed" ? CONTEXT_LOSS_MSG_FAILED : CONTEXT_LOSS_MSG_PAUSED;
+  }
+  if (retryEl) {
+    const showRetry = phase === "failed";
+    retryEl.style.display = showRetry ? "inline-flex" : "none";
+    retryEl.onclick = showRetry && opts?.onRetry ? () => opts.onRetry!() : null;
+  }
+  root.hidden = false;
+  return root;
+}
+
+export function hideContextLossOverlay(host: ParentNode | null | undefined): void {
+  const el = findContextLossOverlay(host);
+  if (!el) return;
+  el.remove();
+}

@@ -138,7 +138,12 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 84 | **Gap#57 Escape focus restore** — blur hidden close; restore to opener/canvas host; inert when closed | **done** | c52 — restoreFocusAfterDetailClose + canvas host tabIndex |
 | 85 | **Gap# empty Notes / Lock commits honesty** — surface real notes+lock.commits when present; keep no-source when absent | **queued** | c52 forever-contract; surfaces still empty Notes/Lock commits for many bots |
 | 86 | **Hostile Notion title sanitize in Star Detail** — show plain text only (already sanitizeNotionPlainText); verify no raw <b> in panel | **queued** | gap-feed #44 follow-up / attacker |
-| 87 | **Scene: focus restore visible ring** — canvas-host :focus-visible outline when Escape returns keyboard to stage | **queued** | pairs Gap#57 |
+| 87 | **Scene: focus restore visible ring** — canvas-host :focus-visible outline when Escape returns keyboard to stage | **done** | c52 — dashboard-3d.css :focus-visible on dash3d-canvas-host |
+| 88 | **Gap Dispatcher #59 — WebGL context-loss black screen** — honest overlay “3D view paused — graphics context lost, restoring…” + retry when restore fails | **done** | c52 — showContextLossOverlay + universe-scene preventDefault/restore/retry |
+| 89 | **Gap Dispatcher #60 — Focus stage chip covers System weather** — reserve skybar padding; chip stays clear of title | **done** | c52 — .dash3d-skybar padding-right 9.5rem |
+| 90 | **Gap Dispatcher #61 — Compass dots clumped** — deterministic spread by real lane/bot data | **done** | c52 — minimap auto-span + lane/id de-overlap |
+| 91 | **Light #83 — Imagine key lift + meter badge wired** — createSceneKeyLiftPass after detailDim; badge behind ?dash3dDebug=1; hidden-tab suspend from 4496632 | **done** | c52 land postfx from 4496632 + universe-scene wire; tests registered |
+| 92 | **Light #84 — meter focused Imagine card rect** (reader maxRects 2→3) | **queued** | Light tip e74d051 next; needs Light lane then wire |
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |
