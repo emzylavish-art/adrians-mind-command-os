@@ -2,8 +2,10 @@ import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
-import { sanitizeAttachments, type ImageAttachment } from "./media/index.ts";
-import type { ChatContent } from "./media/types.ts";
+import { sanitizeAttachments, type ImageAttachment } from "./media";
+import type { ChatContent } from "./media/types";
+import { resolveXaiInferenceApiKey } from "./media/xai-key";
+import type { HistoryInputMessage } from "./media/history";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, selectProvider } from "./provider-call";
@@ -16,7 +18,6 @@ export const MIND_MODEL = "grok-4.5";
 /** Raised so a few downscaled image data-URLs can ride with the turn JSON. */
 const MAX_BODY = 2_500_000;
 
-type HistoryItem = { role: "user" | "assistant"; content: string };
 type NoteItem = { id: string; text: string };
 
 export type TurnBody = {
@@ -32,10 +33,12 @@ export type TurnBody = {
   images?: unknown;
 };
 
-function isHistory(item: unknown): item is HistoryItem {
+function isHistory(item: unknown): item is HistoryInputMessage {
   if (!item || typeof item !== "object") return false;
-  const record = item as { role?: unknown; content?: unknown };
-  return (record.role === "user" || record.role === "assistant") && typeof record.content === "string";
+  const record = item as { role?: unknown; content?: unknown; images?: unknown };
+  if (!(record.role === "user" || record.role === "assistant") || typeof record.content !== "string") return false;
+  if (record.images != null && !Array.isArray(record.images)) return false;
+  return true;
 }
 
 function isNote(item: unknown): item is NoteItem {
@@ -65,7 +68,12 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if (!text && images.length === 0) return { ok: false as const, error: "Write a message first." };
   const history = Array.isArray(data.history) ? data.history.filter(isHistory).slice(-12) : [];
   const memoryContext = Array.isArray(data.memoryContext) ? data.memoryContext.filter(isNote).slice(0, 12) : [];
-  const sized = checkTurnSize({ text: text || "Describe the attached image.", history, memoryContext });
+  const sized = checkTurnSize({
+    text: text || "Describe the attached image.",
+    history,
+    memoryContext,
+    images,
+  });
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
   if (!memory) return { ok: false as const, error: "Memory setting is invalid." };
@@ -102,7 +110,7 @@ export async function completeModelReply(prepared: {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
   }
-  const apiKey = process.env.XAI_API_KEY;
+  const apiKey = resolveXaiInferenceApiKey(process.env);
   if (!apiKey) return { ok: false as const, error: "Grok is not configured on the server." };
   let res: Response;
   try {
@@ -191,7 +199,15 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const selected = selectProvider(body.provider, process.env);
   if (!selected.ok) return json(selected);
+  const pendingImages = sanitizeAttachments(body.images);
   if (selected.id !== "grok") {
+    if (pendingImages.length > 0) {
+      return json({
+        ok: false,
+        error: `${selected.id} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+        provider: selected.id,
+      });
+    }
     const { haltIsOn } = await import("./halt.server");
     if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." });
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
@@ -203,7 +219,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
-  const apiKey = process.env.XAI_API_KEY;
+  const apiKey = resolveXaiInferenceApiKey(process.env);
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
   return relayModelStream({
     apiKey,

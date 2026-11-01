@@ -55,6 +55,7 @@ import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
+import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
 import { historyTextForImages, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
@@ -348,6 +349,7 @@ export function CommandApp() {
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -873,7 +875,11 @@ export function CommandApp() {
           text,
           memory: chat.memory,
           halted: wsRef.current.halted,
-          history: history.map((item) => ({ role: item.role, content: item.content })),
+          history: history.map((item) => ({
+            role: item.role,
+            content: item.content,
+            images: item.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
           modelTier,
@@ -992,7 +998,7 @@ export function CommandApp() {
       return;
     }
     setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true);
+    void deliver(revised.chat, revised.text, revised.ws, true, revised.images ?? []);
   }
 
   function regenerate() {
@@ -1007,7 +1013,7 @@ export function CommandApp() {
       return;
     }
     setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true);
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, prepared.images ?? []);
   }
 
   function retryLast() {
@@ -1022,7 +1028,7 @@ export function CommandApp() {
       return;
     }
     setError(null);
-    void deliver(prepared.chat, prepared.text, ws, true);
+    void deliver(prepared.chat, prepared.text, ws, true, prepared.images ?? []);
   }
 
   function exportActive() {
@@ -1262,6 +1268,22 @@ export function CommandApp() {
     setProjectName("");
     setProjectAbout("");
     setProjectOpen(false);
+    setError(null);
+  }
+
+  function applyCloudAttach(item: CloudPickerAttach) {
+    if (item.kind === "image") {
+      setPendingImages((prev) => {
+        if (prev.length >= 4) {
+          setError("You can attach up to 4 images per message.");
+          return prev;
+        }
+        return [...prev, { dataUrl: item.dataUrl, name: item.name, mime: item.mime }];
+      });
+      setError(null);
+      return;
+    }
+    setStaged({ name: item.name, text: item.text });
     setError(null);
   }
 
@@ -2115,6 +2137,9 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
                       <Camera className="size-4" /> Camera
                     </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
+                      Drive
+                    </button>
                     <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} />
                     <button
                       type="button"
@@ -2436,6 +2461,7 @@ export function CommandApp() {
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
+              onOpenCloud={() => setCloudPickerOpen(true)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -2968,10 +2994,13 @@ export function CommandApp() {
                   <img src="/icons/library.svg" alt="" className="size-8" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Library</h2>
-                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Chat can also send images to vision-capable models.</p>
                   </div>
                 </div>
-                <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button>
+                </div>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
                 <aside className="dense-card card-texture p-3 text-sm">
@@ -3286,6 +3315,12 @@ export function CommandApp() {
           setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
         }}
       />
+      <CloudPicker
+        open={cloudPickerOpen}
+        onClose={() => setCloudPickerOpen(false)}
+        onAttach={applyCloudAttach}
+        onNotice={(message) => setNotice(message)}
+      />
 
       {projectOpen && (
         <Overlay>
@@ -3501,6 +3536,7 @@ function ChatPane({
   onAttach,
   onAttachImage,
   onOpenCamera,
+  onOpenCloud,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -3552,6 +3588,7 @@ function ChatPane({
   onAttach: () => void;
   onAttachImage: () => void;
   onOpenCamera: () => void;
+  onOpenCloud: () => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -3798,6 +3835,9 @@ function ChatPane({
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCamera}>
               <Camera className="size-4" /> Camera
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCloud}>
+              Drive
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>

@@ -2,8 +2,8 @@
   "ok": true,
   "status": 200,
   "model": "grok-4.20-0309-non-reasoning",
-  "requestId": "8a5df750-7771-9789-8464-034208ca4940",
-  "latencyMs": 552,
+  "requestId": "8dc427e8-c78a-9fef-b94f-1d606c28ae20",
+  "latencyMs": 452,
   "reply": "red",
   "sawImageHint": true,
   "packaging": {

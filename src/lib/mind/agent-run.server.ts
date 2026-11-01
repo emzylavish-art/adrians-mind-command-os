@@ -6,6 +6,7 @@ import { allowMindRequest } from "./limits";
 import { decideFetchSite } from "./request-guard";
 import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
+import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
 
 const MAX_BODY = 2_500_000;
 
@@ -89,7 +90,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
   if (!gate.ok) return json({ ok: false, error: gate.error, log: [] });
-  const apiKey = process.env.XAI_API_KEY;
+  const apiKey = resolveXaiInferenceApiKey(process.env);
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server.", log: [] });
   const ws = emptyWorkspace();
   const stamp = "2026-01-01T00:00:00.000Z";

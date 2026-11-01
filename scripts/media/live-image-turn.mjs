@@ -15,18 +15,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "../..");
 const outPath = join(__dirname, "live-image-result.json");
 
-function loadKey() {
-  if (process.env.XAI_API_KEY?.trim()) return process.env.XAI_API_KEY.trim();
-  const p = "/home/box/.secrets/xai_inference.env";
-  if (!existsSync(p)) throw new Error("XAI_API_KEY missing and secrets file not found");
-  for (const line of readFileSync(p, "utf8").split(/\n/)) {
+function loadKeyFromFile(path = "/home/box/.secrets/xai_inference.env") {
+  if (!existsSync(path)) return undefined;
+  for (const line of readFileSync(path, "utf8").split(/\n/)) {
     const m = line.trim().match(/^(?:export\s+)?XAI_API_KEY=(.*)$/);
     if (!m) continue;
     let v = m[1].trim();
     if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
     if (v) return v;
   }
-  throw new Error("XAI_API_KEY not found in secrets file");
+  return undefined;
+}
+
+/** Prefer secrets file (authoritative) over a possibly stale/invalid process env key. */
+function loadKey() {
+  const fromFile = loadKeyFromFile();
+  if (fromFile) return fromFile;
+  if (process.env.XAI_API_KEY?.trim()) return process.env.XAI_API_KEY.trim();
+  throw new Error("XAI_API_KEY missing and secrets file not found");
 }
 
 function crc32(buf) {

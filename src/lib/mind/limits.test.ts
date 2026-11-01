@@ -18,3 +18,11 @@ describe("mind request limits", () => {
     assert.equal(checkTurnSize({ text: "ok", history: Array.from({ length: 13 }, () => ({ content: "a" })), memoryContext: [] }).ok, false);
   });
 });
+
+describe("checkTurnSize images", () => {
+  it("rejects oversized image payloads", () => {
+    const big = "data:image/png;base64," + "a".repeat(2_500_000);
+    const result = checkTurnSize({ text: "hi", history: [], memoryContext: [], images: [{ dataUrl: big }] });
+    assert.equal(result.ok, false);
+  });
+});

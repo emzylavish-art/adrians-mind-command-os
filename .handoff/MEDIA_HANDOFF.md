@@ -51,3 +51,55 @@ Main checkout `/workspace/mind-command-os` remains on Visual Polish with uncommi
 
 ## Paths touched
 See `/workspace/locks/media-integration.lock`.
+
+---
+
+## Cloud file sources (2026-11-01 follow-up) — complete
+
+**Commit:** `332c1f4` Add Google Drive browse-and-attach gated on connection records.
+
+### What works
+- Connection-aware status for `google_drive` / `onedrive` via MCP-compatible records under `.data/mind-connectors/<ownerHash>/<source>.json` (same layout MCP uses for Notion OAuth tokens).
+- Composer **Drive** button + Library **Browse Drive** open `CloudPicker`.
+- If not connected / unsupported: honest copy pointing to **ServiceBoard** (OAuth owned by MCP Integration — not implemented here).
+- When connected (record with plaintext test token, or `MIND_GOOGLE_DRIVE_TOKEN` on server): list Drive files + fetch; images → existing multimodal chips/downscale path; text → existing staged-text attach.
+- API: `GET /api/mind/media/cloud/status|list`, `POST /api/mind/media/cloud/fetch` (auth required; no secrets in client).
+
+### Stubbed
+- **OneDrive:** UI tab + helpers return `unsupported` / not implemented until MCP adds an OneDrive connection + OAuth path.
+- **Google Docs native MIME** (`application/vnd.google-apps.*`): refused with clear error (export not wired).
+- Encrypted `accessTokenEnc` without MCP decrypt helper: connected record may exist but fetch asks MCP to expose Drive token decrypt/helper.
+
+### Requests for MCP Integration Bot
+1. Add `google_drive` (and later `onedrive`) to connector OAuth + `ConnectorId`, writing records into `.data/mind-connectors/.../google_drive.json`.
+2. Either allow media to call `getAccessToken(ownerId, "google_drive")` or document a shared server helper so browse works without plaintext tokens / `MIND_GOOGLE_DRIVE_TOKEN`.
+3. Surface Drive Connected state on ServiceBoard (MCP already owns that UI).
+
+### Verification
+- typecheck pass; mind/media tests **232/232**; build pass.
+- Did not edit styles.css, voice/, connectors OAuth, research search, error banners, or xai-adapter.
+- Shared `command-app.tsx` edits limited to Drive/cloud picker wiring (voice-integration also claims voice wiring there).
+
+---
+
+## Verification gap fixes (2026-11-01) — build step
+
+**Commit:** `57c20a9`  
+**Source:** `/workspace/audit/media-integration/VERIFY_REPORT.md`
+
+### Fixed
+1. **HIGH** Retry/regenerate retain `Msg.images` (`prepareRetry` / `prepareRegenerate` + `deliver(..., images)`).
+2. **HIGH** Follow-up history sends multimodal parts for prior user images (`buildHistoryMessages`, max 3 images / ~2.7M chars budget).
+3. **HIGH/ops** Live script + turn/agent key resolution prefer `/home/box/.secrets/xai_inference.env` over a stale `XAI_API_KEY` (`resolveXaiInferenceApiKey`). Did **not** edit `server.ts` (voice claim); `mindStatus` may still reflect process env until that lane adopts the helper.
+5. **MED** Client downscale recompresses/rejects past `MAX_DATA_URL_CHARS` with a clear composer error.
+6. **MED** `checkTurnSize` counts current + history image data-URL chars.
+7. **MED** Non-Grok provider branch returns an honest “cannot see images” error instead of silently dropping them.
+
+### Deferred
+4. **MED** Persist/export strategy for full data-URLs in workspace (storage bloat) — not in this step; still useful later.
+- `xai-adapter.ts` / error banners / model picker untouched by request.
+- Library copy lightly clarified (images can go to vision models in chat).
+
+### Verification this step
+- typecheck pass; mind/media tests **237/237**; build pass
+- live script with `XAI_API_KEY=invalid-...` still replied **red** via secrets file
