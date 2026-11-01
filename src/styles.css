@@ -6676,3 +6676,50 @@ form.floating-composer button[type="submit"] {
     animation: none !important;
   }
 }
+
+/* —— Evolution c94: Copy / Regenerate / Speak / Edit hover actions on messages —— */
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 {
+  opacity: 0.72;
+  transition: opacity 140ms ease !important;
+}
+.main-stage article.max-w-3xl:hover .mt-2.flex.flex-wrap.gap-3,
+.main-stage article.max-w-3xl:focus-within .mt-2.flex.flex-wrap.gap-3 {
+  opacity: 1 !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button {
+  border-radius: 999px !important;
+  padding: 0.35rem 0.7rem !important;
+  border: 1px solid transparent !important;
+  color: #e8ecf5 !important; /* mono — was text-accent purple path */
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:active:not(:disabled) {
+  background: rgb(255 255 255 / 0.12) !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:disabled {
+  opacity: 0.4 !important;
+}
+/* Copy-code on fenced blocks */
+.main-stage [data-testid="copy-code"],
+.md-code-block + button,
+pre.md-code-block ~ button[data-testid="copy-code"] {
+  border-radius: 0.65rem !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e8ecf5 !important;
+  padding: 0.35rem 0.65rem !important;
+}
+.main-stage [data-testid="copy-code"]:hover {
+  background: rgb(255 255 255 / 0.12) !important;
+}
+html[data-theme="light"] .main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button {
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:hover:not(:disabled) {
+  background: rgb(15 23 42 / 0.06) !important;
+  border-color: rgb(15 23 42 / 0.14) !important;
+}
