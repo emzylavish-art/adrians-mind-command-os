@@ -33,6 +33,7 @@ export function createBuildingBrushMaterial(
   const uniforms = cloneUniforms(BrushBuildingShader.uniforms);
   if (opts.base != null) uniforms.uBase.value.set(opts.base);
   if (opts.accent != null) uniforms.uAccent.value.set(opts.accent);
+  // HACKER (c11): NaN/±Inf/negative floors+progress → finite clamps (never raw GPU NaN)
   if (opts.floors != null) uniforms.uFloors.value = sanitizeFinite(opts.floors, 8, 1, 128);
   if (opts.progress != null) uniforms.uProgress.value = sanitizeFinite(opts.progress, 0, 0, 1);
   if (opts.paper != null) uniforms.uPaper.value = sanitizeFinite(opts.paper, 0.18, 0, 1);
