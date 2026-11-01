@@ -377,5 +377,14 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Lock: error-banners-gap-copy-code.lock; markdown lock done/released.
 - Fix: copy-code-action.ts; red banner + Retry re-copies identical text; optional onFailure for View log (command-app mount still forbidden).
 - Checks: typecheck pass; TS 819/821 (2 pre-existing); lint 0e; build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42812d9ca0f88a58319ab4
+- Pushed origin/error-banners → 27ad1018f777dc5439bc386c7fd2eca66bd72851
+- Lock releasing.
+
+## 2026-11-01T17:43:02+01:00 (Africa/Lagos) — Error Banners Bot — H21 memory-manager action banner
+- Gap: MemoryManagerView setError → bare red text, no Retry/View log.
+- Lock: error-banners-gap-memory-manager.lock; memory-ux locks done/released.
+- Fix: memory-action.ts; MemoryActionFailureBanner + onceRetry of identical save_new/save_edit/delete params; optional onFailure (command-app mount still forbidden).
+- Checks: typecheck pass; TS 823/825 (2 pre-existing); lint 0e; build pass.
 - Notion: (pending)
 - Lock releasing.
