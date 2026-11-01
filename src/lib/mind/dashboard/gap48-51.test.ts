@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { join } from "node:path";
 import { buildLockHealthShare } from "./chart-series.ts";
+import type { Timeline } from "./time-scrub.ts";
 import { chartTickLabel } from "./chart-tick-label.ts";
 
 const root = process.cwd();
@@ -45,7 +46,7 @@ describe("Gap#50 lock claims vs releases", () => {
       droppedFuture: 0,
       droppedInvalid: 0,
     };
-    const series = buildLockHealthShare(tl, now);
+    const series = buildLockHealthShare(tl as Timeline, now);
     assert.ok(series.points.length >= 3, "includes zero-filled hours");
     const withAlt = series.points.filter((p) => p.altValue != null);
     assert.equal(withAlt.length, series.points.length);
