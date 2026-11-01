@@ -57,3 +57,11 @@ Full local write-up: `MEDIA_HANDOFF.md`.
 - Counts: typecheck pass; mind 326 pass; scripts 198 pass / 4 skipped; build pass
 - Notion child: https://app.notion.com/p/40bb95f33e4281c9ab52d1c445d273d3
 - Lock: logic-wiring.lock → done, released
+
+## 2026-11-01T15:00:30+01:00 (Africa/Lagos) — Logic Bot — stop point: F2 429 + deep partial timeout
+- Branch tip: 2f09eb8 on origin/logic-wiring
+- Commits: e6b0c62 429+Retry-After (body before rate limit); 2f09eb8 deep research partial timeout honesty
+- Choice: malformed bodies do not consume rate-limit tokens; stay 400 even while limited
+- Counts: typecheck pass; mind 333 pass; scripts 198 pass / 4 skipped; build pass
+- Notion child: https://app.notion.com/p/40bb95f33e42817c8ed0e8b11340e7e7
+- Lock: logic-wiring.lock → done, released
