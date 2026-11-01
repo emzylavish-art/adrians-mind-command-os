@@ -49,7 +49,10 @@ export function createHealthAtmosphere(
     scene.fog = fog;
   }
 
+  let disposed = false;
+
   const update = (rawTone: HealthTone) => {
+    if (disposed) return;
     const tone = normalizeHealthTone(rawTone);
     ambient.color.setHex(rgbToHex(AMBIENT_RGB[tone]));
     key.color.setHex(rgbToHex(KEY_RGB[tone]));
@@ -71,6 +74,8 @@ export function createHealthAtmosphere(
   };
 
   const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     scene.remove(ambient, key, rim);
     ambient.dispose();
     key.dispose();

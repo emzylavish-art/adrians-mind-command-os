@@ -59,3 +59,35 @@ Eases over 400ms; snaps (static) under reduced-motion; clamps to [0.6, 1.4]; jun
 ## Hacker-pass notes (cycle 3)
 - After `dispose()`, god-ray `update` / `setSun` / `setDepthTexture` no-op and leave `pass.enabled = false` (StrictMode remount / late RAF must not revive a disposed ShaderPass).
 - Bloom `setSize` / `update` and color-grade `update` also no-op after dispose; color-grade dispose is idempotent.
+
+## Context-loss recovery (cycle 4, queue #13) — wire-up for Dashboard Bot
+
+```ts
+import {
+  createTunedBloomPass,
+  createColorGradePass,
+  createGodRayPass,
+  createExposureRide,
+  createContextLossRecovery,
+} from "./postfx";
+
+const recovery = createContextLossRecovery({
+  canvas: renderer.domElement,
+  factory: () => {
+    const bloom = createTunedBloomPass(new THREE.Vector2(w, h), tone);
+    const grade = createColorGradePass(tone);
+    const godRays = createGodRayPass();
+    const exposure = createExposureRide({ tone });
+    // re-add passes to composer here…
+    return { bloom, grade, godRays, exposure };
+  },
+  initial: { bloom, grade, godRays, exposure },
+});
+// render loop: if (recovery.lost) return;
+// unmount: recovery.dispose(); // removes listeners + disposes handles
+```
+
+On `webglcontextlost` handles are disposed and `lost` is true (honest frozen/paused state). On `webglcontextrestored` the factory rebuilds fresh passes. Listeners are removed on dispose.
+
+## Hacker-pass notes (cycle 4)
+- `createHealthAtmosphere`: `update` after `dispose` no longer resurrects FogExp2 or mutates a foreign fog (atmosphere/hacker-dispose.test).
