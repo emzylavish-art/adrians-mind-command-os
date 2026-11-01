@@ -371,3 +371,11 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e428113ad87df9f6beaf908
 - Pushed origin/error-banners → 109c2f9d4e965c1a1197dd9253947765e99c68b7
 - Lock releasing.
+
+## 2026-11-01T17:41:30+01:00 (Africa/Lagos) — Error Banners Bot — H20 copy-code clipboard banner
+- Gap: message-body Copy code .catch → setCopied(null) silent (H10).
+- Lock: error-banners-gap-copy-code.lock; markdown lock done/released.
+- Fix: copy-code-action.ts; red banner + Retry re-copies identical text; optional onFailure for View log (command-app mount still forbidden).
+- Checks: typecheck pass; TS 819/821 (2 pre-existing); lint 0e; build pass.
+- Notion: (pending)
+- Lock releasing.
