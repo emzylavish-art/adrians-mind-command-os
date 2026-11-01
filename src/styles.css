@@ -8322,3 +8322,86 @@ html:not([data-theme="light"]) span.rounded-full.border.border-line.text-xs {
     0 14px 36px rgb(0 0 0 / 0.5) !important;
   border: 1px solid rgb(255 255 255 / 0.14) !important;
 }
+
+/* —— Evolution c139: motion — animate transform/opacity only (60fps / no layout thrash) —— */
+:where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card) {
+  transition:
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+:where(button, a[href], [role="button"]):active:not(:disabled) {
+  transform: scale(0.98) !important;
+  transition-duration: 80ms !important;
+}
+:where(button, a[href], [role="button"]):hover:not(:disabled) {
+  /* tonal hover without transitioning background */
+}
+.nav-item,
+.dense-card,
+.glow-card,
+.model-chip,
+.suggestion-chip,
+.sidebar-plus,
+aside nav button,
+nav[aria-label="Primary"] button {
+  transition:
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+/* Convert common layout-property transitions */
+.composer-dock,
+.floating-composer,
+.command-card,
+.rounded-panel,
+.dash3d-pill,
+.dash3d-glass {
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+/* Keyframes: keep opacity/transform only where we control them */
+@keyframes mono-motion-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.02); }
+}
+@keyframes skel-mono-shimmer {
+  0% { transform: translateX(-40%); opacity: 0.35; }
+  100% { transform: translateX(140%); opacity: 0.55; }
+}
+@keyframes sheet-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes page-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* will-change only on frequently hovered chrome */
+aside nav button,
+nav[aria-label="Primary"] button,
+.composer-dock button,
+.main-stage button.bg-accent {
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card),
+  .composer-dock,
+  .floating-composer,
+  .command-card,
+  .rounded-panel,
+  aside nav button,
+  nav[aria-label="Primary"] button {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+}
