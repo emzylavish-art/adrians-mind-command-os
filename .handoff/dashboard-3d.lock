@@ -1,5 +1,5 @@
 owner: dashboard-3d-loop
-cycle: 30
-heartbeat: 2026-11-01T21:50:02+01:00
+cycle: 31
+heartbeat: 2026-11-01T21:51:13+01:00
 branch: dashboard-3d
-work: Gap#3 last-frame + Painter c5 + Gap#12
+work: Gap#13 status-cache

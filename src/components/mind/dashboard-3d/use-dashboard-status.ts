@@ -6,6 +6,7 @@ import {
   reducePoll,
   type PollState,
 } from "@/lib/mind/dashboard/status-poll";
+import { readStatusCache, writeStatusCache } from "@/lib/mind/dashboard/status-cache";
 
 export type StatusData = DashboardStatus & { ok?: boolean };
 export type StatusState = PollState<StatusData>;
@@ -14,13 +15,32 @@ const POLL_MS = 20_000;
 const FETCH_TIMEOUT_MS = 20_000;
 
 export function useDashboardStatus() {
-  const [state, setState] = useState<StatusState>(() => initialPollState<StatusData>());
+  const [state, setState] = useState<StatusState>(() => {
+    // Gap #13: hydrate from session last-good so a reload during outage keeps the scene.
+    try {
+      const cached = typeof sessionStorage !== "undefined" ? readStatusCache<StatusData>(sessionStorage) : null;
+      if (cached) {
+        return {
+          status: "ready",
+          data: cached.data,
+          seq: 0,
+          stale: { error: "Showing cached last-good from this browser session", since: cached.savedAt },
+        };
+      }
+    } catch {
+      /* private mode */
+    }
+    return initialPollState<StatusData>();
+  });
   const seqRef = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const lastGoodRef = useRef<StatusData | null>(null);
   const failCountRef = useRef(0);
   const retryTimer = useRef<number | null>(null);
   const stopped = useRef(false);
+  if (lastGoodRef.current == null && state.status === "ready") {
+    lastGoodRef.current = state.data;
+  }
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return;
@@ -51,6 +71,11 @@ export function useDashboardStatus() {
       } as StatusData;
       lastGoodRef.current = normalized;
       failCountRef.current = 0;
+      try {
+        if (typeof sessionStorage !== "undefined") writeStatusCache(sessionStorage, normalized);
+      } catch {
+        /* ignore quota */
+      }
       setState((prev) => reducePoll(prev, { type: "success", seq, data: normalized }));
     } catch (err) {
       const aborted = (err as Error)?.name === "AbortError";
