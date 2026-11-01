@@ -5846,3 +5846,78 @@ html[data-theme="light"] {
     z-index: 46 !important;
   }
 }
+
+/* —— Evolution c80: deepen login / dashboard auth glass (readable contrast) ——
+   Keep AuthCard text readable: inputs darker well, body text at --color-fg/muted. */
+main.grid.min-h-screen.place-items-center {
+  background:
+    radial-gradient(ellipse 55% 45% at 72% 6%, rgb(255 255 255 / 0.07), transparent 55%),
+    radial-gradient(ellipse 42% 36% at 12% 88%, rgb(255 255 255 / 0.04), transparent 52%),
+    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    var(--color-bg) !important;
+  background-size: auto, auto, cover, auto !important;
+  background-blend-mode: soft-light, soft-light, soft-light, normal !important;
+}
+main.grid.min-h-screen.place-items-center > div[class*="max-w-"],
+main.grid.min-h-screen.place-items-center > div.rounded-panel.border {
+  background-color: rgb(10 10 12 / 0.58) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 44%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow:
+    0 32px 88px rgb(0 0 0 / 0.58),
+    inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+}
+/* Readable contrast: titles/fg stay bright; muted ≥ ~#9aa3b5; inputs darker */
+main.grid.min-h-screen.place-items-center h1,
+main.grid.min-h-screen.place-items-center .font-display {
+  color: #f4f6fb !important;
+}
+main.grid.min-h-screen.place-items-center .text-muted,
+main.grid.min-h-screen.place-items-center p.text-sm {
+  color: #b4bccb !important;
+}
+main.grid.min-h-screen.place-items-center input,
+main.grid.min-h-screen.place-items-center textarea {
+  background-color: rgb(0 0 0 / 0.45) !important;
+  color: #f4f6fb !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+}
+main.grid.min-h-screen.place-items-center label,
+main.grid.min-h-screen.place-items-center [class*="text-"] {
+  /* don't force every utility — only ensure labels readable */
+}
+main.grid.min-h-screen.place-items-center label {
+  color: #e8ecf5 !important;
+}
+/* fa50cf6 a11y: keep ≥44px hit targets on login controls */
+main.grid.min-h-screen.place-items-center button.min-h-10,
+main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center a[data-testid^="login-oauth"],
+main.grid.min-h-screen.place-items-center [data-testid="login-back-home"] {
+  min-height: 2.75rem !important;
+}
+/* Selected auth mode pill — mono, not purple */
+main.grid.min-h-screen.place-items-center button.bg-accent,
+main.grid.min-h-screen.place-items-center [aria-pressed="true"] {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  box-shadow: none !important;
+}
+
+.login-shell,
+.login-card {
+  background-color: rgb(10 10 12 / 0.58) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 44%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  border: 1px solid rgb(255 255 255 / 0.15) !important;
+  backdrop-filter: blur(26px) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.18) !important;
+}
