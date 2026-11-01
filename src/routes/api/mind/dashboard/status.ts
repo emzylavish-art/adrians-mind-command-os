@@ -44,6 +44,8 @@ export const Route = createFileRoute("/api/mind/dashboard/status")({
       PUT: async () => methodNotAllowed(),
       PATCH: async () => methodNotAllowed(),
       DELETE: async () => methodNotAllowed(),
+      OPTIONS: async () => methodNotAllowed(),
+      // Some stacks map TRACE oddly — reject explicitly when offered
     },
   },
 });

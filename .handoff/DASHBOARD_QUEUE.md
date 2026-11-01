@@ -7,6 +7,17 @@
 Last release: Dashboard c42 — Gap#29 publicize+405 + Gap#28 server TTL/single-flight + Motion 831225f (motion/+particles/, skip package.json) + Painter c10 94c28c7. Next: probe-ranked gaps + fleet tips.
 
 
+## c43 attacker pass ranked
+| Gap | Rank | Notes |
+|-----|------|-------|
+| #22 Spend JSONL | **done** | tail+partial+canonical; no USD source on box |
+| #30 hostile branch/notes HTML | **fixed c43** | sanitizeHostileText in bot-normalize |
+| #31 Notion outage badge | P2 | |
+| #32 WebGL mid-zoom restore desync | P2 | |
+| #33 500+ bots status O(n) cold | P2 | |
+| #34 hidden-tab money burn window | P3 | |
+| Motion 3fff118 / Painter bbf6c47 | landed | motion/+particles/; materials/shaders |
+
 ## Probe 20261101-162902 ranked (after c42)
 
 | Item | Rank | Notes |
@@ -65,7 +76,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 19 | **Feed severity pulse** — pulse sky-feed glyphs faster when Merge Gate / lock notes mention blocked/main (real text only) | **done** | c29 — feedSeverity from real text; alert pulseMul 2.2 + glyph is-alert |
 | 20 | **Imagine zone densify** — add 1–2 more character/scene billboards for under-art constellations (GenerateImage→webp≤300KB) | **done** | c26 — scene-merge-beacon + scene-collab-tower webp billboards |
 | 21 | **Star focus breadcrumb twin** — when a star is focused, mirror name+lane health beside last-palette crumb with Back to sky | **done** | c35 — FlyoverHud focus crumb + motion breadcrumb-ease (c8) |
-| 22 | **Spend JSONL hook readiness** — document + adapter probe for future xAI usage append path (still honest empty until real USD events exist) | queued | researched c14; never invent numbers |
+| 22 | **Spend JSONL hook readiness** — document + adapter probe for future xAI usage append path (still honest empty until real USD events exist) | **done** | c43 — canonical spend.jsonl + tail/partial/malformed harden; **no real USD ledger on box** → honest empty |
 
 | 23 | **Status-error last-good (Gap#1)** — keep last-good scene on status fail; calm stale chrome; backoff retry; never blank wipe | **done** | c27 — soft error overlay + lastData hydrate + exponential backoff; interior gated to fly.interior |
 | 24 | **Idle interior drawer (Gap#2)** — keep INTERIOR collapsed until a building is focused | **done** | c27 — BuildingInteriorPanel mounts only when fly.level===interior |

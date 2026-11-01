@@ -65,3 +65,9 @@ Do not allocate inside the rAF tick. See INTEGRATION.md.
 - `particles/dust-field` — `impulseGust` / `gust` hook (update API unchanged)
 - Hacker c13: traveler degenerate polylines; pause abuse; 1000-event gust flood capped
 
+## Comet launch ease (c14)
+
+- `comet-launch-ease.ts` — staggered burst schedule, concurrent cap, ease-out opacity/scale; reduced-motion static
+- Hacker c14: gust huge/NaN dirs; mid-RM residual clear; dust dispose clears gust; sub-ε snap
+- **Do not edit package.json** — list unregistered tests under INTEGRATION.md → Requests for Dashboard Bot
+

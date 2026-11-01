@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { PainterlyKit } from "./use-painterly-kit.ts";
-import { setStarWatercolorColor, type StarSurfaceOptions } from "./star-surface.ts";
+import { setStarWatercolorColor, setStarHalo, type StarSurfaceOptions } from "./star-surface.ts";
 import { sanitizeFinite } from "./paper-grain.ts";
 
 export type PainterlyBotStarOptions = StarSurfaceOptions & {
@@ -15,6 +15,8 @@ export type PainterlyBotStarBundle = {
   glowMaterial: THREE.SpriteMaterial;
   /** Apply a new health color without recreating materials. */
   setColor: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void;
+  /** Override brush-stroke halo (locks auto-sync from emissive). */
+  setHalo: (halo: number) => void;
 };
 
 /**
@@ -38,11 +40,19 @@ export function createPainterlyBotStar(
       : idle
         ? 0.25
         : 0.9;
+  // Halo from real idle/active status (neutral default — no fabricated pulse)
+  const halo =
+    opts.halo != null
+      ? opts.halo
+      : idle
+        ? 0.18
+        : sanitizeFinite(0.2 + emissive * 0.55, 0.65, 0, 1.5);
   const meshMaterial = kit.createStarMaterial({
     color: opts.color,
     emissiveIntensity: emissive,
     grain: opts.grain,
     stroke: opts.stroke,
+    halo,
   });
   const glowMaterial = new THREE.SpriteMaterial({
     map: kit.starSpriteTexture,
@@ -58,5 +68,6 @@ export function createPainterlyBotStar(
     setStarWatercolorColor(meshMaterial, color, em);
     glowMaterial.color.set(color);
   };
-  return { meshMaterial, glowMaterial, setColor };
+  const setHalo = (h: number) => setStarHalo(meshMaterial, h);
+  return { meshMaterial, glowMaterial, setColor, setHalo };
 }

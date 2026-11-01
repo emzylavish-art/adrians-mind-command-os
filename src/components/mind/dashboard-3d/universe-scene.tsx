@@ -74,6 +74,11 @@ import {
   createEdgePulseState,
   createEdgePulseSample,
   stepEdgePulseSync,
+  createCometLaunchState,
+  createCometLaunchSample,
+  scheduleCometLaunchBurst,
+  stepCometLaunchEase,
+  clearCometLaunch,
   createTravelerEaseState,
   createTravelerEaseSample,
   stepTravelerEase,
@@ -810,6 +815,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const dust = createDustField(scene, { count: 480, seed: 42 });
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    const cometLaunch = createCometLaunchState(24);
+    const cometLaunchSamples = Array.from({ length: 24 }, () => createCometLaunchSample());
+    scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
 
@@ -1410,6 +1418,26 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city.tick(wallT, reducedMotion);
       dust.update(wallT, reducedMotion);
       comets.update(wallT, reducedMotion);
+      stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
+      for (let ci = 0; ci < comets.count; ci++) {
+        const sample = cometLaunchSamples[ci];
+        if (!sample) continue;
+        const line = comets.group.getObjectByName(`motion-comet-${ci}`);
+        const head = comets.group.getObjectByName(`motion-comet-head-${ci}`);
+        if (line) {
+          line.visible = sample.visible || reducedMotion;
+          const mat = (line as THREE.Line).material as THREE.LineBasicMaterial;
+          if (mat && "opacity" in mat) mat.opacity = (reducedMotion ? 0.22 : 0.55) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
+        }
+        if (head) {
+          head.visible = sample.visible || reducedMotion;
+          const mat = (head as THREE.Points).material as THREE.PointsMaterial;
+          if (mat && "opacity" in mat) {
+            mat.opacity = (reducedMotion ? 0.35 : 0.95) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
+            mat.size = Math.max(0.12, (mat.size || 0.2) * (0.85 + 0.15 * sample.scale));
+          }
+        }
+      }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
       const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
@@ -1459,6 +1487,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         syncCity();
         comets.dispose();
         comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+        clearCometLaunch(cometLaunch);
+        scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
         feedGlyphs.dispose();
       inkEdges?.dispose();
       inkEdges = null;

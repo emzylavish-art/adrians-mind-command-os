@@ -185,4 +185,19 @@ export {
   type WindGustSample,
   type WindGustState,
 } from "./wind-gust.ts";
+export {
+  COMET_LAUNCH_STAGGER,
+  COMET_LAUNCH_DURATION,
+  COMET_LAUNCH_MAX_CONCURRENT,
+  COMET_LAUNCH_MAX_BURST,
+  clearCometLaunch,
+  createCometLaunchSample,
+  createCometLaunchState,
+  scheduleCometLaunchBurst,
+  stepCometLaunchEase,
+  type CometLaunchOpts,
+  type CometLaunchSample,
+  type CometLaunchSlot,
+  type CometLaunchState,
+} from "./comet-launch-ease.ts";
 

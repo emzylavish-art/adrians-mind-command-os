@@ -24,7 +24,7 @@ export function MoneyPanel({ money }: Props) {
             {money.reason || NO_SPEND_SOURCE}
           </p>
           <p className="dash3d-muted" style={{ fontSize: "0.68rem" }}>
-            Burn / today stay blank until a real USD spend log appears (adapter: filesystem JSON/JSONL).
+            Burn / today stay blank until a real USD ledger appears at audit/dashboard-3d/spend.jsonl (never invents numbers).
           </p>
         </>
       ) : (

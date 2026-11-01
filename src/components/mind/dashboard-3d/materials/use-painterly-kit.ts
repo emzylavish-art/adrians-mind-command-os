@@ -491,6 +491,11 @@ export function releasePainterlyMaterial(
  * Does not fabricate dims — unknown sizes contribute 0.
  */
 export function painterlyKitTextureBudget(kit: PainterlyKit): PainterlyTextureBudgetReport {
+  const budget = kit.textureBudgetBytes ?? PAINTER_TEXTURE_BUDGET_BYTES;
+  // HACKER (c12): after dispose, textures are invalid — report 0 honestly (no throw / fabricate)
+  if (kit.disposed) {
+    return { bytes: 0, budget, overBudget: false, remaining: budget, items: [] };
+  }
   const items: PainterlyTextureBudgetReport["items"] = [];
   let bytes = 0;
   bytes += pushBudgetItem(items, "paperGrain", kit.paperGrainTexture);
@@ -527,7 +532,6 @@ export function painterlyKitTextureBudget(kit: PainterlyKit): PainterlyTextureBu
       }
     }
   }
-  const budget = kit.textureBudgetBytes ?? PAINTER_TEXTURE_BUDGET_BYTES;
   return {
     bytes,
     budget,

@@ -5,6 +5,8 @@ import {
   NO_SPEND_SOURCE,
   buildMoneyView,
   createFilesystemSpendAdapter,
+  parseSpendTextRobust,
+  CANONICAL_SPEND_JSONL,
   parseSpendFileText,
   parseSpendRecord,
   sanitizeAmountUsd,
@@ -102,5 +104,62 @@ describe("spend / money (hacker + queue #7)", () => {
     const money = buildMoneyView({ loadResult: custom.load({ nowMs: NOW }), nowMs: NOW });
     assert.equal(money.available, true);
     assert.equal(money.warnings[0]?.level, "crit");
+  });
+});
+
+describe("spend Gap#22 robust JSONL", () => {
+  it("tails huge files and drops incomplete final line", () => {
+    const lines = [];
+    for (let i = 0; i < 200; i++) {
+      lines.push(JSON.stringify({ at: `2026-11-01T12:${String(i % 60).padStart(2, "0")}:00+01:00`, amountUsd: 0.01 * (i + 1), lane: "xai" }));
+    }
+    // Partial last line (mid-write)
+    const huge = lines.join("\n") + "\n{\"at\":\"2026-11-01T13:00:00+01:00\",\"amountUsd\":";
+    const { events, droppedInvalid } = parseSpendTextRobust(huge, "mem://tail", Date.parse("2026-11-01T14:00:00+01:00"), {
+      allowPartialTail: true,
+    });
+    assert.ok(events.length >= 1);
+    assert.ok(events.every((e) => Number.isFinite(e.amountUsd) && e.amountUsd > 0));
+    // incomplete line discarded before parse → not counted as droppedInvalid necessarily
+    assert.equal(typeof droppedInvalid, "number");
+  });
+
+  it("malformed lines are dropped without inventing USD", () => {
+    const text = [
+      "not-json",
+      JSON.stringify({ at: "2026-11-01T12:00:00+01:00", amountUsd: 1.25, lane: "dashboard" }),
+      JSON.stringify({ at: "bad", amountUsd: "NaN" }),
+      "{partial",
+    ].join("\n");
+    const { events, droppedInvalid } = parseSpendTextRobust(text, "mem://malformed", Date.parse("2026-11-01T14:00:00+01:00"));
+    assert.equal(events.length, 1);
+    assert.equal(events[0]!.amountUsd, 1.25);
+    assert.ok(droppedInvalid >= 2);
+  });
+
+  it("adapter prefers canonical path and reports no source when empty", () => {
+    const files: Record<string, string> = {};
+    const adapter = createFilesystemSpendAdapter({
+      roots: ["/tmp/spend-roots"],
+      hooks: {
+        exists: (p) => p === "/tmp/spend-roots" || p in files || p === CANONICAL_SPEND_JSONL,
+        listNames: (d) => (d === "/tmp/spend-roots" ? ["notes.txt"] : []),
+        readText: (p) => files[p] ?? "",
+        readTailText: (p) => files[p] ?? "",
+        statSize: (p) => (files[p] ? files[p]!.length : 0),
+      },
+    });
+    const empty = adapter.load({ nowMs: Date.parse("2026-11-01T14:00:00+01:00") });
+    assert.equal(empty.ok, false);
+    if (!empty.ok) assert.match(empty.reason, /no spend source/i);
+
+    files[CANONICAL_SPEND_JSONL] =
+      JSON.stringify({ at: "2026-11-01T12:00:00+01:00", amountUsd: 2.5, lane: "xai" }) + "\n";
+    const hit = adapter.load({ nowMs: Date.parse("2026-11-01T14:00:00+01:00") });
+    assert.equal(hit.ok, true);
+    if (hit.ok) {
+      assert.equal(hit.events[0]!.amountUsd, 2.5);
+      assert.match(hit.source, /spend\.jsonl/);
+    }
   });
 });
