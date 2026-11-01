@@ -6,6 +6,7 @@ import {
   disconnectProvider,
   exchangeAuthorizationCode,
   providerConfigured,
+  type DisconnectResult,
   type FetchLike,
   type OAuthProviderEnv,
 } from "./oauth-provider.ts";
@@ -33,6 +34,7 @@ export function buildNotionAuthorizeUrl(input: {
 export async function exchangeNotionCode(input: {
   code: string;
   state: string;
+  expectedOwnerId?: string;
   env?: NotionOAuthEnv;
   fetch?: FetchLike;
 }): Promise<{ ok: true; public: ConnectionPublic } | { ok: false; error: string }> {
@@ -47,7 +49,7 @@ export async function disconnectNotion(input: {
   ownerId: string;
   env?: NotionOAuthEnv;
   fetch?: FetchLike;
-}): Promise<ConnectionPublic> {
+}): Promise<DisconnectResult> {
   return disconnectProvider(notion(), input);
 }
 

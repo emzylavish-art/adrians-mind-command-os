@@ -65,6 +65,14 @@ function boardState(oauth: OauthStatus | null, legacy?: { state: string; detail:
   return { state: "Not connected", detail: "Checking connection…" };
 }
 
+function boardForOauth(name: string, oauth: OauthStatus | null | undefined, legacy?: { state: string; detail: string } | null) {
+  if (oauth === undefined) {
+    return { state: "Not connected", detail: "Checking connection…" };
+  }
+  return boardState(oauth, legacy);
+}
+
+
 export function ServiceBoard({
   grokConfigured,
   onSetup,
@@ -89,7 +97,14 @@ export function ServiceBoard({
       .then(async (res) => {
         const body = (await res.json().catch(() => null)) as OauthStatus & { ok?: boolean; error?: string } | null;
         if (!res.ok || !body) {
-          setOauthByName((prev) => ({ ...prev, [name]: null }));
+          const detail =
+            res.status === 401 || res.status === 403
+              ? "Connection status could not be read (sign in required)."
+              : "Connection status could not be read.";
+          setOauthByName((prev) => ({
+            ...prev,
+            [name]: { state: "not_connected", detail },
+          }));
           return;
         }
         setOauthByName((prev) => ({
@@ -103,7 +118,12 @@ export function ServiceBoard({
           },
         }));
       })
-      .catch(() => setOauthByName((prev) => ({ ...prev, [name]: null })));
+      .catch(() =>
+        setOauthByName((prev) => ({
+          ...prev,
+          [name]: { state: "not_connected", detail: "Connection status could not be read." },
+        })),
+      );
   }, []);
 
   const refreshAll = useCallback(() => {
@@ -135,7 +155,7 @@ export function ServiceBoard({
     const meta = OAUTH_BOARD[service.name];
     if (!meta) return service;
     const legacy = service.name === "Notion" ? notion : null;
-    const board = boardState(oauthByName[service.name] ?? null, legacy);
+    const board = boardForOauth(service.name, oauthByName[service.name], legacy);
     return { name: service.name, state: board.state, detail: board.detail };
   });
 

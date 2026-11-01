@@ -65,7 +65,7 @@ async function main() {
         headers: req.headers,
         body: req.method === "GET" || req.method === "HEAD" ? undefined : body,
       });
-      const response = await handleBuiltinMcpHttp(request, async () => sqlClient);
+      const response = await handleBuiltinMcpHttp(request, { getSql: async () => sqlClient, authenticate: async () => "e2e-user" });
       res.statusCode = response.status;
       response.headers.forEach((value, key) => res.setHeader(key, value));
       res.end(Buffer.from(await response.arrayBuffer()));

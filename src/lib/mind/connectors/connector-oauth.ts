@@ -4,6 +4,7 @@ import {
   connectionStatus,
   disconnectProvider,
   exchangeAuthorizationCode,
+  type DisconnectResult,
   type FetchLike,
   type OAuthProviderEnv,
 } from "./oauth-provider.ts";
@@ -18,7 +19,7 @@ export function buildConnectorAuthorizeUrl(
 
 export async function exchangeConnectorCode(
   connector: ConnectorId,
-  input: { code: string; state: string; env?: OAuthProviderEnv; fetch?: FetchLike },
+  input: { code: string; state: string; expectedOwnerId?: string; env?: OAuthProviderEnv; fetch?: FetchLike },
 ) {
   return exchangeAuthorizationCode(getProvider(connector), input);
 }
@@ -34,7 +35,7 @@ export function connectorConnectionStatus(
 export async function disconnectConnector(
   connector: ConnectorId,
   input: { ownerId: string; env?: OAuthProviderEnv; fetch?: FetchLike },
-): Promise<ConnectionPublic> {
+): Promise<DisconnectResult> {
   return disconnectProvider(getProvider(connector), input);
 }
 

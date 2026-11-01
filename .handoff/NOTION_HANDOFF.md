@@ -157,3 +157,68 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Google: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_*_REDIRECT_URI` (or `GOOGLE_OAUTH_REDIRECT_URI`)
 - Slack: `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`, `SLACK_OAUTH_REDIRECT_URI`
 - GitHub: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`
+
+
+## Gap done: OAuth callback XSS / state traversal (2026-11-01 Africa/Lagos)
+
+**Status:** done (typecheck + oauth/security/stdio/pairing tests + build passed; one flaky workspace normalize timing under load unrelated)
+
+### Fixed
+- H1: shared `oauth-callback-html` escape + CSP + nosniff; fixed provider error messages; postMessage to `window.location.origin`
+- H2: strict state regex + pending path containment; atomic rename claim
+- H3: 10m TTL, single-use, prune, connector+owner bind
+- Attacker pass: redirect_uri https/localhost; Origin CSRF on start/disconnect; no upstream error_description leak; CONNECTOR_TOKEN_SECRET required ≥16; revokeOk honesty; pairing id path validation; ServiceBoard settles status errors
+
+### Commits
+- `2595ba7` Harden OAuth connectors…
+- (routes/ServiceBoard/pairing + tests follow)
+
+## Gap done: stdio MCP servers (2026-11-01 Africa/Lagos)
+
+**Status:** done (stdio unit + e2e PASS; typecheck/build previously green on tip)
+
+### Shipped
+- Execute registered command MCP servers: initialize, tools/list, tools/call with connect/call timeouts and child cleanup
+- Operator allowlist `MIND_MCP_STDIO_ALLOW` required before any spawn (deny by default)
+- Block LD_PRELOAD/NODE_OPTIONS/PATH override etc. from server env
+- Tools UI timeout/error status; e2e script `scripts/mcp/stdio-e2e.mjs`
+
+### Commits
+- `cf3bc07` Execute registered stdio MCP servers…
+- `8d46376` Tools UI timeout/error status for stdio…
+- (allowlist commit on tip)
+
+## Security fix: unauthenticated built-in MCP HTTP endpoint (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed (`d113625`).
+
+### Weakness (confirmed)
+`/api/mind/mcp/builtin` had no auth. Anyone who could reach the app could POST
+JSON-RPC `tools/call` and run `pglite_query` against the app DB (confirmed earlier:
+anonymous call on :8083 returned rows, see `live-verify.log`), read/append Notion
+pages with the server `NOTION_TOKEN`, and send `pc_run_shell` with `confirm=true`
+to the legacy `MIND_PC_AGENT_URL` agent (if one is set).
+
+### Fix
+- `handleBuiltinMcpHttp(request, { authenticate, getSql?, isHalted? })`: without an
+  authenticator, or when it returns null or throws → 401 JSON-RPC error before any
+  MCP server or tool is created (no tool list leaks). The old `(request, getSql)` call
+  shape also fails closed.
+- Emergency stop → 403; a halt read that throws also counts as halted.
+- Tools are scoped to the signed-in owner (`ownerId` goes to notion_* and pc_run_shell).
+- Route uses `requireUserId` (cookie or bearer session) and `haltIsOn`.
+- Callers in e2e/verify-live scripts updated.
+
+### Checks
+- New `src/lib/mind/mcp/builtin-server.test.ts`: 7 tests. All 7 failed before the fix and all 7 pass after it.
+- typecheck: pass
+- mind/src tests: 284/284 pass
+- scripts tests: 198/202. The 4 failures (SKILL.md/AGENTS.md/og-skill doc checks) were already failing before this change and are unrelated.
+- build: pass; `npm run mcp:e2e`: pass
+- Live on a local preview (:8141, built from this commit): an anonymous call and a forged bearer to `tools/call pglite_query` both got **HTTP 401**. Not checked live: a signed-in call (no session on the box). That path is covered only by unit tests.
+- Auth-disabled dev mode (`VITE_AUTH_ENABLED=false`, no DATABASE_URL) still maps to `dev-user`, the same as every other route.
+
+### Open (attacker pass notes, not fixed this cycle)
+- HTTP MCP registry `rpc()` has no fetch timeout, no response-size cap, and follows redirects. A hostile https MCP server can hang the Tools list (servers are listed one after another), use up memory, or redirect to internal hosts (blind SSRF / port probe through the status code).
+- https registration accepts private/link-local IP literals. http is allowed on localhost by design.
+- `pglite_query` guard: functions with side effects like `set_config()`/`nextval()` are not write verbs, so they pass the guard (only matters inside PGLite).

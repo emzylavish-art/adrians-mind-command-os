@@ -70,9 +70,9 @@ export function FleetPanel({
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
-  const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean }[]>([]);
+  const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean; status?: string }[]>([]);
   const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
-  const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
+  const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
 
   useEffect(() => {
     if (mode !== "tools") return;
@@ -393,7 +393,7 @@ export function FleetPanel({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold">{server.label}</p>
-                    <p className="text-xs text-muted">{server.kind} · {server.enabled ? "Enabled" : "Disabled"} · {tools.filter((t) => t.name !== "(disabled)").length} tool(s)</p>
+                    <p className="text-xs text-muted">{server.kind} · {server.enabled ? "Enabled" : "Disabled"} · {tools.filter((t) => !t.name.startsWith("(")).length} tool(s)</p>
                   </div>
                   <button
                     type="button"
@@ -411,7 +411,7 @@ export function FleetPanel({
                 <ul className="mt-2 space-y-1">
                   {tools.map((tool) => (
                     <li key={`${tool.serverId}:${tool.name}`} className="rounded-panel border border-line px-2 py-1">
-                      <p className="font-semibold">{tool.name} · {server.enabled && tool.enabled ? "Available" : "Gated"}</p>
+                      <p className="font-semibold">{tool.name} · {tool.status === "timeout" ? "Timed out" : tool.status === "error" ? "Error" : server.enabled && tool.enabled ? "Available" : "Gated"}</p>
                       <p className="text-xs text-muted">{tool.description}</p>
                       {tool.name === "pglite_query" ? (
                         <button
@@ -424,7 +424,7 @@ export function FleetPanel({
                             void mcpRegistryCall({ data: { serverId: server.id, tool: "pglite_query", args: { sql: "SELECT 1 AS n" } } })
                               .then((result) => {
                                 const row = result as { status: string; text: string };
-                                setMcpCallStatus(row.status === "ok" ? "ok" : "error");
+                                setMcpCallStatus(row.status === "ok" ? "ok" : row.status === "timeout" ? "timeout" : "error");
                                 setMcpCallNote(`${row.status}: ${row.text}`);
                               })
                               .catch((error: unknown) => {
