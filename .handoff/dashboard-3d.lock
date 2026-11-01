@@ -1,5 +1,5 @@
-owner: dashboard-3d-loop
+owner: released
 cycle: 42
-heartbeat: 2026-11-01T22:31:54+01:00
+released: 2026-11-01T22:31:54+01:00
 branch: dashboard-3d
-work: Painter c11 land commit
+last: c42–c42c Gap#29/#28 Motion831225f Painter c11 f7c4784
