@@ -281,3 +281,101 @@ html[data-theme="light"] [data-model-picker] [data-selected="true"] {
   background: rgb(9 9 11 / 0.08);
   color: #09090b;
 }
+
+/* —— Cycle 3: expanding composer + anchored voice zone (visual only, mono) —— */
+.floating-composer,
+.composer-dock,
+[data-composer="floating"] {
+  transition: min-height 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  min-height: 3.25rem;
+}
+.floating-composer:focus-within,
+.composer-dock:focus-within,
+[data-composer="floating"]:focus-within,
+.floating-composer[data-expanded="true"],
+.composer-dock[data-expanded="true"] {
+  min-height: 5.5rem;
+}
+.floating-composer textarea,
+.composer-dock textarea,
+[data-composer="floating"] textarea {
+  transition: min-height 160ms ease;
+  min-height: 1.5rem;
+}
+.floating-composer:focus-within textarea,
+.composer-dock:focus-within textarea,
+[data-composer="floating"]:focus-within textarea {
+  min-height: 3.25rem;
+}
+
+/* Anchored voice zone — bottom chrome visual skin */
+.voice-zone,
+.live-voice-bar,
+[data-voice-zone],
+[data-live-voice] {
+  position: relative;
+  background: rgb(10 10 12 / 0.82);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 1.35rem 1.35rem 1.1rem 1.1rem;
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow:
+    0 -8px 32px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+.voice-zone::before,
+.live-voice-bar::before,
+[data-voice-zone]::before {
+  content: "";
+  position: absolute;
+  inset: 0 12% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  pointer-events: none;
+}
+.voice-zone .waveform span,
+.live-voice-bar .waveform span,
+[data-live-voice] .waveform span {
+  background: #f4f4f5;
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.25);
+}
+html[data-theme="light"] .voice-zone,
+html[data-theme="light"] .live-voice-bar,
+html[data-theme="light"] [data-voice-zone],
+html[data-theme="light"] [data-live-voice] {
+  background: rgb(255 255 255 / 0.9);
+  border-color: rgb(9 9 11 / 0.1);
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 0.08), inset 0 1px 0 #fff;
+}
+html[data-theme="light"] .voice-zone .waveform span,
+html[data-theme="light"] .live-voice-bar .waveform span,
+html[data-theme="light"] [data-live-voice] .waveform span {
+  background: #18181b;
+  box-shadow: none;
+}
+
+/* Live call pills — white/gray only */
+.live-call-pill,
+.live-voice-bar__round {
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  color: #f4f4f5;
+}
+.live-call-pill[aria-pressed="true"],
+.live-voice-bar__round[aria-pressed="true"],
+.live-call-pill[data-active="true"] {
+  background: #f4f4f5;
+  color: #09090b;
+  border-color: #fff;
+}
+html[data-theme="light"] .live-call-pill,
+html[data-theme="light"] .live-voice-bar__round {
+  background: rgb(9 9 11 / 0.06);
+  border-color: rgb(9 9 11 / 0.12);
+  color: #09090b;
+}
+html[data-theme="light"] .live-call-pill[aria-pressed="true"],
+html[data-theme="light"] .live-voice-bar__round[aria-pressed="true"] {
+  background: #18181b;
+  color: #fafafa;
+}
