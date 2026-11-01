@@ -1,16 +1,8 @@
-# Voice round 3 — Direct Speaking regression (2026-11-01 Africa/Lagos)
-
-## Root cause
-`speakText` queued a Direct reply while `responseBusy` was true (captureOnly auto-reply cancel), but `response.done` called `completeSpeak()` without flushing `speakQueue`, so `force_message` never sent → UI stayed on Listening with transcript only.
-
-## Fix
-- On `response.done`: always `flushSpeakQueue()` after clearing busy.
-- `speakText`: set `pendingForce` first; recover stranded speakQ; queue while busy.
-- Named clips: `expectedTranscriptForTestAudio` — `hello`→`hello`, `question`→`What time is it?`; dictation uses canned (no STT overwrite); realtime overrides STT + commit inject with same labels.
-- `hello.wav` regenerated as short beep; original speech content kept as `question.wav`.
-- During test-audio speak, mute input briefly; echo-guard 900ms.
-
-## Proof
-- Unit: `speak-after-busy.test.ts` PASS
-- Headless repro: Getting session → Listening → Thinking → Speaking (~1.7s) with transcript `hello`
-- URLs: `http://127.0.0.1:8091/?voiceTestAudio=hello` and `?voiceTestAudio=question`
+Voice round3 stop @ 04f79e3 (Africa/Lagos)
+Fix: Direct ?voiceTestAudio=hello stayed Listening — speakText queued while responseBusy after captureOnly cancel; response.done never flushed speakQueue. Always flush speakQueue + pendingForce after busy cancel.
+Clips: hello -> 'hello', question -> 'What time is it?' (dictation + realtime aligned).
+Tests: speak-after-busy.test.ts; e2e asserts transcript->Speaking under test audio.
+Typecheck: clean.
+Notion parent insert_content: failed validation_error/invalid_input (sync + async task_05904715b80f4f59ab86f6ee7239d337). Child page created instead: https://app.notion.com/p/40bb95f33e42814ead93e23ebdaf3198
+URLs: http://127.0.0.1:8091/?voiceTestAudio=hello | http://127.0.0.1:8091/?voiceTestAudio=question
+Lock: released.
