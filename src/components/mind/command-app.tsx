@@ -3285,6 +3285,13 @@ export function CommandApp() {
           if (!voiceSession.current?.isOpen) return;
           if (bargeRef.current.phase === "speaking") return;
           voiceSession.current.setMuted(true);
+          // Keep overlay phase in sync — capture-only test audio can otherwise leave the UI on getting_session.
+          if (overlayOpenRef.current) {
+            holdInterruptedRef.current = false;
+            bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+            setOverlayPhase("speaking");
+            setOverlayNotice("Dev test reply via TTS. Interrupt cuts playback.");
+          }
           voiceSession.current.speakText("It is about noon.");
         }, 2500);
       }

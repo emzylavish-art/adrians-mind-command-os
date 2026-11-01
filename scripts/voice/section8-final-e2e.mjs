@@ -161,14 +161,23 @@ await safe("b_overlay_transcript_reply_speaking", async () => {
 
     let interrupted = false;
     if (speaking) {
+      // Ensure Speaking UI is visible long enough for Interrupt (force_message may outpace phase attr).
       const btn = page.locator('[data-testid="voice-interrupt"]');
-      if (await btn.isVisible()) {
-        await btn.click();
-        await page.waitForTimeout(900);
+      for (let i = 0; i < 20 && !(await btn.isVisible().catch(() => false)); i++) await page.waitForTimeout(200);
+      if (await btn.isVisible().catch(() => false)) {
+        await btn.click({ force: true });
+        await page.waitForTimeout(1000);
         const status = await page.locator('[data-testid="voice-overlay-status"]').innerText().catch(() => "");
         const phase = await page.locator('[data-testid="voice-overlay"]').getAttribute("data-voice-phase");
-        interrupted = /Interrupted/i.test(status) || phase === "interrupted";
+        const chip = await page.locator('[data-testid="voice-interrupted-chip"]').count();
+        interrupted = /Interrupted/i.test(status) || phase === "interrupted" || chip > 0;
         await page.screenshot({ path: `${OUT_DIR}/c-overlay-interrupted.png` });
+      } else {
+        // Fallback: trigger the same handler the Interrupt button uses.
+        await page.evaluate(() => {
+          const el = document.querySelector('[data-testid="voice-overlay"]');
+          if (el) el.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        });
       }
     }
     setItem("c_interrupt_listening", interrupted, { speaking, interrupted });
@@ -179,11 +188,13 @@ await safe("d_live_bar_listening_end", async () => {
   await withPage({}, async (page) => {
     await ensureDirect(page);
     // Start via composer speak if present, else overlay
+    // Prefer live bar path via composer Speak control.
     if (await page.locator('[data-testid="composer-speak"]').count()) {
       await page.locator('[data-testid="composer-speak"]').first().click({ force: true });
     } else {
       await page.locator('[data-testid="open-voice-mode"]').nth(1).click({ force: true });
     }
+    await page.waitForTimeout(1500);
     let listening = false, ended = false, used = "bar";
     const bar = page.locator('[data-testid="live-voice-bar"]');
     const deadline = Date.now() + 25000;
@@ -191,17 +202,21 @@ await safe("d_live_bar_listening_end", async () => {
       while (Date.now() < deadline) {
         const attr = await bar.getAttribute("data-live-voice");
         const text = await bar.innerText().catch(() => "");
-        if (/listening/i.test(attr || "") || /Listening/i.test(text)) { listening = true; break; }
+        if (/listening/i.test(attr || "") || /listening/i.test(text)) { listening = true; break; }
         await page.waitForTimeout(250);
       }
       await page.screenshot({ path: `${OUT_DIR}/d-live-bar-listening.png` });
       const endBtn = page.locator('[data-testid="live-voice-bar-end"], [data-testid="live-voice-end"], button:has-text("End")').first();
-      if (listening && await endBtn.count()) {
-        await endBtn.click({ force: true });
-        await page.waitForTimeout(800);
-        const attr = await bar.getAttribute("data-live-voice").catch(() => "");
-        ended = !/listening/i.test(attr || "");
-        await page.screenshot({ path: `${OUT_DIR}/d-live-bar-ended.png` });
+      if (listening) {
+        const end = page.locator('[data-testid="live-voice-bar-end"]');
+        if (await end.count()) {
+          await end.click({ force: true });
+          await page.waitForTimeout(1000);
+          const attr = await bar.getAttribute("data-live-voice").catch(() => "");
+          const text = await bar.innerText().catch(() => "");
+          ended = !/listening/i.test(attr || "") && !/\bListening\b/i.test(text);
+          await page.screenshot({ path: `${OUT_DIR}/d-live-bar-ended.png` });
+        }
       }
     } else {
       used = "overlay";
