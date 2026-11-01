@@ -32,6 +32,13 @@ import {
   type CameraRigState,
   UNIVERSE_HOME,
 } from "@/lib/mind/dashboard/camera-rig";
+import {
+  pulsePhaseFromId,
+  sampleOrbitDrift,
+  sampleStarPulse,
+  sanitizeDt,
+} from "./motion";
+import { createCommitComets, createDustField } from "./particles";
 
 const HEALTH_COLOR: Record<Health, number> = {
   healthy: 0x3dd68c,
@@ -528,6 +535,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     }
     rebuildAll();
 
+    const dust = createDustField(scene, { count: 480, seed: 42 });
+    let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
+    const driftOut = { x: 0, y: 0, z: 0 };
+
     let composer: EffectComposer | null = null;
     let bloomHandle: ReturnType<typeof createTunedBloomPass> | null = null;
     let gradeHandle: ReturnType<typeof createColorGradePass> | null = null;
@@ -664,7 +676,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let sync = 0;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = sanitizeDt((now - last) / 1000);
       last = now;
 
       if (rig.t < 1) {
@@ -678,15 +690,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         ch.lookAt(camera.position);
       }
 
+      const t = now * 0.001;
+      for (const n of botVis) {
+        const phase = pulsePhaseFromId(n.id);
+        sampleStarPulse(pulseOut, t, phase, n.health, reducedMotion);
+        n.mesh.scale.setScalar(pulseOut.scale);
+        n.glow.scale.setScalar(pulseOut.glow);
+        sampleOrbitDrift(driftOut, { x: n.base.x, y: n.base.y, z: n.base.z }, t, phase, reducedMotion);
+        n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
+        n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
+        n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);
+      }
+      dust.update(t, reducedMotion);
+      comets.update(t, reducedMotion);
       if (!reducedMotion) {
-        const t = now * 0.001;
-        for (const n of botVis) {
-          if (n.health === "idle") continue;
-          const speed = n.health === "stalled" ? 1.1 : n.health === "blocked" ? 3.2 : 2.2;
-          const pulse = 1 + Math.sin(t * speed + n.base.x) * (n.health === "stalled" ? 0.05 : 0.1);
-          n.mesh.scale.setScalar(pulse);
-          n.glow.scale.setScalar(2.0 + Math.sin(t * speed) * 0.3);
-        }
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;
         tickPainterlyKit(kit, t);
         if (atm) {
@@ -704,13 +721,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (now - sync > 5000) {
         sync = now;
         rebuildAll();
+        comets.dispose();
+        comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
       }
     };
     tick(performance.now());
 
     const onResize = () => {
-      const w = mount.clientWidth || window.innerWidth;
-      const h = mount.clientHeight || window.innerHeight;
+      const w = Math.max(1, mount.clientWidth || window.innerWidth || 1);
+      const h = Math.max(1, mount.clientHeight || window.innerHeight || 1);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -740,6 +759,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       cancelAnimationFrame(raf);
+      dust.dispose();
+      comets.dispose();
       sphereGeo.dispose();
       pageGeo.dispose();
       starTex.dispose();
