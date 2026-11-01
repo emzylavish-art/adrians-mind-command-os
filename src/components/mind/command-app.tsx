@@ -243,7 +243,7 @@ function formatBytes(bytes: number) {
 }
 
 export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError } = useMindWorkspace();
+  const { ws, setWs, ready, syncNote, publishServerCopy, saveError, retrySave, clearSaveError } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
