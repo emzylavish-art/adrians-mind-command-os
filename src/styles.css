@@ -2696,6 +2696,7 @@ html[data-theme="light"] [data-composer="floating"] {
 }
 
 /* —— Cycle 32 / item 2: ComposerBar layout hooks (from pass-10, mono) —— */
+:root {
   --composer-speak-fg: #0a0a0b;
   --composer-speak-bg: #f4f4f5;
   --composer-bar-bg: #111113;
@@ -3157,14 +3158,6 @@ aside span.grid.size-11.rounded-2xl {
 }
 
 /* —— Cycle 32 / item 5: mono high-contrast warning / error cards —— */
-.main-stage [class*="border-danger"],
-.main-stage .text-danger,
-.glow-card.border-danger\/40,
-.service-setup,
-article.rounded-panel.border.border-line.bg-surface:has(.text-danger),
-.main-stage article:has(> .flex .text-danger) {
-  /* fallback below */
-}
 .main-stage p.text-danger,
 .main-stage .text-danger {
   color: #f4f4f5 !important;
@@ -3711,3 +3704,5 @@ aside .text-xs.text-muted,
   opacity: 0.85;
   letter-spacing: 0.01em;
 }
+
+}}
