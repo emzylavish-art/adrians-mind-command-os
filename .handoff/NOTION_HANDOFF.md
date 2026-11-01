@@ -41,3 +41,11 @@ Full local write-up: `MEDIA_HANDOFF.md`.
 ### Notion note
 - Parent mirror `40bb95f3-3e42-814a-acf8-c3281b4f528d` rejects content insert/update (page ~3.7MB; validation_error).
 - Stop point recorded as child page: https://app.notion.com/p/40bb95f33e42811dba85f915672db536
+
+## 2026-11-01T14:36:54+01:00 (Africa/Lagos) — Logic Bot — stop point: unknown-model + disconnect + env issues done
+- Branch tip: 5c98bf7 on origin/logic-wiring
+- Commits: 18aa83c model unknown; 07ad71d CHAT_DISCONNECT_REPLY; 5c98bf7 modelTierEnvIssues
+- Fixed: done without model → "model unknown"; disconnect ≠ timeout; MIND_MODEL_* validated without echoing secrets
+- Counts: typecheck pass; mind 314 pass; scripts 198 pass / 4 skipped; build pass
+- Notion child: https://app.notion.com/p/40bb95f33e42817a9615c1a4549d43fb
+- Lock: logic-wiring.lock → done, released
