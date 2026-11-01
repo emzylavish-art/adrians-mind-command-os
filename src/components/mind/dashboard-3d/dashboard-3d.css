@@ -882,14 +882,16 @@
   opacity: 0.9;
 }
 
-/* Gap#27: dock Filters clear of Notion Mirror (was under mirror at 1280×800) */
+/* Gap#27: clear of Notion Mirror (left) AND soft status overlay (top-right z20) */
 .dash3d-graph-filters {
   position: absolute;
-  top: 3.25rem;
-  right: 0.75rem;
-  left: auto;
-  z-index: 12;
+  top: auto;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  right: auto;
+  z-index: 14;
   width: min(280px, calc(100vw - 1.5rem));
+  max-height: min(42vh, 360px);
   padding: 0.55rem 0.65rem;
   pointer-events: auto;
 }
