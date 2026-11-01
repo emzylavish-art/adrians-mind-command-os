@@ -1556,3 +1556,122 @@ html[data-theme="light"] .dash3d-flyhud {
   color: #09090b !important;
   box-shadow: 0 14px 32px rgb(0 0 0 / 0.1) !important;
 }
+
+/* —— Cycle 18: attachment chips + mono avatars/status + kill non-logo purple glow —— */
+
+/* Staged attachment chip */
+p.text-xs.text-muted:has(+ *),
+form p.mt-2.text-xs.text-muted,
+p.text-xs.text-muted[class*="mt-2"] {
+  /* default */
+}
+form p.mt-2.text-xs.text-muted,
+.mt-2.text-xs.text-muted,
+p.text-xs.text-muted:is([class~="mt-2"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  color: #e4e4e7 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  line-height: 1.3;
+}
+form p.mt-2.text-xs.text-muted::before,
+p.text-xs.text-muted.mt-2::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #f4f4f5;
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.35);
+  flex: 0 0 auto;
+}
+html[data-theme="light"] form p.mt-2.text-xs.text-muted,
+html[data-theme="light"] p.text-xs.text-muted.mt-2 {
+  background: rgb(9 9 11 / 0.05);
+  border-color: rgb(9 9 11 / 0.12);
+  color: #3f3f46 !important;
+}
+html[data-theme="light"] form p.mt-2.text-xs.text-muted::before {
+  background: #18181b;
+  box-shadow: none;
+}
+
+/* Status pill dot — always mono */
+header span.size-2.rounded-full.bg-current,
+.size-2.rounded-full.bg-current {
+  background: #d4d4d8 !important;
+  color: #d4d4d8 !important;
+  box-shadow: 0 0 6px rgb(255 255 255 / 0.25);
+}
+html[data-theme="light"] header span.size-2.rounded-full.bg-current {
+  background: #52525b !important;
+  box-shadow: none;
+}
+header .rounded-full.border.text-sm {
+  background: rgb(255 255 255 / 0.04);
+  border-color: rgb(255 255 255 / 0.14) !important;
+  color: #d4d4d8 !important;
+}
+
+/* Mono agent/bot avatars */
+.bot-avatar,
+.bot-avatar-pink,
+.bot-avatar-teal,
+.bot-avatar-amber,
+.bot-avatar-violet,
+.bot-avatar-sky {
+  background: linear-gradient(145deg, #3f3f46, #18181b) !important;
+  color: #f4f4f5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 14px rgb(255 255 255 / 0.08) !important;
+}
+html[data-theme="light"] .bot-avatar,
+html[data-theme="light"] .bot-avatar-pink,
+html[data-theme="light"] .bot-avatar-teal,
+html[data-theme="light"] .bot-avatar-amber,
+html[data-theme="light"] .bot-avatar-violet,
+html[data-theme="light"] .bot-avatar-sky {
+  background: linear-gradient(145deg, #e4e4e7, #a1a1aa) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 12px rgb(0 0 0 / 0.08) !important;
+}
+
+/* Profile / initials avatars — mono, no purple glow */
+span.grid.size-8.place-items-center.rounded-full.bg-accent,
+span.grid.size-16.place-items-center.rounded-full {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15), 0 8px 20px rgb(0 0 0 / 0.35) !important;
+}
+html[data-theme="light"] span.grid.size-8.place-items-center.rounded-full.bg-accent,
+html[data-theme="light"] span.grid.size-16.place-items-center.rounded-full {
+  background: #18181b !important;
+  color: #fafafa !important;
+}
+
+/* Kill purple glow on chat-thread empty Zap badge (not logo) */
+span.shadow-\[0_0_28px_rgb\(124_92_255\/0\.45\)\],
+span[class*="shadow-[0_0_28px_rgb(124_92_255"] {
+  background: rgb(255 255 255 / 0.08) !important;
+  color: #f4f4f5 !important;
+  box-shadow: 0 0 28px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+html[data-theme="light"] span[class*="shadow-[0_0_28px_rgb(124_92_255"] {
+  background: rgb(9 9 11 / 0.06) !important;
+  color: #18181b !important;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.08) !important;
+}
+
+/* Re-assert logo purple last */
+aside > div.flex.items-center > span.grid.size-11.rounded-2xl,
+aside span.bg-gradient-to-br.from-info.to-accent,
+.logo-mark {
+  background: #7c5cff !important;
+  background-image: none !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
