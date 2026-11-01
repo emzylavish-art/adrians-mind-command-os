@@ -1,0 +1,22 @@
+feature: Refresh preview/integration with released security/hardening fixes so they can be verified on the integration preview
+lane: merge-gate
+owner_bot: Merge Gate Bot
+gap_rank: security (H1-H3 OAuth XSS/traversal, builtin MCP anon access, H4-H7 Imagine) + deferred H8 search-timeout
+status: done, released
+claimed_by: Merge Gate Bot
+claimed_at: 2026-11-01T14:45:40+01:00
+released_at: 2026-11-01T14:48:40+01:00
+merge_scope:
+  - logic-wiring d507e30+6bb0b7b (search timeout) — MERGED (f871f0d, d13e004)
+  - mcp-integration up to d50da97 — MERGED (6e68b21)
+  - media-integration ffc677b — SKIPPED (media-integration.lock in progress)
+acceptance_criteria:
+  - Keep every lane's behavior in command-app.tsx (voice, model chip, banners, MCP tools, media/Imagine, tools timeline, persona/explore)
+  - typecheck + npm test + build pass; regression test asserting: anon POST /api/mind/mcp/builtin -> 401, OAuth callback escapes state + rejects ../ state, search timeout markers present, Imagine rejects unknown model
+  - Screenshots/logs under /workspace/audit/integration-c16/; push preview/integration only; done on Notion mirror 40bb95f33e42814aacf8c3281b4f528d (child page ok); set lock done, released
+notes: |
+  Tip 2c1eb0f pushed. Regression integration-security-c16.test.ts; Imagine allowlist assert documents skip.
+  Notion child: https://app.notion.com/p/40bb95f33e42810ca814c8661215354e
+  Logs: /workspace/audit/integration-c16/
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:45:03+01:00

@@ -8,9 +8,9 @@ import {
   writeStoredVoiceMode,
   commitVoiceMode,
   simulateVoiceModeReloadCycle,
-  shouldPersistVoiceMode,
   VOICE_MODE_STORAGE_KEY,
 } from "./mode.ts";
+import { shouldPersistVoiceMode } from "./errors.ts";
 
 function memoryStorage(seed: Record<string, string> = {}) {
   const store = new Map<string, string>(Object.entries(seed));
@@ -45,8 +45,10 @@ describe("voice mode", () => {
     const storage = memoryStorage();
     let ui: "direct" | "orchestrator" = "direct";
     const hydrated = false;
+    // Old buggy path: gate write on hydrated → toggle is lost.
     if (shouldPersistVoiceMode(hydrated)) writeStoredVoiceMode(toggleVoiceMode(ui), storage);
     assert.equal(readStoredVoiceMode(storage), "direct");
+    // Fixed path: sync commit on toggle.
     ui = commitVoiceMode(toggleVoiceMode(ui), storage);
     assert.equal(ui, "orchestrator");
     assert.equal(readStoredVoiceMode(storage), "orchestrator");
@@ -63,13 +65,16 @@ describe("voice mode", () => {
 
   it("does not let hydrated+default Direct effect-write wipe a stored Orchestrator choice", () => {
     const storage = memoryStorage({ [VOICE_MODE_STORAGE_KEY]: "orchestrator" });
+    // Simulate the race: effect marks hydrated while UI mode still SSR default.
     let ui: "direct" | "orchestrator" = "direct";
     const hydrated = true;
     if (shouldPersistVoiceMode(hydrated)) {
+      // This is the dangerous write the old effect did — prove storage would be wiped:
       const wiped = memoryStorage({ [VOICE_MODE_STORAGE_KEY]: "orchestrator" });
       writeStoredVoiceMode(ui, wiped);
       assert.equal(readStoredVoiceMode(wiped), "direct");
     }
+    // Fixed controller never effect-writes the default; hydrate only reads.
     ui = readStoredVoiceMode(storage);
     assert.equal(ui, "orchestrator");
     assert.equal(readStoredVoiceMode(storage), "orchestrator");

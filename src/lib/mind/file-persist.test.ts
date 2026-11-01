@@ -7,7 +7,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { pendingMigrations } from "../../../scripts/migration-plan.mjs";
 import type { Sql } from "../db.ts";
 import { applyAgentTurn } from "./agent-session.ts";
-import { safeToResume, voiceProviderStatus } from "./memory.ts";
+import { safeToResume, voiceProviderStatus } from "./memory/index.ts";
 import type { AgentTool } from "./orchestrator.ts";
 import { readToolRuns, writeToolRun } from "./notion-record.ts";
 import { readSnapshot, writeSnapshot } from "./store.ts";
@@ -51,7 +51,7 @@ describe("file database", () => {
     const dir = mkdtempSync(join(tmpdir(), "mind-db-"));
     try {
       const first = await openDatabase(dir);
-      let ws = addMemory(emptyWorkspace(), { scope: "global", text: "The pier depth is 12 feet.", source: "owner", projectId: null, chatId: null });
+      const ws = addMemory(emptyWorkspace(), { scope: "global", text: "The pier depth is 12 feet.", source: "owner", projectId: null, chatId: null });
       ws.projects.push({ id: "p1", name: "Harbor", description: "", createdAt: "2026-04-01T00:00:00.000Z" });
       const applied = applyAgentTurn(ws, {
         chatId: "chat-1",

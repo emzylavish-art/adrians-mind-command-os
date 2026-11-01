@@ -53,3 +53,50 @@ describe("client reply events", () => {
     assert.equal(pulled.events.some((event) => event.event === "done"), false);
   });
 });
+
+
+describe("done.model honesty", () => {
+  it("does not invent grok-4.5 when the done event omits a model id", () => {
+    const { events } = pullMindEvents(`event: done\ndata: ${JSON.stringify({ text: "hi", usedIds: [] })}\n\n`);
+    assert.equal(events.length, 1);
+    const done = events[0];
+    assert.equal(done.event, "done");
+    if (done.event === "done") {
+      assert.equal(done.model, "model unknown");
+      assert.equal(done.model.includes("grok-4.5"), false);
+    }
+  });
+
+  it("keeps a confirmed non-empty model id from the done event", () => {
+    const { events } = pullMindEvents(`event: done\ndata: ${JSON.stringify({ text: "hi", model: "grok-4.7", usedIds: [] })}\n\n`);
+    const done = events[0];
+    assert.equal(done?.event, "done");
+    if (done?.event === "done") assert.equal(done.model, "grok-4.7");
+  });
+
+  it("treats blank model strings as model unknown", () => {
+    const { events } = pullMindEvents(`event: done\ndata: ${JSON.stringify({ text: "hi", model: "  ", usedIds: [] })}\n\n`);
+    const done = events[0];
+    assert.equal(done?.event, "done");
+    if (done?.event === "done") assert.equal(done.model, "model unknown");
+  });
+});
+
+
+describe("done.model null / number / object", () => {
+  for (const [label, model] of [
+    ["null", null],
+    ["number", 45],
+    ["object", { id: "grok-4.5" }],
+  ] as const) {
+    it(`coerces ${label} to model unknown without inventing grok-4.5`, () => {
+      const { events } = pullMindEvents(`event: done\ndata: ${JSON.stringify({ text: "hi", model, usedIds: [] })}\n\n`);
+      const done = events[0];
+      assert.equal(done?.event, "done");
+      if (done?.event === "done") {
+        assert.equal(done.model, "model unknown");
+        assert.equal(done.model.includes("grok"), false);
+      }
+    });
+  }
+});

@@ -12,9 +12,19 @@ export function voiceModeLabel(mode: VoiceRoutingMode): "Direct" | "Orchestrator
   return mode === "orchestrator" ? "Orchestrator" : "Direct";
 }
 
-export function readStoredVoiceMode(storage?: Pick<Storage, "getItem"> | null): VoiceRoutingMode {
+export function readStoredVoiceMode(storage?: Pick<Storage, "getItem" | "setItem"> | null): VoiceRoutingMode {
   try {
-    return parseVoiceMode(storage?.getItem(VOICE_MODE_STORAGE_KEY));
+    const raw = storage?.getItem(VOICE_MODE_STORAGE_KEY);
+    const mode = parseVoiceMode(raw);
+    // Rewrite corrupted / unexpected values to a clean canonical token.
+    if (raw != null && raw !== mode) {
+      try {
+        storage?.setItem(VOICE_MODE_STORAGE_KEY, mode);
+      } catch {
+        /* ignore */
+      }
+    }
+    return mode;
   } catch {
     return "direct";
   }
@@ -34,7 +44,10 @@ export function toggleVoiceMode(mode: VoiceRoutingMode): VoiceRoutingMode {
 
 /**
  * Apply a user-driven mode change: write localStorage FIRST, then return the next
- * mode for React state. Avoids the hydrate/effect race that wiped Orchestrator.
+ * mode for React state. Sync write avoids the hydrate/effect race where flipping
+ * `hydrated` to true while state is still the SSR default ("direct") clobbers a
+ * stored Orchestrator choice — and avoids losing a toggle that happened before
+ * the hydrate effect ran (persist-effect skipped while !hydrated).
  */
 export function commitVoiceMode(
   next: VoiceRoutingMode,
@@ -44,28 +57,43 @@ export function commitVoiceMode(
   return next;
 }
 
-/** Old buggy gate — kept for regression tests only. */
-export function shouldPersistVoiceMode(hydrated: boolean): boolean {
-  return hydrated;
-}
-
+/**
+ * Reproduce the real browser failure mode under React effect ordering:
+ * 1) SSR/default state is Direct + not hydrated
+ * 2) User toggles Orchestrator (must persist immediately)
+ * 3) Hydrate effect runs (must read Orchestrator, not overwrite with Direct)
+ * 4) Reload / remount reads Orchestrator
+ *
+ * Also covers the prior bug: marking hydrated while mode is still Direct and
+ * then writing from an effect would wipe Orchestrator — commitVoiceMode does
+ * not rely on that effect.
+ */
 export function simulateVoiceModeReloadCycle(storage: VoiceModeStorage): {
   afterToggle: VoiceRoutingMode;
   afterHydrate: VoiceRoutingMode;
   afterReload: VoiceRoutingMode;
   stored: string | null;
 } {
-  writeStoredVoiceMode("direct", storage);
+  // Fresh page: empty or prior value — start as if first visit then user toggles.
+  writeStoredVoiceMode("direct", storage); // clear to known baseline for the sim
   let uiMode: VoiceRoutingMode = "direct";
+  let hydrated = false;
 
+  // User clicks Switch before/without waiting for effects (or effect write was gated).
   uiMode = commitVoiceMode(toggleVoiceMode(uiMode), storage);
   const afterToggle = uiMode;
 
+  // Hydrate effect: read storage into state (must not write default).
   uiMode = readStoredVoiceMode(storage);
+  hydrated = true;
+  void hydrated;
   const afterHydrate = uiMode;
 
+  // Reload: new mount default Direct, then hydrate from storage.
   uiMode = "direct";
+  hydrated = false;
   uiMode = readStoredVoiceMode(storage);
+  hydrated = true;
   const afterReload = uiMode;
 
   return {

@@ -1,0 +1,16 @@
+owner: Grok Bot (xAI verification)
+branch: preview/integration
+worktree: /workspace/mind-command-os-xai-merge
+status: stopped, released
+claimed_by: xAI verification lane — merge xai-verification (typed-chat key fix + adapter probes)
+claimed_at: 2026-11-01T15:02:00+01:00
+released_at: 2026-11-01T15:02:30+01:00
+source_branch: xai-verification
+source_tip: 8fd3dc5
+integration_tip_at_claim: 93eb15a
+notes: |
+  STOPPED before merge: /workspace/locks/integration.lock was re-claimed by
+  Merge Gate Bot for integration refresh c19 (H9 + banners + voice + memory-ux)
+  at 2026-11-01T14:57:50+01:00. Per HARD RULES, did not merge while claimed.
+  Throwaway worktree left at /workspace/mind-command-os-xai-merge (detached 93eb15a)
+  for optional cleanup; no merge commit, no push.

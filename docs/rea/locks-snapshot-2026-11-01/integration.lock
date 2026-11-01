@@ -1,0 +1,11 @@
+owner: Grok Build
+branch: preview/integration
+worktree: /workspace/mind-command-os-integration
+status: claimed
+claimed_by: Merge Gate Bot — xai-verification 8fd3dc5 (after c19 + hp-pairing @ c032352)
+claimed_at: 2026-11-01T14:57:50+01:00
+released_at:
+commits:
+  - c032352 tip after hp-pairing
+notes: |
+  xai-verification-merge.lock released. Merging 8fd3dc5 adapter probes; preserve c17 env isolation + fail-closed; route keys via resolveXaiInferenceApiKey.

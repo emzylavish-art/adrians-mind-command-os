@@ -1,0 +1,241 @@
+import { useMemo, useState } from "react";
+import type { MemoryItem, MemoryScope, Workspace } from "@/lib/mind/types";
+import { addMemory, deleteMemory, reviseMemory } from "@/lib/mind/workspace";
+import { MEMORY_TEXT_MAX, sanitizeMemoryText } from "@/lib/mind/memory";
+import { MemoryChatToggle } from "./memory-chat-toggle";
+import { MemorySavedIndicator } from "./memory-saved-indicator";
+
+function stamp(value: string) {
+  if (!value) return "unknown time";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+export function MemoryManagerView({
+  ws,
+  setWs,
+  demoSignal,
+}: {
+  ws: Workspace;
+  setWs: (updater: (prev: Workspace) => Workspace) => void;
+  /** Optional demo of the in-thread indicator (no command-app mount). */
+  demoSignal?: { memorySaved: boolean; savedMemoryId?: string | null };
+}) {
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<MemoryScope>("global");
+  const [draft, setDraft] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<{ memorySaved: boolean; savedMemoryId: string | null }>({
+    memorySaved: false,
+    savedMemoryId: null,
+  });
+  const [chatSkipDemo, setChatSkipDemo] = useState<"off" | "on">("on");
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return ws.memories
+      .filter((item) => !item.archived)
+      .filter((item) => (!q ? true : item.text.toLowerCase().includes(q) || item.scope.includes(q)))
+      .slice()
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  }, [ws.memories, query]);
+
+  function saveNew() {
+    const text = sanitizeMemoryText(draft);
+    if (!text) {
+      setError("Write a note before saving.");
+      return;
+    }
+    let createdId: string | null = null;
+    setWs((prev) => {
+      const before = new Set(prev.memories.map((item) => item.id));
+      const next = addMemory(prev, {
+        scope,
+        text,
+        source: "owner",
+        projectId: null,
+        chatId: null,
+      });
+      createdId = next.memories.find((item) => !before.has(item.id))?.id ?? null;
+      return next;
+    });
+    setDraft("");
+    setError(null);
+    setLastSaved({ memorySaved: true, savedMemoryId: createdId });
+  }
+
+  function saveEdit(item: MemoryItem) {
+    const text = sanitizeMemoryText(editText);
+    if (!text) {
+      setError("Edited note cannot be empty.");
+      return;
+    }
+    setWs((prev) => reviseMemory(prev, item.id, text));
+    setEditId(null);
+    setError(null);
+    setLastSaved({ memorySaved: true, savedMemoryId: item.id });
+  }
+
+  function remove(item: MemoryItem) {
+    setWs((prev) => deleteMemory(prev, item.id));
+    setError(null);
+    if (lastSaved.savedMemoryId === item.id) {
+      setLastSaved({ memorySaved: false, savedMemoryId: null });
+    }
+  }
+
+  const signal = demoSignal ?? lastSaved;
+
+  return (
+    <section className="page-shell" data-testid="memory-manager">
+      <div className="page-hero mb-4">
+        <div className="mb-3 flex items-center gap-3">
+          <img src="/brand/logo-mark.jpg" alt="" className="logo-mark size-10 rounded-2xl object-cover" />
+          <div>
+            <p className="meta-label">Memory</p>
+            <h1 className="font-display text-3xl font-bold">Memory manager</h1>
+          </div>
+        </div>
+        <p className="text-sm text-muted">
+          Real notes stored in this workspace (scopes: global, project, chat). Delete removes the row. Text is
+          length-capped at {MEMORY_TEXT_MAX} and rendered as plain text (React escapes markup).
+        </p>
+      </div>
+
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
+        <a href="/" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm">
+          Back to Chat
+        </a>
+        <MemoryChatToggle memory={chatSkipDemo} onChange={setChatSkipDemo} />
+      </div>
+
+      <div className="mb-4">
+        <MemorySavedIndicator memorySaved={signal.memorySaved} savedMemoryId={signal.savedMemoryId} />
+      </div>
+
+      <div className="glow-card mb-4 grid gap-3 rounded-panel border border-line p-4">
+        <label className="text-sm font-semibold text-fg" htmlFor="memory-draft">
+          Add a note
+        </label>
+        <textarea
+          id="memory-draft"
+          data-testid="memory-draft"
+          value={draft}
+          maxLength={MEMORY_TEXT_MAX}
+          onChange={(event) => setDraft(event.target.value)}
+          rows={3}
+          placeholder="Write a note you want kept"
+          className="rounded-panel border border-line bg-bg px-3 py-2 text-sm"
+        />
+        <div className="flex flex-wrap gap-2">
+          <select
+            aria-label="Memory scope"
+            data-testid="memory-scope"
+            value={scope}
+            onChange={(event) => setScope(event.target.value as MemoryScope)}
+            className="min-h-11 rounded-panel border border-line bg-bg px-3 text-sm"
+          >
+            <option value="global">global</option>
+            <option value="project">project</option>
+            <option value="chat">chat</option>
+          </select>
+          <button
+            type="button"
+            data-testid="memory-add"
+            className="min-h-11 rounded-panel border border-fg bg-surface px-4 text-sm font-semibold"
+            onClick={saveNew}
+          >
+            Save note
+          </button>
+        </div>
+        {error ? (
+          <p className="text-sm text-danger" data-testid="memory-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mb-3">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search notes"
+          aria-label="Search notes"
+          data-testid="memory-search"
+          className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm"
+        />
+      </div>
+
+      {visible.length === 0 ? (
+        <div
+          className="dense-card rounded-panel border border-line p-6 text-center text-sm text-muted"
+          data-testid="memory-empty"
+        >
+          No saved memory yet. Nothing is invented here — add a note above, or leave this empty until you save one.
+        </div>
+      ) : (
+        <ul className="space-y-2" data-testid="memory-list">
+          {visible.map((item) => (
+            <li key={item.id} className="rounded-panel border border-line bg-surface p-3 text-sm" data-testid="memory-row">
+              {editId === item.id ? (
+                <textarea
+                  value={editText}
+                  maxLength={MEMORY_TEXT_MAX}
+                  onChange={(event) => setEditText(event.target.value)}
+                  className="min-h-20 w-full rounded-panel border border-line bg-bg px-2 py-1"
+                  data-testid="memory-edit-text"
+                />
+              ) : (
+                <p className="whitespace-pre-wrap text-fg" data-testid="memory-text">
+                  {item.text}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-muted" data-testid="memory-scope-label">
+                scope: {item.scope}
+                {item.projectId ? ` · project ${item.projectId}` : ""}
+                {item.chatId ? ` · chat ${item.chatId}` : ""} · {stamp(item.updatedAt || item.createdAt)}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {editId === item.id ? (
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-panel border border-line px-3"
+                    data-testid="memory-save-edit"
+                    onClick={() => saveEdit(item)}
+                  >
+                    Save edit
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-panel border border-line px-3"
+                    data-testid="memory-edit"
+                    onClick={() => {
+                      setEditId(item.id);
+                      setEditText(item.text);
+                    }}
+                  >
+                    Edit
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3"
+                  data-testid="memory-delete"
+                  onClick={() => remove(item)}
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}

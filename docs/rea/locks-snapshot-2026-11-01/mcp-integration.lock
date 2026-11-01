@@ -1,0 +1,29 @@
+owner: MCP Integration Bot
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+base: f2b88fd25d83e32f7556a270d6469f2edb98ad5b
+status: done, released
+claimed_at: 2026-11-01T12:20:15+01:00
+released_at: 2026-11-01T12:27:27+01:00
+commits:
+  - 93485fc (tool handlers + registry)
+  - 05e189e (SDK HTTP + API routes + server fns)
+  - 8b0980e (Tools UI toggles + tool-result status)
+  - c3a646f (e2e script)
+  - bbc30f4 (handoff mirror)
+  - 60552be (Notion page unavailable note)
+paths_claimed:
+  - src/lib/mind/mcp/
+  - src/lib/mind/mcp-registry.ts
+  - src/lib/mind/mcp-registry.test.ts
+  - src/routes/api/mind/mcp/
+  - src/components/mind/fleet-panels.tsx (Tools MCP list/toggles)
+  - src/components/mind/command-app.tsx (Tools button/card + tool-result wiring only)
+  - src/lib/mind/server.ts (MCP registry server fns only)
+  - package.json (deps + test scripts only)
+  - .handoff/NOTION_HANDOFF.md
+  - scripts/mcp/
+notes: |
+  Pushed to origin/mcp-integration. E2E pglite_query SELECT 1 verified.
+  Notion handoff page 404 in connected workspace; mirror in .handoff/.
+  No paired PC; no NOTION_TOKEN on box. Main visual polish checkout untouched.

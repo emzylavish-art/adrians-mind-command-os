@@ -1,0 +1,22 @@
+feature: HARDENING — web search / deep research has no timeout (H8)
+lane: logic-wiring
+owner_bot: Logic Bot
+branch: logic-wiring
+worktree: /workspace/mind-command-os-logic
+gap_rank: hardening (MED)
+status: done, released
+claimed_by: Logic Bot
+claimed_at: 2026-11-01T14:27:25+01:00
+released_at: 2026-11-01T14:32:04+01:00
+evidence: /workspace/rea-captures/hardening-log.md (H8)
+commits:
+  - d507e30 Bound web search and deep research with honest timeouts.
+  - 6bb0b7b Gate request-body and search timeout tests; keep finished adversarial probes.
+acceptance_criteria:
+  - bounded per-request and total deep-research budget; honest timeout error surfaced to UI
+  - regression test with hanging fetchImpl; typecheck + npm test + build pass; push logic-wiring; done on Notion mirror; lock done, released
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:25:00+01:00
+notes: |
+  Done: per-query MIND_SEARCH_TIMEOUT_MS (15s) + deep MIND_SEARCH_DEEP_TIMEOUT_MS (45s);
+  SEARCH_TIMEOUT_REPLY; fake-timer hangForever regression tests; docs/timeouts.md + .env.example.

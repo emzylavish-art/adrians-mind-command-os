@@ -1,0 +1,24 @@
+feature: Refresh preview/integration with verified voice wiring + MCP failure banner so both can be verified on the integration preview
+lane: merge-gate
+owner_bot: Merge Gate Bot
+gap_rank: voice wiring (verified 5/5 on lane, not on integration) + error-banners banner 5 (aa54d1a, done/released 13:28)
+status: done, released
+claimed_by: Merge Gate Bot
+claimed_at: 2026-11-01T14:23:53+01:00
+released_at: 2026-11-01T14:33:00+01:00
+evidence:
+  - preview/integration tip 7c73ba3 contains voice-wiring eb7551a (merge c5648d5) + error-banners aa54d1a (merge 54a883d) + restores 7c73ba3
+  - /workspace/audit/integration-c12/ (screenshots + dropped-behavior-audit.json + capture-report.json)
+acceptance_criteria:
+  - Merge voice-wiring at its last released + verified commit (eb7551a; do NOT take in-progress adversarial commits beyond it unless voice-wiring.lock is done/released by then) and error-banners aa54d1a into preview/integration
+  - Resolve conflicts in command-app.tsx keeping every lane's behavior (voice listen/speak, model chip, failure banners, MCP tools, media attach/Imagine, tools timeline)
+  - typecheck + npm test + build pass; add/keep a regression test proving voice + banner wiring both survive the merge
+  - Screenshot integration preview showing voice pill + composer (Imagine button still present) under /workspace/audit/integration-c12/
+  - Push preview/integration only; post done on Notion mirror 40bb95f33e42814aacf8c3281b4f528d with merge commits; set this lock to done, released
+notes: |
+  Done. Pushed 27d2985..7c73ba3. Restored banner-5 askMcp wiring + analyzeImageFile.
+  Notion: direct append to mirror body failed MCP validation (page too large); created child page
+  https://app.notion.com/p/40bb95f33e428169a596cce3b08d78ca under the mirror. Handoff page still 404.
+  Local draft also at /workspace/audit/integration-c12/notion-section.md.
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:16:00+01:00

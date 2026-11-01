@@ -1,0 +1,21 @@
+feature: HARDENING — pc_run_shell allowlist bypass via shell metacharacters (echo prefix lets chained/substituted commands skip human approval)
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: MCP Integration Bot
+claimed_at: 2026-11-01T15:01:42+01:00 (Africa/Lagos)
+status: done, released
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+paths_claimed: []
+released: true
+released_at: 2026-11-01T15:08:16+01:00 (Africa/Lagos)
+commits:
+  - 230a05d (Harden pc_run_shell allowlist: refuse shell metacharacters, +5 regression tests)
+  - 635b370 (NOTION_HANDOFF)
+push: origin/mcp-integration 6490b9e..635b370 (no force)
+notion: 40bb95f3-3e42-8176-b180-d085b94741cf (child under mirror 40bb95f33e42814aacf8c3281b4f528d; direct append returned validation_error); handoff page 40b1aa27632381768d58cde0731f142a 404 again
+notes: |
+  Weakness: isShellAllowlisted('/^echo /') accepted 'echo x; <any cmd>' / $() / backticks / redirects / newlines,
+  so pc_run_shell ran them on the paired PC with confirm:true and no human approval (H9 bypass). Confirmed by local repro.
+  Tests: typecheck pass; mind/src 325/325; scripts 198/202 (4 pre-existing doc checks); build pass; mcp:e2e pass.
+  First full run had 2 timing flakes (load avg ~220); passed on rerun and full rerun 325/325.

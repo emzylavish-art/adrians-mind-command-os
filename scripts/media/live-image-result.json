@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "status": 200,
+  "model": "grok-4.20-0309-non-reasoning",
+  "requestId": "8dc427e8-c78a-9fef-b94f-1d606c28ae20",
+  "latencyMs": 452,
+  "reply": "red",
+  "sawImageHint": true,
+  "packaging": {
+    "parts": [
+      {
+        "type": "text",
+        "text": "What dominant color is this image? Reply with one word only: red, green, blue, o"
+      },
+      {
+        "type": "image_url",
+        "urlPrefix": "data:image/png;base64,iVBORw0KGg"
+      }
+    ]
+  },
+  "note": "Uses app media packaging + relay body builder (Direct path shape). Key not logged."
+}

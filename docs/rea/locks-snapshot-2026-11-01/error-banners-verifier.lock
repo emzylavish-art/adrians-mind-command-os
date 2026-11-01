@@ -1,0 +1,25 @@
+owner: Error Banners Bot verifier
+target: 7f40ca8 (preview/integration; error-banners merged as 9d8e6ee) + aa54d1a unit tests
+status: done, released
+claimed_at: 2026-11-01T13:29:09+01:00
+released_at: 2026-11-01T13:43:59+01:00
+worktree: /workspace/eb-live-7f40ca8 (temp, detached), /workspace/eb-live-aa54 (temp, detached)
+port: 8180 (dev server pid 1186528, http://127.0.0.1:8180)
+paths_claimed:
+  - /workspace/eb-live-7f40ca8
+  - /workspace/eb-live-aa54
+  - /workspace/audit/error-banners-verify-*/
+  - /workspace/mind-command-os-error-banners/.handoff/NOTION_HANDOFF.md (append only)
+notes: |
+  Read-and-test only. No commits, no pushes.
+result: |
+  Live-verified 7f40ca8 on http://127.0.0.1:8180 (server stopped). Temp worktrees /workspace/eb-live-7f40ca8 and /workspace/eb-live-aa54 removed + pruned.
+  Evidence: /workspace/audit/error-banners-verify-20261101T133142+0100/ (results.json, screenshots, eb-verify.mjs).
+
+--- run 2026-11-01T15:08+01:00 (Africa/Lagos)
+status: claimed (read/test only)
+target: 9545007 (local preview/integration, Merge Gate c19)
+worktree: /workspace/eb-verify-9545007 (temp, detached)
+status: done, released
+released_at: 2026-11-01T15:12+01:00 (Africa/Lagos)
+result: 9545007 banners intact; TS 501/501; banner markup+retry 10/10; typecheck FAIL (src/routeTree.gen.ts from memory merge 2e769b4, not banner lane); lint 1 error (research.ts no-control-regex, logic lane) / 8 warnings. Temp worktree removed.

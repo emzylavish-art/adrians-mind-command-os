@@ -1,0 +1,9 @@
+feature: H14 hardening — Space hold-to-talk must not open the mic on ARIA interactive widgets or inside open modals
+lane: voice-wiring
+owner_bot: Voice Wiring Bot
+branch: voice-wiring (base e527875)
+status: claimed
+claimed_by: Voice Wiring Bot
+claimed_at: 2026-11-01T15:09:00+01:00
+evidence: /workspace/rea-captures/hardening-log.md#H14
+notes: Implementing ARIA role + modal document guards for PTT and Ctrl+Shift+V.

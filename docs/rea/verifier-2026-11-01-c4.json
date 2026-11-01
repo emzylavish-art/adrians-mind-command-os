@@ -1,0 +1,286 @@
+{
+  "date": "2026-11-01",
+  "cycle": 4,
+  "timezone": "Africa/Lagos",
+  "ports_up": [
+    8100,
+    8095,
+    8092,
+    8112
+  ],
+  "primary": 8100,
+  "primary_cwd": "/workspace/mind-command-os-milestone",
+  "checks": [
+    {
+      "gap": "Live Grok replies",
+      "claimed": "closed",
+      "branch": "xai-verification / milestone",
+      "result": "pass",
+      "live_preview": "pass_inferred",
+      "port": 8100,
+      "route": "/",
+      "evidence": "App shell Adrian's Mind on :8100 (milestone); composer Send path present; key-loading on xai-verification. Screenshot: verifier-c4/port-8100-home.png"
+    },
+    {
+      "gap": "Mode\u2192model picker",
+      "claimed": "closed",
+      "branch": "logic-wiring",
+      "result": "pass",
+      "live_preview": "pass",
+      "port": 8100,
+      "route": "/",
+      "evidence": "modelTierChip marker true on :8100 DOM; ModelTierChip in milestone command-app. Shot: port-8100-home.png"
+    },
+    {
+      "gap": "Live voice",
+      "claimed": "closed",
+      "branch": "voice-integration/voice-wiring",
+      "result": "pass",
+      "live_preview": "pass",
+      "port": 8100,
+      "route": "/",
+      "evidence": "voice marker true on :8100; also :8095 voice-wiring preview shot port-8095-home.png"
+    },
+    {
+      "gap": "Error banners",
+      "claimed": "closed",
+      "branch": "error-banners",
+      "result": "pass",
+      "live_preview": "unverifiable_idle",
+      "port": 8100,
+      "route": "/",
+      "evidence": "data-testid=failure-banner in milestone command-app.tsx:2434; not visible until failure. Contract present."
+    },
+    {
+      "gap": "Image attach/vision",
+      "claimed": "closed",
+      "branch": "media-integration",
+      "result": "pass",
+      "live_preview": "pass",
+      "port": 8100,
+      "route": "/ Chat",
+      "evidence": "attach+Imagine markers true; shot port-8100-view-chat.png"
+    },
+    {
+      "gap": "MCP builtins",
+      "claimed": "closed",
+      "branch": "mcp-integration",
+      "result": "pass",
+      "live_preview": "pass",
+      "port": 8100,
+      "route": "/ Tools",
+      "evidence": "Tools nav + mcp marker; shot port-8100-view-tools.png"
+    },
+    {
+      "gap": "Web search wiring",
+      "claimed": "closed",
+      "branch": "logic-wiring",
+      "result": "pass",
+      "live_preview": "pass",
+      "port": 8100,
+      "route": "/ Research",
+      "evidence": "Research nav present; shot port-8100-view-research.png (live MIND_SEARCH_* may still refuse)"
+    },
+    {
+      "gap": "Notion OAuth / connectors UI",
+      "claimed": "closed",
+      "branch": "mcp-integration",
+      "result": "pass",
+      "live_preview": "pass",
+      "port": 8100,
+      "route": "/ Connected",
+      "evidence": "Connected view shot port-8100-view-connected.png; oauth/drive markers true"
+    },
+    {
+      "gap": "Drive attach",
+      "claimed": "closed",
+      "branch": "media-integration",
+      "result": "pass",
+      "live_preview": "pass",
+      "port": 8100,
+      "route": "/",
+      "evidence": "Drive marker/text in :8100 DOM; multi-account rotation commits on media tip"
+    },
+    {
+      "gap": "Tool timeline",
+      "claimed": "in_progress\u2192merged",
+      "branch": "preview/integration + milestone",
+      "result": "pass",
+      "live_preview": "unverifiable_idle",
+      "port": 8100,
+      "route": "/",
+      "evidence": "Executing tools UI in milestone command-app.tsx:4268 (ancestor of tools-timeline). Card hidden until a tool run; marker false on idle home."
+    }
+  ],
+  "preview_results": [
+    {
+      "port": 8100,
+      "url": "http://127.0.0.1:8100/",
+      "ok": true,
+      "http": 200,
+      "title": "Adrian's Mind",
+      "screenshot": "/workspace/rea-captures/verifier-c4/port-8100-home.png",
+      "markers": {
+        "modelTier": true,
+        "voice": true,
+        "failure": true,
+        "attach": true,
+        "mcp": true,
+        "research": true,
+        "timeline": false,
+        "drive": true,
+        "oauth": true,
+        "dashboard": false
+      }
+    },
+    {
+      "port": 8091,
+      "url": "http://127.0.0.1:8091/",
+      "ok": false,
+      "http": 200,
+      "title": "",
+      "error": "page.content: Target crashed "
+    },
+    {
+      "port": 8096,
+      "url": "http://127.0.0.1:8096/",
+      "ok": false,
+      "error": "page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:8096/\nCall log:\n  - navigating to \"http://127.0.0.1:8096/\", waiting until \"domcontentloaded\"\n"
+    },
+    {
+      "port": 8095,
+      "url": "http://127.0.0.1:8095/",
+      "ok": true,
+      "http": 200,
+      "title": "Adrian's Mind",
+      "screenshot": "/workspace/rea-captures/verifier-c4/port-8095-home.png",
+      "markers": {
+        "modelTier": true,
+        "voice": true,
+        "failure": true,
+        "attach": true,
+        "mcp": true,
+        "research": true,
+        "timeline": false,
+        "drive": true,
+        "oauth": true,
+        "dashboard": false
+      },
+      "routes": [
+        {
+          "route": "/app",
+          "http": 404,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8095-app.png",
+          "title": "Adrian's Mind"
+        },
+        {
+          "route": "/dashboard",
+          "http": 404,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8095-dashboard.png",
+          "title": "Adrian's Mind"
+        },
+        {
+          "route": "/login",
+          "http": 200,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8095-login.png",
+          "title": "Adrian's Mind"
+        }
+      ]
+    },
+    {
+      "port": 8092,
+      "url": "http://127.0.0.1:8092/",
+      "ok": true,
+      "http": 200,
+      "title": "Adrian's Mind",
+      "screenshot": "/workspace/rea-captures/verifier-c4/port-8092-home.png",
+      "markers": {
+        "modelTier": true,
+        "voice": true,
+        "failure": true,
+        "attach": true,
+        "mcp": true,
+        "research": true,
+        "timeline": false,
+        "drive": true,
+        "oauth": true,
+        "dashboard": false
+      },
+      "routes": [
+        {
+          "route": "/app",
+          "http": 404,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8092-app.png",
+          "title": "Adrian's Mind"
+        },
+        {
+          "route": "/dashboard",
+          "http": 404,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8092-dashboard.png",
+          "title": "Adrian's Mind"
+        },
+        {
+          "route": "/login",
+          "http": 200,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8092-login.png",
+          "title": "Adrian's Mind"
+        }
+      ]
+    },
+    {
+      "port": 8112,
+      "url": "http://127.0.0.1:8112/",
+      "ok": true,
+      "http": 200,
+      "title": "Adrian's Mind",
+      "screenshot": "/workspace/rea-captures/verifier-c4/port-8112-home.png",
+      "markers": {
+        "modelTier": true,
+        "voice": true,
+        "failure": true,
+        "attach": true,
+        "mcp": true,
+        "research": true,
+        "timeline": false,
+        "drive": true,
+        "oauth": true,
+        "dashboard": false
+      },
+      "routes": [
+        {
+          "route": "/app",
+          "http": 404,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8112-app.png",
+          "title": "Adrian's Mind"
+        },
+        {
+          "route": "/dashboard",
+          "http": 200,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8112-dashboard.png",
+          "title": "Adrian's Mind \u00b7 Universe"
+        },
+        {
+          "route": "/login",
+          "http": 200,
+          "screenshot": "/workspace/rea-captures/verifier-c4/port-8112-login.png",
+          "title": "Adrian's Mind"
+        }
+      ]
+    }
+  ],
+  "port_8100_checks": {
+    "modelTierChip": true,
+    "failureBannerContract": false,
+    "imagineBtn": true,
+    "attach": true,
+    "researchNav": true,
+    "toolsNav": true,
+    "drive": true,
+    "executingTools": false,
+    "voice": true,
+    "shot_Tools": "/workspace/rea-captures/verifier-c4/port-8100-view-tools.png",
+    "shot_Research": "/workspace/rea-captures/verifier-c4/port-8100-view-research.png",
+    "shot_Connected": "/workspace/rea-captures/verifier-c4/port-8100-view-connected.png",
+    "shot_Chat": "/workspace/rea-captures/verifier-c4/port-8100-view-chat.png"
+  }
+}

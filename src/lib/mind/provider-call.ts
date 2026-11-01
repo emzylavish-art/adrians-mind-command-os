@@ -55,3 +55,10 @@ export async function callConfiguredProvider(input: {
   const body = await response.text();
   return { ok: Boolean(body.trim()), text: body.slice(0, 4000), error: body.trim() ? "" : `${input.id} returned an empty reply.` };
 }
+
+/** Map provider selection failures to HTTP status. Unknown → 400; missing key/config → 503. */
+export function httpStatusForProviderSelection(error: string): 400 | 503 {
+  if (/not known/i.test(error)) return 400;
+  if (/not configured|No .+ key is configured/i.test(error)) return 503;
+  return 400;
+}

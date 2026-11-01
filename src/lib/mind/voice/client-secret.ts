@@ -6,6 +6,19 @@ export type ClientSecretResult =
   | { ok: true; value: string; expiresAt: number }
   | { ok: false; error: string };
 
+export function formatClientSecretHttpError(status: number): string {
+  if (status === 401 || status === 403) {
+    return `Voice secret was refused (${status}). Check the speech key ACLs, then try Start voice again.`;
+  }
+  if (status === 429) {
+    return "Voice secret rate limit hit (429). Wait a moment, then try Start voice again.";
+  }
+  if (status >= 500) {
+    return `Voice secret service is unavailable (${status}). Try again in a moment.`;
+  }
+  return `Voice secret service returned ${status}.`;
+}
+
 /**
  * Mint an ephemeral realtime client secret using the server voice key.
  * The returned value is short-lived and safe to hand to the browser.
@@ -42,23 +55,14 @@ export async function mintRealtimeClientSecret(input: {
     return { ok: false, error: "Voice secret service did not answer in time." };
   }
   if (!response.ok) {
-    return { ok: false, error: `Voice secret service returned ${response.status}.` };
+    return { ok: false, error: formatClientSecretHttpError(response.status) };
   }
-  let payload: unknown;
+  let payload: { value?: string; expires_at?: number };
   try {
-    payload = await response.json();
+    payload = (await response.json()) as { value?: string; expires_at?: number };
   } catch {
     return { ok: false, error: "Voice secret service returned a response that could not be read." };
   }
-  if (!payload || typeof payload !== "object") {
-    return { ok: false, error: "Voice secret service returned a response that could not be read." };
-  }
-  const record = payload as { value?: unknown; expires_at?: unknown };
-  if (typeof record.value !== "string" || !record.value.trim()) {
-    return { ok: false, error: "Voice secret service returned no token." };
-  }
-  if (typeof record.expires_at !== "number" || !Number.isFinite(record.expires_at)) {
-    return { ok: false, error: "Voice secret service returned no expiry." };
-  }
-  return { ok: true, value: record.value, expiresAt: record.expires_at };
+  if (!payload.value) return { ok: false, error: "Voice secret service returned no token." };
+  return { ok: true, value: payload.value, expiresAt: payload.expires_at ?? 0 };
 }

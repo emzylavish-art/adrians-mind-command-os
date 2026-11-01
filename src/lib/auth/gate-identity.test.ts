@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, type KeyObject } from "node:crypto";
 import { SignJWT, exportJWK, type JWK } from "jose";
@@ -66,6 +66,36 @@ function staticJwks(keys: JWK[]): {
     calls: () => count,
   };
 }
+
+
+const GATE_ENV_KEYS = [
+  "VITE_AUTH_ENABLED",
+  "GROK_PROJECT_ID",
+  "GROK_GATE_ORIGIN",
+] as const;
+
+type GateEnvSnapshot = Partial<Record<(typeof GATE_ENV_KEYS)[number], string | undefined>>;
+
+let gateEnvSnapshot: GateEnvSnapshot = {};
+
+beforeEach(() => {
+  gateEnvSnapshot = {};
+  for (const key of GATE_ENV_KEYS) {
+    gateEnvSnapshot[key] = process.env[key];
+    delete process.env[key];
+  }
+});
+
+afterEach(() => {
+  for (const key of GATE_ENV_KEYS) {
+    const previous = gateEnvSnapshot[key];
+    if (previous === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = previous;
+    }
+  }
+});
 
 let urlCounter = 0;
 function uniqueUrl(): string {

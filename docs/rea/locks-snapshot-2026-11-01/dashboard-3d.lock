@@ -1,0 +1,13 @@
+owner: Dashboard Bot
+branch: dashboard-3d
+worktree: /workspace/mind-command-os-dashboard
+status: claimed
+claimed_at: 2026-11-01T14:50:43+01:00
+task: queue #2 click-and-zoom + hacker pass (cycle c9)
+paths_claimed:
+  - src/components/mind/dashboard-3d/ (excluding shaders/, materials/, atmosphere/, postfx/, motion/, particles/)
+  - src/app/dashboard/
+  - src/app/api/dashboard/
+  - .handoff/DASHBOARD_QUEUE.md
+  - /workspace/audit/dashboard-3d/
+notes: prior lock content (Cosmos Painter c3, 7a6e24f, released 14:50:13 WAT) superseded.

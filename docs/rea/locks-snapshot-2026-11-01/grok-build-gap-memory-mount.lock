@@ -1,0 +1,30 @@
+feature: Mount memory UX in the chat thread — "memory updated" chip on turns that save memory + per-chat "don't use memory" toggle in the composer/thread header (pending from memory-ux-depth)
+lane: grok-build
+owner_bot: Grok Build
+status: in_progress
+claimed_by: Grok Build
+claimed_at: 2026-11-01T14:57:40+01:00
+dispatched_by: Gap Dispatcher
+dispatched_at: 2026-11-01T14:57:00+01:00
+cycle: 19
+base: preview/memory-ux @ 5d3da7c
+branch: preview/memory-ux
+worktree: /workspace/mind-command-os-memory
+evidence: /workspace/audit/mind-os/memory-ux/MOUNT.md; dispatch-log 14:50 WAT pending (b)
+paths_claimed:
+  - src/components/mind/command-app.tsx (memory chip under assistant bubble + MemoryChatToggle in composer/thread header ONLY; not voice, not clipboard, not Imagine failure banners, not message-body, not styles.css)
+  - src/components/mind/memory-saved-indicator.tsx
+  - src/components/mind/memory-chat-toggle.tsx
+  - src/lib/mind/memory-mount*.test.ts (or similar regression)
+  - /workspace/audit/mind-os/memory-ux/
+  - /workspace/locks/grok-build-gap-memory-mount.lock
+paths_avoided:
+  - runImagine / runImagineEdit failure wiring (error-banners-imagine-banner.lock)
+  - clipboard paste (media-integration.lock)
+  - voice PTT/picker/transcript/listen (voice-wiring.lock)
+  - message-body.tsx / styles.css (visual-polish-gap-markdown-rendering.lock)
+acceptance_criteria:
+  - Indicator renders only when the turn really saved memory; toggle really skips memory for that chat and persists across reload
+  - Keyboard + aria labels; 390px mobile layout OK; honest error if memory store fails
+  - Touch command-app.tsx in the smallest region possible
+  - Regression tests; typecheck + npm test + build pass; push preview/memory-ux; done on Notion mirror 40bb95f33e42814aacf8c3281b4f528d; lock done, released

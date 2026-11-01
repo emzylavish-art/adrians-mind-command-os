@@ -1,4 +1,4 @@
-/** Shared speaker path for Direct and Orchestrator voice replies. */
+/** Shared speaker path for Direct, Orchestrator, and message-level Speak. */
 
 export type PcmFormat = { sampleRate: number; channels?: number };
 
@@ -18,7 +18,8 @@ export class SharedAudioOutput {
   private stopped = false;
   private playing = false;
   private onEnded: (() => void) | null = null;
-  private onLevel: ((level: number) => void) | null = null;
+  private htmlAudio: HTMLAudioElement | null = null;
+  private htmlFinish: (() => void) | null = null;
 
   get isPlaying() {
     return this.playing;
@@ -26,10 +27,6 @@ export class SharedAudioOutput {
 
   setEndedListener(listener: (() => void) | null) {
     this.onEnded = listener;
-  }
-
-  setLevelListener(listener: ((level: number) => void) | null) {
-    this.onLevel = listener;
   }
 
   private ensureCtx(sampleRate: number) {
@@ -41,7 +38,7 @@ export class SharedAudioOutput {
     return this.ctx;
   }
 
-  /** Stop buffered playback immediately. */
+  /** Stop buffered PCM playback immediately. */
   stop() {
     this.stopped = true;
     this.playing = false;
@@ -70,13 +67,7 @@ export class SharedAudioOutput {
     const samples = new Int16Array(aligned.buffer, aligned.byteOffset, Math.floor(aligned.byteLength / 2));
     const buffer = ctx.createBuffer(1, samples.length, sampleRate);
     const channel = buffer.getChannelData(0);
-    let peak = 0;
-    for (let i = 0; i < samples.length; i++) {
-      const v = samples[i]! / 32768;
-      channel[i] = v;
-      peak = Math.max(peak, Math.abs(v));
-    }
-    this.onLevel?.(Math.min(1, peak * 1.4));
+    for (let i = 0; i < samples.length; i++) channel[i] = samples[i] / 32768;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
@@ -111,38 +102,56 @@ export class SharedAudioOutput {
     const blob = new Blob([copy], { type: "audio/mpeg" });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    this.htmlAudio = audio;
     this.playing = true;
     await new Promise<void>((resolve) => {
+      let settled = false;
       const finish = () => {
+        if (settled) return;
+        settled = true;
         this.playing = false;
+        if (this.htmlAudio === audio) this.htmlAudio = null;
+        this.htmlFinish = null;
         URL.revokeObjectURL(url);
         this.onEnded?.();
         resolve();
       };
+      this.htmlFinish = finish;
+      if (this.stopped) {
+        finish();
+        return;
+      }
       audio.onended = finish;
       audio.onerror = finish;
-      (this as unknown as { _htmlAudio?: HTMLAudioElement })._htmlAudio = audio;
       audio.play().catch(finish);
     });
   }
 
   stopHtmlAudio() {
-    const audio = (this as unknown as { _htmlAudio?: HTMLAudioElement })._htmlAudio;
+    const audio = this.htmlAudio;
+    const finish = this.htmlFinish;
     if (audio) {
       try {
+        audio.onended = null;
+        audio.onerror = null;
         audio.pause();
-        audio.src = "";
+        audio.removeAttribute("src");
+        audio.load();
       } catch {
         /* ignore */
       }
-      (this as unknown as { _htmlAudio?: HTMLAudioElement })._htmlAudio = undefined;
+      this.htmlAudio = null;
     }
+    // Always resolve a pending playMpeg await so Speaking can clear.
+    finish?.();
+    this.htmlFinish = null;
   }
 
-  /** Hard cut used for barge-in / mic stop. */
+  /** Hard cut used for barge-in / mic stop / Speak cancel. */
   interrupt() {
     this.stop();
     this.stopHtmlAudio();
+    this.playing = false;
   }
 }
 

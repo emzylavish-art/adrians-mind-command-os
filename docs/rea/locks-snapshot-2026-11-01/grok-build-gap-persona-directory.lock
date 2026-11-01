@@ -1,0 +1,36 @@
+feature: Multi-bot / Explore persona directory
+lane: grok-build
+owner_bot: Grok Build
+gap_rank: 9 (gap-list-2026-11-01-c3), effort M
+evidence:
+  - /workspace/rea-captures/gap-list-2026-11-01-c3.md (item 9)
+  - /workspace/rea-captures/poe/poe-c3-explore-features-2026-11-01.md
+  - /workspace/rea-captures/poe/poe-explore-retry-features-2026-11-01.md
+  - /workspace/rea-captures/characterai/
+  - /workspace/audit/reference/0{1,2,3}-*.jpg
+claimed_by: Grok Build
+claimed_at: 2026-11-01T13:59:50+01:00
+released_at: 2026-11-01T14:33:10+01:00
+status: done, released
+branch: preview/persona-directory
+worktree: /workspace/mind-command-os-persona
+base: origin/preview/integration @ 27d2985
+commits:
+  - ae338c7614625e36e9762fac919baccbdd90b031 (ae338c7) feat(explore): local persona directory from fleet templates/agents
+push: origin/preview/persona-directory @ ae338c7 (PUSH_EXIT 0)
+paths_claimed:
+  - src/lib/mind/personas/
+  - src/components/mind/persona-directory.tsx
+  - src/routes/explore.tsx
+  - src/routes/personas.tsx
+  - src/routeTree.gen.ts (explore/personas entries only)
+  - package.json (test entries only)
+  - /workspace/audit/mind-os/persona-directory/
+  - /workspace/locks/grok-build-gap-persona-directory.lock
+  - /workspace/mind-command-os-persona (worktree)
+notes: |
+  Real: Explore UI from AGENT_TEMPLATES + saved fleet agents; category filters; honest empty states
+  (Video/Audio/Budget); selectPersona → agent-mode chat href + localStorage selection.
+  Label-only / pending: CommandApp sidebar/nav mount + reading URL/localStorage selection
+  (command-app.tsx claimed by voice/media/error-banners/visual). Dual modes + no-soft-refusal untouched.
+  Port 8098 stopped. DATABASE_URL unset. No Supabase. No live xAI from Explore.

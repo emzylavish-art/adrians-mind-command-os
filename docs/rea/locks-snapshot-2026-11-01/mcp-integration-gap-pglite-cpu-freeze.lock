@@ -1,0 +1,20 @@
+feature: HARDENING (HIGH) — H15 pglite_query timeout ineffective; CPU-bound SELECT freezes the Node event loop
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: MCP Integration Bot
+claimed_at: 2026-11-01T15:13:14+01:00
+updated_at: 2026-11-01T15:13:14+01:00
+status: claimed
+gap_rank: hardening H15 HIGH
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+base: af084a4
+paths_claimed:
+  - src/lib/mind/mcp/tools.ts (pgliteQuery / worker path)
+  - src/lib/mind/mcp/pglite-worker*.ts
+  - src/lib/mind/mcp/pglite-guard.test.ts
+  - src/lib/mind/mcp/*worker*
+  - .handoff/NOTION_HANDOFF.md
+  - package.json (test entries only if needed)
+notes: |
+  Worker-thread PGLite for tool queries; terminate on timeout. Keep READ ONLY + guard.

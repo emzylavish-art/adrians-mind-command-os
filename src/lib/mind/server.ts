@@ -3,9 +3,11 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
+import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
 
 const MODEL = "grok-4.5";
 
@@ -39,6 +41,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       ok: false as const,
       grok: "down" as const,
       model: MODEL,
+      modelTiers: modelTierCatalog(process.env),
       database: gate.error,
       isolation: "failed" as const,
       executionHalted,
@@ -52,8 +55,9 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const mindUrl = process.env.MIND_SUPABASE_URL;
   return {
     ok: true as const,
-    grok: process.env.XAI_API_KEY ? ("configured" as const) : ("unconfigured" as const),
+    grok: resolveXaiInferenceApiKey(process.env).ok ? ("configured" as const) : ("unconfigured" as const),
     model: MODEL,
+    modelTiers: modelTierCatalog(process.env),
     database: mindUrl
       ? "A Mind project URL is set and is not a forbidden project."
       : "No dedicated project yet. The free organization already holds two active projects.",
@@ -99,6 +103,7 @@ export const searchWeb = createServerFn({ method: "POST" })
 export const recordAgentExecution = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { id?: string; tool?: string; action?: string; ok?: boolean; detail?: string }) => ({
+    // Only a server-issued id is honored. tool/ok/detail from the client are ignored.
     id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
     tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
     action: input.action === "voice" ? "voice" : "chat",
@@ -106,11 +111,20 @@ export const recordAgentExecution = createServerFn({ method: "POST" })
     detail: typeof input.detail === "string" ? input.detail.slice(0, 500) : "",
   }))
   .handler(async ({ data, context }) => {
-    if (!data.id || !data.tool) return { ok: false as const, error: "The execution was not recorded." };
+    const { recordIssuedExecution } = await import("./execution-ledger");
     const { writeToolRun } = await import("./notion-record");
     const { getSql } = await import("../db");
-    await writeToolRun(await getSql(), context.userId, data);
-    return { ok: true as const };
+    const sql = await getSql();
+    const result = await recordIssuedExecution({
+      userId: context.userId,
+      id: data.id,
+      clientOk: data.ok,
+      clientDetail: data.detail,
+      write: async (run) => {
+        await writeToolRun(sql, context.userId, run);
+      },
+    });
+    return result;
   });
 
 export const notionStatus = createServerFn({ method: "GET" })
@@ -294,6 +308,8 @@ export const sendTurn = createServerFn({ method: "POST" })
     halted: boolean;
     history: { role: "user" | "assistant"; content: string }[];
     memoryContext: { id: string; text: string }[];
+    modelTier?: string;
+    images?: { dataUrl: string; name?: string }[];
   }) => input)
   .handler(async ({ data, context }) => {
     const { completeModelReply, prepareMindTurn } = await import("./turn.server");
@@ -344,7 +360,7 @@ export const loadMindCopy = createServerFn({ method: "POST" })
 
 export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => input)
+  .validator((input: { text: string; voiceId?: string }) => input)
   .handler(async ({ data, context }) => {
     const { validateSpeakTextInput } = await import("./voice/voice-input");
     const parsed = validateSpeakTextInput((data as { text?: unknown } | null)?.text);
@@ -354,15 +370,17 @@ export const speakText = createServerFn({ method: "POST" })
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
+    const { resolveXaiVoiceId } = await import("./voice/voices");
     const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
+    const voice_id = resolveXaiVoiceId(data.voiceId);
     let res: Response;
     try {
       res = await fetch("https://api.x.ai/v1/tts", {
         method: "POST",
         signal: AbortSignal.timeout(20_000),
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ text, voice_id: "eve" }),
+        body: JSON.stringify({ text, voice_id, language: "en", output_format: { codec: "mp3" } }),
       });
     } catch {
       return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
@@ -386,27 +404,135 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
     return mintRealtimeClientSecret({});
   });
-
-export const transcribeAudio = createServerFn({ method: "POST" })
+export const mcpRegistryList = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => input)
+  .handler(async ({ context }) => {
+    const { listRegistryServers } = await import("./mcp/registry");
+    return { servers: listRegistryServers(context.userId) };
+  });
+
+export const mcpRegistryToggle = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; enabled?: boolean }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
+    enabled: input.enabled === true,
+  }))
   .handler(async ({ data, context }) => {
-    const { decodeAudioBase64, validateTranscribeAudioInput } = await import("./voice/voice-input");
-    const parsed = validateTranscribeAudioInput(data);
-    if (!parsed.ok) return { ok: false as const, error: parsed.error };
+    const { setServerEnabled } = await import("./mcp/registry");
+    return { servers: setServerEnabled(context.userId, data.id, data.enabled) };
+  });
+
+export const mcpRegistryTools = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { listRegistryTools } = await import("./mcp/registry");
+    return { tools: await listRegistryTools(context.userId) };
+  });
+
+export const mcpRegistryCall = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { serverId?: string; tool?: string; args?: Record<string, unknown> }) => ({
+    serverId: typeof input.serverId === "string" ? input.serverId.slice(0, 80) : "",
+    tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
+    args: input.args && typeof input.args === "object" ? input.args : {},
+  }))
+  .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
-    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was transcribed." };
-    if (!allowMindRequest("stt", context.userId, 12)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
-    const { resolveVoiceApiKey } = await import("./voice/keys");
-    const apiKey = resolveVoiceApiKey(process.env);
-    if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was transcribed." };
-    const decoded = decodeAudioBase64(parsed.audioBase64);
-    if (!decoded.ok) return { ok: false as const, error: decoded.error };
-    const { transcribeWavBytes } = await import("./voice/stt");
-    return transcribeWavBytes({
-      bytes: decoded.bytes,
-      apiKey,
-      mime: parsed.mime,
-      filename: parsed.filename,
+    if (await haltIsOn(context.userId)) {
+      return { ok: false, status: "error" as const, serverId: data.serverId, tool: data.tool, text: "Emergency stop is on. No MCP tool was called." };
+    }
+    const { callRegistryTool } = await import("./mcp/registry");
+    const { getSql } = await import("../db");
+    const result = await callRegistryTool({
+      userId: context.userId,
+      serverId: data.serverId,
+      tool: data.tool,
+      args: data.args,
+      getSql,
     });
+    return {
+      ok: result.ok,
+      status: result.status,
+      serverId: result.serverId,
+      tool: result.tool,
+      text: result.text,
+    };
+  });
+
+export const listMindMemories = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Memories were not listed.", memories: [] as const };
+    }
+    const { getSql } = await import("../db");
+    const { listOwnerMemories } = await import("./memory/owner-ops");
+    const listed = await listOwnerMemories(await getSql(), context.userId, { includeArchived: false });
+    return { ok: true as const, memories: listed.memories };
+  });
+
+export const createMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { scope?: string; text?: string; projectId?: string | null; chatId?: string | null; source?: string }) => {
+    const scope = input.scope === "project" || input.scope === "chat" ? input.scope : ("global" as const);
+    return {
+      scope: scope as "global" | "project" | "chat",
+      text: typeof input.text === "string" ? input.text : "",
+      projectId: typeof input.projectId === "string" ? input.projectId : null,
+      chatId: typeof input.chatId === "string" ? input.chatId : null,
+      source: typeof input.source === "string" ? input.source.slice(0, 160) : "owner",
+    };
+  })
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was saved.", memorySaved: false as const, savedMemoryId: null };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute.", memorySaved: false as const, savedMemoryId: null };
+    }
+    const { getSql } = await import("../db");
+    const { createOwnerMemory } = await import("./memory/owner-ops");
+    const { memorySignalFromSave } = await import("./memory/signal");
+    const saved = await createOwnerMemory(await getSql(), context.userId, data);
+    if (!saved.ok) return { ok: false as const, error: saved.error, ...memorySignalFromSave(saved) };
+    return { ok: true as const, item: saved.item, ...memorySignalFromSave({ ok: true, id: saved.item.id }) };
+  });
+
+export const editMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; text?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+    text: typeof input.text === "string" ? input.text : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was edited." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { editOwnerMemory } = await import("./memory/owner-ops");
+    return editOwnerMemory(await getSql(), context.userId, data.id, data.text);
+  });
+
+export const deleteMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was deleted." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { deleteOwnerMemory } = await import("./memory/owner-ops");
+    return deleteOwnerMemory(await getSql(), context.userId, data.id);
   });

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { inspectWebPage, workerHealth } from "@/lib/mind/server";
+import { useEffect, useRef, useState } from "react";
+import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -24,15 +24,38 @@ import {
   type ProviderConnection,
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
+import { McpListStatusRows, loadMcpList, onceListRetry, type McpListState } from "@/lib/mind/mcp-list-state";
+
+
+function botAvatarSrc(name: string) {
+  const lower = name.toLowerCase();
+  if (lower.includes("document") || lower.includes("personal") || lower.includes("content") || lower.includes("knowledge")) return "/avatars/avatar-documents.webp";
+  if (lower.includes("research") || lower.includes("data")) return "/avatars/avatar-research.webp";
+  if (lower.includes("cod") || lower.includes("build") || lower.includes("browser") || lower.includes("project")) return "/avatars/avatar-build.webp";
+  if (lower.includes("notion") || lower.includes("knowledge")) return "/avatars/avatar-notion.webp";
+  if (lower.includes("email") || lower.includes("mail")) return "/avatars/avatar-email.webp";
+  const pool = [
+    "/avatars/avatar-documents.webp",
+    "/avatars/avatar-research.webp",
+    "/avatars/avatar-build.webp",
+    "/avatars/avatar-notion.webp",
+    "/avatars/avatar-email.webp",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash + name.charCodeAt(i) * (i + 1)) % pool.length;
+  return pool[hash];
+}
 
 export function FleetPanel({
   mode,
   ws,
   setWs,
+  onFailure,
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
+  onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [goal, setGoal] = useState("");
@@ -47,6 +70,56 @@ export function FleetPanel({
   const [workerNote, setWorkerNote] = useState("Checking the worker.");
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
+  const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [mcpListState, setMcpListState] = useState<McpListState>({ status: "loading" });
+  const mcpListInFlight = useRef(false);
+  const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean; status?: string }[]>([]);
+  const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
+  const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
+  const [pcApprovals, setPcApprovals] = useState<
+    { id: string; token: string; command: string; agentId: string; agentLabel: string; expiresAt: string }[]
+  >([]);
+  const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
+
+  /** One MCP list load: loading → ready (maybe empty) or error banner. Retry re-runs this once. */
+  function loadMcpServers() {
+    if (mcpListInFlight.current) return;
+    mcpListInFlight.current = true;
+    setMcpListState({ status: "loading" });
+    void loadMcpList(() => mcpRegistryList()).then((next) => {
+      mcpListInFlight.current = false;
+      setMcpListState(next);
+      if (next.status === "ready") {
+        setMcpServers(next.servers);
+        return;
+      }
+      setMcpServers([]);
+      if (next.status === "error") onFailure?.(next.message, onceListRetry(loadMcpServers));
+    });
+  }
+
+  function refreshPcApprovals() {
+    void fetch("/api/mind/pc/approvals", { credentials: "include" })
+      .then(async (res) => {
+        const body = (await res.json().catch(() => null)) as
+          | { ok?: boolean; approvals?: typeof pcApprovals }
+          | null;
+        if (body?.ok && Array.isArray(body.approvals)) setPcApprovals(body.approvals);
+        else setPcApprovals([]);
+      })
+      .catch(() => setPcApprovals([]));
+  }
+
+  useEffect(() => {
+    if (mode !== "tools") return;
+    loadMcpServers();
+    void mcpRegistryTools()
+      .then((result) => setMcpTools(result.tools))
+      .catch(() => setMcpTools([]));
+    refreshPcApprovals();
+    const timer = window.setInterval(refreshPcApprovals, 15_000);
+    return () => window.clearInterval(timer);
+  }, [mode]);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
@@ -59,6 +132,7 @@ export function FleetPanel({
       .catch(() => setWorkerNote("Worker status could not be read. Nothing is reported as online."));
   }, [mode]);
 
+
   function apply(result: { ok: true; ws: Workspace } | { ok: false; error: string }) {
     if (!result.ok) {
       setNote(result.error);
@@ -70,12 +144,13 @@ export function FleetPanel({
 
   if (mode === "agents") {
     return (
-      <section className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6">
+      <section className="dense-card card-texture mx-4 mb-6 p-4 md:mx-6">
         <h3 className="font-semibold">Agent directory</h3>
         <p className="mt-1 text-sm text-muted">Templates are definitions. A saved agent is not deployed. Local ready means the Run worker button in this app can execute it. Hosted stays external until a worker process exists.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {AGENT_TEMPLATES.map((template) => (
-            <button key={template.name} type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addAgentFromTemplate(ws, template.name))}>
+            <button key={template.name} type="button" className="dense-card inline-flex min-h-11 items-center gap-2 px-3 text-sm" onClick={() => apply(addAgentFromTemplate(ws, template.name))}>
+              <img src={botAvatarSrc(template.name)} alt="" className="bot-avatar-img size-8" />
               Add {template.name}
             </button>
           ))}
@@ -113,11 +188,16 @@ export function FleetPanel({
           {ws.agents.filter((agent) => !agent.archived).map((agent) => {
             const deployment = ws.deployments.find((item) => item.agentId === agent.id);
             return (
-              <li key={agent.id} className="rounded-panel border border-line p-3 text-sm">
+              <li key={agent.id} className="glow-card rounded-panel border border-line/80 p-3 text-sm">
+                <div className="flex items-start gap-3">
+                  <img src={botAvatarSrc(agent.name)} alt="" className="bot-avatar-img" />
+                  <div className="min-w-0 flex-1">
                 <p className="font-semibold">{agent.name}</p>
                 <p className="text-muted">{agent.description}</p>
                 <p className="mt-1 text-xs text-muted">Tools: {agent.tools.join(", ") || "none"}. Version {agent.version}. {deployment ? `${deployment.target} · ${deployment.state}` : "Not deployed"}.</p>
                 {deployment?.error ? <p className="text-xs text-muted">{deployment.error}</p> : null}
+                  </div>
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "local-worker"))}>Arm local worker</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "hosted-worker"))}>Record hosted target</button>
@@ -135,9 +215,11 @@ export function FleetPanel({
 
   if (mode === "runs") {
     return (
-      <section className="p-4 md:p-6">
+      <section className="page-shell">
+        <div className="page-hero mb-4">
         <h2 className="font-display text-3xl font-bold">Agent runs</h2>
         <p className="text-sm text-muted">Events come from the local worker. This does not call a model, send mail, or invent browser screenshots.</p>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <select value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
             <option value="">Choose agent</option>
@@ -169,7 +251,13 @@ export function FleetPanel({
         </div>
         {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
         <ul className="mt-4 space-y-3">
-          {ws.runs.length === 0 && <li className="text-sm text-muted">No runs yet.</li>}
+          {ws.runs.length === 0 && (
+            <li className="empty-state">
+              <img src="/empty/empty-activity.svg" alt="" />
+              <p className="font-semibold">No runs yet</p>
+              <p className="text-sm text-muted">Queue a run, then press Run worker once.</p>
+            </li>
+          )}
           {ws.runs.slice(0, 20).map((run) => (
             <li key={run.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
               <p className="font-semibold">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state}</p>
@@ -198,9 +286,11 @@ export function FleetPanel({
 
   if (mode === "connected") {
     return (
-      <section className="p-4 md:p-6">
-        <h2 className="font-display text-3xl font-bold">Connected apps</h2>
-        <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Gmail stays not connected until Google OAuth is configured.</p>
+      <section className="page-shell">
+        <div className="page-hero mb-4">
+          <h2 className="font-display text-3xl font-bold">Connected apps</h2>
+          <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Gmail stays not connected until Google OAuth is configured.</p>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <select value={provider} onChange={(event) => setProvider(event.target.value as ProviderConnection["provider"])} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
             {["grok", "openai", "anthropic", "gemini", "openrouter", "ollama"].map((item) => (
@@ -213,7 +303,7 @@ export function FleetPanel({
         <ul className="mt-4 space-y-2">
           {ws.connections.length === 0 && <li className="text-sm text-muted">No extra connections yet. Chat still uses the server Grok key only when you press Send.</li>}
           {ws.connections.map((item) => (
-            <li key={item.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
+            <li key={item.id} className="dense-card dense-row text-sm">
               {item.label} · {item.provider} · {item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected."} · secret stored: no
             </li>
           ))}
@@ -236,9 +326,8 @@ export function FleetPanel({
 
   if (mode === "scheduled") {
     return (
-      <section className="p-4 md:p-6">
-        <h2 className="font-display text-3xl font-bold">Scheduled tasks</h2>
-        <p className="text-sm text-muted">{workerNote} This database is local. It is not hosted scheduling.</p>
+      <section className="page-shell">
+        <div className="page-hero mb-4"><h2 className="font-display text-3xl font-bold">Scheduled tasks</h2><p className="text-sm text-muted">{workerNote} This database is local. It is not hosted scheduling.</p></div>
         <p className="mt-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
@@ -257,9 +346,15 @@ export function FleetPanel({
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
         </div>
         <ul className="mt-4 space-y-2">
-          {ws.schedules.length === 0 && <li className="text-sm text-muted">No schedules yet.</li>}
+          {ws.schedules.length === 0 && (
+            <li className="empty-state">
+              <img src="/empty/empty-activity.svg" alt="" />
+              <p className="font-semibold">No schedules yet</p>
+              <p className="text-sm text-muted">Add a daily job to queue local work.</p>
+            </li>
+          )}
           {ws.schedules.map((job) => (
-            <li key={job.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
+            <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
               <p className="text-xs text-muted">{job.enabled ? "On" : "Off"} · {job.timeZone || "UTC"}{job.clockHour == null ? ` · every ${job.intervalMinutes} minutes` : ` · ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")}`} · next {job.nextRunAt} · last {job.lastRunAt ?? "never"} · {job.lastStatus || "no run"} · {job.lastError || "No error"}</p>
               <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
@@ -271,38 +366,181 @@ export function FleetPanel({
     );
   }
 
+
   return (
-    <section className="p-4 md:p-6">
-      <h2 className="font-display text-3xl font-bold">Tools</h2>
-      <p className="text-sm text-muted">Local reads run in the worker. Page inspect uses the browser driver only when you press Open page. Image, video, and model calls are not made here.</p>
+    <section className="page-shell">
+      <div className="page-hero mb-4">
+        <h2 className="font-display text-3xl font-bold">Tools</h2>
+        <p className="text-sm text-muted">Local reads run in the worker. Page inspect uses the browser driver only when you press Open page. Image, video, and model calls are not made here.</p>
+      </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <input value={pageUrl} onChange={(event) => setPageUrl(event.target.value)} placeholder="https://example.com" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
         <button
           type="button"
           className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
           onClick={() => {
-            void inspectWebPage({ data: { url: pageUrl } }).then((result) => {
-              setPageNote(result.ok ? `${result.title}\n${result.excerpt}` : result.error);
-            }).catch((error: unknown) => {
-              setPageNote(error instanceof Error ? error.message : "The page was not opened.");
-            });
+            const run = () => {
+              void inspectWebPage({ data: { url: pageUrl } }).then((result) => {
+                if (result.ok) {
+                  setPageNote(`${result.title}\n${result.excerpt}`);
+                  return;
+                }
+                setPageNote(result.error);
+                onFailure?.(result.error, run);
+              }).catch((error: unknown) => {
+                const message = error instanceof Error ? error.message : "The page was not opened.";
+                setPageNote(message);
+                onFailure?.(message, run);
+              });
+            };
+            run();
           }}
         >
           Open page
         </button>
       </div>
       {pageNote ? <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{pageNote}</p> : null}
-      <ul className="mt-4 space-y-2 text-sm">
+      <ul className="tool-list mt-4 space-y-2 text-sm">
         {toolCatalog().map((tool) => (
-          <li key={tool.id} className="rounded-panel border border-line bg-surface p-3">
+          <li key={tool.id} className="tool-card dense-card flex flex-col gap-1 p-3" data-available={tool.available ? "true" : "false"}>
             <p className="font-semibold">{tool.name} · {tool.available ? "Available" : "Not available"}</p>
             <p className="text-xs text-muted">{tool.reason}</p>
           </li>
         ))}
       </ul>
+
+      <div className="mt-6 space-y-3">
+        <h3 className="font-semibold">PC shell approvals</h3>
+        <p className="text-sm text-muted">Non-allowlisted pc_run_shell commands wait here. Approve or deny from this panel only — tool confirm args cannot authorize them.</p>
+        <ul className="space-y-2 text-sm">
+          {pcApprovals.map((item) => (
+            <li key={item.id} className="rounded-panel border border-line bg-surface p-3">
+              <p className="font-semibold">{item.command}</p>
+              <p className="text-xs text-muted">Agent {item.agentLabel || item.agentId} · expires {item.expiresAt} · id {item.id}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    setPcApprovalNote(`approving ${item.id}`);
+                    void fetch("/api/mind/pc/approve", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ approvalId: item.id, token: item.token, command: item.command }),
+                    })
+                      .then(async (res) => {
+                        const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; error?: string } | null;
+                        setPcApprovalNote(body?.ok ? `ok: ${body.text ?? "ran"}` : `error: ${body?.error ?? res.status}`);
+                        refreshPcApprovals();
+                      })
+                      .catch((error: unknown) => {
+                        setPcApprovalNote(error instanceof Error ? error.message : "Approve failed.");
+                      });
+                  }}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    setPcApprovalNote(`denying ${item.id}`);
+                    void fetch("/api/mind/pc/deny", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ approvalId: item.id, token: item.token }),
+                    })
+                      .then(async (res) => {
+                        const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                        setPcApprovalNote(body?.ok ? `denied ${item.id}` : `error: ${body?.error ?? res.status}`);
+                        refreshPcApprovals();
+                      })
+                      .catch((error: unknown) => {
+                        setPcApprovalNote(error instanceof Error ? error.message : "Deny failed.");
+                      });
+                  }}
+                >
+                  Deny
+                </button>
+              </div>
+            </li>
+          ))}
+          {pcApprovals.length === 0 ? <li className="text-sm text-muted">No pending PC shell approvals.</li> : null}
+        </ul>
+        {pcApprovalNote ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
+      </div>
+
+      <div className="mt-6 space-y-3">
+        <h3 className="font-semibold">MCP servers</h3>
+        <p className="text-sm text-muted">Every registered server is listed. Disabled servers keep their tools visible but calls refuse honestly. Toggles persist on the server.</p>
+        <ul className="space-y-2 text-sm">
+          {mcpServers.map((server) => {
+            const tools = mcpTools.filter((tool) => tool.serverId === server.id);
+            return (
+              <li key={server.id} className="rounded-panel border border-line bg-surface p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{server.label}</p>
+                    <p className="text-xs text-muted">{server.kind} · {server.enabled ? "Enabled" : "Disabled"} · {tools.filter((t) => !t.name.startsWith("(")).length} tool(s)</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                    onClick={() => {
+                      void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
+                        setMcpServers(result.servers);
+                        void mcpRegistryTools().then((listed) => setMcpTools(listed.tools)).catch(() => undefined);
+                      });
+                    }}
+                  >
+                    {server.enabled ? "Turn off" : "Turn on"}
+                  </button>
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {tools.map((tool) => (
+                    <li key={`${tool.serverId}:${tool.name}`} className="rounded-panel border border-line px-2 py-1">
+                      <p className="font-semibold">{tool.name} · {tool.status === "timeout" ? "Timed out" : tool.status === "error" ? "Error" : server.enabled && tool.enabled ? "Available" : "Gated"}</p>
+                      <p className="text-xs text-muted">{tool.description}</p>
+                      {tool.name === "pglite_query" ? (
+                        <button
+                          type="button"
+                          className="mt-1 min-h-11 rounded-panel border border-line px-3 text-sm"
+                          disabled={mcpCallStatus === "running"}
+                          onClick={() => {
+                            setMcpCallStatus("running");
+                            setMcpCallNote(`running: pglite_query on ${server.label} (enabled=${server.enabled})`);
+                            void mcpRegistryCall({ data: { serverId: server.id, tool: "pglite_query", args: { sql: "SELECT 1 AS n" } } })
+                              .then((result) => {
+                                const row = result as { status: string; text: string };
+                                setMcpCallStatus(row.status === "ok" ? "ok" : row.status === "timeout" ? "timeout" : "error");
+                                setMcpCallNote(`${row.status}: ${row.text}`);
+                              })
+                              .catch((error: unknown) => {
+                                setMcpCallStatus("error");
+                                setMcpCallNote(error instanceof Error ? error.message : "MCP call failed.");
+                              });
+                          }}
+                        >
+                          Try SELECT 1
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            );
+          })}
+          <McpListStatusRows state={mcpListState} onRetry={onceListRetry(loadMcpServers)} />
+        </ul>
+        {mcpCallNote ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
+      </div>
+
       <ul className="mt-4 space-y-2 text-sm">
+        {ws.browserSessions.length === 0 && <li className="rounded-panel border border-line bg-surface p-3 text-muted">No browser sessions yet. Open page records one only after a successful inspect.</li>}
         {ws.browserSessions.map((session) => (
-          <li key={session.id} className="rounded-panel border border-line bg-surface p-3">
+          <li key={session.id} className="dense-card p-3">
             <p className="font-semibold">{session.title || "No title"} · {session.status}</p>
             <p className="text-xs text-muted">{session.url}</p>
             <p className="mt-1">{session.excerpt || session.lastAction}</p>

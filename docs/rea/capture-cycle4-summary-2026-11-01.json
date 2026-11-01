@@ -1,0 +1,158 @@
+{
+  "cycle": 4,
+  "date": "2026-11-01",
+  "walled": [
+    {
+      "id": "claude",
+      "label": "app",
+      "url": "https://claude.ai/",
+      "status": "partial",
+      "reason": "http_403",
+      "title": "Just a moment...",
+      "finalUrl": "https://claude.ai/login",
+      "http": 403
+    },
+    {
+      "id": "claude",
+      "label": "com",
+      "url": "https://claude.com/",
+      "status": "captured",
+      "reason": null,
+      "title": "Claude by Anthropic | The AI for problem solvers",
+      "finalUrl": "https://claude.com/",
+      "http": 200
+    },
+    {
+      "id": "phind",
+      "label": "home",
+      "url": "https://www.phind.com/",
+      "status": "blocked",
+      "reason": "not_found",
+      "title": "404: NOT_FOUND",
+      "finalUrl": "https://www.phind.com/",
+      "http": 404
+    },
+    {
+      "id": "poe",
+      "label": "home",
+      "url": "https://poe.com/",
+      "status": "partial",
+      "reason": "login_wall",
+      "title": "Poe - Fast, Helpful AI Chat",
+      "finalUrl": "https://poe.com/login?redirect_url=%2F",
+      "http": 200
+    },
+    {
+      "id": "poe",
+      "label": "explore",
+      "url": "https://poe.com/explore",
+      "status": "captured",
+      "reason": null,
+      "title": "Explore - Poe",
+      "finalUrl": "https://poe.com/explore?category=Official",
+      "http": 200
+    }
+  ],
+  "light": [
+    {
+      "id": "chatgpt",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "ffa275739c83c254",
+      "domHash": "b66b4283153e934b",
+      "title": "ChatGPT: Chat, Work, Create & Code with AI"
+    },
+    {
+      "id": "gemini",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "861e00aca9d25742",
+      "domHash": "183307ef8c0a9c9e",
+      "title": "Google Gemini"
+    },
+    {
+      "id": "perplexity",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "87ee1a95a91e90a7",
+      "domHash": "baea9159f9afd6e3",
+      "title": "Perplexity"
+    },
+    {
+      "id": "manus",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "4c0d027dc6e8bf31",
+      "domHash": "9aab79eb85d677ee",
+      "title": "Manus: Hands On AI"
+    },
+    {
+      "id": "copilot",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "08c291a53eb36b5a",
+      "domHash": "9f9f2550fab02b8b",
+      "title": "Microsoft Copilot | Sign in"
+    },
+    {
+      "id": "metaai",
+      "status": "partial",
+      "reason": "http_403",
+      "changed": true,
+      "recaptured": false,
+      "prev": "08d00a7bcb25c638",
+      "domHash": "4ec5996ae406ae08",
+      "title": "Meta AI - Your AI Assistant for Images, Shopping and More"
+    },
+    {
+      "id": "youcom",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "09cdba4be8679d9e",
+      "domHash": "b5cc12917b75ec19",
+      "title": "You.com | Search and inference for AI"
+    },
+    {
+      "id": "huggingchat",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "13d5d06f17bbcbdd",
+      "domHash": "a13fdf85d5f571b5",
+      "title": "HuggingChat"
+    },
+    {
+      "id": "pi",
+      "status": "partial",
+      "reason": "http_403",
+      "changed": true,
+      "recaptured": false,
+      "prev": "1c63b3e907fbba7c",
+      "domHash": "2edc9d6765e9ba39",
+      "title": "Just a moment..."
+    },
+    {
+      "id": "characterai",
+      "status": "captured",
+      "reason": null,
+      "changed": true,
+      "recaptured": true,
+      "prev": "1792f37f7d2958ea",
+      "domHash": "62f9053028e0dcb1",
+      "title": "character.ai | AI Chat, Reimagined–Your Words. Your World."
+    }
+  ]
+}

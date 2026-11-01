@@ -183,14 +183,15 @@ describe("bounded agent", () => {
     assert.equal(calls, 3);
   });
 
-  it("sends tool results back in tool-message form and only registers the three read tools", () => {
+  it("sends tool results back in tool-message form and registers read tools plus imagine", () => {
     const body = buildAgentModelBody([
       { role: "user", content: "List chats" },
       { role: "assistant", content: "", toolCalls: [{ id: "call-1", name: "list_chats", arguments: {} }] },
       { role: "tool", toolCallId: "call-1", name: "list_chats", content: "Dock" },
     ]);
     assert.equal(body.model, "grok-4.5");
-    assert.deepEqual(body.tools.map((tool) => tool.function.name), ["list_projects", "list_chats", "search_notes"]);
+    assert.equal(buildAgentModelBody([], { model: "grok-build-0.1" }).model, "grok-build-0.1");
+    assert.deepEqual(body.tools.map((tool) => tool.function.name), ["list_projects", "list_chats", "search_notes", "imagine"]);
     const encoded = JSON.stringify(body);
     assert.equal(encoded.includes("shell"), false);
     const messages = toProviderMessages([
@@ -205,5 +206,137 @@ describe("bounded agent", () => {
     assert.deepEqual(parsed.toolCalls[0]?.arguments, { query: "pier" });
     const broken = readAgentMessage({ choices: [{ message: { content: "", tool_calls: [{ function: { name: "search_notes", arguments: "{" } }] } }] });
     assert.equal(typeof broken.toolCalls[0]?.arguments, "string");
+  });
+
+  it("runs imagine via the tool registry and returns images for inline render", async () => {
+    const tiny =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let calls = 0;
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw a red circle",
+      model: async () => {
+        calls += 1;
+        if (calls === 1) return { text: "", toolCalls: [{ id: "call-1", name: "imagine", arguments: { prompt: "a red circle" } }] };
+        return { text: "Here is your red circle.", toolCalls: [] };
+      },
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      execute: async (_ws, tool, args) => {
+        assert.equal(tool, "imagine");
+        assert.equal(args.prompt, "a red circle");
+        return { ok: true, lines: ["imagine: Generated 1 image with grok-imagine-image."], images: [{ dataUrl: tiny, name: "imagine-1.png", mime: "image/png" }] };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.text, "Here is your red circle.");
+    assert.equal(result.log[0]?.tool, "imagine");
+    assert.equal(result.images?.length, 1);
+    assert.equal(result.images?.[0]?.name, "imagine-1.png");
+  });
+
+  it("rejects imagine without a prompt", async () => {
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw",
+      model: async () => ({ text: "", toolCalls: [{ id: "call-1", name: "imagine", arguments: {} }] }),
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /prompt/);
+  });
+});
+
+describe("adversarial: agent imagine cost metering", () => {
+  it("PoC: default imagine path must hit the shared rate limiter", async () => {
+    const { resetImagineRateLimitForTests, checkImagineRateLimit, imagineRateLimitKey, IMAGINE_MAX_PER_WINDOW } = await import("./media/harden.ts");
+    resetImagineRateLimitForTests();
+    const owner = "owner-agent-poc";
+    const key = imagineRateLimitKey({ ownerId: owner, sessionId: "agent-run" });
+    for (let i = 0; i < IMAGINE_MAX_PER_WINDOW; i++) assert.equal(checkImagineRateLimit(key).ok, true);
+
+    let calls = 0;
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw something expensive",
+      model: async () => {
+        calls += 1;
+        if (calls === 1) return { text: "", toolCalls: [{ id: "call-1", name: "imagine", arguments: { prompt: "burn credits" } }] };
+        return { text: "should not get here", toolCalls: [] };
+      },
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      imagineOwnerId: owner,
+      imagineSessionId: "agent-run",
+      // Force empty key so a missed meter cannot spend live credits.
+      execute: undefined,
+    });
+    // Override generate by saturating limiter — defaultExecuteTool must refuse before network.
+    assert.equal(result.ok, false);
+    assert.match(`${result.error ?? ""} ${result.log.map((entry) => entry.detail).join(" ")}`, /rate-limited|Wait a minute/i);
+    resetImagineRateLimitForTests();
+  });
+
+  it("caps imagine calls per agent run (loop protection)", async () => {
+    const { resetImagineRateLimitForTests } = await import("./media/harden.ts");
+    resetImagineRateLimitForTests();
+    let imagineTools = 0;
+    const tiny =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let calls = 0;
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw many pictures",
+      maxSteps: 8,
+      imagineOwnerId: "owner-loop",
+      imagineSessionId: "run-1",
+      maxImaginePerRun: 4,
+      model: async () => {
+        calls += 1;
+        if (calls <= 6) return { text: "", toolCalls: [{ id: `call-${calls}`, name: "imagine", arguments: { prompt: `pic ${calls}` } }] };
+        return { text: "done", toolCalls: [] };
+      },
+      signal: signal(),
+      autonomy: "ask",
+      halted: false,
+      approved: true,
+      execute: async (_ws, tool) => {
+        assert.equal(tool, "imagine");
+        imagineTools += 1;
+        return { ok: true, lines: ["imagine: ok"], images: [{ dataUrl: tiny, name: "x.png", mime: "image/png" }] };
+      },
+    });
+    assert.ok(imagineTools <= 4, `imagineTools=${imagineTools}`);
+    assert.match(`${result.error ?? ""} ${result.log.map((e) => e.detail).join(" ")}`, /imagine.*limit|Too many Imagine|4/i);
+    resetImagineRateLimitForTests();
+  });
+});
+
+
+describe("adversarial: agent imagine spend owner required", () => {
+  it("refuses default imagine execute without imagineOwnerId", async () => {
+    const model: AgentModel = async () => ({
+      text: "",
+      toolCalls: [{ id: "1", name: "imagine", arguments: { prompt: "a lake" } }],
+    });
+    const result = await runBoundedAgent({
+      ws: workspace(),
+      goal: "Draw a lake",
+      model,
+      signal: signal(),
+      autonomy: "automatic",
+      halted: false,
+      approved: true,
+      // no imagineOwnerId
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error || "", /owner/i);
   });
 });

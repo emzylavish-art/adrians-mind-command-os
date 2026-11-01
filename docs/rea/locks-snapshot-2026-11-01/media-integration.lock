@@ -1,0 +1,25 @@
+owner: Media Integration Bot
+branch: media-integration
+worktree: /workspace/mind-command-os-media
+base: d624a19
+status: interrupted (rate-limited) — round 4 WIP uncommitted in worktree; next run should resume it
+claimed_at: 2026-11-01T14:50:40+01:00
+released_at:
+commits:
+  - 0abf71d
+  - ffc677b
+  - d624a19
+paths_claimed:
+  - src/lib/mind/media/ (r4: spend ledger, meter-in-generate, clipboard, SSRF ipv6) EXCLUDING storage/
+  - src/lib/mind/agent.ts
+  - src/lib/mind/agent-run.server.ts
+  - src/lib/mind/agent.test.ts
+  - src/components/mind/command-app.tsx (clipboard file paste ONLY)
+  - src/routes/api/mind/media/generate.ts
+  - src/routes/api/mind/media/imagine-status.ts (new)
+  - package.json (test entries only)
+  - /workspace/audit/media-integration/HARDENING.md
+notes: |
+  Round 4. Do NOT touch src/lib/mind/media/storage/ or storage routes (media-storage-rotation.lock).
+  Never mint/print keys. No force-push. Fail-test-first.
+interrupted_at: 2026-11-01T08:56:17-05:00

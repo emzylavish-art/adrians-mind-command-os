@@ -76,7 +76,7 @@ async function captureOnlyRoundtrip(secret, pcm) {
     const ws = new WebSocket('wss://api.x.ai/v1/realtime?model=grok-voice-latest', {
       headers: { Authorization: `Bearer ${secret}` },
     });
-    const timer = setTimeout(() => { try { ws.close(); } catch {}; resolve(); }, 25000);
+    const timer = setTimeout(() => { try { ws.close(); } catch { /* ignore */ }; resolve(); }, 25000);
     const send = (o) => ws.send(JSON.stringify(o));
     let forceSent = false;
     ws.on('message', (data, isBinary) => {
@@ -133,7 +133,7 @@ async function captureOnlyRoundtrip(secret, pcm) {
       }
       if (msg.type === 'response.done' && forceSent && events.filter((e) => e === 'response.done').length >= 2) {
         clearTimeout(timer);
-        try { ws.close(); } catch {}
+        try { ws.close(); } catch { /* ignore */ }
         resolve();
       }
       if (msg.type === 'error') events.push('ERR:' + redact(msg.error?.message || ''));
