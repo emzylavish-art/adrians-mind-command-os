@@ -34,6 +34,13 @@ describe("resolveSupabaseEnv", () => {
       }),
       { url: "https://a.supabase.co", anonKey: "publishable" },
     );
+    assert.deepEqual(
+      resolveSupabaseEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://pub.supabase.co",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "npk",
+      }),
+      { url: "https://pub.supabase.co", anonKey: "npk" },
+    );
   });
 
   it("ignores empty / whitespace values", () => {

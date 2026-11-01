@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
 import { safeRedirectPath } from "./safe-redirect";
+import { buildAuthCallbackUrl } from "./oauth-redirect";
 import { decideDashboardGate, type SupabaseGateUser } from "./gate";
 
 function asString(value: unknown, max = 320): string {
@@ -127,7 +128,7 @@ export const signUpWithPassword = createServerFn({ method: "POST" })
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(data.next)}`,
+        emailRedirectTo: buildAuthCallbackUrl(origin, data.next),
       },
     });
     if (error) {
@@ -179,7 +180,7 @@ export const startOAuth = createServerFn({ method: "POST" })
     }
     const supabase = createSupabaseServerClient();
     const origin = await requestOrigin();
-    const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(data.next)}`;
+    const redirectTo = buildAuthCallbackUrl(origin, data.next);
     const provider = data.provider as "google" | "github" | "apple";
     const { data: oauth, error } = await supabase.auth.signInWithOAuth({
       provider,
