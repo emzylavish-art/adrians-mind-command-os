@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
@@ -43,7 +43,15 @@ import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
-import { commitVoiceMode, readStoredVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import {
+  getServerVoiceMode,
+  getVoiceMode,
+  hydrateVoiceModeStore,
+  setVoiceModeStore,
+  subscribeVoiceMode,
+} from "@/lib/mind/voice/mode-store";
+import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
 import {
   isEditableKeyboardTarget,
   matchesVoiceToggleShortcut,
@@ -256,10 +264,12 @@ export function CommandApp() {
   const voiceNext = useRef(false);
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
   const listenRef = useRef<() => void>(() => undefined);
-  const voiceModeRef = useRef<VoiceRoutingMode>("direct");
-  const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
+  const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
+  const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
+  const speakAbortRef = useRef<AbortController | null>(null);
+  const speakGenRef = useRef(0);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -311,11 +321,8 @@ export function CommandApp() {
   const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
-    // Hydrate is read-only. Never write the SSR default ("direct") from an effect —
-    // that race wiped Orchestrator after toggle+reload in live QA.
-    const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
-    setVoiceMode(mode);
-    voiceModeRef.current = mode;
+    // Single store: hydrate from localStorage once; every badge reads the same snapshot.
+    hydrateVoiceModeStore(typeof localStorage === "undefined" ? null : localStorage);
   }, []);
 
   useEffect(() => {
@@ -324,16 +331,29 @@ export function CommandApp() {
 
   function applyVoiceMode(next: VoiceRoutingMode) {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
-    const committed = commitVoiceMode(next, storage);
+    const committed = setVoiceModeStore(next, storage);
     voiceModeRef.current = committed;
-    setVoiceMode(committed);
+  }
+
+  function interruptSpeakPlayback() {
+    interruptMessageSpeak({
+      sharedAudio: sharedAudioOutput,
+      abortSpeak: speakAbortRef.current,
+      speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
+    });
+    speakAbortRef.current = null;
+    setSpeaking(false);
   }
 
   useEffect(() => {
     return () => {
+      interruptMessageSpeak({
+        sharedAudio: sharedAudioOutput,
+        abortSpeak: speakAbortRef.current,
+        speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
+      });
       voiceSession.current?.close();
       voiceSession.current = null;
-      sharedAudioOutput.interrupt();
     };
   }, []);
 
@@ -1162,46 +1182,64 @@ export function CommandApp() {
   }
 
   async function speak(text: string) {
+    interruptSpeakPlayback();
+    const generation = ++speakGenRef.current;
+    const abort = new AbortController();
+    speakAbortRef.current = abort;
     setSpeaking(true);
     setError(null);
-    const result = await speakText({ data: { text } });
-    setSpeaking(false);
+    let result: Awaited<ReturnType<typeof speakText>>;
+    try {
+      result = await speakText({ data: { text } });
+    } catch (caught) {
+      if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
+      setSpeaking(false);
+      setError(formatVoiceClientError(caught));
+      return;
+    }
+    if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
     if (!result.ok) {
       if (!result.error.includes("No speech key")) {
+        setSpeaking(false);
         setError(result.error);
         return;
       }
       const synth = window.speechSynthesis;
       if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
+        setSpeaking(false);
         setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
         return;
       }
       const utter = new SpeechSynthesisUtterance(text);
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => {
-        setSpeaking(false);
-        setError("Browser speech failed. Nothing was spoken.");
+      utter.onend = () => {
+        if (generation === speakGenRef.current) setSpeaking(false);
       };
-      setSpeaking(true);
+      utter.onerror = () => {
+        if (generation === speakGenRef.current) {
+          setSpeaking(false);
+          setError("Browser speech failed. Nothing was spoken.");
+        }
+      };
       synth.cancel();
       synth.speak(utter);
       setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
       return;
     }
-    sharedAudioOutput.interrupt();
     try {
       await sharedAudioOutput.playMpegBase64(result.audio);
     } catch {
-      setError("The browser blocked playback.");
+      if (!shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) {
+        setError("The browser blocked playback.");
+      }
     } finally {
-      setSpeaking(false);
+      if (generation === speakGenRef.current) setSpeaking(false);
     }
   }
 
   function stopVoiceSession() {
+    interruptSpeakPlayback();
     voiceSession.current?.close();
     voiceSession.current = null;
-    sharedAudioOutput.interrupt();
     setVoiceListening(false);
     setVoiceLevel(0);
   }
@@ -1271,13 +1309,14 @@ export function CommandApp() {
       setNotice("Voice capture stopped.");
       return;
     }
+    // Cut message-level Speak / TTS / browser speech before opening the mic.
+    interruptSpeakPlayback();
     if (ws.halted) {
       setError("Emergency stop is on. Voice was not started.");
       return;
     }
     setError(null);
     setNotice(null);
-    sharedAudioOutput.interrupt();
     voiceSession.current?.interruptPlayback();
 
     try {
@@ -1317,7 +1356,7 @@ export function CommandApp() {
           void handleVoiceTranscript(text);
         },
         onSpeechStarted: () => {
-          sharedAudioOutput.interrupt();
+          interruptSpeakPlayback();
           session.interruptPlayback();
         },
         onError: (message) => setError(message || "Voice realtime error."),
