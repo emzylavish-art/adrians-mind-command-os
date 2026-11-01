@@ -91,3 +91,19 @@ On `webglcontextlost` handles are disposed and `lost` is true (honest frozen/pau
 
 ## Hacker-pass notes (cycle 4)
 - `createHealthAtmosphere`: `update` after `dispose` no longer resurrects FogExp2 or mutates a foreign fog (atmosphere/hacker-dispose.test).
+
+## Hacker-pass notes (cycle — high-DPR bloom)
+- `createTunedBloomPass`: EffectComposer sizes passes at `w*dpr`; the later `bloomHandle.setSize(cssW, cssH)` used to shrink bloom mips to 1/DPR² of the frame. `setSize(w, h, pixelRatio?)` now infers the composer's ratio when omitted, and composer-driven `pass.setSize` is clamped (NaN/0/huge). Test: `postfx/bloom-dpr.test.ts`.
+
+## Focus depth falloff (`createFocusDepthPass`)
+Depth-aware atmospheric falloff around the focused node: outside a thin depth band the frame desaturates, flattens and drifts toward the fog colour (max 0.42), so the focused star + Imagine card and the DOM detail card/charts read crisply. Off (no cost) with no focus. Insert **after god-rays, before bloom**:
+
+```ts
+const focusDepth = createFocusDepthPass();
+composer.addPass(focusDepth.pass); // after godRays.pass, before bloom.pass
+// per frame:
+focusDepth.setFocus(focusedMesh?.position ?? null, camera, { reducedMotion });
+focusDepth.setFogColor((scene.fog as THREE.FogExp2).color.getHex());
+focusDepth.tick(dtMs);
+// unmount / context loss: focusDepth.dispose();
+```

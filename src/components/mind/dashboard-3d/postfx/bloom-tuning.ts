@@ -23,8 +23,13 @@ export function bloomParamsForTone(tone: HealthTone): BloomTuning {
 export type TunedBloomHandle = {
   pass: UnrealBloomPass;
   update: (tone: HealthTone) => void;
-  /** Resize with a sanitized size (0/NaN/huge → clamped). */
-  setSize: (width: number, height: number) => void;
+  /**
+   * Resize with a sanitized size (0/NaN/huge → clamped). Width/height are CSS
+   * pixels; pass `pixelRatio` for device pixels. Omitted → reuse the ratio the
+   * EffectComposer last sized this pass at (composer.setSize runs first), so a
+   * CSS-pixel call never shrinks bloom below the device-pixel frame.
+   */
+  setSize: (width: number, height: number, pixelRatio?: number) => void;
   /** Frees the bloom mip render targets + materials. */
   dispose: () => void;
 };
@@ -47,6 +52,19 @@ export function createTunedBloomPass(
   const [w0, h0] = safeBloomSize(size.x, size.y);
   const pass = new UnrealBloomPass(new THREE.Vector2(w0, h0), p.strength, p.radius, p.threshold);
   let disposed = false;
+  // Device-pixel size last applied (composer path or handle path).
+  let devW = w0;
+  let devH = h0;
+  // HACKER (high-DPR): EffectComposer calls pass.setSize(w*dpr, h*dpr) directly —
+  // clamp that path too so NaN/0/8K×DPR can't allocate broken mip targets.
+  const rawSetSize = pass.setSize.bind(pass);
+  pass.setSize = (width: number, height: number) => {
+    if (disposed) return;
+    const [w, h] = safeBloomSize(width, height);
+    devW = w;
+    devH = h;
+    rawSetSize(w, h);
+  };
   const update = (next: HealthTone) => {
     if (disposed) return;
     const t = BLOOM_BY_TONE[normalizeHealthTone(next)];
@@ -54,10 +72,13 @@ export function createTunedBloomPass(
     pass.radius = t.radius;
     pass.threshold = t.threshold;
   };
-  const setSize = (width: number, height: number) => {
+  const setSize = (width: number, height: number, pixelRatio?: number) => {
     if (disposed) return;
-    const [w, h] = safeBloomSize(width, height);
-    pass.setSize(w, h);
+    const ratio =
+      pixelRatio !== undefined && Number.isFinite(pixelRatio) && pixelRatio > 0
+        ? pixelRatio
+        : inferPixelRatio(devW, devH, width, height);
+    pass.setSize(width * ratio, height * ratio);
   };
   const dispose = () => {
     if (disposed) return;
@@ -65,4 +86,16 @@ export function createTunedBloomPass(
     pass.dispose();
   };
   return { pass, update, setSize, dispose };
+}
+
+/**
+ * Ratio between the last device-pixel size and a CSS size when both axes agree
+ * (i.e. the composer already sized this pass for the same viewport). Else 1.
+ */
+export function inferPixelRatio(devW: number, devH: number, cssW: number, cssH: number): number {
+  if (![devW, devH, cssW, cssH].every((v) => Number.isFinite(v) && v > 0)) return 1;
+  const rx = devW / cssW;
+  const ry = devH / cssH;
+  if (rx < 1 || rx > 4) return 1;
+  return Math.abs(rx - ry) <= 0.02 * rx ? rx : 1;
 }

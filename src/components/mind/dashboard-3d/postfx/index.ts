@@ -6,6 +6,7 @@ export {
   BLOOM_BY_TONE,
   BLOOM_MAX_EDGE,
   bloomParamsForTone,
+  inferPixelRatio,
   safeBloomSize,
   createTunedBloomPass,
   type BloomTuning,
@@ -52,3 +53,13 @@ export {
   type PostfxBundle,
   type PostfxRebuildFactory,
 } from "./context-loss.ts";
+export {
+  FOCUS_BAND,
+  FOCUS_DEPTH_EASE_MS,
+  FOCUS_DEPTH_MAX,
+  FOCUS_RAMP,
+  FocusDepthShader,
+  createFocusDepthPass,
+  focusBandWeight,
+  type FocusDepthHandle,
+} from "./focus-depth.ts";

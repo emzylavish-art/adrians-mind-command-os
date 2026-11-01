@@ -16,3 +16,16 @@ export {
   type CreateHealthAtmosphereOpts,
   type HealthAtmosphereHandle,
 } from "./health-lights.ts";
+export {
+  FOCUS_EASE_MS,
+  FOCUS_KEY_INTENSITY,
+  FOCUS_RIM_INTENSITY,
+  createFocusLight,
+  focusKeyRgb,
+  focusRigPlacement,
+  focusRimRgb,
+  type FocusLightHandle,
+  type FocusLightInput,
+  type FocusRigPlacement,
+  type Vec3Like,
+} from "./focus-light.ts";
