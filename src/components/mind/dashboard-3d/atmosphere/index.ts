@@ -7,6 +7,7 @@ export {
   RIM_RGB,
   deriveFleetTone,
   isHealthTone,
+  normalizeHealthTone,
   type HealthTone,
   type Rgb,
 } from "./health-tone.ts";

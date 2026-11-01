@@ -48,6 +48,8 @@ export const FOG_PARAMS: Record<HealthTone, { color: number; density: number }> 
 
 /** Derive fleet tone: blocked > stalled > healthy > idle. */
 export function deriveFleetTone(healths: readonly HealthTone[]): HealthTone {
+  // Runtime data can be missing/malformed; junk entries count as neutral idle.
+  healths = Array.isArray(healths) ? healths.map(normalizeHealthTone) : [];
   if (healths.length === 0) return "idle";
   if (healths.some((h) => h === "blocked")) return "blocked";
   if (healths.some((h) => h === "stalled")) return "stalled";
@@ -55,6 +57,14 @@ export function deriveFleetTone(healths: readonly HealthTone[]): HealthTone {
   return "idle";
 }
 
-export function isHealthTone(value: string): value is HealthTone {
+export function isHealthTone(value: unknown): value is HealthTone {
   return value === "healthy" || value === "stalled" || value === "blocked" || value === "idle";
+}
+
+/**
+ * Missing / unknown health must read as neutral ("idle"), never green and
+ * never a crash in the render loop (light hacker pass, cycle 2).
+ */
+export function normalizeHealthTone(value: unknown): HealthTone {
+  return isHealthTone(value) ? value : "idle";
 }
