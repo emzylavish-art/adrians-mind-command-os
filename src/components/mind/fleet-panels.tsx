@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, workerHealth } from "@/lib/mind/server";
+import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -48,6 +48,7 @@ export function FleetPanel({
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [mcpListNeedsSignIn, setMcpListNeedsSignIn] = useState(false);
   const [mcpTools, setMcpTools] = useState<{ serverId: string; serverLabel: string; name: string; description: string; enabled: boolean; status?: string }[]>([]);
   const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
   const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
@@ -68,11 +69,33 @@ export function FleetPanel({
       .catch(() => setPcApprovals([]));
   }
 
+  function loadMcpServers() {
+    void mcpRegistryList()
+      .then((result) => {
+        const status = (result as { status?: string }).status;
+        if (status === "unauthenticated") {
+          setMcpListNeedsSignIn(true);
+          setMcpServers([]);
+          return;
+        }
+        setMcpListNeedsSignIn(false);
+        setMcpServers(Array.isArray(result.servers) ? result.servers : []);
+      })
+      .catch((caught: unknown) => {
+        const message = caught instanceof Error ? caught.message : "";
+        if (message === "Unauthorized" || /sign in is required/i.test(message)) {
+          setMcpListNeedsSignIn(true);
+          setMcpServers([]);
+          return;
+        }
+        setMcpListNeedsSignIn(false);
+        setMcpServers([]);
+      });
+  }
+
   useEffect(() => {
     if (mode !== "tools") return;
-    void mcpRegistryList()
-      .then((result) => setMcpServers(result.servers))
-      .catch(() => setMcpServers([]));
+    loadMcpServers();
     void mcpRegistryTools()
       .then((result) => setMcpTools(result.tools))
       .catch(() => setMcpTools([]));
@@ -80,6 +103,29 @@ export function FleetPanel({
     const timer = window.setInterval(refreshPcApprovals, 15_000);
     return () => window.clearInterval(timer);
   }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "tools" || !mcpListNeedsSignIn) return;
+    const refetchIfSignedIn = () => {
+      void mindStatus()
+        .then((status) => {
+          if (status.signedIn === true) loadMcpServers();
+        })
+        .catch(() => undefined);
+    };
+    const onFocus = () => refetchIfSignedIn();
+    const onVis = () => {
+      if (document.visibilityState === "visible") refetchIfSignedIn();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    const poll = window.setInterval(refetchIfSignedIn, 4_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(poll);
+    };
+  }, [mode, mcpListNeedsSignIn]);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
@@ -458,7 +504,7 @@ export function FleetPanel({
               </li>
             );
           })}
-          {mcpServers.length === 0 && <li className="text-sm text-muted">No MCP servers loaded yet.</li>}
+          {mcpListNeedsSignIn ? <li className="text-sm text-muted" data-testid="mcp-list-sign-in">Sign in to see MCP servers.</li> : mcpServers.length === 0 ? <li className="text-sm text-muted">No MCP servers loaded yet.</li> : null}
         </ul>
         {mcpCallNote ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
       </div>

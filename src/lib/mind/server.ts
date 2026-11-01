@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
@@ -370,11 +370,38 @@ export const speakText = createServerFn({ method: "POST" })
     return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };
   });
 
+/**
+ * Soft-auth MCP list: same session resolution as authMiddleware, but returns
+ * typed `unauthenticated` instead of throwing (quiet Tools empty state).
+ */
 export const mcpRegistryList = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([
+    createMiddleware({ type: "function" })
+      .client(async ({ next }) => {
+        const { getBearerToken } = await import("../auth/client");
+        return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+      })
+      .server(async ({ next, context }) => {
+        const { assertSameSiteRequest } = await import("../auth/isolation.server");
+        assertSameSiteRequest();
+        return next({ context: { bearerToken: context.bearerToken as string | undefined } });
+      }),
+  ])
   .handler(async ({ context }) => {
+    const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
+    const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
+    let userId: string | null = null;
+    if (!authConfigured && !gateIdentityEnabled()) {
+      if (!process.env.DATABASE_URL?.trim()) userId = DEV_USER_ID;
+    } else {
+      const user = await getSessionUser(context.bearerToken);
+      userId = user?.id ?? null;
+    }
+    if (!userId) {
+      return { status: "unauthenticated" as const, servers: [] as { id: string; label: string; kind: string; enabled: boolean }[] };
+    }
     const { listRegistryServers } = await import("./mcp/registry");
-    return { servers: listRegistryServers(context.userId) };
+    return { status: "ok" as const, servers: listRegistryServers(userId) };
   });
 
 export const mcpRegistryToggle = createServerFn({ method: "POST" })
