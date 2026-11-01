@@ -7,6 +7,7 @@ import {
   type PollState,
 } from "@/lib/mind/dashboard/status-poll";
 import { readStatusCache, writeStatusCache } from "@/lib/mind/dashboard/status-cache";
+import { dedupeBotsById } from "@/lib/mind/dashboard/bot-normalize";
 
 export type StatusData = DashboardStatus & { ok?: boolean };
 export type StatusState = PollState<StatusData>;
@@ -60,7 +61,7 @@ export function useDashboardStatus() {
       // Gap #12: normalize sparse section bags so UI optional chains stay honest.
       const normalized = {
         ...data,
-        bots: data.bots,
+        bots: dedupeBotsById(data.bots),
         spend: data.spend ?? { available: false as const, reason: "no spend source yet" },
         money: data.money ?? { available: false as const, reason: "no spend source yet", eventCount: 0 },
         notionGraph: data.notionGraph ?? { available: false, mode: "empty", reason: "no notion graph", pages: [], edges: [], botPageMap: {}, stats: { pages: 0, edges: 0 } },

@@ -6,6 +6,7 @@ import {
   GPU_SAFE_TEXTURE_DEFAULT,
   PAPER_GRAIN_MIN_SIZE,
 } from "./paper-grain.ts";
+import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 
 export type ImagineNodeOptions = {
   /** Imagine-generated Texture (portrait/character/scene). Null/undefined → wash fallback. */
@@ -294,6 +295,7 @@ export function createImagineNodeMaterial(opts: ImagineNodeOptions = {}): THREE.
   if (opts.opacity != null) uniforms.uOpacity.value = sanitizeFinite(opts.opacity, 0.95, 0, 1);
   const mat = new THREE.ShaderMaterial({
     name: "ImagineNodeMaterial",
+    precision: PAINTER_SHADER_PRECISION,
     uniforms,
     vertexShader: ImagineNodeShader.vertexShader,
     fragmentShader: ImagineNodeShader.fragmentShader,

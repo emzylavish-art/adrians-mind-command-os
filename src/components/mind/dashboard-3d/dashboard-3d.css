@@ -909,3 +909,39 @@
 .dash3d-flyhud-focus {
   min-width: 120px;
 }
+
+.dash3d-hud-focus-toggle {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 8;
+}
+.dash3d-root[data-hud-focus="1"] .dash3d-skybar,
+.dash3d-root[data-hud-focus="1"] .dash3d-charts-panel,
+.dash3d-root[data-hud-focus="1"] .dash3d-feed-panel,
+.dash3d-root[data-hud-focus="1"] .dash3d-graph-filters,
+.dash3d-root[data-hud-focus="1"] .dash3d-flyhud,
+.dash3d-root[data-hud-focus="1"] .dash3d-side,
+.dash3d-root[data-hud-focus="1"] .dash3d-money-panel,
+.dash3d-root[data-hud-focus="1"] .dash3d-notion-mirror,
+.dash3d-root[data-hud-focus="1"] .dash3d-operator,
+.dash3d-root[data-hud-focus="1"] .dash3d-time-scrub {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+.dash3d-root[data-hud-focus="1"] .dash3d-hud-focus-toggle {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.dash3d-charts-panel { z-index: 4; }
+.dash3d-node-detail.is-open { z-index: 6; }
+.dash3d-node-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

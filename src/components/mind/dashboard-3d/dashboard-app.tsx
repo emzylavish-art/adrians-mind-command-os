@@ -22,6 +22,7 @@ import {
 import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
 import { GraphFiltersPanel } from "./graph-filters-panel";
+import { portraitUrlForBot } from "@/lib/mind/dashboard/portrait-resolve";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import { pollViewData } from "@/lib/mind/dashboard/status-poll";
 
@@ -59,6 +60,7 @@ export function DashboardApp() {
   const [soundMuted, setSoundMuted] = useState(true);
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
+  const [hudFocus, setHudFocus] = useState(false);
   const [perfHint, setPerfHint] = useState<string | null>(null);
   const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
   useEffect(() => {
@@ -95,6 +97,18 @@ export function DashboardApp() {
   }, [operatorPrefs]);
 
   useOperatorHotkey(() => setOperatorOpen((o) => !o));
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "f" || e.key === "F") {
+        const tag = (e.target as HTMLElement | null)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        e.preventDefault();
+        setHudFocus((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => {
     const id = window.setInterval(() => {
       const hint = document.documentElement.dataset.dashPerf || null;
@@ -195,11 +209,21 @@ export function DashboardApp() {
       data-fly-level={fly.level}
       data-labels={operatorPrefs.layers.labels ? "1" : "0"}
       data-health-filter={operatorPrefs.healthFilter}
+      data-hud-focus={hudFocus ? "1" : "0"}
       onPointerDownCapture={unlockSound}
     >
       <a className="dash3d-skip-link" href="#dash3d-skybar" data-testid="dash3d-skip-skybar">
         Skip to skybar
       </a>
+      <button
+        type="button"
+        className="dash3d-hud-focus-toggle dash3d-pill"
+        data-testid="hud-focus-toggle"
+        aria-pressed={hudFocus}
+        onClick={() => setHudFocus((v) => !v)}
+      >
+        {hudFocus ? "Show HUD" : "Focus stage"}
+      </button>
       {!viewData ? (
         <div id="dash3d-skybar" className="dash3d-skybar" hidden aria-hidden="true" data-testid="dash3d-skybar-fallback" />
       ) : null}
@@ -480,7 +504,7 @@ export function DashboardApp() {
         spend={spendView}
         status={viewData}
         notionNeighbors={resolveNotionNeighbors(viewData, notionPage?.id)}
-        portraitSrc={selected ? `/dashboard-3d/art/portrait-${selected.id}.webp` : null}
+        portraitSrc={selected ? portraitUrlForBot(selected.id) : null}
         onClose={() => {
           setSelected(null);
           setNotionPage(null);

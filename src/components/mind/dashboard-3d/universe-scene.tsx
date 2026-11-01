@@ -375,7 +375,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const fleetLineGroup = new THREE.Group();
     scene.add(fleetLineGroup);
 
-    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3 };
+    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void };
     const botVis: BotVis[] = [];
     const botMeshes: THREE.Mesh[] = [];
     const pageIdByIndex: string[] = [];
@@ -430,28 +430,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           continue;
         }
         const color = HEALTH_COLOR[bot.health];
-        const mat = new THREE.MeshStandardMaterial({
-          color,
-          emissive: color,
-          emissiveIntensity: bot.health === "idle" ? 0.25 : 0.9,
-          roughness: 0.35,
-          metalness: 0.15,
-        });
-        const mesh = new THREE.Mesh(sphereGeo, mat);
+        // Painter c7: watercolor core + glow (keeps botId pick target on mesh).
+        const star = kit.createBotStar({ color, idle: bot.health === "idle" });
+        const mesh = new THREE.Mesh(sphereGeo, star.meshMaterial);
         mesh.position.copy(pos);
         mesh.userData.botId = bot.id;
         botGroup.add(mesh);
         botMeshes.push(mesh);
 
-        const glowMat = new THREE.SpriteMaterial({
-          map: starTex,
-          color,
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        });
-        kit.bindSharedTexture(glowMat, "starSprite");
-        const glow = new THREE.Sprite(glowMat);
+        const glow = new THREE.Sprite(star.glowMaterial);
         // Portrait card + life-size character (ImagineNodeMaterial wash until map loads).
         const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
         const cardMat = kit.createImagineNodeMaterial({ accent: color });
@@ -517,7 +504,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         label.position.set(pos.x, pos.y + 0.75, pos.z);
         botGroup.add(label);
 
-        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone() });
+        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone(), setColor: star.setColor });
       }
     }
 
@@ -1315,8 +1302,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         applyFocusDrift(driftOut, n.base, st.driftMul);
         n.mesh.scale.setScalar(pulseOut.scale);
         n.glow.scale.setScalar(pulseOut.glow);
-        const mat = n.mesh.material as THREE.MeshStandardMaterial;
-        if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
+        if (n.setColor) n.setColor(HEALTH_COLOR[n.health], pulseOut.emissive);
+        else {
+          const mat = n.mesh.material as THREE.MeshStandardMaterial;
+          if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulseOut.emissive;
+        }
         n.mesh.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.glow.position.set(driftOut.x, driftOut.y, driftOut.z);
         n.label.position.set(driftOut.x, driftOut.y + 0.75, driftOut.z);

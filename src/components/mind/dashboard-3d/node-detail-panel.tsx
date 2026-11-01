@@ -1,3 +1,4 @@
+import { PORTRAIT_FALLBACK_URL, markPortraitMissing } from "@/lib/mind/dashboard/portrait-resolve";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import {
@@ -35,9 +36,18 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
           width={72}
           height={72}
           loading="lazy"
+          onError={(e) => {
+            const img = e.currentTarget;
+            const botId = String(img.dataset.botId || detail.botId || "");
+            if (botId) markPortraitMissing(botId);
+            if (img.src !== PORTRAIT_FALLBACK_URL && !img.src.endsWith("portrait-dashboard.webp")) {
+              img.src = PORTRAIT_FALLBACK_URL;
+            }
+          }}
+          data-bot-id={detail.botId}
         />
       ) : null}
-      <p className="dash3d-title">{detail.name}</p>
+      <p className="dash3d-title dash3d-node-title" title={detail.name}>{detail.name}</p>
       <p>
         <span className={`dash3d-dot ${detail.health}`} /> <strong>{detail.health}</strong>
         <span className="dash3d-muted"> — {detail.reason || NO_SOURCE}</span>

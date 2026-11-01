@@ -1,5 +1,5 @@
 owner: dashboard-3d-loop
-cycle: 36
-heartbeat: 2026-11-01T22:01:17+01:00
+cycle: 38
+heartbeat: 2026-11-01T22:03:49+01:00
 branch: dashboard-3d
-work: #28 nhop
+work: c37 hud + painter c7 + gaps 16-20
