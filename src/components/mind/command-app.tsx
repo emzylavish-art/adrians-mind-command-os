@@ -51,7 +51,7 @@ import { ComposerLiveVoice } from "@/components/mind/composer-live-voice";
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { formatVoiceClientError } from "@/lib/mind/voice/errors";
-import { toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
   getVoiceMode,
@@ -64,6 +64,7 @@ import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits
 import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
 import { formatMicCaptureError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
 import {
+  matchesVoiceToggleShortcut,
   voiceMicAriaLabel,
   VOICE_TOGGLE_SHORTCUT,
 } from "@/lib/mind/voice/shortcut";
@@ -463,7 +464,8 @@ export function CommandApp() {
   function applyVoiceMode(next: VoiceRoutingMode) {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
     const previous = voiceModeRef.current;
-    const committed = setVoiceModeStore(next, storage);
+    // commitVoiceMode persists; setVoiceModeStore keeps every badge on the same value.
+    const committed = setVoiceModeStore(commitVoiceMode(next, storage), storage);
     voiceModeRef.current = committed;
     if (shouldClearLiveTranscriptOnModeSwitch(previous, committed)) {
       setVoiceLiveTranscript("");
@@ -649,7 +651,7 @@ export function CommandApp() {
         searchRef.current?.focus();
       }
       if (event.key === "Escape") setPaletteOpen(false);
-      if (shouldToggleVoiceShortcut(event, document)) {
+      if (matchesVoiceToggleShortcut(event) && shouldToggleVoiceShortcut(event, document)) {
         event.preventDefault();
         void listenRef.current({ mode: "toggle" });
       }
