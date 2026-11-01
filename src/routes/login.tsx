@@ -7,6 +7,12 @@ import {
   startOAuth,
 } from "@/lib/supabase/actions";
 import { safeRedirectPath } from "@/lib/supabase/safe-redirect";
+import { authEnabled, signIn } from "@/lib/auth/client";
+import {
+  emailPasswordGate,
+  resolveLoginProviderAction,
+  type LoginProviderId,
+} from "@/lib/auth/login-providers";
 
 type LoginSearch = {
   next?: string;
@@ -29,7 +35,6 @@ export const Route = createFileRoute("/login")({
 });
 
 type Mode = "sign-in" | "sign-up";
-type OAuthProvider = "google" | "github" | "apple";
 
 const inputClassName =
   "mt-1.5 min-h-11 w-full rounded-panel border border-line bg-bg px-3.5 text-[15px] text-fg outline-none transition-[border-color,box-shadow] placeholder:text-muted/60 focus:border-fg/35 focus:ring-2 focus:ring-fg/20 disabled:opacity-60";
@@ -137,19 +142,33 @@ function AppleIcon() {
   );
 }
 
-const oauthMeta: Record<
-  OAuthProvider,
-  { label: string; icon: () => ReactNode }
-> = {
-  google: { label: "Continue with Google", icon: GoogleIcon },
-  github: { label: "Continue with GitHub", icon: GitHubIcon },
-  apple: { label: "Continue with Apple", icon: AppleIcon },
-};
+function XIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+      />
+    </svg>
+  );
+}
+
+const oauthButtons: {
+  id: LoginProviderId;
+  label: string;
+  icon: () => ReactNode;
+}[] = [
+  { id: "google", label: "Continue with Google", icon: GoogleIcon },
+  { id: "github", label: "Continue with GitHub", icon: GitHubIcon },
+  { id: "apple", label: "Continue with Apple", icon: AppleIcon },
+  { id: "x", label: "Continue with X", icon: XIcon },
+];
 
 function Login() {
   const data = Route.useLoaderData();
   const search = Route.useSearch();
   const next = safeRedirectPath(search.next);
+  const supabaseConfigured = Boolean(data.configured);
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -157,38 +176,17 @@ function Login() {
   const [banner, setBanner] = useState<string | null>(search.error ?? null);
   const [info, setInfo] = useState<string | null>(null);
 
-  if (!data.configured) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-bg px-4 py-10 text-fg sm:px-6">
-        <AuthCard>
-          <AuthBrand title="Sign in" />
-          <div
-            className="mt-6 rounded-panel border border-line bg-surface-2 px-4 py-3.5 text-sm leading-relaxed text-muted"
-            role="status"
-            data-testid="auth-not-configured"
-          >
-            <p className="font-medium text-fg">Sign-in isn&apos;t configured yet</p>
-            <p className="mt-1.5">
-              Connect Supabase to this Vercel project, then enable Google,
-              GitHub, and Apple in the Supabase dashboard.
-            </p>
-          </div>
-          <Link
-            to="/"
-            className="mt-6 inline-flex min-h-11 items-center text-sm font-medium text-fg underline-offset-4 hover:underline"
-          >
-            Back to the command page
-          </Link>
-        </AuthCard>
-      </main>
-    );
-  }
-
   async function onPasswordSubmit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setBanner(null);
     setInfo(null);
+    const gate = emailPasswordGate(supabaseConfigured);
+    if (!gate.ok) {
+      setBanner(gate.message);
+      setBusy(false);
+      return;
+    }
     try {
       const action = mode === "sign-in" ? signInWithPassword : signUpWithPassword;
       const result = await action({
@@ -203,7 +201,6 @@ function Login() {
         setMode("sign-in");
       }
     } catch (err) {
-      // Successful redirects throw a redirect response; ignore those.
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
       if (!/redirect/i.test(message)) {
@@ -214,14 +211,32 @@ function Login() {
     }
   }
 
-  async function onOAuth(provider: OAuthProvider) {
+  async function onProvider(provider: LoginProviderId) {
     setBusy(true);
     setBanner(null);
+    setInfo(null);
+    const action = resolveLoginProviderAction(provider, {
+      supabaseConfigured,
+      betterAuthEnabled: authEnabled,
+    });
     try {
-      const result = await startOAuth({ data: { provider, next } });
-      if (result && "ok" in result && result.ok === false) {
-        setBanner(result.error);
+      if (action.kind === "not_configured") {
+        setBanner(action.message);
+        return;
       }
+      if (action.kind === "supabase_oauth") {
+        const result = await startOAuth({
+          data: { provider: action.provider, next },
+        });
+        if (result && "ok" in result && result.ok === false) {
+          setBanner(result.error);
+        }
+        return;
+      }
+      await signIn(action.providerId, {
+        callbackURL: next,
+        errorCallbackURL: `/login?next=${encodeURIComponent(next)}`,
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
@@ -240,6 +255,20 @@ function Login() {
           title={mode === "sign-in" ? "Sign in" : "Create account"}
           subtitle="Grok, voice, REA, and the server copy run only for the signed-in owner."
         />
+
+        {!supabaseConfigured ? (
+          <div
+            className="mt-5 rounded-panel border border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-muted"
+            role="status"
+            data-testid="auth-not-configured"
+          >
+            <p className="font-medium text-fg">Supabase email sign-in isn&apos;t configured yet</p>
+            <p className="mt-1.5">
+              Google and X below still use the owner broker when those env vars
+              are set. Connect Supabase for email/password, GitHub, and Apple.
+            </p>
+          </div>
+        ) : null}
 
         <div
           className="mt-6 grid grid-cols-2 gap-1 rounded-panel border border-line bg-bg p-1"
@@ -339,6 +368,7 @@ function Login() {
             type="submit"
             disabled={busy}
             aria-busy={busy}
+            data-testid="login-password-submit"
             className="mt-1 inline-flex min-h-11 items-center justify-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink transition-[opacity,transform] hover:opacity-95 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55"
           >
             {busy ? (
@@ -361,32 +391,40 @@ function Login() {
         </div>
 
         <div className="flex flex-col gap-2">
-          {(
-            ["google", "github", "apple"] as const
-          ).map((provider) => {
-            const meta = oauthMeta[provider];
-            const Icon = meta.icon;
+          {oauthButtons.map((item) => {
+            const Icon = item.icon;
             return (
               <button
-                key={provider}
+                key={item.id}
                 type="button"
                 disabled={busy}
-                onClick={() => void onOAuth(provider)}
+                data-testid={`login-oauth-${item.id}`}
+                onClick={() => void onProvider(item.id)}
                 className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
               >
                 <Icon />
-                {meta.label}
+                {item.label}
               </button>
             );
           })}
         </div>
 
-        <Link
-          to="/"
-          className="mt-6 inline-flex min-h-11 items-center text-sm font-medium text-muted underline-offset-4 transition-colors hover:text-fg hover:underline"
-        >
-          Back to the command page
-        </Link>
+        <div className="mt-6 flex flex-col gap-1 text-sm">
+          <Link
+            to="/"
+            data-testid="login-back-home"
+            className="inline-flex min-h-11 items-center font-medium text-muted underline-offset-4 transition-colors hover:text-fg hover:underline"
+          >
+            Back to the command page
+          </Link>
+          <a
+            href="/memory"
+            data-testid="login-memory-manager"
+            className="inline-flex min-h-11 items-center font-medium text-muted underline-offset-4 transition-colors hover:text-fg hover:underline"
+          >
+            Memory manager
+          </a>
+        </div>
       </AuthCard>
     </main>
   );
