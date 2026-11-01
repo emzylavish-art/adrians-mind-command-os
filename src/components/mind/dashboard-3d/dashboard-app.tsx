@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
-import { NodeDetailPanel } from "./node-detail-panel";
+import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
 import { UniverseScene } from "./universe-scene";
 import { useDashboardStatus } from "./use-dashboard-status";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
@@ -43,15 +43,6 @@ export function DashboardApp() {
       summary: n ? `Live spend log on box · ${n} entr${n === 1 ? "y" : "ies"}` : "Live spend log on box (empty).",
     };
   }, [state]);
-
-  const laneForBot = useCallback(
-    (bot: BotNode | null) => {
-      if (!bot || state.status !== "ready") return { name: null as string | null, health: null as BotNode["health"] | null };
-      const lane = state.data.constellations.find((c) => c.botIds.includes(bot.id));
-      return { name: lane?.name ?? null, health: lane?.health ?? null };
-    },
-    [state],
-  );
 
   const openNotion = (pageId: string) => {
     if (state.status !== "ready") return;
@@ -193,9 +184,10 @@ export function DashboardApp() {
         bot={selected}
         notionPage={notionPage}
         open={Boolean(selected || notionPage)}
-        laneName={laneForBot(selected).name}
-        laneHealth={laneForBot(selected).health}
         spend={spendView}
+        status={state.status === "ready" ? state.data : null}
+        notionNeighbors={resolveNotionNeighbors(state.status === "ready" ? state.data : null, notionPage?.id)}
+        portraitSrc={selected ? `/dashboard-3d/art/portrait-${selected.id}.webp` : null}
         onClose={() => {
           setSelected(null);
           setNotionPage(null);

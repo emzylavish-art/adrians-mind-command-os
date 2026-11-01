@@ -294,3 +294,18 @@
 .dash3d-stale {
   border-color: rgba(251, 191, 36, 0.55) !important;
 }
+
+.dash3d-portrait {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 0 18px rgba(124,92,255,0.25);
+  margin: 0 0 0.5rem;
+  background: rgba(8,12,28,0.8);
+}
+.dash3d-side .dash3d-glass {
+  max-height: min(92vh, 920px);
+  overflow: auto;
+}
