@@ -139,3 +139,40 @@ stepBreadcrumbEase(bc, bcSample, dt, reducedMotion);
 ```
 
 Interruptible exit mid-enter. Reduced-motion snaps. Label text/DOM is Dashboard Bot's job.
+
+## Pan / remount pose hold (c9)
+
+Complements Dashboard #25 last-frame WebGL freeze. Before unmounting UniverseScene
+(or on `webglcontextlost`), capture motion state; after remount, restore into fresh
+state objects so focus/character/breadcrumb/node/scene easing does not snap.
+
+```ts
+import {
+  createMotionPoseBag, captureFocusPose, restoreFocusPose,
+  captureCharacterPose, restoreCharacterPose,
+  captureBreadcrumbPose, restoreBreadcrumbPose,
+  captureNodeOpenPose, restoreNodeOpenPose,
+  captureSceneTransitionPose, restoreSceneTransitionPose,
+  sanitizeMotionPoseBag, createFocusPoseHold, createCharacterPoseHold,
+} from "./motion";
+
+const bag = createMotionPoseBag(); // keep across remount (module/ref)
+
+// before teardown:
+for (const [id, st] of focusEase) {
+  bag.focusById[id] ??= createFocusPoseHold();
+  captureFocusPose(bag.focusById[id], st);
+}
+// …same for characters; then:
+captureBreadcrumbPose(bag.breadcrumb, bcState);
+captureNodeOpenPose(bag.nodeOpen, nodeState);
+captureSceneTransitionPose(bag.sceneTx, sceneTxState);
+
+// after remount — recreate states, then:
+sanitizeMotionPoseBag(bag); // if bag was JSON-restored
+restoreFocusPose(newFocusState, bag.focusById[id]);
+// …
+```
+
+Do **not** call `hardResetSharedMotionClockForTests()` on remount — shared clock already survives.
+
