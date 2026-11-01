@@ -37,6 +37,8 @@ export interface Sql {
     text: string,
     params?: unknown[],
   ): Promise<T[]>;
+  /** Optional non-result exec (PGLite). */
+  exec?: (text: string) => Promise<void>;
   /** Actual backend for this client (pglite_query uses this, not env sniffing). */
   engine?: "pglite" | "postgres";
   /**
