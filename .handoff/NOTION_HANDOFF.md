@@ -397,5 +397,6 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Fix (src/lib/mind only; command-app NOT edited): STOPPED_REPLY + isUserStoppedReply + classifyHonestTurnOutcome("user_stopped") + shouldShowFailureBanner(false) + honestTurnAuditAction("user_stopped") + failureBannerMountHint(). Timeouts/disconnects still chat_timeout/network_failure with banners. Agent "Stopped after N tool steps." unchanged (still bannerable unclassified).
 - Mount for another lane (one line before reportFailure): `if (!shouldShowFailureBanner(message)) { setNotice(message); return null; }`
 - Checks: typecheck pass; TS 830/832 (2 pre-existing); lint our files 0e; build pass.
-- Notion: (pending)
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e42810bad93f2cd22be479d
+- Pushed origin/error-banners → f24d1252d5766ff3ed13abf73b9cfa52451090ed
 - Lock releasing.
