@@ -2,16 +2,22 @@ import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest, checkTurnSize } from "./limits";
 import { assembleTurn } from "./prompt";
+import { sanitizeAttachments, type ImageAttachment } from "./media";
+import type { ChatContent } from "./media/types";
+import { resolveXaiInferenceApiKey } from "./media/xai-key";
+import type { HistoryInputMessage } from "./media/history";
+import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, selectProvider } from "./provider-call";
-import { relayModelStream } from "./relay";
+import { buildRelayModelBody, relayModelStream } from "./relay";
 import { decideFetchSite } from "./request-guard";
 import { readModelPayload } from "./stream";
 
+/** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
-const MAX_BODY = 200_000;
+/** Raised so a few downscaled image data-URLs can ride with the turn JSON. */
+const MAX_BODY = 2_500_000;
 
-type HistoryItem = { role: "user" | "assistant"; content: string };
 type NoteItem = { id: string; text: string };
 
 export type TurnBody = {
@@ -21,12 +27,18 @@ export type TurnBody = {
   history?: unknown;
   memoryContext?: unknown;
   provider?: unknown;
+  /** UI picker: Auto | Fast | Expert | Heavy | Build */
+  modelTier?: unknown;
+  /** Optional image attachments (data-URLs) for multimodal Direct turns. */
+  images?: unknown;
 };
 
-function isHistory(item: unknown): item is HistoryItem {
+function isHistory(item: unknown): item is HistoryInputMessage {
   if (!item || typeof item !== "object") return false;
-  const record = item as { role?: unknown; content?: unknown };
-  return (record.role === "user" || record.role === "assistant") && typeof record.content === "string";
+  const record = item as { role?: unknown; content?: unknown; images?: unknown };
+  if (!(record.role === "user" || record.role === "assistant") || typeof record.content !== "string") return false;
+  if (record.images != null && !Array.isArray(record.images)) return false;
+  return true;
 }
 
 function isNote(item: unknown): item is NoteItem {
@@ -51,11 +63,17 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if (!allowMindRequest("chat", userId, 12)) {
     return { ok: false as const, error: "Too many messages. Wait a minute and try again." };
   }
+  const images = sanitizeAttachments(data.images);
   const text = typeof data.text === "string" ? data.text.trim() : "";
-  if (!text) return { ok: false as const, error: "Write a message first." };
+  if (!text && images.length === 0) return { ok: false as const, error: "Write a message first." };
   const history = Array.isArray(data.history) ? data.history.filter(isHistory).slice(-12) : [];
   const memoryContext = Array.isArray(data.memoryContext) ? data.memoryContext.filter(isNote).slice(0, 12) : [];
-  const sized = checkTurnSize({ text, history, memoryContext });
+  const sized = checkTurnSize({
+    text: text || "Describe the attached image.",
+    history,
+    memoryContext,
+    images,
+  });
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
   if (!memory) return { ok: false as const, error: "Memory setting is invalid." };
@@ -66,27 +84,33 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   const assembled = assembleTurn({
     memory,
     history,
-    text,
+    text: text || "Describe the attached image.",
     memoryContext,
+    images,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
-  return { ok: true as const, assembled, memory, model: routed.model };
-}
-
-function modelBody(model: string, messages: { role: string; content: string }[]) {
+  const tier = resolveModelTier(data.modelTier, text || "image", process.env);
   return {
-    model,
-    messages,
-    max_tokens: 500,
-    temperature: 0.4,
-    stream: true,
-    stream_options: { include_usage: true },
+    ok: true as const,
+    assembled,
+    memory,
+    model: tier.model,
+    modelTier: tier,
+    provider: routed.id,
+    images,
   };
 }
 
-export async function completeModelReply(prepared: { assembled: { messages: { role: "system" | "user" | "assistant"; content: string }[]; usedIds: string[] }; memory: "off" | "on"; model: "grok-4.5" }) {
-  if (prepared.model !== MIND_MODEL) return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
-  const apiKey = process.env.XAI_API_KEY;
+export async function completeModelReply(prepared: {
+  assembled: { messages: { role: "system" | "user" | "assistant"; content: ChatContent }[]; usedIds: string[] };
+  memory: "off" | "on";
+  model: string;
+  modelTier: ResolvedModelTier;
+}) {
+  if (!allowedModelIds(process.env).has(prepared.model)) {
+    return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
+  }
+  const apiKey = resolveXaiInferenceApiKey(process.env);
   if (!apiKey) return { ok: false as const, error: "Grok is not configured on the server." };
   let res: Response;
   try {
@@ -94,7 +118,13 @@ export async function completeModelReply(prepared: { assembled: { messages: { ro
       method: "POST",
       signal: AbortSignal.timeout(25_000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(modelBody(prepared.model, prepared.assembled.messages)),
+      body: JSON.stringify(
+        buildRelayModelBody(prepared.model, prepared.assembled.messages, {
+          temperature: prepared.modelTier.params.temperature,
+          max_tokens: prepared.modelTier.params.max_tokens,
+          reasoning_effort: prepared.modelTier.params.reasoning_effort,
+        }),
+      ),
     });
   } catch {
     return { ok: false as const, error: "Grok did not answer in time. Nothing was saved as a success." };
@@ -106,6 +136,9 @@ export async function completeModelReply(prepared: { assembled: { messages: { ro
     ok: true as const,
     text: parsed.text,
     model: prepared.model,
+    modelTier: prepared.modelTier.selected,
+    resolvedTier: prepared.modelTier.resolved,
+    tierReason: prepared.modelTier.reason,
     requestId: res.headers.get("x-request-id"),
     usage: parsed.usage,
     memory: prepared.memory,
@@ -164,9 +197,34 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   } catch {
     return json({ ok: false, error: "That request could not be read." }, 400);
   }
+  const pendingImages = sanitizeAttachments(body.images);
+  const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
+  // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.
+  if (
+    pendingImages.length > 0 &&
+    typeof requestedProvider === "string" &&
+    requestedProvider !== "grok" &&
+    (requestedProvider === "openai" ||
+      requestedProvider === "anthropic" ||
+      requestedProvider === "gemini" ||
+      requestedProvider === "openrouter")
+  ) {
+    return json({
+      ok: false,
+      error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+      provider: requestedProvider,
+    });
+  }
   const selected = selectProvider(body.provider, process.env);
   if (!selected.ok) return json(selected);
   if (selected.id !== "grok") {
+    if (pendingImages.length > 0) {
+      return json({
+        ok: false,
+        error: `${selected.id} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+        provider: selected.id,
+      });
+    }
     const { haltIsOn } = await import("./halt.server");
     if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." });
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
@@ -175,8 +233,10 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const prepared = await prepareMindTurn(userId, body);
   if (!prepared.ok) return json(prepared);
-  if (prepared.model !== MIND_MODEL) return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
-  const apiKey = process.env.XAI_API_KEY;
+  if (!allowedModelIds(process.env).has(prepared.model)) {
+    return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
+  }
+  const apiKey = resolveXaiInferenceApiKey(process.env);
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." });
   return relayModelStream({
     apiKey,
@@ -184,5 +244,19 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     messages: prepared.assembled.messages,
     usedIds: prepared.assembled.usedIds,
     requestSignal: request.signal,
+    params: {
+      temperature: prepared.modelTier.params.temperature,
+      max_tokens: prepared.modelTier.params.max_tokens,
+      reasoning_effort: prepared.modelTier.params.reasoning_effort,
+    },
+    meta: {
+      modelTier: prepared.modelTier.selected,
+      resolvedTier: prepared.modelTier.resolved,
+      tierReason: prepared.modelTier.reason,
+      images: prepared.images.length,
+    },
   });
 }
+
+/** Exported for scripts/tests that build a multimodal Direct turn without the HTTP handler. */
+export type { ImageAttachment };

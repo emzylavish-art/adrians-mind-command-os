@@ -51,7 +51,7 @@ describe("file database", () => {
     const dir = mkdtempSync(join(tmpdir(), "mind-db-"));
     try {
       const first = await openDatabase(dir);
-      let ws = addMemory(emptyWorkspace(), { scope: "global", text: "The pier depth is 12 feet.", source: "owner", projectId: null, chatId: null });
+      const ws = addMemory(emptyWorkspace(), { scope: "global", text: "The pier depth is 12 feet.", source: "owner", projectId: null, chatId: null });
       ws.projects.push({ id: "p1", name: "Harbor", description: "", createdAt: "2026-04-01T00:00:00.000Z" });
       const applied = applyAgentTurn(ws, {
         chatId: "chat-1",

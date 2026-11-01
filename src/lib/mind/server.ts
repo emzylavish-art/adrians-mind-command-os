@@ -3,6 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
+import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
@@ -39,6 +40,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       ok: false as const,
       grok: "down" as const,
       model: MODEL,
+      modelTiers: modelTierCatalog(process.env),
       database: gate.error,
       isolation: "failed" as const,
       executionHalted,
@@ -54,6 +56,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     ok: true as const,
     grok: process.env.XAI_API_KEY ? ("configured" as const) : ("unconfigured" as const),
     model: MODEL,
+    modelTiers: modelTierCatalog(process.env),
     database: mindUrl
       ? "A Mind project URL is set and is not a forbidden project."
       : "No dedicated project yet. The free organization already holds two active projects.",
@@ -294,6 +297,8 @@ export const sendTurn = createServerFn({ method: "POST" })
     halted: boolean;
     history: { role: "user" | "assistant"; content: string }[];
     memoryContext: { id: string; text: string }[];
+    modelTier?: string;
+    images?: { dataUrl: string; name?: string }[];
   }) => input)
   .handler(async ({ data, context }) => {
     const { completeModelReply, prepareMindTurn } = await import("./turn.server");
@@ -351,7 +356,8 @@ export const speakText = createServerFn({ method: "POST" })
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = data.text.trim().slice(0, 500);
     if (!text) return { ok: false as const, error: "Nothing to read." };
-    const apiKey = process.env.VOICE_API_KEY;
+    const { resolveVoiceApiKey } = await import("./voice/keys");
+    const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
     let res: Response;
     try {
@@ -369,3 +375,70 @@ export const speakText = createServerFn({ method: "POST" })
     if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };
   });
+
+export const createVoiceClientSecret = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Voice was not started." };
+    if (!allowMindRequest("voice_secret", context.userId, 20)) {
+      return { ok: false as const, error: "Too many voice requests. Wait a minute." };
+    }
+    const { mintRealtimeClientSecret } = await import("./voice/client-secret");
+    return mintRealtimeClientSecret({});
+  });
+export const mcpRegistryList = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { listRegistryServers } = await import("./mcp/registry");
+    return { servers: listRegistryServers(context.userId) };
+  });
+
+export const mcpRegistryToggle = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; enabled?: boolean }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
+    enabled: input.enabled === true,
+  }))
+  .handler(async ({ data, context }) => {
+    const { setServerEnabled } = await import("./mcp/registry");
+    return { servers: setServerEnabled(context.userId, data.id, data.enabled) };
+  });
+
+export const mcpRegistryTools = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { listRegistryTools } = await import("./mcp/registry");
+    return { tools: await listRegistryTools(context.userId) };
+  });
+
+export const mcpRegistryCall = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { serverId?: string; tool?: string; args?: Record<string, unknown> }) => ({
+    serverId: typeof input.serverId === "string" ? input.serverId.slice(0, 80) : "",
+    tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
+    args: input.args && typeof input.args === "object" ? input.args : {},
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false, status: "error" as const, serverId: data.serverId, tool: data.tool, text: "Emergency stop is on. No MCP tool was called." };
+    }
+    const { callRegistryTool } = await import("./mcp/registry");
+    const { getSql } = await import("../db");
+    const result = await callRegistryTool({
+      userId: context.userId,
+      serverId: data.serverId,
+      tool: data.tool,
+      args: data.args,
+      getSql,
+    });
+    return {
+      ok: result.ok,
+      status: result.status,
+      serverId: result.serverId,
+      tool: result.tool,
+      text: result.text,
+    };
+  });
+

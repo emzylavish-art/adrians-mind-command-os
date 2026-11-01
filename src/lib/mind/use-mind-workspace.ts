@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { compactWorkspaceImages, createIndexedDbBlobStore, hydrateWorkspaceImages } from "./media/blob-store";
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
@@ -16,15 +17,24 @@ export function useMindWorkspace() {
   const followServer = useRef(false);
   const savedJson = useRef<string | null>(null);
   const latest = useRef(ws);
+  const blobStore = useRef(createIndexedDbBlobStore());
   latest.current = ws;
 
   useEffect(() => {
-    const local = loadWorkspace(localStorage);
-    setWs(local);
-    setReady(true);
     let cancel = false;
-    void loadMindCopy()
-      .then((result) => {
+    void (async () => {
+      const localRaw = loadWorkspace(localStorage);
+      let local = localRaw;
+      try {
+        local = (await hydrateWorkspaceImages(localRaw, blobStore.current)) as Workspace;
+      } catch {
+        local = localRaw;
+      }
+      if (cancel) return;
+      setWs(local);
+      setReady(true);
+      try {
+        const result = await loadMindCopy();
         if (cancel || !result.ok) {
           followServer.current = false;
           if (!cancel) setSyncNote("Browser copy only. The server copy was not read. Nothing was deleted.");
@@ -33,8 +43,15 @@ export function useMindWorkspace() {
         const choice = chooseServerSync(hasContent(local), Boolean(result.workspace && hasContent(result.workspace)));
         if (choice === "use-server" && result.workspace) {
           followServer.current = true;
+          let serverWs = result.workspace as Workspace;
+          try {
+            serverWs = (await hydrateWorkspaceImages(serverWs, blobStore.current)) as Workspace;
+          } catch {
+            /* keep raw */
+          }
+          if (cancel) return;
           savedJson.current = JSON.stringify(result.workspace);
-          setWs(result.workspace);
+          setWs(serverWs);
           setSyncNote("Loaded the server copy because this browser was empty. It is still not cloud backup.");
           return;
         }
@@ -54,11 +71,11 @@ export function useMindWorkspace() {
         followServer.current = true;
         savedJson.current = JSON.stringify(local);
         setSyncNote("Nothing is stored yet. This is not cloud backup.");
-      })
-      .catch(() => {
+      } catch {
         followServer.current = false;
         if (!cancel) setSyncNote("Browser copy only. Sign in may be required before a server copy can be saved.");
-      });
+      }
+    })();
     return () => {
       cancel = true;
     };
@@ -66,10 +83,23 @@ export function useMindWorkspace() {
 
   useEffect(() => {
     if (!ready) return;
-    const write = () => localStorage.setItem(WORKSPACE_KEY, JSON.stringify(ws));
+    let cancelled = false;
+    const write = () => {
+      void (async () => {
+        let persisted = ws;
+        try {
+          persisted = (await compactWorkspaceImages(ws, blobStore.current)) as Workspace;
+        } catch {
+          persisted = ws;
+        }
+        if (cancelled) return;
+        localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));
+      })();
+    };
     const id = window.setTimeout(write, 250);
     window.addEventListener("pagehide", write);
     return () => {
+      cancelled = true;
       window.clearTimeout(id);
       window.removeEventListener("pagehide", write);
     };

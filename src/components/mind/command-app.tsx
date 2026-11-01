@@ -14,7 +14,9 @@ import {
   Lock,
   MessageSquare,
   Mic,
+  MicOff,
   Paperclip,
+  Camera,
   Plus,
   Search,
   Send,
@@ -30,6 +32,7 @@ import {
   PanelLeft,
   Pin,
   Terminal,
+  Volume2,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -38,11 +41,23 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { analyzeImageFile, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
+import { VoiceWaveform } from "@/components/mind/voice-waveform";
+import { runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
+import { readStoredVoiceMode, toggleVoiceMode, writeStoredVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
+import { AttachmentChips } from "@/components/mind/media/attachment-chips";
+import { CameraCapture } from "@/components/mind/media/camera-capture";
+import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
+import { InlineImage } from "@/components/mind/media/inline-image";
+import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
+import { historyTextForImages, parseImagineCommand, toImageAttachments, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -50,10 +65,24 @@ import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
 import { relevantMemories } from "@/lib/mind/memory";
 import { databaseMode } from "@/lib/mind/persistence";
-import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
+import { runAgentTurn, type AgentTool, type ToolEvent } from "@/lib/mind/orchestrator";
+import {
+  agentActivityFromTimeline,
+  applyToolEvent,
+  attachAuditIds,
+  connectedServicesRail,
+  elapsedMs,
+  formatElapsed,
+  recentTasksFromAudit,
+  systemStatusRail,
+  timelineCounts,
+  type ToolTimelineRow,
+} from "@/lib/mind/tools-timeline";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
-import { chosenProvider, providerChoices } from "@/lib/mind/providers";
+import { ModelTierChip } from "@/components/mind/model-tier-chip";
+import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
+import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
@@ -121,6 +150,27 @@ const EXTERNAL = [
 ];
 
 type Staged = { name: string; text: string };
+
+const NAV_ICON_SRC: Partial<Record<View, string>> = {
+  command: "/icons/chat.svg",
+  agents: "/icons/bots.svg",
+  build: "/icons/build.svg",
+  projects: "/icons/projects.svg",
+  research: "/icons/research.svg",
+  files: "/icons/library.svg",
+  chat: "/icons/thread.svg",
+  runs: "/icons/runs.svg",
+  connected: "/icons/systems.svg",
+  tools: "/icons/systems.svg",
+  scheduled: "/icons/systems.svg",
+  skills: "/icons/systems.svg",
+  memory: "/icons/library.svg",
+  activity: "/icons/runs.svg",
+  settings: "/icons/systems.svg",
+  help: "/icons/systems.svg",
+  integrations: "/icons/systems.svg",
+};
+
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
@@ -252,10 +302,20 @@ export function CommandApp() {
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
   const voiceNext = useRef(false);
+  const voiceSession = useRef<RealtimeVoiceSession | null>(null);
+  const voiceModeRef = useRef<VoiceRoutingMode>("direct");
+  const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>("direct");
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceLevel, setVoiceLevel] = useState(0);
   const turnGen = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null } | null>(null);
+  const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
+  const [timelineTickMs, setTimelineTickMs] = useState(0);
+  const [statusSignedIn, setStatusSignedIn] = useState<boolean | null>(null);
+  const [databaseConfigured, setDatabaseConfigured] = useState(false);
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
   const wsRef = useRef(ws);
   wsRef.current = ws;
@@ -264,11 +324,16 @@ export function CommandApp() {
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
+  const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
+  const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
+  const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [agentGoal, setAgentGoal] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
   const [agentLog, setAgentLog] = useState<{ step: number; tool: string; ok: boolean; detail: string }[]>([]);
+  const [agentImages, setAgentImages] = useState<ImageAttachment[]>([]);
   const agentAbort = useRef<AbortController | null>(null);
   const [system, setSystem] = useState("Checking isolation.");
   const [checkedAt, setCheckedAt] = useState("");
@@ -299,12 +364,37 @@ export function CommandApp() {
   const [importPreview, setImportPreview] = useState<{ workspace: Workspace; chats: number; memories: number; projects: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
+  const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
+
+  useEffect(() => {
+    const mode = readStoredVoiceMode(typeof localStorage === "undefined" ? null : localStorage);
+    setVoiceMode(mode);
+    voiceModeRef.current = mode;
+  }, []);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+    writeStoredVoiceMode(voiceMode, typeof localStorage === "undefined" ? null : localStorage);
+  }, [voiceMode]);
+
+  useEffect(() => {
+    return () => {
+      voiceSession.current?.close();
+      voiceSession.current = null;
+      sharedAudioOutput.interrupt();
+    };
+  }, []);
+
   const [reaBusy, setReaBusy] = useState(false);
   const [reaReport, setReaReport] = useState<string | null>(null);
   const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
@@ -312,6 +402,8 @@ export function CommandApp() {
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; host: string; state: "unchecked" | "connected" | "failed"; tools: { name: string; description: string }[]; error: string }[]>([]);
+  const [mcpRegistry, setMcpRegistry] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [toolResultStatus, setToolResultStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
@@ -331,12 +423,22 @@ export function CommandApp() {
     node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focusAuditId, view, ws.audit]);
 
+  const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
+  useEffect(() => {
+    if (!timelineRunning) return;
+    setTimelineTickMs(Date.now());
+    const id = window.setInterval(() => setTimelineTickMs(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [timelineRunning]);
+
   useEffect(() => {
     if (!ready) return;
     mindStatus()
       .then((status) => {
         setGrokConfigured(status.grok === "configured");
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
+        setStatusSignedIn(status.signedIn === true);
+        setDatabaseConfigured(status.databaseBackend === "postgres");
         const mode = databaseMode(status.databaseBackend === "postgres" || status.databaseBackend === "refused" ? status.databaseBackend : "memory");
         setDatabasePill(mode.pill);
         setDatabaseDetail(mode.detail);
@@ -358,6 +460,9 @@ export function CommandApp() {
     mcpList()
       .then((result) => setMcpServers(result.servers))
       .catch(() => setMcpServers([]));
+    mcpRegistryList()
+      .then((result) => setMcpRegistry(result.servers))
+      .catch(() => setMcpRegistry([]));
     try {
       const saved = localStorage.getItem("amcos.skills.v1");
       if (saved) setEnabledSkills(JSON.parse(saved) as Record<string, boolean>);
@@ -369,6 +474,10 @@ export function CommandApp() {
   useEffect(() => {
     try {
       if (localStorage.getItem("amcos.provider.v1") === "grok") setProviderChoice("grok");
+      const tier = localStorage.getItem("amcos.modelTier.v1");
+      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) setModelTier(tier as ModelTier);
+      const fail = localStorage.getItem("amcos.failover.v1");
+      if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
     } catch {
       /* a private browser can refuse storage */
     }
@@ -382,6 +491,15 @@ export function CommandApp() {
       /* a private browser can refuse storage */
     }
   }, [providerChoice]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("amcos.modelTier.v1", modelTier);
+      localStorage.setItem("amcos.failover.v1", failoverPolicy);
+    } catch {
+      /* a private browser can refuse storage */
+    }
+  }, [modelTier, failoverPolicy]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -556,11 +674,25 @@ export function CommandApp() {
     ];
   }
 
+  function observeToolEvent(event: ToolEvent) {
+    const atMs = typeof event.atMs === "number" ? event.atMs : Date.now();
+    setToolTimeline((current) => applyToolEvent(current, { ...event, atMs }));
+    if (event.status === "running" || event.status === "queued" || event.status === "awaiting_confirmation") return;
+    const entryId = crypto.randomUUID();
+    setToolTimeline((current) => attachAuditIds(current, { [event.toolId]: entryId }));
+    setWs((prev) => ({
+      ...prev,
+      audit: [{ id: entryId, at: new Date(atMs).toISOString(), action: event.toolId, target: event.toolId, result: event.text.slice(0, 500) }, ...prev.audit].slice(0, 200),
+    }));
+  }
+
   function settleIntent(chat: Chat, text: string, source: Workspace, action: "chat" | "voice" = "chat"): boolean {
     const intent = interpretCommand(text, source.agents, commandMode);
     if (intent.kind === "chat") return false;
     if (intent.kind === "local" || intent.kind === "skill") {
       const toolId = intent.kind === "skill" ? "search_skills" : intent.tool;
+      setToolTimeline([]);
+      clearFailure();
       const turn = runAgentTurn({
         userId: "local-owner",
         sessionId: chat.id,
@@ -569,6 +701,7 @@ export function CommandApp() {
         tools: agentTools(source),
         toolId,
         nowMs: Date.now(),
+        onEvent: observeToolEvent,
       });
       if (turn.status === "awaiting_confirmation" && turn.confirm) {
         const grantNow = turn.confirm;
@@ -579,6 +712,7 @@ export function CommandApp() {
           detail: turn.text,
           confirm: "This runs only the action you just asked for.",
           run: () => {
+            setToolTimeline([]);
             const again = runAgentTurn({
               userId: "local-owner",
               sessionId: chat.id,
@@ -588,8 +722,14 @@ export function CommandApp() {
               toolId,
               confirm: grantNow,
               nowMs: Date.now(),
+              onEvent: observeToolEvent,
             });
             recordToolTurn(chat, text, again.text, toolId === "run_due_schedules" && again.status === "completed" ? (prev) => runDueSchedules(prev, new Date().toISOString()) : undefined, { tool: toolId, ok: again.status === "completed", action });
+            if (again.status === "failed" || again.status === "timed_out" || again.status === "cancelled") {
+              reportFailure(again.text, "tool_failed", toolId, () => {
+                settleIntent(chat, text, source, action);
+              });
+            }
             setNotice("The confirmed action finished on this device. Hosted realtime is not connected.");
           },
         });
@@ -598,6 +738,11 @@ export function CommandApp() {
       const notes = chat.memory === "on" ? relevantMemories(source.memories, text) : [];
       const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
       recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
+      if (turn.status === "failed" || turn.status === "timed_out" || turn.status === "cancelled") {
+        reportFailure(turn.text, "tool_failed", toolId, () => {
+          settleIntent(chat, text, source, action);
+        });
+      }
       setNotice(turn.status === "completed" ? "The agent finished on this device. Hosted realtime is not connected." : turn.text);
       return true;
     }
@@ -621,8 +766,39 @@ export function CommandApp() {
       void askMcp(chat, text);
       return true;
     }
+    if (intent.kind === "web_research") {
+      void runWebResearch(chat, intent.query, action);
+      return true;
+    }
     recordToolTurn(chat, text, intent.reply);
     return true;
+  }
+
+  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await searchWeb({ data: { query } });
+      setBusy(false);
+      setResearchCitations(result.citations);
+      if (!result.ok) {
+        recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
+        setResearchNote(result.error);
+        return;
+      }
+      const lines = [
+        result.summary || `Research returned ${result.citations.length} source${result.citations.length === 1 ? "" : "s"}:`,
+        ...result.citations.map((item) => `- ${item.title} — ${item.url}`),
+      ];
+      recordToolTurn(chat, query, lines.join("\n"), undefined, { tool: "web_search", ok: true, action });
+      setResearchNote(result.summary || "");
+      setNotice(`Research kept ${result.citations.length} http(s) citation${result.citations.length === 1 ? "" : "s"}.`);
+    } catch {
+      setBusy(false);
+      const message = "The search provider could not be reached. No citations were created.";
+      recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
+      setResearchNote(message);
+    }
   }
 
   async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null) {
@@ -657,11 +833,13 @@ export function CommandApp() {
   async function askMcp(chat: Chat, text: string, confirmed = false) {
     setBusy(true);
     setError(null);
+    setToolResultStatus("running");
     try {
       const result = await mcpCommand({ data: { text, confirmed } });
       setBusy(false);
       setMcpServers(result.servers);
       if (result.needsConfirmation) {
+        setToolResultStatus("idle");
         setPending({
           id: "mcp-call",
           kind: "mcp-call",
@@ -674,32 +852,50 @@ export function CommandApp() {
         });
         return;
       }
-      recordToolTurn(chat, text, [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.");
+      const reply = [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.";
+      const status = result.ok ? "ok" : "error";
+      setToolResultStatus(status);
+      recordToolTurn(chat, text, `[${status}] ${reply}`, undefined, { tool: "mcp", ok: result.ok, action: "chat" });
     } catch {
       setBusy(false);
+      setToolResultStatus("error");
       setError("The MCP server could not be reached. Nothing was called.");
     }
   }
 
-  async function deliver(chat: Chat, text: string, source: Workspace, resume = false) {
+  async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []): Promise<string | null> {
     const latest = wsRef.current;
     if (latest.halted || source.halted) {
       reportEmergencyStop(chat.id, () => {
-        void deliver(chat, text, wsRef.current, resume);
+        void deliver(chat, text, wsRef.current, resume, images);
       });
-      return;
+      return null;
     }
-    const routed = chosenProvider(providerChoice, grokConfigured);
+    let routed = chosenProvider(providerChoice, grokConfigured);
+    if (!routed.ok) {
+      const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
+      if (switched.provider === "grok") {
+        routed = chosenProvider("grok", grokConfigured);
+        if (routed.ok) setNotice(switched.note);
+      }
+    }
     if (!routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
         void deliver(chat, text, wsRef.current, resume);
       });
-      return;
+      return null;
     }
     const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const history = (resume ? chat.messages.slice(0, -1) : chat.messages).slice(-12);
     if (!resume) {
-      const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
+      const displayText = historyTextForImages(text, images);
+      const userMsg = {
+        id: crypto.randomUUID(),
+        role: "user" as const,
+        content: displayText,
+        at: new Date().toISOString(),
+        images: images.length ? images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
+      };
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) =>
@@ -711,6 +907,7 @@ export function CommandApp() {
     setLiveText("");
     setError(null);
     setFailure(null);
+    setToolTimeline([]);
     turnAbort.current?.abort();
     const generation = ++turnGen.current;
     const controller = new AbortController();
@@ -731,16 +928,24 @@ export function CommandApp() {
           text,
           memory: chat.memory,
           halted: wsRef.current.halted,
-          history,
+          history: history.map((item) => ({
+            role: item.role,
+            content: item.content,
+            images: item.images
+              ?.filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+              .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
+          })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
+          modelTier,
+          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         },
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
           setLiveText((current) => current + chunk);
         },
       });
-      if (generation !== turnGen.current) return;
+      if (generation !== turnGen.current) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
@@ -750,7 +955,7 @@ export function CommandApp() {
         reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
           void deliver(chat, text, wsRef.current, true);
         });
-        return;
+        return null;
       }
       setWs((prev) => {
         const next = {
@@ -774,6 +979,18 @@ export function CommandApp() {
               : item,
           ),
         };
+        const autoBit =
+          result.resolvedTier && (result.modelTier === "Auto" || (!result.modelTier && modelTier === "Auto"))
+            ? `→${result.resolvedTier}`
+            : "";
+        const tierLabel = result.model
+          ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
+          : result.model;
+        if (result.resolvedTier === "Fast" || result.resolvedTier === "Expert" || result.resolvedTier === "Heavy" || result.resolvedTier === "Build") {
+          setLastResolvedTier(result.resolvedTier);
+        }
+        if (result.model) setLastModelUsed(result.model);
+        setNotice(`Ran ${tierLabel}.`);
         return pushAudit(
           pushUsage(next, {
             id: crypto.randomUUID(),
@@ -786,11 +1003,12 @@ export function CommandApp() {
           }),
           "message_sent",
           chat.id,
-          result.model,
+          tierLabel,
         );
       });
+      return result.text;
     } catch (caught) {
-      if (generation !== turnGen.current) return;
+      if (generation !== turnGen.current) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
@@ -804,6 +1022,7 @@ export function CommandApp() {
       reportFailure(message, kind === "emergency_stop_active" ? "emergency_stop_active" : kind === "model_unavailable" ? "model_unavailable" : "chat_failed", chat.id, () => {
         void deliver(chat, text, wsRef.current, resume);
       });
+      return null;
     }
   }
 
@@ -822,6 +1041,30 @@ export function CommandApp() {
     setError(null);
   }
 
+
+  function downloadImageDataUrl(src: string, alt: string) {
+    const link = document.createElement("a");
+    const ext = src.startsWith("data:image/png") ? "png" : src.startsWith("data:image/webp") ? "webp" : "jpg";
+    link.href = src;
+    link.download = (alt || "image").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80) + "." + ext;
+    link.click();
+  }
+
+  function saveImageToComposer(src: string, alt: string) {
+    if (!src.startsWith("data:image/")) {
+      setError("Only in-chat data URLs can be saved back into the composer.");
+      return;
+    }
+    setPendingImages((prev) => {
+      if (prev.length >= 4) {
+        setError("You can attach up to 4 images per message.");
+        return prev;
+      }
+      return [...prev, { dataUrl: src, name: alt || `saved-${prev.length + 1}.jpg` }];
+    });
+    setNotice("Image saved into the composer for a follow-up turn.");
+  }
+
   function editMessage(messageId: string, text: string) {
     if (!active || busy) return;
     if (wsRef.current.halted) {
@@ -834,7 +1077,7 @@ export function CommandApp() {
       return;
     }
     setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true);
+    void deliver(revised.chat, revised.text, revised.ws, true, toImageAttachments(revised.images));
   }
 
   function regenerate() {
@@ -849,7 +1092,7 @@ export function CommandApp() {
       return;
     }
     setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true);
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, toImageAttachments(prepared.images));
   }
 
   function retryLast() {
@@ -864,7 +1107,7 @@ export function CommandApp() {
       return;
     }
     setError(null);
-    void deliver(prepared.chat, prepared.text, ws, true);
+    void deliver(prepared.chat, prepared.text, ws, true, toImageAttachments(prepared.images));
   }
 
   function exportActive() {
@@ -903,7 +1146,17 @@ export function CommandApp() {
   async function sendCommand() {
     if (busy) return;
     const text = draft.trim();
-    if (!text) {
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, null);
+      return;
+    }
+    const images = pendingImages;
+    if (!text && images.length === 0) {
       setError("Write what you want to work on.");
       return;
     }
@@ -925,9 +1178,10 @@ export function CommandApp() {
     });
     const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text}${attached}`.slice(0, 8000);
+    const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
     setDraft("");
     setStaged(null);
+    setPendingImages([]);
     const source = { ...ws, chats: [made.chat, ...ws.chats] };
     if (settleIntent(made.chat, full, source)) {
       if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: projectChoice || null }));
@@ -940,7 +1194,7 @@ export function CommandApp() {
       if (file) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
-    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] });
+    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, false, images);
   }
 
   async function startResearch() {
@@ -958,7 +1212,7 @@ export function CommandApp() {
       const result = await searchWeb({ data: { query } });
       setError(null);
       setResearchCitations(result.citations);
-      setResearchNote(result.ok ? "" : result.error);
+      setResearchNote(result.ok ? (result.summary || "") : result.error);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
       if (!result.ok) {
         reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
@@ -992,6 +1246,9 @@ export function CommandApp() {
     setAgentBusy(true);
     setAgentNote(null);
     setAgentLog([]);
+    setAgentImages([]);
+    const plannerImages = pendingImages;
+    setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     const token = getBearerToken();
     try {
@@ -1004,13 +1261,38 @@ export function CommandApp() {
           projects: ws.projects.map((project) => project.name),
           chats: ws.chats.map((chat) => chat.title),
           notes: ws.memories.filter((note) => !note.archived).map((note) => note.text),
+          modelTier,
+          images: plannerImages.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         }),
       });
-      const payload = (await response.json()) as { ok?: boolean; text?: string; error?: string; log?: { step: number; tool: string; ok: boolean; detail: string }[] };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        text?: string;
+        error?: string;
+        log?: { step: number; tool: string; ok: boolean; detail: string }[];
+        model?: string;
+        modelTier?: string;
+        resolvedTier?: string;
+        images?: { dataUrl: string; name?: string; mime?: string }[];
+      };
       if (controller.signal.aborted) return;
       setAgentLog(payload.log ?? []);
-      setAgentNote(payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.");
-      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? "finished" : "stopped"));
+      const modelBit = payload.model ? ` Model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? modelTier}→${payload.resolvedTier})` : ""}.` : "";
+      const agentImages = (payload.images ?? [])
+        .filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+        .map((image, index) => ({
+          dataUrl: image.dataUrl,
+          name: image.name || `imagine-${index + 1}.jpg`,
+          mime: image.mime,
+        }));
+      if (agentImages.length) {
+        setPendingImages(agentImages);
+        setAgentImages(agentImages);
+      } else {
+        setAgentImages([]);
+      }
+      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : "") + (agentImages.length ? ` · ${agentImages.length} image staged for follow-up.` : ""));
+      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? (agentImages.length ? "finished+imagine" : "finished") : "stopped"));
     } catch {
       if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
       else setAgentNote("The planner did not finish. Nothing was marked finished.");
@@ -1023,23 +1305,36 @@ export function CommandApp() {
   async function sendInChat() {
     if (!active || busy) return;
     const text = draft.trim();
-    if (!text && !staged) return;
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, active);
+      return;
+    }
+    const images = pendingImages;
+    if (!text && !staged && images.length === 0) return;
     if (wsRef.current.halted) {
       const snapshot = text;
       const file = staged;
       const chatId = active.id;
+      const imageSnapshot = images;
       reportEmergencyStop(chatId, () => {
         setDraft(snapshot);
         if (file) setStaged(file);
+        setPendingImages(imageSnapshot);
         void sendInChat();
       });
       return;
     }
     const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text || "Read the attached file."}${attached}`.slice(0, 8000);
+    const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
     setDraft("");
     setStaged(null);
+    setPendingImages([]);
     const source = ws;
     const action = voiceNext.current ? "voice" as const : "chat" as const;
     voiceNext.current = false;
@@ -1050,7 +1345,237 @@ export function CommandApp() {
     if (file) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
-    await deliver(active, full, ws);
+    await deliver(active, full, ws, false, images);
+  }
+
+  async function runImagine(promptRaw?: string, targetChat: Chat | null = active) {
+    if (busy || ws.halted) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write a prompt for Imagine, or use /imagine <prompt>.");
+      return;
+    }
+    setDraft("");
+    setError(null);
+    setBusy(true);
+    setLiveText("");
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    let chat = targetChat;
+    if (!chat) {
+      const made = createChat(ws, {
+        memory: memoryChoice,
+        autonomy,
+        temporary,
+        projectId: projectChoice || null,
+      });
+      chat = made.chat;
+      setActiveId(made.chat.id);
+      setView("chat");
+      setWs((prev) =>
+        pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, `imagine; memory ${made.chat.memory}`),
+      );
+    }
+    const chatId = chat.id;
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: "user" as const,
+      content: `/imagine ${prompt}`,
+      at: new Date().toISOString(),
+    };
+    setWs((prev) => ({
+      ...prev,
+      chats: prev.chats.map((item) =>
+        item.id === chatId
+          ? {
+              ...item,
+              title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
+              messages: [...item.messages, userMsg],
+            }
+          : item,
+      ),
+    }));
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ prompt, n: 1 }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        const message = payload.error || `Imagine failed (HTTP ${response.status}).`;
+        setError(message);
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: message,
+                      at: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      const model = payload.model || "grok-imagine-image";
+      setPendingImages(images);
+      setNotice(`Imagine (${model}). Attached for a follow-up vision turn — Send or Agent to reuse.`);
+      setWs((prev) => {
+        const next = {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Generated with ${model}. The image is shown below and staged in the composer so you can Send or run Agent with it as vision input.`,
+                      at: new Date().toISOString(),
+                      model,
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        };
+        return pushAudit(next, "imagine_generate", chatId, model);
+      });
+    } catch (caught) {
+      const message =
+        caught instanceof Error && caught.message === "Unauthorized"
+          ? "Sign in is required."
+          : caught instanceof Error
+            ? caught.message
+            : "Imagine could not be reached.";
+      setError(message);
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                messages: [
+                  ...item.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant" as const,
+                    content: message,
+                    at: new Date().toISOString(),
+                  },
+                ],
+              }
+            : item,
+        ),
+      }));
+    } finally {
+      setBusy(false);
+      setLiveText("");
+    }
+  }
+
+  async function runImagineEdit(imageDataUrl: string, promptRaw?: string) {
+    if (busy || ws.halted) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write an edit instruction in the composer, then press Edit with Imagine.");
+      return;
+    }
+    if (!imageDataUrl.startsWith("data:image/")) {
+      setError("Edit with Imagine only works on images kept as data URLs in this chat.");
+      return;
+    }
+    setDraft("");
+    setError(null);
+    setBusy(true);
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1 }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        setError(payload.error || `Edit with Imagine failed (HTTP ${response.status}).`);
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-edit-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      setPendingImages(images);
+      setNotice(`Edited with ${payload.model || "grok-imagine-image"}. Staged for Send / Agent.`);
+      if (active) {
+        const chatId = active.id;
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "user" as const,
+                      content: `Edit with Imagine: ${prompt}`,
+                      at: new Date().toISOString(),
+                    },
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Edited with ${payload.model || "grok-imagine-image"}.`,
+                      at: new Date().toISOString(),
+                      model: payload.model || "grok-imagine-image",
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Edit with Imagine could not be reached.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function enableMemory() {
@@ -1088,18 +1613,50 @@ export function CommandApp() {
     setError(null);
   }
 
+  function applyCloudAttach(item: CloudPickerAttach) {
+    if (item.kind === "image") {
+      setPendingImages((prev) => {
+        if (prev.length >= 4) {
+          setError("You can attach up to 4 images per message.");
+          return prev;
+        }
+        return [...prev, { dataUrl: item.dataUrl, name: item.name, mime: item.mime }];
+      });
+      setError(null);
+      return;
+    }
+    setStaged({ name: item.name, text: item.text });
+    setError(null);
+  }
+
+  async function addImageAttachment(file: File) {
+    try {
+      const scaled = await fileToDownscaledDataUrl(file);
+      setPendingImages((prev) => {
+        if (prev.length >= 4) {
+          setError("You can attach up to 4 images per message.");
+          return prev;
+        }
+        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
+      });
+      setError(null);
+      setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`);
+    } catch {
+      setError("That image could not be prepared.");
+    }
+  }
+
   async function onPicked(file: File) {
+    if (/\.(png|jpe?g|gif|webp)$/i.test(file.name) || (file.type || "").startsWith("image/")) {
+      await addImageAttachment(file);
+      return;
+    }
     if (file.size > 400_000) {
       setError("That file is too large to keep in this browser.");
       return;
     }
-    if (/\.(png|jpe?g|gif|webp|heic)$/i.test(file.name)) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      let binary = "";
-      for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-      const result = await analyzeImageFile({ data: { name: file.name, bytes: file.size, imageBase64: btoa(binary) } });
-      if (result.analyzed) setNotice(`${result.provider} returned: ${result.text}`);
-      else setError(result.error);
+    if (/\.(heic)$/i.test(file.name)) {
+      setError("HEIC is not supported here. Convert to JPEG or PNG first.");
       return;
     }
     if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
@@ -1250,14 +1807,142 @@ export function CommandApp() {
       setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
       return;
     }
-    const binary = Uint8Array.from(atob(result.audio), (char) => char.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([binary], { type: result.mime }));
-    const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    await audio.play().catch(() => setError("The browser blocked playback."));
+    sharedAudioOutput.interrupt();
+    try {
+      await sharedAudioOutput.playMpegBase64(result.audio);
+    } catch {
+      setError("The browser blocked playback.");
+    } finally {
+      setSpeaking(false);
+    }
   }
 
-  function listen() {
+  function stopVoiceSession() {
+    voiceSession.current?.close();
+    voiceSession.current = null;
+    sharedAudioOutput.interrupt();
+    setVoiceListening(false);
+    setVoiceMuted(false);
+    setVoiceLevel(0);
+  }
+
+  function toggleVoiceMute() {
+    const next = !voiceMuted;
+    setVoiceMuted(next);
+    voiceSession.current?.setMuted(next);
+    setNotice(next ? "Microphone muted. Listening session stays open." : "Microphone unmuted.");
+  }
+
+  async function handleVoiceTranscript(transcript: string) {
+    const text = transcript.trim();
+    if (!text) {
+      setNotice("No words were recognized. Nothing was sent.");
+      return;
+    }
+    setDraft(text);
+    voiceNext.current = true;
+    setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
+    if (voiceModeRef.current === "orchestrator") {
+      setBusy(true);
+      const conducted = await runOllamaConductor(text, {
+        baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+        model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+      });
+      setBusy(false);
+      if (!conducted.ok) {
+        setError(conducted.error);
+        return;
+      }
+      if (active) {
+        const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at: new Date().toISOString() };
+        const assistantMsg = {
+          id: crypto.randomUUID(),
+          role: "assistant" as const,
+          content: conducted.text,
+          at: new Date().toISOString(),
+          model: conducted.model,
+        };
+        setWs((prev) =>
+          pushAudit(
+            {
+              ...prev,
+              chats: prev.chats.map((item) =>
+                item.id === active.id ? { ...item, messages: [...item.messages, userMsg, assistantMsg] } : item,
+              ),
+            },
+            "message_sent",
+            active.id,
+            conducted.model,
+          ),
+        );
+      }
+      if (voiceSession.current?.isOpen) voiceSession.current.speakText(conducted.text);
+      else void speak(conducted.text);
+      return;
+    }
+    if (!active) {
+      setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
+      return;
+    }
+    if (ws.halted || busy) return;
+    const reply = await deliver(active, text, ws);
+    if (reply) {
+      if (voiceSession.current?.isOpen) voiceSession.current.speakText(reply);
+      else void speak(reply);
+    }
+  }
+
+  async function listen() {
+    if (voiceListening) {
+      stopVoiceSession();
+      setNotice("Voice capture stopped.");
+      return;
+    }
+    if (ws.halted) {
+      setError("Emergency stop is on. Voice was not started.");
+      return;
+    }
+    setError(null);
+    sharedAudioOutput.interrupt();
+    voiceSession.current?.interruptPlayback();
+    const secret = await createVoiceClientSecret();
+    if (!secret.ok) {
+      setError(secret.error);
+      return;
+    }
+    const session = new RealtimeVoiceSession({
+      onTranscript: (text) => {
+        void handleVoiceTranscript(text);
+      },
+      onSpeechStarted: () => {
+        sharedAudioOutput.interrupt();
+        session.interruptPlayback();
+      },
+      onError: (message) => setError(message),
+      onLevel: (level) => setVoiceLevel(level),
+      onStatus: (status) => {
+        setVoiceListening(status === "listening" || status === "processing" || status === "connecting" || status === "speaking");
+        if (status === "speaking") setSpeaking(true);
+        if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+        if (status === "idle" || status === "closed") setVoiceLevel(0);
+      },
+    });
+    voiceSession.current = session;
+    try {
+      await session.connect(secret.value, { captureOnly: true });
+      session.setMuted(voiceMuted);
+      await session.startCapture();
+      setVoiceListening(true);
+      setNotice(`Realtime voice listening (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}). Capture-only STT; replies use TTS. Press mic again to stop.`);
+    } catch (caught) {
+      stopVoiceSession();
+      setError(caught instanceof Error ? caught.message : "Voice capture could not start.");
+    }
+  }
+
+  function listenBrowserFallback() {
+    setListening(true);
+    window.setTimeout(() => setListening(false), 6000);
     const host = window as Window & {
       SpeechRecognition?: new () => {
         lang: string;
@@ -1278,6 +1963,7 @@ export function CommandApp() {
     const rec = new Ctor();
     rec.lang = "en-US";
     rec.onresult = (event) => {
+      setListening(false);
       const transcript = event.results[0]?.[0]?.transcript ?? "";
       setDraft(transcript);
       voiceNext.current = Boolean(transcript);
@@ -1332,11 +2018,11 @@ export function CommandApp() {
   const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
 
   return (
-    <div className="flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col bg-surface md:static md:flex md:h-dvh ${railCollapsed ? "md:w-16" : "md:w-64"} md:shrink-0 md:border-r md:border-line`}>
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
+      <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
-            A
+          <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
+            <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
           </span>
           {!railCollapsed && (
             <div className="min-w-0 flex-1">
@@ -1351,10 +2037,26 @@ export function CommandApp() {
             <PanelLeft className="size-4" />
           </button>
         </div>
+        <div className={`px-3 pb-2 ${railCollapsed ? "flex justify-center" : ""}`}>
+          <button
+            type="button"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            aria-label="Search workspace"
+            onClick={() => {
+              setPaletteOpen(true);
+              setNavOpen(false);
+              window.setTimeout(() => searchRef.current?.focus(), 0);
+            }}
+          >
+            <Search className="size-4 shrink-0" />
+            {!railCollapsed && <span>Search</span>}
+          </button>
+        </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
           {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-3">
-              {!railCollapsed && <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">{group.label.toUpperCase()}</p>}
+            <div key={group.label} className="mb-4">
+              {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
+              <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const on = view === item.id;
@@ -1368,13 +2070,14 @@ export function CommandApp() {
                       setNavOpen(false);
                       closeMenus();
                     }}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "bg-accent text-white shadow-[0_0_18px_rgb(124_92_255/0.45)]" : "text-muted"}`}
+                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"}`}
                   >
-                    <Icon className="size-4 shrink-0" />
+                    {NAV_ICON_SRC[item.id] ? <img src={NAV_ICON_SRC[item.id]} alt="" className="nav-icon-img" /> : <Icon className="size-4 shrink-0 opacity-90" />}
                     {!railCollapsed && item.label}
                   </button>
                 );
               })}
+              </div>
             </div>
           ))}
           {ws.pins.length > 0 && !railCollapsed && (
@@ -1432,25 +2135,62 @@ export function CommandApp() {
             </div>
           )}
         </nav>
-        {!railCollapsed && (
-          <div className="border-t border-line p-4">
-            <p className="text-sm font-semibold">Adrian (Personal)</p>
-            <p className="text-xs text-muted">Only workspace on this device.</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+        <div className={`border-t border-line/70 p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
+          <button
+            type="button"
+            className={`sidebar-plus inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-accent px-3 text-sm font-semibold text-accent-ink ${railCollapsed ? "size-11 px-0" : "w-full"}`}
+            aria-label="New chat"
+            onClick={() => {
+              openChat();
+              setView("chat");
+              setNavOpen(false);
+            }}
+          >
+            <Plus className="size-4" />
+            {!railCollapsed && "New"}
+          </button>
+          {!railCollapsed && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold">Adrian (Personal)</p>
+              <p className="text-xs text-muted">Only workspace on this device.</p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full bg-glow" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
+              <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
             </div>
-            <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
-            <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
-        <header className="flex items-center gap-2 border-b border-line px-3 py-3 md:gap-3 md:px-5">
+      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
+        <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
+          <div className="hidden shrink-0 md:block">
+            <VoiceModeBadge
+              mode={voiceMode}
+              listening={voiceListening}
+              onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+            />
+            <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                onClick={toggleVoiceMute}
+                aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
+                aria-pressed={voiceMuted}
+                data-testid="voice-mute"
+                disabled={!voiceListening}
+              >
+                {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
+            </div>
+
+          </div>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -1462,7 +2202,7 @@ export function CommandApp() {
               }}
               onFocus={() => setPaletteOpen(true)}
               placeholder="Search or jump…"
-              className="h-11 w-full rounded-panel border border-line bg-surface pr-14 pl-10 text-sm"
+              className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
               aria-label="Search"
               aria-keyshortcuts="Control+K Meta+K"
               aria-expanded={paletteOpen}
@@ -1470,7 +2210,7 @@ export function CommandApp() {
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="absolute z-30 mt-2 max-h-80 w-full overflow-auto rounded-panel border border-line bg-surface p-2 shadow-panel">
+              <div id="command-palette" className="floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
                 {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
                 {hits.map((hit) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
@@ -1501,13 +2241,46 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex ${headerTone}`}>
+          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}>
             <span className="size-2 rounded-full bg-current" />
             {headerState}
           </span>
+          <div className="hidden md:block">
+            <ModelTierChip
+              tier={modelTier}
+              onChoose={setModelTier}
+              lastResolved={lastResolvedTier}
+              lastModel={lastModelUsed}
+            />
+          </div>
+          <div className={`voice-zone ${listening || speaking ? "is-live" : ""}`} aria-label="Voice controls">
+            <button
+              type="button"
+              className={`focus-ring grid size-9 place-items-center rounded-full ${listening ? "mic-pulse text-glow" : "text-muted"}`}
+              aria-label="Dictate (browser speech fallback)"
+              onClick={listenBrowserFallback}
+            >
+              <Mic className="size-4" />
+            </button>
+            <span className="waveform" aria-hidden="true">
+              <span /><span /><span /><span /><span /><span /><span />
+            </span>
+            <button
+              type="button"
+              className="focus-ring grid size-9 place-items-center rounded-full text-muted"
+              aria-label="Speak last reply"
+              disabled={speaking}
+              onClick={() => {
+                const last = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
+                if (last) void speak(last.content);
+              }}
+            >
+              <Volume2 className="size-4" />
+            </button>
+          </div>
           <button
             type="button"
-            className="grid size-11 place-items-center rounded-full border border-line"
+            className="grid size-11 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Alerts"
             onClick={() => {
               setBellOpen((open) => !open);
@@ -1565,7 +2338,7 @@ export function CommandApp() {
           </div>
         )}
         {ws.halted && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2">
+          <div className="banner-error mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 px-4 py-2 md:mx-5">
             <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
               Clear stop
@@ -1630,13 +2403,13 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+              <section className="floating-composer command-card p-3 md:p-4">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
                     <span className="block text-xs">Review and approve before action</span>
                   </button>
-                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">AUTOMATIC</span>
                     <span className="block text-xs">Deletes and replacements still ask you</span>
                   </button>
@@ -1679,7 +2452,7 @@ export function CommandApp() {
                       <button
                         key={id}
                         type="button"
-                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}
+                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
                         onClick={() => setCommandMode(id)}
                       >
                         {label}
@@ -1691,15 +2464,37 @@ export function CommandApp() {
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
                     rows={3}
-                    className="w-full resize-none rounded-panel border border-line bg-bg px-3 py-3 text-sm"
+                    className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
                       <Paperclip className="size-4" /> Attach
                     </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
+                      <Image className="size-4" /> Image
+                    </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
+                      <Camera className="size-4" /> Camera
+                    </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
+                      Drive
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      disabled={busy || ws.halted}
+                      onClick={() => {
+                        const viaCmd = parseImagineCommand(draft);
+                        const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                        void runImagine(prompt || undefined, null);
+                      }}
+                    >
+                      Imagine
+                    </button>
+                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -1726,8 +2521,9 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
-                      <Mic className="size-4" />
+                    <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+                    <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+                      {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
@@ -1764,7 +2560,31 @@ export function CommandApp() {
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
-                    <li className="text-muted">Image and video — paid APIs, not called. HP — not paired.</li>
+                    <li className="text-muted">Imagine — Grok Imagine (composer /imagine). Video — paid API, not called. HP — not paired.</li>
+                    <li>
+                      <p className="font-semibold">MCP servers</p>
+                      <ul className="mt-2 space-y-2">
+                        {mcpRegistry.map((server) => (
+                          <li key={server.id} className="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line px-3 py-2">
+                            <span>{server.label} · {server.kind} · {server.enabled ? "On" : "Off"}</span>
+                            <button
+                              type="button"
+                              className="min-h-11 rounded-panel border border-line px-3"
+                              onClick={() => {
+                                void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => setMcpRegistry(result.servers));
+                              }}
+                            >
+                              {server.enabled ? "Turn off" : "Turn on"}
+                            </button>
+                          </li>
+                        ))}
+                        {mcpRegistry.length === 0 && <li className="text-muted">No MCP registry loaded.</li>}
+                      </ul>
+                      <button type="button" className="mt-2 min-h-11 text-accent" onClick={() => setView("tools")}>
+                        Open Tools panel
+                      </button>
+                      {toolResultStatus !== "idle" ? <p className="mt-2 text-xs text-muted">Last tool call: {toolResultStatus}</p> : null}
+                    </li>
                     <li>
                       <button type="button" className="min-h-11 text-accent" onClick={() => { setView("agents"); void checkRea(); }}>
                         Run REA doctor
@@ -1774,6 +2594,11 @@ export function CommandApp() {
                 )}
               </section>
 
+              <div className="flex flex-wrap gap-2 pb-1">
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("Summarize my projects on this device")}>Summarize my projects</button>
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
+                <button type="button" className="suggestion-chip" onClick={() => setView("connected")}>Review connected services</button>
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
                 <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
@@ -1783,8 +2608,37 @@ export function CommandApp() {
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
-              {error && <p className="text-sm text-danger">{error}</p>}
+              <VoiceModeBadge
+                mode={voiceMode}
+                listening={voiceListening}
+                onToggle={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
+              />
+            <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                onClick={toggleVoiceMute}
+                aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
+                aria-pressed={voiceMuted}
+                data-testid="voice-mute"
+                disabled={!voiceListening}
+              >
+                {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                onClick={listenBrowserFallback}
+                aria-label="Browser speech fallback"
+                title="Browser speech recognition fallback"
+              >
+                <Mic className="size-4" />
+              </button>
+            </div>
+
+              {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
+              {error && <p className="banner-error px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -1921,8 +2775,14 @@ export function CommandApp() {
               }}
               onNew={openChat}
               onSpeak={(text) => void speak(text)}
-              onListen={listen}
+              onListen={() => void listen()}
               speaking={speaking}
+              voiceMode={voiceMode}
+              voiceListening={voiceListening}
+              voiceMuted={voiceMuted}
+              voiceLevel={voiceLevel}
+              onToggleMute={toggleVoiceMute}
+              onToggleVoiceMode={() => setVoiceMode((mode) => toggleVoiceMode(mode))}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
               onComposerMemory={() => {
@@ -1950,7 +2810,21 @@ export function CommandApp() {
                 }));
               }}
               stagedName={staged?.name ?? null}
+              pendingImages={pendingImages}
+              onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
               onAttach={() => fileRef.current?.click()}
+              onAttachImage={() => imageInputRef.current?.click()}
+              onOpenCamera={() => setCameraOpen(true)}
+              onOpenCloud={() => setCloudPickerOpen(true)}
+              onImagine={() => {
+                const viaCmd = parseImagineCommand(draft);
+                const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                void runImagine(prompt || undefined, active);
+              }}
+              onEditImagine={(src) => void runImagineEdit(src)}
+              onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
+              onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
+              onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
                 else {
@@ -1967,14 +2841,39 @@ export function CommandApp() {
               onProvider={(id) => {
                 if (id === "grok") setProviderChoice("grok");
               }}
+              modelTier={modelTier}
+              onModelTier={setModelTier}
+              toolTimeline={toolTimeline}
+              timelineNowMs={timelineTickMs || Date.now()}
+              agentActivity={agentActivityFromTimeline(toolTimeline)}
+              recentTasks={recentTasksFromAudit(ws.audit)}
+              connectedServices={connectedServicesRail({
+                grokConfigured,
+                notionState: notion?.state ?? null,
+                mcpConnected: mcpServers.some((server) => server.state === "connected"),
+              })}
+              systemStatus={systemStatusRail({
+                grokConfigured,
+                databaseConfigured,
+                searchConfigured: (CAPABILITIES.find((item) => item.id === "research")?.status === "configured"
+                  || CAPABILITIES.find((item) => item.id === "research")?.status === "ready"
+                  || CAPABILITIES.find((item) => item.id === "research")?.status === "live_verified") ?? false,
+                signedIn: statusSignedIn,
+              })}
+              onViewAudit={(auditId) => {
+                setView("activity");
+                setFocusAuditId(auditId);
+                setActivityQuery("");
+                setNavOpen(false);
+              }}
             />
           )}
 
           {view === "projects" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card flex flex-wrap items-center justify-between gap-3 rounded-panel border border-line bg-surface px-4 py-4">
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-12 place-items-center rounded-2xl bg-accent/20 text-accent"><Folder className="size-5" /></span>
+                  <img src="/icons/projects.svg" alt="" className="size-10" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
                     <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
@@ -1990,9 +2889,10 @@ export function CommandApp() {
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 {ws.projects.length === 0 && (
-                  <article className="glow-card rounded-panel border border-line bg-surface p-4 lg:col-span-2">
+                  <article className="empty-state lg:col-span-2">
+                    <img src="/empty/empty-folder.svg" alt="" />
                     <p className="font-semibold">No projects on this device yet.</p>
-                    <p className="mt-1 text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
+                    <p className="text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
                   </article>
                 )}
                 {ws.projects.map((project) => {
@@ -2000,7 +2900,7 @@ export function CommandApp() {
                   const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
                   return (
-                    <article key={project.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={project.id} className="dense-card card-texture p-4">
                       <div className="flex items-start gap-3">
                         <span className="grid size-11 place-items-center rounded-2xl bg-accent/15 text-accent"><Folder className="size-5" /></span>
                         <div className="min-w-0 flex-1">
@@ -2250,6 +3150,13 @@ export function CommandApp() {
                 </button>
               </div>
               {agentNote ? <p className="mt-3 text-sm text-muted">{agentNote}</p> : null}
+              {agentImages.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {agentImages.map((image, index) => (
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} />
+                  ))}
+                </div>
+              )}
               {agentLog.length > 0 && (
                 <ol className="mt-3 space-y-1 text-sm">
                   {agentLog.map((entry) => (
@@ -2263,9 +3170,8 @@ export function CommandApp() {
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
           {view === "connected" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Connected</h2>
-              <p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex items-center gap-3"><img src="/icons/systems.svg" alt="" className="size-8" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -2356,30 +3262,56 @@ export function CommandApp() {
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry) => reportFailure(message, "open_page_failed", "browser", retry)} />}
           {view === "build" && (
-            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Build</h2>
-              <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
-              <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">Edit files, run tests, and use git. Not available. No files were changed.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">HP EliteBook and iPhone control. Not paired.</li>
+            <section className="page-shell space-y-4">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/build.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Build</h2>
+                    <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="promo-banner text-sm">
+                <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Local Companion not paired</p>
+                  <p className="text-muted">Pair a computer to unlock file edits, tests, and git. Nothing runs until then.</p>
+                </div>
+              </div>
+              <ul className="dense-grid space-y-0 text-sm">
+                <li className="dense-card dense-row">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
+                <li className="dense-card dense-row">Edit files, run tests, and use git. Not available. No files were changed.</li>
+                <li className="dense-card dense-row">HP EliteBook and iPhone control. Not paired.</li>
               </ul>
             </section>
           )}
           {view === "research" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
-                <h2 className="font-display text-3xl font-bold">Research</h2>
-                <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
-                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+            <section className="page-shell">
+              <div className="page-hero card-texture">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/research.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Research</h2>
+                    <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
+                  </div>
+                </div>
+                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
                   Check research
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
+                {researchCitations.length === 0 && !researchNote ? (
+                  <div className="empty-state mt-4">
+                    <img src="/empty/empty-search.svg" alt="" />
+                    <p className="font-semibold">No citations yet</p>
+                    <p className="text-sm text-muted">Run a check when a search provider is configured.</p>
+                  </div>
+                ) : null}
                 {researchCitations.length > 0 && (
                   <ul className="mt-3 space-y-2 text-sm">
                     {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
-                      <li key={item.url}>
+                      <li key={item.url} className="dense-row">
                         <a className="text-accent underline" href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
                       </li>
                     ))}
@@ -2399,15 +3331,15 @@ export function CommandApp() {
             </section>
           )}
           {view === "skills" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Skills</h2>
-              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p>
+            <section className="page-shell space-y-4">
+              <div className="page-hero"><h2 className="font-display text-3xl font-bold">Skills</h2>
+              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p></div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <div className="grid gap-3 md:grid-cols-2">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
                   const on = skill.kind === "built-in" && enabledSkills[skill.id] !== false;
                   return (
-                    <article key={skill.id} className="rounded-panel border border-line bg-surface p-3">
+                    <article key={skill.id} className="dense-card p-3">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-semibold">{skill.name}</h3>
                         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "built-in" ? (on ? "On" : "Off") : "Not installed"}</span>
@@ -2448,31 +3380,48 @@ export function CommandApp() {
             </section>
           )}
           {view === "files" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-3xl font-bold">Library</h2>
-                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/library.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Library</h2>
+                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Images attached on Command are decoded for Grok vision and Imagine — they are not OCR’d into Library text copies.</p>
+                  </div>
                 </div>
-                <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button>
+                </div>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
-                <aside className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
+                <aside className="dense-card card-texture p-3 text-sm">
                   <p className="font-semibold">Text copies</p>
                   <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
                   <ul className="mt-3 space-y-1">
-                    {ws.files.length === 0 && <li className="text-muted">No files yet.</li>}
+                    {ws.files.length === 0 && (
+                      <li className="empty-state py-6">
+                        <img src="/empty/empty-folder.svg" alt="" />
+                        <p className="text-muted">No files yet.</p>
+                      </li>
+                    )}
                     {ws.files.map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`min-h-11 w-full rounded-panel px-2 text-left ${openFileId === file.id ? "bg-accent text-white" : ""}`}>
+                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
                           {file.name}
                         </button>
                       </li>
                     ))}
                   </ul>
                 </aside>
-                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
-                  {!ws.files.find((file) => file.id === openFileId) && <p className="text-muted">Select a file to read the text copy. Upload text from the button above, or attach a file on Command.</p>}
+                <div className="dense-card p-4 text-sm">
+                  {!ws.files.find((file) => file.id === openFileId) && (
+                    <div className="empty-state">
+                      <img src="/empty/empty-folder.svg" alt="" />
+                      <p className="font-semibold">Select a file</p>
+                      <p className="text-muted">Upload text from the button above, or attach a file on Command.</p>
+                    </div>
+                  )}
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold">{file.name}</p>
@@ -2501,8 +3450,8 @@ export function CommandApp() {
             </section>
           )}
           {view === "integrations" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
+            <section className="page-shell">
+              <div className="page-hero">
                 <h2 className="font-display text-3xl font-bold">Integrations</h2>
                 <p className="text-sm text-muted">{system}</p>
                 <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
@@ -2511,7 +3460,7 @@ export function CommandApp() {
                 {CAPABILITIES.map((item) => {
                   const live = isVerifiedCapability(item.status);
                   return (
-                    <article key={item.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={item.id} className="dense-card card-texture p-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold">{item.name}</h3>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
@@ -2526,14 +3475,25 @@ export function CommandApp() {
             </section>
           )}
           {view === "activity" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
-                <h2 className="font-display text-3xl font-bold">Activity</h2>
-                <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+            <section className="page-shell">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/runs.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Activity</h2>
+                    <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+                  </div>
+                </div>
               </div>
-              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="mt-4 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" aria-label="Filter activity" />
+              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="input-glow mt-4 min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm" aria-label="Filter activity" />
               <ul className="mt-4 space-y-2">
-                {ws.audit.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No events yet.</li>}
+                {ws.audit.length === 0 && (
+                  <li className="empty-state">
+                    <img src="/empty/empty-activity.svg" alt="" />
+                    <p className="font-semibold">No events yet</p>
+                    <p className="text-sm text-muted">Actions you take will appear here.</p>
+                  </li>
+                )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).length === 0 && ws.audit.length > 0 && (
                   <li className="text-sm text-muted">No events match that filter.</li>
                 )}
@@ -2541,7 +3501,7 @@ export function CommandApp() {
                   <li
                     key={entry.id}
                     id={`audit-${entry.id}`}
-                    className={`glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border p-3 text-sm ${focusAuditId === entry.id ? "border-danger bg-danger/10" : "border-line bg-surface"}`}
+                    className={`dense-card dense-row flex-wrap justify-between text-sm ${focusAuditId === entry.id ? "border-danger bg-danger/10" : ""}`}
                   >
                     <div>
                       <p className="font-semibold">{humanAction(entry.action)}</p>
@@ -2558,30 +3518,58 @@ export function CommandApp() {
               <h2 className="font-display text-3xl font-bold">Help</h2>
               <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
               <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
               </ul>
             </section>
           )}
           {view === "settings" && (
-            <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Settings</h2>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
-                <p className="font-semibold">Appearance</p>
-                <p className="mt-1 text-muted">The theme is saved in this browser. It does not change a server setting.</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(["dark", "light", "system"] as const).map((choice) => (
-                    <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink" : "border-line"}`} onClick={() => setTheme(choice)}>
-                      {choice}
-                    </button>
-                  ))}
+            <section className="page-shell mx-auto max-w-3xl space-y-4">
+              <div className="page-hero">
+                <h2 className="font-display text-3xl font-bold">Settings</h2>
+                <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+              </div>
+              <div className="settings-card card-texture rounded-panel p-4 text-sm">
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Appearance</p>
+                    <p className="text-muted">Theme for the app UI. Saved in this browser only.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["dark", "light", "system"] as const).map((choice) => (
+                      <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Provider failover</p>
+                    <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
+                  </div>
+                  <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
                 </div>
               </div>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="settings-card rounded-panel p-4 text-sm hidden">
                 <p className="font-semibold">Provider failover</p>
-                <p className="mt-1 text-muted">Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present.</p>
+                <p className="mt-1 text-muted">
+                  {failoverPolicy === "none"
+                    ? "Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present."
+                    : "On. If the selected provider cannot run, chat may switch to Grok when that key is present. The switch is recorded in the notice."}
+                </p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={failoverPolicy === "grok"}
+                  className={`mt-3 flex min-h-11 w-full items-center justify-between rounded-panel border border-line px-3 ${failoverPolicy === "grok" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
+                  onClick={() => setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"))}
+                >
+                  Allow switch to Grok
+                  <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
+                </button>
               </div>
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
@@ -2692,13 +3680,38 @@ export function CommandApp() {
       <input
         ref={fileRef}
         type="file"
-        accept=".txt,.md,.json,.csv,.pdf,.png,.jpg,.jpeg,.js,.ts,.mjs,text/plain,application/pdf"
+        accept=".txt,.md,.json,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp,.js,.ts,.mjs,text/plain,application/pdf,image/*"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
           if (file) void onPicked(file);
         }}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void addImageAttachment(file);
+        }}
+      />
+      <CameraCapture
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={(dataUrl, name) => {
+          setPendingImages((prev) => (prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]));
+          setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
+        }}
+      />
+      <CloudPicker
+        open={cloudPickerOpen}
+        onClose={() => setCloudPickerOpen(false)}
+        onAttach={applyCloudAttach}
+        onNotice={(message) => setNotice(message)}
       />
 
       {projectOpen && (
@@ -2733,12 +3746,30 @@ export function CommandApp() {
           </div>
         </Overlay>
       )}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Primary">
-        {NAV.filter((item) => item.id === "command" || item.id === "agents" || item.id === "build" || item.id === "projects").map((item) => {
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
+        {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
           return (
-            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-accent" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+              <Icon className="size-4" />
+              {item.label}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className="sidebar-plus relative -mt-3 flex size-14 flex-col items-center justify-center rounded-full bg-accent text-accent-ink"
+          aria-label="New chat"
+          onClick={() => { openChat(); setView("chat"); setNavOpen(false); }}
+        >
+          <Plus className="size-5" />
+        </button>
+        {NAV.filter((item) => item.id === "build" || item.id === "projects").map((item) => {
+          const Icon = item.icon;
+          const on = view === item.id;
+          return (
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
               <Icon className="size-4" />
               {item.label}
             </button>
@@ -2755,7 +3786,7 @@ export function CommandApp() {
 
 function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm">
+    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line/80 bg-surface/80 px-3 text-sm shadow-[0_8px_24px_rgb(0_0_0/0.25)] backdrop-blur">
       <Icon className={`size-4 ${tone}`} />
       {label}
     </button>
@@ -2764,7 +3795,7 @@ function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: type
 
 function Panel({ title, action, onAction, children }: { title: string; action: string; onAction: () => void; children: ReactNode }) {
   return (
-    <section className="rounded-panel border border-line bg-surface p-4 shadow-panel">
+    <section className="glow-card rounded-panel border border-line/80 p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">{title}</h2>
         <button type="button" className="text-sm text-info" onClick={onAction}>{action}</button>
@@ -2802,8 +3833,8 @@ function StatusRow({
 
 function Overlay({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-40 grid place-items-end bg-bg/80 p-4 md:place-items-center">
-      <div className="w-full max-w-md rounded-panel border border-line bg-surface p-4 shadow-panel">{children}</div>
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center">
+      <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
     </div>
   );
 }
@@ -2830,7 +3861,7 @@ function ReaPanel({
         <p className="mt-2 max-w-2xl text-sm text-muted">{lead}</p>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_18rem]">
-        <div className="glow-card rounded-panel border border-line bg-surface p-4">
+        <div className="dense-card card-texture p-4">
           <p className="text-sm font-semibold">What can run</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA doctor</span><span className="text-xs text-muted">Live check</span></li>
@@ -2881,17 +3912,42 @@ function ChatPane({
   onSpeak,
   onListen,
   speaking,
+  voiceMode,
+  voiceListening,
+  voiceMuted,
+  voiceLevel,
+  onToggleMute,
+  onToggleVoiceMode,
   memoryChoice,
   mode,
   onComposerMemory,
   onComposerMode,
   stagedName,
+  pendingImages,
+  onRemoveImage,
   onAttach,
+  onAttachImage,
+  onOpenCamera,
+  onOpenCloud,
+  onImagine,
+  onEditImagine,
+  onSaveImage,
+  onDownloadImage,
+  onAddImageFile,
   onAnalyze,
   onDoctor,
   providerChoices: choices,
   providerChoice,
   onProvider,
+  modelTier,
+  onModelTier,
+  toolTimeline,
+  timelineNowMs,
+  agentActivity,
+  recentTasks,
+  connectedServices,
+  systemStatus,
+  onViewAudit,
 }: {
   active: Chat | null;
   chats: Chat[];
@@ -2919,17 +3975,42 @@ function ChatPane({
   onSpeak: (text: string) => void;
   onListen: () => void;
   speaking: boolean;
+  voiceMode: VoiceRoutingMode;
+  voiceListening: boolean;
+  voiceMuted: boolean;
+  voiceLevel: number;
+  onToggleMute: () => void;
+  onToggleVoiceMode: () => void;
   memoryChoice: "off" | "on";
   mode: Autonomy;
   onComposerMemory: () => void;
   onComposerMode: (mode: Autonomy) => void;
   stagedName: string | null;
+  pendingImages: ImageAttachment[];
+  onRemoveImage: (index: number) => void;
   onAttach: () => void;
+  onAttachImage: () => void;
+  onOpenCamera: () => void;
+  onOpenCloud: () => void;
+  onImagine: () => void;
+  onEditImagine: (src: string) => void;
+  onSaveImage: (src: string, alt: string) => void;
+  onDownloadImage: (src: string, alt: string) => void;
+  onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
   providerChoices: { id: string; label: string; enabled: boolean; reason: string }[];
   providerChoice: string;
   onProvider: (id: string) => void;
+  modelTier: ModelTier;
+  onModelTier: (tier: ModelTier) => void;
+  toolTimeline: ToolTimelineRow[];
+  timelineNowMs: number;
+  agentActivity: ReturnType<typeof agentActivityFromTimeline>;
+  recentTasks: ReturnType<typeof recentTasksFromAudit>;
+  connectedServices: ReturnType<typeof connectedServicesRail>;
+  systemStatus: ReturnType<typeof systemStatusRail>;
+  onViewAudit: (auditId: string) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -3009,6 +4090,9 @@ function ChatPane({
           <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
           <div className="mt-3 xl:hidden">
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
+            <div className="mt-3">
+              <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} />
+            </div>
           </div>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
@@ -3027,7 +4111,7 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-surface-2" : "bg-surface"}`}>
+            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "ml-auto bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -3045,7 +4129,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} />
+                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
@@ -3087,13 +4171,55 @@ function ChatPane({
             </article>
             );
           })}
+          {toolTimeline.length > 0 && (
+            <div className="max-w-3xl rounded-panel border border-line bg-surface p-3" data-testid="executing-tools">
+              {(() => {
+                const counts = timelineCounts(toolTimeline);
+                return (
+                  <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                    <span className={`inline-block size-2 rounded-full ${counts.failed ? "bg-danger" : counts.running ? "bg-accent" : "bg-ok"}`} />
+                    Executing tools ({counts.done}/{counts.total})
+                  </p>
+                );
+              })()}
+              <ul className="space-y-2">
+                {toolTimeline.map((row) => {
+                  const ms = elapsedMs(row, timelineNowMs);
+                  const failed = row.status === "failed" || row.status === "timed_out" || row.status === "cancelled";
+                  const done = row.endedAtMs != null && !failed;
+                  return (
+                    <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-panel border border-line bg-bg px-3 py-2 text-sm" data-testid="tool-timeline-row" data-status={row.status}>
+                      <span className={`size-2 shrink-0 rounded-full ${failed ? "bg-danger" : done ? "bg-ok" : "bg-accent"}`} />
+                      <span className="min-w-0 flex-1 font-medium">{row.name}</span>
+                      <span className={`text-xs ${failed ? "text-danger" : "text-muted"}`}>{row.status}</span>
+                      <span className="text-xs text-muted tabular-nums">{formatElapsed(ms)}</span>
+                      {row.auditId ? (
+                        <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onViewAudit(row.auditId!)}>
+                          View
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {busy && liveText && (
             <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
-              <p className="mb-1 text-xs text-muted">Grok 4.5 · writing</p>
+              <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
-          {busy && !liveText && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {busy && !liveText && toolTimeline.length === 0 && (
+            <div className="max-w-3xl space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
+              <p className="text-xs text-muted">Waiting for Grok.</p>
+              <div className="skeleton h-3" style={{ width: "75%" }} />
+              <div className="skeleton h-3" style={{ width: "50%" }} />
+              <div className="skeleton h-3" style={{ width: "66%" }} />
+            </div>
+          )}
           {busy && (
             <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
           )}
@@ -3102,15 +4228,40 @@ function ChatPane({
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
+          <VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} />
         </div>
         <form
-          className="command-card m-3 rounded-panel bg-surface p-3"
+          className="floating-composer command-card m-3 p-3"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
           }}
+          onDragOver={(event) => {
+            if (event.dataTransfer?.types?.includes("Files")) event.preventDefault();
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => (file.type || "").startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name));
+            for (const file of files.slice(0, 4)) onAddImageFile(file);
+          }}
         >
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message Grok 4.5..." className="min-h-11 w-full bg-transparent text-sm outline-none" />
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onPaste={(event) => {
+              const items = Array.from(event.clipboardData?.items ?? []);
+              const imageItems = items.filter((item) => item.type.startsWith("image/"));
+              if (imageItems.length === 0) return;
+              event.preventDefault();
+              for (const item of imageItems.slice(0, 4)) {
+                const file = item.getAsFile();
+                if (file) onAddImageFile(file);
+              }
+            }}
+            placeholder={`Message (${modelTier})...`}
+            className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
+          />
+          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -3121,48 +4272,151 @@ function ChatPane({
             <div className="mt-2 space-y-1 rounded-panel border border-line bg-bg p-3 text-sm">
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onDoctor}>Run REA doctor</button>
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onAnalyze}>Inspect a file with REA</button>
-              <p className="text-xs text-muted">Chat stays on Grok 4.5. Image, video, and web search are not called.</p>
+              <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttach}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
               <Paperclip className="size-4" /> Attach
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line" onClick={onListen} aria-label="Dictate">
-              <Mic className="size-4" />
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage}>
+              <Image className="size-4" /> Image
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCamera}>
+              <Camera className="size-4" /> Camera
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCloud}>
+              Drive
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+              Imagine
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+            <button type="button" className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceListening ? "Stop voice" : "Start voice"} aria-pressed={voiceListening}>
+              {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
+            </button>
+            <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
+              {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
               {speaking ? "Speaking" : "Speak"}
             </button>
             <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
         </form>
       </section>
-      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
-        <section className="rounded-panel border border-line bg-surface p-3">
+      <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-auto border-l border-line/70 p-3 xl:flex" data-testid="chat-right-rail">
+        <section className="glass-panel rounded-panel p-3">
           <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
-          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>
-          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Automatic</button>
+        <section className="glass-panel rounded-panel p-3">
+          <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} />
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
+        <section className="glass-panel rounded-panel p-3">
+          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
+          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
+        </section>
+        <section className="glass-panel rounded-panel p-3">
           <button type="button" role="switch" aria-checked={memoryChoice === "on"} onClick={onComposerMemory} className="flex min-h-11 w-full items-center justify-between text-sm">
             Memory: {memoryChoice === "on" ? "ON" : "OFF"}
             <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
           </button>
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3 text-sm">
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="agent-activity-live">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-semibold">Agent Activity</p>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${agentActivity.live ? "bg-ok/20 text-ok" : "bg-surface-2 text-muted"}`}>
+              {agentActivity.live ? "Live" : "Idle"}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-muted">{agentActivity.label}</p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
+            <div className={`h-full ${agentActivity.live ? "bg-accent" : agentActivity.percent > 0 ? "bg-ok" : "bg-transparent"}`} style={{ width: `${agentActivity.percent}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {agentActivity.total === 0
+              ? agentActivity.detail
+              : `Step ${agentActivity.step} of ${agentActivity.total}: ${agentActivity.detail}`}
+          </p>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="recent-tasks">
+          <p className="font-semibold">Recent Tasks</p>
+          {recentTasks.length === 0 && <p className="mt-2 text-xs text-muted">No tasks yet. Actions you take show up here.</p>}
+          <ul className="mt-2 space-y-2">
+            {recentTasks.map((task) => (
+              <li key={task.id} className="flex items-start justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate font-medium">{task.label}</span>
+                <span className="shrink-0 text-muted">{task.result}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="connected-services-rail">
+          <p className="font-semibold">Connected Services</p>
+          <ul className="mt-2 space-y-2">
+            {connectedServices.map((item) => (
+              <li key={item.name} className="flex items-center justify-between gap-2 text-xs">
+                <span>{item.name}</span>
+                <span className={item.tone === "ok" ? "text-ok" : item.tone === "danger" ? "text-danger" : "text-muted"}>{item.state}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="system-status-rail">
+          <p className="font-semibold">System Status</p>
+          <p className="mt-1 text-xs text-muted">{systemStatus.headline}</p>
+          <ul className="mt-2 space-y-2">
+            {systemStatus.rows.map((row) => (
+              <li key={row.name} className="flex items-center justify-between gap-2 text-xs">
+                <span>{row.name}</span>
+                <span className={row.ok ? "text-ok" : "text-muted"}>{row.state}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm">
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
+        <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label="Dictate">
+            <Mic className="size-4" />
+          </button>
+          <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
+            <Volume2 className="size-4" />
+          </button>
+        </div>
       </aside>
     </div>
+  );
+}
+
+function ModelTierPicker({
+  name,
+  tier,
+  onChoose,
+}: {
+  name: string;
+  tier: ModelTier;
+  onChoose: (tier: ModelTier) => void;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-semibold">Mode</legend>
+      <p className="text-xs text-muted">Chooses which Grok model runs. Auto routes from the prompt.</p>
+      {MODEL_TIERS.map((item) => (
+        <label key={item} className="flex items-start gap-2 text-sm">
+          <input type="radio" name={name} checked={tier === item} onChange={() => onChoose(item)} className="mt-1" />
+          <span className="font-medium">{item}</span>
+        </label>
+      ))}
+    </fieldset>
   );
 }
 
@@ -3179,9 +4433,12 @@ function ProviderPicker({
 }) {
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold">Model</legend>
+      <legend className="text-sm font-semibold">Provider</legend>
       {choices.map((item) => (
-        <label key={item.id} className="flex items-start gap-2 text-sm">
+        <label
+          key={item.id}
+          className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : "hover:bg-white/5"} ${!item.enabled ? "opacity-60" : ""}`}
+        >
           <input
             type="radio"
             name={name}

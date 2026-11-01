@@ -9,7 +9,7 @@ export function describeFile(name: string, text: string): FileRead {
   const lower = name.toLowerCase();
   const body = text.trim();
   if (/\.(png|jpe?g|gif|webp|heic)$/.test(lower)) {
-    return { format: "image", analyzed: false, state: "uploaded", summary: "This image was not analyzed. No description was created." };
+    return { format: "image", analyzed: false, state: "uploaded", summary: "This image is stored for chat vision (attach on Command). Library does not OCR it into text here." };
   }
   if (lower.endsWith(".pdf") || body.startsWith("%PDF")) {
     if (body.startsWith("%PDF") || !body) return { format: "pdf", analyzed: false, state: "ocr unavailable", summary: "This PDF was not decoded. No text was extracted." };

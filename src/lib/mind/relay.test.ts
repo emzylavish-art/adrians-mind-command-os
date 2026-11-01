@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { decide } from "./policy.ts";
-import { relayModelStream, STOPPED_REPLY } from "./relay.ts";
+import { resolveModelTier } from "./model-tiers.ts";
+import { buildRelayModelBody, relayModelStream, STOPPED_REPLY } from "./relay.ts";
 import { pullMindEvents } from "./stream.ts";
 
 const encoder = new TextEncoder();
@@ -174,3 +175,62 @@ describe("provider relay", () => {
     assert.equal(STOPPED_REPLY.includes("Emergency stop"), false);
   });
 });
+
+
+describe("relay model body follows model tiers", () => {
+  it("emits a different model id for each concrete tier in the provider JSON", async () => {
+    const seen = new Set<string>();
+    for (const tier of ["Fast", "Expert", "Heavy", "Build"] as const) {
+      const resolved = resolveModelTier(tier, "probe", {});
+      const captured: { body: { model?: string } | null } = { body: null };
+      const response = relayModelStream({
+        apiKey: "test-key",
+        model: resolved.model,
+        messages: [{ role: "user", content: "probe" }],
+        usedIds: [],
+        requestSignal: new AbortController().signal,
+        params: {
+          temperature: resolved.params.temperature,
+          max_tokens: resolved.params.max_tokens,
+          reasoning_effort: resolved.params.reasoning_effort,
+        },
+        meta: { modelTier: resolved.selected, resolvedTier: resolved.resolved, tierReason: resolved.reason },
+        fetchImpl: async (_url, init) => {
+          captured.body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"ok"}}]}\n'));
+                controller.enqueue(new TextEncoder().encode("data: [DONE]\n"));
+                controller.close();
+              },
+            }),
+            { status: 200 },
+          );
+        },
+      });
+      await response.text();
+      assert.equal(captured.body?.model, resolved.model);
+      seen.add(String(captured.body?.model));
+      const fields = buildRelayModelBody(resolved.model, [{ role: "user", content: "probe" }], {
+        temperature: resolved.params.temperature,
+        max_tokens: resolved.params.max_tokens,
+        reasoning_effort: resolved.params.reasoning_effort,
+      });
+      assert.equal(fields.model, resolved.model);
+    }
+    assert.equal(seen.size, 4);
+  });
+});
+
+describe("relay multimodal body", () => {
+  it("passes content part arrays through to the provider JSON", () => {
+    const parts = [
+      { type: "text" as const, text: "what color?" },
+      { type: "image_url" as const, image_url: { url: "data:image/png;base64,aa" } },
+    ];
+    const body = buildRelayModelBody("grok-4.5", [{ role: "user", content: parts }], { temperature: 0, max_tokens: 16 });
+    assert.deepEqual(body.messages, [{ role: "user", content: parts }]);
+  });
+});
+
