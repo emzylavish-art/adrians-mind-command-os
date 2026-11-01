@@ -817,3 +817,29 @@
 .dash3d-forever:focus-within {
   box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.55);
 }
+
+/* Status soft-error overlay — never wipe the last-good WebGL stage */
+.dash3d-status-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgb(5 8 18 / 0.55);
+}
+.dash3d-status-overlay.is-soft {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: max(0.85rem, env(safe-area-inset-top, 0px)) max(0.85rem, env(safe-area-inset-right, 0px)) 0 0;
+  background: transparent;
+}
+.dash3d-status-card {
+  pointer-events: auto;
+  max-width: min(360px, 92vw);
+  padding: 0.85rem 1rem;
+}
+.dash3d-status-overlay.is-soft .dash3d-status-card {
+  max-width: 280px;
+}

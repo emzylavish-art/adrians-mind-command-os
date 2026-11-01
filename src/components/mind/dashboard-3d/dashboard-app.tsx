@@ -22,10 +22,12 @@ import {
 import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
+import { pollViewData } from "@/lib/mind/dashboard/status-poll";
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
-  const { state } = useDashboardStatus();
+  const { state, refresh } = useDashboardStatus();
+  const viewData = useMemo(() => pollViewData(state), [state]);
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
@@ -40,8 +42,8 @@ export function DashboardApp() {
     }
   }, []);
   const layoutForHud = useMemo(
-    () => cityLayout ?? buildCityLayout(state.status === "ready" ? state.data.projects : null),
-    [cityLayout, state],
+    () => cityLayout ?? buildCityLayout(viewData?.projects ?? null),
+    [cityLayout, viewData],
   );
   const reducedMotion = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -102,12 +104,13 @@ export function DashboardApp() {
   }, []);
 
   const spendView = useMemo(() => {
-    if (state.status !== "ready") return { available: false as const, reason: "no spend source yet" };
-    const m = state.data.money;
+    const data = pollViewData(state);
+    if (!data) return { available: false as const, reason: "no spend source yet" };
+    const m = data.money;
     if (!m?.available) {
       const reason =
         m?.reason ||
-        (!state.data.spend.available ? state.data.spend.reason : null) ||
+        (!data.spend.available ? data.spend.reason : null) ||
         "no spend source yet";
       return { available: false as const, reason };
     }
@@ -121,10 +124,10 @@ export function DashboardApp() {
 
   const nowMs = useMemo(() => Date.now(), [state]);
   const scrubView = useMemo(() => {
-    if (state.status !== "ready") {
+    if (!viewData) {
       return { data: null as null, mode: "live" as const, message: null as string | null, scrubMs: null as number | null };
     }
-    const timeline = state.data.timeline ?? {
+    const timeline = viewData.timeline ?? {
       events: [],
       earliestMs: null,
       latestMs: null,
@@ -133,27 +136,27 @@ export function DashboardApp() {
       truncated: false,
     };
     const liveHealth = Object.fromEntries(
-      state.data.bots.map((b) => [b.id, { health: b.health, reason: b.reason }]),
+      viewData.bots.map((b) => [b.id, { health: b.health, reason: b.reason }]),
     );
     const target = scrubMs == null ? nowMs : scrubMs;
     const result = scrubAt({
       timeline,
-      botIds: state.data.bots.map((b) => b.id),
+      botIds: viewData.bots.map((b) => b.id),
       liveHealth,
       scrubMs: target,
       nowMs,
     });
     if (result.mode === "live") {
-      return { data: state.data, mode: result.mode, message: result.message, scrubMs: null as number | null };
+      return { data: viewData, mode: result.mode, message: result.message, scrubMs: null as number | null };
     }
-    const bots = applyScrubToBots(state.data.bots, result);
+    const bots = applyScrubToBots(viewData.bots, result);
     return {
-      data: { ...state.data, bots },
+      data: { ...viewData, bots },
       mode: result.mode,
       message: result.message,
       scrubMs: result.scrubMs,
     };
-  }, [state, scrubMs, nowMs]);
+  }, [viewData, scrubMs, nowMs]);
 
   const sceneData = scrubView.data;
 
@@ -171,8 +174,8 @@ export function DashboardApp() {
   }, [sceneData]);
 
   const openNotion = (pageId: string) => {
-    if (state.status !== "ready") return;
-    const page = state.data.notionGraph.pages.find((p) => p.id === pageId) ?? null;
+    if (!viewData) return;
+    const page = viewData.notionGraph.pages.find((p) => p.id === pageId) ?? null;
     setNotionPage(page);
     setSelected(null);
   };
@@ -186,15 +189,16 @@ export function DashboardApp() {
       data-health-filter={operatorPrefs.healthFilter}
       onPointerDownCapture={unlockSound}
     >
-      {state.status === "ready" && sceneData && !webglError ? (
+      {sceneData && !webglError ? (
         <UniverseScene
           data={sceneData}
           reducedMotion={reducedMotion}
           onSelectBot={(bot) => {
             setSelected(bot);
-            const mapped = state.data.notionGraph.botPageMap[bot.id];
-            if (mapped) {
-              const page = state.data.notionGraph.pages.find((p) => p.id === mapped) ?? null;
+            const graph = viewData?.notionGraph;
+            const mapped = graph?.botPageMap[bot.id];
+            if (mapped && graph) {
+              const page = graph.pages.find((p) => p.id === mapped) ?? null;
               setNotionPage(page);
             } else {
               setNotionPage(null);
@@ -216,9 +220,9 @@ export function DashboardApp() {
             <h2>Universe unavailable</h2>
             <p className="dash3d-title">WebGL fallback</p>
             <p className="dash3d-muted">{webglError}</p>
-            {state.status === "ready" ? (
+            {viewData ? (
               <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
-                {state.data.bots.map((b) => (
+                {viewData.bots.map((b) => (
                   <li key={b.id}>
                     <button type="button" className="dash3d-pill" onClick={() => setSelected(b)}>
                       <span className={`dash3d-dot ${b.health}`} />
@@ -232,7 +236,7 @@ export function DashboardApp() {
         </div>
       ) : null}
 
-      {state.status === "loading" ? (
+      {state.status === "loading" && !viewData ? (
         <div className="dash3d-fallback">
           <div className="dash3d-glass">
             <h2>Adrian&apos;s Mind</h2>
@@ -242,21 +246,29 @@ export function DashboardApp() {
       ) : null}
 
       {state.status === "error" ? (
-        <div className="dash3d-fallback">
-          <div className="dash3d-glass">
-            <h2>Status error</h2>
+        <div
+          className={`dash3d-status-overlay${viewData ? " is-soft" : ""}`}
+          role="status"
+          data-testid="status-error-overlay"
+        >
+          <div className="dash3d-glass dash3d-status-card">
+            <h2>{viewData ? "Status stale" : "Status unreachable"}</h2>
+            <p className="dash3d-title">{viewData ? "Showing last good scene" : "Retrying with backoff"}</p>
             <p className="dash3d-muted">{state.error}</p>
+            <button type="button" className="dash3d-pill" data-testid="status-retry" onClick={() => void refresh()}>
+              Retry now
+            </button>
           </div>
         </div>
       ) : null}
 
-      {state.status === "ready" ? (
+      {viewData ? (
         <>
         <a className="dash3d-skip-link" href="#dash3d-skybar" data-testid="dash3d-skip-skybar">
           Skip to skybar
         </a>
         <div className="dash3d-skybar" id="dash3d-skybar" aria-live="polite" role="region" aria-label="Dashboard skybar">
-          {state.stale ? (
+          {state.status === "ready" && state.stale ? (
             <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
               <h2>Status stale</h2>
               <p className="dash3d-title">Showing last good data</p>
@@ -267,8 +279,8 @@ export function DashboardApp() {
           ) : null}
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>System weather</h2>
-            <p className="dash3d-title">{state.data.weather.label}</p>
-            <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>{state.data.weather.summary}</p>
+            <p className="dash3d-title">{viewData.weather.label}</p>
+            <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>{viewData.weather.summary}</p>
           </div>
           {perfHint ? (
             <div className="dash3d-glass dash3d-skybar-card" data-testid="perf-budget-hint" role="status">
@@ -279,33 +291,33 @@ export function DashboardApp() {
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Notion galaxy</h2>
             <p className="dash3d-title">
-              {state.data.notionGraph.available
-                ? `${state.data.notionGraph.stats.pages} pages · ${state.data.notionGraph.stats.edges} edges`
+              {viewData.notionGraph.available
+                ? `${viewData.notionGraph.stats.pages} pages · ${viewData.notionGraph.stats.edges} edges`
                 : "Unavailable"}
             </p>
             <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
-              {state.data.notionGraph.mode}
-              {state.data.notionGraph.reason ? ` — ${state.data.notionGraph.reason.slice(0, 90)}` : ""}
+              {viewData.notionGraph.mode}
+              {viewData.notionGraph.reason ? ` — ${viewData.notionGraph.reason.slice(0, 90)}` : ""}
             </p>
           </div>
-          <MoneyPanel money={state.data.money} />
+          <MoneyPanel money={viewData.money} />
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Fleet plan</h2>
             <p className="dash3d-title">
-              {state.data.fleetPlan?.queueHead
-                ? `#${state.data.fleetPlan.queueHead.index} ${state.data.fleetPlan.queueHead.title}`
-                : state.data.fleetPlan?.queueSource === "unavailable"
+              {viewData.fleetPlan?.queueHead
+                ? `#${viewData.fleetPlan.queueHead.index} ${viewData.fleetPlan.queueHead.title}`
+                : viewData.fleetPlan?.queueSource === "unavailable"
                   ? "Queue unavailable"
                   : "Queue empty"}
             </p>
             <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
-              {(state.data.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
+              {(viewData.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
             </p>
           </div>
-          {state.data.foreverContract ? <ForeverContractPanel guard={state.data.foreverContract} /> : null}
+          {viewData.foreverContract ? <ForeverContractPanel guard={viewData.foreverContract} /> : null}
           {operatorPrefs.layers.time ? (
           <TimeScrubber
-            timeline={state.data.timeline ?? {
+            timeline={viewData.timeline ?? {
               events: [],
               earliestMs: null,
               latestMs: null,
@@ -362,28 +374,28 @@ export function DashboardApp() {
         </>
       ) : null}
 
-      {state.status === "ready" && !webglError ? (
+      {viewData && !webglError ? (
         <FlyoverHud
           fly={fly}
           layout={layoutForHud}
           lastNode={resolveLastNodeBreadcrumb({
             lastNodeId: operatorPrefs.lastNodeId,
             lastNodeKind: operatorPrefs.lastNodeKind,
-            bots: state.data.bots,
+            bots: viewData.bots,
             buildings: layoutForHud.buildings,
-            pages: state.data.notionGraph?.pages ?? null,
+            pages: viewData.notionGraph?.pages ?? null,
           })}
           onRevisitLast={() => {
             const crumb = resolveLastNodeBreadcrumb({
               lastNodeId: operatorPrefs.lastNodeId,
               lastNodeKind: operatorPrefs.lastNodeKind,
-              bots: state.data.bots,
+              bots: viewData.bots,
               buildings: layoutForHud.buildings,
-              pages: state.data.notionGraph?.pages ?? null,
+              pages: viewData.notionGraph?.pages ?? null,
             });
             if (!crumb || crumb.missing) return;
             if (crumb.kind === "bot") {
-              const bot = state.data.bots.find((b) => b.id === crumb.id);
+              const bot = viewData.bots.find((b) => b.id === crumb.id);
               if (bot) {
                 setSelected(bot);
                 setNotionPage(null);
@@ -395,7 +407,7 @@ export function DashboardApp() {
               sendFly({ type: "DIVE" });
               sendFly({ type: "ENTER", buildingId: crumb.id, part: "door" });
             } else if (crumb.kind === "notion") {
-              const page = state.data.notionGraph?.pages?.find((x) => x.id === crumb.id) ?? null;
+              const page = viewData.notionGraph?.pages?.find((x) => x.id === crumb.id) ?? null;
               if (page) {
                 setSelected(null);
                 setNotionPage(page);
@@ -404,34 +416,34 @@ export function DashboardApp() {
           }}
         />
       ) : null}
-      {state.status === "ready" ? (
+      {viewData && fly.level === "interior" ? (
         <BuildingInteriorPanel
           fly={fly}
-          projects={state.data.projects}
-          bots={state.data.bots}
+          projects={viewData.projects}
+          bots={viewData.bots}
           onClose={() => sendFly({ type: "ZOOM_OUT" })}
         />
       ) : null}
 
-      {state.status === "ready" && sceneData && operatorPrefs.layers.feed ? (
-        <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
+      {viewData && sceneData && operatorPrefs.layers.feed ? (
+        <FeedPanel feed={sceneData.skyFeed ?? viewData.skyFeed} />
       ) : null}
-      {state.status === "ready" && sceneData?.charts && operatorPrefs.layers.charts ? (
+      {viewData && sceneData?.charts && operatorPrefs.layers.charts ? (
         <ChartsPanel charts={sceneData.charts} />
       ) : null}
-      {state.status === "ready" ? (
+      {viewData ? (
         <NotionMirrorPanel
-          mirror={state.data.notionMirror}
+          mirror={viewData.notionMirror}
           onOpenPage={(pageId) => {
             openNotion(pageId);
           }}
         />
       ) : null}
-      {state.status === "ready" ? (
+      {viewData ? (
         <OperatorConsole
-          bots={state.data.bots}
+          bots={viewData.bots}
           buildings={layoutForHud.buildings}
-          pages={state.data.notionGraph.pages}
+          pages={viewData.notionGraph.pages}
           open={operatorOpen}
           onOpenChange={setOperatorOpen}
           prefs={operatorPrefs}
@@ -451,8 +463,8 @@ export function DashboardApp() {
         notionPage={notionPage}
         open={Boolean(selected || notionPage)}
         spend={spendView}
-        status={state.status === "ready" ? state.data : null}
-        notionNeighbors={resolveNotionNeighbors(state.status === "ready" ? state.data : null, notionPage?.id)}
+        status={viewData}
+        notionNeighbors={resolveNotionNeighbors(viewData, notionPage?.id)}
         portraitSrc={selected ? `/dashboard-3d/art/portrait-${selected.id}.webp` : null}
         onClose={() => {
           setSelected(null);

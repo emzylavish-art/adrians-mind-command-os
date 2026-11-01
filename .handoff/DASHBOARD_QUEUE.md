@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c26 — Imagine zone densify (#20). Next: #19 Feed severity pulse.
+Last release: Dashboard c27 — Gap#1 status last-good + Gap#2 interior gate. Next: #19 Feed severity pulse + Gap#3.
 
 Ordered. Status: `done` | `active` | `queued`.  
 Branch: `dashboard-3d` · Worktree: `/workspace/mind-command-os-dashboard`  
@@ -39,6 +39,15 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 20 | **Imagine zone densify** — add 1–2 more character/scene billboards for under-art constellations (GenerateImage→webp≤300KB) | **done** | c26 — scene-merge-beacon + scene-collab-tower webp billboards |
 | 21 | **Star focus breadcrumb twin** — when a star is focused, mirror name+lane health beside last-palette crumb with Back to sky | queued | researched c9; complements #14 |
 | 22 | **Spend JSONL hook readiness** — document + adapter probe for future xAI usage append path (still honest empty until real USD events exist) | queued | researched c14; never invent numbers |
+
+| 23 | **Status-error last-good (Gap#1)** — keep last-good scene on status fail; calm stale chrome; backoff retry; never blank wipe | **done** | c27 — soft error overlay + lastData hydrate + exponential backoff; interior gated to fly.interior |
+| 24 | **Idle interior drawer (Gap#2)** — keep INTERIOR collapsed until a building is focused | **done** | c27 — BuildingInteriorPanel mounts only when fly.level===interior |
+| 25 | **Pan/drag remount splash (Gap#3)** — keep last WebGL frame across context-loss/remount; no full splash on pan | queued | REA capture desktop-pan; three.js pauseAnimation pattern |
+| 26 | **Star hover tooltip + edge highlight (Gap#4)** — health/lane/branch/heartbeat tooltip; highlight constellation edges | queued | Obsidian/Kepler hover literacy |
+| 27 | **Constellation Filters/Groups drawer (Gap#5)** — search, orphans, lane/health groups beyond Operator filter | queued | Obsidian Filters & Groups; Bloom Filter drawer |
+| 28 | **N-hop / expand neighbors (Gap#6)** — local graph depth around focused star | queued | Obsidian Local Graph; Bloom Expand |
+| 29 | **HUD focus mode / collapsible layers (Gap#7)** — one-gesture collapse Mirror/Feed/Charts/sky chrome | queued | Linear sidebar; Kepler layers; mobile chrome |
+| 30 | **Orientation minimap / compass (Gap#8)** — inset overview after zoom/pan | queued | Kepler map controls; Bloom overview |
 
 ## After each upgrade
 1. Commit + push `origin/dashboard-3d` (never main, no force).

@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { initialPollState, reducePoll } from "./status-poll.ts";
+import { initialPollState, nextBackoffMs, pollViewData, reducePoll } from "./status-poll.ts";
 
 describe("status poll reducer (hacker pass)", () => {
-  it("first failure is an honest error", () => {
+  it("first failure is a soft error with null lastData (UI retries, no forever wipe)", () => {
     const s = reducePoll(initialPollState<number>(), { type: "failure", seq: 1, error: "HTTP 500" });
     assert.equal(s.status, "error");
+    assert.ok(s.status === "error" && s.lastData === null);
+    assert.equal(pollViewData(s), null);
   });
 
   it("failure after data keeps the scene mounted but marks stale (not silently green)", () => {
@@ -14,7 +16,6 @@ describe("status poll reducer (hacker pass)", () => {
     assert.equal(s.status, "ready");
     assert.ok(s.status === "ready" && s.data === 42);
     assert.ok(s.status === "ready" && s.stale?.error === "ECONNREFUSED");
-    // stale "since" sticks to first failure
     s = reducePoll(s, { type: "failure", seq: 3, error: "again", at: "2026-11-01T14:41:00+01:00" });
     assert.ok(s.status === "ready" && s.stale?.since === "2026-11-01T14:40:00+01:00");
     s = reducePoll(s, { type: "success", seq: 4, data: 43 });
@@ -27,5 +28,12 @@ describe("status poll reducer (hacker pass)", () => {
     assert.ok(s.status === "ready" && s.data === 5);
     s = reducePoll(s, { type: "failure", seq: Number.NaN, error: "x" });
     assert.ok(s.status === "ready" && s.stale === null);
+  });
+
+  it("backoff doubles then caps", () => {
+    assert.equal(nextBackoffMs(0), 1000);
+    assert.equal(nextBackoffMs(1), 2000);
+    assert.equal(nextBackoffMs(10), 20_000);
+    assert.equal(nextBackoffMs(Number.NaN), 1000);
   });
 });
