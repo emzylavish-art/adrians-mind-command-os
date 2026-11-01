@@ -18,6 +18,7 @@ export class SharedAudioOutput {
   private stopped = false;
   private playing = false;
   private onEnded: (() => void) | null = null;
+  private onLevel: ((level: number) => void) | null = null;
 
   get isPlaying() {
     return this.playing;
@@ -25,6 +26,10 @@ export class SharedAudioOutput {
 
   setEndedListener(listener: (() => void) | null) {
     this.onEnded = listener;
+  }
+
+  setLevelListener(listener: ((level: number) => void) | null) {
+    this.onLevel = listener;
   }
 
   private ensureCtx(sampleRate: number) {
@@ -65,7 +70,13 @@ export class SharedAudioOutput {
     const samples = new Int16Array(aligned.buffer, aligned.byteOffset, Math.floor(aligned.byteLength / 2));
     const buffer = ctx.createBuffer(1, samples.length, sampleRate);
     const channel = buffer.getChannelData(0);
-    for (let i = 0; i < samples.length; i++) channel[i] = samples[i] / 32768;
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const v = samples[i]! / 32768;
+      channel[i] = v;
+      peak = Math.max(peak, Math.abs(v));
+    }
+    this.onLevel?.(Math.min(1, peak * 1.4));
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);

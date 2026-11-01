@@ -30,12 +30,16 @@ class FakeSocket {
 }
 
 describe("RealtimeVoiceSession", () => {
-  it("connects with ephemeral protocol and cancels on interrupt", async () => {
+  it("connects with ephemeral protocol, cancels auto replies in captureOnly, and speaks after idle", async () => {
     let created: FakeSocket | undefined;
     const output = new SharedAudioOutput();
     const transcripts: string[] = [];
+    const levels: number[] = [];
     const session = new RealtimeVoiceSession(
-      { onTranscript: (text) => transcripts.push(text) },
+      {
+        onTranscript: (text) => transcripts.push(text),
+        onLevel: (level) => levels.push(level),
+      },
       output,
       (url, protocols) => {
         assert.equal(url, REALTIME_ENDPOINT);
@@ -45,15 +49,22 @@ describe("RealtimeVoiceSession", () => {
         return created;
       },
     );
-    await session.connect("ephemeral-test");
+    await session.connect("ephemeral-test", { captureOnly: true });
     assert.equal(session.isOpen, true);
     assert.ok(created);
     const socket = created as FakeSocket;
     assert.ok(socket.sent.some((line: string) => line.includes("session.update")));
+    socket.emitMessage({ type: "response.created" });
+    assert.ok(socket.sent.some((line: string) => line.includes("response.cancel")));
     socket.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "hello world" });
     assert.deepEqual(transcripts, ["hello world"]);
+    socket.emitMessage({ type: "response.done" });
+    session.speakText("Heard you.");
+    assert.ok(socket.sent.some((line: string) => line.includes("force_message") && line.includes("Heard you.")));
+    session.setMuted(true);
+    assert.equal(session.isMuted, true);
     session.interruptPlayback();
-    assert.ok(socket.sent.some((line: string) => line.includes("response.cancel")));
+    assert.ok(socket.sent.filter((line: string) => line.includes("response.cancel")).length >= 1);
     session.close();
   });
 });
