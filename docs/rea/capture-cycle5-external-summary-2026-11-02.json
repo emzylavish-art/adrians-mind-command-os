@@ -1,0 +1,181 @@
+{
+  "cycle": 5,
+  "lane": "external",
+  "date": "2026-11-02",
+  "generatedAt": "2026-11-01T23:09:38.096Z",
+  "results": [
+    {
+      "id": "chatgpt",
+      "status": "captured",
+      "reason": null,
+      "title": "ChatGPT: Chat, Work, Create & Code with AI",
+      "finalUrl": "https://chatgpt.com/",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "b66b4283153e934b",
+      "domHash": "f3fdbb5725a4ebab"
+    },
+    {
+      "id": "claude",
+      "url": "https://claude.ai/",
+      "primary": {
+        "status": "blocked",
+        "reason": "cloudflare_interstitial,captcha_or_bot_check,http_403",
+        "title": "Just a moment...",
+        "finalUrl": "https://claude.ai/login",
+        "http": 403
+      },
+      "alt": {
+        "status": "captured",
+        "reason": null,
+        "title": "Claude by Anthropic | The AI for problem solvers",
+        "finalUrl": "https://claude.com/",
+        "http": 200,
+        "changed": true,
+        "domHash": "22e4413c28325ff4",
+        "prev": "878ee55b93e23a08"
+      }
+    },
+    {
+      "id": "gemini",
+      "status": "captured",
+      "reason": null,
+      "title": "Google Gemini",
+      "finalUrl": "https://gemini.google.com/app",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "473fa99ad7d967a4",
+      "domHash": "bbbbb8f176dabb18"
+    },
+    {
+      "id": "perplexity",
+      "status": "captured",
+      "reason": null,
+      "title": "Perplexity",
+      "finalUrl": "https://www.perplexity.ai/",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "0f8e0aff751d9d19",
+      "domHash": "151943f98e865d75"
+    },
+    {
+      "id": "manus",
+      "status": "captured",
+      "reason": null,
+      "title": "Manus: Hands On AI",
+      "finalUrl": "https://manus.im/",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "9aab79eb85d677ee",
+      "domHash": "b054dd8923cef6d6"
+    },
+    {
+      "id": "copilot",
+      "status": "captured",
+      "reason": null,
+      "title": "Microsoft Copilot | Sign in",
+      "finalUrl": "https://copilot.com/",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "9f9f2550fab02b8b",
+      "domHash": "cec9f86d82e7e052"
+    },
+    {
+      "id": "metaai",
+      "status": "partial",
+      "reason": "http_403",
+      "title": "Meta AI - Your AI Assistant for Images, Shopping and More",
+      "finalUrl": "https://www.meta.ai/",
+      "http": 403,
+      "changed": true,
+      "recaptured": true,
+      "prev": "08d00a7bcb25c638",
+      "domHash": "0fe19d0a4cc6b047"
+    },
+    {
+      "id": "youcom",
+      "status": "captured",
+      "reason": null,
+      "title": "You.com | Search and inference for AI",
+      "finalUrl": "https://you.com/",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "66c04d1a165f1c15",
+      "domHash": "2c8179ed2969a39a"
+    },
+    {
+      "id": "huggingchat",
+      "status": "captured",
+      "reason": null,
+      "title": "HuggingChat",
+      "finalUrl": "https://huggingface.co/chat/",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "a13fdf85d5f571b5",
+      "domHash": "13d5d06f17bbcbdd"
+    },
+    {
+      "id": "poe",
+      "home": {
+        "status": "partial",
+        "reason": "login_wall",
+        "title": "Poe - Fast, Helpful AI Chat",
+        "finalUrl": "https://poe.com/login?redirect_url=%2F",
+        "http": 200,
+        "changed": true,
+        "domHash": "b3cfcbfee2e2ccf3",
+        "prev": "1c99802e9bba5e80"
+      },
+      "explore": {
+        "status": "captured",
+        "reason": null,
+        "title": "Explore - Poe",
+        "finalUrl": "https://poe.com/explore?category=Official",
+        "http": 200
+      }
+    },
+    {
+      "id": "pi",
+      "status": "captured",
+      "reason": null,
+      "title": "Greetings from Pi - Pi",
+      "finalUrl": "https://pi.ai/talk/LjdrSWHquwoWdALBeVVss",
+      "http": 200,
+      "changed": false,
+      "recaptured": false,
+      "prev": "1c63b3e907fbba7c",
+      "domHash": "1c63b3e907fbba7c"
+    },
+    {
+      "id": "characterai",
+      "status": "captured",
+      "reason": null,
+      "title": "character.ai | AI Chat, Reimagined–Your Words. Your World.",
+      "finalUrl": "https://character.ai/",
+      "http": 200,
+      "changed": true,
+      "recaptured": true,
+      "prev": "62f9053028e0dcb1",
+      "domHash": "dac26c527cc2f2dd"
+    },
+    {
+      "id": "phind",
+      "status": "blocked",
+      "reason": "not_found,cloudflare_interstitial",
+      "title": "404: NOT_FOUND",
+      "finalUrl": "https://www.phind.com/",
+      "http": 404,
+      "changed": true,
+      "recaptured": false,
+      "prev": "8f44ffdabc14e07d",
+      "domHash": "90dd98cf6843d91d"
+    }
+  ]
+}

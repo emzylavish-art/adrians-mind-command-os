@@ -1,0 +1,208 @@
+{
+  "cycle": 5,
+  "lane": "external",
+  "date": "2026-11-02",
+  "timezone": "Africa/Lagos",
+  "source_gap_list_md": "/workspace/rea-captures/gap-list-2026-11-02.md",
+  "prior_cycle": "gap-list-2026-11-01-c4",
+  "capture_summary": "/workspace/rea-captures/capture-cycle5-external-summary-2026-11-02.json",
+  "changed_since_last_cycle": {
+    "closed": [
+      "tool-timeline-merge",
+      "oauth-beyond-notion",
+      "cloud-drive-browse-attach",
+      "memory-ux-depth",
+      "memory-mount-postgres",
+      "retry-fidelity",
+      "search-timeout",
+      "persona-explore-routes",
+      "hp-pairing-code"
+    ],
+    "capture": {
+      "recaptured": [
+        "chatgpt",
+        "gemini",
+        "perplexity",
+        "manus",
+        "copilot",
+        "metaai",
+        "youcom",
+        "huggingchat",
+        "characterai",
+        "poe-home",
+        "poe-explore",
+        "claude-com-alt"
+      ],
+      "unchanged": [
+        "pi"
+      ],
+      "blocked": [
+        {
+          "id": "claude.ai",
+          "reason": "cloudflare_interstitial,captcha_or_bot_check,http_403"
+        },
+        {
+          "id": "phind",
+          "reason": "not_found,cloudflare_interstitial"
+        }
+      ],
+      "partial": [
+        {
+          "id": "metaai",
+          "reason": "http_403"
+        },
+        {
+          "id": "poe-home",
+          "reason": "login_wall"
+        }
+      ]
+    }
+  },
+  "gaps": [
+    {
+      "rank": 1,
+      "title": "Guest / logged-out usable chat (progressive auth)",
+      "status": "open",
+      "effort": "M",
+      "owner": "Grok Build",
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "HuggingChat",
+        "Pi"
+      ],
+      "rationale": "Competitors allow start-before-login; Adrian 401s signed-out protected ops. Highest activation gap. No lock."
+    },
+    {
+      "rank": 2,
+      "title": "Artifacts / Canvas side panel",
+      "status": "open",
+      "effort": "L",
+      "owner": "Media",
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Perplexity",
+        "Manus"
+      ],
+      "rationale": "media-integration-gap-artifacts-canvas.lock released/not started; Perplexity Artifacts still public."
+    },
+    {
+      "rank": 3,
+      "title": "Unattended scheduled automations (hosted worker + durable queue)",
+      "status": "open",
+      "effort": "L",
+      "owner": "Logic",
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "rationale": "Local schedule-worker only; registry honest no hosted worker. No lock."
+    },
+    {
+      "rank": 4,
+      "title": "Keyboard shortcut sheet + Cmd+K mount into live chrome",
+      "status": "open",
+      "effort": "S",
+      "owner": "Visual Polish",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Perplexity"
+      ],
+      "rationale": "Components shipped unmounted (e5c4c87); ShortcutSheetHost not in milestone CommandApp."
+    },
+    {
+      "rank": 5,
+      "title": "Projects dashboard with progress / agent stats",
+      "status": "in_progress",
+      "effort": "M",
+      "owner": "Dashboard Bot",
+      "branch": "dashboard-3d",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Copilot"
+      ],
+      "rationale": "Claimed; cosmos lanes active."
+    },
+    {
+      "rank": 6,
+      "title": "Durable cloud DB / multi-device sync",
+      "status": "open",
+      "effort": "L",
+      "owner": "Grok Build",
+      "platforms": [
+        "All SaaS"
+      ],
+      "rationale": "PGLite default without DATABASE_URL; memory Postgres path exists but workspace sync incomplete."
+    },
+    {
+      "rank": 7,
+      "title": "Explore / persona directory linked in main chrome",
+      "status": "open",
+      "effort": "S",
+      "owner": "Visual Polish",
+      "platforms": [
+        "Poe",
+        "Character.AI",
+        "Manus"
+      ],
+      "rationale": "Routes closed on milestone; sidebar/nav mount residual."
+    },
+    {
+      "rank": 8,
+      "title": "MCP stdio / remote hardening remaining",
+      "status": "in_progress",
+      "effort": "M",
+      "owner": "MCP",
+      "platforms": [
+        "Claude",
+        "ChatGPT",
+        "HuggingChat"
+      ],
+      "rationale": "Multiple mcp-integration hardening locks active."
+    },
+    {
+      "rank": 9,
+      "title": "Live search provider key (MIND_SEARCH_*) product readiness",
+      "status": "open",
+      "effort": "S",
+      "owner": "Logic",
+      "platforms": [
+        "Perplexity",
+        "ChatGPT",
+        "You.com"
+      ],
+      "rationale": "Wiring closed; product still refuses without env."
+    },
+    {
+      "rank": 10,
+      "title": "Computer / long-running project handoff",
+      "status": "open",
+      "effort": "L",
+      "owner": "Logic",
+      "platforms": [
+        "Perplexity",
+        "Manus"
+      ],
+      "rationale": "Public Computer/Automations bar; no Adrian Computer mode."
+    }
+  ],
+  "top10": [
+    "Guest / logged-out usable chat (progressive auth)",
+    "Artifacts / Canvas side panel",
+    "Unattended scheduled automations (hosted worker + durable queue)",
+    "Keyboard shortcut sheet + Cmd+K mount into live chrome",
+    "Projects dashboard with progress / agent stats",
+    "Durable cloud DB / multi-device sync",
+    "Explore / persona directory linked in main chrome",
+    "MCP stdio / remote hardening remaining",
+    "Live search provider key (MIND_SEARCH_*) product readiness",
+    "Computer / long-running project handoff"
+  ]
+}
