@@ -33,6 +33,10 @@ export type IntentOutcome = {
   query: string;
   score: number;
   at: number;
+  /** Optional FK into patterns.id when known (uuid). */
+  patternId?: string;
+  /** Stable queue id for flush ack/clear. */
+  clientId?: string;
 };
 
 export type IntentOutcomeReporter = {

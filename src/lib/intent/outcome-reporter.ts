@@ -42,7 +42,10 @@ export function createLocalStorageOutcomeReporter(
     report(outcome: IntentOutcome) {
       try {
         const rows = readOutcomes(store);
-        rows.push(outcome);
+        const clientId =
+          outcome.clientId ||
+          `c-${outcome.intentId}-${outcome.at}-${outcome.accepted ? 1 : 0}-${rows.length}`;
+        rows.push({ ...outcome, clientId });
         while (rows.length > MAX_STORED_OUTCOMES) rows.shift();
         store.setItem(INTENT_OUTCOMES_KEY, JSON.stringify(rows));
       } catch {

@@ -32,3 +32,20 @@ export {
 } from "./source-bus.ts";
 export { runPredictedIntent, type IntentRunHandlers } from "./run.ts";
 export { useIntentPrediction, type UseIntentPredictionOptions } from "./use-intent-prediction.ts";
+
+export {
+  MAX_OUTCOME_BATCH,
+  validateOutcomeBatch,
+  validateOutcomeItem,
+  isUuid,
+  type ValidatedOutcomeItem,
+} from "./outcome-validate.ts";
+export {
+  flushIntentOutcomeQueue,
+  installOutcomeFlushScheduler,
+  readOutcomeQueue,
+  writeOutcomeQueue,
+  removeAcknowledged,
+  type FlushResult,
+  type QueuedOutcome,
+} from "./outcome-flush.ts";

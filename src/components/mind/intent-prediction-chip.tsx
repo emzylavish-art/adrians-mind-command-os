@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef } from "react";
 import {
+  installOutcomeFlushScheduler,
   useIntentPrediction,
   type IntentRunHandlers,
   type RankedIntent,
 } from "@/lib/intent";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import "./intent-prediction-chip.css";
 
 type Props = {
@@ -23,8 +25,17 @@ export function IntentPredictionChip(props: Props) {
     text: props.text,
     source: props.source,
   });
+  const { user, isPending } = useCurrentUserState();
   const labelId = useId();
   const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isPending) return;
+    const scheduler = installOutcomeFlushScheduler({
+      getIsSignedIn: () => Boolean(user),
+    });
+    return () => scheduler.stop();
+  }, [user, isPending]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

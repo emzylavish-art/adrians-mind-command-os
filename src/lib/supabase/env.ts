@@ -51,3 +51,33 @@ export function isSupabaseConfigured(
 ): boolean {
   return resolveSupabaseEnv(env) !== null;
 }
+
+const SERVICE_ROLE_KEYS = [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_SERVICE_KEY",
+] as const;
+
+export type SupabaseServiceEnv = {
+  url: string;
+  serviceRoleKey: string;
+};
+
+/** Server-only: URL + service role key for PostgREST writes (never import from client). */
+export function resolveSupabaseServiceRole(
+  env: Record<string, string | undefined>,
+): SupabaseServiceEnv | null {
+  const url = firstDefined(env, URL_KEYS);
+  const serviceRoleKey = firstDefined(env, SERVICE_ROLE_KEYS);
+  if (!url || !serviceRoleKey) return null;
+  return { url, serviceRoleKey };
+}
+
+export function isSupabaseServiceRoleConfigured(
+  env: Record<string, string | undefined> = process.env as Record<
+    string,
+    string | undefined
+  >,
+): boolean {
+  return resolveSupabaseServiceRole(env) !== null;
+}
+
