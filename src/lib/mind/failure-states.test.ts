@@ -4,15 +4,21 @@ import {
   CHAT_DISCONNECT_REPLY,
   CHAT_TIMEOUT_REPLY,
   HONEST_FAILURE_MESSAGES,
+  STOPPED_REPLY,
   bindRetry,
   classifyHonestFailure,
+  classifyHonestTurnOutcome,
+  failureBannerMountHint,
   honestFailureAuditAction,
   honestFailureDescription,
+  honestTurnAuditAction,
+  isUserStoppedReply,
   mcpToolFailure,
   normalizeClientFailureMessage,
   imageGenerationFailure,
   imagineRetryParams,
   mapImagineHttpErrorCopy,
+  shouldShowFailureBanner,
 } from "./failure-states.ts";
 
 describe("honest failure states", () => {
@@ -249,5 +255,51 @@ describe("banner 4 image_generation_failed", () => {
     const params = imagineRetryParams(failure);
     assert.deepEqual(params, { mode: "generate", prompt: "harbor at dawn", n: 1 });
     assert.equal("imageDataUrl" in params, false);
+  });
+});
+
+describe("H22 intentional STOPPED_REPLY vs failure banners", () => {
+  it("STOPPED_REPLY is user_stopped, not chat_failed and not an honest failure kind", () => {
+    assert.equal(STOPPED_REPLY, "Stopped. The unfinished reply was not saved.");
+    assert.equal(isUserStoppedReply(STOPPED_REPLY), true);
+    assert.equal(classifyHonestFailure(STOPPED_REPLY), null);
+    assert.equal(classifyHonestTurnOutcome(STOPPED_REPLY), "user_stopped");
+    assert.equal(honestTurnAuditAction(STOPPED_REPLY), "user_stopped");
+    assert.notEqual(honestTurnAuditAction(STOPPED_REPLY), "chat_failed");
+  });
+
+  it("intentional stop must not show the red failure banner", () => {
+    assert.equal(shouldShowFailureBanner(STOPPED_REPLY), false);
+    assert.equal(shouldShowFailureBanner(`  ${STOPPED_REPLY}  `), false);
+  });
+
+  it("timeouts and disconnects still classify as failures with banners", () => {
+    assert.equal(classifyHonestTurnOutcome(CHAT_TIMEOUT_REPLY), "chat_timeout");
+    assert.equal(shouldShowFailureBanner(CHAT_TIMEOUT_REPLY), true);
+    assert.equal(classifyHonestFailure(CHAT_TIMEOUT_REPLY), "chat_timeout");
+    assert.equal(classifyHonestTurnOutcome(CHAT_DISCONNECT_REPLY), "network_failure");
+    assert.equal(shouldShowFailureBanner(CHAT_DISCONNECT_REPLY), true);
+    assert.equal(classifyHonestFailure("Failed to fetch"), "network_failure");
+    assert.equal(shouldShowFailureBanner("Failed to fetch"), true);
+    assert.equal(classifyHonestTurnOutcome(HONEST_FAILURE_MESSAGES.chat_timeout_stale), "chat_timeout");
+  });
+
+  it("agent budget stop is not an intentional user stop", () => {
+    const agentStop = "Stopped after 8 tool steps.";
+    assert.equal(isUserStoppedReply(agentStop), false);
+    assert.equal(classifyHonestTurnOutcome(agentStop), null);
+    assert.equal(shouldShowFailureBanner(agentStop), true);
+    assert.equal(honestTurnAuditAction(agentStop), null);
+  });
+
+  it("provider close without abort stays a bannerable failure path (unclassified or model)", () => {
+    const closed = "Grok closed the reply before it finished. Nothing was saved as a success.";
+    assert.equal(isUserStoppedReply(closed), false);
+    assert.equal(shouldShowFailureBanner(closed), true);
+  });
+
+  it("exports a one-line mount hint for command-app without editing it here", () => {
+    assert.match(failureBannerMountHint(), /shouldShowFailureBanner/);
+    assert.match(failureBannerMountHint(), /reportFailure/);
   });
 });

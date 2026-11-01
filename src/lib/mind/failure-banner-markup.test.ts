@@ -5,7 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   CHAT_TIMEOUT_REPLY,
   HONEST_FAILURE_MESSAGES,
+  STOPPED_REPLY,
   classifyHonestFailure,
+  shouldShowFailureBanner,
   bindRetry,
 } from "./failure-states.ts";
 
@@ -81,4 +83,11 @@ describe("failure banner markup contract", () => {
       assert.deepEqual(calls, [`retry-${kind}`]);
     });
   }
+});
+
+describe("H22 STOPPED_REPLY is not a red failure banner", () => {
+  it("classifyHonestFailure leaves STOPPED_REPLY unclassified and shouldShowFailureBanner is false", () => {
+    assert.equal(classifyHonestFailure(STOPPED_REPLY), null);
+    assert.equal(shouldShowFailureBanner(STOPPED_REPLY), false);
+  });
 });

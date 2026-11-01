@@ -6,6 +6,8 @@
  * Top-5 gap kinds reuse CHAT_TIMEOUT_REPLY / CHAT_DISCONNECT_REPLY, auth, and provider-call copy.
  * Banner 4 (image_generation_failed) mirrors media-lane mapImagineHttpError copy (harden.ts);
  * media keeps request/HTTP mapping — this module only classifies and banners that copy.
+ * H22: intentional user Stop (STOPPED_REPLY) is classified as user_stopped — not chat_failed,
+ * and must not paint the red failure banner (see shouldShowFailureBanner / classifyHonestTurnOutcome).
  */
 
 export type HonestFailureKind =
@@ -24,6 +26,11 @@ export type HonestFailureKind =
 export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
 /** Logic-wiring disconnect copy (CHAT_DISCONNECT_REPLY). */
 export const CHAT_DISCONNECT_REPLY = "Connection to the model dropped";
+/**
+ * Intentional user Stop (live-turn / relay / agent note).
+ * Not a failure — do not paint the red failure banner or audit as chat_failed.
+ */
+export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 
 export const HONEST_FAILURE_MESSAGES = {
   model_unavailable: "That model is not available. Another provider is not substituted.",
@@ -120,6 +127,11 @@ const NETWORK_FAILURE_MARKERS = [
   "network request failed",
 ];
 
+/** Exact intentional-stop copy from live-turn/relay (not agent "Stopped after N tool steps"). */
+const USER_STOPPED_MARKERS = [
+  STOPPED_REPLY,
+];
+
 
 /** Honest Imagine / Edit Imagine copy from media mapImagineHttpError (+ call-site fallbacks). */
 const IMAGE_GENERATION_FAILURE_MARKERS = [
@@ -199,6 +211,61 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     return "network_failure";
   }
   return null;
+}
+
+/**
+ * True when the message is an intentional user Stop (Stop this reply), not a timeout/disconnect/provider failure.
+ * Agent budget copy like "Stopped after N tool steps." is NOT a user stop.
+ */
+export function isUserStoppedReply(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  return USER_STOPPED_MARKERS.some((marker) => text === marker);
+}
+
+/** Turn outcome kinds: honest failures plus intentional user_stopped (not a failure). */
+export type HonestTurnOutcomeKind = HonestFailureKind | "user_stopped";
+
+/**
+ * Classify a turn/deliver error string for UI routing.
+ * user_stopped is distinct from null (unknown → historically audited as chat_failed) and from chat_timeout/network_failure.
+ */
+export function classifyHonestTurnOutcome(message: string): HonestTurnOutcomeKind | null {
+  if (isUserStoppedReply(message)) return "user_stopped";
+  return classifyHonestFailure(message);
+}
+
+/**
+ * Whether the red failure banner (Retry + View log) should be shown for this message.
+ * Intentional Stop → false. Timeouts, disconnects, and other honest failures → true.
+ * Unclassified messages stay true so existing chat_failed banner behavior is preserved until classified.
+ */
+export function shouldShowFailureBanner(message: string): boolean {
+  return !isUserStoppedReply(message);
+}
+
+/**
+ * Audit action for a turn outcome. user_stopped → "user_stopped" (never "chat_failed").
+ * Unknown → null so the caller can keep its legacy "chat_failed" default if it still shows a banner.
+ */
+export function honestTurnAuditAction(message: string): string | null {
+  const outcome = classifyHonestTurnOutcome(message);
+  if (outcome === "user_stopped") return "user_stopped";
+  if (outcome) return honestFailureAuditAction(outcome);
+  return null;
+}
+
+/**
+ * MOUNT (command-app.tsx / another lane — one-line gate before reportFailure):
+ *
+ *   if (!shouldShowFailureBanner(message)) { setNotice(message); return null; }
+ *   const kind = classifyHonestFailure(message);
+ *   reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retry);
+ *
+ * Or equivalently use isUserStoppedReply(message) and setNotice(STOPPED_REPLY) with no reportFailure.
+ */
+export function failureBannerMountHint(): string {
+  return "if (!shouldShowFailureBanner(message)) { setNotice(message); return null; } // then existing reportFailure(classifyHonestFailure...)";
 }
 
 export function honestFailureDescription(kind: HonestFailureKind, message?: string): string {

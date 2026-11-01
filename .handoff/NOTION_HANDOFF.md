@@ -389,3 +389,13 @@ listed one after another), exhaust memory, or bounce requests to internal hosts.
 - Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40bb95f33e4281ba9ee0c9041e792007
 - Pushed origin/error-banners → 464fe8f9ffbbcd700e649ed7e565dc9351e8b524
 - Lock releasing.
+
+## 2026-11-01T17:45:28+01:00 (Africa/Lagos) — Error Banners Bot — H22 STOPPED_REPLY user_stopped
+- Gap: intentional Stop (STOPPED_REPLY) fell through to reportFailure as chat_failed red banner.
+- Lock: error-banners-gap-stopped-reply.lock; failure-states free (dashboard lock only forbids Dashboard from editing it).
+- preview/integration still @ 7f3e641 (no merge).
+- Fix (src/lib/mind only; command-app NOT edited): STOPPED_REPLY + isUserStoppedReply + classifyHonestTurnOutcome("user_stopped") + shouldShowFailureBanner(false) + honestTurnAuditAction("user_stopped") + failureBannerMountHint(). Timeouts/disconnects still chat_timeout/network_failure with banners. Agent "Stopped after N tool steps." unchanged (still bannerable unclassified).
+- Mount for another lane (one line before reportFailure): `if (!shouldShowFailureBanner(message)) { setNotice(message); return null; }`
+- Checks: typecheck pass; TS 830/832 (2 pre-existing); lint our files 0e; build pass.
+- Notion: (pending)
+- Lock releasing.
