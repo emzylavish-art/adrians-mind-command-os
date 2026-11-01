@@ -28,7 +28,7 @@ export type TurnBody = {
   history?: unknown;
   memoryContext?: unknown;
   provider?: unknown;
-  /** UI picker: Auto | Fast | Expert | Heavy | Build */
+  /** UI picker: Auto | Fast | Expert | Heavy | Build | Orchestrator */
   modelTier?: unknown;
   /** Optional image attachments (data-URLs) for multimodal Direct turns. */
   images?: unknown;

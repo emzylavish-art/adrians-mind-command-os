@@ -4,7 +4,7 @@
  * Override any id via env without code changes.
  */
 
-export const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build"] as const;
+export const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build", "Orchestrator"] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 export type ConcreteModelTier = Exclude<ModelTier, "Auto">;
 
@@ -45,6 +45,11 @@ const DEFAULTS: Record<ConcreteModelTier, { model: string; params: ModelRequestP
     model: "grok-build-0.1",
     params: { temperature: 0.2, max_tokens: 700 },
     envKey: "MIND_MODEL_BUILD",
+  },
+  Orchestrator: {
+    model: "grok-4.7",
+    params: { temperature: 0.2, max_tokens: 1200, reasoning_effort: "high" },
+    envKey: "MIND_MODEL_ORCHESTRATOR",
   },
 };
 
@@ -89,6 +94,7 @@ const ENV_KEYS: Record<ConcreteModelTier, string> = {
   Expert: "MIND_MODEL_EXPERT",
   Heavy: "MIND_MODEL_HEAVY",
   Build: "MIND_MODEL_BUILD",
+  Orchestrator: "MIND_MODEL_ORCHESTRATOR",
 };
 
 export function parseModelTierEnv(env: Record<string, string | undefined> = {}): Record<ConcreteModelTier, string> {

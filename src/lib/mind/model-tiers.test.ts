@@ -7,23 +7,23 @@ import {
   modelTierCatalog,
   modelTierEnvIssues,
   parseModelTierEnv,
+  chipLabelForTier,
   resolveModelTier,
   routeAutoTier,
 } from "./model-tiers.ts";
 
 describe("model tier mapping", () => {
-  it("exposes the five picker modes", () => {
-    assert.deepEqual([...MODEL_TIERS], ["Auto", "Fast", "Expert", "Heavy", "Build"]);
+  it("exposes the six picker modes including Orchestrator", () => {
+    assert.deepEqual([...MODEL_TIERS], ["Auto", "Fast", "Expert", "Heavy", "Build", "Orchestrator"]);
   });
 
-  it("maps each concrete mode to a distinct default model id", () => {
+  it("maps each concrete mode to a default model id", () => {
     const models = parseModelTierEnv({});
-    const ids = [models.Fast, models.Expert, models.Heavy, models.Build];
-    assert.equal(new Set(ids).size, 4);
     assert.equal(models.Fast, "grok-4.20-0309-non-reasoning");
     assert.equal(models.Expert, "grok-4.5");
     assert.equal(models.Heavy, "grok-4.7");
     assert.equal(models.Build, "grok-build-0.1");
+    assert.equal(models.Orchestrator, "grok-4.7");
   });
 
   it("honors env overrides for each concrete mode", () => {
@@ -32,31 +32,33 @@ describe("model tier mapping", () => {
       MIND_MODEL_EXPERT: "expert-custom",
       MIND_MODEL_HEAVY: "heavy-custom",
       MIND_MODEL_BUILD: "build-custom",
+      MIND_MODEL_ORCHESTRATOR: "orch-custom",
     });
     assert.deepEqual(models, {
       Fast: "fast-custom",
       Expert: "expert-custom",
       Heavy: "heavy-custom",
       Build: "build-custom",
+      Orchestrator: "orch-custom",
     });
   });
 
   it("puts a different model id in the outgoing provider fields for each concrete mode", () => {
     const seen = new Set<string>();
-    for (const tier of ["Fast", "Expert", "Heavy", "Build"] as const) {
+    for (const tier of ["Fast", "Expert", "Heavy", "Build", "Orchestrator"] as const) {
       const resolved = resolveModelTier(tier, "hello", {});
       const body = buildProviderModelFields(resolved);
       assert.equal(body.model, resolved.model);
       assert.equal(typeof body.model, "string");
-      seen.add(String(body.model));
-      if (tier === "Expert" || tier === "Heavy") {
+      seen.add(`${tier}:${body.model}`);
+      if (tier === "Expert" || tier === "Heavy" || tier === "Orchestrator") {
         assert.ok(body.reasoning_effort);
       }
       if (tier === "Fast" || tier === "Build") {
         assert.equal(body.reasoning_effort, undefined);
       }
     }
-    assert.equal(seen.size, 4);
+    assert.equal(seen.size, 5);
   });
 
   it("defaults unknown/missing selection to Auto then routes", () => {
@@ -163,5 +165,61 @@ describe("modelTierEnvIssues", () => {
     assert.equal(parseModelTierEnv(env).Expert, "grok-4.5-0901");
     assert.equal(parseModelTierEnv(env).Heavy, "xai/grok-4.7:latest");
     assert.deepEqual(modelTierEnvIssues(env), []);
+  });
+});
+
+
+describe("Orchestrator tier", () => {
+  it("resolves to grok-4.7 with high reasoning_effort", () => {
+    const resolved = resolveModelTier("Orchestrator", "coordinate the tools", {});
+    assert.equal(resolved.selected, "Orchestrator");
+    assert.equal(resolved.resolved, "Orchestrator");
+    assert.equal(resolved.model, "grok-4.7");
+    assert.equal(resolved.params.reasoning_effort, "high");
+    const body = buildProviderModelFields(resolved);
+    assert.equal(body.model, "grok-4.7");
+    assert.equal(body.reasoning_effort, "high");
+  });
+
+  it("honors MIND_MODEL_ORCHESTRATOR override", () => {
+    const env = { MIND_MODEL_ORCHESTRATOR: "orch-override-model" };
+    assert.equal(parseModelTierEnv(env).Orchestrator, "orch-override-model");
+    assert.equal(resolveModelTier("Orchestrator", "x", env).model, "orch-override-model");
+  });
+
+  it("ignores invalid Orchestrator override without echoing secrets", () => {
+    const SECRET = "xai-ORCHSECRET-0123456789abcdef";
+    const env = { MIND_MODEL_ORCHESTRATOR: SECRET };
+    assert.equal(parseModelTierEnv(env).Orchestrator, "grok-4.7");
+    const issues = modelTierEnvIssues(env);
+    assert.equal(issues.length, 1);
+    assert.ok(issues[0].includes("MIND_MODEL_ORCHESTRATOR"));
+    assert.equal(issues.join(" ").includes(SECRET), false);
+  });
+
+  it("is never chosen by Auto routing", () => {
+    const probes = [
+      "Hi",
+      "Explain how DNS works in detail please with examples across resolvers.",
+      "Please prove this rigorously with a formal proof of correctness.",
+      "Please refactor this TypeScript function:\n```ts\nexport const x = 1\n```",
+      "x".repeat(2000),
+      "orchestrate the agents and coordinate tools for this workflow",
+    ];
+    for (const prompt of probes) {
+      assert.notEqual(routeAutoTier(prompt).tier, "Orchestrator");
+      assert.notEqual(resolveModelTier("Auto", prompt, {}).resolved, "Orchestrator");
+    }
+  });
+
+  it("chip label matches done.model for Orchestrator", () => {
+    const resolved = resolveModelTier("Orchestrator", "probe", {});
+    const label = chipLabelForTier({
+      selected: "Orchestrator",
+      lastResolved: "Orchestrator",
+      lastModel: resolved.model,
+    });
+    assert.equal(label, `Orchestrator · ${resolved.model}`);
+    assert.ok(label.includes(resolved.model));
   });
 });

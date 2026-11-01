@@ -29,3 +29,14 @@ describe("ModelTierChip tierReason accessibility", () => {
     assert.ok(reason.length > 10);
   });
 });
+
+describe("ModelTierChip Orchestrator", () => {
+  it("chip label includes the Orchestrator model id", () => {
+    const label = chipLabelForTier({
+      selected: "Orchestrator",
+      lastResolved: "Orchestrator",
+      lastModel: "grok-4.7",
+    });
+    assert.equal(label, "Orchestrator · grok-4.7");
+  });
+});

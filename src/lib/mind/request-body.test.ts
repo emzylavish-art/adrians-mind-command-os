@@ -100,7 +100,7 @@ describe("parseModelTierField", () => {
   });
 
   it("accepts each known tier exactly", () => {
-    for (const tier of ["Auto", "Fast", "Expert", "Heavy", "Build"]) {
+    for (const tier of ["Auto", "Fast", "Expert", "Heavy", "Build", "Orchestrator"]) {
       const parsed = parseModelTierField(tier);
       assert.equal(parsed.ok, true);
       if (parsed.ok) assert.equal(parsed.tier, tier);

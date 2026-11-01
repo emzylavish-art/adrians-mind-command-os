@@ -8,7 +8,7 @@ import { pullMindEvents } from "./stream.ts";
  * (same string the provider returned / relay echoed).
  */
 describe("chip label ↔ SSE done.model contract", () => {
-  for (const tier of ["Fast", "Expert", "Heavy", "Build", "Auto"] as ModelTier[]) {
+  for (const tier of ["Fast", "Expert", "Heavy", "Build", "Orchestrator", "Auto"] as ModelTier[]) {
     it(`includes done.model in the chip label for ${tier}`, () => {
       const prompt = tier === "Auto" ? "Hi" : "probe";
       const resolved = resolveModelTier(tier, prompt, {});
