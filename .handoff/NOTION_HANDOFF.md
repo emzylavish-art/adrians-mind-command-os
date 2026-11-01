@@ -84,3 +84,12 @@ Live provider connect **unverified** — no `NOTION_OAUTH_CLIENT_*` on box env
 Avoided `command-app.tsx` / `server.ts` / `styles.css` / voice / media / research.
 
 Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
+
+## Hardening pass (2026-11-01, Africa/Lagos)
+
+1. PC pairing contract + pc_run_shell (8749cbd)
+2. pglite_query harden + pglite_list_schema (befbaa6)
+3. Tools UI nested servers/tools + toggle gate (823ee77)
+4. Live verify script against vite :8083 (see /workspace/audit/mcp-integration/live-verify.log)
+   - Auth-gated UI routes return honest 401 without session
+   - `/api/mind/mcp/builtin` initialize + tools/call work without session

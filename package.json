@@ -22,7 +22,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "mcp:e2e": "node --experimental-strip-types scripts/mcp/e2e.mjs",
-    "oauth:e2e": "node --experimental-strip-types scripts/mcp/oauth-e2e.mjs"
+    "oauth:e2e": "node --experimental-strip-types scripts/mcp/oauth-e2e.mjs",
+    "mcp:verify-live": "node --experimental-strip-types scripts/mcp/verify-live.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
