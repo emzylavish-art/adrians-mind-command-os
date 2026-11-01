@@ -207,3 +207,9 @@ document.addEventListener("visibilitychange", () => liveDetailDim?.setHidden(doc
 ## Hacker-pass notes (#69 cycle) — backdrop meter counted slow readbacks as fresh
 - Before: a measurement's age started when the async readback LANDED, so a readback stalled 1.9 s (driver stall / context trouble) counted as fresh for another 2 s — the dim acted on a backdrop up to ~4 s old, contradicting the "older than METER_MAX_AGE_MS → static" contract. `reset()` also left the previous layout's `lastError` showing.
 - Now age is measured from the sampled frame; a readback landing after max age is rejected with `lastError = "stale-readback"`; `reset()` clears `lastError`. Test: `postfx/meter-sample-age.test.ts` (fails 3/3 on the old code).
+
+### #80 — meter readback cost guard (backdrop-meter.ts)
+
+Every readback's real begin→resolve time is recorded (`meter.backoff.lastLatencyMs`, null until a read lands — never estimated). A read slower than `METER_SLOW_READ_MS` (33 ms), a frame ≥ `METER_DROP_FRAME_MS` (50 ms) while a read is in flight (fed by `tick(dtMs)` → `meter.noteFrame`), or a readback timeout doubles the sampling interval up to `METER_MAX_BACKOFF`× (8× → 4 s). Reads at or under `METER_FAST_READ_MS` (17 ms) halve it back. The state is surfaced on `dim.contrast.backoff` (`multiplier`, `intervalMs`, `lastLatencyMs`, `reason`) for debug badges; it survives `reset()` because it describes the device's GPU, not the layout. No wiring change needed: it is live wherever the #68 dim pass already ticks.
+
+Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (mixed `Date.now`/`performance.now` clocks, injected clocks) produced a negative age that counted as fresh — forever. Now rejected as `lastError: "clock-skew"`, `measurementFor` never returns a measurement for a time before it was sampled, and `due` re-arms instead of stalling on a backwards clock (`meter-backoff.test.ts`).

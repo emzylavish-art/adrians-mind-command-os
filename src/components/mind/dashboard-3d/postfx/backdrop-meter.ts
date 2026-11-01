@@ -22,6 +22,26 @@ export const METER_MAX_AGE_MS = 2000;
 export const METER_EDGE = 8;
 /** Bright-tail percentile used as the worst case under text. */
 export const METER_PERCENTILE = 0.9;
+/** #80: a readback (begin→resolve) slower than this (≈2 frames) doubles the interval. */
+export const METER_SLOW_READ_MS = 33;
+/** #80: a readback at or under this (≈1 frame) halves the back-off again. */
+export const METER_FAST_READ_MS = 17;
+/** #80: a frame this long while a read is in flight counts as a drop caused by it. */
+export const METER_DROP_FRAME_MS = 50;
+/** #80: interval never widens past METER_INTERVAL_MS × this. */
+export const METER_MAX_BACKOFF = 8;
+
+export type MeterBackoffReason = "slow-readback" | "frame-drop" | "readback-timeout" | null;
+export type MeterBackoff = {
+  /** 1 = nominal; doubles per slow read up to METER_MAX_BACKOFF. */
+  multiplier: number;
+  /** Effective sampling interval right now (base × multiplier). */
+  intervalMs: number;
+  /** Real begin→resolve time of the last completed read, or null if none yet. */
+  lastLatencyMs: number | null;
+  /** Why the current back-off exists (null when nominal). */
+  reason: MeterBackoffReason;
+};
 
 export type LuminanceStats = { mean: number; p90: number; max: number; samples: number };
 
@@ -70,6 +90,10 @@ export type BackdropMeter = {
   readonly inFlight: boolean;
   readonly lastError: string | null;
   readonly reads: number;
+  /** #80: report a frame duration so drops during an in-flight read widen the interval. */
+  noteFrame: (dtMs: number) => void;
+  /** #80: honest back-off state (real timings only). */
+  readonly backoff: MeterBackoff;
   reset: () => void;
 };
 
@@ -83,6 +107,25 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
   let latest: MeterMeasurement | null = null;
   let lastError: string | null = null;
   let reads = 0;
+  let mult = 1;
+  let reason: MeterBackoffReason = null;
+  let lastLatency: number | null = null;
+  let droppedDuringRead = false;
+  const widen = (why: Exclude<MeterBackoffReason, null>) => {
+    mult = Math.min(METER_MAX_BACKOFF, mult * 2);
+    reason = why;
+  };
+  /** Record a completed read's real latency and adjust the back-off. */
+  const settle = (latency: number) => {
+    lastLatency = latency;
+    if (droppedDuringRead) widen("frame-drop");
+    else if (latency > METER_SLOW_READ_MS) widen("slow-readback");
+    else if (latency <= METER_FAST_READ_MS && mult > 1) {
+      mult = Math.max(1, mult / 2);
+      if (mult === 1) reason = null;
+    }
+    droppedDuringRead = false;
+  };
   return {
     due(nowMs, key, o = {}) {
       if (!Number.isFinite(nowMs) || !key || o.hidden) return false;
@@ -92,14 +135,20 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
         if (nowMs - pending.atMs <= maxAge) return false;
         pending = null;
         lastError = "readback-timeout";
+        droppedDuringRead = false;
+        widen("readback-timeout");
       }
       if (key !== lastKey) return true;
       if (o.reducedMotion) return !latest || latest.key !== key; // one read per layout
-      return nowMs - lastStart >= interval;
+      // Clock went backwards (mixed clocks / injected now): re-arm instead of
+      // waiting out a negative gap forever.
+      if (nowMs < lastStart) return true;
+      return nowMs - lastStart >= interval * mult;
     },
     begin(nowMs, key) {
       token += 1;
       pending = { token, key, atMs: nowMs };
+      droppedDuringRead = false;
       lastStart = nowMs;
       lastKey = key;
       reads += 1;
@@ -109,10 +158,17 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
       if (!pending || pending.token !== t) return; // superseded / reset
       const { key, atMs: sampledAt } = pending;
       pending = null;
+      if (Number.isFinite(nowMs) && nowMs >= sampledAt) settle(nowMs - sampledAt);
       // Age is measured from the frame that was SAMPLED, not when the async
       // readback landed: a 1.9 s driver stall must not make a 1.9 s-old backdrop
       // count as fresh for another METER_MAX_AGE_MS (hacker pass, cycle after #68).
-      if (!Number.isFinite(nowMs) || nowMs - sampledAt > maxAge) {
+      // Hacker pass (cycle after #79): nowMs < sampledAt (clock skew) gave a
+      // negative age that counted as fresh; treat it as unusable, surfaced.
+      if (!Number.isFinite(nowMs) || nowMs < sampledAt) {
+        lastError = "clock-skew";
+        return;
+      }
+      if (nowMs - sampledAt > maxAge) {
         lastError = "stale-readback";
         return;
       }
@@ -133,7 +189,9 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
     },
     measurementFor(key, nowMs) {
       if (!latest || latest.key !== key || !Number.isFinite(nowMs)) return null;
-      return nowMs - latest.atMs <= maxAge ? latest : null;
+      const age = nowMs - latest.atMs;
+      // Negative age = clock skew, never "fresh forever".
+      return age >= 0 && age <= maxAge ? latest : null;
     },
     get inFlight() {
       return !!pending;
@@ -144,12 +202,21 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
     get reads() {
       return reads;
     },
+    noteFrame(dtMs) {
+      if (pending && Number.isFinite(dtMs) && dtMs >= METER_DROP_FRAME_MS) droppedDuringRead = true;
+    },
+    get backoff() {
+      return { multiplier: mult, intervalMs: interval * mult, lastLatencyMs: lastLatency, reason };
+    },
     reset() {
       pending = null;
       latest = null;
       lastError = null; // a reconfigured meter must not report a previous layout's failure
       lastKey = "";
       lastStart = -Infinity;
+      // Back-off is a property of this device's GPU, not the layout: keep mult
+      // and lastLatency across resets so a slow device doesn't re-hammer reads.
+      droppedDuringRead = false;
     },
   };
 }

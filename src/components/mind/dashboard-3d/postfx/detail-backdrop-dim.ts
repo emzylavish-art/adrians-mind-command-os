@@ -9,6 +9,7 @@ import {
   measureLuminance,
   rectsKey,
   type LuminanceStats,
+  type MeterBackoff,
   type RegionReader,
 } from "./backdrop-meter.ts";
 import { WCAG_GRAPHIC_AA, WCAG_TEXT_AA, dimForContrast, linearToSrgb, type ContrastPlan, type Rgb } from "./wcag-contrast.ts";
@@ -80,6 +81,8 @@ export type ContrastReport = {
   perRectPlans: (ContrastPlan | null)[];
   /** #69: full (pre-ease) shader strength per rect. */
   perRectStrength: number[];
+  /** #80: meter readback cost back-off (real begin→resolve timings). */
+  backoff: MeterBackoff;
 };
 
 /**
@@ -286,6 +289,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
     reads: 0,
     perRectPlans: [],
     perRectStrength: [],
+    backoff: meter.backoff,
   };
 
   /** Plan for one rect from its own measured stats (text, and lines if given). */
@@ -347,6 +351,7 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       reads: meter.reads,
       perRectPlans: plans,
       perRectStrength: strengths,
+      backoff: meter.backoff,
     };
     return strengths;
   };
@@ -477,11 +482,14 @@ export function createDetailBackdropDimPass(opts: CreateDetailBackdropDimOpts = 
       apply();
     },
     get contrast() {
+      // Back-off changes when a read resolves (async), not only on apply().
+      report.backoff = meter.backoff;
       return report;
     },
     tick(dtMs) {
       if (disposed) return;
       const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0;
+      meter.noteFrame(dt);
       if (reduced || elapsed >= DIM_EASE_MS) level = target;
       else {
         elapsed = Math.min(DIM_EASE_MS, elapsed + dt);
