@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 import { relayModelStream } from "./relay.ts";
 import { consumeMindTurn } from "./live-turn.ts";
-import { resolveModelTier, routeAutoTier } from "./model-tiers.ts";
+import { allowedModelIds, modelTierCatalog, modelTierEnvIssues, parseModelTierEnv, resolveModelTier, routeAutoTier } from "./model-tiers.ts";
+import { pullMindEvents } from "./stream.ts";
+import { CHAT_DISCONNECT_REPLY } from "./relay.ts";
+import { CHAT_TIMEOUT_REPLY } from "./turn-timeouts.ts";
 import { normalizeCitations, performDeepResearch, performSearch, SEARCH_TIMEOUT_REPLY } from "./research.ts";
 
 const SECRET = "xai-SUPERSECRET-0123456789abcdef";
@@ -79,19 +82,74 @@ describe("chip never shows a model that did not answer", () => {
   });
 });
 
-/*
- * Deferred chip/relay probes (need stream/relay fixes beyond this pass):
- * - done event without model id must not invent grok-4.5
- * - mid-stream disconnect must be reported as disconnect, not CHAT_TIMEOUT_REPLY
- * - network failure before any reply must not be mislabeled as a timeout (and must never echo the key)
- */
+describe("chip/relay honesty (restored deferred probes)", () => {
+  it("a done event without a model id does not invent grok-4.5", () => {
+    const { events } = pullMindEvents(`event: done\ndata: ${JSON.stringify({ text: "hi", usedIds: [] })}\n\n`);
+    assert.equal(events.length, 1);
+    const done = events[0];
+    assert.equal(done.event, "done");
+    if (done.event === "done") {
+      assert.equal(done.model, "model unknown");
+      assert.equal(done.model.includes("grok"), false);
+    }
+  });
 
-/*
- * Deferred (incomplete — needs modelTierEnvIssues + parseModelTierEnv validation):
- * - Reject malformed MIND_MODEL_* ids (whitespace, newlines, huge strings) with explicit issues
- * - Refuse API-key-shaped values pasted into model env vars without echoing the secret
- * Keep those probes out until the env parser hardens; Auto/search/chip probes below stay.
- */
+  it("mid-stream disconnect is reported as a disconnect, not as a timeout", async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"part"}}]}\n\n'));
+        queueMicrotask(() => controller.error(new TypeError("terminated")));
+      },
+    });
+    const raw = await readAll(relay((async () => new Response(body, { status: 200 })) as typeof fetch));
+    assert.equal(raw.includes("event: done"), false);
+    assert.equal(raw.includes(CHAT_TIMEOUT_REPLY), false, "a dropped connection is not a timeout");
+    assert.equal(raw.includes(CHAT_DISCONNECT_REPLY), true);
+  });
+
+  it("a network failure before any reply is not mislabeled as a timeout and never echoes the key", async () => {
+    const raw = await readAll(
+      relay((async () => {
+        throw new TypeError(`fetch failed Authorization: Bearer ${SECRET}`);
+      }) as typeof fetch),
+    );
+    assert.equal(raw.includes(CHAT_TIMEOUT_REPLY), false);
+    assert.equal(raw.includes(CHAT_DISCONNECT_REPLY), true);
+    assert.equal(raw.includes(SECRET), false);
+  });
+});
+
+describe("env model ids are validated, never leaked", () => {
+  it("rejects malformed ids and falls back to the default with an explicit issue", () => {
+    const env = { MIND_MODEL_FAST: "grok 4\nInjected: yes", MIND_MODEL_BUILD: "x".repeat(300) };
+    const models = parseModelTierEnv(env);
+    assert.equal(models.Fast, "grok-4.20-0309-non-reasoning");
+    assert.equal(models.Build, "grok-build-0.1");
+    const issues = modelTierEnvIssues(env);
+    assert.equal(issues.length, 2);
+    assert.ok(issues.some((issue) => issue.includes("MIND_MODEL_FAST")));
+  });
+
+  it("never exposes an API key pasted into a model env var", () => {
+    const env = { MIND_MODEL_HEAVY: SECRET };
+    assert.equal(parseModelTierEnv(env).Heavy, "grok-4.7");
+    assert.equal(JSON.stringify(modelTierCatalog(env)).includes(SECRET), false);
+    assert.equal(allowedModelIds(env).has(SECRET), false);
+    assert.equal(resolveModelTier("Heavy", "x", env).model, "grok-4.7");
+    const issues = modelTierEnvIssues(env);
+    assert.equal(issues.length, 1);
+    assert.equal(issues.join(" ").includes(SECRET), false);
+    assert.equal(issues.join(" ").includes("SUPERSECRET"), false);
+  });
+
+  it("keeps valid overrides (dots, dashes, colons, slashes)", () => {
+    const env = { MIND_MODEL_EXPERT: "grok-4.5-0901", MIND_MODEL_HEAVY: "xai/grok-4.7:latest" };
+    assert.equal(parseModelTierEnv(env).Expert, "grok-4.5-0901");
+    assert.equal(parseModelTierEnv(env).Heavy, "xai/grok-4.7:latest");
+    assert.deepEqual(modelTierEnvIssues(env), []);
+  });
+});
 
 describe("Auto routing under hostile prompts", () => {
   it("empty / whitespace-only prompts route to Fast", () => {

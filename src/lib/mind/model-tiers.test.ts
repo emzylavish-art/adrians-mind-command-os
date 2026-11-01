@@ -4,6 +4,8 @@ import {
   MODEL_TIERS,
   allowedModelIds,
   buildProviderModelFields,
+  modelTierCatalog,
+  modelTierEnvIssues,
   parseModelTierEnv,
   resolveModelTier,
   routeAutoTier,
@@ -117,5 +119,49 @@ describe("Auto heavyHints narrowness", () => {
     assert.equal(routeAutoTier("Please prove this rigorously with a formal proof of correctness.").tier, "Heavy");
     assert.equal(routeAutoTier("Provide a deep analysis with multi-step reasoning.").tier, "Heavy");
     assert.equal(routeAutoTier("x".repeat(1800)).tier, "Heavy");
+  });
+});
+
+
+describe("modelTierEnvIssues", () => {
+  const SECRET = "xai-SUPERSECRET-0123456789abcdef";
+
+  it("rejects malformed ids and falls back to the default with an explicit issue", () => {
+    const env = { MIND_MODEL_FAST: "grok 4\nInjected: yes", MIND_MODEL_BUILD: "x".repeat(300) };
+    const models = parseModelTierEnv(env);
+    assert.equal(models.Fast, "grok-4.20-0309-non-reasoning");
+    assert.equal(models.Build, "grok-build-0.1");
+    const issues = modelTierEnvIssues(env);
+    assert.equal(issues.length, 2);
+    assert.ok(issues.some((issue) => issue.includes("MIND_MODEL_FAST")));
+    assert.ok(issues.some((issue) => issue.includes("MIND_MODEL_BUILD")));
+    assert.equal(issues.join(" ").includes("Injected"), false);
+  });
+
+  it("never exposes an API key pasted into a model env var", () => {
+    const env = { MIND_MODEL_HEAVY: SECRET };
+    assert.equal(parseModelTierEnv(env).Heavy, "grok-4.7");
+    assert.equal(JSON.stringify(modelTierCatalog(env)).includes(SECRET), false);
+    assert.equal(allowedModelIds(env).has(SECRET), false);
+    assert.equal(resolveModelTier("Heavy", "x", env).model, "grok-4.7");
+    const issues = modelTierEnvIssues(env);
+    assert.equal(issues.length, 1);
+    assert.equal(issues.join(" ").includes(SECRET), false);
+    assert.equal(issues.join(" ").includes("SUPERSECRET"), false);
+  });
+
+  it("rejects empty / whitespace-only overrides without echoing them", () => {
+    const env = { MIND_MODEL_EXPERT: "   ", MIND_MODEL_FAST: "" };
+    assert.equal(parseModelTierEnv(env).Expert, "grok-4.5");
+    assert.equal(parseModelTierEnv(env).Fast, "grok-4.20-0309-non-reasoning");
+    const issues = modelTierEnvIssues(env);
+    assert.ok(issues.some((issue) => issue.includes("MIND_MODEL_EXPERT")));
+  });
+
+  it("keeps valid overrides (dots, dashes, colons, slashes)", () => {
+    const env = { MIND_MODEL_EXPERT: "grok-4.5-0901", MIND_MODEL_HEAVY: "xai/grok-4.7:latest" };
+    assert.equal(parseModelTierEnv(env).Expert, "grok-4.5-0901");
+    assert.equal(parseModelTierEnv(env).Heavy, "xai/grok-4.7:latest");
+    assert.deepEqual(modelTierEnvIssues(env), []);
   });
 });
