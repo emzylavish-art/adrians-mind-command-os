@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 11)
+## Status vs origin/dashboard-3d (verified cycle 13)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -15,9 +15,9 @@ Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materi
 | `createLaneNebulae` | **done** | `rebuildNebulae` (Dashboard Bot wired) |
 | `setPassHealth` / `resizePass` | **done** | frame loop + `onResize` |
 | `createBuildingBrushMaterial` (+ c10 `uWindowGlow`) | **done** | `city-layer` rebuild with real `lit/floors` |
-| `tickPainterlyKit(kit, t, { reducedMotion })` | **done** | frame loop passes `{ reducedMotion }` (still gated by `if (!reducedMotion)` so freeze path unused when reduced) |
-| `setBuildingProgress` | **done** | `city-layer` calls after create with real lit/floors |
-| `setBuildingWindowGlow` | optional | not required if progress drives glow |
+| `tickPainterlyKit(kit, t, { reducedMotion })` | **done** | always called each frame (incl. reducedMotion); flushes throttled resize |
+| `setBuildingProgress` | **done** | create + `applyBuildingProgress` on live litFloors; unknown→0 |
+| `setBuildingWindowGlow` | optional | progress already drives glow |
 | `attachPainterlyContextHandlers` | check scene | confirm detach on unmount |
 
 ```ts
