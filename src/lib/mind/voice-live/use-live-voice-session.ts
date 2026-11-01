@@ -1,5 +1,5 @@
 /**
- * React hook wrapping LiveVoiceSession — presentational components stay prop-driven.
+ * React hook wrapping LiveVoiceSession for the persistent live-voice bar.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,12 +8,9 @@ import { getVoiceMode } from "../voice/mode-store.ts";
 import { readStoredVoiceChoice } from "../voice/voices.ts";
 import { formatVoiceClientError } from "../voice/errors.ts";
 import { LiveVoiceSession, type LiveSessionDeps, type MintSecretResult } from "./live-session.ts";
-import {
-  phaseToLabel,
-  phaseToUiAttr,
-  type LiveVoicePublicState,
-} from "./types.ts";
+import { phaseToLabel, phaseToUiAttr, type LiveVoicePublicState } from "./types.ts";
 import { isLiveVoiceOccupied } from "./occupancy.ts";
+import { readStoredVolume } from "./speaker-gain.ts";
 
 const OFF_STATE: LiveVoicePublicState = {
   phase: "off",
@@ -37,6 +34,10 @@ export type UseLiveVoiceSessionOptions = {
 
 export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
   const [state, setState] = useState<LiveVoicePublicState>(OFF_STATE);
+  const [speakerMuted, setSpeakerMuted] = useState(false);
+  const [volume, setVolume] = useState(() =>
+    readStoredVolume(typeof localStorage === "undefined" ? null : localStorage),
+  );
   const sessionRef = useRef<LiveVoiceSession | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -80,24 +81,47 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     return session;
   }, []);
 
-  const toggle = useCallback(() => {
-    void ensureSession().toggle();
+  const pressMic = useCallback(() => {
+    void ensureSession().pressMic();
   }, [ensureSession]);
 
   const end = useCallback(() => {
     sessionRef.current?.end("Live voice ended.");
-    setState((prev) => ({
-      ...OFF_STATE,
-      modeBadge: prev.modeBadge,
-      error: null,
-    }));
+    setSpeakerMuted(false);
+    setState((prev) => ({ ...OFF_STATE, modeBadge: prev.modeBadge, error: null }));
   }, []);
 
   const toggleMute = useCallback(() => {
     ensureSession().toggleMute();
   }, [ensureSession]);
 
-  // Esc ends live voice when active and focus is not inside a dialog.
+  const toggleSpeaker = useCallback(() => {
+    const session = ensureSession();
+    const next = session.speaker.toggleMute();
+    setSpeakerMuted(next);
+  }, [ensureSession]);
+
+  const setOutputVolume = useCallback(
+    (v: number) => {
+      const session = ensureSession();
+      const applied = session.speaker.setVolume(
+        v,
+        typeof localStorage === "undefined" ? null : localStorage,
+      );
+      setVolume(applied);
+    },
+    [ensureSession],
+  );
+
+  const sendText = useCallback(
+    (text: string) => {
+      const session = ensureSession();
+      if (!session.isActive) return false;
+      return session.sendText(text);
+    },
+    [ensureSession],
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -111,7 +135,6 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     return () => document.removeEventListener("keydown", onKey, true);
   }, [end]);
 
-  // Cleanup on hide / unmount.
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "hidden" && isLiveVoiceOccupied()) {
@@ -132,12 +155,18 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     label: state.label || phaseToLabel(state.phase, state.muted),
     level: state.level,
     muted: state.muted,
+    speakerMuted,
+    volume,
     active: state.active || isLiveVoiceOccupied(),
     error: state.error,
     modeBadge: state.modeBadge,
-    toggle,
+    pressMic,
     end,
     toggleMute,
+    toggleSpeaker,
+    setOutputVolume,
+    sendText,
     sessionRef,
+    lastTranscript: () => sessionRef.current?.lastTranscript ?? "",
   };
 }

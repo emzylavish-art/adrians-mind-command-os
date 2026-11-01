@@ -3,7 +3,8 @@
  * Browser auth: ephemeral client secret only (never the voice API key).
  */
 
-import { sharedAudioOutput, type SharedAudioOutput } from "../voice/audio-output.ts";
+import type { SharedAudioOutput } from "../voice/audio-output.ts";
+import { LiveSpeakerGain, readStoredVolume } from "./speaker-gain.ts";
 import {
   REALTIME_ENDPOINT,
   REALTIME_SAMPLE_RATE,
@@ -65,7 +66,8 @@ export type LiveSessionDeps = {
   isOverlayMicOpen?: () => boolean;
   getMode?: () => VoiceRoutingMode;
   getVoiceId?: () => string;
-  output?: SharedAudioOutput;
+  output?: SharedAudioOutput; // unused for playback; kept for API compat
+  speaker?: LiveSpeakerGain;
   socketFactory?: (url: string, protocols: string[]) => WsLike;
   runConductor?: typeof runOllamaConductor;
   now?: () => number;
@@ -114,13 +116,19 @@ export class LiveVoiceSession {
   private assistantPlaying = false;
   private speakingStartedAtMs: number | null = null;
   private pendingAssistantText = "";
+  private lastUserTranscript = "";
   private open = false;
   private generation = 0;
 
   constructor(handlers: LiveSessionHandlers = {}, deps: LiveSessionDeps) {
     this.handlers = handlers;
     this.deps = deps;
-    this.playback = createLivePlayback(deps.output ?? sharedAudioOutput);
+    this.playback = createLivePlayback(
+      deps.speaker ??
+        new LiveSpeakerGain(
+          readStoredVolume(typeof localStorage === "undefined" ? null : localStorage),
+        ),
+    );
   }
 
   get state(): LiveVoicePublicState {
@@ -205,12 +213,61 @@ export class LiveVoiceSession {
     }
   }
 
-  async toggle() {
+  /** Mic button: first tap starts continuous session; later taps toggle input mute. */
+  async pressMic() {
     if (this.phase === "off" || this.phase === "error") {
       await this.start();
-    } else {
-      this.end("Live voice ended.");
+      return;
     }
+    this.toggleMute();
+  }
+
+  /** @deprecated use pressMic / end — kept for tests */
+  async toggle() {
+    await this.pressMic();
+  }
+
+  get lastTranscript() {
+    return this.lastUserTranscript;
+  }
+
+  get speaker() {
+    return this.playback.speaker;
+  }
+
+  /** Typed Ask Anything → realtime input_text + response.create when live. */
+  sendText(text: string) {
+    const trimmed = text.trim().slice(0, 4000);
+    if (!trimmed) return false;
+    if (!this.open) return false;
+    this.send({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: trimmed }],
+      },
+    });
+    this.send({ type: "response.create" });
+    this.lastUserTranscript = trimmed;
+    this.handlers.onUserTranscript?.(trimmed);
+    this.setPhase("thinking");
+    return true;
+  }
+
+  /**
+   * Attach image context. Native input_image is unsupported on grok-voice (ignored);
+   * returns { native: false } so UI can run chat/vision fallback.
+   */
+  attachImageContext(_jpegBase64: string, caption?: string): { native: boolean; note: string } {
+    void _jpegBase64;
+    if (caption?.trim()) {
+      this.sendText(`(Attached image) ${caption.trim()}`);
+    }
+    return {
+      native: false,
+      note: "Realtime voice does not accept images natively; using chat vision fallback.",
+    };
   }
 
   end(notice?: string) {
@@ -219,6 +276,7 @@ export class LiveVoiceSession {
     this.mintAbort?.abort();
     this.mintAbort = null;
     this.teardownMedia(true);
+    this.playback.speaker.dispose();
     this.muted = false;
     this.error = null;
     this.level = 0;
@@ -530,6 +588,7 @@ export class LiveVoiceSession {
     const sanitized = sanitizeVoiceTranscript(text);
     if (!sanitized.ok) return;
     const clean = sanitized.text;
+    this.lastUserTranscript = clean;
     this.handlers.onUserTranscript?.(clean);
 
     const mode = this.deps.getMode?.() ?? getVoiceMode();
