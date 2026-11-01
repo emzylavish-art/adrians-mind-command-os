@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { LorePlaqueShader } from "../shaders/lore-plaque.ts";
 import {
   sanitizeFinite,
+  sanitizeShaderTime,
   sanitizePaperGrainSize,
+  clampTextureSizeToGpu,
   paperHash,
 } from "./paper-grain.ts";
 
@@ -45,7 +47,7 @@ export function createLorePlaqueMaterial(opts: LorePlaqueOptions = {}): THREE.Sh
 }
 
 export function tickLorePlaqueMaterial(mat: THREE.ShaderMaterial, timeSeconds: number): void {
-  if (mat.uniforms["uTime"]) mat.uniforms["uTime"].value = sanitizeFinite(timeSeconds, 0);
+  if (mat.uniforms["uTime"]) mat.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
 }
 
 /**
@@ -68,8 +70,62 @@ export function makeParchmentRGBA(size: number, seed = 11): Uint8ClampedArray {
   return data;
 }
 
-export function createParchmentTexture(size = 256, seed = 11): THREE.DataTexture {
-  const s = sanitizePaperGrainSize(size);
+export function createParchmentTexture(size = 256, seed = 11, maxTextureSize?: number): THREE.DataTexture {
+  const s = clampTextureSizeToGpu(size, maxTextureSize);
+  const data = makeParchmentRGBA(s, seed);
+  const tex = new THREE.DataTexture(data, s, s, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Caps for attacker-sized lock-note dumps into plaque content helpers. */
+export const LORE_MAX_NOTES = 8;
+export const LORE_MAX_CHARS_PER_NOTE = 160;
+
+export type LoreNote = { text: string; truncated: boolean };
+
+/**
+ * Sanitize huge/odd lock-note arrays for plaque body text.
+ * Rejects non-strings, strips controls, caps count + length — never silent-drop
+ * without marking truncation.
+ */
+export function sanitizeLoreNotes(
+  notes: unknown,
+  maxNotes = LORE_MAX_NOTES,
+  maxChars = LORE_MAX_CHARS_PER_NOTE,
+): { notes: LoreNote[]; truncatedCount: number; inputCount: number } {
+  const capN = Math.max(1, Math.min(32, Number.isFinite(maxNotes) ? Math.floor(maxNotes as number) : LORE_MAX_NOTES));
+  const capC = Math.max(8, Math.min(512, Number.isFinite(maxChars) ? Math.floor(maxChars as number) : LORE_MAX_CHARS_PER_NOTE));
+  const arr = Array.isArray(notes) ? notes : [];
+  const out: LoreNote[] = [];
+  let truncatedCount = 0;
+  for (const raw of arr) {
+    if (out.length >= capN) {
+      truncatedCount += 1;
+      continue;
+    }
+    let s = typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+    s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").replace(/\s+/g, " ").trim();
+    if (!s) continue;
+    let truncated = false;
+    if (s.length > capC) {
+      s = s.slice(0, capC - 1) + "…";
+      truncated = true;
+      truncatedCount += 1;
+    }
+    out.push({ text: s, truncated });
+  }
+  return { notes: out, truncatedCount, inputCount: arr.length };
+}
+
+export function createParchmentTextureForGpu(
+  size = 256,
+  seed = 11,
+  maxTextureSize?: number,
+): THREE.DataTexture {
+  const s = clampTextureSizeToGpu(size, maxTextureSize);
   const data = makeParchmentRGBA(s, seed);
   const tex = new THREE.DataTexture(data, s, s, THREE.RGBAFormat);
   tex.needsUpdate = true;

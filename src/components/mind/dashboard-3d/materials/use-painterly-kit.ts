@@ -5,7 +5,8 @@
  * 1. import { createPainterlyKit, tickPainterlyKit, disposePainterlyKit } from ".../materials";
  * 2. const kit = createPainterlyKit(); composer.addPass(kit.painterlyPass);
  * 3. Stars: kit.createStarMaterial({ color }); Buildings: kit.createBuildingMaterial({...});
- * 4. Lore plaques: kit.createLorePlaqueMaterial({ accent }); sky: kit.createSkyMaterial();
+ * 4. Lore plaques: kit.createLorePlaqueMaterial({ accent }); edges: kit.createInkWashEdgeMaterial({ health });
+ * 5. Sky: kit.createSkyMaterial();
  * 5. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
  * 6. Each frame: tickPainterlyKit(kit, t); on unmount: disposePainterlyKit(kit).
  */
@@ -32,8 +33,13 @@ import {
   tickLorePlaqueMaterial,
   type LorePlaqueOptions,
 } from "./lore-plaque.ts";
+import {
+  createInkWashEdgeMaterial as createInkWashEdgeMaterialImpl,
+  tickInkWashEdgeMaterial,
+  type InkWashEdgeOptions,
+} from "./ink-wash-edge.ts";
 import { createNebulaSkyMaterial, type NebulaTextureOptions } from "./nebula-sky.ts";
-import { createPaperGrainTexture } from "./paper-grain.ts";
+import { createPaperGrainTexture, sanitizeShaderTime } from "./paper-grain.ts";
 
 export type PainterlyKitOptions = {
   pass?: PainterlyPassOptions;
@@ -52,6 +58,7 @@ export type PainterlyKit = {
   createStarMaterial: (opts?: StarSurfaceOptions) => THREE.ShaderMaterial;
   createBuildingMaterial: (opts?: BuildingSurfaceOptions) => THREE.ShaderMaterial;
   createLorePlaqueMaterial: (opts?: LorePlaqueOptions) => THREE.ShaderMaterial;
+  createInkWashEdgeMaterial: (opts?: InkWashEdgeOptions) => THREE.ShaderMaterial;
   createSkyMaterial: (opts?: NebulaTextureOptions) => THREE.MeshBasicMaterial;
 };
 
@@ -81,6 +88,11 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       tracked.push(m);
       return m;
     },
+    createInkWashEdgeMaterial(eOpts) {
+      const m = createInkWashEdgeMaterialImpl(eOpts);
+      tracked.push(m);
+      return m;
+    },
     createSkyMaterial(skyOpts) {
       const m = createNebulaSkyMaterial(skyOpts ?? opts.nebula);
       trackedSkies.push(m);
@@ -97,7 +109,8 @@ export function tickPainterlyKit(kit: PainterlyKit, timeSeconds: number): void {
     if (m.name === "StarWatercolorMaterial") tickStarMaterial(m, timeSeconds);
     else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, timeSeconds);
     else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, timeSeconds);
-    else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = timeSeconds;
+    else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, timeSeconds);
+    else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
   }
 }
 
@@ -117,6 +130,31 @@ export function disposePainterlyKit(kit: PainterlyKit): void {
     sky.dispose();
   }
   kit.trackedSkies.length = 0;
+}
+
+/**
+ * Release one kit-created material (e.g. edge ribbons rebuilt on every status poll).
+ * HACKER FIX (c3): without this, rebuilt materials stay in kit.tracked forever —
+ * unbounded growth + ticking disposed materials. Returns true if it was tracked.
+ */
+export function releasePainterlyMaterial(
+  kit: PainterlyKit,
+  mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial,
+): boolean {
+  const i = kit.tracked.indexOf(mat as THREE.ShaderMaterial);
+  if (i >= 0) {
+    kit.tracked.splice(i, 1);
+    mat.dispose();
+    return true;
+  }
+  const j = kit.trackedSkies.indexOf(mat as THREE.MeshBasicMaterial);
+  if (j >= 0) {
+    kit.trackedSkies.splice(j, 1);
+    (mat as THREE.MeshBasicMaterial).map?.dispose();
+    mat.dispose();
+    return true;
+  }
+  return false;
 }
 
 /** Pure helper for tests: count outstanding disposables before/after dispose. */
@@ -178,5 +216,6 @@ export function usePainterlyKitFactory() {
     disposePainterlyKit,
     attachPainterlyContextHandlers,
     painterlyKitResourceCounts,
+    releasePainterlyMaterial,
   };
 }

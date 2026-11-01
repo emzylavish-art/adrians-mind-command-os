@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { UniverseScene } from "./universe-scene";
 import { useDashboardStatus } from "./use-dashboard-status";
+import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
+import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
+import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
@@ -11,6 +14,20 @@ export function DashboardApp() {
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
+  const [fly, setFlyState] = useState<FlyState>(FLY_HOME);
+  const [cityLayout, setCityLayout] = useState<CityLayout | null>(null);
+  const onFlyoverChange = useCallback((next: FlyState, layout: CityLayout) => {
+    setFlyState(next);
+    setCityLayout(layout);
+    if (next.level !== "universe") {
+      setSelected(null);
+      setNotionPage(null);
+    }
+  }, []);
+  const layoutForHud = useMemo(
+    () => cityLayout ?? buildCityLayout(state.status === "ready" ? state.data.projects : null),
+    [cityLayout, state],
+  );
   const reducedMotion = useMemo(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -24,7 +41,7 @@ export function DashboardApp() {
   };
 
   return (
-    <main className="dash3d-root dash3d-universe">
+    <main className="dash3d-root dash3d-universe" data-fly-level={fly.level}>
       {state.status === "ready" && !webglError ? (
         <UniverseScene
           data={state.data}
@@ -45,6 +62,7 @@ export function DashboardApp() {
             setNotionPage(null);
           }}
           onUnavailable={setWebglError}
+          onFlyoverChange={onFlyoverChange}
         />
       ) : null}
 
@@ -90,6 +108,15 @@ export function DashboardApp() {
 
       {state.status === "ready" ? (
         <div className="dash3d-skybar" aria-live="polite">
+          {state.stale ? (
+            <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
+              <h2>Status stale</h2>
+              <p className="dash3d-title">Showing last good data</p>
+              <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
+                since {new Date(state.stale.since).toLocaleTimeString("en-GB", { timeZone: "Africa/Lagos", hour12: false })} WAT — {state.stale.error.slice(0, 90)}
+              </p>
+            </div>
+          ) : null}
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>System weather</h2>
             <p className="dash3d-title">{state.data.weather.label}</p>
@@ -131,6 +158,15 @@ export function DashboardApp() {
             Zoom to sky
           </button>
         </div>
+      ) : null}
+
+      {state.status === "ready" && !webglError ? <FlyoverHud fly={fly} layout={layoutForHud} /> : null}
+      {state.status === "ready" ? (
+        <BuildingInteriorPanel
+          fly={fly}
+          projects={state.data.projects}
+          onClose={() => sendFly({ type: "ZOOM_OUT" })}
+        />
       ) : null}
 
       <NodeDetailPanel
