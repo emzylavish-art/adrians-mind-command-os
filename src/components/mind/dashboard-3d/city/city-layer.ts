@@ -20,6 +20,8 @@ export const CITY_HEALTH_COLOR: Record<Health, number> = {
 export type CityPick = { buildingId: string; part: "door" | "window" | "facade"; floor: number | null };
 
 export type CityLayerHandle = {
+  /** Gap#43 — load city/interior/building art on first Dive (no-op after). */
+  ensureDiveArt: () => void;
   group: THREE.Group;
   clouds: THREE.Group;
   pickables: THREE.Object3D[];
@@ -124,49 +126,57 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   let buildingCount = 0;
   let labelsVisible = true;
 
-  // Painted city skyline + interior room backdrops (Grok Imagine webp)
-  // Kept out of ownedMats so rebuild()/clearDynamic does not dispose them.
+  // Gap#43: Dive art stays cold until ensureDiveArt() (city/interior fly level).
   const cityBackdropGroup = new THREE.Group();
   cityBackdropGroup.name = "dash3d-city-backdrop";
   group.add(cityBackdropGroup);
   const texLoader = new THREE.TextureLoader();
   let interiorBackdropMat: THREE.MeshBasicMaterial | null = null;
-  texLoader.load(
-    "/dashboard-3d/art/backdrop-city.webp",
-    (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.92,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      backdropMats.push(mat);
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), mat);
-      backdropGeos.push(plane.geometry);
-      plane.position.set(0, CITY_Y + 7.5, -22);
-      cityBackdropGroup.add(plane);
-    },
-    undefined,
-    () => { /* no source */ },
-  );
-  texLoader.load(
-    "/dashboard-3d/art/backdrop-interior.webp",
-    (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      interiorBackdropMat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.85,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      backdropMats.push(interiorBackdropMat);
-    },
-    undefined,
-    () => { /* no source */ },
-  );
+  let diveArtRequested = false;
+  let lastLayout: CityLayout | null = null;
+
+  function ensureDiveArt() {
+    if (diveArtRequested) return;
+    diveArtRequested = true;
+    texLoader.load(
+      "/dashboard-3d/art/backdrop-city.webp",
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        backdropMats.push(mat);
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), mat);
+        backdropGeos.push(plane.geometry);
+        plane.position.set(0, CITY_Y + 7.5, -22);
+        cityBackdropGroup.add(plane);
+      },
+      undefined,
+      () => { /* no source */ },
+    );
+    texLoader.load(
+      "/dashboard-3d/art/backdrop-interior.webp",
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        interiorBackdropMat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        backdropMats.push(interiorBackdropMat);
+      },
+      undefined,
+      () => { /* no source */ },
+    );
+    // Facades were skipped while diveArtRequested was false — rebuild once to attach them.
+    if (lastLayout) rebuild(lastLayout);
+  }
 
   function clearDynamic() {
     for (const l of labels) {
@@ -188,6 +198,8 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   }
 
   function rebuild(layout: CityLayout) {
+    // Gap#43: do NOT ensureDiveArt here — rebuild runs in universe too.
+    lastLayout = layout;
     clearDynamic();
     for (const b of layout.buildings) {
       const color = CITY_HEALTH_COLOR[b.health];
@@ -226,7 +238,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
             : b.id.startsWith("bot-")
               ? "/dashboard-3d/art/building-guild.webp"
               : null;
-      if (facadeUrl) {
+      if (facadeUrl && diveArtRequested) {
         texLoader.load(
           facadeUrl,
           (tex: THREE.Texture) => {
@@ -428,6 +440,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     clouds,
     pickables,
     rebuild,
+    ensureDiveArt,
     applyBuildingProgress,
     setInterior,
     setLabelsVisible,

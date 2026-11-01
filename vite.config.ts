@@ -145,6 +145,32 @@ function authPopupPlugin(): Plugin {
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
+
+/** Gap#43 — long-cache Imagine art in vite preview/dev (prod via vercel.json headers). */
+function artCacheHeadersPlugin(): Plugin {
+  return {
+    name: "dashboard-3d-art-cache",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (pathOnly.startsWith("/dashboard-3d/art/")) {
+          res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+        }
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (pathOnly.startsWith("/dashboard-3d/art/")) {
+          res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ command, isPreview }) => ({
   server: {
     host: "0.0.0.0",

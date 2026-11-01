@@ -108,9 +108,11 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 51 | **Gap#38 touch-action / overscroll** — canvas touch-action:none; detail overscroll-behavior:contain | **done** | c44 — canvas touch-action:none; detail overscroll-behavior · was queued REA pinch/swipe |
 | 52 | **Gap#42 live Star Detail** — refresh selected bot from latest status; close if bot gone | **done** | c44 — selected sync from status; close if bot gone · was queued REA Conductor stale |
 | 53 | **Gap#44 Notion plain text in detail** — strip markup escapes in titles/excerpts (reuse Gap#22 helpers) | **done** | c44 — sanitizeNotionPlainText in graph + node-detail · was queued REA mobile Notion page |
-| 54 | **Gap#43 art cache + lazy dive assets** — long-cache hashed art; defer building/backdrop until Dive | queued | REA cold 3.1MB |
-| 55 | **Gap#41 skybar CLS / long tasks** — more reserved skeletons; defer constellation work off first paint | queued | REA CLS 0.058 |
+| 54 | **Gap#43 art cache + lazy dive assets** — long-cache hashed art; defer building/backdrop until Dive | **done** | c45 — Dive-only city/interior/building; idle-deferred scene plates; vite+vercel Cache-Control; capture art 30→fewer |
+| 55 | **Gap#41 skybar CLS / long tasks** — more reserved skeletons; defer constellation work off first paint | **done** | c45 — skybar/card min-heights; portrait idle queue; evidence captures-c45-cls |
 | 56 | **Light — focus key/rim light + depth focus falloff (wire)** — `createFocusLight` (atmosphere/) + `createFocusDepthPass` (postfx/, after god-rays, before bloom) driven by `rig.subjectId` focused mesh + bot health | **done** | c44 — wired in universe-scene (after god-rays, before bloom; real health; DPR RT; dispose on unmount/context loss); Light lane 53f5ad1 was #49 |
+| 58 | **Motion c16 follow-up — wire star-batch into universe tick** — adopt star-batch helper for botVis pulse/drift; keep camera dolly Dashboard-owned | queued | Motion c16 772fe62 landed helpers |
+| 59 | **Attacker — status cold-cache / payload size** — re-check Gap#28-style slow status after bot cap; add timing badge if still >500ms | queued | feed #28/#33 follow-up |
 | 57 | **Light — focus-aware bloom guard** — while a node is focused, depth-mask bloom so Imagine portrait/card highlights inside the focus band don't haze over detail; background keeps tone bloom | queued | Light lane was #50; builds on #56 focus depth; reduced-motion static |
 
 

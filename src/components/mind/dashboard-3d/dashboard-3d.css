@@ -1096,8 +1096,20 @@
 .dash3d-minimap-dot[data-health="idle"] { box-shadow: inset 0 0 0 7px #94a3b8; }
 .dash3d-minimap-dot.is-focus { box-shadow: inset 0 0 0 7px #7dd3fc, 0 0 0 2px #fff; }
 
-/* Gap #41 — reserve skybar money card height to cut CLS */
+/* Gap #41 — reserve skybar strip + card heights (capture CLS was money/sky shifts) */
+.dash3d-skybar {
+  min-height: 7.5rem;
+}
+.dash3d-skybar-card {
+  min-height: 4.75rem;
+}
 .dash3d-money,
 .dash3d-skybar-card.dash3d-money {
-  min-height: 4.5rem;
+  min-height: 5.5rem;
+}
+.dash3d-skybar-card.dash3d-forever,
+.dash3d-fleet-plan,
+[data-testid="forever-contract"],
+[data-testid="money-panel"] {
+  min-height: 5.5rem;
 }
