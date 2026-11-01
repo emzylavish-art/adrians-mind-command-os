@@ -77,4 +77,33 @@ describe("transcript edits", () => {
     assert.equal(parsed.chat.messages.length, 3);
     assert.equal(packed.json.includes("http"), false);
   });
+
+
+  it("retries and regenerates with the original image attachments", () => {
+    const ws = sample();
+    const chat = ws.chats[0]!;
+    chat.messages = [
+      {
+        id: "u1",
+        role: "user",
+        content: "what color?\n\n[Attached: red.png]",
+        at: "2026-01-01T00:00:00.000Z",
+        images: [{ dataUrl: "data:image/png;base64,aa", name: "red.png" }],
+      },
+      { id: "a1", role: "assistant", content: "red", at: "2026-01-01T00:00:01.000Z", model: "grok-4.5" },
+    ];
+    const regen = prepareRegenerate(ws, "c1");
+    assert.equal("error" in regen, false);
+    if ("error" in regen) return;
+    assert.equal(regen.text, "what color?");
+    assert.equal(regen.images.length, 1);
+    assert.equal(regen.images[0]?.name, "red.png");
+
+    const retryWs = { ...ws, chats: [{ ...chat, messages: chat.messages.slice(0, 1) }] };
+    const retry = prepareRetry(retryWs, "c1");
+    assert.equal("error" in retry, false);
+    if ("error" in retry) return;
+    assert.equal(retry.images[0]?.dataUrl, "data:image/png;base64,aa");
+  });
+
 });

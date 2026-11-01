@@ -740,7 +740,11 @@ export function CommandApp() {
           text,
           memory: chat.memory,
           halted: source.halted,
-          history: history.map((item) => ({ role: item.role, content: item.content })),
+          history: history.map((item) => ({
+            role: item.role,
+            content: item.content,
+            images: item.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
           modelTier,
@@ -836,7 +840,7 @@ export function CommandApp() {
       return;
     }
     setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true);
+    void deliver(revised.chat, revised.text, revised.ws, true, revised.images ?? []);
   }
 
   function regenerate() {
@@ -847,7 +851,7 @@ export function CommandApp() {
       return;
     }
     setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true);
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, prepared.images ?? []);
   }
 
   function retryLast() {
@@ -858,7 +862,7 @@ export function CommandApp() {
       return;
     }
     setError(null);
-    void deliver(prepared.chat, prepared.text, ws, true);
+    void deliver(prepared.chat, prepared.text, ws, true, prepared.images ?? []);
   }
 
   function exportActive() {
@@ -2415,7 +2419,7 @@ export function CommandApp() {
               <div className="masthead flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-3xl font-bold">Library</h2>
-                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Chat can also send images to vision-capable models.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
