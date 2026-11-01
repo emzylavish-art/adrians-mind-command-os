@@ -6,6 +6,7 @@ import {
   VOICE_SIGN_IN_REQUIRED,
   VOICE_START_FAILED,
   formatMicCaptureError,
+  mapBrowserSpeechError,
   formatVoiceClientError,
   shouldPersistVoiceMode,
 } from "./errors.ts";
@@ -66,5 +67,14 @@ describe("voice mode persistence hydrate gate", () => {
     };
     assert.equal(readStoredVoiceMode(storage), "direct");
     assert.equal(store.get("amcos.voice.mode.v1"), "direct");
+  });
+});
+
+describe("mapBrowserSpeechError", () => {
+  it("maps denied permission honestly and keeps browser-vs-realtime distinction", () => {
+    const msg = mapBrowserSpeechError("not-allowed");
+    assert.match(msg, /permission was denied/i);
+    assert.match(msg, /browser speech/i);
+    assert.match(msg, /not a realtime/i);
   });
 });

@@ -1,5 +1,7 @@
 import { SharedAudioOutput, sharedAudioOutput } from "./audio-output.ts";
 import { rmsFromTimeDomain } from "./level.ts";
+import { rmsLevel } from "./levels.ts";
+import { decodeWavPcm, resampleLinear, synthesizeTone } from "./test-audio.ts";
 import { resolveXaiVoiceId } from "./voices.ts";
 
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
@@ -22,6 +24,15 @@ export type RealtimeHandlers = {
 export type RealtimeSessionOptions = {
   /** Built-in or allowlisted voice id applied on session.update (default eve). */
   voice?: string;
+};
+
+export type RealtimeConnectOptions = {
+  /** When true, cancel auto model replies so the app owns Direct/Orchestrator routing. */
+  captureOnly?: boolean;
+  /** Dev-only: stream this WAV URL or tone:440 instead of the mic. */
+  testAudioUrl?: string | null;
+  /** Optional session instructions (e.g. personality + capture-only). */
+  instructions?: string;
 };
 
 type WsLike = {
@@ -77,6 +88,9 @@ export class RealtimeVoiceSession {
   private levelRaf = 0;
 
   private voiceId: string;
+  private captureOnly = true;
+  private testAudioUrl: string | null = null;
+  private testAudioTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -115,9 +129,11 @@ export class RealtimeVoiceSession {
     if (muted) this.handlers.onLevel?.(0);
   }
 
-  async connect(ephemeralSecret: string) {
+  async connect(ephemeralSecret: string, options: RealtimeConnectOptions = {}) {
     if (!ephemeralSecret) throw new Error("Missing ephemeral voice secret.");
     this.intentionalClose = false;
+    this.captureOnly = options.captureOnly !== false;
+    this.testAudioUrl = options.testAudioUrl || null;
     this.handlers.onStatus?.("connecting");
     const ws = this.socketFactory(REALTIME_ENDPOINT, [`xai-client-secret.${ephemeralSecret}`]);
     this.ws = ws;
@@ -147,7 +163,11 @@ export class RealtimeVoiceSession {
       type: "session.update",
       session: {
         voice: this.voiceId,
-        instructions: "You are a voice capture helper. Prefer short replies when asked to speak.",
+        instructions:
+          options.instructions ||
+          (this.captureOnly
+            ? "You only listen for transcription. Do not answer unless a force_message is sent."
+            : "You are a voice capture helper. Prefer short replies when asked to speak."),
         turn_detection: { type: "server_vad" },
         audio: {
           input: { format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE } },
@@ -229,6 +249,10 @@ export class RealtimeVoiceSession {
   async startCapture() {
     if (!this.open) throw new Error("Voice session is not connected.");
     if (this.capturing) return;
+    if (this.testAudioUrl) {
+      await this.startTestAudioCapture(this.testAudioUrl);
+      return;
+    }
     let media: MediaStream;
     try {
       media = await navigator.mediaDevices.getUserMedia({
@@ -280,6 +304,10 @@ export class RealtimeVoiceSession {
 
   stopCapture() {
     this.capturing = false;
+    if (this.testAudioTimer) {
+      clearInterval(this.testAudioTimer);
+      this.testAudioTimer = null;
+    }
     if (this.levelRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.levelRaf);
     this.levelRaf = 0;
     this.handlers.onLevel?.(0);

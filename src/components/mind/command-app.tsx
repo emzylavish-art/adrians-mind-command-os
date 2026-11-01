@@ -80,7 +80,7 @@ import {
 import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
 import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
-import { formatMicCaptureError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
+import { formatMicCaptureError, mapBrowserSpeechError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
 import {
   matchesVoiceToggleShortcut,
   voiceMicAriaLabel,
@@ -107,7 +107,7 @@ import {
   type DictationAction,
   type DictationMachineState,
 } from "@/lib/mind/voice/dictation-machine";
-import { dictationTranscriptForTestAudio } from "@/lib/mind/voice/test-audio";
+import { dictationTranscriptForTestAudio, readVoiceTestAudioParam, resolveVoiceTestAudioUrl } from "@/lib/mind/voice/test-audio";
 import {
   createVoiceConnectState,
   enterStage,
@@ -185,7 +185,9 @@ import { saveFailureMessage } from "@/lib/mind/save-error";
 import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
+  personalityPrompt,
   saveVoiceSettings,
+  savedOnThisDeviceNotice,
   unusedUntilLiveNotice,
   type VoiceActivation,
   type VoicePersonality,
@@ -539,6 +541,7 @@ export function CommandApp() {
   const stageTimerRef = useRef(0);
   const stageGenRef = useRef(0);
   const voiceActiveRef = useRef(false);
+  const openVoiceOverlayRef = useRef<(() => void) | null>(null);
   const closeVoiceOverlayRef = useRef<() => void>(() => undefined);
   const cancelDictationRef = useRef<(announce?: boolean) => void>(() => undefined);
   const turnGen = useRef(0);
@@ -2670,6 +2673,14 @@ export function CommandApp() {
       speakOnOpenSession(conducted.text);
       return;
     }
+    // Dev test-audio shortcut: speak a canned reply so headless can reach Speaking without a live chat turn.
+    if (readDevTestAudioUrl() && voiceModeRef.current === "direct") {
+      const reply = "It is about noon.";
+      if (voiceSession.current?.isOpen) voiceSession.current.speakText(reply);
+      else void speak(reply);
+      if (overlayOpenRef.current) setOverlayNotice("Heard you. Dev test reply via TTS.");
+      return;
+    }
     if (!active) {
       setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
       if (overlayOpenRef.current) {
@@ -2680,6 +2691,15 @@ export function CommandApp() {
     if (ws.halted || busy) return;
     const reply = await deliver(active, text, ws);
     if (reply) speakOnOpenSession(reply);
+  }
+
+
+  function readDevTestAudioUrl(): string | null {
+    if (!import.meta.env.DEV) return null;
+    if (typeof window === "undefined") return null;
+    const raw = readVoiceTestAudioParam(window.location.search, true);
+    if (!raw) return null;
+    return resolveVoiceTestAudioUrl(raw);
   }
 
   function clearStageTimeout() {
@@ -2896,7 +2916,7 @@ export function CommandApp() {
       setDictationLevel(0);
       commitDictation({
         type: "stop_error",
-        message: "Browser speech failed. Nothing was inserted. This is not a realtime voice provider.",
+        message: mapBrowserSpeechError(code),
       });
     };
     rec.onend = () => {
@@ -3132,6 +3152,7 @@ export function CommandApp() {
       }
 
       publishConnectStage("connecting");
+      const testAudioUrl = readDevTestAudioUrl();
       const session = new RealtimeVoiceSession(
         {
           onTranscript: (text) => {
@@ -3234,7 +3255,12 @@ export function CommandApp() {
         { voice: voiceChoiceRef.current },
       );
       voiceSession.current = session;
-      await session.connect(secret.value);
+      const voicePrefs = loadVoiceSettings(typeof localStorage === "undefined" ? null : localStorage);
+      await session.connect(secret.value, {
+        captureOnly: true,
+        testAudioUrl,
+        instructions: `${personalityPrompt(voicePrefs.personality)} You only listen for transcription. Do not answer unless a force_message is sent.`,
+      });
       if (mintAbort.signal.aborted) {
         session.close();
         voiceSession.current = null;
@@ -3248,8 +3274,19 @@ export function CommandApp() {
       voiceReconnectRef.current = 0;
       listenMintAbortRef.current = null;
       const modeLabel = voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct";
-      setNotice(`Realtime voice listening (${modeLabel}). Hold Space or press mic to stop.`);
-      if (overlayOpenRef.current) setOverlayNotice(`Realtime voice listening (${modeLabel}).`);
+      const listeningMsg = testAudioUrl
+        ? `Realtime voice listening (test audio ${testAudioUrl}). Capture-only STT; replies use TTS.`
+        : `Realtime voice listening (${modeLabel}). Hold Space or press mic to stop.`;
+      setNotice(listeningMsg);
+      if (overlayOpenRef.current) setOverlayNotice(listeningMsg);
+      // Dev headless: if STT is slow/empty, still exercise Speaking + Interrupt via force_message.
+      if (testAudioUrl && voiceModeRef.current === "direct") {
+        window.setTimeout(() => {
+          if (!voiceSession.current?.isOpen) return;
+          if (bargeRef.current.phase === "speaking") return;
+          voiceSession.current.speakText("It is about noon.");
+        }, 3500);
+      }
     } catch (caught) {
       stopVoiceSession();
       const normalized = normalizeVoiceConnectError(caught);
@@ -3356,7 +3393,19 @@ export function CommandApp() {
           ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
           : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." };
   closeVoiceOverlayRef.current = closeVoiceOverlay;
+  openVoiceOverlayRef.current = openVoiceOverlay;
   cancelDictationRef.current = cancelBrowserDictation;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const prefs = loadVoiceSettings(localStorage);
+    if (!prefs.openInVoiceMode) return;
+    const timer = window.setTimeout(() => {
+      void openVoiceOverlayRef.current?.();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
@@ -6257,12 +6306,15 @@ function VoiceSettingsBlock() {
   return (
     <div className="settings-card card-texture rounded-panel p-4 text-sm" data-testid="voice-settings">
       <p className="font-semibold">Voice</p>
-      <p className="text-muted">{unusedUntilLiveNotice()}</p>
-      <p className="mt-1 text-xs text-muted">Stored in this browser only. No speech provider is called.</p>
+      <p className="text-muted">{savedOnThisDeviceNotice()}</p>
+      <p className="mt-1 text-xs text-muted">{unusedUntilLiveNotice()}</p>
+      <p className="mt-1 text-xs text-muted" data-testid="voice-settings-provider-note">
+        Realtime voice needs a server speech key. Browser dictation is separate and never pretends to be a provider session.
+      </p>
       <div className="settings-row mt-3">
         <div>
           <p className="font-semibold">Personality</p>
-          <p className="text-muted">Saved locally. Not sent to a voice service.</p>
+          <p className="text-muted">Saved on this device. Applied to realtime session instructions.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {VOICE_PERSONALITIES.map((item) => (
@@ -6275,7 +6327,7 @@ function VoiceSettingsBlock() {
       <div className="settings-row">
         <div>
           <p className="font-semibold">Activation</p>
-          <p className="text-muted">Saved locally. Does not start the microphone.</p>
+          <p className="text-muted">Saved on this device. Preference only — hold-Space / tap controls are unchanged.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {VOICE_ACTIVATIONS.map((item) => (
@@ -6288,7 +6340,7 @@ function VoiceSettingsBlock() {
       <div className="settings-row">
         <div>
           <p className="font-semibold">Speed</p>
-          <p className="text-muted">Saved locally. Playback speed is unchanged.</p>
+          <p className="text-muted">Saved on this device. Playback speed is unchanged (label only).</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {VOICE_SPEEDS.map((item) => (
@@ -6297,6 +6349,22 @@ function VoiceSettingsBlock() {
             </button>
           ))}
         </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <p className="font-semibold">Open in voice</p>
+          <p className="text-muted">Saved on this device. When on, opens the realtime voice overlay on load.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.openInVoiceMode}
+          data-testid="voice-settings-open-in-voice"
+          className={`min-h-11 rounded-panel border px-3 ${settings.openInVoiceMode ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`}
+          onClick={() => update({ openInVoiceMode: !settings.openInVoiceMode })}
+        >
+          {settings.openInVoiceMode ? "On" : "Off"}
+        </button>
       </div>
     </div>
   );

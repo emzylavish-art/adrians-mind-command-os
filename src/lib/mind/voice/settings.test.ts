@@ -5,6 +5,7 @@ import {
   liveVoiceMissingNotice,
   loadVoiceSettings,
   saveVoiceSettings,
+  savedOnThisDeviceNotice,
   unusedUntilLiveNotice,
   VOICE_SETTINGS_KEY,
 } from "./settings.ts";
@@ -27,11 +28,13 @@ describe("voice settings", () => {
     assert.equal(loaded.microphoneId, "");
   });
 
-  it("labels unused prefs until live voice is connected", () => {
-    assert.match(unusedUntilLiveNotice(), /not used until live voice/i);
+  it("labels prefs as saved on this device", () => {
+    assert.match(unusedUntilLiveNotice(), /Saved on this device/i);
+    assert.match(savedOnThisDeviceNotice(), /Saved on this device/i);
   });
 
   it("refuses live voice without a provider key", () => {
-    assert.match(liveVoiceMissingNotice(false), /XAI_API_KEY/);
+    assert.match(liveVoiceMissingNotice(false), /not configured/i);
+    assert.match(liveVoiceMissingNotice(false), /speech key/i);
   });
 });

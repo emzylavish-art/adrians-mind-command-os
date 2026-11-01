@@ -95,4 +95,59 @@ describe("RealtimeVoiceSession", () => {
     assert.equal(session.isMuted, false);
     session.close();
   });
+
+  it("streams testAudioUrl PCM instead of requesting the mic", async () => {
+    let created: FakeSocket | undefined;
+    const statuses: string[] = [];
+    const originalFetch = globalThis.fetch;
+    // Minimal PCM WAV: 44-byte header + 4800 samples (16-bit mono @ 24kHz ~100ms * 2 for safety)
+    const sampleRate = 24000;
+    const n = 4800;
+    const dataSize = n * 2;
+    const buf = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buf);
+    const writeStr = (offset: number, s: string) => {
+      for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+    };
+    writeStr(0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    writeStr(8, "WAVE");
+    writeStr(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, "data");
+    view.setUint32(40, dataSize, true);
+    for (let i = 0; i < n; i++) view.setInt16(44 + i * 2, Math.sin(i / 10) * 10000, true);
+
+    globalThis.fetch = (async () =>
+      new Response(buf, { status: 200, headers: { "content-type": "audio/wav" } })) as typeof fetch;
+
+    const session = new RealtimeVoiceSession(
+      { onStatus: (status) => statuses.push(status) },
+      new SharedAudioOutput(),
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created;
+      },
+    );
+    try {
+      await session.connect("ephemeral-test", { captureOnly: true, testAudioUrl: "/voice-test/hello.wav" });
+      await session.startCapture();
+      assert.equal(session.isCapturing, true);
+      // Allow a couple of interval ticks.
+      await new Promise((r) => setTimeout(r, 250));
+      assert.ok(created!.sent.some((line) => line.includes("input_audio_buffer.append")));
+      const update = created!.sent.find((line) => line.includes("session.update")) || "";
+      assert.ok(update.includes("Do not answer unless a force_message"), update);
+    } finally {
+      session.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
