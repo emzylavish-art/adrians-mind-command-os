@@ -1,5 +1,5 @@
 owner: none
-cycle: 50
-released: 2026-11-01T23:33:22+01:00
+cycle: 51
+released: 2026-11-01T23:46:38+01:00
 branch: dashboard-3d
-note: c50 Motion c17/c18 + Light #68 landed; :8102 nohup; Gap#10+#54-56 queued
+note: hydration + Light#80 + Motion c19/c20; og skip; Gap#10-56 earlier
