@@ -8,6 +8,8 @@ import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
 import { createHealthSound, type SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
+import { applyScrubToBots, scrubAt } from "@/lib/mind/dashboard/time-scrub";
+import { TimeScrubber } from "./time-scrubber";
 import "./dashboard-3d.css";
 
 export function DashboardApp() {
@@ -36,6 +38,7 @@ export function DashboardApp() {
 
   const soundRef = useRef<ReturnType<typeof createHealthSound> | null>(null);
   const [soundMuted, setSoundMuted] = useState(true);
+  const [scrubMs, setScrubMs] = useState<number | null>(null);
   useEffect(() => {
     const sound = createHealthSound({ reducedMotion });
     soundRef.current = sound;
@@ -54,19 +57,6 @@ export function DashboardApp() {
     soundRef.current?.setReducedMotion(reducedMotion);
   }, [reducedMotion]);
 
-  useEffect(() => {
-    if (state.status !== "ready") {
-      soundRef.current?.sync([]);
-      return;
-    }
-    const voices: SoundVoiceSpec[] = state.data.bots.map((b, i) => ({
-      id: b.id,
-      health: b.health,
-      pan: ((i % 7) - 3) / 3,
-    }));
-    soundRef.current?.sync(voices);
-  }, [state]);
-
   const unlockSound = useCallback(() => {
     soundRef.current?.unlock();
   }, []);
@@ -82,6 +72,57 @@ export function DashboardApp() {
     };
   }, [state]);
 
+  const nowMs = useMemo(() => Date.now(), [state]);
+  const scrubView = useMemo(() => {
+    if (state.status !== "ready") {
+      return { data: null as null, mode: "live" as const, message: null as string | null, scrubMs: null as number | null };
+    }
+    const timeline = state.data.timeline ?? {
+      events: [],
+      earliestMs: null,
+      latestMs: null,
+      droppedFuture: 0,
+      droppedInvalid: 0,
+      truncated: false,
+    };
+    const liveHealth = Object.fromEntries(
+      state.data.bots.map((b) => [b.id, { health: b.health, reason: b.reason }]),
+    );
+    const target = scrubMs == null ? nowMs : scrubMs;
+    const result = scrubAt({
+      timeline,
+      botIds: state.data.bots.map((b) => b.id),
+      liveHealth,
+      scrubMs: target,
+      nowMs,
+    });
+    if (result.mode === "live") {
+      return { data: state.data, mode: result.mode, message: result.message, scrubMs: null as number | null };
+    }
+    const bots = applyScrubToBots(state.data.bots, result);
+    return {
+      data: { ...state.data, bots },
+      mode: result.mode,
+      message: result.message,
+      scrubMs: result.scrubMs,
+    };
+  }, [state, scrubMs, nowMs]);
+
+  const sceneData = scrubView.data;
+
+  useEffect(() => {
+    if (!sceneData) {
+      soundRef.current?.sync([]);
+      return;
+    }
+    const voices: SoundVoiceSpec[] = sceneData.bots.map((b, i) => ({
+      id: b.id,
+      health: b.health,
+      pan: ((i % 7) - 3) / 3,
+    }));
+    soundRef.current?.sync(voices);
+  }, [sceneData]);
+
   const openNotion = (pageId: string) => {
     if (state.status !== "ready") return;
     const page = state.data.notionGraph.pages.find((p) => p.id === pageId) ?? null;
@@ -91,9 +132,9 @@ export function DashboardApp() {
 
   return (
     <main className="dash3d-root dash3d-universe" data-fly-level={fly.level} onPointerDownCapture={unlockSound}>
-      {state.status === "ready" && !webglError ? (
+      {state.status === "ready" && sceneData && !webglError ? (
         <UniverseScene
-          data={state.data}
+          data={sceneData}
           reducedMotion={reducedMotion}
           onSelectBot={(bot) => {
             setSelected(bot);
@@ -194,6 +235,21 @@ export function DashboardApp() {
               {(state.data.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
             </p>
           </div>
+          <TimeScrubber
+            timeline={state.data.timeline ?? {
+              events: [],
+              earliestMs: null,
+              latestMs: null,
+              droppedFuture: 0,
+              droppedInvalid: 0,
+              truncated: false,
+            }}
+            scrubMs={scrubView.scrubMs}
+            nowMs={nowMs}
+            message={scrubView.message}
+            mode={scrubView.mode}
+            onScrubMs={setScrubMs}
+          />
           <button
             type="button"
             className="dash3d-glass dash3d-zoomout"

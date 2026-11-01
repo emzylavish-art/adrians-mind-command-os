@@ -309,3 +309,48 @@
   max-height: min(92vh, 920px);
   overflow: auto;
 }
+
+
+/* Queue #5 TIME scrubber */
+.dash3d-time-scrub {
+  min-width: 220px;
+  max-width: 320px;
+  padding: 0.55rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.dash3d-time-scrub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.dash3d-time-scrub-head h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.dash3d-time-live {
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: rgba(14, 24, 48, 0.65);
+  color: #e8eefc;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.55rem;
+  cursor: pointer;
+}
+.dash3d-time-live[aria-pressed="true"] {
+  background: rgba(61, 214, 140, 0.22);
+  border-color: rgba(61, 214, 140, 0.55);
+}
+.dash3d-time-range {
+  width: 100%;
+  accent-color: #7dd3fc;
+  cursor: pointer;
+}
+.dash3d-time-scrub[data-mode="before_history"] .dash3d-title {
+  color: #fbbf24;
+}

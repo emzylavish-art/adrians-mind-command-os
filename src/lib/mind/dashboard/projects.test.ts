@@ -70,6 +70,14 @@ function baseStatus(partial: Partial<DashboardStatus> = {}): DashboardStatus {
       queueHead: null,
       mergeGateNote: "",
     },
+    timeline: {
+      events: [],
+      earliestMs: null,
+      latestMs: null,
+      droppedFuture: 0,
+      droppedInvalid: 0,
+      truncated: false,
+    },
     ...partial,
   };
 }

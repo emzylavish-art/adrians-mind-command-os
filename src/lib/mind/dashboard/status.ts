@@ -1,6 +1,8 @@
 import { DASHBOARD_BOTS, matchBotForLock } from "./bots.ts";
 import { loadConductorNudges, loadGapDispatcherFeed, loadSpend, orchestratorFromLocks } from "./feeds.ts";
-import { collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { collectBranchCommits, collectRecentCommitsResult, latestCommitActivityForBranch } from "./git.ts";
+import { buildTimeline, parseLockTransitionLog } from "./time-scrub.ts";
+import { readFileSync } from "node:fs";
 import { locksDirFromEnvSafe, repoDirFromEnvSafe } from "./safe-paths.ts";
 import { classifyHealth } from "./health.ts";
 import { readLocksDir } from "./locks.ts";
@@ -98,6 +100,26 @@ export async function buildDashboardStatus(
   const edges = constellationEdges(bots);
   const weather = systemWeather(bots);
 
+  // Queue #5 TIME: fleet+dashboard commits + lock timestamps + transition log
+  let transitionText = "";
+  try {
+    transitionText = readFileSync("/workspace/audit/dashboard-3d/lock-transitions.log", "utf8");
+  } catch {
+    transitionText = "";
+  }
+  let fleetCommits = commits;
+  try {
+    fleetCommits = collectBranchCommits(repoDir, undefined, 80);
+  } catch {
+    fleetCommits = commits;
+  }
+  const timeline = buildTimeline({
+    commits: fleetCommits.length ? fleetCommits : commits,
+    locks,
+    transitions: parseLockTransitionLog(transitionText),
+    nowMs: now,
+  });
+
   const base = {
     generatedAt: new Date(now).toISOString(),
     bots,
@@ -120,6 +142,7 @@ export async function buildDashboardStatus(
     constellationEdges: edges,
     weather,
     notionGraph,
+    timeline,
   };
 
   return {

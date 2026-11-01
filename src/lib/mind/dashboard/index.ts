@@ -6,3 +6,4 @@ export { buildConstellations, constellationEdges, systemWeather } from "./conste
 export { parseNotionSnapshot, loadNotionSnapshotFile } from "./notion-graph.ts";
 export { createRig, flyTo, stepRig, focusBotTarget, zoomOutTarget } from "./camera-rig.ts";
 export type * from "./types.ts";
+export { buildTimeline, scrubAt, applyScrubToBots, formatWat } from "./time-scrub.ts";
