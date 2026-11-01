@@ -7,6 +7,7 @@ import {
   clampTextureSizeToGpu,
   sanitizeFinite,
   sanitizeShaderTime,
+  createPaperGrainTexture,
   PAINTER_TIME_PERIOD,
   PAPER_GRAIN_MAX_SIZE,
   PAPER_GRAIN_MIN_SIZE,
@@ -23,6 +24,7 @@ import {
   painterlyKitResourceCounts,
   tickPainterlyKit,
   releasePainterlyMaterial,
+  painterlyKitTextureBudget,
   rebindPainterlyKitTextures,
   applyTextureBinding,
   attachPainterlyContextHandlers,
@@ -33,6 +35,19 @@ import {
   createPainterlyInkEdges,
   buildMergedInkWashGeometry,
 } from "./painterly-ink-edges.ts";
+import {
+  createPainterlyLaneNebulae,
+  createLaneNebulaMaterial,
+} from "./lane-nebula.ts";
+import {
+  estimateTextureBytes,
+  sanitizeTextureBudgetBytes,
+  PAINTER_TEXTURE_BUDGET_BYTES,
+} from "./painter-texture-budget.ts";
+import {
+  markImagineNodeReleased,
+  isImagineNodeReleased,
+} from "./imagine-node.ts";
 import {
   createImagineNodeMaterial,
   setImagineNodeMap,
@@ -1063,5 +1078,139 @@ describe("painter c8: createInkEdges one-call adopt helper", () => {
     }
     ink.dispose();
     assert.equal(tracked.length, 0);
+  });
+});
+
+
+describe("hacker pass c9: Imagine post-release load race", () => {
+  it("setImagineNodeMap no-ops after markImagineNodeReleased (late TextureLoader)", () => {
+    const mat = createImagineNodeMaterial();
+    assert.equal(isImagineNodeReleased(mat), false);
+    // Fake a texture with valid dims
+    const fake = {
+      isTexture: true,
+      image: { width: 64, height: 64 },
+      needsUpdate: false,
+      dispose() {},
+      generateMipmaps: false,
+      minFilter: 0,
+      magFilter: 0,
+      wrapS: 0,
+      wrapT: 0,
+    } as unknown as import("three").Texture;
+    const ok = setImagineNodeMap(mat, fake);
+    assert.equal(ok.ok, true);
+    markImagineNodeReleased(mat);
+    assert.equal(isImagineNodeReleased(mat), true);
+    const late = setImagineNodeMap(mat, fake);
+    assert.equal(late.ok, false);
+    assert.equal(late.reason, "material-released");
+    assert.equal(mat.uniforms["uHasImage"]!.value, 1); // unchanged from prior bind — no rewrite required after release; released path returns early before mutate
+    mat.dispose();
+  });
+
+  it("releasePainterlyMaterial marks Imagine released before dispose", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+      createImagineNodeMaterial: (o?: object) => {
+        const m = createImagineNodeMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+    } as unknown as PainterlyKit;
+    const m = kit.createImagineNodeMaterial({});
+    assert.equal(releasePainterlyMaterial(kit, m), true);
+    assert.equal(isImagineNodeReleased(m), true);
+    const fake = {
+      isTexture: true,
+      image: { width: 32, height: 32 },
+      needsUpdate: false,
+      dispose() {},
+      generateMipmaps: false,
+    } as unknown as import("three").Texture;
+    const late = setImagineNodeMap(m, fake);
+    assert.equal(late.reason, "material-released");
+    assert.equal(tracked.length, 0);
+  });
+});
+
+describe("hacker pass c9: kit GPU texture budget", () => {
+  it("sanitizeTextureBudgetBytes clamps hostile budgets", () => {
+    assert.equal(sanitizeTextureBudgetBytes(NaN), PAINTER_TEXTURE_BUDGET_BYTES);
+    assert.ok(sanitizeTextureBudgetBytes(1) >= 2 * 1024 * 1024);
+    assert.ok(sanitizeTextureBudgetBytes(1e15) <= 256 * 1024 * 1024);
+  });
+
+  it("estimateTextureBytes reports RGBA footprint; missing dims → 0 (no fabricate)", () => {
+    const empty = estimateTextureBytes(null);
+    assert.equal(empty.bytes, 0);
+    const data = createPaperGrainTexture({ size: 64, seed: 1 });
+    const e = estimateTextureBytes(data);
+    assert.equal(e.width, 64);
+    assert.equal(e.height, 64);
+    // DataTexture generateMipmaps default false in three → exact 64*64*4
+    assert.ok(e.bytes === 64 * 64 * 4 || e.bytes === Math.floor(64 * 64 * 4 * 1.333333));
+    data.dispose();
+  });
+
+  it("painterlyKitTextureBudget sums paper+star and flags overBudget vs tiny cap", () => {
+    const paper = createPaperGrainTexture({ size: 128, seed: 2 });
+    const star = { image: { width: 128, height: 128 }, generateMipmaps: false, dispose() {} };
+    const kit = {
+      paperGrainTexture: paper,
+      starSpriteTexture: star,
+      tracked: [],
+      trackedSkies: [],
+      textureBindings: [],
+      disposed: false,
+      textureBudgetBytes: 1000, // tiny → over budget
+    } as unknown as PainterlyKit;
+    const report = painterlyKitTextureBudget(kit);
+    assert.ok(report.bytes > 0);
+    assert.equal(report.budget, 1000);
+    assert.equal(report.overBudget, true);
+    assert.ok(report.items.some((i) => i.id === "paperGrain"));
+    paper.dispose();
+  });
+});
+
+describe("painter c9: createLaneNebulae one-call adopt helper", () => {
+  it("replaces MeshBasic lane spheres with health-tinted wash mats; dispose releases", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+    } as unknown as PainterlyKit;
+    const neb = createPainterlyLaneNebulae(kit, [
+      { health: "healthy", center: [0, 0, 0] },
+      { health: "blocked", center: [5, 1, -2], radius: 3 },
+      { health: "idle", center: [-4, 0, 2] },
+    ]);
+    assert.equal(neb.count, 3);
+    assert.equal(tracked.length, 3);
+    assert.ok(tracked.every((m) => m.name === "LaneNebulaMaterial"));
+    neb.tick(2);
+    assert.equal(tracked[0]!.uniforms["uTime"]!.value, 2);
+    neb.update([{ health: "stalled", center: [1, 1, 1] }]);
+    assert.equal(neb.count, 1);
+    assert.equal(tracked.length, 1);
+    neb.dispose();
+    assert.equal(tracked.length, 0);
+    assert.equal(neb.group.children.length, 0);
+    // idle opacity lower than active — create single mats
+    const idle = createLaneNebulaMaterial({ health: "idle", opacity: 0.1 });
+    const hot = createLaneNebulaMaterial({ health: "healthy", opacity: 0.32 });
+    assert.ok((idle.uniforms["uOpacity"]!.value as number) < (hot.uniforms["uOpacity"]!.value as number));
+    assert.ok((hot.uniforms["uHealth"]!.value as { g: number }).g > 0.5);
+    idle.dispose();
+    hot.dispose();
   });
 });

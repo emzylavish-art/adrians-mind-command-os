@@ -307,6 +307,8 @@ export function createImagineNodeMaterial(opts: ImagineNodeOptions = {}): THREE.
   (mat.userData as Record<string, unknown>).imagineMapError = null;
   (mat.userData as Record<string, unknown>).imagineOwnedMap = null;
   (mat.userData as Record<string, unknown>).maxTextureSize = opts.maxTextureSize;
+  (mat.userData as Record<string, unknown>).imagineReleased = false;
+  (mat.userData as Record<string, unknown>).imagineGeneration = 0;
   setImagineNodePaperMap(mat, opts.paperMap ?? null);
   setImagineNodeMap(mat, opts.map ?? null, { maxTextureSize: opts.maxTextureSize });
   return mat;
@@ -329,11 +331,38 @@ function disposeOwnedImagineMap(mat: THREE.ShaderMaterial): void {
  * On failure: wash fallback (uHasImage=0) AND mat.userData.imagineMapError set (not hidden).
  * Never disposes the caller's original Texture; disposes prior owned downscales.
  */
+/** True when material was released/disposed — late TextureLoader callbacks must no-op. */
+export function isImagineNodeReleased(mat: THREE.ShaderMaterial): boolean {
+  if ((mat as { disposed?: boolean }).disposed) return true;
+  return !!(mat.userData as Record<string, unknown>).imagineReleased;
+}
+
+/** Mark released so async portrait loads cannot rebind / allocate owned downscales. */
+export function markImagineNodeReleased(mat: THREE.ShaderMaterial): void {
+  (mat.userData as Record<string, unknown>).imagineReleased = true;
+  const gen = Number((mat.userData as Record<string, unknown>).imagineGeneration ?? 0);
+  (mat.userData as Record<string, unknown>).imagineGeneration = (Number.isFinite(gen) ? gen : 0) + 1;
+}
+
 export function setImagineNodeMap(
   mat: THREE.ShaderMaterial,
   map: THREE.Texture | null | undefined,
   opts: ImagineTextureSanitizeOptions = {},
 ): ImagineTextureSanitizeResult {
+  // HACKER (c9): race — TextureLoader may finish after rebuild released this material.
+  // Must not write uniforms or allocate owned downscales onto a dead material.
+  if (isImagineNodeReleased(mat)) {
+    return {
+      ok: false,
+      texture: null,
+      reason: "material-released",
+      width: 0,
+      height: 0,
+      npot: false,
+      downscaled: false,
+      owned: false,
+    };
+  }
   if (!mat.uniforms?.["uImage"] || !mat.uniforms?.["uHasImage"]) {
     return {
       ok: false,
@@ -356,6 +385,22 @@ export function setImagineNodeMap(
     mat.uniforms["uHasImage"].value = 0;
     (mat.userData as Record<string, unknown>).imagineMapError = result.reason ?? "rejected";
     return result;
+  }
+  // Re-check after sanitize/downscale — release may have won the race mid-flight.
+  if (isImagineNodeReleased(mat)) {
+    if (result.owned) {
+      try { result.texture.dispose(); } catch { /* */ }
+    }
+    return {
+      ok: false,
+      texture: null,
+      reason: "material-released",
+      width: result.width,
+      height: result.height,
+      npot: result.npot,
+      downscaled: result.downscaled,
+      owned: false,
+    };
   }
   mat.uniforms["uImage"].value = result.texture;
   mat.uniforms["uHasImage"].value = 1;
