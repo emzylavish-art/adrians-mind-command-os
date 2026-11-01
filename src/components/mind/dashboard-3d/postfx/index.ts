@@ -48,6 +48,8 @@ export {
 export {
   createContextLossRecovery,
   type ContextLossCanvas,
+  type ContextLossError,
+  type ContextLossErrorStage,
   type ContextLossHandle,
   type CreateContextLossOpts,
   type PostfxBundle,
@@ -79,3 +81,19 @@ export {
   projectedRadiusUv,
   type FocusBloomGuardHandle,
 } from "./focus-bloom-guard.ts";
+export {
+  DIM_EASE_MS,
+  DIM_FEATHER_PX,
+  DIM_MAX,
+  DIM_MAX_RECTS,
+  DIM_PAD_PX,
+  DetailBackdropDimShader,
+  createDetailBackdropDimPass,
+  dimFactor,
+  rectMask,
+  rectToUv,
+  type DetailBackdropDimHandle,
+  type RectLike,
+  type UvRect,
+  type ViewportLike,
+} from "./detail-backdrop-dim.ts";

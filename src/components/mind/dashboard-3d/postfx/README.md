@@ -128,3 +128,41 @@ bloomGuard.tick(dtMs);
 // unmount: bloomGuard.dispose() (also auto-tears down if bloom is disposed first)
 ```
 Also add `postfx/depth-validity.test.ts`, `postfx/exposure-retarget.test.ts`, `postfx/focus-bloom-guard.test.ts` to `npm test`.
+
+## Hacker-pass notes (#60 cycle) — context-loss never freezes on a throwing dispose/rebuild
+- Before: `disposeBundle` called each handle's `dispose()` in sequence with no isolation, and `onRestored` ran it again before `factory()`. One throwing dispose (or a throwing factory) aborted the chain: later handles' render targets leaked and `lost` stayed `true` forever. universe-scene returns early from the render loop while `postfxRecovery.lost`, so the dashboard froze permanently on the last-frame snapshot with the error only reaching window.onerror.
+- Now: refs are cleared before disposal, every dispose is isolated, failures go to `opts.onError(stage, err)` (default `console.error`) and `recovery.lastError`; a throwing factory still clears `lost` (loop resumes with nullish handles → existing `?? handle` fallbacks) and leaves an empty bundle. Test: `postfx/context-loss-throw.test.ts`.
+- Wiring (optional): `createContextLossRecovery({ ..., onError: (stage, e) => reportDashboardError("postfx-" + stage, e) })`.
+
+## #60 Detail-card backdrop dim (postfx) + Imagine portrait colour bounce (atmosphere) — wire-up for Dashboard Bot
+
+```ts
+import { createDetailBackdropDimPass, projectedRadiusUv } from "./postfx";
+import { createPortraitBounce, portraitTextureOf } from "./atmosphere";
+
+// Composer: AFTER grade, BEFORE kit.painterlyPass (dims final-tone brightness only).
+const detailDim = createDetailBackdropDimPass();
+composer.addPass(detailDim.pass);
+// include in rebuildPostfxBundle()'s return: { ..., detailDim } (context-loss disposes it)
+
+// Scene light (re-create on webglcontextrestored like focusLight):
+let portraitBounce = createPortraitBounce(scene);
+
+// Per frame, inside the Light #56 focus block:
+const tex = focusedVis ? portraitTextureOf(cardPlaneOf(focusedVis).material) : null; // card plane's ImagineNode material
+portraitBounce.setFocus(focusedVis ? { position: focusedVis.mesh.position, camera: camera.position, texture: tex } : null, { reducedMotion });
+portraitBounce.tick(dtMs);
+
+// Whenever detail card / chart opens, closes, resizes, scrolls (CSS px, canvas client rect):
+const vp = renderer.domElement.getBoundingClientRect();
+detailDim.setRects([detailCardEl?.getBoundingClientRect(), chartEl?.getBoundingClientRect()], vp, { reducedMotion });
+// Keep the focused portrait undimmed if it sits under the card (#57 radius):
+detailDim.setHole(focusedVis?.mesh.position ?? null, camera, focusedVis ? projectedRadiusUv(focusedVis.mesh.position, cardRadiusWorld, camera) : null);
+detailDim.tick(dtMs);
+// unmount: detailDim.dispose(); portraitBounce.dispose();
+```
+
+- Bounce colour comes ONLY from the loaded texture's pixels (16×16 downsample, alpha-weighted, linear). Unloaded / missing / tainted (CORS) → neutral white fill; failures land on `portraitBounce.lastSampleError`. Cached per texture+version (one readback per portrait).
+- Bounce intensity 3.2 (vs #56 key 12 / rim 14) — fill only. Reduced motion snaps level + colour.
+- Dim: luminance-weighted (pixels below 0.12 luma untouched, ≥0.55 dimmed up to 50%), 28px CSS feather, 10px pad, ≤2 rects. Rects are CSS px → DPR/resize safe; pass disabled (zero cost) with no rects. Eases 220ms; reduced motion snaps.
+- Tests to add to `npm test`: `postfx/{context-loss-throw,detail-backdrop-dim}.test.ts`, `atmosphere/portrait-bounce.test.ts` (plus the #57 list: `postfx/{depth-validity,exposure-retarget,focus-bloom-guard}.test.ts`).
