@@ -1,19 +1,70 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { hmacHex, safeEqualHex } from "./crypto.ts";
+import { readManagementKey } from "./management-key.ts";
 
 export type AgentManifest = {
   files: Record<string, string>; // relative path -> sha256 hex
   version: string;
+  /** HMAC-SHA256 over canonical file list, keyed by management key (or derived). */
+  signature?: string;
+  signedAt?: string;
 };
 
 export function hashContent(content: string | Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+/** Canonical bytes signed: version + sorted "path:hash" lines. */
+export function canonicalManifestPayload(manifest: Pick<AgentManifest, "version" | "files">): string {
+  const lines = Object.keys(manifest.files)
+    .sort()
+    .map((k) => `${k}:${manifest.files[k]!.toLowerCase()}`);
+  return `mind-agent-manifest|v=${manifest.version}|${lines.join("|")}`;
+}
+
+export function signAgentManifest(
+  files: Record<string, string>,
+  version = "1",
+  now = Date.now(),
+): { ok: true; manifest: AgentManifest } | { ok: false; error: string } {
+  const key = readManagementKey();
+  if (!key.ok) return key;
+  const base: AgentManifest = { version, files: { ...files } };
+  const payload = canonicalManifestPayload(base);
+  const signature = hmacHex(key.key, payload);
+  return {
+    ok: true,
+    manifest: {
+      ...base,
+      signature,
+      signedAt: new Date(now).toISOString(),
+    },
+  };
+}
+
+export function verifyAgentManifestSignature(
+  manifest: AgentManifest,
+): { ok: true } | { ok: false; error: string } {
+  const key = readManagementKey();
+  if (!key.ok) return key;
+  if (!manifest.signature) return { ok: false, error: "Manifest signature missing." };
+  const expected = hmacHex(key.key, canonicalManifestPayload(manifest));
+  if (!safeEqualHex(expected, manifest.signature)) {
+    return { ok: false, error: "Manifest signature invalid (tampered or wrong key)." };
+  }
+  return { ok: true };
+}
+
 export function verifyAgentFiles(
   rootFiles: Record<string, string>,
   manifest: AgentManifest,
+  opts?: { requireSignature?: boolean },
 ): { ok: true } | { ok: false; error: string; mismatched: string[] } {
+  if (opts?.requireSignature !== false) {
+    const sig = verifyAgentManifestSignature(manifest);
+    if (!sig.ok) return { ok: false, error: sig.error, mismatched: [] };
+  }
   const mismatched: string[] = [];
   for (const [rel, expected] of Object.entries(manifest.files)) {
     const actual = rootFiles[rel];

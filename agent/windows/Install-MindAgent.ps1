@@ -123,14 +123,31 @@ function Get-Sha256([string]$Path) {
   $hash = Get-FileHash -Algorithm SHA256 -Path $Path
   return $hash.Hash.ToLowerInvariant()
 }
-$manifest = @{
-  version = "1"
-  files = @{
-    "MindAgent.ps1" = (Get-Sha256 $AgentScript)
-    "Emergency-Stop.ps1" = (Get-Sha256 $StopScript)
+# Fetch server-signed manifest (signature verified server-side via management key)
+$manifestUri = ($DashboardUrl.TrimEnd("/") + "/api/mind/pairing/manifest")
+try {
+  $remote = Invoke-RestMethod -Method Get -Uri $manifestUri
+} catch {
+  throw "Could not fetch signed agent manifest from dashboard. $($_.Exception.Message)"
+}
+if (-not $remote.ok -or -not $remote.manifest) { throw "Dashboard did not return a signed agent manifest." }
+$localHashes = @{
+  "MindAgent.ps1" = (Get-Sha256 $AgentScript)
+  "Emergency-Stop.ps1" = (Get-Sha256 $StopScript)
+}
+foreach ($name in @("MindAgent.ps1", "Emergency-Stop.ps1")) {
+  $expected = $remote.manifest.files.$name
+  if (-not $expected) { throw "Signed manifest missing $name" }
+  if ($localHashes[$name].ToLowerInvariant() -ne $expected.ToLowerInvariant()) {
+    throw "Agent file hash mismatch for $name — refusing to install (tamper/hijack)."
   }
 }
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $AgentRoot "agent.manifest.json") -Encoding utf8
+# Server-side signature verification of the bundle we are about to run
+$verifyUri = ($DashboardUrl.TrimEnd("/") + "/api/mind/pairing/manifest?op=verify")
+$verifyBody = @{ manifest = $remote.manifest; localFiles = $localHashes } | ConvertTo-Json -Depth 6
+$verified = Invoke-RestMethod -Method Post -Uri $verifyUri -Body $verifyBody -ContentType "application/json"
+if (-not $verified.ok) { throw "Manifest signature verification failed: $($verified.error)" }
+$remote.manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $AgentRoot "agent.manifest.json") -Encoding utf8
 
 # Local control plane shared secret (localhost only). DLL/PATH: prefer absolute powershell path.
 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()

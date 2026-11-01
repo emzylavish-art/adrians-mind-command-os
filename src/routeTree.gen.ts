@@ -18,6 +18,7 @@ import { Route as ApiMindPairingActionRouteImport } from './routes/api/mind/pair
 import { Route as ApiMindPairingCodeRouteImport } from './routes/api/mind/pairing/code'
 import { Route as ApiMindPairingHandshakeRouteImport } from './routes/api/mind/pairing/handshake'
 import { Route as ApiMindPairingHeartbeatRouteImport } from './routes/api/mind/pairing/heartbeat'
+import { Route as ApiMindPairingManifestRouteImport } from './routes/api/mind/pairing/manifest'
 import { Route as ApiMindPairingStatusRouteImport } from './routes/api/mind/pairing/status'
 import { Route as ApiMindPairingStopRouteImport } from './routes/api/mind/pairing/stop'
 
@@ -66,6 +67,11 @@ const ApiMindPairingHeartbeatRoute = ApiMindPairingHeartbeatRouteImport.update({
   path: '/api/mind/pairing/heartbeat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindPairingManifestRoute = ApiMindPairingManifestRouteImport.update({
+  id: '/api/mind/pairing/manifest',
+  path: '/api/mind/pairing/manifest',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindPairingStatusRoute = ApiMindPairingStatusRouteImport.update({
   id: '/api/mind/pairing/status',
   path: '/api/mind/pairing/status',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
   '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/manifest': typeof ApiMindPairingManifestRoute
   '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
   '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
 }
@@ -100,6 +107,7 @@ export interface FileRoutesByTo {
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
   '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/manifest': typeof ApiMindPairingManifestRoute
   '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
   '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
 }
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
   '/api/mind/pairing/heartbeat': typeof ApiMindPairingHeartbeatRoute
+  '/api/mind/pairing/manifest': typeof ApiMindPairingManifestRoute
   '/api/mind/pairing/status': typeof ApiMindPairingStatusRoute
   '/api/mind/pairing/stop': typeof ApiMindPairingStopRoute
 }
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
     | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/manifest'
     | '/api/mind/pairing/status'
     | '/api/mind/pairing/stop'
   fileRoutesByTo: FileRoutesByTo
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
     | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/manifest'
     | '/api/mind/pairing/status'
     | '/api/mind/pairing/stop'
   id:
@@ -155,6 +166,7 @@ export interface FileRouteTypes {
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
     | '/api/mind/pairing/heartbeat'
+    | '/api/mind/pairing/manifest'
     | '/api/mind/pairing/status'
     | '/api/mind/pairing/stop'
   fileRoutesById: FileRoutesById
@@ -169,6 +181,7 @@ export interface RootRouteChildren {
   ApiMindPairingCodeRoute: typeof ApiMindPairingCodeRoute
   ApiMindPairingHandshakeRoute: typeof ApiMindPairingHandshakeRoute
   ApiMindPairingHeartbeatRoute: typeof ApiMindPairingHeartbeatRoute
+  ApiMindPairingManifestRoute: typeof ApiMindPairingManifestRoute
   ApiMindPairingStatusRoute: typeof ApiMindPairingStatusRoute
   ApiMindPairingStopRoute: typeof ApiMindPairingStopRoute
 }
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindPairingHeartbeatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/pairing/manifest': {
+      id: '/api/mind/pairing/manifest'
+      path: '/api/mind/pairing/manifest'
+      fullPath: '/api/mind/pairing/manifest'
+      preLoaderRoute: typeof ApiMindPairingManifestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/pairing/status': {
       id: '/api/mind/pairing/status'
       path: '/api/mind/pairing/status'
@@ -265,6 +285,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindPairingCodeRoute: ApiMindPairingCodeRoute,
   ApiMindPairingHandshakeRoute: ApiMindPairingHandshakeRoute,
   ApiMindPairingHeartbeatRoute: ApiMindPairingHeartbeatRoute,
+  ApiMindPairingManifestRoute: ApiMindPairingManifestRoute,
   ApiMindPairingStatusRoute: ApiMindPairingStatusRoute,
   ApiMindPairingStopRoute: ApiMindPairingStopRoute,
 }

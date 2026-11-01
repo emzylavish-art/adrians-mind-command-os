@@ -12,7 +12,7 @@ import { fingerprintPublicKey, makeBindingChallenge, hmacBindingProof } from "./
 import { isPathInScope, isCommandInScope } from "./scope.ts";
 import { assertPinnedOrigin, agentMustUseTls } from "./transport.ts";
 import { redactSecretsFromOutput } from "./redact.ts";
-import { verifyAgentFiles, localControlAuth, hashContent } from "./integrity.ts";
+import { verifyAgentFiles, localControlAuth, hashContent, signAgentManifest } from "./integrity.ts";
 import { handshakeRateLimited, recordHandshakeAttempt, HANDSHAKE_MAX_FAILURES } from "./rate-limit.ts";
 import { engageDeviceEmergencyStop, clearDeviceEmergencyStop, localStopCheck } from "./emergency-stop.ts";
 import { approvalTokenFor } from "../policy.ts";
@@ -227,12 +227,12 @@ describe("adversarial pairing hardening", () => {
 
   it("detects tampered agent files via manifest hash", () => {
     const mind = "Write-Host hello";
-    const manifest = {
-      version: "1",
-      files: { "MindAgent.ps1": hashContent(mind) },
-    };
-    assert.equal(verifyAgentFiles({ "MindAgent.ps1": hashContent(mind) }, manifest).ok, true);
-    assert.equal(verifyAgentFiles({ "MindAgent.ps1": hashContent("malicious") }, manifest).ok, false);
+    const files = { "MindAgent.ps1": hashContent(mind) };
+    const signed = signAgentManifest(files);
+    assert.equal(signed.ok, true);
+    if (!signed.ok) return;
+    assert.equal(verifyAgentFiles(files, signed.manifest).ok, true);
+    assert.equal(verifyAgentFiles({ "MindAgent.ps1": hashContent("malicious") }, signed.manifest).ok, false);
   });
 
   it("local control port must be localhost and authenticated", () => {

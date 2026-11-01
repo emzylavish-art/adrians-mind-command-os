@@ -20,6 +20,7 @@ export {
   signDeviceAction,
   verifyAndAuthorizeAction,
   reportActionOutcome,
+  executeDeviceActionWithReport,
   deviceBindingHelpers,
 } from "./actions.ts";
 export {
@@ -47,5 +48,13 @@ export {
 } from "./binding.ts";
 export { assertPinnedOrigin, agentMustUseTls } from "./transport.ts";
 export { redactSecretsFromOutput, safeLogLine } from "./redact.ts";
-export { verifyAgentFiles, localControlAuth, hashContent, loadManifestFromJson } from "./integrity.ts";
+export {
+  verifyAgentFiles,
+  localControlAuth,
+  hashContent,
+  loadManifestFromJson,
+  signAgentManifest,
+  verifyAgentManifestSignature,
+  canonicalManifestPayload,
+} from "./integrity.ts";
 export { handshakeRateLimited, mintRateLimited, recordHandshakeAttempt } from "./rate-limit.ts";
