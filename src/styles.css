@@ -3568,3 +3568,28 @@ header .flex.items-center.gap-1,
 header button.grid {
   vertical-align: middle;
 }
+
+/* —— Cycle 32 / item 9: expanded composer as keyboard-anchored bottom sheet —— */
+@media (max-width: 767.98px) {
+  .composer-dock:focus-within,
+  .composer-dock[data-expanded="true"],
+  .floating-composer:focus-within,
+  .floating-composer[data-expanded="true"],
+  [data-composer="floating"]:focus-within {
+    position: fixed !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    bottom: calc(2.75rem + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    z-index: 45 !important;
+    max-height: min(58vh, 28rem) !important;
+    overflow: auto !important;
+    border-bottom-left-radius: 1.1rem !important;
+    border-bottom-right-radius: 1.1rem !important;
+    transform: translateY(0) !important;
+  }
+  .composer-dock:focus-within textarea,
+  .floating-composer:focus-within textarea {
+    min-height: 6.5rem !important;
+  }
+}
