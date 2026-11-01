@@ -69,6 +69,26 @@ export function statsAtFocus(
   return null;
 }
 
+export type LiftBackdropSource = "card" | "panel";
+
+/**
+ * #84: backdrop stats for the key lift. Prefers the focused card's OWN
+ * metered rect (detailDim.setCardProbe(true) → contrast.card), which exists
+ * even when no detail card / chart sits behind the Imagine scene; falls back
+ * to the #83 panel rect containing the card. Nothing fresh → null.
+ */
+export function liftBackdrop(
+  report: (Pick<ContrastReport, "perRect"> & Partial<Pick<ContrastReport, "card">>) | null | undefined,
+  rects: readonly UvRect[] | null | undefined,
+  focusUv: readonly [number, number] | null | undefined,
+): { stats: LuminanceStats; source: LiftBackdropSource } | null {
+  if (!report) return null;
+  const card = report.card?.stats;
+  if (card && Number.isFinite(card.mean) && card.samples > 0) return { stats: card, source: "card" };
+  const panel = statsAtFocus(report, rects, focusUv);
+  return panel ? { stats: panel, source: "panel" } : null;
+}
+
 export const SceneKeyLiftShader = {
   name: "SceneKeyLiftShader",
   uniforms: {
@@ -114,6 +134,8 @@ export type SceneKeyLiftReport = {
   targetGain: number;
   gain: number;
   backdropMean: number | null;
+  /** #84: which metered rect drove the gain (null = no lift). */
+  backdropSource?: LiftBackdropSource | null;
 };
 
 export type SceneKeyLiftHandle = {
@@ -121,7 +143,10 @@ export type SceneKeyLiftHandle = {
   /** Focused Imagine card (world pos) + projected radius uv; null clears (fades out). */
   setFocus: (world: THREE.Vector3 | null, camera: THREE.Camera | null, radiusUv?: number | null) => void;
   /** Fresh measured stats under the card (statsAtFocus(dim.contrast, dim.rects, uv)); null → no lift. */
-  setBackdrop: (stats: LuminanceStats | null | undefined, opts?: { reducedMotion?: boolean }) => void;
+  setBackdrop: (
+    stats: LuminanceStats | null | undefined,
+    opts?: { reducedMotion?: boolean; source?: LiftBackdropSource | null },
+  ) => void;
   /** Focus centre uv when visible (feed to statsAtFocus), else null. */
   readonly focusUv: [number, number] | null;
   readonly report: SceneKeyLiftReport;
@@ -140,6 +165,7 @@ export function createSceneKeyLiftPass(): SceneKeyLiftHandle {
   let gain = 0;
   let reduced = false;
   let mean: number | null = null;
+  let source: LiftBackdropSource | null = null;
 
   const apply = () => {
     u.gain.value = disposed ? 0 : gain;
@@ -178,6 +204,7 @@ export function createSceneKeyLiftPass(): SceneKeyLiftHandle {
       const g = focused ? keyLiftGain(stats) : 0;
       targetGain = g;
       mean = g > 0 && stats ? stats.mean : null;
+      source = g > 0 ? (opts.source ?? "panel") : null;
       if (reduced) {
         gain = targetGain;
         apply();
@@ -187,7 +214,7 @@ export function createSceneKeyLiftPass(): SceneKeyLiftHandle {
       return focusUv ? ([focusUv[0], focusUv[1]] as [number, number]) : null;
     },
     get report() {
-      return { source: (targetGain > 0 ? "measured" : "none") as SceneKeyLiftReport["source"], targetGain, gain: disposed ? 0 : gain, backdropMean: mean };
+      return { source: (targetGain > 0 ? "measured" : "none") as SceneKeyLiftReport["source"], targetGain, gain: disposed ? 0 : gain, backdropMean: mean, backdropSource: targetGain > 0 ? source : null };
     },
     tick(dtMs) {
       if (disposed) return;

@@ -28,7 +28,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, formatMeterBadge, statsAtFocus, projectedRadiusUv, parseCssColor } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -998,6 +998,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       let nextDetailDim: typeof detailDimHandle = null;
       try {
         nextDetailDim = createDetailBackdropDimPass();
+        nextDetailDim.setCardProbe(true); // Light #84/#92 — meter focused Imagine card rect
         composer.addPass(nextDetailDim.pass);
       } catch {
         nextDetailDim = null;
@@ -1901,10 +1902,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             if (focusedVis) {
               const rad = projectedRadiusUv(focusedVis.mesh.position, cardRadiusWorld, camera);
               lift.setFocus(focusedVis.mesh.position, camera, rad);
-              lift.setBackdrop(
-                statsAtFocus(liveDetailDim?.contrast ?? null, liveDetailDim?.rects ?? null, lift.focusUv),
-                { reducedMotion },
-              );
+              {
+                const b = liftBackdrop(
+                  liveDetailDim?.contrast ?? null,
+                  liveDetailDim?.rects ?? null,
+                  lift.focusUv,
+                );
+                lift.setBackdrop(b?.stats ?? null, { reducedMotion, source: b?.source ?? null });
+              }
             } else {
               lift.setFocus(null, camera, null);
               lift.setBackdrop(null, { reducedMotion });

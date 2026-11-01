@@ -15,7 +15,11 @@ export type MeterBadge = {
 const fmt = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "?");
 
 export function formatMeterBadge(
-  contrast: Pick<ContrastReport, "source" | "backdropLum" | "lastError" | "reads" | "backoff"> | null | undefined,
+  contrast:
+    | (Pick<ContrastReport, "source" | "backdropLum" | "lastError" | "reads" | "backoff"> &
+        Partial<Pick<ContrastReport, "card" | "cardProbe">>)
+    | null
+    | undefined,
   lift?: SceneKeyLiftReport | null,
 ): MeterBadge {
   if (!contrast) return { text: "dim: off", level: "idle" };
@@ -25,12 +29,20 @@ export function formatMeterBadge(
       ? `dim measured p90 ${fmt(contrast.backdropLum)}`
       : "dim static (no reading)",
   );
+  // #84: card-vs-panel — the focused card's own rect, reported separately.
+  if (contrast.card) parts.push(`card mean ${fmt(contrast.card.stats.mean)} p90 ${fmt(contrast.card.stats.p90)}`);
+  else if (contrast.cardProbe) parts.push("card no reading");
   const b = contrast.backoff;
   parts.push(b && b.lastLatencyMs !== null ? `read ${Math.round(b.lastLatencyMs)}ms` : "no read yet");
   if (b && b.multiplier > 1) parts.push(`×${b.multiplier} ${b.reason ?? "backoff"} (${Math.round(b.intervalMs)}ms)`);
   if (contrast.lastError) parts.push(`err ${contrast.lastError}`);
   parts.push(`${contrast.reads} reads`);
-  if (lift) parts.push(lift.source === "measured" ? `key +${fmt(lift.targetGain)}` : "key off");
+  if (lift)
+    parts.push(
+      lift.source === "measured"
+        ? `key +${fmt(lift.targetGain)}${lift.backdropSource ? ` (${lift.backdropSource})` : ""}`
+        : "key off",
+    );
   const warn = (b && b.multiplier > 1) || !!contrast.lastError;
   const level = warn ? "warn" : contrast.source === "measured" ? "ok" : "idle";
   return { text: parts.join(" · "), level };
