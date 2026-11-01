@@ -129,6 +129,15 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     [ensureSession],
   );
 
+  const sendSessionContext = useCallback(
+    (text: string) => {
+      const session = ensureSession();
+      if (!session.isActive) return false;
+      return session.sendSessionContext(text);
+    },
+    [ensureSession],
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -151,7 +160,7 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     });
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "hidden" && isLiveVoiceOccupied()) {
         sessionRef.current?.end();
@@ -184,6 +193,7 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     toggleSpeaker,
     setOutputVolume,
     sendText,
+    sendSessionContext,
     sessionRef,
     lastTranscript: () => sessionRef.current?.lastTranscript ?? "",
   };

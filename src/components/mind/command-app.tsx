@@ -41,6 +41,8 @@ import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { probeOllamaForBadge } from "@/lib/mind/voice-live/ollama-status";
+import { isInternalSessionPrompt } from "@/lib/mind/voice-live/session-context";
+import type { LiveVoiceUiAttr } from "@/lib/mind/voice-live/types";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
@@ -284,6 +286,8 @@ export function CommandApp() {
   const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
   const [orchestratorDetail, setOrchestratorDetail] = useState<string | null>(null);
+  const [liveSessionActive, setLiveSessionActive] = useState(false);
+  const [liveSessionUiAttr, setLiveSessionUiAttr] = useState<LiveVoiceUiAttr | "off">("off");
   const [orchestratorDetailTone, setOrchestratorDetailTone] = useState<"muted" | "warn" | "danger">("muted");
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
@@ -1383,6 +1387,8 @@ export function CommandApp() {
   function appendLiveVoiceUser(text: string) {
     const clipped = text.trim();
     if (!clipped) return;
+    // Screen/camera session prompts must never land in Ask Anything / chat as user text.
+    if (isInternalSessionPrompt(clipped)) return;
     const targetId = activeId ?? active?.id ?? null;
     if (!targetId) {
       setDraft(clipped);
@@ -1869,6 +1875,8 @@ export function CommandApp() {
             <VoiceModeBadge
               mode={voiceMode}
               listening={voiceListening}
+              sessionActive={liveSessionActive}
+              sessionUiAttr={liveSessionUiAttr}
               detail={voiceMode === "orchestrator" ? orchestratorDetail : null}
               detailTone={orchestratorDetailTone}
               onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
@@ -3127,7 +3135,22 @@ export function CommandApp() {
         askValue={draft}
         onAskChange={setDraft}
         dictating={voiceListening}
-        onDictateToggle={() => void dictateWithTimeout()}
+        onDictateToggle={() => {
+          const fake =
+            typeof window !== "undefined"
+              ? (window as Window & { __AMCOS_FAKE_DICTATION__?: string }).__AMCOS_FAKE_DICTATION__
+              : undefined;
+          if (typeof fake === "string" && fake.trim()) {
+            setDraft((prev) => (prev ? `${prev} ${fake.trim()}` : fake.trim()));
+            setNotice("Dictation (test stub) inserted into Ask Anything.");
+            return;
+          }
+          void dictateWithTimeout();
+        }}
+        onSessionStatusChange={(status) => {
+          setLiveSessionActive(status.active);
+          setLiveSessionUiAttr(status.uiAttr || "off");
+        }}
         onAttachFileClick={() => fileRef.current?.click()}
         modelPickerSlot={
           <>

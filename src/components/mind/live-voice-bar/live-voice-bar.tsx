@@ -46,6 +46,7 @@ import {
   type FrameStreamHandle,
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape, shouldEndCallOnEscape } from "./settings-popover";
+import { LIVE_SCREEN_FRAME_PROMPT } from "@/lib/mind/voice-live/session-context";
 
 export type LiveVoiceBarProps = {
   isOverlayMicOpen: () => boolean;
@@ -62,6 +63,8 @@ export type LiveVoiceBarProps = {
   onAskChange?: (value: string) => void;
   modelPickerSlot?: ReactNode;
   onAttachFileClick?: () => void;
+  /** Mirror live session attr into the header badge (connecting / listening / …). */
+  onSessionStatusChange?: (status: { active: boolean; uiAttr: LiveVoiceUiAttr; label: string }) => void;
 };
 
 const PILL =
@@ -79,6 +82,15 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const inCall = live.active;
   const uiAttr: LiveVoiceUiAttr = live.uiAttr || "off";
   const dictationState = props.dictating ? "recording" : "idle";
+
+  const onSessionStatusChange = props.onSessionStatusChange;
+  useEffect(() => {
+    onSessionStatusChange?.({
+      active: Boolean(live.active),
+      uiAttr,
+      label: live.label,
+    });
+  }, [live.active, live.label, uiAttr, onSessionStatusChange]);
 
   const [localAsk, setLocalAsk] = useState("");
   const ask = props.askValue !== undefined ? props.askValue : localAsk;
@@ -221,12 +233,12 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       const prompt = [caption.trim() || "Describe this attached image briefly.", analysis ? `Vision summary: ${analysis}` : ""]
         .filter(Boolean)
         .join("\n");
-      const sent = live.sendText(prompt);
+      // Session context only — never fill Ask Anything / user transcript.
+      const sent = live.sendSessionContext(`(Attached image) ${prompt}`);
+      setAsk("");
       if (!sent) {
         props.onChatAttachText?.(prompt, "live-attach.jpg");
         props.onNotice?.("Attached to normal chat (live session was not open).");
-      } else {
-        live.sessionRef.current?.attachImageContext(jpegBase64, caption);
       }
     },
     [ensureLive, live, props],
@@ -315,7 +327,10 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           stream,
           async (b64) => {
             void b64;
-            if (live.active) live.sendText("(Live screen frame received — describe if relevant.)");
+            if (live.active) {
+              live.sendSessionContext(LIVE_SCREEN_FRAME_PROMPT);
+              setAsk("");
+            }
           },
           SCREEN_FRAME_INTERVAL_MS,
         );

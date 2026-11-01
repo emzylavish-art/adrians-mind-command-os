@@ -17,6 +17,7 @@ import type { VoiceRoutingMode } from "../voice/mode.ts";
 import { voiceModeLabel } from "../voice/mode.ts";
 import { liveVoiceInstructionsForMode, shouldSpeakOrchestratorResult } from "./mode-routing.ts";
 import { sanitizeVoiceTranscript } from "../voice/limits.ts";
+import { attachedImagePrompt, isInternalSessionPrompt } from "./session-context.ts";
 import {
   phaseToLabel,
   phaseToUiAttr,
@@ -282,6 +283,10 @@ export class LiveVoiceSession {
     const trimmed = text.trim().slice(0, 4000);
     if (!trimmed) return false;
     if (!this.open) return false;
+    // Defense: never treat internal frame prompts as user Ask/transcript.
+    if (isInternalSessionPrompt(trimmed)) {
+      return this.sendSessionContext(trimmed);
+    }
     this.send({
       type: "conversation.item.create",
       item: {
@@ -298,13 +303,34 @@ export class LiveVoiceSession {
   }
 
   /**
+   * Session-only context (screen/camera frames). Goes to the model without
+   * calling onUserTranscript / filling Ask Anything.
+   */
+  sendSessionContext(text: string) {
+    const trimmed = text.trim().slice(0, 4000);
+    if (!trimmed) return false;
+    if (!this.open) return false;
+    this.send({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: trimmed }],
+      },
+    });
+    this.send({ type: "response.create" });
+    this.setPhase("thinking");
+    return true;
+  }
+
+  /**
    * Attach image context. Native input_image is unsupported on grok-voice (ignored);
    * returns { native: false } so UI can run chat/vision fallback.
    */
   attachImageContext(_jpegBase64: string, caption?: string): { native: boolean; note: string } {
     void _jpegBase64;
     if (caption?.trim()) {
-      this.sendText(`(Attached image) ${caption.trim()}`);
+      this.sendSessionContext(attachedImagePrompt(caption));
     }
     return {
       native: false,
