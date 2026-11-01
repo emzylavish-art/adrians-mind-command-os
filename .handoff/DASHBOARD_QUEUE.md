@@ -146,7 +146,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion — camera dolly ease on star focus**~~ — **deferred (owned by Dashboard Bot)**: camera fly/dolly lives in `camera-rig.ts` / `stepRigSmooth` / flyover FSM (queue #1–#2). Motion c16 will not duplicate. Pair focus-ring with Dashboard glide.
 - ~~**Motion — star-field batch step helper**~~ — **done (Cosmos Motion Bot c16)**: `star-batch.ts` + CPU budget test (10k frames, mean ≪ 2ms). Hacker c16: CPU-only budget (not SwiftShader fps).
 - ~~**Motion — star pulse health-change crossfade**~~ — **done (Cosmos Motion Bot c17)**: `health-pulse-crossfade.ts` + star-batch harden (STAR_BATCH_MAX/holes/NaN/scratch dispose-reuse). Hacker c17: batch resize, id holes, count 0/100k, NaN bases, typed scratch after dispose.
-- **Motion — multi-focus soft neighbor drift damp** — when a star is focused, damp orbit-drift on 1-hop constellation neighbors (not only the focus star) so the local cluster settles for read; MotionClock; reduced-motion = no extra damp; keep health-xfade + star-batch APIs stable (Cosmos Motion Bot next).
+- ~~**Motion — multi-focus soft neighbor drift damp**~~ — **done (Cosmos Motion Bot c18)**: `neighbor-drift-damp.ts` + alloc harden (`STAR_BATCH_ORBIT_OPTS`, cpu-budget opts reuse; heapΔ ~4MB vs c16 ~14MB). Hacker c18: failing alloc-budget test + fix per-star orbit opts.
+- **Motion — focus-exit settle bloom** — after deselect, ease neighbor driftMul + focus pulse back with a shared settle tau so the cluster does not pop; reduced-motion snaps; keep neighbor-damp + star-batch APIs stable (Cosmos Motion Bot next).
 
 - **Painter — ink-wash constellation edge ribbons** — ShaderMaterial/Line2 ribbons replacing LineBasic edges; health-tinted wash; mediump-safe (next painter cycle).
 - **Painter — lore plaque text atlas** — procedural canvas glyph atlas for lock-note body text on plaques (no external fonts/assets).

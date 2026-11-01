@@ -18,7 +18,7 @@ import {
   type PulseHealth,
   type PulseSample,
 } from "./star-pulse.ts";
-import { sampleOrbitDrift, type Xyz } from "./orbit-drift.ts";
+import { sampleOrbitDrift, type OrbitDriftOpts, type Xyz } from "./orbit-drift.ts";
 import {
   applyFocusDrift,
   applyFocusPulse,
@@ -44,6 +44,12 @@ export type StarBatchOpts = {
 };
 
 const EMPTY_BATCH_OPTS: StarBatchOpts = Object.freeze({});
+
+/** Reused per-star orbit opts — never allocate `{ clock, radialAmp, bobAmp }` in the hot loop (c18). */
+export const STAR_BATCH_ORBIT_OPTS: OrbitDriftOpts = {
+  radialAmp: 0.35,
+  bobAmp: 0.2,
+};
 
 /**
  * Reusable scratch for Dashboard Bot: packed Float32 bases + object views.
@@ -253,6 +259,7 @@ export function stepStarFieldBatch(
     ),
   );
 
+  STAR_BATCH_ORBIT_OPTS.clock = clock;
   let stepped = 0;
   for (let i = 0; i < n; i++) {
     // Re-check live length in case caller shrunk arrays mid-frame.
@@ -274,11 +281,7 @@ export function stepStarFieldBatch(
     sampleStarPulse(pulse, tSeconds, ph, health, reducedMotion, clock);
     stepFocusEase(focusState, id, focusId, dt, reducedMotion);
     applyFocusPulse(pulse, focusState.pulseMul);
-    sampleOrbitDrift(pos, base, tSeconds, ph, reducedMotion, {
-      clock,
-      radialAmp: 0.35,
-      bobAmp: 0.2,
-    });
+    sampleOrbitDrift(pos, base, tSeconds, ph, reducedMotion, STAR_BATCH_ORBIT_OPTS);
     applyFocusDrift(pos, base, focusState.driftMul);
 
     // Belt: keep outs finite even if upstream ever regresses NaN handling.

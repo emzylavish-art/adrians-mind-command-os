@@ -352,6 +352,8 @@ Motion lane **does not edit `package.json`**. Please add these lane test files t
 - `src/components/mind/dashboard-3d/motion/focus-ring-breathe.test.ts`
 - `src/components/mind/dashboard-3d/motion/star-batch.test.ts`
 - `src/components/mind/dashboard-3d/motion/health-pulse-crossfade.test.ts`
+- `src/components/mind/dashboard-3d/motion/alloc-budget.test.ts`
+- `src/components/mind/dashboard-3d/motion/neighbor-drift-damp.test.ts`
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
 
@@ -394,3 +396,31 @@ Reduced-motion → snap. Camera dolly remains Dashboard-owned.
 - Keep one `HealthPulseCrossfadeState` per bot (parallel to focus-ease).
 - On status/health change call `setHealthPulseTarget`; each tick `step` + `sampleStarPulseCrossfaded` (or lerp after dual `sampleStarPulse`).
 - Register `health-pulse-crossfade.test.ts` in package.json test glob when landing (Motion lane does not edit package.json).
+
+## Neighbor drift damp (c18)
+
+After focus-ease / star-batch, soft-dampen 1-hop neighbors:
+
+```ts
+import {
+  collectOneHopNeighbors,
+  stepNeighborDriftDampBatch,
+} from "./motion";
+
+const neighbors = collectOneHopNeighbors(edgePairs, focusId); // rebuild when graph/focus changes
+stepNeighborDriftDampBatch(ids, focusStates, focusId, neighbors, dt, reducedMotion);
+// applyFocusDrift already uses focusStates[i].driftMul
+```
+
+Focused star stays fully pinned by `stepFocusEase`. Reduced-motion → neighbors get no extra damp.
+Camera dolly remains Dashboard-owned.
+
+### Alloc budget (c18 hacker)
+- `STAR_BATCH_ORBIT_OPTS` reused; no per-star `{ clock, radialAmp, bobAmp }`.
+- cpu-budget harness reuses opts; heapΔ budget 5MB (was ~14MB in c16).
+- Run alloc-budget tests with `node --expose-gc`.
+
+### Neighbor drift damp wiring (c18)
+- Build `edgePairs` from constellation edges; `collectOneHopNeighbors(edgePairs, rig.subjectId)` when focus/graph changes.
+- After star-batch / focus-ease, call `stepNeighborDriftDampBatch` so neighbor `driftMul` eases toward `NEIGHBOR_DRIFT_FLOOR`.
+- Register `alloc-budget.test.ts` + `neighbor-drift-damp.test.ts` in package.json test glob when landing (Motion lane does not edit package.json).
