@@ -157,3 +157,14 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Google: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_*_REDIRECT_URI` (or `GOOGLE_OAUTH_REDIRECT_URI`)
 - Slack: `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`, `SLACK_OAUTH_REDIRECT_URI`
 - GitHub: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`
+
+## 2026-11-01T14:45:02+01:00 (Africa/Lagos) — Error Banners Bot — connector status stuck fixed
+- Gap: ServiceBoard cards stuck on "Checking connection…" (GitHub/Gmail/Drive/Calendar/Slack); Notion "status could not be read" on preview/integration.
+- Lock: /workspace/locks/error-banners-gap-connector-status-stuck.lock — no ACTIVE exclusive claim on service-board.tsx. Did not touch connectors/ or OAuth routes.
+- Cause: failed/hung status fetches left oauth null; boardState(null) kept "Checking connection…" forever; no client timeout.
+- MCP 02b2703 already covered honest terminal copy for 401/403/5xx/network + boardForOauth undefined=checking.
+- This lane added: AbortSignal.timeout(10_000), explicit text→JSON non-JSON handling, in-flight Retry guard, Status unavailable chip + red card Retry, service-board-status.ts + 11 regression tests.
+- Commit on error-banners: eae5297 (from 58f8894). Not pushed.
+- Checks: typecheck pass; TS 333/333; scripts 198/202 (4 pre-existing .grok/skills/og); lint 0 errors; build pass.
+- Trial merge eae5297 + origin/mcp-integration: service-board kept as our superset; typecheck pass; TS 371 (1 MCP stdio timeout flake, re-run pass); build pass.
+- Lock releasing done.
