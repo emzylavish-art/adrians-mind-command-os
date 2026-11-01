@@ -167,4 +167,5 @@ Notion mirror append for OAuth gap succeeded on page 40bb95f3… (status done).
 - Commit on error-banners: eae5297 (from 58f8894). Not pushed.
 - Checks: typecheck pass; TS 333/333; scripts 198/202 (4 pre-existing .grok/skills/og); lint 0 errors; build pass.
 - Trial merge eae5297 + origin/mcp-integration: service-board kept as our superset; typecheck pass; TS 371 (1 MCP stdio timeout flake, re-run pass); build pass.
+- Notion: child page https://app.notion.com/p/40bb95f33e42811a969ee5efb98eae7a under mirror 40bb95f33e42814aacf8c3281b4f528d (parent insert_content rejected on oversized page; create-pages child used).
 - Lock releasing done.
