@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mind Command OS Tool Status",
+  "type": "object",
+  "required": [
+    "name",
+    "status",
+    "install",
+    "live"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "source-resolution-required",
+        "identified",
+        "reviewed",
+        "scaffolded",
+        "implemented",
+        "tested",
+        "live-verified",
+        "blocked",
+        "restricted",
+        "identity-unconfirmed"
+      ]
+    },
+    "install": {
+      "enum": [
+        "not-installed",
+        "installed",
+        "blocked"
+      ]
+    },
+    "live": {
+      "enum": [
+        "not-connected",
+        "connected",
+        "blocked"
+      ]
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "guardrail": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
