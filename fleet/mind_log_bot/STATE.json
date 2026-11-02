@@ -1,0 +1,12 @@
+{
+  "bot_id": "mind_log_bot",
+  "display_name": "Mind Log",
+  "status": "IDLE",
+  "last_task": null,
+  "last_result": null,
+  "last_error": null,
+  "failure_count": 0,
+  "halted": false,
+  "updated_at": null,
+  "cycle": 0
+}
