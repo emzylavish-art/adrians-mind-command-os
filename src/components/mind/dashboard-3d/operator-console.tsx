@@ -27,6 +27,8 @@ type Props = {
   onFlyBot: (botId: string) => void;
   onOpenNotion: (pageId: string) => void;
   onSelectBot: (bot: BotNode) => void;
+  /** Painter kit.textureBudget().budgetMeta.degraded — real over-budget only. */
+  painterBudgetDegraded?: boolean;
 };
 
 const HEALTHS: Array<Health | "all"> = ["all", "healthy", "stalled", "blocked", "idle"];
@@ -42,6 +44,7 @@ export function OperatorConsole({
   onFlyBot,
   onOpenNotion,
   onSelectBot,
+  painterBudgetDegraded = false,
 }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -119,6 +122,11 @@ export function OperatorConsole({
             Cmd/Ctrl-K · Esc closes · no shell / no lock writes
           </p>
         </div>
+        {painterBudgetDegraded ? (
+          <p className="dash3d-muted" data-testid="painter-budget-degraded" role="status" style={{ fontSize: "0.68rem", color: "#fbbf24" }}>
+            Painter texture budget degraded — grain/fiber reduced until under budget
+          </p>
+        ) : null}
         <input
           ref={inputRef}
           className="dash3d-operator-input"
