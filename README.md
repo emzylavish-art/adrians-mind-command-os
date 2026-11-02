@@ -15,6 +15,7 @@ The repository-native tools currently exposed to compatible AI runners are:
 - `team.queue` — durable SQLite job management.
 - `team.worker` — bounded worker using an explicit allowlist.
 - `team.agent.resolve` — specialist prompt resolution for host-side model execution.
+- `mcp.remote` — HTTPS remote MCP discovery/call bridge with explicit server and tool allowlists (no endpoints enabled by default).
 
 List the declared tools:
 
