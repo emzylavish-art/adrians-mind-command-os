@@ -53,6 +53,13 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result["result"]["status"], "ok")
         self.assertIn("team/health.py", result["evidence"])
 
+    def test_team_health_executes(self):
+        code, result = call({"operation": "invoke", "tool_id": "team.health", "input": {}})
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["result"]["status"], "ok")
+        self.assertIn("team/health.py", result["evidence"])
+
     def test_unavailable_tool_is_not_claimed_ready(self):
         code, result = call({"operation": "invoke", "tool_id": "gods-eyes", "input": {}})
         self.assertEqual(code, 0)
