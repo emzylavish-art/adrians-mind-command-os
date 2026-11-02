@@ -10,6 +10,8 @@ export const LorePlaqueShader = {
     uTime: { value: 0 },
     uPaper: { value: 0.22 },
     uWash: { value: 0.45 },
+    /** 1 = fresh lock ink; fades toward ~0.25 as claimed_at ages (never raw age). */
+    uInkDensity: { value: 0.85 },
     uTextMap: { value: null as unknown },
     uHasText: { value: 0 },
   },
@@ -29,6 +31,7 @@ export const LorePlaqueShader = {
     uniform float uTime;
     uniform float uPaper;
     uniform float uWash;
+    uniform float uInkDensity;
     uniform sampler2D uTextMap;
     uniform float uHasText;
     varying vec2 vUv;
@@ -37,6 +40,7 @@ export const LorePlaqueShader = {
     void main() {
       // parchment field
       float fiber = paintFbm(vUv * vec2(14.0, 22.0) + uTime * 0.02);
+      float dens = clamp(uInkDensity, 0.0, 1.0);
       float grain = (paintNoise(vUv * 110.0) - 0.5) * uPaper;
       vec3 parchment = mix(uBase, uBase * 1.35 + vec3(0.08, 0.06, 0.02), fiber * uWash);
       parchment += grain;
@@ -48,11 +52,11 @@ export const LorePlaqueShader = {
       parchment = mix(parchment * 0.82, parchment, vig);
       // title band
       float band = smoothstep(0.78, 0.82, vUv.y) * smoothstep(0.96, 0.90, vUv.y);
-      parchment = mix(parchment, mix(parchment, uInk * 0.15 + uAccent * 0.35, 0.55), band);
+      parchment = mix(parchment, mix(parchment, uInk * 0.15 + uAccent * 0.35, 0.55 * dens), band);
       // procedural canvas glyph atlas (painterly ink) — body text region
       if (uHasText > 0.5) {
         vec4 inkSample = texture2D(uTextMap, vUv);
-        float inkA = clamp(inkSample.a, 0.0, 1.0);
+        float inkA = clamp(inkSample.a, 0.0, 1.0) * dens;
         vec3 inkCol = mix(uInk * 0.35 + uAccent * 0.15, inkSample.rgb, 0.85);
         parchment = mix(parchment, inkCol, inkA * 0.92);
       }

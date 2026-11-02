@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 18)
+## Status vs origin/dashboard-3d (verified cycle 19)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -14,6 +14,7 @@ Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materi
 | `createBuildingBrushPool` post-dispose tombstone | optional c17/c18 | pool safe after dispose; city may adopt |
 | `textureBudget()` hysteresis | done in kit | degrade enter immediate; exit after 8 under-budget frames ×0.92 |
 | `createLorePlaqueMaterial` + text atlas | **done** | lock notes plaques |
+| `claimedAt` / `setLorePlaqueLockAge` + `setLorePlaqueNotesCached` | optional c19 | ink density+paper from real lock claimed_at; atlas fingerprint skips heartbeat churn |
 | `createInkEdges` | **done** | `rebuildEdges` (Dashboard Bot wired) |
 | `createLaneNebulae` | **done** | `rebuildNebulae` (Dashboard Bot wired) |
 | `setPassHealth` / `resizePass` | **done** | frame loop + `onResize` |
@@ -251,3 +252,21 @@ loader.load(
 - Missing/loading art uses lane+health wash (`imagineWashFromLaneHealth`) — never fabricates portraits.
 - Building pool: `materialForProgress` after `dispose()` returns a live tombstone (no undefined crash).
 - Budget degrade: enter on overBudget; exit only after `BUDGET_HYSTERESIS_FRAMES` under `budget×BUDGET_HYSTERESIS_RATIO`.
+
+
+## c19 — lore plaque ink density from real lock age
+
+```ts
+const loreMat = kit.createLorePlaqueMaterial({
+  accent: HEALTH_COLOR[bot.health],
+  claimedAt: bot.lock?.claimed_at, // real ISO / epoch; missing → neutral
+});
+// Heartbeat / poll: update age WITHOUT rebuilding atlas
+setLorePlaqueLockAge(loreMat, bot.lock?.claimed_at);
+// Notes: cached — identical text across heartbeats does not realloc canvas/GPU
+setLorePlaqueNotesCached(loreMat, bot.lock?.notes || bot.notes || "", { owned: true });
+```
+
+- `uInkDensity` + `uPaper` from sanitized age (future/malformed/missing → neutral; never NaN/negative).
+- Density saturates at stale floor — not a raw growing age counter.
+- Empty notes stay honest empty atlas (LORE_ATLAS_MIN).

@@ -97,6 +97,21 @@ import {
   setLorePlaqueTextAtlas,
   createLorePlaqueMaterial,
   disposeLorePlaqueOwnedAtlas,
+  parseLockClaimedAtMs,
+  lockAgeSecondsFromClaimedAt,
+  loreInkDensityFromAgeSeconds,
+  lorePaperFromAgeSeconds,
+  setLorePlaqueLockAge,
+  setLorePlaqueInkDensity,
+  loreNotesFingerprint,
+  setLorePlaqueNotesCached,
+  LORE_CLOCK_SKEW_S,
+  LORE_INK_AGE_STALE_S,
+  LORE_INK_AGE_MAX_S,
+  LORE_INK_DENSITY_NEUTRAL,
+  LORE_INK_DENSITY_FRESH,
+  LORE_INK_DENSITY_FADED,
+  LORE_PAPER_NEUTRAL,
 } from "./lore-plaque.ts";
 import {
   createInkWashEdgeMaterial,
@@ -2162,5 +2177,119 @@ describe("painter c18: Imagine missing-art wash from real lane+health", () => {
     setImagineNodeLaneWash(m, { lane: "rea", health: "healthy" });
     assert.equal((m.userData as { imagineLane: string }).imagineLane, "rea");
     m.dispose();
+  });
+});
+
+
+describe("hacker pass c19: lock claimed_at age / atlas heartbeat churn / density saturate", () => {
+  it("malformed, missing, future, mixed-offset claimed_at never yield NaN/negative age", () => {
+    const now = Date.parse("2026-11-02T23:00:00+01:00"); // WAT
+    const miss = lockAgeSecondsFromClaimedAt(null, now);
+    assert.equal(miss.meta.reason, "missing");
+    assert.equal(miss.ageSeconds, 0);
+    assert.equal(miss.meta.inkDensity, LORE_INK_DENSITY_NEUTRAL);
+
+    const bad = lockAgeSecondsFromClaimedAt("not-a-date", now);
+    assert.equal(bad.meta.reason, "malformed");
+    assert.ok(Number.isFinite(bad.ageSeconds));
+
+    const future = lockAgeSecondsFromClaimedAt("2026-11-02T23:30:00+01:00", now);
+    assert.equal(future.ageSeconds, 0);
+    assert.equal(future.meta.skewClamped, true);
+
+    // Mixed offsets: claimed in -06:00, now in +01:00 — absolute ms delta
+    const claimedCst = "2026-11-02T15:00:00-06:00"; // == 21:00Z / 22:00+01
+    const age = lockAgeSecondsFromClaimedAt(claimedCst, now);
+    assert.ok(age.meta.ok);
+    assert.ok(age.ageSeconds > 0);
+    assert.ok(Number.isFinite(age.ageSeconds));
+    assert.ok(age.ageSeconds < LORE_INK_AGE_MAX_S);
+
+    // Epoch seconds vs ms
+    const sec = Math.floor(now / 1000) - 120;
+    assert.ok(Math.abs(lockAgeSecondsFromClaimedAt(sec, now).ageSeconds - 120) < 1);
+    assert.ok(Math.abs(lockAgeSecondsFromClaimedAt(now - 90_000, now).ageSeconds - 90) < 1);
+
+    assert.equal(parseLockClaimedAtMs(NaN), null);
+    assert.equal(parseLockClaimedAtMs(""), null);
+  });
+
+  it("DST / clock-skew spanning: age uses UTC ms; density saturates (no growing uniform counter)", () => {
+    // Before/after a US DST boundary still yields finite age via Date.parse
+    const spring = Date.parse("2026-03-08T12:00:00-05:00");
+    const claimed = "2026-03-08T01:30:00-06:00"; // ambiguous-ish local; parse to absolute
+    const { ageSeconds, meta } = lockAgeSecondsFromClaimedAt(claimed, spring);
+    assert.ok(meta.ok || meta.reason != null);
+    assert.ok(Number.isFinite(ageSeconds));
+    assert.ok(ageSeconds >= 0);
+
+    // Long session: age at MAX still maps to faded floor — not raw age as uniform
+    const densMax = loreInkDensityFromAgeSeconds(LORE_INK_AGE_MAX_S);
+    assert.ok(Math.abs(densMax - LORE_INK_DENSITY_FADED) < 1e-6);
+    const densFresh = loreInkDensityFromAgeSeconds(0);
+    assert.ok(Math.abs(densFresh - LORE_INK_DENSITY_FRESH) < 1e-6);
+    assert.ok(loreInkDensityFromAgeSeconds(LORE_INK_AGE_STALE_S / 2) < densFresh);
+    assert.ok(lorePaperFromAgeSeconds(LORE_INK_AGE_STALE_S) > lorePaperFromAgeSeconds(0));
+    // Hostile age inputs
+    assert.ok(Number.isFinite(loreInkDensityFromAgeSeconds(NaN)));
+    assert.ok(Number.isFinite(loreInkDensityFromAgeSeconds(-1e9)));
+  });
+
+  it("lock heartbeat re-bind does not rebuild atlas when notes unchanged (churn guard)", () => {
+    const mat = createLorePlaqueMaterial({});
+    const notes = "painter c19 claimed lane";
+    const r1 = setLorePlaqueNotesCached(mat, notes);
+    assert.equal(r1.rebuilt, true);
+    assert.equal(r1.empty, false);
+    const tex1 = mat.uniforms["uTextMap"]!.value;
+    // Simulate heartbeat storm — same notes, claimed_at bump only
+    for (let i = 0; i < 60; i++) {
+      const r = setLorePlaqueNotesCached(mat, notes);
+      assert.equal(r.rebuilt, false, `heartbeat ${i} must not rebuild`);
+    }
+    assert.equal(mat.uniforms["uTextMap"]!.value, tex1);
+    // Notes change → rebuild once
+    const r2 = setLorePlaqueNotesCached(mat, notes + " · updated");
+    assert.equal(r2.rebuilt, true);
+    assert.notEqual(mat.uniforms["uTextMap"]!.value, tex1);
+    // Fingerprint stable
+    assert.equal(loreNotesFingerprint(notes), loreNotesFingerprint(notes));
+    mat.dispose();
+  });
+});
+
+describe("painter c19: lore plaque ink density from real lock age", () => {
+  it("LorePlaqueShader exposes uInkDensity; age drives density+paper; no lock → neutral/empty", () => {
+    assert.ok(LorePlaqueShader.uniforms.uInkDensity);
+    assert.match(LorePlaqueShader.fragmentShader, /uInkDensity/);
+
+    const now = Date.parse("2026-11-02T23:00:00+01:00");
+    const fresh = createLorePlaqueMaterial({
+      claimedAt: "2026-11-02T22:55:00+01:00",
+      nowMs: now,
+    });
+    assert.ok((fresh.uniforms["uInkDensity"]!.value as number) > 0.9);
+    assert.ok((fresh.uniforms["uPaper"]!.value as number) < LORE_PAPER_NEUTRAL + 0.05);
+
+    const stale = createLorePlaqueMaterial({
+      claimedAt: "2026-11-01T10:00:00+01:00",
+      nowMs: now,
+    });
+    assert.ok((stale.uniforms["uInkDensity"]!.value as number) < (fresh.uniforms["uInkDensity"]!.value as number));
+    assert.ok((stale.uniforms["uPaper"]!.value as number) > (fresh.uniforms["uPaper"]!.value as number));
+
+    const none = createLorePlaqueMaterial({});
+    assert.ok(Math.abs((none.uniforms["uInkDensity"]!.value as number) - LORE_INK_DENSITY_NEUTRAL) < 1e-6);
+    const empty = setLorePlaqueNotesCached(none, null);
+    assert.equal(empty.empty, true);
+
+    setLorePlaqueInkDensity(fresh, 0.5);
+    setLorePlaqueLockAge(fresh, "2026-11-02T22:00:00+01:00", { nowMs: now });
+    // locked density stays
+    assert.ok(Math.abs((fresh.uniforms["uInkDensity"]!.value as number) - 0.5) < 1e-6);
+
+    fresh.dispose();
+    stale.dispose();
+    none.dispose();
   });
 });

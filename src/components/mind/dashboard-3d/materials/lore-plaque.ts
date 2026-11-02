@@ -18,6 +18,15 @@ export type LorePlaqueOptions = {
   wash?: number;
   /** Optional prebuilt text atlas texture. */
   textAtlas?: THREE.Texture | null;
+  /**
+   * Real lock `claimed_at` (ISO / epoch). Drives ink density + paper grain.
+   * Missing/malformed → neutral defaults (never fabricate a timestamp).
+   */
+  claimedAt?: unknown;
+  /** Override "now" for tests (ms since epoch). */
+  nowMs?: number;
+  /** Explicit ink density 0..1 (locks auto age sync when set). */
+  inkDensity?: number;
 };
 
 function cloneUniforms(src: typeof LorePlaqueShader.uniforms) {
@@ -28,9 +37,170 @@ function cloneUniforms(src: typeof LorePlaqueShader.uniforms) {
     uTime: { value: 0 },
     uPaper: { value: src.uPaper.value as number },
     uWash: { value: src.uWash.value as number },
+    uInkDensity: {
+      value: (src as { uInkDensity?: { value: number } }).uInkDensity?.value ?? 0.85,
+    },
     uTextMap: { value: null as THREE.Texture | null },
     uHasText: { value: 0 },
   };
+}
+
+
+/* ---------- c19: lock age → ink density / paper grain (never NaN / never fabricate) ---------- */
+
+/** Soft clock-skew window: future claimed_at within this many seconds → age 0. */
+export const LORE_CLOCK_SKEW_S = 300;
+/** Cap age so uniforms never track unbounded session counters. */
+export const LORE_INK_AGE_MAX_S = 7 * 24 * 3600;
+/** Age at which ink is fully faded (density floor). */
+export const LORE_INK_AGE_STALE_S = 6 * 3600;
+export const LORE_INK_DENSITY_FRESH = 1;
+export const LORE_INK_DENSITY_FADED = 0.25;
+export const LORE_INK_DENSITY_NEUTRAL = 0.85;
+export const LORE_PAPER_FRESH = 0.16;
+export const LORE_PAPER_STALE = 0.44;
+export const LORE_PAPER_NEUTRAL = 0.22;
+
+export type LoreAgeMeta = {
+  ok: boolean;
+  reason: string | null;
+  claimedAtMs: number | null;
+  ageSeconds: number;
+  inkDensity: number;
+  paper: number;
+  skewClamped: boolean;
+};
+
+/**
+ * HACKER (c19): parse real lock claimed_at across ISO offsets / epoch s|ms.
+ * Malformed / missing → null (caller uses neutral defaults — never invent a time).
+ */
+export function parseLockClaimedAtMs(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw)) return null;
+    // Heuristic: < 1e12 → seconds; else ms
+    const ms = Math.abs(raw) < 1e12 ? raw * 1000 : raw;
+    if (!Number.isFinite(ms)) return null;
+    return Math.floor(ms);
+  }
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (!s) return null;
+    // Bare integer string
+    if (/^[+-]?\d+(\.\d+)?$/.test(s)) {
+      const n = Number(s);
+      if (!Number.isFinite(n)) return null;
+      return parseLockClaimedAtMs(n);
+    }
+    const t = Date.parse(s);
+    if (!Number.isFinite(t)) return null;
+    return t;
+  }
+  return null;
+}
+
+/**
+ * Age in seconds from real claimed_at. Never NaN/negative.
+ * Future timestamps (clock skew / TZ mix) clamp to 0 within LORE_CLOCK_SKEW_S,
+ * else still 0 with skewClamped meta — never feed negative density math.
+ * DST: uses absolute UTC ms delta (Date.parse offsets already normalized).
+ */
+export function lockAgeSecondsFromClaimedAt(
+  raw: unknown,
+  nowMs: number = Date.now(),
+): { ageSeconds: number; meta: LoreAgeMeta } {
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const claimedAtMs = parseLockClaimedAtMs(raw);
+  if (claimedAtMs == null) {
+    const meta: LoreAgeMeta = {
+      ok: false,
+      reason: raw == null || raw === "" ? "missing" : "malformed",
+      claimedAtMs: null,
+      ageSeconds: 0,
+      inkDensity: LORE_INK_DENSITY_NEUTRAL,
+      paper: LORE_PAPER_NEUTRAL,
+      skewClamped: false,
+    };
+    return { ageSeconds: 0, meta };
+  }
+  let age = (now - claimedAtMs) / 1000;
+  let skewClamped = false;
+  if (!Number.isFinite(age)) {
+    const meta: LoreAgeMeta = {
+      ok: false,
+      reason: "non-finite-age",
+      claimedAtMs,
+      ageSeconds: 0,
+      inkDensity: LORE_INK_DENSITY_NEUTRAL,
+      paper: LORE_PAPER_NEUTRAL,
+      skewClamped: false,
+    };
+    return { ageSeconds: 0, meta };
+  }
+  if (age < 0) {
+    skewClamped = true;
+    // Future within skew window or beyond — never negative age for uniforms
+    age = 0;
+  }
+  age = Math.min(age, LORE_INK_AGE_MAX_S);
+  const inkDensity = loreInkDensityFromAgeSeconds(age);
+  const paper = lorePaperFromAgeSeconds(age);
+  const meta: LoreAgeMeta = {
+    ok: true,
+    reason: skewClamped ? "future-clamped" : null,
+    claimedAtMs,
+    ageSeconds: age,
+    inkDensity,
+    paper,
+    skewClamped,
+  };
+  return { ageSeconds: age, meta };
+}
+
+/** Map sanitized age → ink density (saturates; never raw growing counter). */
+export function loreInkDensityFromAgeSeconds(ageSeconds: number): number {
+  const a = sanitizeFinite(ageSeconds, 0, 0, LORE_INK_AGE_MAX_S);
+  const t = Math.min(1, a / LORE_INK_AGE_STALE_S);
+  return sanitizeFinite(
+    LORE_INK_DENSITY_FRESH - t * (LORE_INK_DENSITY_FRESH - LORE_INK_DENSITY_FADED),
+    LORE_INK_DENSITY_NEUTRAL,
+    LORE_INK_DENSITY_FADED,
+    LORE_INK_DENSITY_FRESH,
+  );
+}
+
+/** Map sanitized age → paper grain (more fiber as lock ages). */
+export function lorePaperFromAgeSeconds(ageSeconds: number): number {
+  const a = sanitizeFinite(ageSeconds, 0, 0, LORE_INK_AGE_MAX_S);
+  const t = Math.min(1, a / LORE_INK_AGE_STALE_S);
+  return sanitizeFinite(LORE_PAPER_FRESH + t * (LORE_PAPER_STALE - LORE_PAPER_FRESH), LORE_PAPER_NEUTRAL, 0, 1);
+}
+
+/** Apply real lock age to plaque uniforms (idempotent; no atlas rebuild). */
+export function setLorePlaqueLockAge(
+  mat: THREE.ShaderMaterial,
+  claimedAt: unknown,
+  opts: { nowMs?: number } = {},
+): LoreAgeMeta {
+  const { meta } = lockAgeSecondsFromClaimedAt(claimedAt, opts.nowMs ?? Date.now());
+  (mat.userData as Record<string, unknown>).loreAgeMeta = meta;
+  if ((mat.userData as Record<string, unknown>).loreInkDensityLocked) {
+    // Explicit inkDensity lock — still record meta + paper unless paper also locked later
+  } else if (mat.uniforms?.["uInkDensity"]) {
+    mat.uniforms["uInkDensity"].value = meta.ok ? meta.inkDensity : LORE_INK_DENSITY_NEUTRAL;
+  }
+  if (mat.uniforms?.["uPaper"] && !(mat.userData as Record<string, unknown>).lorePaperLocked) {
+    mat.uniforms["uPaper"].value = meta.ok ? meta.paper : LORE_PAPER_NEUTRAL;
+  }
+  return meta;
+}
+
+export function setLorePlaqueInkDensity(mat: THREE.ShaderMaterial, density: number): void {
+  if (mat.uniforms?.["uInkDensity"]) {
+    mat.uniforms["uInkDensity"].value = sanitizeFinite(density, LORE_INK_DENSITY_NEUTRAL, 0, 1);
+  }
+  (mat.userData as Record<string, unknown>).loreInkDensityLocked = true;
 }
 
 /** Watercolor parchment plaque ShaderMaterial (constellation lore). */
@@ -41,6 +211,9 @@ export function createLorePlaqueMaterial(opts: LorePlaqueOptions = {}): THREE.Sh
   if (opts.accent != null) uniforms.uAccent.value.set(opts.accent);
   if (opts.paper != null) uniforms.uPaper.value = sanitizeFinite(opts.paper, 0.22, 0, 1);
   if (opts.wash != null) uniforms.uWash.value = sanitizeFinite(opts.wash, 0.45, 0, 1);
+  if (opts.inkDensity != null) {
+    uniforms.uInkDensity.value = sanitizeFinite(opts.inkDensity, LORE_INK_DENSITY_NEUTRAL, 0, 1);
+  }
   const mat = new THREE.ShaderMaterial({
     name: "LorePlaqueMaterial",
     precision: PAINTER_SHADER_PRECISION,
@@ -52,6 +225,15 @@ export function createLorePlaqueMaterial(opts: LorePlaqueOptions = {}): THREE.Sh
     depthWrite: false,
   });
   (mat.userData as Record<string, unknown>).loreOwnedAtlas = null;
+  (mat.userData as Record<string, unknown>).loreNotesFingerprint = null;
+  (mat.userData as Record<string, unknown>).loreAgeMeta = null;
+  (mat.userData as Record<string, unknown>).loreInkDensityLocked = opts.inkDensity != null;
+  if (opts.claimedAt !== undefined || opts.nowMs != null) {
+    setLorePlaqueLockAge(mat, opts.claimedAt, { nowMs: opts.nowMs });
+  } else if (opts.inkDensity == null) {
+    // Neutral defaults when no lock age known
+    uniforms.uInkDensity.value = LORE_INK_DENSITY_NEUTRAL;
+  }
   if (opts.textAtlas) setLorePlaqueTextAtlas(mat, opts.textAtlas, { owned: false });
   return mat;
 }
@@ -386,6 +568,7 @@ export function setLorePlaqueTextAtlas(
   if (atlas == null) {
     mat.uniforms["uTextMap"].value = null;
     mat.uniforms["uHasText"].value = 0;
+    (mat.userData as Record<string, unknown>).loreNotesFingerprint = null;
     return;
   }
   const isAtlasObj = typeof atlas === "object" && atlas !== null && "texture" in atlas && "dispose" in atlas;
@@ -402,3 +585,49 @@ export function setLorePlaqueTextAtlas(
 export function disposeLorePlaqueOwnedAtlas(mat: THREE.ShaderMaterial): void {
   setLorePlaqueTextAtlas(mat, null);
 }
+
+
+/* ---------- c19: atlas fingerprint — skip rebuild on lock heartbeat churn ---------- */
+
+/** Stable fingerprint of sanitized notes (ignores heartbeat-only claimed_at bumps). */
+export function loreNotesFingerprint(notes: unknown, maxNotes?: number, maxChars?: number): string {
+  const s = sanitizeLoreNotes(notes, maxNotes, maxChars);
+  if (s.notes.length === 0) return `empty#${s.truncatedCount}`;
+  return `${s.notes.map((n) => `${n.text}\0${n.truncated ? 1 : 0}`).join("\n")}#${s.truncatedCount}`;
+}
+
+export type LoreAtlasCacheResult = {
+  rebuilt: boolean;
+  atlas: LoreTextAtlas | null;
+  fingerprint: string;
+  empty: boolean;
+};
+
+/**
+ * HACKER (c19): lock heartbeats must NOT realloc canvas atlases / re-upload GPU textures
+ * when note text is unchanged. Returns rebuilt=false and keeps prior atlas.
+ * No lock / empty notes → honest empty atlas once, then cached.
+ */
+export function setLorePlaqueNotesCached(
+  mat: THREE.ShaderMaterial,
+  notes: unknown,
+  opts: LoreTextAtlasOptions & { owned?: boolean; force?: boolean } = {},
+): LoreAtlasCacheResult {
+  const fp = loreNotesFingerprint(notes, opts.maxNotes, opts.maxChars);
+  const prevFp = (mat.userData as Record<string, unknown>).loreNotesFingerprint as string | null;
+  const hasText = Number(mat.uniforms?.["uHasText"]?.value ?? 0) > 0.5;
+  if (!opts.force && prevFp === fp && hasText) {
+    const prev = (mat.userData as Record<string, unknown>).loreOwnedAtlas as LoreTextAtlas | null;
+    return {
+      rebuilt: false,
+      atlas: prev && "texture" in (prev as object) ? (prev as LoreTextAtlas) : null,
+      fingerprint: fp,
+      empty: !!(prev && (prev as LoreTextAtlas).empty),
+    };
+  }
+  const atlas = createLoreTextAtlas(notes, opts);
+  setLorePlaqueTextAtlas(mat, atlas, { owned: opts.owned !== false });
+  (mat.userData as Record<string, unknown>).loreNotesFingerprint = fp;
+  return { rebuilt: true, atlas, fingerprint: fp, empty: atlas.empty };
+}
+
