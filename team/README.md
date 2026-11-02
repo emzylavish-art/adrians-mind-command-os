@@ -42,3 +42,17 @@ being simulated. External actions and deployment remain gated by explicit author
 `python -m unittest discover -s team -p 'test_*.py'`
 
 The manifest remains the authority for capability matching, readiness, and requirements.
+
+
+## MCP stdio server
+
+A minimal JSON-RPC stdio server exposes tools marked `ready` in the manifest to MCP-compatible hosts:
+
+```bash
+python team/mcp_server.py
+```
+
+Configure an MCP client to launch that command from the repository root. The current
+server publishes `rea.scan` only because it is the only fully implemented and ready
+tool adapter. The server implements `initialize`, `tools/list`, and `tools/call`;
+it does not launch model agents or invent adapters for unresolved tools.
