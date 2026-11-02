@@ -69,6 +69,54 @@ def invoke(tool_id, payload, manifest):
         return envelope("ready", report, ["tools/knowledge/knowledge_search.py"],
                         report.get("limitations", []))
 
+    if tool_id == "team.queue":
+        action = payload.get("action")
+        command = [sys.executable, str(ROOT / "team" / "queue.py"),
+                   "--db", str(payload.get("db", ROOT / "team" / "queue.sqlite3"))]
+        if action == "enqueue":
+            task = payload.get("task")
+            body = payload.get("payload", {})
+            if not isinstance(task, str) or not task.strip() or not isinstance(body, dict):
+                return envelope("blocked", limitations=["enqueue requires a non-empty task and object payload."])
+            command.extend(["enqueue", "--task", task, "--payload", json.dumps(body),
+                            "--max-attempts", str(payload.get("max_attempts", 3))])
+        elif action == "claim":
+            worker = payload.get("worker")
+            if not isinstance(worker, str) or not worker.strip():
+                return envelope("blocked", limitations=["claim requires worker."])
+            command.extend(["claim", "--worker", worker,
+                            "--lease-seconds", str(payload.get("lease_seconds", 120))])
+        elif action == "complete":
+            if not payload.get("id") or not payload.get("worker"):
+                return envelope("blocked", limitations=["complete requires id and worker."])
+            command.extend(["complete", "--id", str(payload["id"]), "--worker", str(payload["worker"]),
+                            "--result", json.dumps(payload.get("result", {}))])
+        elif action == "fail":
+            if not payload.get("id") or not payload.get("worker") or not payload.get("error"):
+                return envelope("blocked", limitations=["fail requires id, worker, and error."])
+            command.extend(["fail", "--id", str(payload["id"]), "--worker", str(payload["worker"]),
+                            "--error", str(payload["error"])])
+        elif action == "list":
+            command.extend(["list", "--limit", str(payload.get("limit", 100))])
+            if payload.get("status"):
+                command.extend(["--status", str(payload["status"])])
+        else:
+            return envelope("blocked", limitations=["team.queue action must be enqueue, claim, complete, fail, or list."])
+        try:
+            completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True,
+                                       timeout=int(payload.get("timeout_seconds", 30)), check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Queue invocation failed: {exc}"])
+        try:
+            report = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope("blocked", result=completed.stdout,
+                            limitations=[completed.stderr.strip() or "Queue returned invalid JSON."])
+        if completed.returncode:
+            return envelope("blocked", result=report.get("result"),
+                            limitations=[report.get("error", "Queue operation failed.")])
+        return envelope("ready", report.get("result"), ["team/queue.py"], [])
+
     adapters = {
         "rea.scan": (ROOT / "tools" / "rea" / "rea.py", "source"),
         "security.scan": (ROOT / "tools" / "security_review" / "security_review.py", "source"),
