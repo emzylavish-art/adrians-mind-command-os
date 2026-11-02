@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Named remote MCP HTTP endpoints. Enable each integration explicitly, use HTTPS, and put bearer secrets in environment variables. No endpoint is enabled by default.",
+  "servers": {}
+}
