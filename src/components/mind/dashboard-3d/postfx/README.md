@@ -276,3 +276,8 @@ Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (m
   // badge: formatMeterBadge(liveDetailDim.contrast, lift.report, cardEdgeHandle?.report ?? null, plate.report) → "plate spread 0.21 +0.85" / "plate spread 0.02 ok" / "plate no reading"
   ```
 - Register tests: `postfx/{charts-depth-plate,projected-radius-real}.test.ts` (the #93 `card-edge` + `probe-radius-honest` are already registered).
+
+## #103 — Edge-mode hysteresis + measurement-age fade (hacker: hard 0.35 mode flash)
+
+- **Hacker (live, no wiring):** `#93` picked light vs shade from `max(card, surround) mean > EDGE_SHADE_ABOVE` (0.35) with a hard cut. A surround hovering near 0.35 could flip a cool light rim to a shade halo between ~500 ms meter reads — a visible flash. Fixed in `card-edge.ts` (already wired via `createCardEdgePass` / `setSeparation`): mode now uses ±`EDGE_SHADE_HYST` 0.05 hysteresis (`edgeModeFromPeak`) — flip to shade only past 0.40, back to light only below 0.30. First reading still uses the hard threshold. Rim `targetGain` is also faded by `contrast.card.atMs` age (`edgeAgeFade`): full through the first half of `METER_MAX_AGE_MS`, then smooth to 0 so a reading near expiry cannot drive a full-strength rim. `createCardEdgePass({ now })` injects the clock (defaults to `performance.now`); `setSeparation` accepts optional `nowMs`. No universe-scene change required.
+- Test: `postfx/card-edge.test.ts` `#103 hacker` suite (failed the hard-threshold flap assertion before the fix).
