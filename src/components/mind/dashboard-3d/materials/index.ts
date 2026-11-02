@@ -54,7 +54,13 @@ export {
   tickBuildingMaterial,
   setBuildingProgress,
   setBuildingWindowGlow,
+  setBuildingDryBrush,
+  buildingDryBrushFromProgress,
+  createBuildingBrushPool,
+  BUILDING_BRUSH_POOL_MAX,
   type BuildingSurfaceOptions,
+  type BuildingBrushPool,
+  type BuildingPainterMaterialMeta,
 } from "./building-surface.ts";
 export {
   createLorePlaqueMaterial,
@@ -120,8 +126,11 @@ export {
   PAINTER_TEXTURE_BUDGET_BYTES,
   PAINTER_TEXTURE_BUDGET_MIN,
   PAINTER_TEXTURE_BUDGET_MAX,
+  noteTextureBudgetReport,
+  createBudgetDegradeState,
   type PainterlyTextureBudgetItem,
   type PainterlyTextureBudgetReport,
+  type PainterlyBudgetDegradeState,
 } from "./painter-texture-budget.ts";
 export {
   createImagineNodeMaterial,

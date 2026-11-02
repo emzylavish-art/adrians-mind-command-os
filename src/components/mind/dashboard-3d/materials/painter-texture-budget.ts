@@ -73,3 +73,43 @@ export function pushBudgetItem(
   if (e.bytes > 0) items.push({ id, bytes: e.bytes, width: e.width, height: e.height });
   return e.bytes;
 }
+
+export type PainterlyBudgetDegradeState = {
+  overBudget: boolean;
+  degraded: boolean;
+  warned: boolean;
+  degradeCount: number;
+  lastBytes: number;
+};
+
+export function createBudgetDegradeState(): PainterlyBudgetDegradeState {
+  return { overBudget: false, degraded: false, warned: false, degradeCount: 0, lastBytes: 0 };
+}
+
+/**
+ * HACKER (c17): soft cap was report-only (silent). When overBudget, mark degraded and
+ * warn once so operators see it — callers should visibly ease pass grain/fiber.
+ */
+export function noteTextureBudgetReport(
+  state: PainterlyBudgetDegradeState,
+  report: Pick<PainterlyTextureBudgetReport, "bytes" | "budget" | "overBudget">,
+): PainterlyBudgetDegradeState {
+  state.lastBytes = report.bytes;
+  state.overBudget = !!report.overBudget;
+  if (report.overBudget) {
+    state.degraded = true;
+    state.degradeCount += 1;
+    if (!state.warned) {
+      state.warned = true;
+      try {
+        console.warn(
+          "[painterly-kit] texture budget exceeded — degrading paper grain/fiber (soft cap)",
+          { bytes: report.bytes, budget: report.budget },
+        );
+      } catch {
+        /* */
+      }
+    }
+  }
+  return state;
+}
