@@ -57,3 +57,7 @@
 [submodule "upstream/x64dbg"]
 	path = upstream/x64dbg
 	url = https://github.com/x64dbg/x64dbg.git
+
+[submodule "upstream/l1b3rt4s"]
+	path = upstream/l1b3rt4s
+	url = https://github.com/elder-plinius/L1B3RT4S.git
