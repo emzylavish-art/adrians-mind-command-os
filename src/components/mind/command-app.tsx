@@ -192,7 +192,7 @@ import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers"
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
-import { COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { COMPOSER_MODES, composerModeToModelTier, loadComposerEffort, modelTierToComposerMode, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import {
@@ -647,11 +647,6 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   }, []);
 
   useEffect(() => {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
-    setComposerEffort(loadComposerEffort(storage));
-  }, []);
-
-  useEffect(() => {
     if (view !== "build") return;
     let cancel = false;
     const token = getBearerToken();
@@ -774,10 +769,18 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     const storage = typeof localStorage === "undefined" ? null : localStorage;
     saveComposerEffort(storage, mode);
     setComposerEffort(mode);
+    setModelTier(composerModeToModelTier(mode));
     const resolved = resolveSendPath(mode);
     if (resolved.notice) setNotice(resolved.notice);
-    // Effort does not change modelTier. The server model stays on the Direct path.
     if (mode === "build") setView("build");
+  }
+
+  function chooseModelTier(tier: ModelTier) {
+    setModelTier(tier);
+    const mode = modelTierToComposerMode(tier);
+    setComposerEffort(mode);
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    saveComposerEffort(storage, mode);
   }
 
   function interruptSpeakPlayback() {
@@ -956,7 +959,15 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     try {
       if (localStorage.getItem("amcos.provider.v1") === "grok") setProviderChoice("grok");
       const tier = localStorage.getItem("amcos.modelTier.v1");
-      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) setModelTier(tier as ModelTier);
+      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) {
+        const next = tier as ModelTier;
+        setModelTier(next);
+        setComposerEffort(modelTierToComposerMode(next));
+      } else {
+        const effort = loadComposerEffort(localStorage);
+        setComposerEffort(effort);
+        setModelTier(composerModeToModelTier(effort));
+      }
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
     } catch {
@@ -3847,7 +3858,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           <div className="hidden md:block">
             <ModelTierChip
               tier={modelTier}
-              onChoose={setModelTier}
+              onChoose={chooseModelTier}
               lastResolved={lastResolvedTier}
               lastModel={lastModelUsed}
             />
@@ -4104,7 +4115,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                       navigate: (href) => {
                         window.location.assign(href);
                       },
-                      setModelTier: (tier) => setModelTier(tier as ModelTier),
+                      setModelTier: (tier) => chooseModelTier(tier as ModelTier),
                       openModelPicker: () => setPaletteOpen(true),
                       startVoice: () => {
                         void openVoiceOverlay();
@@ -4558,7 +4569,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 if (id === "grok") setProviderChoice("grok");
               }}
               modelTier={modelTier}
-              onModelTier={setModelTier}
+              onModelTier={chooseModelTier}
               toolTimeline={toolTimeline}
               timelineNowMs={timelineTickMs || Date.now()}
               agentActivity={agentActivityFromTimeline(toolTimeline)}
@@ -5034,7 +5045,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 <p className="text-sm text-muted">No build is running. Suggestion cards do not run anything just by appearing.</p>
                 <p className="text-sm font-semibold">{pcAgentOnline ? "PC agent online" : "Not paired"}</p>
                 <p className="text-sm text-muted">{pcAgentDetail}</p>
-                <p className="text-xs text-muted">Build effort is not wired to a different model. Send stays on Direct.</p>
+                <p className="text-xs text-muted">Build effort selects the Build model tier for the next send.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {BUILD_SUGGESTIONS.map((item) => (
@@ -5624,12 +5635,13 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
         }}
         onAttachFileClick={() => fileRef.current?.click()}
         modelPickerSlot={
-          <>
-            <span className="composer-bar__model-ico" aria-hidden="true" />
-            <span className="composer-bar__model-label">
-              {providerChoices(grokConfigured).find((item) => item.id === providerChoice)?.label ?? "Model"}
-            </span>
-          </>
+          <ModelTierChip
+            tier={modelTier}
+            onChoose={chooseModelTier}
+            lastResolved={lastResolvedTier}
+            lastModel={lastModelUsed}
+            className="composer-bar__model-chip"
+          />
         }
         onChatSend={(text) => {
           const clipped = text.trim().slice(0, 8000);
@@ -6514,7 +6526,7 @@ function ComposerEffortControl({
         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{resolved.badge}</span>
       </div>
       <p className="mt-1 text-xs text-muted">
-        {current?.detail} This effort is not wired to a different model.
+        {current?.detail}
         {resolved.notice ? ` ${resolved.notice}` : ""}
       </p>
     </div>

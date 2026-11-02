@@ -1,5 +1,5 @@
 import { getRequest } from "@tanstack/react-start/server";
-import { decideFetchSite } from "@/lib/mind/request-guard";
+import { decideFetchSite } from "../mind/request-guard.ts";
 
 /**
  * Fetch-Metadata sibling isolation — **server-only** (`.server.ts` suffix).

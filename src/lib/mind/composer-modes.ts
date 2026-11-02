@@ -1,4 +1,6 @@
-/** Composer effort/mode picker. Only modes with real behavior are actionable. */
+/** Composer effort/mode picker — maps 1:1 onto MODEL_TIERS for the next send. */
+
+import type { ModelTier } from "./model-tiers.ts";
 
 export type ComposerModeId = "auto" | "fast" | "expert" | "heavy" | "build" | "orchestrator";
 
@@ -6,37 +8,79 @@ export type ComposerMode = {
   id: ComposerModeId;
   label: string;
   detail: string;
-  /** When false, selecting shows a notice and send stays on Direct. */
+  /** When false, selecting shows a notice; send still uses the mapped modelTier. */
   wired: boolean;
   notice?: string;
 };
 
 export const COMPOSER_MODES: ComposerMode[] = [
-  { id: "auto", label: "Auto", detail: "Direct single-model path with Ask autonomy.", wired: true },
-  { id: "fast", label: "Fast", detail: "Same Direct path. No separate fast model is configured.", wired: true },
-  { id: "expert", label: "Expert", detail: "Same Direct path. No separate expert model is configured.", wired: true },
-  { id: "heavy", label: "Heavy", detail: "Same Direct path. No separate heavy model is configured.", wired: true },
+  { id: "auto", label: "Auto", detail: "Routes Fast, Expert, Heavy, or Build from the prompt.", wired: true },
+  { id: "fast", label: "Fast", detail: "Uses the Fast tier model (MIND_MODEL_FAST).", wired: true },
+  { id: "expert", label: "Expert", detail: "Uses the Expert tier model (MIND_MODEL_EXPERT).", wired: true },
+  { id: "heavy", label: "Heavy", detail: "Uses the Heavy tier model (MIND_MODEL_HEAVY).", wired: true },
   {
     id: "build",
     label: "Build",
-    detail: "Opens the Build surface. File edit and terminal stay unavailable until a computer is paired.",
+    detail: "Uses the Build tier model and opens the Build surface.",
     wired: true,
   },
   {
     id: "orchestrator",
     label: "Orchestrator",
-    detail: "Multi-agent fan-out is not wired.",
-    wired: false,
-    notice: "Orchestrator fan-out is not wired. Send stays on Direct. Nothing was fanned out.",
+    detail: "Uses the Orchestrator tier model (MIND_MODEL_ORCHESTRATOR).",
+    wired: true,
+    notice: "Multi-agent fan-out is not available yet. Send still uses the Orchestrator model on Direct.",
   },
 ];
 
-export type SendPath = "direct" | "blocked-orchestrator";
+export type SendPath = "direct" | "orchestrator-notice";
+
+export function composerModeToModelTier(mode: ComposerModeId): ModelTier {
+  switch (mode) {
+    case "auto":
+      return "Auto";
+    case "fast":
+      return "Fast";
+    case "expert":
+      return "Expert";
+    case "heavy":
+      return "Heavy";
+    case "build":
+      return "Build";
+    case "orchestrator":
+      return "Orchestrator";
+    default: {
+      const _exhaustive: never = mode;
+      return _exhaustive;
+    }
+  }
+}
+
+export function modelTierToComposerMode(tier: ModelTier): ComposerModeId {
+  switch (tier) {
+    case "Auto":
+      return "auto";
+    case "Fast":
+      return "fast";
+    case "Expert":
+      return "expert";
+    case "Heavy":
+      return "heavy";
+    case "Build":
+      return "build";
+    case "Orchestrator":
+      return "orchestrator";
+    default: {
+      const _exhaustive: never = tier;
+      return _exhaustive;
+    }
+  }
+}
 
 export function resolveSendPath(mode: ComposerModeId): { path: SendPath; badge: "Direct" | "Orchestrator"; notice: string | null } {
   const found = COMPOSER_MODES.find((item) => item.id === mode) ?? COMPOSER_MODES[0];
-  if (found.id === "orchestrator" && !found.wired) {
-    return { path: "blocked-orchestrator", badge: "Direct", notice: found.notice ?? null };
+  if (found.id === "orchestrator") {
+    return { path: "orchestrator-notice", badge: "Orchestrator", notice: found.notice ?? null };
   }
   return { path: "direct", badge: "Direct", notice: null };
 }
