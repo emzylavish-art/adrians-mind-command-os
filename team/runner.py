@@ -40,39 +40,25 @@ def invoke(tool_id, payload, manifest):
             limitations=[f"Tool status is {tool.get('status')}; invocation is disabled."],
         )
 
-    if tool_id == "team.health":
-        command = [sys.executable, str(ROOT / "team" / "health.py"), "--json"]
-        try:
-            completed = subprocess.run(
-                command, cwd=ROOT, capture_output=True, text=True,
-                timeout=int(payload.get("timeout_seconds", 30)), check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return envelope("blocked", limitations=[f"Health check invocation failed: {exc}"])
-        try:
-            report = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            return envelope("blocked", result=completed.stdout,
-                            evidence=["team/health.py"],
-                            limitations=[completed.stderr.strip() or "Health check returned non-JSON output."])
-        status = "ready" if completed.returncode == 0 and report.get("status") == "ok" else "partial"
-        return envelope(status, report, ["team/health.py"],
-                        ["Offline status and entrypoint checks only; external services are not probed."])
-
     adapters = {
-        "rea.scan": ROOT / "tools" / "rea" / "rea.py",
-        "security.scan": ROOT / "tools" / "security_review" / "security_review.py",
+        "rea.scan": (ROOT / "tools" / "rea" / "rea.py", "source"),
+        "security.scan": (ROOT / "tools" / "security_review" / "security_review.py", "source"),
+        "team.health": (ROOT / "team" / "health.py", "health"),
     }
-    script = adapters.get(tool_id)
-    if script is None or not script.is_file():
+    adapter = adapters.get(tool_id)
+    if adapter is None or not adapter[0].is_file():
         return envelope(
             "not_implemented", evidence=[f"team/manifest.json#tools/{tool_id}"],
             limitations=["No verified executable adapter exists for this declaration."],
         )
-    path = payload.get("path", ".")
-    command = [sys.executable, str(script), path, "--json"]
-    if payload.get("out"):
-        command.extend(["--out", str(payload["out"])])
+    script, mode = adapter
+    command = [sys.executable, str(script)]
+    if mode == "source":
+        command.extend([payload.get("path", "."), "--json"])
+        if payload.get("out"):
+            command.extend(["--out", str(payload["out"])])
+    else:
+        command.append("--json")
     try:
         completed = subprocess.run(
             command, cwd=ROOT, capture_output=True, text=True,
