@@ -74,6 +74,13 @@ def claim(db_path, worker_id, lease_seconds=120):
     conn = connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
+        # A final-attempt lease that expires is terminal; don't strand it as claimed.
+        conn.execute(
+            """UPDATE jobs SET status='failed',worker_id=NULL,lease_until=NULL,
+               error=COALESCE(error,'Lease expired after final attempt'),updated_at=?
+               WHERE status='claimed' AND lease_until < ? AND attempts >= max_attempts""",
+            (now, now),
+        )
         row = conn.execute(
             """SELECT * FROM jobs
                WHERE attempts < max_attempts AND
