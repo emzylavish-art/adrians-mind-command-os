@@ -96,7 +96,7 @@ export const PainterlyPassShader = {
       c.rgb *= 1.0 - smoothstep(0.02, 0.14, edge) * amt * 0.22;
       // Paper vignette: pigment pools at deckle
       float vig = smoothstep(1.18, 0.22, length(uv - 0.5));
-      c.rgb *= mix(0.68, 1.0, vig);
+      c.rgb *= mix(0.76, 1.0, vig); // c29: slightly softer vignette — HUD corner legibility
       // HACKER (c28): final clamp — no Inf/NaN out of wash math
       c.rgb = clamp(c.rgb, 0.0, 1.2);
       gl_FragColor = c;

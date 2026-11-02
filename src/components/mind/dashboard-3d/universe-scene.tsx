@@ -27,6 +27,10 @@ import {
   setImagineNodeMapFailed,
   setImagineNodeFocus,
   setLorePlaqueNotesCached,
+  setLorePlaqueLockAge,
+  setLorePlaqueStackIndex,
+  resolvePainterlyRenderTargetType,
+  probeHalfFloatRenderTargetSupport,
   releasePainterlyMaterial,
   type PainterlyKit,
 } from "./materials";
@@ -618,13 +622,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         glow.position.copy(pos);
         botGroup.add(glow);
 
-        // Painter c19: lore plaque from real lock claimed_at + cached notes atlas.
+        // Painter c19/c20: lore plaque + claimedAt age + stack harden.
         {
           const notesRaw = bot.lock?.notes || bot.notes || "";
           const loreMat = kit.createLorePlaqueMaterial({
             accent: color,
             claimedAt: bot.lock?.claimed_at ?? null,
+            stackIndex: 0,
           });
+          setLorePlaqueLockAge(loreMat, bot.lock?.claimed_at ?? null);
           const atlasRes = setLorePlaqueNotesCached(loreMat, notesRaw, {
             maxTextureSize: maxTexSize,
             seed: hashStr(bot.id),
@@ -635,6 +641,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           lore.userData.botId = bot.id;
           lore.userData.kind = "lore";
           lore.userData.loreEmpty = atlasRes.empty;
+          setLorePlaqueStackIndex(loreMat, 0, lore);
           botGroup.add(lore);
         }
 
@@ -724,7 +731,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     type EdgeRec = { from: string; to: string; health: string; kind: string; fromPos: [number, number, number]; toPos: [number, number, number] };
     let edgeRecs: EdgeRec[] = [];
     let inkEdges: ReturnType<typeof kit.createInkEdges> | null = null;
-    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number; ease: TravelerEaseState; sample: TravelerEaseSample; lastProgress: number };
+    type LandingTrail = { points: Array<{ x: number; y: number; z: number }>; mesh: THREE.Mesh; seed: number; ease: TravelerEaseState; sample: TravelerEaseSample; lastProgress: number; focused?: boolean; speed?: number };
     const landingTrails: LandingTrail[] = [];
     const travelerGeo = new THREE.SphereGeometry(0.16, 12, 12);
 
@@ -912,9 +919,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           return v ? v.base.clone() : null;
         });
         // Animation #3: landing-trail travelers (one per lane path)
+        // c69: watercolor traveler (Painter c27 beacon) — no MeshStandard neon LEDs.
         for (const tr of landingTrails) {
           landingGroup.remove(tr.mesh);
-          (tr.mesh.material as THREE.Material).dispose();
+          const beacon = tr.mesh.userData.fleetBeacon as { meshMaterial?: THREE.ShaderMaterial; glowMaterial?: THREE.Material } | undefined;
+          if (beacon?.meshMaterial) releasePainterlyMaterial(kit, beacon.meshMaterial);
+          else (tr.mesh.material as THREE.Material).dispose();
+          try { beacon?.glowMaterial?.dispose(); } catch { /* */ }
         }
         landingTrails.length = 0;
         const baseY = -1.5;
@@ -927,17 +938,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             z,
           }));
           if (points.length < 2) return;
-          const mat = new THREE.MeshStandardMaterial({
-            color: 0xffe08a,
-            emissive: 0xffc14a,
-            emissiveIntensity: 0.9,
-            transparent: true,
-            opacity: 0.95,
-          });
-          const mesh = new THREE.Mesh(travelerGeo, mat);
+          const beacon = kit.createFleetBeacon({ color: 0xffe08a, status: "active", radius: 0.16 });
+          const mesh = new THREE.Mesh(travelerGeo, beacon.meshMaterial);
           mesh.position.set(points[0]!.x, points[0]!.y, points[0]!.z);
+          mesh.userData.fleetBeacon = beacon;
+          const glow = new THREE.Sprite(beacon.glowMaterial);
+          glow.scale.setScalar(0.55);
+          mesh.add(glow);
           landingGroup.add(mesh);
-          landingTrails.push({ points, mesh, seed: li * 1.7, ease: createTravelerEaseState(li * 1.7), sample: createTravelerEaseSample(), lastProgress: 0 });
+          landingTrails.push({
+            points,
+            mesh,
+            seed: li * 1.7,
+            ease: createTravelerEaseState(li * 1.7),
+            sample: createTravelerEaseSample(),
+            lastProgress: 0,
+            focused: li === 0,
+            speed: 1,
+          });
         });
       }
     }
@@ -1177,7 +1195,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const bw = Math.max(1, Math.round((mount.clientWidth || width) * dpr0));
           const bh = Math.max(1, Math.round((mount.clientHeight || height) * dpr0));
           const depthTex = new THREE.DepthTexture(bw, bh);
-          const rt = new THREE.WebGLRenderTarget(bw, bh, { depthTexture: depthTex });
+          // Painter c20: honest half-float probe — unsigned byte fallback avoids black wash.
+          const rtType = resolvePainterlyRenderTargetType({
+            halfFloatSupported: probeHalfFloatRenderTargetSupport(renderer.getContext() as WebGLRenderingContext | null),
+          });
+          const rt = new THREE.WebGLRenderTarget(bw, bh, { depthTexture: depthTex, type: rtType.type });
           composer = new EffectComposer(renderer, rt);
         } catch {
           try { composer = new EffectComposer(renderer); } catch { composer = null; }
@@ -1666,6 +1688,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let lastBillboardCamX = Number.NaN;
     let lastBillboardCamY = Number.NaN;
     let lastBillboardCamZ = Number.NaN;
+    let lastLabelCamX = Number.NaN;
+    let lastLabelCamY = Number.NaN;
+    let lastLabelCamZ = Number.NaN;
     let lastSceneSyncSig = "";
     lastSceneSyncSig = dashboardSceneSyncSignature(dataRef.current);
     const travelOut = { x: 0, y: 0, z: 0 };
@@ -1891,12 +1916,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         // Motion c21: batch traveler step + honest wrap count (no teleport on resume)
         const travelerHold = fly.level !== "universe" || Boolean(rig.subjectId);
-        const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, { hold: travelerHold });
+        const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, {
+          hold: travelerHold,
+          enablePointBudget: true,
+          camDistance: camera.position.length(),
+        });
         if (wraps > 0) dust?.impulseGust(0.55, 0.12, -0.35, 0.45);
         for (const tr of landingTrails) {
           tr.lastProgress = tr.sample.progress;
           tr.mesh.position.set(tr.sample.x, tr.sample.y + 0.35, tr.sample.z);
-          (tr.mesh.material as THREE.MeshStandardMaterial).opacity = tr.sample.opacity;
+          // Watercolor beacon: drive glow opacity (ShaderMaterial has no MeshStandard.opacity).
+          const glow = tr.mesh.children.find((c) => c instanceof THREE.Sprite) as THREE.Sprite | undefined;
+          if (glow?.material && "opacity" in glow.material) {
+            (glow.material as THREE.SpriteMaterial).opacity = Math.min(1, Math.max(0.12, tr.sample.opacity * 0.55));
+          }
           tr.mesh.visible = fly.level === "universe";
         }
       } else {
@@ -1906,8 +1939,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       dust?.update(wallT, reducedMotion);
       if (comets) {
         // Motion c31 optional: explicit cam distance for comet segment LOD (onBeforeRender also feeds).
-        const camDist = camera.position.length();
-        if (Number.isFinite(camDist)) comets.setCamDistance?.(camDist);
+        // Gap#68: under RM, skip setCamDistance thrash — LOD band flips rewrote arcs every frame.
+        if (!reducedMotion) {
+          const camDist = camera.position.length();
+          if (Number.isFinite(camDist)) comets.setCamDistance?.(camDist);
+        }
         comets.update(wallT, reducedMotion);
         stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
         // Motion c24 / queue #108: cached lines/heads — no per-frame getObjectByName thrash.
@@ -2127,8 +2163,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
                   mount.appendChild(badge);
                 }
                 const b = formatMeterBadge(liveDetailDim.contrast, lift.report, cardEdgeHandle?.report ?? null, chartsDepthPlateHandle?.report ?? null);
-                badge.textContent = b.text;
-                badge.dataset.level = b.level;
+                const painterBit = kit.budgetMeta?.degraded ? " · painter:degraded" : "";
+                badge.textContent = b.text + painterBit;
+                badge.dataset.level = kit.budgetMeta?.degraded ? "warn" : b.level;
                 badge.hidden = false;
               } else if (badge) {
                 badge.hidden = true;
@@ -2145,7 +2182,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
       if (composer) composer.render();
       else renderer.render(scene, camera);
-      labelRenderer.render(scene, camera);
+      // Gap#68: CSS2D subpixel jitter under RM — reproject labels only when camera moved.
+      {
+        const cx = camera.position.x;
+        const cy = camera.position.y;
+        const cz = camera.position.z;
+        const camMoved =
+          !Number.isFinite(lastLabelCamX) ||
+          Math.abs(cx - lastLabelCamX) > 1e-4 ||
+          Math.abs(cy - lastLabelCamY) > 1e-4 ||
+          Math.abs(cz - lastLabelCamZ) > 1e-4;
+        if (!reducedMotion || camMoved) {
+          labelRenderer.render(scene, camera);
+          lastLabelCamX = cx;
+          lastLabelCamY = cy;
+          lastLabelCamZ = cz;
+        }
+      }
       if (freezePendingClear) {
         freezePendingClear = false;
         hideLastFrameFreeze(mount);
@@ -2173,10 +2226,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         });
         stepReducedMotionSettle(rmGuard, reducedMotion, now);
         if (!shouldRebuildScene(rmGuard, dataHash, reducedMotion, now)) {
-          if (comets) {
-            comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
-            reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
-          }
+          // Gap#68 / Motion c26: under RM with unchanged hash, skip soft comet sync
+          // (5s soft-sync was the periodic canvas jump).
         } else if (nextSig !== lastSceneSyncSig) {
           lastSceneSyncSig = nextSig;
           rebuildAll();
@@ -2189,8 +2240,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           // Do NOT dispose inkEdges/laneNebulae here — rebuildEdges/Nebulae update in place.
           feedGlyphs.dispose();
           feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
-        } else if (comets) {
+        } else if (comets && !reducedMotion) {
           // Commit list may still need soft sync when signature aliases (sha-stable no-op).
+          // Gap#68: never soft-sync under RM (canvas jump).
           comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
           reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
         }

@@ -10,6 +10,29 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+
+## Painter c30 (2026-11-03T00:10:05+01:00 WAT) — Notion galaxy watercolor adopt
+**Shipped:** `kit.createNotionGalaxyPages` + GalaxyPageShader (instanceColor). Kind→pigment; child edges→ink.
+**WIRING P0:** rebuildPages still MeshBasic — Dashboard snippet in Still-unwired.
+**Hacker:** empty/flood/NaN/dispose. Tests 164/164.
+
+## Painter c29 (2026-11-03T00:02:38+01:00 WAT) — star granulation + pass legibility
+**Pass vs c26:** c28 wash reads; HUD OK → vignette soften only. **Win:** STAR_GRAIN_BY_HEALTH + WatercolorStar granulation amp (createBotStar already wired).
+**Still unwired:** P0 Notion galaxy watercolor instance; P1 landing travelers. c27 fleet beacon WIRED.
+
+
+
+## Dashboard c70 (2026-11-03T00:10:31+01:00 WAT) — Gap#68 RM freeze regression
+**Fix:** skip 5s soft comet sync when RM hash unchanged; gate alias soft-sync with `!reducedMotion`; skip comet setCamDistance under RM (LOD band thrash); CSS2D labelRenderer only when camera moved under RM.
+**Tests:** gap68-rm-freeze-wired + full suite.
+**Next:** Notion galaxy watercolor (painter P0) when API ships; gap-feed / queue #125.
+
+## Dashboard c69 (2026-11-03T00:06:29+01:00 WAT) — Painter c28 Still-unwired follow-ups
+**Wired:** lore setLorePlaqueLockAge + setLorePlaqueStackIndex; composer resolvePainterlyRenderTargetType + half-float probe; landing travelers → kit.createFleetBeacon (no MeshStandard LEDs); Motion c33 enablePointBudget+camDistance+focused; debug badge painter:degraded; registered light #120 + motion c34 tests.
+**Skipped:** Notion galaxy instanceColor watercolor (P0 painter c29) — needs star shader instance path; c34 BufferAttribute upload N/A (sphere travelers).
+**Next:** gap-feed / request files / galaxy watercolor adopt.
+
 ## Painter c28 (2026-11-02T23:58:08+01:00 WAT) — post-pass paper wash (lane-only)
 **Unwired audit:** P0 c27 fleet beacon still MeshStandard; c24/c25/c26/c22 wired. Notion galaxy InstancedMesh P1.
 **Fix:** PainterlyPassShader louder grain/fiber/palette/ink-edge + mediump brush cap (already in composer — no wait).
@@ -198,7 +221,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 121 | **Motion c31 — comet segment LOD by camera distance** — hysteretic drawRange thin (24→6 far); head continuous; hacker NaN/0/inside + threshold thrash + mid-trail seg change | **done** | Motion c31 |
 | 122 | **Motion c32 — painter glow desaturate** — GLOW_BASE 2→1.25; clampGlowScale cap 1.45 on pulse+focus (n.glow.scale); hacker NaN/Inf/over-boost | **done** | Motion c32; Painter c26 request |
 | 123 | **Motion c33 — traveler trail point budget** — cam-distance+speed resample under TRAVELER_POINT_BUDGET_TOTAL=2048; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus, LOD hyst teleport, many-traveler overflow | **done** | Motion c33 |
-| 124 | **Motion c34 — traveler trail GPU upload throttle** — dirty-only BufferAttribute uploads for activePoints when budget/cam band unchanged; skip resample+upload on duplicate clock.map(t); hacker 0↔budget jump / teleport mid-band / focus flip | queued | Motion lane next |
+| 124 | **Motion c34 — traveler trail GPU upload throttle** — dirty-only resample/upload via pointsDirty + consumeTravelerPointsDirty; skip on duplicate clock.map(t); toggle ON↔OFF clears stale budget; 0/neg total parks (no full escape) | **done** | Motion c34 |
+| 125 | **Motion c35 — traveler trail focus-flip LOD snap** — focus edge dirty full resample; unfocus thin restore; focus@budget0 parks (no MIN escape); disposed+focused skip; hacker rapid multi-flip / disposed / budget0 | **done** | Motion c35 |
+| 126 | **Motion c36 — traveler hold×focus churn** — hold true while focused flips must not false-wrap or teleport sample; resume restores budget band; hacker hold spam + focus spam same frame / NaN dt | queued | Motion lane next |
 | 125 | **Light — HDR-safe byte bloom chain** — when c114 drops the bloom chain to 8-bit (no renderable RGBA16F / c20 byte composer over HDR), Reinhard-encode the bright pass e/(1+e) and decode in the composite (as #117 did for the god-ray mask) so sun cores and blocked-tone halos don't clip at 1.0; measure halo energy vs HalfFloat chain. Painter stars stay ≤0.98 matte (no threshold change) | queued | Light lane next; postfx/ only |
 
 
@@ -224,7 +249,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c31 — comet segment LOD by camera distance**~~ — **done (Cosmos Motion Bot c31)**: hysteretic seg LOD 24→6; head continuous; NaN/thrash harden.
 - ~~**Motion c32 — painter glow desaturate**~~ — **done (Cosmos Motion Bot c32)**: GLOW_BASE 1.25 + GLOW_SCALE_CAP 1.45; Painter c26 request via handoff.
 - ~~**Motion c33 — traveler trail point budget**~~ — **done (Cosmos Motion Bot c33)**: allocateTravelerPointBudgets + hysteretic LOD + resample; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus / teleport hyst / overflow.
-- **Motion c34 — traveler trail GPU upload throttle** — dirty-only activePoints uploads when budget/cam band unchanged; skip on duplicate clock.map(t); hacker 0↔budget / teleport mid-band / focus flip. Cosmos Motion Bot next.
+- ~~**Motion c34 — traveler trail GPU upload throttle**~~ — **done (Cosmos Motion Bot c34)**: pointsDirty + consumeTravelerPointsDirty; duplicate map(t) skip; toggle ON↔OFF clears stale; 0/neg parks.
+- ~~**Motion c35 — traveler trail focus-flip LOD snap**~~ — **done (Cosmos Motion Bot c35)**: focus-edge dirty full; unfocus thin; focus@0 parks; disposed skip. Lean REA uniqueSamples=9 — no quality gap → c36.
+- **Motion c36 — traveler hold×focus churn** — hold while focused flips: no false wrap/teleport; resume restores band; hacker hold+focus spam / NaN dt. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.

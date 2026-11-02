@@ -813,3 +813,30 @@ No universe-scene edit required until Dashboard opts in. Pass `camDistance` (e.g
 - Register `motion/traveler-point-budget.test.ts` in package.json strip-types list.
 - Queue row #123 Motion c33 **done**.
 - Wire: `enablePointBudget: true` + `camDistance` on the traveler tick; mark focus traveler `focused: true`.
+
+## Requests for Dashboard Bot (c34 — traveler upload throttle)
+
+When `enablePointBudget` is on:
+- `trail.pointsDirty` is set only when budget/cam band changes (or toggle edge)
+- Call `consumeTravelerPointsDirty(trail)` after copying `activePoints` into a BufferAttribute — returns true once per dirty edge
+- Duplicate `clock.map(t)` with unchanged budget skips resample (no GPU upload needed)
+- Toggling `enablePointBudget` off mid-flight clears `pointsBudget` and dirties once (restore full poly upload)
+- `pointBudgetTotal` ≤0 parks travelers (empty poly) — never escapes to full path
+
+### Requests (c34)
+- Register `motion/traveler-upload-throttle.test.ts` in package.json strip-types list.
+- Queue row #124 Motion c34 **done**.
+- Optional wire: after traveler tick, if `consumeTravelerPointsDirty(tr)` then upload line positions from `tr.activePoints` / full `tr.points`.
+
+## Requests for Dashboard Bot (c35 — focus-flip LOD snap)
+
+When `enablePointBudget` is on and `trail.focused` flips:
+- Focus edge forces dirty resample to full polyline (then `consumeTravelerPointsDirty`)
+- Unfocus restores hysteretic cam thin — no one-frame empty hole
+- `pointBudgetTotal === 0` parks even focused travelers (no MIN escape)
+- `trail.disposed === true` (or null ease/sample) is skipped safely under focus
+
+### Requests (c35)
+- Register `motion/traveler-focus-flip.test.ts` in package.json strip-types list.
+- Queue row #125 Motion c35 **done** (note: Light also queued a #125 — renumber if needed).
+- Lean REA c35: uniqueSamples=9, 0 page errors — motion still reads; no c36 quality gap from captures.

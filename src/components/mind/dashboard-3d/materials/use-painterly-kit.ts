@@ -72,6 +72,15 @@ import {
   type PainterlyFleetBeaconBundle,
 } from "./fleet-beacon.ts";
 import {
+  createGalaxyPageMaterial as createGalaxyPageMaterialImpl,
+  createNotionGalaxyPages as createNotionGalaxyPagesImpl,
+  type GalaxyPageMaterialOptions,
+  type GalaxyPageInput,
+  type GalaxyEdgeInput,
+  type NotionGalaxyPagesOptions,
+  type NotionGalaxyPagesHandle,
+} from "./galaxy-page.ts";
+import {
   createPainterlyInkEdges,
   type PainterlyInkEdgeInput,
   type PainterlyInkEdgesOptions,
@@ -201,6 +210,16 @@ export type PainterlyKit = {
    * Fleet plan queue/landing beacons (c27) — replaces MeshStandardMaterial ball() in fleet-plan-layer.
    */
   createFleetBeacon: (opts?: FleetBeaconOptions) => PainterlyFleetBeaconBundle;
+  /** Notion page galaxy InstancedMesh watercolor (c30) — replaces MeshBasic interim. */
+  createGalaxyPageMaterial: (opts?: GalaxyPageMaterialOptions) => THREE.ShaderMaterial;
+  /**
+   * One-call Notion galaxy pages+child edges from real snapshot (rebuildPages adopt).
+   */
+  createNotionGalaxyPages: (
+    pages?: GalaxyPageInput[],
+    edges?: GalaxyEdgeInput[],
+    opts?: NotionGalaxyPagesOptions,
+  ) => NotionGalaxyPagesHandle;
   /**
    * One-line ink-wash constellation edges (replaces LineDashedMaterial rebuildEdges).
    * Batches by health → ≤4 draw calls; handle.update / handle.dispose.
@@ -612,6 +631,33 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
         };
       }
       return createFleetBeaconImpl(kit, beaconOpts);
+    },
+    createGalaxyPageMaterial(gOpts) {
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("GalaxyPageMaterialInert");
+      }
+      const m = createGalaxyPageMaterialImpl(gOpts);
+      tracked.push(m);
+      return m;
+    },
+    createNotionGalaxyPages(pages = [], edges = [], gOpts) {
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        const group = new THREE.Group();
+        return {
+          group,
+          pageMesh: null,
+          edges: null,
+          update: () => {},
+          dispose: () => {},
+          pageCount: 0,
+          edgeCount: 0,
+          truncated: false,
+          skippedInvalid: 0,
+        };
+      }
+      return createNotionGalaxyPagesImpl(kit, pages, edges, gOpts);
     },
     createInkEdges(edges = [], eOpts) {
       if (kit.disposed) {
