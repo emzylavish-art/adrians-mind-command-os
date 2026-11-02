@@ -1,26 +1,44 @@
 # Mind Command OS — Agent Team
 
-This repository is a **callable tool team**, not a folder of disconnected scripts. Agents discover capabilities through `team/manifest.json`, use a common tool contract, and route requests to the right specialist. Implementations must declare readiness accurately.
+The team manifest is the interoperability contract. The shared Python runner provides
+a concrete JSON entrypoint for compatible hosts (Grok, Codex, Claude, or another
+runner); it does not perform model inference or claim external services are live.
+
+## Entry points
+
+- `python team/runner.py` — JSON task through stdin.
+- `python team/runner.py --task '{"operation":"list-tools"}'` — inspect tool catalog.
+- `python team/runner.py --task '{"operation":"route","task":"inspect source","capabilities":["source_inventory"]}'` — create a specialist dispatch.
+- `python team/runner.py --task '{"operation":"invoke","tool_id":"rea.scan","input":{"path":"."}}'` — execute the implemented REA scanner.
+
+### JSON contract
+
+Input requires an `operation`:
+- `route`: requires `task`; optional `capabilities` and `context`.
+- `list-tools`: returns declared catalog entries and their status.
+- `invoke`: requires `tool_id`; optional `input` object.
+
+Responses use `status`, `result`, `evidence`, `limitations`, and `dispatch`.
+A declared catalog entry is not proof of an installed executable, configured provider,
+credentials, or live runtime. Unsupported tools return a non-ready status rather than
+being simulated. External actions and deployment remain gated by explicit authorization.
 
 ## Team map
-- **Orchestrator** — classifies task, builds plan, dispatches specialists, combines evidence.
-- **Analysis / Research** — repo and document inspection; source-grounded research.
-- **Engineering / Codex** — implementation, tests, refactors, CI verification.
-- **Reverse Engineering / REA** — static inventory and authorized code analysis.
-- **Security Review** — defensive checks on owned/authorized code and systems.
-- **God's Eyes** — named capability in catalog; implementation is not yet verified. Do not claim callable until provider/source is mapped.
-- **Memory / Knowledge** — project context and retrieval.
-- **Browser / Workflow** — browser automation and external workflow adapters; require declared connector and authorization.
-- **QA / Release** — test, validate, package; no auto-merge/deploy unless explicitly configured.
-- **Observability** — health/status and run logs.
-- **Human Approval** — gates consequential external actions.
 
-## Routing
-Any compatible agent (Grok, Codex, Claude, or another runner) should:
-1. Read `team/manifest.json`.
-2. Select by `capabilities`, not agent name alone.
-3. Check `status`, `entrypoint`, and `requires`.
-4. Invoke only the listed entrypoint and pass the documented JSON input.
-5. Return evidence, result, and limitations; never fabricate a successful run.
+- **Orchestrator** — task classification, planning, dispatch, synthesis.
+- **Analysis / Research** — reasoning, requirements, evidence-based research; provider adapter required.
+- **Engineering / Codex** — coding, refactoring, tests, CI.
+- **REA** — offline source inventory and static reconnaissance.
+- **Security** — defensive checks on owned or authorized systems.
+- **God's Eyes / Arrow EA** — identity/source not verified; no fabricated implementation.
+- **Knowledge** — retrieval/organization; knowledge-store adapter required.
+- **Browser / Workflow** — browser tasks; authorized runtime and connector required.
+- **QA / Release** — tests and validation; no automatic merge/deploy by default.
+- **Observability** — status and logs.
+- **Human Approval** — authorization gate for consequential external actions.
 
-The manifest is a shared interchange contract. It does not magically provide model credentials or runtime services. Each tool's status is tracked separately.
+## Tests
+
+`python -m unittest discover -s team -p 'test_*.py'`
+
+The manifest remains the authority for capability matching, readiness, and requirements.
