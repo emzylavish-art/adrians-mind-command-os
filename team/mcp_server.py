@@ -37,6 +37,20 @@ def tool_specs(manifest):
                     "additionalProperties": False,
                 },
             })
+        elif tool_id == "security.scan":
+            specs.append({
+                "name": tool_id,
+                "description": "Perform an offline heuristic static security review of source files. Does not execute code or make network requests; findings require human validation.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Authorized source directory or file, relative to repository root unless absolute."},
+                        "out": {"type": "string", "description": "Optional output file path."},
+                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
+                    },
+                    "additionalProperties": False,
+                },
+            })
     return specs
 
 
