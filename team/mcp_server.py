@@ -58,7 +58,7 @@ def tool_specs(manifest):
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "operation": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
+                        "action": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},\n                        "operation": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
                         "db": {"type": "string", "description": "Optional SQLite database path; defaults to team/queue.sqlite3."},
                         "task": {"type": "string"},
                         "payload": {"type": "object"},
@@ -72,7 +72,7 @@ def tool_specs(manifest):
                         "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
                         "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
                     },
-                    "required": ["operation"],
+                    
                     "additionalProperties": False,
                 },
             })
