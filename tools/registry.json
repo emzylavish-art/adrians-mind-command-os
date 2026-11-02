@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "emzylavish-art/adrians-mind-command-os",
-  "note": "Registry of requested tools. Presence in this registry means catalogued, not installed on the owner's PC. `bootstrap-script-ready` means a Windows installer is committed but has not been run on the owner's PC. Unresolved identities remain unresolved.",
+  "note": "Registry of requested and repository-integrated tools. A catalog/source record is not proof of a native callable adapter. Use each entry's status, install, and live fields to distinguish committed metadata, executable repository code, and verified runtime connections. Unresolved identities remain unresolved.",
   "tools": [
     {
       "name": "Everything Claude Code",
@@ -245,10 +245,10 @@
       "category": "windows-installation",
       "status": "implemented",
       "install": "repo-code-present",
-      "live": "script-present-not-yet-run-on-user-pc",
+      "live": "bootstrap-script-available-in-repository",
       "source_url": "tools/bootstrap/Install-MindCommandTools.ps1",
       "team_agent": "engineering",
-      "guardrail": "Installs listed upstream software and clones source repositories on the owner's Windows machine only after the owner runs the script; does not configure provider credentials or silently overwrite client settings."
+      "guardrail": "A repository bootstrap script and metadata are committed. This entry does not imply that its third-party tools are exposed as native AI adapters; use the actual tool readiness fields and MCP inventory."
     }
   ]
 }
