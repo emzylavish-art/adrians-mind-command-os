@@ -27,7 +27,7 @@ log "Installing Python integration packages into this Codespace environment"
 python -m pip install --user --upgrade frida-tools 'lightrag-hku[api]' || warn "Python package install did not finish; see pip output."
 
 log "Installing declared Node integration packages"
-npm install --global n8n-mcp ui-ux-pro-max-cli || warn "One or more npm packages did not finish installing."
+npm install --prefix "$TOOLS_ROOT/npm" --global n8n-mcp ui-ux-pro-max-cli || warn "One or more npm packages did not finish installing."
 
 log "Checking out the approved upstream source catalog"
 while IFS=$'\t' read -r id url; do
