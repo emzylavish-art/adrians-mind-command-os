@@ -29,7 +29,8 @@ class MCPServerTests(unittest.TestCase):
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
         ])
         self.assertEqual(responses[0]["result"]["serverInfo"]["name"], "mind-command-os-tools")
-        self.assertIn("rea.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])\n        self.assertIn("security.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("rea.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("security.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
 
     def test_call_rea_scan(self):
         responses = rpc([{
