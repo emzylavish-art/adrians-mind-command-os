@@ -201,8 +201,8 @@ import {
   painterlyAmountFromHealth,
   setPainterlyPassHealth,
   setPainterlyPassAmount,
-  setPainterlyPassFiber,
   sanitizePainterlyPassUniforms,
+  setPainterlyPassFiber,
   painterlyFiberFromAmount,
   PAINTER_FIBER_DEFAULT,
   PAINTER_FIBER_MIN,
@@ -212,6 +212,8 @@ import {
   PAINTER_PASS_MAX_DPR,
   PAINTER_AMOUNT_MIN,
   PAINTER_AMOUNT_MAX,
+  PAINTER_PASS_GRAIN_DEFAULT,
+  PAINTER_PASS_BRUSH_OFFSET_MAX,
   PAINTER_RESIZE_MIN_INTERVAL_MS,
 } from "../shaders/index.ts";
 
@@ -3254,5 +3256,52 @@ describe("painter c27: fleet queue/landing watercolor beacons (string-light adop
     } finally {
       (globalThis as { document?: unknown }).document = docPrev;
     }
+  });
+});
+
+describe("hacker pass c28: painterly pass UV brush / NaN grain / amount blowout", () => {
+  it("PAINTER_PASS_BRUSH_OFFSET_MAX keeps brush under mediump-safe sheet", () => {
+    assert.ok(PAINTER_PASS_BRUSH_OFFSET_MAX <= 0.025);
+    assert.ok(PAINTER_PASS_BRUSH_OFFSET_MAX > 0);
+    // max amount * 0.028 would be ~0.024 — soft-cap at BRUSH_OFFSET_MAX
+    assert.ok(Math.min(PAINTER_AMOUNT_MAX * 0.028, PAINTER_PASS_BRUSH_OFFSET_MAX) <= PAINTER_PASS_BRUSH_OFFSET_MAX);
+  });
+
+  it("sanitizePainterlyPassUniforms / setAmount scrub NaN Inf grain and clamp amount", () => {
+    const pass = createPainterlyPass({ amount: 0.4, grain: PAINTER_PASS_GRAIN_DEFAULT });
+    pass.uniforms.amount.value = Number.NaN;
+    pass.uniforms.grain.value = Number.POSITIVE_INFINITY;
+    sanitizePainterlyPassUniforms(pass);
+    assert.ok(Number.isFinite(pass.uniforms.amount.value as number));
+    assert.ok((pass.uniforms.amount.value as number) <= PAINTER_AMOUNT_MAX);
+    assert.ok(Number.isFinite(pass.uniforms.grain.value as number));
+    assert.ok((pass.uniforms.grain.value as number) <= 1);
+    setPainterlyPassAmount(pass, 99);
+    assert.ok((pass.uniforms.amount.value as number) <= PAINTER_AMOUNT_MAX);
+    setPainterlyPassAmount(pass, Number.NaN);
+    assert.ok(Number.isFinite(pass.uniforms.amount.value as number));
+    disposePainterlyPass(pass);
+  });
+
+  it("PainterlyPassShader fragment soft-caps brush and clamps output (source contract)", () => {
+    assert.match(PainterlyPassShader.fragmentShader, /brushScale/);
+    assert.match(PainterlyPassShader.fragmentShader, /PAINTER_PASS_BRUSH_OFFSET_MAX|0\.022|min\(amt/);
+    assert.match(PainterlyPassShader.fragmentShader, /clamp\(c\.rgb/);
+    assert.match(PainterlyPassShader.fragmentShader, /ink edge|edge/);
+  });
+});
+
+describe("painter c28: louder paper wash on already-wired pass", () => {
+  it("default grain is PAINTER_PASS_GRAIN_DEFAULT (readable vs legacy 0.09)", () => {
+    assert.ok(PAINTER_PASS_GRAIN_DEFAULT >= 0.16);
+    const pass = createPainterlyPass({});
+    assert.ok(Math.abs((pass.uniforms.grain.value as number) - PAINTER_PASS_GRAIN_DEFAULT) < 1e-6);
+    disposePainterlyPass(pass);
+  });
+
+  it("shader exposes second-octave granulation + stronger palette (c28)", () => {
+    assert.match(PainterlyPassShader.fragmentShader, /g2/);
+    assert.match(PainterlyPassShader.fragmentShader, /paperWarm/);
+    assert.match(PainterlyPassShader.fragmentShader, /c28/);
   });
 });

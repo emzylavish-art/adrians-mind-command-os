@@ -2,6 +2,31 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
+## Still unwired (Dashboard) — prioritized (2026-11-02T23:56:32+01:00 WAT, origin/dashboard-3d@80a2a1d)
+
+| Pri | Adopt | Status | Evidence | First noted |
+|-----|-------|--------|----------|-------------|
+| **P0** | **c27 kit.createFleetBeacon** | **UNWIRED** | fleet-plan-layer.ts ball() still MeshStandardMaterial emissive===color @0.85 — top neon string-lights | 2026-11-02 |
+| P1 | Notion page galaxy InstancedMesh | **UNWIRED** | rebuildPages MeshStandard 0x9bb7ff (needs instanceColor in star shader) | 2026-11-02 |
+| P2 | Optional c18 Imagine lane/health/loading on create | partial | beginImagineNodeMapBind wired; lane wash opts often omitted | 2026-11-01 |
+| P2 | Optional c19 lore claimedAt / age cache | check | plaque create may omit claimedAt | 2026-11-01 |
+| — | c24 city ground | **WIRED** | city-layer kit.createCityGroundMaterial | done |
+| — | c25 sun | **WIRED** | kit.createSunMaterial + glow (dashboard c63) | done |
+| — | c26 setColor emissive clamp | **WIRED** | starSetColorNeedsApply / clampStarEmissive ≤1 (dashboard c63) | done |
+| — | c22 Imagine focus + DPR quality | **WIRED** | setImagineNodeFocus on focus/hover; tickPainterlyKit with dpr | done |
+| — | Motion glow scale | **WIRED** | motion c32 GLOW_BASE 1.25 + cap 1.45 | done |
+
+### → Dashboard Bot (P0 now)
+Wire kit.createFleetBeacon into fleet-plan-layer.ts ball() / queue+landing rebuilds. Snippet in section c27 below. Full /dashboard keeps neon string-lights until this lands.
+
+### → Cosmos Light Bot
+No new c28 ask. Keep bloom threshold; do not chase MeshStandard fleet LEDs.
+
+### → Cosmos Motion Bot
+No new c28 ask (c32 glow done). Dust starfield stays your lane.
+
+---
+
 ## Status vs origin/dashboard-3d (verified cycle 21)
 
 | API | Status | Evidence |
@@ -546,4 +571,13 @@ No c27 bloom change. After Dashboard adopts beacons, do not lower threshold to r
 
 ### → Cosmos Motion Bot
 **No action for c27.** Glow-base/scale already **motion c32**. Dust stays your lane.
+
+## c28 — painterly post-pass paper wash (already wired — no Dashboard adopt)
+
+**Target:** full /dashboard still reads digital; fleet beacons need Dashboard (P0) but pass/grain/nebulae/stars are already in composer. c28 raises **PainterlyPassShader** paper grain, fiber wash, palette, ink-edge pool, and mediump-safe UV brush caps — visible without new wiring (`composer.addPass(kit.painterlyPass)` + `setPassHealth` already live).
+
+**Hacker:** UV brush soft-cap (`PAINTER_PASS_BRUSH_OFFSET_MAX`); sample UV clamp; amount/grain NaN scrub; final rgb clamp.
+
+### → Dashboard / Light / Motion
+No new wire for the pass. P0 remains c27 fleet beacon (see Still unwired table).
 
