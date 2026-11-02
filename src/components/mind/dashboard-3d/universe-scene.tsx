@@ -831,11 +831,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const pages = status.notionGraph.pages;
       if (!pages.length) return;
       const positions = pageStarPositions(pages.length, 16);
-      const mat = new THREE.MeshStandardMaterial({
+      // c68 hacker: MeshBasic (no emissive LED) until Painter ships instance-safe page stars.
+      const mat = new THREE.MeshBasicMaterial({
         color: 0x9bb7ff,
-        emissive: 0x4960a8,
-        emissiveIntensity: 0.55,
-        roughness: 0.5,
+        transparent: true,
+        opacity: 0.92,
       });
       pageMesh = new THREE.InstancedMesh(pageGeo, mat, pages.length);
       pageMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(pages.length * 3), 3);
