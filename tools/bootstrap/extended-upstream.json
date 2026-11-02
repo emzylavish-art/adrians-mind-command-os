@@ -1,1 +1,123 @@
-{"schema_version":"1.0.0","sources":[]}
+{
+  "schema_version": "1.0.0",
+  "description": "Pinned upstream sources added per owner request. Submodule checkouts are initialized in GitHub Codespaces or by the workspace bootstrap; they do not imply services are configured or live. Never store provider tokens in this repository.",
+  "sources": [
+    {
+      "id": "comfyui",
+      "name": "ComfyUI",
+      "repo": "Comfy-Org/ComfyUI",
+      "commit": "384577510969e0ed59506f8eb5fcf6e6df15a3d1",
+      "category": "image-video-workflow",
+      "source_url": "https://github.com/Comfy-Org/ComfyUI",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    },
+    {
+      "id": "open-higgsfield",
+      "name": "Open Higgsfield",
+      "repo": "wide-trace/open-higgsfield",
+      "commit": "b16a0efe4d7e2707b56f8ccb02387fd2a9d2eddf",
+      "category": "image-video-workflow",
+      "source_url": "https://github.com/wide-trace/open-higgsfield",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    },
+    {
+      "id": "weknora",
+      "name": "WeKnora",
+      "repo": "Tencent/WeKnora",
+      "commit": "d9c1cf65f0d8ad56e11a1c6340b635e4fede107c",
+      "category": "knowledge-browser-agent",
+      "source_url": "https://github.com/Tencent/WeKnora",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    },
+    {
+      "id": "openwhispr",
+      "name": "OpenWhispr",
+      "repo": "OpenWhispr/openwhispr",
+      "commit": "ab9e470b971807ee625b60e7e040195cfebcc404",
+      "category": "speech-notes",
+      "source_url": "https://github.com/OpenWhispr/openwhispr",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    },
+    {
+      "id": "openproject",
+      "name": "OpenProject",
+      "repo": "opf/openproject",
+      "commit": "c93dccdc030fd62424755cf43d04f69513c81d5c",
+      "category": "project-management",
+      "source_url": "https://github.com/opf/openproject",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    },
+    {
+      "id": "cal-diy",
+      "name": "Cal.diy",
+      "repo": "calcom/cal.diy",
+      "commit": "81ce067c1d0e16b21c39c2de98b9a43a92562cd1",
+      "category": "scheduling",
+      "source_url": "https://github.com/calcom/cal.diy",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    },
+    {
+      "id": "chatwoot",
+      "name": "Chatwoot",
+      "repo": "chatwoot/chatwoot",
+      "commit": "ae66c979835f7e49e1cf9ecb64eb89628e8f3f70",
+      "category": "customer-support",
+      "source_url": "https://github.com/chatwoot/chatwoot",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    },
+    {
+      "id": "cap",
+      "name": "Cap",
+      "repo": "CapSoftware/Cap",
+      "commit": "3c640452168e05b2fdbff62add26100a265511d8",
+      "category": "screen-recording",
+      "source_url": "https://github.com/CapSoftware/Cap",
+      "install": "pinned-git-submodule+codespaces-bootstrap",
+      "live": "not-connected"
+    }
+  ],
+  "unresolved": [
+    {
+      "name": "VoiceStudio",
+      "status": "identity-unconfirmed",
+      "note": "Exact intended repository not established; do not substitute a similarly named project."
+    },
+    {
+      "name": "OpenSEO",
+      "status": "identity-unconfirmed",
+      "note": "Several unrelated projects use this name; exact source not established."
+    },
+    {
+      "name": "Zapia",
+      "status": "integration-not-configured",
+      "note": "Requires exact service identity and owner-authorized endpoint/credentials."
+    },
+    {
+      "name": "God's Eyes",
+      "status": "identity-unconfirmed",
+      "note": "Exact source identity not established."
+    },
+    {
+      "name": "Arrow EA",
+      "status": "identity-unconfirmed",
+      "note": "Exact source identity not established."
+    },
+    {
+      "name": "Blackbox",
+      "status": "identity-unconfirmed",
+      "note": "Exact source identity not established."
+    },
+    {
+      "name": "BlackEye",
+      "status": "restricted-not-integrated",
+      "note": "Phishing and credential-collection deployment is excluded."
+    }
+  ]
+}
