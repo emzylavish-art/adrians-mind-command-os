@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "name": "Mind Command OS Agent Team",
+  "description": "Interoperable specialist agents and callable tools for compatible AI runners.",
+  "entrypoint_contract": {
+    "protocol": "json-stdin-json-stdout",
+    "required_input": ["task"],
+    "required_output": ["status", "result", "evidence", "limitations"],
+    "statuses": ["ready", "partial", "blocked", "not_implemented"]
+  },
+  "routing_policy": {
+    "match": "capabilities",
+    "prefer": "ready",
+    "allow_partial": true,
+    "partial_requires_disclosure": true,
+    "no_claim_without_execution_evidence": true
+  },
+  "agents": [
+    {"id":"orchestrator","role":"Orchestrator","capabilities":["task_classification","planning","dispatch","synthesis"],"status":"contract_defined","entrypoint":"team/agents/orchestrator.md","requires":[]},
+    {"id":"analysis","role":"Analysis Specialist","capabilities":["reasoning","requirements_analysis","document_analysis"],"status":"contract_defined","entrypoint":"team/agents/analysis.md","requires":[]},
+    {"id":"research","role":"Research Specialist","capabilities":["source_research","evidence_collection","citation"],"status":"adapter_required","entrypoint":"team/agents/research.md","requires":["configured_search_provider"]},
+    {"id":"engineering","role":"Engineering / Codex Specialist","capabilities":["coding","refactoring","implementation","tests","ci"],"status":"contract_defined","entrypoint":"team/agents/engineering.md","requires":["repository_access"]},
+    {"id":"rea","role":"Reverse Engineering Specialist","capabilities":["source_inventory","static_recon","manifest_discovery"],"status":"ready","entrypoint":"tools/rea/rea.py","requires":["python3"]},
+    {"id":"security","role":"Defensive Security Specialist","capabilities":["secure_code_review","dependency_review","static_security_triage"],"status":"adapter_required","entrypoint":"team/agents/security.md","requires":["approved_scanner_or_review_runtime"]},
+    {"id":"gods-eyes","role":"God's Eyes","capabilities":["capability_name_reserved"],"status":"source_unmapped","entrypoint":null,"requires":["identify_exact_project_and_source"]},
+    {"id":"knowledge","role":"Memory / Knowledge Specialist","capabilities":["context_retrieval","knowledge_organization"],"status":"adapter_required","entrypoint":"team/agents/knowledge.md","requires":["configured_knowledge_store"]},
+    {"id":"browser-workflow","role":"Browser / Workflow Specialist","capabilities":["browser_workflows","web_task_automation"],"status":"adapter_required","entrypoint":"team/agents/browser-workflow.md","requires":["authorized_browser_runtime","connector_configuration"]},
+    {"id":"qa-release","role":"QA / Release Specialist","capabilities":["test_execution","validation","release_readiness"],"status":"partial","entrypoint":"team/agents/qa-release.md","requires":["test_runner","repository_access"]},
+    {"id":"observability","role":"Observability Specialist","capabilities":["run_status","structured_logs","health_checks"],"status":"contract_defined","entrypoint":"team/agents/observability.md","requires":[]},
+    {"id":"human-approval","role":"Human Approval Gate","capabilities":["approval_for_external_actions"],"status":"contract_defined","entrypoint":"team/agents/human-approval.md","requires":["approval_channel"]}
+  ],
+  "tools": [
+    {"id":"rea.scan","agent":"rea","capabilities":["source_inventory","static_recon"],"status":"ready","entrypoint":"python3 tools/rea/rea.py","input_schema":{"path":"string","json":"boolean","out":"string"},"safety":"offline; does not execute scanned code"},
+    {"id":"gods-eyes","agent":"gods-eyes","capabilities":["capability_name_reserved"],"status":"source_unmapped","entrypoint":null,"input_schema":null,"safety":"Do not fabricate source or executable behavior"},
+    {"id":"blackeye","agent":"security","capabilities":["security_tool_reference"],"status":"restricted_not_integrated","entrypoint":null,"input_schema":null,"safety":"Do not integrate credential-harvesting or phishing workflows"}
+  ]
+}
