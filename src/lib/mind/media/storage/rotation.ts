@@ -1,5 +1,5 @@
 import { orderedEnabledAccounts, loadStorageAccountsConfig } from "./config.ts";
-import { resolveStorageAccessToken, isStorageAccountConnected } from "./credentials.ts";
+import { resolveStorageAccessTokenAsync, isStorageAccountConnected } from "./credentials.ts";
 import { appendStorageAudit } from "./audit.ts";
 import { bumpLedgerUsed, readLedgerUsed, setLedgerUsed } from "./ledger.ts";
 import { createDefaultProviders } from "./providers/index.ts";
@@ -21,6 +21,8 @@ export type RotationDeps = {
   configPath?: string;
   auditPath?: string;
   ledgerPath?: string;
+  fetch?: import("../../connectors/storage-token-refresh.ts").FetchLike;
+  nowMs?: number;
 };
 
 function nearCap(used: number, fileSize: number, cap: number, threshold: number): boolean {
@@ -82,7 +84,7 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
   let anyConnected = false;
 
   for (const account of accounts) {
-    const tokenResult = resolveStorageAccessToken(input.ownerId, account.service, env);
+    const tokenResult = await resolveStorageAccessTokenAsync(input.ownerId, account.service, { env, fetch: deps.fetch, nowMs: deps.nowMs });
     if (!tokenResult.ok) {
       continue;
     }
@@ -198,7 +200,7 @@ export async function storageStatusForOwner(
   const out: AccountPublicStatus[] = [];
 
   for (const account of accounts) {
-    const tokenResult = resolveStorageAccessToken(ownerId, account.service, env);
+    const tokenResult = await resolveStorageAccessTokenAsync(ownerId, account.service, { env, fetch: deps.fetch, nowMs: deps.nowMs });
     const connected = tokenResult.ok;
     let used = readLedgerUsed(account.service, account.accountEmail, deps.ledgerPath);
     let quotaSource: StorageQuota["source"] = "ledger";
