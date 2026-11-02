@@ -110,3 +110,25 @@ The currently declared repository-native callable tools are:
 ## CI and verification
 
 The CI workflow validates JSON metadata, bootstrap/manifest consistency, tests the REA/security/knowledge/team modules, smoke-tests the runner and MCP listing, and builds the hosted MCP container. Run the same checks locally where available. Preserve test evidence and disclose any checks not run.
+
+
+## Remote MCP bridge
+
+The repository includes `team/remote_mcp.py` and `team/remote_mcp.json` as a generic remote MCP-over-HTTP client. It does not auto-connect to vendors. A named server must be explicitly enabled, use HTTPS, declare an explicit `allowed_tools` list, and read any bearer token from a named environment variable. The committed starter configuration enables no endpoints.
+
+Example (replace with an actual endpoint and exact tools; do not commit secrets):
+
+```json
+{
+  "servers": {
+    "approved-service": {
+      "enabled": true,
+      "url": "https://mcp.example.com/mcp",
+      "token_env": "APPROVED_SERVICE_MCP_TOKEN",
+      "allowed_tools": ["read_status", "search"]
+    }
+  }
+}
+```
+
+Use `mcp.remote` through the runner/MCP: action `list` discovers filtered tools; action `call` invokes only a tool in the configured allowlist. This bridge is a reusable transport client, not proof that any vendor MCP endpoint, model provider, or Notion integration is connected. Tests cover disabled endpoints, HTTPS enforcement, environment-only credentials, and tool allowlists.
