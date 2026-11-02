@@ -52,11 +52,20 @@ export {
   starMatteFromStatus,
   sanitizeStarHalo,
   sanitizeStarGrain,
+  painterPigmentFromStatusColor,
+  painterGlowColorScale,
+  sanitizePainterEmissive,
   PAINTER_MATTE_DEFAULT,
   PAINTER_MATTE_IDLE,
   PAINTER_HDR_CEILING,
   PAINTER_BLOOM_SAFE_CEILING,
+  PAINTER_PIGMENT_MAX_CHANNEL,
+  PAINTER_PIGMENT_DESAT,
+  PAINTER_EMISSIVE_MAX,
+  PAINTER_GLOW_COLOR_SCALE_MATTE,
+  PAINTER_GLOW_COLOR_SCALE_OPEN,
   type PainterOutputSafeFlags,
+  type PainterPigmentResult,
 } from "./painter-output.ts";
 export {
   createPainterlyBotStar,
@@ -226,6 +235,12 @@ export {
 export {
   createCityGroundMaterial,
   tickCityGroundMaterial,
+  setCityGroundRing,
+  setCityGroundPlazaScale,
+  cityGroundPlazaScaleFromRadius,
+  CITY_GROUND_PLAZA_SCALE_MIN,
+  CITY_GROUND_PLAZA_SCALE_MAX,
+  CITY_GROUND_PLAZA_SCALE_DEFAULT,
   type CityGroundOptions,
 } from "./city-ground.ts";
 export {
@@ -238,6 +253,7 @@ export {
   tickPainterlyKit,
   disposePainterlyKit,
   disposeAllPainterlyKits,
+  disposePainterlyKitsByScope,
   PAINTER_KIT_DISPOSED,
   livePainterlyKitCount,
   attachPainterlyContextHandlers,

@@ -8,6 +8,9 @@ import {
   sanitizeStarGrain,
   starMatteFromStatus,
   PAINTER_MATTE_DEFAULT,
+  painterPigmentFromStatusColor,
+  sanitizePainterEmissive,
+  PAINTER_EMISSIVE_MAX,
 } from "./painter-output.ts";
 
 /** Real bot/lane health tones that drive pigment granulation (no fabricated activity). */
@@ -114,13 +117,17 @@ function applyColor(
   color: unknown,
   userData: Record<string, unknown>,
 ): void {
-  const { color: safe, ok, reason } = sanitizePainterColor(color, PAINTER_IDLE_RGB);
-  target.copy(safe);
-  if (!ok) {
-    userData.starColorError = reason;
+  // c26: map status/UI hex → watercolor pigment (desat pure neon / soft-cap channels)
+  const pig = painterPigmentFromStatusColor(color as THREE.ColorRepresentation, {
+    fallback: new THREE.Color(PAINTER_IDLE_RGB[0], PAINTER_IDLE_RGB[1], PAINTER_IDLE_RGB[2]),
+  });
+  target.copy(pig.color);
+  if (!pig.ok) {
+    userData.starColorError = pig.reason;
   } else {
     delete userData.starColorError;
   }
+  userData.painterPigmentSatIn = pig.satIn;
 }
 
 /** Watercolor ShaderMaterial for bot/star nodes (mediump for iOS/WebGL1). */
@@ -139,7 +146,7 @@ export function createStarWatercolorMaterial(
       applyColor(uniforms.uColor.value, opts.color, userData);
     }
     if (opts.emissiveIntensity != null) {
-      uniforms.uEmissive.value = sanitizeFinite(opts.emissiveIntensity, 0.85, 0, 3);
+      uniforms.uEmissive.value = sanitizePainterEmissive(opts.emissiveIntensity, 0.85);
     }
     if (opts.grain != null) {
       uniforms.uGrain.value = sanitizeStarGrain(opts.grain, 0.22);
@@ -249,7 +256,8 @@ export function setStarWatercolorColor(
     applyColor(mat.uniforms["uColor"].value as THREE.Color, color, mat.userData as Record<string, unknown>);
   }
   if (emissiveIntensity != null && mat.uniforms["uEmissive"]) {
-    const em = sanitizeFinite(emissiveIntensity, 0.85, 0, 3);
+    // c26: Motion pulse.emissive can exceed 1 — clamp for watercolor (was 0..3)
+    const em = sanitizePainterEmissive(emissiveIntensity, 0.85);
     mat.uniforms["uEmissive"].value = em;
     // Keep halo honest to real status emissive unless locked
     if (mat.uniforms["uHalo"] && !(mat.userData as { haloLocked?: boolean }).haloLocked) {

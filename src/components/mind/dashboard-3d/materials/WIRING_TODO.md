@@ -421,3 +421,80 @@ tickPainterlyKit(kit, t, { dpr, pauseWhenHidden: true });
 ### Hacker (c24)
 - `disposePriorLive: true` on kit create — route leave/reenter without dispose was leaking live kits.
 - `tickPainterlyKit` skips while `document.hidden` (rAF stop / background tab catch-up thrash).
+
+
+## c25 — sun watercolor surface + scoped disposePriorLive
+
+### disposePriorLive safety (c24 fix)
+`disposePriorLive` **requires** `kitScope`. Same-scope remounts dispose prior kits only.
+Minimap/preview must use a different scope (`"minimap"` / `"preview"`). Without
+`kitScope`, disposePriorLive is ignored (never a global wipe).
+
+```ts
+const kit = createPainterlyKit({
+  kitScope: "dashboard",
+  disposePriorLive: true, // only prior "dashboard" kits
+});
+// minimap:
+createPainterlyKit({ kitScope: "minimap" });
+```
+
+### Sun (universe-scene.tsx — Dashboard lane)
+
+```ts
+// Replace MeshStandardMaterial sun:
+const sun = kit.createSunMaterial({
+  color: 0xffd27a,
+  // health recolor:
+});
+sunMesh.material = sun.meshMaterial;
+// on rebuild health:
+sun.setColor(HEALTH_COLOR[bot.health], bot.health === "idle" ? 0.25 : 1.05);
+// Optional glow sprite with sun.glowMaterial — Light owns bloom/god-rays (do not retune here).
+```
+
+Painter owns surface (`createSunMaterial` → watercolor star). Light owns bloom/emissive postfx.
+
+
+## c26 — neon bot spheres: pigment map + glow setColor wipe (painter) + Motion/Light wiring
+
+### Root cause (evidence)
+1. **createBotStar IS wired** in `universe-scene.tsx` `rebuildBots` — not a missing adopt.
+2. **Painter bug (fixed c26):** every-frame `n.setColor(HEALTH_COLOR[n.health], pulse.emissive)` copied **raw** status RGB onto the **AdditiveBlending** glow sprite, wiping the create-time matte `multiplyScalar(glowScale)`. Healthy `0x3dd68c` + additive scale ~`pulse.glow` (**GLOW_BASE=2.0** in Motion `star-pulse.ts`) → flat neon-green blobs; watercolor mesh + granulation unread.
+3. **Painter bug (fixed c26):** `setStarWatercolorColor` / `setColor` allowed `emissive` **0..3**; Motion healthy pulse ~0.7–0.9 (blocked up to ~1.2). Pigment `uColor*(0.55+uEmissive*0.65)` blew toward LED before matte clamp.
+4. Status colors are **not** pure `#00ff00` (healthy=`0x3dd68c`) but still too saturated for additive glow; pigment ramp now desats primaries/neon.
+
+### Painter lane landed
+- `painterPigmentFromStatusColor` + soft-cap `PAINTER_PIGMENT_MAX_CHANNEL`
+- `sanitizePainterEmissive` → `PAINTER_EMISSIVE_MAX=1`
+- `setColor` / `setMatte` re-apply **matte-scaled pigment** to glow (never raw neon)
+- Quieter glow opacity; shader quieter emissive lift + tighter `bloomSafeClamp` under matte
+
+### → Motion Bot (do not edit from painter)
+`motion/star-pulse.ts`: `GLOW_BASE = 2.0` scales additive sprites 2× mesh. With many overlapping nodes this stacks to neon wash even after painter matte.
+
+```ts
+// motion/star-pulse.ts — suggest
+const GLOW_BASE = 1.25; // was 2.0 — painter additive sprites already bloom
+// keep GLOW_AMP ~0.15–0.25
+```
+
+`universe-scene` (Dashboard owns file): prefer not feeding raw `pulse.emissive` into `setColor` every frame once health is set — drive pulse via scale/halo only:
+
+```ts
+// universe-scene tick — prefer
+n.glow.scale.setScalar(Math.min(1.45, pulse.glow) * (scaleMul / Math.max(1e-6, pulse.scale)));
+if (n.setColor) n.setColor(HEALTH_COLOR[n.health]); // omit emissive; or clamp Math.min(1, pulse.emissive)
+// optional: n.setHalo?.(0.2 + pulse.emissive * 0.35)
+```
+
+### → Cosmos Light Bot
+Additive painter glow + UnrealBloom still saturates green if threshold is low / strength high. Do **not** lower bloom threshold to “bring back glow” after c26 — leave threshold so watercolor pigment reads; painter now soft-caps under matte.
+
+```ts
+// light bloom — keep threshold ≥ ~0.85 (or current post-c21 value); avoid strength bumps for “neon stars”
+```
+
+### → Dashboard Bot
+Confirm sun adopt from c25 still pending if MeshStandard sun remains. Star path already uses `createBotStar` + `setColor` — after Motion glow-base drop, constellation should read watercolor without further Dashboard changes. Optional: pass `matte: bot.health === "idle" ? 0.95 : 0.85` explicitly.
+

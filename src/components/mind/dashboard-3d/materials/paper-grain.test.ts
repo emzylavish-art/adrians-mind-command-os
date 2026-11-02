@@ -42,11 +42,17 @@ import {
   PAINTER_MATTE_IDLE,
   PAINTER_HDR_CEILING,
   PAINTER_BLOOM_SAFE_CEILING,
+  painterPigmentFromStatusColor,
+  painterGlowColorScale,
+  sanitizePainterEmissive,
+  PAINTER_EMISSIVE_MAX,
+  PAINTER_PIGMENT_MAX_CHANNEL,
 } from "./painter-output.ts";
 import {
   createPainterlyKit,
   disposePainterlyKit,
   disposeAllPainterlyKits,
+  disposePainterlyKitsByScope,
   PAINTER_KIT_DISPOSED,
   livePainterlyKitCount,
   painterlyKitResourceCounts,
@@ -115,6 +121,10 @@ import {
 import {
   createCityGroundMaterial,
   tickCityGroundMaterial,
+  setCityGroundRing,
+  setCityGroundPlazaScale,
+  cityGroundPlazaScaleFromRadius,
+  CITY_GROUND_PLAZA_SCALE_MAX,
 } from "./city-ground.ts";
 import { CityGroundShader } from "../shaders/city-ground.ts";
 import {
@@ -2777,10 +2787,10 @@ describe("hacker pass c24: kit remount leak + hidden-tab tick pause", () => {
     withDomCanvas(() => {
       disposeAllPainterlyKits();
       assert.equal(livePainterlyKitCount(), 0);
-      const a = createPainterlyKit({ pass: { amount: 0.2 } });
+      const a = createPainterlyKit({ pass: { amount: 0.2 }, kitScope: "dashboard" });
       assert.equal(livePainterlyKitCount(), 1);
-      const b = createPainterlyKit({ pass: { amount: 0.2 } });
-      assert.equal(livePainterlyKitCount(), 2, "leak: two live kits");
+      const b = createPainterlyKit({ pass: { amount: 0.2 }, kitScope: "dashboard" });
+      assert.equal(livePainterlyKitCount(), 2, "leak: two live kits same scope");
       disposePainterlyKit(a);
       disposePainterlyKit(b);
       assert.equal(livePainterlyKitCount(), 0);
@@ -2790,11 +2800,16 @@ describe("hacker pass c24: kit remount leak + hidden-tab tick pause", () => {
   it("disposePriorLive clears prior kits on remount (route /dashboard leak fix)", () => {
     withDomCanvas(() => {
       disposeAllPainterlyKits();
-      createPainterlyKit({ pass: { amount: 0.1 } });
-      createPainterlyKit({ pass: { amount: 0.1 } });
+      createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
+      createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
       assert.ok(livePainterlyKitCount() >= 2);
-      const kit = createPainterlyKit({ pass: { amount: 0.2 }, disposePriorLive: true });
+      const kit = createPainterlyKit({
+        pass: { amount: 0.2 },
+        kitScope: "dashboard",
+        disposePriorLive: true,
+      });
       assert.equal(livePainterlyKitCount(), 1);
+      assert.equal(kit.kitScope, "dashboard");
       assert.equal(kit.disposed, false);
       disposePainterlyKit(kit);
       assert.equal(livePainterlyKitCount(), 0);
@@ -2869,5 +2884,263 @@ describe("painter c24: city plaza watercolor ground", () => {
     assert.ok((m.uniforms["uTime"]!.value as number) > 0);
     disposePainterlyKit(kit);
     g.document = prev;
+  });
+});
+
+
+describe("hacker pass c25: disposePriorLive scope safety + city ground extremes", () => {
+  function withDomCanvas<T>(fn: () => T): T {
+    const g = globalThis as { document?: { hidden: boolean; createElement: (tag: string) => unknown } };
+    const prev = g.document;
+    const grad = { addColorStop() {} };
+    g.document = {
+      hidden: false,
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            {
+              canvas: c,
+              fillStyle: "#000",
+              strokeStyle: "#000",
+              globalAlpha: 1,
+              createRadialGradient: () => grad,
+              createLinearGradient: () => grad,
+              getImageData: () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 }),
+            },
+            {
+              get(target, prop, recv) {
+                if (prop in target) return Reflect.get(target, prop, recv);
+                return () => grad;
+              },
+            },
+          );
+        return c;
+      },
+    };
+    try {
+      return fn();
+    } finally {
+      g.document = prev;
+    }
+  }
+
+  it("disposePriorLive without kitScope is a no-op (never global wipe)", () => {
+    withDomCanvas(() => {
+      disposeAllPainterlyKits();
+      const dash = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
+      const mini = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "minimap" });
+      assert.equal(livePainterlyKitCount(), 2);
+      const ignored = createPainterlyKit({ pass: { amount: 0.2 }, disposePriorLive: true });
+      // both prior kits must survive — disposePriorLive ignored without scope
+      assert.equal(dash.disposed, false);
+      assert.equal(mini.disposed, false);
+      assert.equal(livePainterlyKitCount(), 3);
+      assert.equal(ignored.kitScope, null);
+      disposeAllPainterlyKits();
+    });
+  });
+
+  it("disposePriorLive only disposes matching kitScope (minimap survives dashboard remount)", () => {
+    withDomCanvas(() => {
+      disposeAllPainterlyKits();
+      const dash = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
+      const mini = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "minimap" });
+      assert.equal(livePainterlyKitCount(), 2);
+      const remount = createPainterlyKit({
+        pass: { amount: 0.2 },
+        kitScope: "dashboard",
+        disposePriorLive: true,
+      });
+      assert.equal(dash.disposed, true, "prior dashboard kit disposed");
+      assert.equal(mini.disposed, false, "minimap kit must stay alive");
+      assert.equal(livePainterlyKitCount(), 2); // mini + remount
+      assert.equal(disposePainterlyKitsByScope("minimap"), 1);
+      assert.equal(mini.disposed, true);
+      disposePainterlyKit(remount);
+      assert.equal(livePainterlyKitCount(), 0);
+    });
+  });
+
+  it("city ground: NaN ring → 0; extreme plazaScale clamps; radius mapper finite", () => {
+    const flat = createCityGroundMaterial({ ring: Number.NaN });
+    assert.equal(flat.uniforms["uRing"]!.value, 0);
+    assert.equal(setCityGroundRing(flat, Number.POSITIVE_INFINITY), 0);
+    assert.equal(setCityGroundRing(flat, 0.5), 0.5);
+    const huge = createCityGroundMaterial({ plazaScale: 1e9 });
+    assert.equal(huge.uniforms["uPlazaScale"]!.value, CITY_GROUND_PLAZA_SCALE_MAX);
+    const tiny = cityGroundPlazaScaleFromRadius(0.001);
+    assert.ok(tiny >= 0.05);
+    const far = setCityGroundPlazaScale(huge, 4000, { asRadius: true });
+    assert.equal(far, CITY_GROUND_PLAZA_SCALE_MAX);
+    assert.ok(CityGroundShader.uniforms.uPlazaScale);
+    assert.match(CityGroundShader.fragmentShader, /paintWrap/);
+    assert.match(CityGroundShader.fragmentShader, /ringAmt > 0\.001|uRing/);
+    flat.dispose();
+    huge.dispose();
+  });
+});
+
+describe("painter c25: sun MeshStandard → watercolor surface adopt", () => {
+  it("kit.createSunMaterial returns watercolor star bundle (surface only)", () => {
+    const g = globalThis as { document?: { hidden?: boolean } };
+    const prevDoc = g.document;
+    // reuse withDom from above via try/catch pattern
+    let kit: PainterlyKit | null = null;
+    try {
+      // minimal: may fail without canvas — then use createPainterlyBotStar path via createStarMaterial
+      disposeAllPainterlyKits();
+    } catch { /* */ }
+    function withDom<T>(fn: () => T): T | null {
+      const grad = { addColorStop() {} };
+      const docPrev = (globalThis as { document?: unknown }).document;
+      (globalThis as { document: unknown }).document = {
+        hidden: false,
+        createElement(tag: string) {
+          if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+          const c: Record<string, unknown> = { width: 64, height: 64 };
+          c.getContext = () =>
+            new Proxy(
+              { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+              { get(t, p, r) { return p in t ? Reflect.get(t, p, r) : () => grad; } },
+            );
+          return c;
+        },
+      };
+      try { return fn(); } finally { (globalThis as { document?: unknown }).document = docPrev; }
+    }
+    withDom(() => {
+      disposeAllPainterlyKits();
+      kit = createPainterlyKit({ pass: { amount: 0.2 }, kitScope: "dashboard" });
+      const sun = kit.createSunMaterial({ color: 0xffd27a });
+      assert.equal(sun.meshMaterial.type, "ShaderMaterial");
+      assert.match(sun.meshMaterial.name, /StarWatercolor|Watercolor/);
+      assert.equal(sun.meshMaterial.toneMapped, false);
+      // health recolor like universe-scene sun emissive path — surface API only
+      sun.setColor(0x3cd687, 0.9);
+      disposePainterlyKit(kit);
+      kit = null;
+    });
+    if (prevDoc !== undefined) g.document = prevDoc;
+  });
+});
+
+
+describe("hacker pass c26: neon status / emissive>1 / additive glow setColor wipe", () => {
+  it("painterPigmentFromStatusColor desaturates pure #00ff00 and soft-caps channels", () => {
+    const neon = painterPigmentFromStatusColor(0x00ff00);
+    assert.ok(neon.satIn > 0.95, "pure green is fully saturated in");
+    assert.ok(neon.color.g <= PAINTER_PIGMENT_MAX_CHANNEL + 1e-6, `g=${neon.color.g}`);
+    assert.ok(neon.color.g < 0.95, "must not stay LED-green");
+    assert.ok(neon.color.r > 0.02, "desat wash lifts red channel off zero");
+    const primary = painterPigmentFromStatusColor("#ff0000");
+    assert.ok(primary.color.r <= PAINTER_PIGMENT_MAX_CHANNEL + 1e-6);
+    assert.ok(primary.color.g > 0.01 && primary.color.b > 0.01);
+  });
+
+  it("sanitizePainterEmissive clamps Motion pulse >1 (and rejects Inf)", () => {
+    assert.equal(sanitizePainterEmissive(3), PAINTER_EMISSIVE_MAX);
+    assert.equal(sanitizePainterEmissive(1.5), PAINTER_EMISSIVE_MAX);
+    assert.equal(sanitizePainterEmissive(Number.POSITIVE_INFINITY, 0.5), 0.5);
+    assert.ok(sanitizePainterEmissive(0.7) === 0.7);
+  });
+
+  it("setColor every-frame does not wipe matte-scaled glow back to raw neon", () => {
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = {
+      addColorStop() {},
+    };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            {
+              canvas: c,
+              fillStyle: "#000",
+              createRadialGradient: () => grad,
+              createLinearGradient: () => grad,
+              getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+            },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ pass: { amount: 0.2 }, kitScope: "c26-glow" });
+      const star = createPainterlyBotStar(kit, { color: 0x00ff00, idle: false, health: "healthy", matte: 0.85 });
+      const beforeG = star.glowMaterial.color.g;
+      const beforeR = star.glowMaterial.color.r;
+      // Simulate universe-scene tick: setColor(HEALTH, pulse.emissive) every frame with emissive>1
+      star.setColor(0x00ff00, 2.4);
+      const afterG = star.glowMaterial.color.g;
+      const afterR = star.glowMaterial.color.r;
+      // Must stay matte-scaled pigment — NOT raw #00ff00 (g≈1, r≈0)
+      assert.ok(afterG < 0.55, `glow.g after setColor=${afterG} (raw neon would be ~1)`);
+      assert.ok(afterR > 0.01, `glow.r after setColor=${afterR} (raw neon would be 0)`);
+      assert.ok(
+        Math.abs(afterG - beforeG) < 0.08,
+        `setColor must re-apply matte scale (before=${beforeG} after=${afterG})`,
+      );
+      const em = star.meshMaterial.uniforms.uEmissive.value as number;
+      assert.ok(em <= PAINTER_EMISSIVE_MAX + 1e-9, `uEmissive=${em}`);
+      const u = star.meshMaterial.uniforms.uColor.value as { r: number; g: number; b: number };
+      assert.ok(u.g <= PAINTER_PIGMENT_MAX_CHANNEL + 1e-6, `mesh uColor.g=${u.g}`);
+      // Additive glow opacity must stay quiet under default matte
+      assert.ok(star.glowMaterial.opacity <= 0.85);
+      assert.equal(star.meshMaterial.toneMapped, false);
+      assert.equal(star.glowMaterial.toneMapped, false);
+      disposePainterlyKit(kit);
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
+  });
+
+  it("painterGlowColorScale is quieter at high matte", () => {
+    assert.ok(painterGlowColorScale(1) < painterGlowColorScale(0));
+    assert.ok(painterGlowColorScale(1) <= 0.25);
+  });
+});
+
+describe("painter c26: status→pigment watercolor stars (neon → wash)", () => {
+  it("healthy 0x3dd68c maps under pigment max and createBotStar keeps matte glow", () => {
+    const pig = painterPigmentFromStatusColor(0x3dd68c);
+    assert.ok(pig.color.g <= PAINTER_PIGMENT_MAX_CHANNEL + 1e-6);
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = { addColorStop() {} };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ kitScope: "c26-pigment" });
+      const star = createPainterlyBotStar(kit, { color: 0x3dd68c, idle: false, health: "healthy" });
+      assert.match(star.meshMaterial.name, /StarWatercolor|Watercolor|Fallback/);
+      assert.ok((star.meshMaterial.uniforms.uMatte?.value as number) >= 0.7);
+      assert.ok((star.meshMaterial.uniforms.uGrain?.value as number) >= 0.15);
+      assert.ok((star.meshMaterial.uniforms.uHalo?.value as number) > 0.15);
+      // setMatte re-scales stored pigment base (does not jump to neon)
+      const g0 = star.glowMaterial.color.g;
+      star.setMatte(1);
+      assert.ok(star.glowMaterial.color.g <= g0 + 1e-6);
+      star.setColor(0x3dd68c, 0.9);
+      assert.ok(star.glowMaterial.color.g < 0.5);
+      disposePainterlyKit(kit);
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
   });
 });

@@ -7,6 +7,14 @@
 Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire stillTarget + Painter Imagine/lore/city pool + operator budget chip. Skipped ink weight (no edge.activity). Next: Light #110 or cloud signed-URL hosts.
 
 
+
+## Painter c26 (2026-11-02T23:45:25+01:00 WAT) — neon bot spheres → watercolor pigment
+**Root cause:** `createBotStar` WAS wired; every-frame `setColor(HEALTH_COLOR, pulse.emissive)` recopied raw status RGB onto AdditiveBlending glow (Motion `GLOW_BASE=2`), wiping matte scale; emissive allowed 0..3. Star watercolor unread under neon blobs.
+**Painter fix:** `painterPigmentFromStatusColor` desat+soft-cap; `sanitizePainterEmissive`≤1; setColor/setMatte re-apply matte-scaled pigment to glow; quieter glow opacity; shader quieter emissive + tighter bloomSafeClamp.
+**WIRING (other lanes):** Motion lower `GLOW_BASE` (~1.25) + cap glow.scale; Dashboard omit/clamp pulse.emissive in setColor; Light keep bloom threshold (don't chase neon).
+**Captures:** `/workspace/audit/dashboard-3d/fleet/painter/c26-full-{before,after}.png` (+ harness). Auth-off local vite :8110 only (never committed).
+**Next painter:** after Motion glow-base lands, verify constellation grain/halo on full dash; optional plaque/Imagine polish.
+
 ## c43 attacker pass ranked
 | Gap | Rank | Notes |
 |-----|------|-------|
@@ -173,7 +181,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 116 | **Motion c28 — RM guard 5s harness** — `runReducedMotionGuardHarness` proves 0 churn when data stable + exactly 1 rebuild per real change; hacker: backwards nowMs settle clamp, hash size budget, dispose-safe guard | **done** | Motion c28 |
 | 117 | **Light — god-ray mask real-GPU temporal stability + VRAM** — `postfx/god-ray-mask.ts`: HalfFloat mask only where RGBA16F is renderable (`EXT_color_buffer_float`/`_half_float`; byte composer source → byte mask), FBO-completeness guard (half→byte→stock path, sticky, never samples black), mask freed whenever the pass is disabled (reduced motion / sun behind camera / no data — previously pinned 29.5 MB at 5120×2880), odd-edge mask UV alignment (≤1 px drift fixed), 8-bit mask over HDR source Reinhard-encoded. Harness 5120×2880 SwiftShader orbit (real god-rays.ts): flicker off 0.55% / HalfFloat mask 0.55% / byte 0.564% (no regression; no gain measurable in this scene); HDR sun 3× byte mask frame luma 35.03 → 56.20 (HalfFloat 56.31); VRAM 29.5 MB → 0 on DPR drop, reduced motion, context loss. `emissionMask: "auto"|"off"|"byte"` A/B knob. No scene wiring | **done** | light c113; register postfx/god-ray-mask-vram.test.ts |
 | 118 | **Motion c29 — dust mote octahedron + zero-alloc matrices** — Sphere 6×6 (~60 tris) → Octahedron 0 (8 tris); direct instanceMatrix writes; normal REA mid-canvas dust hotspots; 28800→3840 tris @480 | **done** | Motion c29 |
-| 119 | **Light — postfx VRAM ledger** — one `postfxVramBytes()` readout summing live composer/bloom-chain/god-ray-mask/focus-depth RT bytes (from real RT sizes + texel types), shown in the `?dash3dDebug=1` meter badge, with a leak test that DPR drop, reduced motion and context loss return it to baseline. Why: c113 found the #114 mask silently pinning 29.5 MB while the pass was off; nothing in the scene would have shown it | queued | Light lane next; postfx/ only |
+| 119 | **Motion c30 — comet arc upload throttle** — dirty-only GPU uploads + BufferAttribute update ranges; duplicate map(t) skips; hacker 0↔max count jump / segments resize / trail len 0|1 | **done** | Motion c30 |
+| 120 | **Light — postfx VRAM ledger** — one `postfxVramBytes()` readout summing live composer/bloom-chain/god-ray-mask/focus-depth RT bytes (from real RT sizes + texel types), shown in the `?dash3dDebug=1` meter badge, with a leak test that DPR drop, reduced motion and context loss return it to baseline. Why: c113 found the #114 mask silently pinning 29.5 MB while the pass was off; nothing in the scene would have shown it | queued | Light lane next; postfx/ only |
 
 
 
@@ -189,7 +198,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c27 — reduced-motion guard + settle gate**~~ — **done (Cosmos Motion Bot c27)**: `reduced-motion-guard.ts` + hacker tests (key-order hash, length-collision, SSR/legacy matchMedia, RM flap settle); INTEGRATION drop-in for 4 sources.
 - ~~**Motion c28 — RM guard 5s harness**~~ — **done (Cosmos Motion Bot c28)**: `runReducedMotionGuardHarness` + dispose/budget/skew hardenings; lean REA uniqueSamples re-checked post Dashboard c59.
 - ~~**Motion c29 — dust mote octahedron + zero-alloc matrices**~~ — **done (Cosmos Motion Bot c29)**: 60→8 tris/mote (7.5×); direct instanceMatrix; hacker size/LOD0/neighbor/alloc. RM thread closed (uniqueSamples=1).
-- **Motion c30 — comet arc upload throttle** — skip `needsUpdate` when head phase delta &lt; ε under steady orbit; optional segment LOD by cam distance. Cosmos Motion Bot next.
+- ~~**Motion c30 — comet arc upload throttle**~~ — **done (Cosmos Motion Bot c30)**: dirty-only uploads + update ranges; duplicate map(t) skip; dust 480×120 ≈0.03 ms/frame under c16 0.3 ms budget.
+- **Motion c31 — comet segment LOD by camera distance** — fewer arc samples when far (reuse dust LOD distance factor); keep head bright. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
@@ -223,8 +233,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Painter — Imagine card paper bevel under focus**~~ — **done (Cosmos Painter Bot c22)**: `setImagineNodeFocus` eased `uFocus` bevel/deckle; `painterQualityFromDpr` cheap grain; no-op on released/swapped; camera passes focus only.
 - ~~**Painter — Imagine card aspect-safe deckle under non-square maps**~~ — **done (Cosmos Painter Bot c23)**: `uAspect` + letterbox content UV; `imagineAspectFromDims` never NaN; sampler-safe NPOT/anisotropy; extreme 1×4000 clamps.
 - ~~**Painter — city plaza watercolor ground**~~ — **done (Cosmos Painter Bot c24)**: `CityGroundMaterial` ink-wash plaza + wet rings (replaces MeshStandard+GridHelper); disposePriorLive + hidden-tab tick pause; WIRING for city-layer.
-- **Painter — sun MeshStandardMaterial → watercolor corona adopt** — next: grok-build sun still MeshStandard in universe-scene; provide/createBotStar or sun material + WIRING.
-- **Painter — Imagine card focus+aspect combined bevel under DPR cheap path** — later micro: focused letterboxed deckle at uQuality=0 (4K); no Light/Motion ownership.
+- ~~**Painter — sun MeshStandardMaterial → watercolor corona adopt**~~ — **done (Cosmos Painter Bot c25)**: `kit.createSunMaterial` watercolor surface + WIRING; disposePriorLive scoped by `kitScope`; city-ground NaN ring / extreme plazaScale harden.
+- **Painter — Imagine card focus+aspect combined bevel under DPR cheap path** — later micro: focused letterboxed deckle at uQuality=0 (4K).
 - ~~**Depth-aware god-ray shafts**~~ — **done (wired c9)**: god-ray pass + depth RT in universe-scene.
 - ~~**Health-reactive exposure ride**~~ — **done (wired c9)**: `createExposureRide` in universe-scene; idle until data; reduced-motion snaps.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
