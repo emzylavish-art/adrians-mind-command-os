@@ -63,6 +63,20 @@ export {
   type BuildingPainterMaterialMeta,
 } from "./building-surface.ts";
 export {
+  applyLorePlaqueStackLayer,
+  applyPainterTransparentLayer,
+  applyPainterLogDepthSupport,
+  resolvePainterlyRenderTargetType,
+  probeHalfFloatRenderTargetSupport,
+  PAINTER_RENDER_ORDER,
+  LORE_PLAQUE_STACK_MAX,
+  LORE_PLAQUE_OFFSET_UNITS,
+  type LorePlaqueStackOptions,
+  type LorePlaqueStackResult,
+  type PainterlyRenderTargetTypeOpts,
+  type PainterlyRenderTargetTypeResult,
+} from "./painter-depth.ts";
+export {
   createLorePlaqueMaterial,
   tickLorePlaqueMaterial,
   makeParchmentRGBA,
@@ -78,6 +92,7 @@ export {
   lorePaperFromAgeSeconds,
   setLorePlaqueLockAge,
   setLorePlaqueInkDensity,
+  setLorePlaqueStackIndex,
   loreNotesFingerprint,
   setLorePlaqueNotesCached,
   LORE_MAX_NOTES,

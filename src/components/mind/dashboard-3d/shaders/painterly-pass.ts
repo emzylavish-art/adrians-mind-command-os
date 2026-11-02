@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { GLSL_HASH_NOISE } from "./glsl-noise.ts";
 import { sanitizeFinite, sanitizeShaderTime } from "../materials/paper-grain.ts";
+import { resolvePainterlyRenderTargetType } from "../materials/painter-depth.ts";
 
 /** Max drawing-buffer edge for painterly pass / composer resize helpers. */
 export const PAINTER_PASS_MAX_EDGE = 4096;
@@ -124,6 +125,12 @@ export type PainterlyPassOptions = {
   fiber?: number;
   /** Force identity fallback (tests / known-bad environments). */
   forceFallback?: boolean;
+  /** Explicit composer RT type (HalfFloatType / UnsignedByteType). */
+  renderTargetType?: import("three").TextureDataType;
+  /** Probe result — false → UnsignedByteType fallback. */
+  halfFloatSupported?: boolean;
+  /** Force byte RT (MSAA / SwiftShader / tests). */
+  forceUnsignedByte?: boolean;
 };
 
 export const PAINTER_FIBER_DEFAULT = 0.35;
@@ -459,6 +466,24 @@ export function createPainterlyPass(opts: PainterlyPassOptions = {}): ShaderPass
       pass.uniforms["amount"].value as number,
     );
   }
+  // HACKER (c20): record RT type on existing PassMeta (do not replace resize bookkeeping)
+  const rt = opts.renderTargetType != null
+    ? {
+        type: opts.renderTargetType,
+        halfFloat: false,
+        reason: "explicit",
+      }
+    : resolvePainterlyRenderTargetType({
+        halfFloatSupported: opts.halfFloatSupported,
+        forceUnsignedByte: opts.forceUnsignedByte,
+      });
+  (m as PassMeta & {
+    renderTargetType?: unknown;
+    halfFloat?: boolean;
+    renderTargetReason?: string | null;
+  }).renderTargetType = rt.type;
+  (m as PassMeta & { halfFloat?: boolean }).halfFloat = rt.halfFloat;
+  (m as PassMeta & { renderTargetReason?: string | null }).renderTargetReason = rt.reason;
   return pass;
 }
 

@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 19)
+## Status vs origin/dashboard-3d (verified cycle 20)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -23,6 +23,39 @@ Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materi
 | `setBuildingProgress` | **done** | create + `city.applyBuildingProgress` on live litFloors; `progressKnown` false → 0 |
 | `setBuildingWindowGlow` | optional | progress already drives glow |
 | `attachPainterlyContextHandlers` | check scene | confirm detach on unmount |
+
+
+## Needed for visuals to appear (c12–c19 → Dashboard Bot)
+
+Zack asked Dashboard Bot to wire these. Until they land in `universe-scene` / city, the painter upgrades stay **inert defaults** (lane still ships them).
+
+| Hookup | Why it must be wired | Call site |
+|--------|----------------------|-----------|
+| **Star health granulation (c12/c15)** | `createBotStar({ health: bot.health, idle })` — without `health`, only idle/active halo+grain ladder; blocked pigment never settles. | `rebuildBots` → `kit.createBotStar({ color: HEALTH_COLOR[bot.health], idle: bot.health==="idle", health: bot.health })` |
+| **Imagine lane / health / loading (c18)** | Missing-art wash stays flat grey accent unless `lane`+`health`+`loading` passed. | `kit.createImagineNodeMaterial({ lane: bot.lane, health: bot.health, loading: true, accent: color })` |
+| **Imagine async generation binds (c18)** | Rapid TextureLoader / 404 can apply **stale** maps or leave `loading` forever. | `const gen = beginImagineNodeMapBind(mat); loader.load(url, tex => setImagineNodeMapIfGeneration(mat, tex, gen, { maxTextureSize }), undefined, () => setImagineNodeMapFailed(mat, "load-failed"))` |
+| **Lore `claimedAt` + age/notes cache (c19)** | Ink density/paper stay neutral; heartbeats realloc atlases without cache. | `createLorePlaqueMaterial({ claimedAt: bot.lock?.claimed_at, accent });` each poll: `setLorePlaqueLockAge(mat, bot.lock?.claimed_at); setLorePlaqueNotesCached(mat, notes, { owned: true })` |
+| **Lore plaque stack (c20)** | Overlapping plaques at one star z-fight without stack index. | `createLorePlaqueMaterial({ stackIndex });` or `setLorePlaqueStackIndex(mat, i, mesh)` |
+| **`createBuildingBrushPool` (c17)** | Per-building mats OOM/stall at city scale. | City rebuild: `const pool = createBuildingBrushPool({ floors }); mesh.material = pool.materialForProgress(p); pool.syncFromProgresses(list)` |
+| **`textureBudget()` degraded (c17/c18)** | Soft cap was silent; now `kit.budgetMeta.degraded` eases grain/fiber — surface in UI/debug. | Once/frame or on rebuild: `const b = kit.textureBudget(); if (kit.budgetMeta.degraded) /* badge */` |
+| **Ink edge `weight` (c13)** | Bleed stays kind/health default; activity-weighted watercolor needs real weight. | `kit.createInkEdges(edges.map(e => ({ …, weight: e.activity })))` |
+| **Composer RT type (c20)** | Half-float unsupported / MSAA mismatch → black painterly pass. | `const rt = resolvePainterlyRenderTargetType({ halfFloatSupported: probeHalfFloatRenderTargetSupport(gl) }); new EffectComposer(renderer, new WebGLRenderTarget(w,h,{ type: rt.type }))` |
+
+```ts
+// Minimal “visuals appear” kit usage (imports from materials/index)
+import {
+  beginImagineNodeMapBind,
+  setImagineNodeMapIfGeneration,
+  setImagineNodeMapFailed,
+  setLorePlaqueLockAge,
+  setLorePlaqueNotesCached,
+  setLorePlaqueStackIndex,
+  createBuildingBrushPool,
+  resolvePainterlyRenderTargetType,
+  probeHalfFloatRenderTargetSupport,
+} from "@/components/mind/dashboard-3d/materials";
+```
+
 
 ```ts
 import {
@@ -270,3 +303,32 @@ setLorePlaqueNotesCached(loreMat, bot.lock?.notes || bot.notes || "", { owned: t
 - `uInkDensity` + `uPaper` from sanitized age (future/malformed/missing → neutral; never NaN/negative).
 - Density saturates at stale floor — not a raw growing age counter.
 - Empty notes stay honest empty atlas (LORE_ATLAS_MIN).
+
+
+## c20 — constellation plaque stack z-fight + RT/logDepth harden
+
+```ts
+// Overlapping lore cards at one star:
+bots.forEach((bot, i) => {
+  const loreMat = kit.createLorePlaqueMaterial({
+    accent: HEALTH_COLOR[bot.health],
+    claimedAt: bot.lock?.claimed_at,
+    stackIndex: i % 4, // distinct polygonOffset + renderOrder
+  });
+  const mesh = new THREE.Mesh(geo, loreMat);
+  setLorePlaqueStackIndex(loreMat, i % 4, mesh);
+  // …
+});
+// Composer (half-float fallback):
+const gl = renderer.getContext();
+const rtType = resolvePainterlyRenderTargetType({
+  halfFloatSupported: probeHalfFloatRenderTargetSupport(gl),
+});
+const rt = new THREE.WebGLRenderTarget(bw, bh, { type: rtType.type, depthTexture });
+composer = new EffectComposer(renderer, rt);
+```
+
+- Transparent plaques keep `depthWrite: false` (writing depth punches holes); **polygonOffset + renderOrder** separate layers.
+- `uStackLift` soft paper shade by stack index.
+- Lore + lane nebula get log-depth `onBeforeCompile` / shader chunks for `logarithmicDepthBuffer` cameras.
+- Ink edges / nebulae use `PAINTER_RENDER_ORDER` so blend order does not flicker against lore.

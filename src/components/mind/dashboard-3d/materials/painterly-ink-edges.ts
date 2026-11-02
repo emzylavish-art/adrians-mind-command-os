@@ -12,6 +12,7 @@ import {
   type HealthTone,
   type InkWashRibbonOptions,
 } from "./ink-wash-edge.ts";
+import { PAINTER_RENDER_ORDER, applyPainterTransparentLayer } from "./painter-depth.ts";
 import { sanitizeFinite } from "./paper-grain.ts";
 
 /** Local release — avoid value-import cycle with use-painterly-kit. */
@@ -206,7 +207,8 @@ export function createPainterlyInkEdges(
     materials.set(tone, mat);
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
     mesh.frustumCulled = true;
-    mesh.renderOrder = 1;
+    mesh.renderOrder = PAINTER_RENDER_ORDER.inkEdge;
+    applyPainterTransparentLayer(mat, "inkEdge", mesh);
     mesh.userData.inkEdgeBatch = tone;
     mesh.visible = false;
     meshes.set(tone, mesh);
