@@ -81,6 +81,19 @@ def tool_specs(manifest):
                 "oneOf": [{"required": ["action"]}, {"required": ["operation"]}],
                 "additionalProperties": False,
             }
+        elif name == "team.worker":
+            description = "Process at most one queued job using the worker's explicit allowlist. No arbitrary shell or code payloads are executed."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "worker_id": {"type": "string", "minLength": 1},
+                    "db": {"type": "string"},
+                    "lease_seconds": {"type": "integer", "minimum": 5, "maximum": 3600},
+                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 180},
+                },
+                "required": ["worker_id"],
+                "additionalProperties": False,
+            }
         else:
             continue
         specs.append({"name": name, "description": description, "inputSchema": schema})
