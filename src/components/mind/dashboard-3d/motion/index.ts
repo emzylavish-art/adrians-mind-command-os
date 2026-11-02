@@ -268,3 +268,17 @@ export {
   pruneMotionStateMap,
   type LiveIds,
 } from "./state-prune.ts";
+
+export {
+  REDUCED_MOTION_SETTLE_MS,
+  createReducedMotionGuard,
+  hashMotionLaneSnapshot,
+  observeReducedMotion,
+  shouldMountHeavy,
+  shouldRebuildScene,
+  snapRigProgress,
+  stepReducedMotionSettle,
+  type ReducedMotionGuardOpts,
+  type ReducedMotionGuardState,
+  type ReducedMotionSubscription,
+} from "./reduced-motion-guard.ts";
