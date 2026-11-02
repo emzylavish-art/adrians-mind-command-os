@@ -25,6 +25,10 @@ on:
       - "tools/knowledge/**"
       - "tools/bootstrap/**"
       - "tools/registry.json"
+      - "tools/integrations/**"
+      - "tools/notion/**"
+      - "policies/**"
+      - ".devcontainer/**"
       - "team/**"
       - ".github/workflows/rea-tests.yml"
   workflow_dispatch:
