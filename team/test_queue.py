@@ -46,6 +46,16 @@ class DurableQueueTests(unittest.TestCase):
     def test_empty_queue_claim_returns_none(self):
         self.assertIsNone(agent_queue.claim(self.db, "worker-a"))
 
+    def test_expired_final_lease_becomes_failed(self):
+        queued = agent_queue.enqueue(self.db, "last attempt", {}, max_attempts=1)
+        claimed = agent_queue.claim(self.db, "worker-a", lease_seconds=5)
+        with agent_queue.connect(self.db) as conn:
+            conn.execute("UPDATE jobs SET lease_until=0 WHERE id=?", (queued["id"],))
+        self.assertIsNone(agent_queue.claim(self.db, "worker-b"))
+        final = agent_queue.get_job(self.db, queued["id"])
+        self.assertEqual(final["status"], "failed")
+        self.assertIsNone(final["worker_id"])
+
 
 if __name__ == "__main__":
     unittest.main()
