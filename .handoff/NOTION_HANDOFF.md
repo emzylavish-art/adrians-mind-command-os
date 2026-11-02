@@ -525,3 +525,14 @@ command on Zack's PC.
 - Gates: typecheck pass; TS 1056/1056; lint touched 0e/3w; build pass.
 - Notion: child under mirror (40b1aa27… still 404).
 - Next: sweep; supabase-account silent catch noted; command-app mounts still blocked.
+
+- Notion child: https://app.notion.com/p/40cb95f33e42816eb53fd3a38516d425
+- Pushed origin/error-banners → de905f8123527971294f05ace56762dabcb73557
+
+## 2026-11-02T15:38:44-06:00 (America/Chicago) — Error Banners Bot — H27 Supabase account probe/sign-out banners
+- Gap: supabase-account getSupabaseAuthUser `.catch` → treated as not configured (silent empty); signOut `.catch` → clear busy only.
+- Fix: supabase-account-action.ts runSupabaseAccountProbe / runSupabaseSignOut (redirect-like throws = ok) + SupabaseAccountFailureBanner; onceRetry; optional onFailure. failure-states supabase_account_probe_failed / supabase_sign_out_failed.
+- Files: src/lib/mind/supabase-account-action.ts(+test), src/components/mind/supabase-account.tsx, failure-states(+test), package.json, .handoff/NOTION_HANDOFF.md
+- Gates: typecheck pass; TS 1061/1061; lint touched 0e; build pass.
+- Notion: child under mirror (40b1aa27… still 404).
+- Remaining blocked: command-app.tsx mounts; voice/; media/; agent-planner; Vercel preview. No further fixable silent-empty gaps found in allowed files after H24–H27.

@@ -10,6 +10,7 @@
  * and must not paint the red failure banner (see shouldShowFailureBanner / classifyHonestTurnOutcome).
  * H24/H25: ServiceBoard OAuth connect/disconnect and Tools Open page failures classify as network_failure.
  * H26: MCP enable/disable toggle failures classify as network_failure (or auth_required).
+ * H27: Supabase account probe/sign-out failures classify as network_failure.
  */
 
 export type HonestFailureKind =
@@ -66,6 +67,10 @@ export const HONEST_FAILURE_MESSAGES = {
   open_page_failed: "The page was not opened.",
   /** Tools panel MCP enable/disable toggle failed. */
   mcp_toggle_failed: "The MCP server toggle could not be completed.",
+  /** Account menu: getSupabaseAuthUser probe rejected (not the same as configured:false). */
+  supabase_account_probe_failed: "Supabase account status could not be loaded.",
+  /** Account menu: signOutSupabase rejected without a redirect. */
+  supabase_sign_out_failed: "Supabase sign out could not be completed.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -228,6 +233,10 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text.includes("OAuth could not be started")
     || text === HONEST_FAILURE_MESSAGES.mcp_toggle_failed
     || text.includes("MCP server toggle could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.supabase_account_probe_failed
+    || text.includes("Supabase account status could not be loaded")
+    || text === HONEST_FAILURE_MESSAGES.supabase_sign_out_failed
+    || text.includes("Supabase sign out could not be completed")
   ) {
     return "network_failure";
   }

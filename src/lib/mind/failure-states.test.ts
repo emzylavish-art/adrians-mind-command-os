@@ -149,6 +149,8 @@ describe("top-5 gap classifiers", () => {
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.open_page_failed), "network_failure");
     assert.equal(classifyHonestFailure("Gmail OAuth could not be started. Nothing was connected."), "network_failure");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_toggle_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.supabase_account_probe_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.supabase_sign_out_failed), "network_failure");
     assert.equal(classifyHonestFailure("The worker status could not be read. The network request failed. Nothing was substituted."), "network_failure");
     assert.equal(honestFailureAuditAction("network_failure"), "network_failure");
   });
