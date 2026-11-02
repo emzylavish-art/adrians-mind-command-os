@@ -32,6 +32,7 @@ class MCPServerTests(unittest.TestCase):
         self.assertIn("rea.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("security.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("knowledge.search", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
 
     def test_call_rea_scan(self):
@@ -68,6 +69,17 @@ class MCPServerTests(unittest.TestCase):
         result = json.loads(responses[0]["result"]["content"][0]["text"])
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["result"]["status"], "ok")
+
+    def test_call_knowledge_search(self):
+        responses = rpc([{
+            "jsonrpc": "2.0", "id": 11, "method": "tools/call",
+            "params": {"name": "knowledge.search", "arguments": {
+                "path": "team", "query": "manifest agent tools", "top_k": 3,
+            }},
+        }])
+        result = json.loads(responses[0]["result"]["content"][0]["text"])
+        self.assertEqual(result["status"], "ready")
+        self.assertIsInstance(result["result"]["results"], list)
 
     def test_unavailable_tool_is_error_not_simulated(self):
         responses = rpc([{
