@@ -39,11 +39,24 @@ export {
   setStarWatercolorColor,
   setStarHalo,
   setStarGrain,
+  setStarMatte,
   starGrainFromHealth,
   STAR_GRAIN_BY_HEALTH,
   type StarSurfaceOptions,
   type StarHealthTone,
 } from "./star-surface.ts";
+export {
+  applyPainterOutputSafeFlags,
+  bloomSafeClampRgb,
+  starMatteFromStatus,
+  sanitizeStarHalo,
+  sanitizeStarGrain,
+  PAINTER_MATTE_DEFAULT,
+  PAINTER_MATTE_IDLE,
+  PAINTER_HDR_CEILING,
+  PAINTER_BLOOM_SAFE_CEILING,
+  type PainterOutputSafeFlags,
+} from "./painter-output.ts";
 export {
   createPainterlyBotStar,
   type PainterlyBotStarOptions,

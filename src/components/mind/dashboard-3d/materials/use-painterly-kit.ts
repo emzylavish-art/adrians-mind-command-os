@@ -303,6 +303,7 @@ function inertBotStar(): PainterlyBotStarBundle {
     setColor: () => {},
     setHalo: () => {},
     setGrain: () => {},
+    setMatte: () => {},
   };
 }
 

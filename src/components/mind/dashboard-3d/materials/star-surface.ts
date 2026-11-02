@@ -2,6 +2,13 @@ import * as THREE from "three";
 import { sanitizeFinite, sanitizeShaderTime, sanitizePainterColor, PAINTER_IDLE_RGB } from "./paper-grain.ts";
 import { WatercolorStarShader } from "../shaders/watercolor-star.ts";
 import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
+import {
+  applyPainterOutputSafeFlags,
+  sanitizeStarHalo,
+  sanitizeStarGrain,
+  starMatteFromStatus,
+  PAINTER_MATTE_DEFAULT,
+} from "./painter-output.ts";
 
 /** Real bot/lane health tones that drive pigment granulation (no fabricated activity). */
 export type StarHealthTone = "healthy" | "stalled" | "blocked" | "idle";
@@ -34,6 +41,13 @@ export type StarSurfaceOptions = {
   /** Real bot health — drives default uGrain when `grain` omitted. */
   health?: StarHealthTone | string;
   /**
+   * c21: bloom-safe corona matte 0..1 (1 = soft-cap under Light bloom).
+   * Omit → PAINTER_MATTE_DEFAULT; pair with idle via createBotStar.
+   */
+  matte?: number;
+  /** When true, treat as idle for default matte (quieter corona). */
+  idle?: boolean;
+  /**
    * HACKER (c13): force identity-tint fallback material (tests / known-bad GLSL).
    * Records `userData.painterMaterialMeta.compileError` — never silent black.
    */
@@ -53,6 +67,9 @@ function cloneUniforms(src: typeof WatercolorStarShader.uniforms) {
     uGrain: { value: src.uGrain.value as number },
     uStroke: { value: src.uStroke.value as number },
     uHalo: { value: src.uHalo.value as number },
+    uMatte: {
+      value: (src as { uMatte?: { value: number } }).uMatte?.value ?? PAINTER_MATTE_DEFAULT,
+    },
   };
 }
 
@@ -66,6 +83,7 @@ function starFallbackMaterial(color: THREE.Color, reason: string): THREE.ShaderM
       uGrain: { value: 0 },
       uStroke: { value: 0 },
       uHalo: { value: 0 },
+      uMatte: { value: 1 },
     },
     vertexShader: /* glsl */ `
       void main() {
@@ -77,13 +95,15 @@ function starFallbackMaterial(color: THREE.Color, reason: string): THREE.ShaderM
       uniform float uEmissive;
       void main() {
         vec3 c = uColor * (0.55 + uEmissive * 0.45);
-        gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+        c = clamp(c, 0.0, 0.98);
+        gl_FragColor = vec4(c, 1.0);
       }
     `,
     transparent: true,
     depthWrite: true,
     precision: PAINTER_SHADER_PRECISION,
   });
+  applyPainterOutputSafeFlags(mat, { transparent: true, premultipliedAlpha: false });
   const meta: PainterMaterialMeta = { compileError: reason, fallback: true };
   mat.userData.painterMaterialMeta = meta;
   return mat;
@@ -122,19 +142,21 @@ export function createStarWatercolorMaterial(
       uniforms.uEmissive.value = sanitizeFinite(opts.emissiveIntensity, 0.85, 0, 3);
     }
     if (opts.grain != null) {
-      uniforms.uGrain.value = sanitizeFinite(opts.grain, 0.22, 0, 1);
+      uniforms.uGrain.value = sanitizeStarGrain(opts.grain, 0.22);
     } else {
       // c15: default granulation from real health / idle (neutral healthy if unknown)
-      uniforms.uGrain.value = starGrainFromHealth(opts.health, undefined);
+      uniforms.uGrain.value = starGrainFromHealth(opts.health, opts.idle);
     }
     if (opts.stroke != null) uniforms.uStroke.value = sanitizeFinite(opts.stroke, 0.55, 0, 1);
     const em = uniforms.uEmissive.value as number;
     if (opts.halo != null) {
-      uniforms.uHalo.value = sanitizeFinite(opts.halo, 0.55, 0, 1.5);
+      uniforms.uHalo.value = sanitizeStarHalo(opts.halo, 0.55);
     } else {
       // Neutral default from real emissive — idle/low → quiet halo; active → stronger
-      uniforms.uHalo.value = sanitizeFinite(0.2 + em * 0.55, 0.55, 0, 1.5);
+      // c21: clamp to 0..1 (was 1.5 HDR) so bloom-safe path stays honest
+      uniforms.uHalo.value = sanitizeStarHalo(0.2 + em * 0.55, 0.55);
     }
+    uniforms.uMatte.value = starMatteFromStatus(opts.idle, opts.matte);
     // Empty vertex/fragment would black-hole the mesh — guard before construct
     if (!WatercolorStarShader.vertexShader?.trim() || !WatercolorStarShader.fragmentShader?.trim()) {
       throw new Error("star-shader-empty");
@@ -151,6 +173,8 @@ export function createStarWatercolorMaterial(
     });
     Object.assign(mat.userData, userData);
     mat.userData.painterMaterialMeta = { compileError: null, fallback: false } satisfies PainterMaterialMeta;
+    // HACKER (c21): toneMapped:false + premultipliedAlpha for painted watercolor
+    applyPainterOutputSafeFlags(mat, { transparent: true, premultipliedAlpha: true });
     return mat;
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
@@ -195,7 +219,7 @@ export function tickStarMaterial(mat: THREE.ShaderMaterial, timeSeconds: number)
 /** Update star pigment from a health color without reallocating the material. */
 export function setStarHalo(mat: THREE.ShaderMaterial, halo: number): void {
   if (mat.uniforms["uHalo"]) {
-    mat.uniforms["uHalo"].value = sanitizeFinite(halo, 0.55, 0, 1.5);
+    mat.uniforms["uHalo"].value = sanitizeStarHalo(halo, 0.55);
   }
   (mat.userData as { haloLocked?: boolean }).haloLocked = true;
 }
@@ -203,9 +227,17 @@ export function setStarHalo(mat: THREE.ShaderMaterial, halo: number): void {
 /** Override pigment granulation (locks auto-sync from health/emissive). */
 export function setStarGrain(mat: THREE.ShaderMaterial, grain: number): void {
   if (mat.uniforms["uGrain"]) {
-    mat.uniforms["uGrain"].value = sanitizeFinite(grain, 0.22, 0, 1);
+    mat.uniforms["uGrain"].value = sanitizeStarGrain(grain, 0.22);
   }
   (mat.userData as { grainLocked?: boolean }).grainLocked = true;
+}
+
+/** c21: bloom-safe corona matte (locks). */
+export function setStarMatte(mat: THREE.ShaderMaterial, matte: number): void {
+  if (mat.uniforms["uMatte"]) {
+    mat.uniforms["uMatte"].value = sanitizeFinite(matte, PAINTER_MATTE_DEFAULT, 0, 1);
+  }
+  (mat.userData as { matteLocked?: boolean }).matteLocked = true;
 }
 
 export function setStarWatercolorColor(
@@ -221,7 +253,10 @@ export function setStarWatercolorColor(
     mat.uniforms["uEmissive"].value = em;
     // Keep halo honest to real status emissive unless locked
     if (mat.uniforms["uHalo"] && !(mat.userData as { haloLocked?: boolean }).haloLocked) {
-      mat.uniforms["uHalo"].value = sanitizeFinite(0.2 + em * 0.55, 0.55, 0, 1.5);
+      mat.uniforms["uHalo"].value = sanitizeStarHalo(0.2 + em * 0.55, 0.55);
+    }
+    if (mat.uniforms["uMatte"] && !(mat.userData as { matteLocked?: boolean }).matteLocked) {
+      mat.uniforms["uMatte"].value = starMatteFromStatus(em < 0.4);
     }
     // c15: quiet granulation when idle/low emissive; richer pigment when active — unless locked
     if (mat.uniforms["uGrain"] && !(mat.userData as { grainLocked?: boolean }).grainLocked) {
