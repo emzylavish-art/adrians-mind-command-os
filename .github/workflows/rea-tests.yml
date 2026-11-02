@@ -6,6 +6,8 @@ on:
       - "tools/rea/**"
       - "tools/security_review/**"
       - "tools/knowledge/**"
+      - "tools/bootstrap/**"
+      - "tools/registry.json"
       - "team/**"
       - ".mcp.json"
       - "Dockerfile.mcp"
@@ -17,6 +19,8 @@ on:
       - "tools/rea/**"
       - "tools/security_review/**"
       - "tools/knowledge/**"
+      - "tools/bootstrap/**"
+      - "tools/registry.json"
       - "team/**"
       - ".github/workflows/rea-tests.yml"
   workflow_dispatch:
@@ -36,6 +40,8 @@ jobs:
         run: |
           python -m json.tool team/manifest.json > /dev/null
           python -m json.tool .mcp.json > /dev/null
+          python -m json.tool tools/registry.json > /dev/null
+          python -m json.tool tools/bootstrap/upstream-sources.json > /dev/null
       - name: Run REA unit tests
         run: python -m unittest discover -s tools/rea -p 'test_*.py'
       - name: Run security review unit tests
