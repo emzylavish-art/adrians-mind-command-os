@@ -105,10 +105,11 @@
         "dependency_review",
         "static_security_triage"
       ],
-      "status": "adapter_required",
-      "entrypoint": "team/agents/security.md",
+      "status": "partial",
+      "entrypoint": "tools/security_review/security_review.py",
       "requires": [
-        "approved_scanner_or_review_runtime"
+        "human_review_of_heuristic_findings",
+        "approved_scope"
       ]
     },
     {
@@ -228,6 +229,22 @@
       "entrypoint": null,
       "input_schema": null,
       "safety": "Do not integrate credential-harvesting or phishing workflows"
+    },
+    {
+      "id": "security.scan",
+      "agent": "security",
+      "capabilities": [
+        "secure_code_review",
+        "static_security_triage"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/security_review/security_review.py",
+      "input_schema": {
+        "path": "string",
+        "json": "boolean",
+        "out": "string"
+      },
+      "safety": "offline heuristic static review; no code execution or network requests; authorized source only"
     }
   ],
   "catalog": [
