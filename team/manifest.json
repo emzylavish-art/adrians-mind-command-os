@@ -35,7 +35,8 @@
         "task_classification",
         "planning",
         "dispatch",
-        "synthesis"
+        "synthesis",
+        "durable_task_queue"
       ],
       "status": "contract_defined",
       "entrypoint": "team/agents/orchestrator.md",
@@ -277,6 +278,26 @@
         "top_k": "integer"
       },
       "safety": "offline lexical search over local Markdown/text files; no external service"
+    },
+    {
+      "id": "team.queue",
+      "agent": "orchestrator",
+      "capabilities": [
+        "durable_task_queue",
+        "worker_coordination"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/queue.py",
+      "input_schema": {
+        "action": "enqueue|claim|complete|fail|list",
+        "task": "string",
+        "payload": "object",
+        "worker": "string",
+        "id": "string",
+        "result": "object",
+        "error": "string"
+      },
+      "safety": "SQLite local queue; stores payloads only and never executes queued task data; worker must apply policy and approvals."
     }
   ],
   "catalog": [
@@ -499,6 +520,16 @@
       "install": "repo-code-present",
       "live": "callable-cli-runner-and-mcp",
       "guardrail": "Local lexical search only; semantic search and external knowledge stores are not connected."
+    },
+    {
+      "id": "mind-command-os-durable-queue",
+      "name": "Mind Command OS Durable Queue",
+      "category": "durable-worker-queue",
+      "agent": "orchestrator",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-runner",
+      "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval."
     }
   ]
 }
