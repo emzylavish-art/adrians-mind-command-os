@@ -169,6 +169,18 @@
       "entrypoint": "src",
       "live": "not-verified-in-this-adapter-pass",
       "notes": "Do not infer model router shutdown from the app's emergency-stop UI; runtime enforcement must be separately verified."
+    },
+    {
+      "id": "l1b3rt4s",
+      "name": "L1B3RT4S",
+      "kind": "llm-red-team-research-corpus",
+      "status": "source-pinned",
+      "source": "https://github.com/elder-plinius/L1B3RT4S",
+      "activation": {
+        "submodule": "upstream/l1b3rt4s"
+      },
+      "live": "not-connected",
+      "notes": "Source is available as a pinned submodule; research corpus is not automatically executed or used to bypass service safeguards."
     }
   ]
 }
