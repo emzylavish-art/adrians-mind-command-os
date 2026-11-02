@@ -1,5 +1,3 @@
-# MCP stdio configuration for Mind Command OS.
-# Use this file with a compatible MCP host after installing Python 3.
 {
   "mcpServers": {
     "mind-command-os-tools": {
