@@ -676,7 +676,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     ];
     const mountSceneArt = (art: { url: string; pos: THREE.Vector3; scale: readonly [number, number] }) => {
       if (!sceneAlive || kit.disposed) return;
-      const mat = kit.createImagineNodeMaterial({ loading: true, maxTextureSize: maxTexSize });
+      const mat = kit.createImagineNodeMaterial({ loading: true, lane: "scene", health: "healthy", maxTextureSize: maxTexSize });
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
       plane.position.copy(art.pos);
       plane.userData.kind = "scene";
@@ -912,7 +912,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             ease: createTravelerEaseState(li * 1.7),
             sample: createTravelerEaseSample(),
             lastProgress: 0,
-            focused: li === 0,
+            focused: false,
             speed: 1,
           });
         });
@@ -1873,8 +1873,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             mat.uniforms["uPulse"].value = Math.min(1, base + 0.55 * edgePulseSample.highlight);
           }
         }
-        // Motion c21: batch traveler step + honest wrap count (no teleport on resume)
+        // Motion c21/c35: batch traveler step + focus-flip LOD (focused ↔ landing.botId)
         const travelerHold = fly.level !== "universe" || Boolean(rig.subjectId);
+        {
+          const focusId = rig.subjectId;
+          const lands = dataRef.current.fleetPlan?.landings ?? [];
+          for (let i = 0; i < landingTrails.length; i++) {
+            const tr = landingTrails[i]!;
+            const land = lands[i];
+            tr.focused = Boolean(focusId) && Boolean(land) && land.botId === focusId;
+            tr.speed = tr.focused ? 1.15 : 1;
+          }
+        }
         const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, {
           hold: travelerHold,
           enablePointBudget: true,

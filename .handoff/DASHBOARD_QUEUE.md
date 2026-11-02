@@ -24,6 +24,11 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+## Dashboard c72 (2026-11-03T00:14:52+01:00 WAT) — Motion c35 traveler focus-flip + scene Imagine wash
+**Wired:** landingTrails.focused from landing.botId===rig.subjectId before stepTravelerTrails; scene arts createImagineNodeMaterial lane/health wash.
+**Tests:** painter-c30-c35-wired.
+
 ## Dashboard c71 (2026-11-03T00:13:21+01:00 WAT) — Painter c30 Notion galaxy watercolor adopt
 **Wired:** `kit.createNotionGalaxyPages` in rebuildPages (kind pigment + ink child edges); dispose via galaxyPages.dispose; tint clear restores kind pigments via update.
 **Registered:** motion c35 traveler-focus-flip test. Updated notion-pages-matte wiring test.
