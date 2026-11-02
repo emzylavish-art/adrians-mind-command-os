@@ -1905,6 +1905,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city?.tick(wallT, reducedMotion);
       dust?.update(wallT, reducedMotion);
       if (comets) {
+        // Motion c31 optional: explicit cam distance for comet segment LOD (onBeforeRender also feeds).
+        const camDist = camera.position.length();
+        if (Number.isFinite(camDist)) comets.setCamDistance?.(camDist);
         comets.update(wallT, reducedMotion);
         stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
         // Motion c24 / queue #108: cached lines/heads — no per-frame getObjectByName thrash.
@@ -1946,7 +1949,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           if (n.personPlane?.material) setImagineNodeFocus(n.personPlane.material as THREE.ShaderMaterial, on);
         }
       }
-      tickPainterlyKit(kit, t, { reducedMotion, dpr: renderer.getPixelRatio() });
+      tickPainterlyKit(kit, t, { reducedMotion, dpr: renderer.getPixelRatio(), pauseWhenHidden: true });
       try {
         const deg = !!kit.budgetMeta?.degraded;
         const prev = (mount as HTMLElement & { __painterDegraded?: boolean }).__painterDegraded;
