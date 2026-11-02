@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 16)
+## Status vs origin/dashboard-3d (verified cycle 17)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -218,3 +218,10 @@ const star = kit.createBotStar({
 - **Hacker:** live feeds / HMR can write NaN into pass `amount`/`grain`/`wash`/`fiber` and black the composer. `tickPainterlyPass` → `sanitizePainterlyPassUniforms` every frame. Empty lore plaques use `LORE_ATLAS_MIN` (not 512²) to stop fleet atlas growth. Context-loss handlers ignore disposed kits and scrub pass uniforms on restore.
 - **Visual:** anisotropic paper-fiber direction on `PainterlyPassShader` (`fiber` uniform). Strength from real `setPassHealth` amount via `painterlyFiberFromAmount`. Neutral default `PAINTER_FIBER_DEFAULT`. Optional lock: `setPainterlyPassFiber`.
 - **Wiring:** **none required** — `kit.setPassHealth` already drives amount → fiber. Light/Motion do not own paper grain (postfx README).
+
+
+## c17 — building dry-brush + compile fallback + budget degrade + shared pool
+
+- **Hacker:** (1) WebGL1/compile failure on buildings was silent/throw — now `forceFallback` + try/catch with visible idle shell. (2) Soft texture budget was report-only — `textureBudget()` now sets `budgetMeta.degraded`, warns once, eases pass grain/fiber. (3) Per-building mats at city scale — ship `createBuildingBrushPool` (≤8 shared) for Dashboard adopt. (4) `setBuildingProgress` stays alloc-free at 60Hz; also drives `uDryBrush`.
+- **Visual:** dry-brush façade strokes (`uDryBrush`) from real progress via `buildingDryBrushFromProgress` / `setBuildingProgress`. Neutral 0 when progress unknown. Optional `setBuildingDryBrush` lock.
+- **Wiring:** **none required** for dry-brush (already on createBuildingBrushMaterial path city uses). Optional: adopt `createBuildingBrushPool` when building count is large; poll `kit.textureBudget()` to surface degrade.
