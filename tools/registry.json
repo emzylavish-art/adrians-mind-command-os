@@ -253,8 +253,8 @@
     {
       "name": "L1B3RT4S",
       "category": "llm-red-team-research",
-      "status": "source-pinned",
-      "install": "git-submodule-pinned",
+      "status": "source-verified",
+      "install": "repo-code-present",
       "live": "not-connected",
       "team_agent": "security",
       "source_url": "https://github.com/elder-plinius/L1B3RT4S",
