@@ -114,9 +114,17 @@ def main():
         return
     if not args.provider or not args.prompt:
         parser.error("provide --status or both --provider and --prompt")
-    result = generate(args.provider, [{"role": "user", "content": args.prompt}],
-                      model=args.model, timeout=args.timeout)
-    print(json.dumps(result, ensure_ascii=False))
+    try:
+        parsed_prompt = json.loads(args.prompt)
+        messages = parsed_prompt if isinstance(parsed_prompt, list) else [{"role": "user", "content": args.prompt}]
+    except json.JSONDecodeError:
+        messages = [{"role": "user", "content": args.prompt}]
+    try:
+        result = generate(args.provider, messages, model=args.model, timeout=args.timeout)
+        print(json.dumps(result, ensure_ascii=False))
+    except ProviderError as exc:
+        print(json.dumps({"error": str(exc)}), file=__import__("sys").stderr)
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
