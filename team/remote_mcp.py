@@ -40,6 +40,13 @@ def _server(name, config=None):
     if not isinstance(entry, dict) or entry.get("enabled") is not True:
         raise RemoteMCPError(f"Remote MCP server is not explicitly enabled: {name}")
     url = entry.get("url")
+    url_env = entry.get("url_env")
+    if url_env:
+        if not NAME_RE.fullmatch(url_env):
+            raise RemoteMCPError("Invalid endpoint environment variable name.")
+        url = os.environ.get(url_env)
+        if not url:
+            raise RemoteMCPError(f"Required endpoint environment variable is unset: {url_env}")
     parsed = urllib.parse.urlparse(url or "")
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise RemoteMCPError("Remote MCP endpoint must be an HTTPS URL without embedded credentials.")
