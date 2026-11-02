@@ -9,12 +9,15 @@ import {
   type StarSurfaceOptions,
   type StarHealthTone,
 } from "./star-surface.ts";
-import { sanitizeFinite, sanitizePainterColor, PAINTER_IDLE_RGB } from "./paper-grain.ts";
+import { sanitizeFinite, PAINTER_IDLE_RGB } from "./paper-grain.ts";
 import {
   applyPainterOutputSafeFlags,
   starMatteFromStatus,
   sanitizeStarHalo,
   PAINTER_MATTE_DEFAULT,
+  painterPigmentFromStatusColor,
+  painterGlowColorScale,
+  sanitizePainterEmissive,
 } from "./painter-output.ts";
 
 export type PainterlyBotStarOptions = StarSurfaceOptions & {
@@ -55,12 +58,10 @@ export function createPainterlyBotStar(
 ): PainterlyBotStarBundle {
   const idle = !!opts.idle;
   const health = opts.health;
-  const emissive =
-    opts.emissiveIntensity != null
-      ? opts.emissiveIntensity
-      : idle
-        ? 0.25
-        : 0.9;
+  const emissive = sanitizePainterEmissive(
+    opts.emissiveIntensity != null ? opts.emissiveIntensity : idle ? 0.25 : 0.85,
+    idle ? 0.25 : 0.85,
+  );
   // Halo from real idle/active status (neutral default — no fabricated pulse)
   const halo =
     opts.halo != null
@@ -85,16 +86,19 @@ export function createPainterlyBotStar(
     matte,
     forceFallback: opts.forceFallback,
   });
-  const glowSafe = sanitizePainterColor(opts.color ?? 0xffffff, PAINTER_IDLE_RGB);
-  // c21: matte scales additive glow so Light bloom sees paint, not a white fireball
-  const glowScale = 0.35 + (1 - matte) * 0.45;
+  // c26: pigment from status (not raw neon) + matte-scaled additive glow
+  const glowPig = painterPigmentFromStatusColor(opts.color ?? 0xffffff, {
+    fallback: new THREE.Color(PAINTER_IDLE_RGB[0], PAINTER_IDLE_RGB[1], PAINTER_IDLE_RGB[2]),
+  });
+  const glowScale = painterGlowColorScale(matte);
   const glowMaterial = new THREE.SpriteMaterial({
     map: kit.starSpriteTexture,
-    color: glowSafe.color.clone().multiplyScalar(glowScale),
+    color: glowPig.color.clone().multiplyScalar(glowScale),
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    opacity: sanitizeFinite(0.55 + (1 - matte) * 0.35, 0.7, 0.2, 1),
+    // Quieter than c21 — additive stack of many nodes saturates otherwise
+    opacity: sanitizeFinite(0.38 + (1 - matte) * 0.28, 0.5, 0.15, 0.85),
   });
   // HACKER (c21): additive sprites must not be toneMapped (double wash / HDR spike)
   applyPainterOutputSafeFlags(glowMaterial, { transparent: true, premultipliedAlpha: true });
@@ -105,22 +109,32 @@ export function createPainterlyBotStar(
       /* */
     }
   }
-  if (!glowSafe.ok) {
-    (glowMaterial.userData as { starColorError?: string }).starColorError = glowSafe.reason ?? "color-bad";
+  if (!glowPig.ok) {
+    (glowMaterial.userData as { starColorError?: string }).starColorError = glowPig.reason ?? "color-bad";
   }
   (glowMaterial.userData as { painterMatte?: number }).painterMatte = matte;
+  (glowMaterial.userData as { painterPigmentBase?: THREE.Color }).painterPigmentBase = glowPig.color.clone();
   kit.bindSharedTexture(glowMaterial, "starSprite");
-  const setColor = (color: THREE.ColorRepresentation, emissiveIntensity?: number) => {
-    const em =
-      emissiveIntensity != null ? sanitizeFinite(emissiveIntensity, 0.85, 0, 3) : undefined;
-    setStarWatercolorColor(meshMaterial, color, em);
-    const g = sanitizePainterColor(color, PAINTER_IDLE_RGB);
-    glowMaterial.color.copy(g.color);
-    if (!g.ok) {
-      (glowMaterial.userData as { starColorError?: string }).starColorError = g.reason ?? "color-bad";
+  const applyGlowFromStatus = (color: THREE.ColorRepresentation) => {
+    const mm =
+      (glowMaterial.userData as { painterMatte?: number }).painterMatte ?? PAINTER_MATTE_DEFAULT;
+    const pig = painterPigmentFromStatusColor(color, {
+      fallback: new THREE.Color(PAINTER_IDLE_RGB[0], PAINTER_IDLE_RGB[1], PAINTER_IDLE_RGB[2]),
+    });
+    (glowMaterial.userData as { painterPigmentBase?: THREE.Color }).painterPigmentBase = pig.color.clone();
+    glowMaterial.color.copy(pig.color).multiplyScalar(painterGlowColorScale(mm));
+    if (!pig.ok) {
+      (glowMaterial.userData as { starColorError?: string }).starColorError = pig.reason ?? "color-bad";
     } else {
       delete (glowMaterial.userData as { starColorError?: string }).starColorError;
     }
+  };
+  const setColor = (color: THREE.ColorRepresentation, emissiveIntensity?: number) => {
+    // c26 HACKER: never pass raw pulse.emissive>1 or copy full neon onto additive glow
+    const em =
+      emissiveIntensity != null ? sanitizePainterEmissive(emissiveIntensity, 0.85) : undefined;
+    setStarWatercolorColor(meshMaterial, color, em);
+    applyGlowFromStatus(color);
   };
   const setHalo = (h: number) => setStarHalo(meshMaterial, h);
   const setGrain = (g: number) => setStarGrain(meshMaterial, g);
@@ -128,7 +142,11 @@ export function createPainterlyBotStar(
     setStarMatte(meshMaterial, m);
     const mm = sanitizeFinite(m, PAINTER_MATTE_DEFAULT, 0, 1);
     (glowMaterial.userData as { painterMatte?: number }).painterMatte = mm;
-    glowMaterial.opacity = sanitizeFinite(0.55 + (1 - mm) * 0.35, 0.7, 0.2, 1);
+    glowMaterial.opacity = sanitizeFinite(0.38 + (1 - mm) * 0.28, 0.5, 0.15, 0.85);
+    const base =
+      (glowMaterial.userData as { painterPigmentBase?: THREE.Color }).painterPigmentBase ??
+      glowMaterial.color.clone();
+    glowMaterial.color.copy(base).multiplyScalar(painterGlowColorScale(mm));
   };
   return { meshMaterial, glowMaterial, setColor, setHalo, setGrain, setMatte };
 }

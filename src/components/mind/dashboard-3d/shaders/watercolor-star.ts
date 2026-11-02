@@ -52,7 +52,7 @@ export const WatercolorStarShader = {
     // Soft-cap RGB so max channel ≤ lim (matte blends 1.6 → 0.98)
     vec3 bloomSafeClamp(vec3 c, float matte) {
       float m = clamp(matte, 0.0, 1.0);
-      float lim = mix(1.6, 0.98, m);
+      float lim = mix(1.35, 0.92, m); // c26: tighter LED soft-cap under matte
       float maxC = max(max(c.r, c.g), max(c.b, 0.0));
       if (maxC > lim && maxC > 1e-5) c *= lim / maxC;
       return clamp(c, 0.0, lim);
@@ -69,17 +69,19 @@ export const WatercolorStarShader = {
       float gFine = paintNoise(gUv);
       float gFiber = paintFbm(paintWrap(vUv * vec2(5.5, 16.0) + uTime * 0.018));
       float grain = (gFine - 0.5) * clamp(uGrain, 0.0, 1.0) * (0.5 + gFiber * 0.95);
-      vec3 pigment = uColor * (0.55 + uEmissive * 0.65);
-      pigment += pigment * stroke * 0.35;
-      pigment += uColor * bloom;
-      pigment += grain;
+      // c26: quieter emissive lift; grain/stroke read as watercolor not LED
+      float em = clamp(uEmissive, 0.0, 1.0);
+      vec3 pigment = uColor * (0.48 + em * 0.42);
+      pigment += pigment * stroke * 0.42;
+      pigment += uColor * bloom * 0.85;
+      pigment += grain * (0.85 + em * 0.25);
       // c12/c21: corona — matte softens additive lift so bloom reads paint, not fire
       float matte = clamp(uMatte, 0.0, 1.0);
       float haloAmt = clamp(uHalo, 0.0, 1.0) * mix(1.0, 0.72, matte);
       float haloNoise = paintFbm(vUv * 10.0 + vec2(uTime * 0.06, -uTime * 0.04));
       float haloRing = smoothstep(0.15, 0.55, fres) * (0.55 + haloNoise * 0.55);
       float haloStroke = smoothstep(0.4, 0.85, paintNoise(vUv * 28.0 + uTime * 0.1));
-      vec3 haloCol = uColor * (0.85 + uEmissive * 0.4) + vec3(0.12, 0.14, 0.28) * fres;
+      vec3 haloCol = uColor * (0.7 + em * 0.28) + vec3(0.14, 0.16, 0.28) * fres;
       pigment = mix(pigment, pigment + haloCol * haloRing * haloStroke, haloAmt * 0.85);
       pigment = mix(pigment, pigment * 1.25 + vec3(0.15, 0.18, 0.35), fres * 0.45 * mix(1.0, 0.55, matte));
       pigment = bloomSafeClamp(pigment, matte);
