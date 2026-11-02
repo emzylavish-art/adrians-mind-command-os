@@ -75,7 +75,7 @@ class MCPServerTests(unittest.TestCase):
                 }},
             }])
             result = json.loads(responses[0]["result"]["content"][0]["text"])
-            self.assertEqual(result["status"], "ready")
+            self.assertEqual(result["status"], "ready", result)
             self.assertEqual(result["result"]["status"], "queued")
 
     def test_call_team_health(self):
