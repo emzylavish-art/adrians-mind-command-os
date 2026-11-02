@@ -70,6 +70,7 @@ export {
   type GodRayBudgetOpts,
   type GodRayTapParams,
 } from "./god-ray-budget.ts";
+export { createGodRayMask, godRayMaskFactor, godRayMaskSize, GodRayMaskShader, type GodRayMask } from "./god-ray-mask.ts";
 export {
   EXPOSURE_BY_TONE,
   EXPOSURE_EASE_MS,

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";
 import { KEY_RGB, normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.ts";
+import { createGodRayMask } from "./god-ray-mask.ts";
 import { GOD_RAY_MAX_TAPS, createGodRayBudget, godRayTapParams, type GodRayBudgetOpts, type GodRayTapParams } from "./god-ray-budget.ts";
 
 /**
@@ -88,6 +89,9 @@ export const GodRayShader = {
     weight: { value: 0.42 },
     lumThreshold: { value: 0.55 },
     tint: { value: new THREE.Color(1, 0.92, 0.72) },
+    /** #114: half-res prefiltered emission (rgb × bright × far); used when useEmit = 1. */
+    tEmit: { value: null as THREE.Texture | null },
+    useEmit: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -115,6 +119,8 @@ export const GodRayShader = {
     uniform float weight;
     uniform float lumThreshold;
     uniform vec3 tint;
+    uniform sampler2D tEmit;
+    uniform float useEmit;
     varying vec2 vUv;
 
     float linDepth(vec2 uv) {
@@ -146,9 +152,16 @@ export const GodRayShader = {
       for (int i = 0; i < SAMPLES; i++) {
         if (float(i) >= n) break;
         uv -= delta;
-        vec3 c;
-        float m = emit(clamp(uv, 0.0, 1.0), c);
-        acc += c * m * illum * weight;
+        vec2 tuv = clamp(uv, 0.0, 1.0);
+        vec3 e;
+        if (useEmit > 0.5) {
+          e = texture2D(tEmit, tuv).rgb;
+        } else {
+          vec3 c;
+          float m = emit(tuv, c);
+          e = c * m;
+        }
+        acc += e * illum * weight;
         illum *= decay;
       }
       acc *= tapNorm;
@@ -180,6 +193,8 @@ export type GodRayHandle = {
    */
   readonly taps: number;
   readonly tapParams: GodRayTapParams;
+  /** #114: emission-mask downsample factor used by the last render (1 = stock per-tap). */
+  readonly maskFactor: number;
   /** Manual override hooks (rebind / tests). */
   setBufferSize: (bufW: number, bufH: number) => number;
   sampleFrameMs: (ms: number) => number;
@@ -218,6 +233,7 @@ export function createGodRayPass(
     u.tapNorm.value = p.norm;
   };
   applyTaps(godRayTapParams(GOD_RAY_MAX_TAPS));
+  const mask = createGodRayMask();
   let lastBufW = -1;
   let lastBufH = -1;
   let disposed = false;
@@ -249,10 +265,33 @@ export function createGodRayPass(
       u.cameraNear.value = depthCam.near;
       u.cameraFar.value = depthCam.far;
     }
+    // #114: below 48 taps, prefilter emission into a half-res mask first.
+    u.tEmit.value = null;
+    u.useEmit.value = 0;
+    if (u.intensity.value > 0) {
+      const mu = mask.uniforms;
+      mu.tDepth.value = liveDepth;
+      mu.useDepth.value = liveDepth ? 1 : 0;
+      mu.cameraNear.value = u.cameraNear.value;
+      mu.cameraFar.value = u.cameraFar.value;
+      mu.sunDepth.value = u.sunDepth.value;
+      mu.depthBias.value = u.depthBias.value;
+      mu.lumThreshold.value = u.lumThreshold.value;
+      let emitTex: THREE.Texture | null = null;
+      try {
+        emitTex = mask.render(renderer, readBuffer as THREE.WebGLRenderTarget, u.taps.value);
+      } catch {
+        emitTex = null; // partial / lost renderer: fall back to the stock per-tap path
+      }
+      u.tEmit.value = emitTex;
+      u.useEmit.value = emitTex ? 1 : 0;
+    }
     baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
     if (!pass.renderToScreen) markDepthClobbered(renderer, writeBuffer);
     u.tDepth.value = null;
     u.useDepth.value = 0;
+    u.tEmit.value = null;
+    u.useEmit.value = 0;
   }) as typeof pass.render;
   return {
     pass,
@@ -261,6 +300,9 @@ export function createGodRayPass(
     },
     get taps() {
       return u.taps.value;
+    },
+    get maskFactor() {
+      return mask.factor;
     },
     get tapParams() {
       return { taps: u.taps.value, decay: u.decay.value, norm: u.tapNorm.value };
@@ -318,6 +360,9 @@ export function createGodRayPass(
       u.tDepth.value = null;
       u.useDepth.value = 0;
       u.intensity.value = 0;
+      u.tEmit.value = null;
+      u.useEmit.value = 0;
+      mask.dispose();
       pass.enabled = false;
       pass.dispose();
     },
