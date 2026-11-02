@@ -197,6 +197,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 120 | **Light — postfx VRAM ledger** — one `postfxVramBytes()` readout summing live composer/bloom-chain/god-ray-mask/focus-depth RT bytes (from real RT sizes + texel types), shown in the `?dash3dDebug=1` meter badge, with a leak test that DPR drop, reduced motion and context loss return it to baseline. Why: c113 found the #114 mask silently pinning 29.5 MB while the pass was off; nothing in the scene would have shown it | queued | Light lane next; postfx/ only |
 | 121 | **Motion c31 — comet segment LOD by camera distance** — hysteretic drawRange thin (24→6 far); head continuous; hacker NaN/0/inside + threshold thrash + mid-trail seg change | **done** | Motion c31 |
 | 122 | **Motion c32 — painter glow desaturate** — GLOW_BASE 2→1.25; clampGlowScale cap 1.45 on pulse+focus (n.glow.scale); hacker NaN/Inf/over-boost | **done** | Motion c32; Painter c26 request |
+| 123 | **Motion c33 — traveler trail point budget** — cam-distance+speed resample under TRAVELER_POINT_BUDGET_TOTAL=2048; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus, LOD hyst teleport, many-traveler overflow | **done** | Motion c33 |
+| 124 | **Motion c34 — traveler trail GPU upload throttle** — dirty-only BufferAttribute uploads for activePoints when budget/cam band unchanged; skip resample+upload on duplicate clock.map(t); hacker 0↔budget jump / teleport mid-band / focus flip | queued | Motion lane next |
 
 
 
@@ -220,7 +222,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c30 — comet arc upload throttle**~~ — **done (Cosmos Motion Bot c30)**: dirty-only uploads + update ranges; duplicate map(t) skip; dust 480×120 ≈0.03 ms/frame under c16 0.3 ms budget.
 - ~~**Motion c31 — comet segment LOD by camera distance**~~ — **done (Cosmos Motion Bot c31)**: hysteretic seg LOD 24→6; head continuous; NaN/thrash harden.
 - ~~**Motion c32 — painter glow desaturate**~~ — **done (Cosmos Motion Bot c32)**: GLOW_BASE 1.25 + GLOW_SCALE_CAP 1.45; Painter c26 request via handoff.
-- **Motion c33 — traveler trail point budget** — cap/resample polyline vertices by cam distance + speed; keep focus traveler full-res. Cosmos Motion Bot next.
+- ~~**Motion c33 — traveler trail point budget**~~ — **done (Cosmos Motion Bot c33)**: allocateTravelerPointBudgets + hysteretic LOD + resample; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus / teleport hyst / overflow.
+- **Motion c34 — traveler trail GPU upload throttle** — dirty-only activePoints uploads when budget/cam band unchanged; skip on duplicate clock.map(t); hacker 0↔budget / teleport mid-band / focus flip. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.

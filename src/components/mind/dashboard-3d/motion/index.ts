@@ -291,3 +291,19 @@ export {
   type ReducedMotionGuardState,
   type ReducedMotionSubscription,
 } from "./reduced-motion-guard.ts";
+
+export {
+  TRAVELER_POINT_BUDGET_TOTAL,
+  TRAVELER_POINT_FAR,
+  TRAVELER_POINT_HYST,
+  TRAVELER_POINT_MIN,
+  TRAVELER_POINT_NEAR,
+  allocateTravelerPointBudgets,
+  createTravelerPointLodState,
+  resampleTravelerPolyline,
+  stepTravelerPointLod,
+  travelerPointBudgetForSpeed,
+  type TravelerBudgetInput,
+  type TravelerPointLodOpts,
+  type TravelerPointLodState,
+} from "./traveler-point-budget.ts";
