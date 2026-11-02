@@ -1,6 +1,7 @@
 import type { ContrastReport } from "./detail-backdrop-dim.ts";
 import type { SceneKeyLiftReport } from "./scene-key-lift.ts";
 import type { CardEdgeReport } from "./card-edge.ts";
+import type { ChartsDepthPlateReport } from "./charts-depth-plate.ts";
 
 /**
  * #81→#83 debug badge: honest one-line state of the measured dim + meter
@@ -23,6 +24,7 @@ export function formatMeterBadge(
     | undefined,
   lift?: SceneKeyLiftReport | null,
   edge?: CardEdgeReport | null,
+  plate?: ChartsDepthPlateReport | null,
 ): MeterBadge {
   if (!contrast) return { text: "dim: off", level: "idle" };
   const parts: string[] = [];
@@ -53,6 +55,15 @@ export function formatMeterBadge(
         : edge.source === "measured"
           ? `edge ${fmt(edge.ratio)}:1 rim +${fmt(edge.targetGain)} (${edge.mode ?? "?"})`
           : `edge ${fmt(edge.ratio)}:1 ok`,
+    );
+  // #102: Charts depth plate — only the real measured spread under the rect.
+  if (plate)
+    parts.push(
+      plate.spread === null
+        ? "plate no reading"
+        : plate.source === "measured"
+          ? `plate spread ${fmt(plate.spread)} +${fmt(plate.targetStrength)}`
+          : `plate spread ${fmt(plate.spread)} ok`,
     );
   const warn = (b && b.multiplier > 1) || !!contrast.lastError;
   const level = warn ? "warn" : contrast.source === "measured" ? "ok" : "idle";

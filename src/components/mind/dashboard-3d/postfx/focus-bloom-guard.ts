@@ -72,6 +72,12 @@ export function clampGuardRadius(r: number | undefined): number {
  * Projected radius of a world-space sphere (e.g. node + Imagine card bounds)
  * as a fraction of screen height, padded 15%. Non-perspective / junk / behind
  * camera → null (caller keeps the default radius).
+ *
+ * Hacker (cycle after #93): returns the REAL radius, unclamped. It used to
+ * run clampGuardRadius() here, so the #84 card probe metered far cards at
+ * 0.04 (mostly backdrop, reported as the card) and the #93 rim was drawn at
+ * 0.45 across close-up card faces. Guard / hole / key-lift consumers clamp it
+ * themselves (clampGuardRadius) — pass it straight through.
  */
 export function projectedRadiusUv(
   world: THREE.Vector3,
@@ -87,7 +93,8 @@ export function projectedRadiusUv(
   const halfH = viewZ * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
   if (!(halfH > 0)) return null;
   // Screen height spans 2*halfH; fraction = r / (2*halfH).
-  return clampGuardRadius((radiusWorld / (2 * halfH)) * 1.15);
+  const r = (radiusWorld / (2 * halfH)) * 1.15;
+  return Number.isFinite(r) && r > 0 ? r : null;
 }
 
 export const FocusBloomGuardShader = {
