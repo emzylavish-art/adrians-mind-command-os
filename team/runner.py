@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Common JSON task runner for compatible AI hosts.
-
-Routes requests through the shared manifest and executes only tools whose
-entrypoints are explicitly implemented here. No model inference is performed.
-"""
+"""Mind Command OS shared JSON task runner."""
 import argparse
 import json
 import subprocess
@@ -21,22 +17,16 @@ def load_manifest():
 
 def envelope(status, result=None, evidence=None, limitations=None, dispatch=None):
     return {
-        "status": status,
-        "result": result,
-        "evidence": evidence or [],
-        "limitations": limitations or [],
-        "dispatch": dispatch,
+        "status": status, "result": result, "evidence": evidence or [],
+        "limitations": limitations or [], "dispatch": dispatch,
     }
 
 
 def list_tools(manifest):
-    return {
-        "status": "ready",
-        "result": manifest.get("tools", []),
-        "evidence": ["team/manifest.json"],
-        "limitations": ["Catalog entries are not proof that external runtimes are installed or connected."],
-        "dispatch": None,
-    }
+    return envelope(
+        "ready", manifest.get("tools", []), ["team/manifest.json"],
+        ["Catalog declarations do not prove external runtimes or services are connected."],
+    )
 
 
 def invoke(tool_id, payload, manifest):
@@ -46,84 +36,47 @@ def invoke(tool_id, payload, manifest):
         return envelope("blocked", limitations=[f"Tool is not declared: {tool_id}"])
     if tool.get("status") != "ready":
         return envelope(
-            "blocked",
-            evidence=[f"team/manifest.json#tools/{tool_id}"],
-            limitations=[f"Tool status is {tool.get('status')}; it cannot be invoked by this runner."],
+            "blocked", evidence=[f"team/manifest.json#tools/{tool_id}"],
+            limitations=[f"Tool status is {tool.get('status')}; invocation is disabled."],
         )
 
-    if tool_id == "rea.scan":
-        path = payload.get("path", ".")
-        command = [sys.executable, str(ROOT / "tools" / "rea" / "rea.py"), path, "--json"]
-        output_path = payload.get("out")
-        if output_path:
-            command.extend(["--out", str(output_path)])
-        try:
-            completed = subprocess.run(
-                command,
-                cwd=ROOT,
-                capture_output=True,
-                text=True,
-                timeout=int(payload.get("timeout_seconds", 60)),
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return envelope("blocked", limitations=[f"REA invocation failed: {exc}"])
-        if completed.returncode:
-            return envelope(
-                "blocked",
-                result=completed.stdout.strip() or None,
-                evidence=["tools/rea/rea.py"],
-                limitations=[completed.stderr.strip() or f"REA exited with {completed.returncode}"],
-            )
-        try:
-            report = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            return envelope("blocked", result=completed.stdout, evidence=["tools/rea/rea.py"],
-                            limitations=["REA returned non-JSON output."])
-        return envelope("ready", report, ["tools/rea/rea.py"], [])
-
-    if tool_id == "security.scan":
-        path = payload.get("path", ".")
-        command = [sys.executable, str(ROOT / "tools" / "security_review" / "security_review.py"), path, "--json"]
-        output_path = payload.get("out")
-        if output_path:
-            command.extend(["--out", str(output_path)])
-        try:
-            completed = subprocess.run(
-                command,
-                cwd=ROOT,
-                capture_output=True,
-                text=True,
-                timeout=int(payload.get("timeout_seconds", 60)),
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return envelope("blocked", limitations=[f"Security scan invocation failed: {exc}"])
-        if completed.returncode:
-            return envelope(
-                "blocked",
-                result=completed.stdout.strip() or None,
-                evidence=["tools/security_review/security_review.py"],
-                limitations=[completed.stderr.strip() or f"Security scan exited with {completed.returncode}"],
-            )
-        try:
-            report = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            return envelope(
-                "blocked", result=completed.stdout,
-                evidence=["tools/security_review/security_review.py"],
-                limitations=["Security scanner returned non-JSON output."],
-            )
+    adapters = {
+        "rea.scan": ROOT / "tools" / "rea" / "rea.py",
+        "security.scan": ROOT / "tools" / "security_review" / "security_review.py",
+    }
+    script = adapters.get(tool_id)
+    if script is None or not script.is_file():
         return envelope(
-            "ready", report, ["tools/security_review/security_review.py"],
-            ["Heuristic findings require human validation; this is not a complete SAST assessment."],
+            "not_implemented", evidence=[f"team/manifest.json#tools/{tool_id}"],
+            limitations=["No verified executable adapter exists for this declaration."],
         )
-
-    return envelope(
-        "not_implemented",
-        evidence=[f"team/manifest.json#tools/{tool_id}"],
-        limitations=["The tool is declared, but this runner has no executable adapter for it yet."],
-    )
+    path = payload.get("path", ".")
+    command = [sys.executable, str(script), path, "--json"]
+    if payload.get("out"):
+        command.extend(["--out", str(payload["out"])])
+    try:
+        completed = subprocess.run(
+            command, cwd=ROOT, capture_output=True, text=True,
+            timeout=int(payload.get("timeout_seconds", 120)), check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return envelope("blocked", limitations=[f"Invocation failed: {exc}"])
+    if completed.returncode:
+        return envelope(
+            "blocked", result=completed.stdout.strip() or None,
+            evidence=[str(script.relative_to(ROOT))],
+            limitations=[completed.stderr.strip() or f"Tool exited {completed.returncode}"],
+        )
+    try:
+        report = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return envelope(
+            "blocked", result=completed.stdout,
+            evidence=[str(script.relative_to(ROOT))],
+            limitations=["Tool output was not valid JSON."],
+        )
+    limitations = report.get("limitations", []) if isinstance(report, dict) else []
+    return envelope("ready", report, [str(script.relative_to(ROOT))], limitations)
 
 
 def run(payload, manifest):
@@ -133,31 +86,31 @@ def run(payload, manifest):
     if operation == "invoke":
         tool_id = payload.get("tool_id")
         if not isinstance(tool_id, str) or not tool_id.strip():
-            return envelope("blocked", limitations=["tool_id is required for operation=invoke."])
-        return invoke(tool_id, payload.get("input", {}), manifest)
+            return envelope("blocked", limitations=["tool_id is required for invoke."])
+        input_data = payload.get("input", {})
+        if not isinstance(input_data, dict):
+            return envelope("blocked", limitations=["input must be a JSON object."])
+        return invoke(tool_id, input_data, manifest)
     if operation != "route":
         return envelope("blocked", limitations=[f"Unsupported operation: {operation}"])
-
     completed = subprocess.run(
         [sys.executable, str(ROUTER)],
-        input=json.dumps(payload),
-        capture_output=True,
-        text=True,
-        cwd=ROOT,
-        check=False,
+        input=json.dumps(payload), capture_output=True, text=True,
+        cwd=ROOT, check=False,
     )
     if completed.returncode:
         return envelope("blocked", result=completed.stdout.strip() or None,
-                        limitations=[completed.stderr.strip() or "Router returned an error."])
+                        limitations=[completed.stderr.strip() or "Router failed."])
     try:
         return json.loads(completed.stdout)
     except json.JSONDecodeError:
-        return envelope("blocked", result=completed.stdout, limitations=["Router returned non-JSON output."])
+        return envelope("blocked", result=completed.stdout,
+                        limitations=["Router returned non-JSON output."])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--task", help="JSON task; stdin is used when omitted.")
+    parser.add_argument("--task", help="JSON task; otherwise read JSON from stdin.")
     args = parser.parse_args()
     try:
         payload = json.loads(args.task) if args.task else json.loads(sys.stdin.read())
