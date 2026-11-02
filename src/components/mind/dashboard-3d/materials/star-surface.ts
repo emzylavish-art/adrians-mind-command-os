@@ -18,10 +18,11 @@ export type StarHealthTone = "healthy" | "stalled" | "blocked" | "idle";
 
 /** Pigment granulation by real health — blocked settles heaviest; idle stays fine. */
 export const STAR_GRAIN_BY_HEALTH: Record<StarHealthTone, number> = {
-  healthy: 0.2,
-  stalled: 0.3,
-  blocked: 0.42,
-  idle: 0.12,
+  // c29: healthier stars need visible granulation on full-dash captures (was 0.2 — unread)
+  healthy: 0.34,
+  stalled: 0.38,
+  blocked: 0.48,
+  idle: 0.16,
 };
 
 export function starGrainFromHealth(health?: StarHealthTone | string | null, idle?: boolean): number {

@@ -2,30 +2,27 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Still unwired (Dashboard) — prioritized (2026-11-02T23:56:32+01:00 WAT, origin/dashboard-3d@80a2a1d)
+## Still unwired (Dashboard) — prioritized (2026-11-03T00:00:27+01:00 WAT, origin/dashboard-3d@8e8b095)
 
 | Pri | Adopt | Status | Evidence | First noted |
 |-----|-------|--------|----------|-------------|
-| **P0** | **c27 kit.createFleetBeacon** | **UNWIRED** | fleet-plan-layer.ts ball() still MeshStandardMaterial emissive===color @0.85 — top neon string-lights | 2026-11-02 |
-| P1 | Notion page galaxy InstancedMesh | **UNWIRED** | rebuildPages MeshStandard 0x9bb7ff (needs instanceColor in star shader) | 2026-11-02 |
-| P2 | Optional c18 Imagine lane/health/loading on create | partial | beginImagineNodeMapBind wired; lane wash opts often omitted | 2026-11-01 |
-| P2 | Optional c19 lore claimedAt / age cache | check | plaque create may omit claimedAt | 2026-11-01 |
-| — | c24 city ground | **WIRED** | city-layer kit.createCityGroundMaterial | done |
-| — | c25 sun | **WIRED** | kit.createSunMaterial + glow (dashboard c63) | done |
-| — | c26 setColor emissive clamp | **WIRED** | starSetColorNeedsApply / clampStarEmissive ≤1 (dashboard c63) | done |
-| — | c22 Imagine focus + DPR quality | **WIRED** | setImagineNodeFocus on focus/hover; tickPainterlyKit with dpr | done |
-| — | Motion glow scale | **WIRED** | motion c32 GLOW_BASE 1.25 + cap 1.45 | done |
+| **P0** | Notion page galaxy → painter instance stars | **PARTIAL** | c68 MeshBasic interim matte (no LED); still not watercolor — needs `createGalaxyPageMaterial` / instanceColor | 2026-11-02 |
+| P1 | Landing-trail travelers | **UNWIRED** | universe-scene MeshStandardMaterial gold spheres | 2026-11-02 |
+| P2 | Optional Imagine lane wash opts on every card | partial | beginImagineNodeMapBind wired; lane/health on some creates | 2026-11-01 |
+| — | c27 kit.createFleetBeacon | **WIRED** | fleet-plan-layer ball() → createFleetBeacon (dashboard c66) | done 2026-11-02 |
+| — | c24 city ground / c25 sun / c26 emissive clamp / c22 focus+DPR | **WIRED** | city-layer / createSunMaterial / starSetColorNeedsApply / setImagineNodeFocus+tick dpr | done |
+| — | Motion c32 glow | **WIRED** | GLOW_BASE 1.25 + scale cap | done |
+| — | c19 lore claimedAt | **WIRED** | createLorePlaqueMaterial({ claimedAt }) | done |
 
-### → Dashboard Bot (P0 now)
-Wire kit.createFleetBeacon into fleet-plan-layer.ts ball() / queue+landing rebuilds. Snippet in section c27 below. Full /dashboard keeps neon string-lights until this lands.
+### → Dashboard Bot
+P0: adopt painter galaxy page material when shipped (replace MeshBasic InstancedMesh). P1: landing travelers → createFleetBeacon or createBotStar.
 
 ### → Cosmos Light Bot
-No new c28 ask. Keep bloom threshold; do not chase MeshStandard fleet LEDs.
+No new c29 ask.
 
 ### → Cosmos Motion Bot
-No new c28 ask (c32 glow done). Dust starfield stays your lane.
+No new c29 ask.
 
----
 
 ## Status vs origin/dashboard-3d (verified cycle 21)
 
@@ -580,4 +577,18 @@ No c27 bloom change. After Dashboard adopts beacons, do not lower threshold to r
 
 ### → Dashboard / Light / Motion
 No new wire for the pass. P0 remains c27 fleet beacon (see Still unwired table).
+
+## c29 — star granulation readable on wired createBotStar + pass vignette soften
+
+**Pass check vs c26-full-after:** c28 louder wash **reads** (grain/mottle); HUD FEED/TIME/charts stay high-contrast — no major tune-back. Softened vignette floor 0.68→0.76 for corner HUD.
+
+**Lane win:** WatercolorStar granulation + STAR_GRAIN_BY_HEALTH bump (already `createBotStar` wired). Neon spheres on full dash still looked flat after c26 pigment — grain was too quiet.
+
+**Hacker:** uGrain clamp in pigment path; grain amp NaN-safe via existing sanitizeStarGrain.
+
+### → Dashboard Bot
+P0 remains Notion galaxy watercolor instance material (MeshBasic interim). P1 landing travelers.
+
+### → Light / Motion
+No new ask.
 
