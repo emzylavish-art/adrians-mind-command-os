@@ -17,6 +17,11 @@ import {
   type TravelerXyz,
 } from "./traveler-ease.ts";
 import type { MotionClock } from "./motion-clock.ts";
+import {
+  TRAVELER_POINT_BUDGET_TOTAL,
+  allocateTravelerPointBudgets,
+  resampleTravelerPolyline,
+} from "./traveler-point-budget.ts";
 
 export const TRAVELER_TRAILS_MAX = 256;
 /** A wrap only counts if the forward step across 1→0 is at most this fraction of a lap. */
@@ -30,6 +35,14 @@ export type TravelerTrail = {
   lastProgress: number;
   /** Set while the batch hold owns the pause, so it never resumes a caller's own pause. */
   holdOwned?: boolean;
+  /** c33: focused traveler keeps full polyline under point budget. */
+  focused?: boolean;
+  /** c33: relative speed for budget weighting. */
+  speed?: number;
+  /** c33: last applied budget (debug / tests). */
+  pointsBudget?: number;
+  /** c33: scratch resampled points (owned by the trail; grown as needed). */
+  activePoints?: TravelerXyz[];
 };
 
 export type TravelerTrailsOpts = {
@@ -40,6 +53,12 @@ export type TravelerTrailsOpts = {
   hold?: boolean;
   /** Max trails stepped per call. Default TRAVELER_TRAILS_MAX. */
   maxTrails?: number;
+  /** c33: enable cam-distance / speed point budget. Default false (bit-identical). */
+  enablePointBudget?: boolean;
+  /** c33: camera distance for point LOD (world units). */
+  camDistance?: number;
+  /** c33: override global point ceiling. */
+  pointBudgetTotal?: number;
 };
 
 const EMPTY: TravelerTrailsOpts = Object.freeze({});
@@ -75,6 +94,28 @@ export function stepTravelerTrails(
   stepOpts.duration = o.duration;
   stepOpts.opacity = o.opacity;
   let wraps = 0;
+  const useBudget = o.enablePointBudget === true;
+  let budgets: number[] | null = null;
+  if (useBudget) {
+    const inputs = [];
+    for (let i = 0; i < n; i++) {
+      const tr = trails[i];
+      if (!tr) {
+        inputs.push(null);
+        continue;
+      }
+      inputs.push({
+        pointCount: Array.isArray(tr.points) ? tr.points.length : 0,
+        focused: tr.focused === true,
+        speed: tr.speed,
+      });
+    }
+    budgets = allocateTravelerPointBudgets(
+      inputs,
+      o.camDistance ?? 0,
+      o.pointBudgetTotal ?? TRAVELER_POINT_BUDGET_TOTAL,
+    );
+  }
   for (let i = 0; i < n; i++) {
     const tr = trails[i];
     if (!tr || !tr.ease || !tr.sample) continue;
@@ -88,7 +129,26 @@ export function stepTravelerTrails(
       tr.holdOwned = false;
     }
     const wasPaused = tr.ease.paused;
-    stepTravelerEase(tr.ease, tr.sample, tr.points ?? [], tSeconds, dt, reducedMotion, stepOpts as TravelerEaseOpts);
+    let pts: ReadonlyArray<Readonly<TravelerXyz>> = tr.points ?? [];
+    if (budgets) {
+      const full = Array.isArray(tr.points) ? tr.points.length : 0;
+      let budget = budgets[i] ?? full;
+      if (!Number.isFinite(budget) || budget < 0) budget = full;
+      tr.pointsBudget = budget;
+      if (budget > 0 && budget < full && Array.isArray(tr.points)) {
+        if (!tr.activePoints || tr.activePoints.length < budget) {
+          const fresh: TravelerXyz[] = [];
+          for (let k = 0; k < Math.max(budget, tr.activePoints?.length ?? 0); k++) {
+            fresh.push(tr.activePoints?.[k] ?? { x: 0, y: 0, z: 0 });
+          }
+          while (fresh.length < budget) fresh.push({ x: 0, y: 0, z: 0 });
+          tr.activePoints = fresh;
+        }
+        const used = resampleTravelerPolyline(tr.activePoints, tr.points, budget);
+        pts = tr.activePoints.slice(0, used);
+      }
+    }
+    stepTravelerEase(tr.ease, tr.sample, pts, tSeconds, dt, reducedMotion, stepOpts as TravelerEaseOpts);
     const cur = tr.sample.progress;
     if (!reducedMotion && !wasPaused && isTravelerWrap(tr.lastProgress, cur)) wraps++;
     tr.lastProgress = cur;
