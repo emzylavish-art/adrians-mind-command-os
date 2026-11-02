@@ -15,7 +15,7 @@ The repository-native tools currently exposed to compatible AI runners are:
 - `team.queue` — durable SQLite job management.
 - `team.worker` — bounded worker using an explicit allowlist.
 - `team.agent.resolve` — specialist prompt resolution for host-side model execution.
-- `mcp.remote` — HTTPS remote MCP discovery/call bridge with explicit server and tool allowlists (no endpoints enabled by default).
+- `mcp.remote` — HTTPS remote MCP discovery/call bridge with explicit server and tool allowlists (no endpoints enabled by default).\n- `model.generate` — explicit Grok/xAI, OpenRouter, or Ollama route with environment-only credentials and paid-route budget preflight.\n- `notion.controller` — Notion search/retrieval and explicit text append using `NOTION_API_KEY`.
 
 List the declared tools:
 
@@ -37,7 +37,7 @@ MCP transports:
 
 A registry entry is a catalog record, not proof of native AI invocation. Upstream projects with source/bootstrap metadata are not fully integrated until an executable adapter, schema, permissions, configuration, tests, and MCP exposure exist. See the registry's individual status fields and the operator guide.
 
-The command-center vision includes Grok/xAI, OpenRouter, local Ollama, Notion continuity, project-state tracking, approval gates, audit logs, specialist routing, and distinct browser/device/voice adapters. Only report each integration as live when its actual runtime and verification evidence are present. See [the operator guide](docs/AI_TEAM_OPERATOR_GUIDE.md) for guardrails and the current scope.
+The command-center provider and Notion API adapters are now repository-callable through the team runner. Set secrets only in the execution environment; no provider or Notion request occurs unless the tool is explicitly invoked. GitHub Codespaces source/package setup is defined in `.devcontainer/devcontainer.json`. The integration status ledger is `tools/integrations/catalog.json`. Project-state tracking, semantic RAG, browser/video, device/voice, and end-to-end approval/audit runtime wiring remain separately gated by actual runtime and verification evidence. See [the operator guide](docs/AI_TEAM_OPERATOR_GUIDE.md) for guardrails and the current scope.
 
 God's Eyes and Arrow EA remain unresolved until their exact projects are identified. BlackEye phishing and credential-harvesting functionality is excluded. Defensive analysis tools are for owned or explicitly authorized targets only.
 
