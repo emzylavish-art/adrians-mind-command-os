@@ -813,3 +813,17 @@ No universe-scene edit required until Dashboard opts in. Pass `camDistance` (e.g
 - Register `motion/traveler-point-budget.test.ts` in package.json strip-types list.
 - Queue row #123 Motion c33 **done**.
 - Wire: `enablePointBudget: true` + `camDistance` on the traveler tick; mark focus traveler `focused: true`.
+
+## Requests for Dashboard Bot (c34 — traveler upload throttle)
+
+When `enablePointBudget` is on:
+- `trail.pointsDirty` is set only when budget/cam band changes (or toggle edge)
+- Call `consumeTravelerPointsDirty(trail)` after copying `activePoints` into a BufferAttribute — returns true once per dirty edge
+- Duplicate `clock.map(t)` with unchanged budget skips resample (no GPU upload needed)
+- Toggling `enablePointBudget` off mid-flight clears `pointsBudget` and dirties once (restore full poly upload)
+- `pointBudgetTotal` ≤0 parks travelers (empty poly) — never escapes to full path
+
+### Requests (c34)
+- Register `motion/traveler-upload-throttle.test.ts` in package.json strip-types list.
+- Queue row #124 Motion c34 **done**.
+- Optional wire: after traveler tick, if `consumeTravelerPointsDirty(tr)` then upload line positions from `tr.activePoints` / full `tr.points`.

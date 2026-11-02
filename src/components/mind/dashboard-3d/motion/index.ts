@@ -183,6 +183,7 @@ export {
   TRAVELER_TRAILS_MAX,
   TRAVELER_WRAP_MAX_STEP,
   isTravelerWrap,
+  consumeTravelerPointsDirty,
   stepTravelerTrails,
   type TravelerTrail,
   type TravelerTrailsOpts,

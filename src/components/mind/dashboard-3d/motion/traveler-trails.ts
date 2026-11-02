@@ -1,11 +1,13 @@
 /**
- * Landing-trail batch step (Cosmos Motion Bot c21).
+ * Landing-trail batch step (Cosmos Motion Bot c21; c33 point budget; c34 upload throttle).
  *
  * One call per frame for all landing travelers: applies an optional scene-wide hold
  * (panel open / flyover / focus) through the c21 churn-safe pause/resume, steps each
  * traveler, and counts genuine forward loop wraps (for the c13 dust gust) without
- * false positives from holds, reduced-motion or garbage progress. No per-frame alloc.
- * Dashboard Bot keeps mesh/material ownership and writes positions from `trail.sample`.
+ * false positives from holds, reduced-motion or garbage progress. No per-frame alloc
+ * on the hot path when the point-budget band is unchanged (c34).
+ * Dashboard Bot keeps mesh/material ownership and writes positions from `trail.sample`;
+ * use `consumeTravelerPointsDirty` to gate BufferAttribute uploads.
  */
 import {
   pauseTraveler,
@@ -27,6 +29,8 @@ export const TRAVELER_TRAILS_MAX = 256;
 /** A wrap only counts if the forward step across 1→0 is at most this fraction of a lap. */
 export const TRAVELER_WRAP_MAX_STEP = 0.25;
 
+const EMPTY_PTS: ReadonlyArray<Readonly<TravelerXyz>> = Object.freeze([]);
+
 export type TravelerTrail = {
   ease: TravelerEaseState;
   sample: TravelerEaseSample;
@@ -39,10 +43,20 @@ export type TravelerTrail = {
   focused?: boolean;
   /** c33: relative speed for budget weighting. */
   speed?: number;
-  /** c33: last applied budget (debug / tests). */
+  /** c33: last applied budget (debug / tests). Cleared when enablePointBudget is off. */
   pointsBudget?: number;
   /** c33: scratch resampled points (owned by the trail; grown as needed). */
   activePoints?: TravelerXyz[];
+  /** c34: activePoints (or budget band) changed since last consumeTravelerPointsDirty. */
+  pointsDirty?: boolean;
+  /** c34: resample invocations (tests / meters). */
+  resampleCount?: number;
+  /** c34: last mapped clock time that drove a resample. */
+  _lastMappedT?: number;
+  /** c34: last applied budget signature (pointsBudget or -1 when off). */
+  _lastBudgetSig?: number;
+  /** c34: cached pts ref passed to ease (avoid slice alloc on skip). */
+  _stepPtsRef?: ReadonlyArray<Readonly<TravelerXyz>>;
 };
 
 export type TravelerTrailsOpts = {
@@ -74,6 +88,32 @@ export function isTravelerWrap(prev: number, cur: number): boolean {
 }
 
 /**
+ * c34: Dashboard calls after copying activePoints into a BufferAttribute.
+ * Returns true once per dirty edge, then clears the flag.
+ */
+export function consumeTravelerPointsDirty(
+  tr: TravelerTrail | null | undefined,
+): boolean {
+  if (!tr || tr.pointsDirty !== true) return false;
+  tr.pointsDirty = false;
+  return true;
+}
+
+function ensureActiveCapacity(tr: TravelerTrail, budget: number): TravelerXyz[] {
+  if (!tr.activePoints || tr.activePoints.length < budget) {
+    const fresh: TravelerXyz[] = [];
+    const prev = tr.activePoints;
+    const keep = prev?.length ?? 0;
+    for (let k = 0; k < Math.max(budget, keep); k++) {
+      fresh.push(prev?.[k] ?? { x: 0, y: 0, z: 0 });
+    }
+    while (fresh.length < budget) fresh.push({ x: 0, y: 0, z: 0 });
+    tr.activePoints = fresh;
+  }
+  return tr.activePoints;
+}
+
+/**
  * Step every trail. Returns the number of genuine wraps this frame (0 under
  * reduced-motion or hold). Null / malformed entries are skipped.
  */
@@ -93,6 +133,10 @@ export function stepTravelerTrails(
   stepOpts.clock = o.clock;
   stepOpts.duration = o.duration;
   stepOpts.opacity = o.opacity;
+
+  // Mapped time for duplicate-tick skip (c34). clock.map is idempotent on same wall t.
+  const mappedT = o.clock ? o.clock.map(tSeconds) : tSeconds;
+
   let wraps = 0;
   const useBudget = o.enablePointBudget === true;
   let budgets: number[] | null = null;
@@ -110,12 +154,14 @@ export function stepTravelerTrails(
         speed: tr.speed,
       });
     }
-    budgets = allocateTravelerPointBudgets(
-      inputs,
-      o.camDistance ?? 0,
-      o.pointBudgetTotal ?? TRAVELER_POINT_BUDGET_TOTAL,
-    );
+    // Sanitize total: NaN→default; ≤0 → 0 (hard empty — never escape to full).
+    let total = o.pointBudgetTotal;
+    if (total === undefined || total === null) total = TRAVELER_POINT_BUDGET_TOTAL;
+    else if (!Number.isFinite(total) || total < 0) total = 0;
+    else total = Math.trunc(total);
+    budgets = allocateTravelerPointBudgets(inputs, o.camDistance ?? 0, total);
   }
+
   for (let i = 0; i < n; i++) {
     const tr = trails[i];
     if (!tr || !tr.ease || !tr.sample) continue;
@@ -129,25 +175,64 @@ export function stepTravelerTrails(
       tr.holdOwned = false;
     }
     const wasPaused = tr.ease.paused;
-    let pts: ReadonlyArray<Readonly<TravelerXyz>> = tr.points ?? [];
-    if (budgets) {
+    let pts: ReadonlyArray<Readonly<TravelerXyz>> = tr.points ?? EMPTY_PTS;
+
+    if (!useBudget) {
+      // c34 hacker: toggling OFF mid-flight must clear stale budget so readers
+      // (and Dashboard uploads) do not keep a thin residual.
+      if (tr.pointsBudget !== undefined || tr._lastBudgetSig !== undefined) {
+        tr.pointsBudget = undefined;
+        tr._lastBudgetSig = -1;
+        tr._lastMappedT = undefined;
+        tr._stepPtsRef = undefined;
+        tr.pointsDirty = true;
+      }
+      pts = tr.points ?? EMPTY_PTS;
+    } else {
       const full = Array.isArray(tr.points) ? tr.points.length : 0;
-      let budget = budgets[i] ?? full;
-      if (!Number.isFinite(budget) || budget < 0) budget = full;
+      let budget = budgets ? (budgets[i] ?? 0) : 0;
+      // c34 hacker: 0 / negative / NaN → empty park, NEVER fall through to full poly.
+      if (!Number.isFinite(budget) || budget < 0) budget = 0;
+      budget = Math.trunc(budget);
+      if (budget > full) budget = full;
       tr.pointsBudget = budget;
-      if (budget > 0 && budget < full && Array.isArray(tr.points)) {
-        if (!tr.activePoints || tr.activePoints.length < budget) {
-          const fresh: TravelerXyz[] = [];
-          for (let k = 0; k < Math.max(budget, tr.activePoints?.length ?? 0); k++) {
-            fresh.push(tr.activePoints?.[k] ?? { x: 0, y: 0, z: 0 });
+
+      const sameT = tr._lastMappedT === mappedT;
+      const sameBudget = tr._lastBudgetSig === budget;
+      if (sameT && sameBudget && tr._stepPtsRef) {
+        pts = tr._stepPtsRef;
+      } else {
+        tr.resampleCount = (tr.resampleCount ?? 0) + 1;
+        tr.pointsDirty = true;
+        tr._lastMappedT = mappedT;
+        tr._lastBudgetSig = budget;
+        if (budget <= 0 || full === 0) {
+          pts = EMPTY_PTS;
+          tr._stepPtsRef = EMPTY_PTS;
+        } else if (budget < full && Array.isArray(tr.points)) {
+          const buf = ensureActiveCapacity(tr, budget);
+          const used = resampleTravelerPolyline(buf, tr.points, budget);
+          // Reuse a stable prefix array on the trail to avoid slice alloc next skip.
+          if (!tr._stepPtsRef || tr._stepPtsRef === EMPTY_PTS || (tr._stepPtsRef as TravelerXyz[]).length !== used) {
+            const view: TravelerXyz[] = [];
+            for (let k = 0; k < used; k++) view.push(buf[k]!);
+            tr._stepPtsRef = view;
+          } else {
+            const view = tr._stepPtsRef as TravelerXyz[];
+            for (let k = 0; k < used; k++) {
+              view[k]!.x = buf[k]!.x;
+              view[k]!.y = buf[k]!.y;
+              view[k]!.z = buf[k]!.z;
+            }
           }
-          while (fresh.length < budget) fresh.push({ x: 0, y: 0, z: 0 });
-          tr.activePoints = fresh;
+          pts = tr._stepPtsRef;
+        } else {
+          pts = tr.points ?? EMPTY_PTS;
+          tr._stepPtsRef = pts;
         }
-        const used = resampleTravelerPolyline(tr.activePoints, tr.points, budget);
-        pts = tr.activePoints.slice(0, used);
       }
     }
+
     stepTravelerEase(tr.ease, tr.sample, pts, tSeconds, dt, reducedMotion, stepOpts as TravelerEaseOpts);
     const cur = tr.sample.progress;
     if (!reducedMotion && !wasPaused && isTravelerWrap(tr.lastProgress, cur)) wraps++;
