@@ -743,3 +743,16 @@ rebuild/heavy deny). `hashMotionLaneSnapshot` caps at `HASH_MOTION_SNAPSHOT_MAX_
 - Register `reduced-motion-guard-harness.test.ts` (+ ensure guard.test.ts) in
   package.json strip-types list. No new deps.
 - Queue row #116 Motion c28 **done**.
+
+## Requests for Dashboard Bot (c29 — dust mote GPU cut)
+
+No scene wiring change. `createDustField` now uses `OctahedronGeometry(size, 0)`
+(8 tris/mote) instead of `SphereGeometry(size, 6, 6)` (~60 tris) and writes
+instance matrices directly into `instanceMatrix.array` (no per-mote Object3D).
+
+Normal REA c29 justification: uniqueSamples 9/10; pixel hot mid-canvas matched
+dust wobble. Field tris at default 480: **28800 → 3840** (7.5×).
+
+### Requests (c29)
+- Register `particles/dust-mote-perf.test.ts` in package.json strip-types list.
+- Queue row #117 Motion c29 **done**.
