@@ -197,6 +197,15 @@
       "live": "callable-cli-and-runner",
       "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval.",
       "team_agent": "orchestrator"
+    },
+    {
+      "name": "Mind Command OS Durable Worker Queue",
+      "category": "local-worker-runtime",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-runner",
+      "guardrail": "SQLite local persistence; queue does not execute payloads or establish that workers are running.",
+      "team_agent": "worker-runtime"
     }
   ]
 }
