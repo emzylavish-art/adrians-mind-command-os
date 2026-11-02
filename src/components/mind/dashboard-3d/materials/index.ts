@@ -7,6 +7,7 @@ export const PAINTER_MATERIALS = {
   imagineNode: "ImagineNodeMaterial",
   cityGround: "CityGroundMaterial",
   botStar: "PainterlyBotStarBundle",
+  fleetBeacon: "PainterlyFleetBeaconBundle",
   inkWashEdgesBatched: "PainterlyInkEdgesHandle",
   laneNebula: "LaneNebulaMaterial",
   paperGrain: "PaperGrainTexture",
@@ -72,6 +73,17 @@ export {
   type PainterlyBotStarOptions,
   type PainterlyBotStarBundle,
 } from "./painterly-bot-star.ts";
+export {
+  createFleetBeacon,
+  createFleetBeaconGeometry,
+  sanitizeFleetBeaconRadius,
+  FLEET_BEACON_RADIUS_DEFAULT,
+  FLEET_BEACON_RADIUS_MAX,
+  FLEET_BEACON_RADIUS_MIN,
+  type FleetBeaconOptions,
+  type FleetBeaconStatus,
+  type PainterlyFleetBeaconBundle,
+} from "./fleet-beacon.ts";
 export {
   createBuildingBrushMaterial,
   tickBuildingMaterial,

@@ -66,6 +66,12 @@ import {
 } from "./use-painterly-kit.ts";
 import { createPainterlyBotStar } from "./painterly-bot-star.ts";
 import {
+  createFleetBeacon,
+  sanitizeFleetBeaconRadius,
+  FLEET_BEACON_RADIUS_MAX,
+  FLEET_BEACON_RADIUS_MIN,
+} from "./fleet-beacon.ts";
+import {
   createPainterlyInkEdges,
   buildMergedInkWashGeometry,
 } from "./painterly-ink-edges.ts";
@@ -3138,6 +3144,112 @@ describe("painter c26: status→pigment watercolor stars (neon → wash)", () =>
       assert.ok(star.glowMaterial.color.g <= g0 + 1e-6);
       star.setColor(0x3dd68c, 0.9);
       assert.ok(star.glowMaterial.color.g < 0.5);
+      disposePainterlyKit(kit);
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
+  });
+});
+
+describe("hacker pass c27: fleet beacon MeshStandard LED / radius / status thrash", () => {
+  it("sanitizeFleetBeaconRadius clamps NaN / 0 / huge (no invisible or planet-sized hops)", () => {
+    assert.equal(sanitizeFleetBeaconRadius(Number.NaN), 0.4);
+    assert.equal(sanitizeFleetBeaconRadius(0), FLEET_BEACON_RADIUS_MIN);
+    assert.equal(sanitizeFleetBeaconRadius(99), FLEET_BEACON_RADIUS_MAX);
+    assert.ok(sanitizeFleetBeaconRadius(0.42) === 0.42);
+  });
+
+  it("done/#00ff00 beacon never keeps raw LED green on mesh or additive glow", () => {
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = { addColorStop() {} };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ kitScope: "c27-beacon" });
+      const beacon = createFleetBeacon(kit, { color: 0x00ff00, status: "done", emissiveIntensity: 0.85 });
+      const u = beacon.meshMaterial.uniforms.uColor.value as { r: number; g: number; b: number };
+      assert.ok(u.g < 0.85, `mesh pigment g=${u.g} (MeshStandard would be ~1)`);
+      assert.ok(beacon.glowMaterial.color.g < 0.55, `glow g=${beacon.glowMaterial.color.g}`);
+      assert.ok((beacon.meshMaterial.uniforms.uEmissive.value as number) <= 1);
+      assert.equal(beacon.meshMaterial.toneMapped, false);
+      beacon.setStatus("queued", 0x5b6b8c);
+      beacon.setStatus("active", 0xffe08a);
+      beacon.setStatus("done", 0x3dd68c);
+      beacon.setReached(false, 0xfbbf24);
+      beacon.setReached(true, 0x3dd68c);
+      assert.ok((beacon.meshMaterial.uniforms.uColor.value as { g: number }).g < 0.85);
+      disposePainterlyKit(kit);
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
+  });
+
+  it("kit.createFleetBeacon post-dispose is inert (no throw into dashboard rebuild)", () => {
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = { addColorStop() {} };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ kitScope: "c27-inert" });
+      disposePainterlyKit(kit);
+      const b = kit.createFleetBeacon({ color: 0x3dd68c, status: "done" });
+      assert.doesNotThrow(() => b.setStatus("queued"));
+      assert.doesNotThrow(() => b.setReached(false));
+      assert.ok(b.radius > 0);
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
+  });
+});
+
+describe("painter c27: fleet queue/landing watercolor beacons (string-light adopt)", () => {
+  it("createFleetBeacon is watercolor star surface with status API (not MeshStandard)", () => {
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = { addColorStop() {} };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ kitScope: "c27-visual" });
+      const done = kit.createFleetBeacon({ color: 0x3dd68c, status: "done" });
+      assert.match(done.meshMaterial.name, /StarWatercolor|Watercolor|Fallback/);
+      assert.ok((done.meshMaterial.uniforms.uMatte?.value as number) >= 0.85);
+      assert.ok((done.meshMaterial.uniforms.uGrain?.value as number) > 0);
+      assert.ok((done.meshMaterial.uniforms.uHalo?.value as number) > 0.1);
+      const queued = kit.createFleetBeacon({ color: 0x5b6b8c, status: "queued" });
+      assert.ok((queued.meshMaterial.uniforms.uEmissive.value as number) < 0.4);
       disposePainterlyKit(kit);
     } finally {
       (globalThis as { document?: unknown }).document = docPrev;

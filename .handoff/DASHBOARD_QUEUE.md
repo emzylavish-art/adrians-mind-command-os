@@ -8,6 +8,12 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+## Painter c27 (2026-11-02T23:50:07+01:00 WAT) — fleet queue string-light beacons
+**Target:** top neon arc = fleet-plan-layer `ball()` MeshStandard (queue y≈8.8). City brush done; dust=Motion; sky wired.
+**Painter:** `kit.createFleetBeacon` + hacker tests. **WIRING → Dashboard** ball() adopt. Motion c32 owns glow — no dup. Light: no bloom chase.
+**Captures:** c27-full-{before,after} + harness (full dash unchanged until Dashboard wires).
+
 ## Painter c26 (2026-11-02T23:45:25+01:00 WAT) — neon bot spheres → watercolor pigment
 **Root cause:** `createBotStar` WAS wired; every-frame `setColor(HEALTH_COLOR, pulse.emissive)` recopied raw status RGB onto AdditiveBlending glow (Motion `GLOW_BASE=2`), wiping matte scale; emissive allowed 0..3. Star watercolor unread under neon blobs.
 **Painter fix:** `painterPigmentFromStatusColor` desat+soft-cap; `sanitizePainterEmissive`≤1; setColor/setMatte re-apply matte-scaled pigment to glow; quieter glow opacity; shader quieter emissive + tighter bloomSafeClamp.
