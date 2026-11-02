@@ -25,7 +25,7 @@ tool adapters include:
 - `security.scan` — defensive heuristic static review of authorized source.
 - `knowledge.search` — offline lexical retrieval from local Markdown/text notes.
 - `team.health` — repository readiness and entrypoint check.
-- `team.queue` — durable SQLite job enqueue/claim/complete/fail/list operations.\n- `team/worker.py` — explicit allowlisted worker process for queued local tool jobs.
+- `team.queue` — durable SQLite job enqueue/claim/complete/fail/list operations.\n- `team/worker.py` — explicit allowlisted worker process for queued local tool jobs.\n- `team.agent.resolve` — returns the declared specialist prompt for host-side execution by Grok, Codex, Claude, or another compatible runner.
 
 Run the team tests with `python -m unittest discover -s team -p 'test_*.py'`.
 Use `python team/runner.py --task '{"operation":"list-tools"}'` to inspect
