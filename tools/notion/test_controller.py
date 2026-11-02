@@ -2,7 +2,7 @@ import io
 import json
 import os
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
 
 import controller
 
@@ -20,7 +20,7 @@ class NotionControllerTests(unittest.TestCase):
 
     def test_append_text_splits_into_safe_rich_text_chunks(self):
         payload = {"children": []}
-        response = Mock()
+        response = MagicMock()
         response.read.return_value = json.dumps({"results": []}).encode()
         response.__enter__.return_value = response
         with patch.dict(os.environ, {"NOTION_API_KEY": "test-secret"}), patch.object(
