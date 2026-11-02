@@ -4,27 +4,26 @@ import {
   MODEL_TIERS,
   allowedModelIds,
   buildProviderModelFields,
-  chipLabelForTier,
   modelTierCatalog,
   modelTierEnvIssues,
   parseModelTierEnv,
+  chipLabelForTier,
   resolveModelTier,
   routeAutoTier,
 } from "./model-tiers.ts";
 
 describe("model tier mapping", () => {
-  it("exposes the six picker modes", () => {
+  it("exposes the six picker modes including Orchestrator", () => {
     assert.deepEqual([...MODEL_TIERS], ["Auto", "Fast", "Expert", "Heavy", "Build", "Orchestrator"]);
   });
 
-  it("maps each concrete mode to a distinct default model id", () => {
+  it("maps each concrete mode to a default model id", () => {
     const models = parseModelTierEnv({});
-    const ids = [models.Fast, models.Expert, models.Heavy, models.Build, models.Orchestrator];
-    assert.equal(new Set(ids).size, 4); // Orchestrator shares Heavy's grok-4.7 by default
     assert.equal(models.Fast, "grok-4.20-0309-non-reasoning");
     assert.equal(models.Expert, "grok-4.5");
     assert.equal(models.Heavy, "grok-4.7");
     assert.equal(models.Build, "grok-build-0.1");
+    assert.equal(models.Orchestrator, "grok-4.7");
   });
 
   it("honors env overrides for each concrete mode", () => {
@@ -46,20 +45,20 @@ describe("model tier mapping", () => {
 
   it("puts a different model id in the outgoing provider fields for each concrete mode", () => {
     const seen = new Set<string>();
-    for (const tier of ["Fast", "Expert", "Heavy", "Build"] as const) {
+    for (const tier of ["Fast", "Expert", "Heavy", "Build", "Orchestrator"] as const) {
       const resolved = resolveModelTier(tier, "hello", {});
       const body = buildProviderModelFields(resolved);
       assert.equal(body.model, resolved.model);
       assert.equal(typeof body.model, "string");
-      seen.add(String(body.model));
-      if (tier === "Expert" || tier === "Heavy") {
+      seen.add(`${tier}:${body.model}`);
+      if (tier === "Expert" || tier === "Heavy" || tier === "Orchestrator") {
         assert.ok(body.reasoning_effort);
       }
       if (tier === "Fast" || tier === "Build") {
         assert.equal(body.reasoning_effort, undefined);
       }
     }
-    assert.equal(seen.size, 4);
+    assert.equal(seen.size, 5);
   });
 
   it("defaults unknown/missing selection to Auto then routes", () => {

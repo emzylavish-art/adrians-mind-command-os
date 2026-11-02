@@ -95,7 +95,7 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     images,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
-  const tier = resolveModelTier(data.modelTier, text || "image", process.env);
+  const tier = resolveModelTier(tierField.tier, text || "image", process.env);
   const saveMemoryText = typeof data.saveMemory === "string" ? data.saveMemory : "";
   return {
     ok: true as const,
