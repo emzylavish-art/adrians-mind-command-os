@@ -331,3 +331,10 @@ Gaussian is re-based in texel units so its screen-space variance matches the
 native chain (energy renormalised) → halo footprint on Imagine nodes / chart
 plates is unchanged (measured in `bloom-budget.test.ts`). No wiring needed;
 `createTunedBloomPass(size, tone, { budget: false })` restores the stock chain.
+
+## #114 / #117 god-ray emission mask (`god-ray-mask.ts`)
+- Below 48 taps (#109 budget, >2.5 MP buffers or frame-time backoff) the god-ray pass box-prefilters emission into a half-res mask; at 48 taps the stock per-tap path runs and the mask is freed.
+- #117: HalfFloat mask only when RGBA16F is colour-renderable (`EXT_color_buffer_float` / `EXT_color_buffer_half_float`); byte composer source (painter c20 fallback) → byte mask. A freshly allocated mask FBO is checked with `checkFramebufferStatus`; incomplete HalfFloat → byte, incomplete byte → stock path (sticky; never samples a black mask).
+- #117: mask freed whenever the pass is disabled (`apply()`), on DPR drop to 48 taps, and on dispose (context-loss path). `godRays.maskBytes` reports live mask VRAM.
+- #117: odd drawing-buffer edges use `godRayMaskUvScale` / `emitScale` so 2×2 block centres stay on full-res texel centres. 8-bit mask over an HDR source stores e/(1+e), decoded per tap.
+- `createGodRayPass(init, { emissionMask: "auto" | "off" | "byte" })` is an A/B knob for harnesses; default `"auto"`. No scene wiring needed. Test: `postfx/god-ray-mask-vram.test.ts` (register in `npm test`).
