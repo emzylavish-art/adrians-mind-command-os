@@ -121,7 +121,7 @@ if (-not $SkipSourceClones) {
         @("jadx", "https://github.com/skylot/jadx.git"),
         @("frida", "https://github.com/frida/frida.git"),
         @("owasp-zap", "https://github.com/zaproxy/zaproxy.git"),
-        @("gdb", "https://github.com/bminor/binutils-gdb.git"),
+        @("gdb", "https://github.com/gnutools/binutils-gdb.git"),
         @("x64dbg", "https://github.com/x64dbg/x64dbg.git")
     )
     foreach ($item in $repos) {
