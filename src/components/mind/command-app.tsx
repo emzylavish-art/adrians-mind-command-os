@@ -120,6 +120,7 @@ import {
   type DictationMachineState,
 } from "@/lib/mind/voice/dictation-machine";
 import { dictationTranscriptForTestAudio, readVoiceTestAudioParam, resolveVoiceTestAudioUrl } from "@/lib/mind/voice/test-audio";
+import { providerUnconfiguredMessage, shouldForceVoiceUnconfigured } from "@/lib/mind/voice/provider-unconfigured";
 import {
   createVoiceConnectState,
   enterStage,
@@ -3234,6 +3235,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       }
 
       publishConnectStage("getting_session");
+      // Dev-only: ?voiceForceUnconfigured=1 proves provider-not-configured UI without route stubs.
+      if (
+        typeof window !== "undefined" &&
+        shouldForceVoiceUnconfigured(window.location.search, Boolean(import.meta.env.DEV))
+      ) {
+        noteConnectFailure("getting_session", providerUnconfiguredMessage());
+        return;
+      }
       listenMintAbortRef.current?.abort();
       const mintAbort = new AbortController();
       listenMintAbortRef.current = mintAbort;

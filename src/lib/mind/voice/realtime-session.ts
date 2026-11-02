@@ -92,6 +92,12 @@ export class RealtimeVoiceSession {
   private testAudioUrl: string | null = null;
   private testAudioTimer: ReturnType<typeof setInterval> | null = null;
   private forceSpeak = false;
+  /** Bumped on interrupt so in-flight play finally-handlers ignore stale work. */
+  private speakEpoch = 0;
+  /** Outstanding playPcm16 promises from assistant audio deltas. */
+  private playsInFlight = 0;
+  /** response.done arrived while local playback still running. */
+  private awaitingPlaybackEnd = false;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -240,20 +246,45 @@ export class RealtimeVoiceSession {
     }
     if (type === "response.output_audio.delta" || type === "response.audio.delta") {
       if (msg.delta) {
-        this.handlers.onStatus?.("speaking");
-        void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE });
+        this.queueAssistantPcm(msg.delta);
       }
       return;
     }
     if (type === "response.done") {
       this.forceSpeak = false;
-      this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
+      // Keep Speaking until local playback actually ends (Interrupt stays visible/clickable).
+      if (this.playsInFlight > 0 || this.output.isPlaying) {
+        this.awaitingPlaybackEnd = true;
+        this.handlers.onStatus?.("speaking");
+      } else {
+        this.awaitingPlaybackEnd = false;
+        this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
+      }
     }
+  }
+
+  /** Start Speaking when PCM playback is queued; leave Speaking only after response.done + drain. */
+  private queueAssistantPcm(deltaB64: string) {
+    const epoch = this.speakEpoch;
+    this.handlers.onStatus?.("speaking");
+    this.playsInFlight += 1;
+    void this.output.playPcm16Base64(deltaB64, { sampleRate: REALTIME_SAMPLE_RATE }).finally(() => {
+      if (epoch !== this.speakEpoch) return;
+      this.playsInFlight = Math.max(0, this.playsInFlight - 1);
+      // Do not leave Speaking between chunks — only after response.done requested settle.
+      if (this.playsInFlight === 0 && this.awaitingPlaybackEnd && !this.output.isPlaying) {
+        this.awaitingPlaybackEnd = false;
+        if (this.open) this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
+      }
+    });
   }
 
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback() {
     this.forceSpeak = false;
+    this.speakEpoch += 1;
+    this.playsInFlight = 0;
+    this.awaitingPlaybackEnd = false;
     this.output.interrupt();
     this.send({ type: "response.cancel" });
   }
@@ -389,6 +420,9 @@ export class RealtimeVoiceSession {
       this.testAudioTimer = null;
     }
     this.forceSpeak = true;
+    this.speakEpoch += 1;
+    this.playsInFlight = 0;
+    this.awaitingPlaybackEnd = false;
     this.output.interrupt();
     this.send({ type: "response.cancel" });
     this.send({

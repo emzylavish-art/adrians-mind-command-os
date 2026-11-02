@@ -402,6 +402,11 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     if (!allowMindRequest("voice_secret", context.userId, 20)) {
       return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     }
+    // Dev-only e2e flag: force honest "provider not configured" without touching real keys.
+    if (process.env.VOICE_E2E_FORCE_UNCONFIGURED === "1" && process.env.NODE_ENV !== "production") {
+      const { providerUnconfiguredMessage } = await import("./voice/provider-unconfigured");
+      return { ok: false as const, error: providerUnconfiguredMessage() };
+    }
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
     return mintRealtimeClientSecret({});
   });
