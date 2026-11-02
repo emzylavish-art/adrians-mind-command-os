@@ -39,6 +39,11 @@ export type ImagineTextureSanitizeOptions = {
   maxTextureSize?: number;
   /** Attempt canvas downscale when over GPU max (skipped if tainted / no DOM). */
   allowDownscale?: boolean;
+  /**
+   * GPU MAX_TEXTURE_MAX_ANISOTROPY_EXT (or 1 on WebGL1 without ext).
+   * Imagine samplers never exceed this (hacker c23).
+   */
+  maxAnisotropy?: number;
 };
 
 export type ImagineTextureSanitizeResult = {
@@ -51,11 +56,19 @@ export type ImagineTextureSanitizeResult = {
   downscaled: boolean;
   /** True when result.texture is a NEW texture we created (caller must dispose). */
   owned: boolean;
+  /** Finite image w/h for uAspect (1 when missing/invalid). */
+  aspect: number;
 };
 
 /** Soft cap edge for Imagine maps (also clamped to GPU max). */
 export const IMAGINE_IMAGE_MIN_EDGE = PAPER_GRAIN_MIN_SIZE;
 export const IMAGINE_IMAGE_HARD_MAX = 8192;
+/** Max |log2| aspect clamp — extreme 1×4000 etc. stay letterboxed, never NaN. */
+export const IMAGINE_ASPECT_MAX = 16;
+export const IMAGINE_ASPECT_DEFAULT = 1;
+/** Safe anisotropy when GPU max unknown (WebGL1 / no EXT). */
+export const IMAGINE_ANISOTROPY_SAFE_DEFAULT = 1;
+export const IMAGINE_ANISOTROPY_HARD_MAX = 16;
 
 function cloneUniforms(src: typeof ImagineNodeShader.uniforms) {
   return {
@@ -77,6 +90,7 @@ function cloneUniforms(src: typeof ImagineNodeShader.uniforms) {
     uLoading: { value: (src as { uLoading?: { value: number } }).uLoading?.value ?? 0 },
     uFocus: { value: (src as { uFocus?: { value: number } }).uFocus?.value ?? 0 },
     uQuality: { value: (src as { uQuality?: { value: number } }).uQuality?.value ?? 1 },
+    uAspect: { value: (src as { uAspect?: { value: number } }).uAspect?.value ?? IMAGINE_ASPECT_DEFAULT },
   };
 }
 
@@ -129,12 +143,63 @@ export function isImageSourceTainted(image: unknown): boolean {
   }
 }
 
-function applyNpotSafeFilters(tex: THREE.Texture): void {
+/**
+ * HACKER (c23): aspect from real dims — never NaN/Inf (0-height → neutral 1).
+ * Clamped to [1/IMAGINE_ASPECT_MAX, IMAGINE_ASPECT_MAX] so 1×4000 letterboxes honestly.
+ * Uses reported width/height only (no EXIF decode in painter lane).
+ */
+export function imagineAspectFromDims(width: number, height: number): number {
+  const w = Number(width);
+  const h = Number(height);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) {
+    return IMAGINE_ASPECT_DEFAULT;
+  }
+  const raw = w / h;
+  if (!Number.isFinite(raw) || raw <= 0) return IMAGINE_ASPECT_DEFAULT;
+  const minA = 1 / IMAGINE_ASPECT_MAX;
+  if (raw < minA) return minA;
+  if (raw > IMAGINE_ASPECT_MAX) return IMAGINE_ASPECT_MAX;
+  return raw;
+}
+
+/** Clamp anisotropy to GPU max (never above EXT / hard max). */
+export function clampImagineAnisotropy(requested: number, gpuMax?: number): number {
+  const gpu = sanitizeFinite(
+    gpuMax ?? IMAGINE_ANISOTROPY_SAFE_DEFAULT,
+    IMAGINE_ANISOTROPY_SAFE_DEFAULT,
+    1,
+    IMAGINE_ANISOTROPY_HARD_MAX,
+  );
+  const req = sanitizeFinite(requested, 1, 1, IMAGINE_ANISOTROPY_HARD_MAX);
+  return Math.min(req, gpu);
+}
+
+/**
+ * HACKER (c23): Imagine sampler state safe on WebGL1 NPOT —
+ * no mipmaps (black textures), ClampToEdge (Repeat illegal on NPOT),
+ * Linear filters, anisotropy ≤ GPU max.
+ * Applied to EVERY accepted Imagine map (not only NPOT).
+ */
+export function applyImagineSamplerSafe(
+  tex: THREE.Texture,
+  opts: { maxAnisotropy?: number } = {},
+): void {
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
+  const cur = Number((tex as { anisotropy?: number }).anisotropy);
+  const maxA = opts.maxAnisotropy ?? IMAGINE_ANISOTROPY_SAFE_DEFAULT;
+  (tex as { anisotropy: number }).anisotropy = clampImagineAnisotropy(
+    Number.isFinite(cur) && cur > 0 ? cur : 1,
+    maxA,
+  );
+}
+
+/** @deprecated use applyImagineSamplerSafe — kept as alias for call sites. */
+function applyNpotSafeFilters(tex: THREE.Texture, maxAnisotropy?: number): void {
+  applyImagineSamplerSafe(tex, { maxAnisotropy });
 }
 
 function tryDownscaleTexture(
@@ -157,7 +222,7 @@ function tryDownscaleTexture(
     ctx.drawImage(tex.image as CanvasImageSource, 0, 0, w, h);
     const out = new THREE.CanvasTexture(c);
     out.colorSpace = tex.colorSpace ?? THREE.SRGBColorSpace;
-    applyNpotSafeFilters(out);
+    applyImagineSamplerSafe(out);
     out.needsUpdate = true;
     return { texture: out, width: w, height: h };
   } catch {
@@ -184,6 +249,7 @@ export function sanitizeImagineImageTexture(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   // HACKER (c12): TextureLoader race / HMR may hand a disposed Texture — never bind it
@@ -197,6 +263,7 @@ export function sanitizeImagineImageTexture(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   let { width, height } = readTextureImageSize(tex);
@@ -210,6 +277,7 @@ export function sanitizeImagineImageTexture(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   if (width > IMAGINE_IMAGE_HARD_MAX || height > IMAGINE_IMAGE_HARD_MAX) {
@@ -222,6 +290,7 @@ export function sanitizeImagineImageTexture(
       npot: !isPowerOfTwoSize(width) || !isPowerOfTwoSize(height),
       downscaled: false,
       owned: false,
+      aspect: imagineAspectFromDims(width, height),
     };
   }
 
@@ -254,6 +323,7 @@ export function sanitizeImagineImageTexture(
           npot: !isPowerOfTwoSize(width) || !isPowerOfTwoSize(height),
           downscaled: false,
           owned: false,
+          aspect: imagineAspectFromDims(width, height),
         };
       }
     } else {
@@ -266,6 +336,7 @@ export function sanitizeImagineImageTexture(
         npot: !isPowerOfTwoSize(width) || !isPowerOfTwoSize(height),
         downscaled: false,
         owned: false,
+        aspect: imagineAspectFromDims(width, height),
       };
     }
   }
@@ -288,12 +359,15 @@ export function sanitizeImagineImageTexture(
       npot: !isPowerOfTwoSize(width) || !isPowerOfTwoSize(height),
       downscaled,
       owned: false,
+      aspect: imagineAspectFromDims(width, height),
     };
   }
 
   const npot = !isPowerOfTwoSize(width) || !isPowerOfTwoSize(height);
-  if (npot) applyNpotSafeFilters(out);
+  // HACKER (c23): always sampler-safe (NPOT mipmaps/wrap → black on WebGL1; anisotropy clamp)
+  applyImagineSamplerSafe(out, { maxAnisotropy: opts.maxAnisotropy });
   out.needsUpdate = true;
+  const aspect = imagineAspectFromDims(width, height);
 
   return {
     ok: true,
@@ -304,6 +378,7 @@ export function sanitizeImagineImageTexture(
     npot,
     downscaled,
     owned,
+    aspect,
   };
 }
 
@@ -485,6 +560,7 @@ export function setImagineNodeMap(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   if (!mat.uniforms?.["uImage"] || !mat.uniforms?.["uHasImage"]) {
@@ -497,6 +573,7 @@ export function setImagineNodeMap(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   // HACKER (c18): bump generation so any older in-flight bind becomes stale.
@@ -524,6 +601,7 @@ export function setImagineNodeMapIfGeneration(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   if (getImagineNodeBindGeneration(mat) !== generation) {
@@ -536,6 +614,7 @@ export function setImagineNodeMapIfGeneration(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   return applyImagineNodeMapAtGeneration(mat, map, generation, opts);
@@ -557,6 +636,7 @@ function applyImagineNodeMapAtGeneration(
       npot: false,
       downscaled: false,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   disposeOwnedImagineMap(mat);
@@ -582,11 +662,14 @@ function applyImagineNodeMapAtGeneration(
       npot: result.npot,
       downscaled: result.downscaled,
       owned: false,
+      aspect: IMAGINE_ASPECT_DEFAULT,
     };
   }
   if (!result.ok || !result.texture) {
     mat.uniforms["uImage"].value = null;
     mat.uniforms["uHasImage"].value = 0;
+    if (mat.uniforms["uAspect"]) mat.uniforms["uAspect"].value = IMAGINE_ASPECT_DEFAULT;
+    (mat.userData as Record<string, unknown>).imagineAspect = IMAGINE_ASPECT_DEFAULT;
     // Keep uLoading on intentional missing map (create/loading wash). Clear only on
     // hard rejects so 404-sized/tainted failures don't keep pulsing forever.
     if (
@@ -609,7 +692,13 @@ function applyImagineNodeMapAtGeneration(
   mat.uniforms["uImage"].value = result.texture;
   mat.uniforms["uHasImage"].value = 1;
   if (mat.uniforms["uLoading"]) mat.uniforms["uLoading"].value = 0;
+  if (mat.uniforms["uAspect"]) {
+    mat.uniforms["uAspect"].value = result.aspect;
+  }
   (mat.userData as Record<string, unknown>).imagineMapError = null;
+  (mat.userData as Record<string, unknown>).imagineAspect = result.aspect;
+  (mat.userData as Record<string, unknown>).imagineMapWidth = result.width;
+  (mat.userData as Record<string, unknown>).imagineMapHeight = result.height;
   if (result.owned) {
     (mat.userData as Record<string, unknown>).imagineOwnedMap = result.texture;
   }

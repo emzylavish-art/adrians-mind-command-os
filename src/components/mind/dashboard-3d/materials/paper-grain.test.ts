@@ -105,6 +105,12 @@ import {
   painterQualityFromDpr,
   isImagineNodeFocusable,
   IMAGINE_FOCUS_EASE,
+  imagineAspectFromDims,
+  applyImagineSamplerSafe,
+  clampImagineAnisotropy,
+  IMAGINE_ASPECT_MAX,
+  IMAGINE_ASPECT_DEFAULT,
+  IMAGINE_ANISOTROPY_SAFE_DEFAULT,
 } from "./imagine-node.ts";
 import {
   createImagineNodeMaterial,
@@ -2600,6 +2606,127 @@ describe("painter c22: Imagine card paper bevel under focus", () => {
     tickPainterlyKit(kit, 2.1, { dpr: 1, reducedMotion: true });
     assert.equal(m2.uniforms["uQuality"]!.value, 1);
     disposePainterlyKit(kit);
+    m.dispose();
+  });
+});
+
+
+describe("hacker pass c23: extreme aspect / NaN aspect / NPOT sampler / anisotropy", () => {
+  function fakeTex(w: number, h: number, extra: Record<string, unknown> = {}) {
+    return {
+      image: { width: w, height: h },
+      needsUpdate: false,
+      generateMipmaps: true,
+      minFilter: 1008, // LinearMipmapLinear
+      magFilter: 1006,
+      wrapS: 1000, // Repeat
+      wrapT: 1000,
+      anisotropy: 16,
+      colorSpace: "srgb",
+      dispose() {},
+      ...extra,
+    } as unknown as import("three").Texture;
+  }
+
+  it("imagineAspectFromDims never yields NaN (0-height / NaN / Inf → neutral 1)", () => {
+    assert.equal(imagineAspectFromDims(0, 0), IMAGINE_ASPECT_DEFAULT);
+    assert.equal(imagineAspectFromDims(64, 0), IMAGINE_ASPECT_DEFAULT);
+    assert.equal(imagineAspectFromDims(0, 64), IMAGINE_ASPECT_DEFAULT);
+    assert.equal(imagineAspectFromDims(Number.NaN, 64), IMAGINE_ASPECT_DEFAULT);
+    assert.equal(imagineAspectFromDims(64, Number.NaN), IMAGINE_ASPECT_DEFAULT);
+    assert.equal(imagineAspectFromDims(Number.POSITIVE_INFINITY, 10), IMAGINE_ASPECT_DEFAULT);
+    assert.ok(Number.isFinite(imagineAspectFromDims(100, 50)));
+    assert.equal(imagineAspectFromDims(100, 50), 2);
+    assert.equal(imagineAspectFromDims(50, 100), 0.5);
+  });
+
+  it("extreme 1×4000 / 4000×1 clamp to IMAGINE_ASPECT_MAX band (letterbox, no stretch NaN)", () => {
+    const thin = imagineAspectFromDims(1, 4000);
+    assert.ok(Number.isFinite(thin));
+    assert.equal(thin, 1 / IMAGINE_ASPECT_MAX);
+    const wide = imagineAspectFromDims(4000, 1);
+    assert.equal(wide, IMAGINE_ASPECT_MAX);
+    const r = sanitizeImagineImageTexture(fakeTex(1, 4000), { maxTextureSize: 8192, allowDownscale: false });
+    assert.equal(r.ok, true);
+    assert.equal(r.aspect, 1 / IMAGINE_ASPECT_MAX);
+    assert.equal(r.width, 1);
+    assert.equal(r.height, 4000);
+  });
+
+  it("NPOT + Repeat + mipmaps + high anisotropy → sampler-safe (WebGL1 black guard)", () => {
+    const tex = fakeTex(300, 200, { anisotropy: 64, wrapS: 1000, wrapT: 1000, generateMipmaps: true });
+    const r = sanitizeImagineImageTexture(tex, {
+      maxTextureSize: 1024,
+      allowDownscale: false,
+      maxAnisotropy: 4,
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.npot, true);
+    assert.equal(tex.generateMipmaps, false);
+    // three: RepeatWrapping=1000, ClampToEdgeWrapping=1001
+    assert.equal(tex.wrapS, 1001);
+    assert.equal(tex.wrapT, 1001);
+    assert.equal(tex.minFilter, 1006); // LinearFilter
+    assert.equal(tex.anisotropy, 4); // clamped to gpu max 4, not 64
+  });
+
+  it("clampImagineAnisotropy never exceeds GPU max or hard max", () => {
+    assert.equal(clampImagineAnisotropy(16, 1), 1);
+    assert.equal(clampImagineAnisotropy(8, 4), 4);
+    assert.equal(clampImagineAnisotropy(Number.NaN, 8), 1);
+    assert.equal(clampImagineAnisotropy(100, 32), 16);
+    assert.equal(clampImagineAnisotropy(2, 8), 2);
+  });
+
+  it("0-height map reject keeps uAspect neutral (no NaN uniform)", () => {
+    const m = createImagineNodeMaterial();
+    assert.equal(m.uniforms["uAspect"]!.value, IMAGINE_ASPECT_DEFAULT);
+    const r = setImagineNodeMap(m, fakeTex(128, 0));
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, "invalid-dimensions");
+    assert.equal(r.aspect, IMAGINE_ASPECT_DEFAULT);
+    assert.equal(m.uniforms["uHasImage"]!.value, 0);
+    assert.equal(m.uniforms["uAspect"]!.value, IMAGINE_ASPECT_DEFAULT);
+    assert.ok(Number.isFinite(m.uniforms["uAspect"]!.value as number));
+    m.dispose();
+  });
+});
+
+describe("painter c23: aspect-safe Imagine deckle under non-square maps", () => {
+  function fakeTex(w: number, h: number) {
+    return {
+      image: { width: w, height: h },
+      needsUpdate: false,
+      generateMipmaps: true,
+      minFilter: 1008,
+      magFilter: 1006,
+      wrapS: 1000,
+      wrapT: 1000,
+      anisotropy: 1,
+      colorSpace: "srgb",
+      dispose() {},
+    } as unknown as import("three").Texture;
+  }
+
+  it("ImagineNodeShader exposes uAspect + letterbox content UV / deckle", () => {
+    assert.ok(ImagineNodeShader.uniforms.uAspect);
+    assert.match(ImagineNodeShader.fragmentShader, /uAspect/);
+    assert.match(ImagineNodeShader.fragmentShader, /contentLo|contentUv|letterbox|contentSize/);
+    assert.match(ImagineNodeShader.fragmentShader, /inContent/);
+  });
+
+  it("setImagineNodeMap writes finite uAspect from real dims; clear resets to 1", () => {
+    const m = createImagineNodeMaterial();
+    const portrait = setImagineNodeMap(m, fakeTex(200, 400), { maxTextureSize: 1024 });
+    assert.equal(portrait.ok, true);
+    assert.equal(portrait.aspect, 0.5);
+    assert.equal(m.uniforms["uAspect"]!.value, 0.5);
+    const land = setImagineNodeMap(m, fakeTex(800, 200), { maxTextureSize: 1024 });
+    assert.equal(land.aspect, 4);
+    assert.equal(m.uniforms["uAspect"]!.value, 4);
+    setImagineNodeMap(m, null);
+    assert.equal(m.uniforms["uAspect"]!.value, IMAGINE_ASPECT_DEFAULT);
+    assert.equal(m.uniforms["uHasImage"]!.value, 0);
     m.dispose();
   });
 });
