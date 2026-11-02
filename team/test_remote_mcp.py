@@ -44,7 +44,7 @@ class RemoteMCPConfigTests(unittest.TestCase):
     def test_tool_call_requires_explicit_allowlist(self):
         config = {"servers": {"demo": {"enabled": True, "url": "https://example.com/mcp", "allowed_tools": ["read"]}}}
         with patch.object(remote_mcp, "_server", return_value=("https://example.com/mcp", None, config["servers"]["demo"])), patch.object(remote_mcp, "_rpc") as rpc, patch.object(remote_mcp, "_post"):
-            rpc.side_effect = [{"ok": True}, None, {"content": [{"type": "text", "text": "ok"}]}]
+            rpc.side_effect = [{"ok": True}, {"content": [{"type": "text", "text": "ok"}]}]
             result = remote_mcp.call_tool("demo", "read", {})
             self.assertEqual(result["tool"], "read")
             with self.assertRaises(remote_mcp.RemoteMCPError):
