@@ -126,6 +126,33 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(outcome["status"], "ready", outcome)
             self.assertEqual(outcome["result"]["status"], "succeeded")
 
+    def test_agent_prompt_resolution_by_id(self):
+        code, result = call({
+            "operation": "invoke", "tool_id": "team.agent.resolve",
+            "input": {"agent_id": "orchestrator"},
+        })
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "ready")
+        self.assertIn("Orchestrator", result["result"]["prompt"])
+        self.assertIn("team/agents/orchestrator.md", result["evidence"])
+
+    def test_agent_prompt_resolution_by_capability(self):
+        code, result = call({
+            "operation": "invoke", "tool_id": "team.agent.resolve",
+            "input": {"task": "inventory source", "capabilities": ["source_inventory"]},
+        })
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["result"]["agent_id"], "rea")
+
+    def test_unmapped_agent_prompt_is_not_fabricated(self):
+        code, result = call({
+            "operation": "invoke", "tool_id": "team.agent.resolve",
+            "input": {"agent_id": "gods-eyes"},
+        })
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "blocked")
+
     def test_unavailable_tool_is_not_claimed_ready(self):
         code, result = call({"operation": "invoke", "tool_id": "gods-eyes", "input": {}})
         self.assertEqual(code, 0)
