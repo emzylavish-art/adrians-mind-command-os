@@ -2,26 +2,39 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Still unwired (Dashboard) — prioritized (2026-11-03T00:00:27+01:00 WAT, origin/dashboard-3d@8e8b095)
+## Still unwired (Dashboard) — prioritized (2026-11-03T00:06:27+01:00 WAT, origin/dashboard-3d@899f896)
 
 | Pri | Adopt | Status | Evidence | First noted |
 |-----|-------|--------|----------|-------------|
-| **P0** | Notion page galaxy → painter instance stars | **PARTIAL** | c68 MeshBasic interim matte (no LED); still not watercolor — needs `createGalaxyPageMaterial` / instanceColor | 2026-11-02 |
-| P1 | Landing-trail travelers | **UNWIRED** | universe-scene MeshStandardMaterial gold spheres | 2026-11-02 |
-| P2 | Optional Imagine lane wash opts on every card | partial | beginImagineNodeMapBind wired; lane/health on some creates | 2026-11-01 |
-| — | c27 kit.createFleetBeacon | **WIRED** | fleet-plan-layer ball() → createFleetBeacon (dashboard c66) | done 2026-11-02 |
-| — | c24 city ground / c25 sun / c26 emissive clamp / c22 focus+DPR | **WIRED** | city-layer / createSunMaterial / starSetColorNeedsApply / setImagineNodeFocus+tick dpr | done |
-| — | Motion c32 glow | **WIRED** | GLOW_BASE 1.25 + scale cap | done |
-| — | c19 lore claimedAt | **WIRED** | createLorePlaqueMaterial({ claimedAt }) | done |
+| **P0** | **c30 kit.createNotionGalaxyPages** | **READY — UNWIRED** | Material shipped this cycle; universe-scene rebuildPages still MeshBasic interim (c68) | 2026-11-03 |
+| P1 | Landing-trail travelers | **UNWIRED** | MeshStandardMaterial gold spheres | 2026-11-02 |
+| P2 | Optional Imagine lane wash on every card | partial | map bind wired | 2026-11-01 |
+| — | c27 fleet beacon / c24 ground / c25 sun / c26 emissive / c22 focus+DPR / c19 lore claimedAt / Motion c32 | **WIRED** | — | done |
 
-### → Dashboard Bot
-P0: adopt painter galaxy page material when shipped (replace MeshBasic InstancedMesh). P1: landing travelers → createFleetBeacon or createBotStar.
+### → Dashboard Bot (P0)
+Replace MeshBasic rebuildPages with:
+
+```ts
+let galaxy: ReturnType<typeof kit.createNotionGalaxyPages> | null = null;
+function rebuildPages(status: DashboardStatus) {
+  const pages = status.notionGraph.pages.map(p => ({ id: p.id, kind: p.kind }));
+  const edges = status.notionGraph.edges; // kind === "child" filtered inside
+  if (!galaxy) {
+    galaxy = kit.createNotionGalaxyPages(pages, edges, { layoutRadius: 16 });
+    pageGroup.add(galaxy.group);
+  } else {
+    galaxy.update(pages, edges);
+  }
+  // focus tint: galaxy.pageMesh instanceColor — or keep tintNotionNeighbors adapting to pageMesh
+}
+// dispose: galaxy?.dispose()
+```
 
 ### → Cosmos Light Bot
-No new c29 ask.
+No new c30 ask. Galaxy pages are matte watercolor (toneMapped:false).
 
 ### → Cosmos Motion Bot
-No new c29 ask.
+No new c30 ask.
 
 
 ## Status vs origin/dashboard-3d (verified cycle 21)
@@ -588,6 +601,18 @@ No new wire for the pass. P0 remains c27 fleet beacon (see Still unwired table).
 
 ### → Dashboard Bot
 P0 remains Notion galaxy watercolor instance material (MeshBasic interim). P1 landing travelers.
+
+### → Light / Motion
+No new ask.
+
+## c30 — Notion galaxy watercolor pages + ink child edges (adopt)
+
+**Shipped:** `GalaxyPageShader` (USE_INSTANCING + instanceColor), `createGalaxyPageMaterial`, `kit.createNotionGalaxyPages(pages, edges)` — kind→pigment from real snapshot; child edges → ink-wash.
+
+**Hacker:** empty/huge page lists, NaN positions skipped, NaN instanceColor, forceFallback, post-dispose inert.
+
+### → Dashboard Bot
+Wire rebuildPages (snippet in Still unwired P0).
 
 ### → Light / Motion
 No new ask.

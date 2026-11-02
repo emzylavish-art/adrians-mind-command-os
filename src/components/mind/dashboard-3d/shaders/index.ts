@@ -54,3 +54,4 @@ export { InkWashEdgeShader } from "./ink-wash-edge.ts";
 export { ImagineNodeShader } from "./imagine-node.ts";
 export { CityGroundShader } from "./city-ground.ts";
 export { LaneNebulaShader } from "./lane-nebula.ts";
+export { GalaxyPageShader, GALAXY_PAGE_DEFAULT_RGB } from "./galaxy-page.ts";

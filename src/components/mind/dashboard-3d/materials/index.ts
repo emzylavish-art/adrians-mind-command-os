@@ -8,6 +8,8 @@ export const PAINTER_MATERIALS = {
   cityGround: "CityGroundMaterial",
   botStar: "PainterlyBotStarBundle",
   fleetBeacon: "PainterlyFleetBeaconBundle",
+  galaxyPage: "GalaxyPageMaterial",
+  notionGalaxy: "NotionGalaxyPagesHandle",
   inkWashEdgesBatched: "PainterlyInkEdgesHandle",
   laneNebula: "LaneNebulaMaterial",
   paperGrain: "PaperGrainTexture",
@@ -310,3 +312,20 @@ export {
   type PainterlyPassOptions,
   type PainterlyHealthInputs,
 } from "../shaders/painterly-pass.ts";
+
+export {
+  createGalaxyPageMaterial,
+  createNotionGalaxyPages,
+  tickGalaxyPageMaterial,
+  galaxyPigmentFromPageKind,
+  asGalaxyPageKind,
+  GALAXY_PAGES_MAX,
+  GALAXY_PAGE_EDGES_MAX,
+  GALAXY_PAGE_RADIUS_DEFAULT,
+  type GalaxyPageMaterialOptions,
+  type GalaxyPageInput,
+  type GalaxyEdgeInput,
+  type NotionGalaxyPagesHandle,
+  type NotionGalaxyPagesOptions,
+  type GalaxyPageKind,
+} from "./galaxy-page.ts";
