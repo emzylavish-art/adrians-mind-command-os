@@ -9,6 +9,7 @@
  * H22: intentional user Stop (STOPPED_REPLY) is classified as user_stopped — not chat_failed,
  * and must not paint the red failure banner (see shouldShowFailureBanner / classifyHonestTurnOutcome).
  * H24/H25: ServiceBoard OAuth connect/disconnect and Tools Open page failures classify as network_failure.
+ * H26: MCP enable/disable toggle failures classify as network_failure (or auth_required).
  */
 
 export type HonestFailureKind =
@@ -63,6 +64,8 @@ export const HONEST_FAILURE_MESSAGES = {
   oauth_disconnect_failed: "Disconnect failed. The board was not changed.",
   /** Tools panel Open page / inspectWebPage failed. */
   open_page_failed: "The page was not opened.",
+  /** Tools panel MCP enable/disable toggle failed. */
+  mcp_toggle_failed: "The MCP server toggle could not be completed.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -223,6 +226,8 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text === HONEST_FAILURE_MESSAGES.open_page_failed
     || text.includes("The page was not opened")
     || text.includes("OAuth could not be started")
+    || text === HONEST_FAILURE_MESSAGES.mcp_toggle_failed
+    || text.includes("MCP server toggle could not be completed")
   ) {
     return "network_failure";
   }

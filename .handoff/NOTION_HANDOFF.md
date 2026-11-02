@@ -504,7 +504,7 @@ command on Zack's PC.
 - Fix: oauth-board-action.ts runOauthBoardAction + snapshot params + OauthBoardActionStatusRows; onceRetry; optional onFailure→reportFailure. failure-states oauth_connect_failed / oauth_disconnect_failed → network_failure.
 - Files: src/lib/mind/oauth-board-action.ts(+test), src/components/mind/service-board.tsx, failure-states(+test), package.json test list.
 - Gates: typecheck pass; TS strip-types 1052/1052; lint touched 0e/4w (pre-existing hooks/unused); build pass.
-- Notion: child under mirror (requested 40b1aa27… still try-then-fallback).
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40cb95f33e42817e85bcd7d6d950675b
 - Next: H25 Open page muted pageNote.
 
 ## 2026-11-02T15:33:52-06:00 (America/Chicago) — Error Banners Bot — H25 Open page action banner
@@ -513,3 +513,15 @@ command on Zack's PC.
 - Files: src/lib/mind/open-page-action.ts(+test), src/components/mind/fleet-panels.tsx, failure-states(+test), package.json test list.
 - Gates: same as H24 (combined).
 - Blocked still: command-app.tsx mounts (Grok Build); voice/; media/; agent-planner; Vercel preview; ServiceBoard onFailure mount in command-app (optional prop ready).
+
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40cb95f33e4281cab098e1f62b9aa7b2
+- Pushed origin/error-banners → 5166d08c3af0aa0231555a56fa7d22fb1230876c
+
+
+## 2026-11-02T15:36:39-06:00 (America/Chicago) — Error Banners Bot — H26 MCP toggle banner
+- Gap: Tools panel MCP Turn on/off `mcpRegistryToggle` had no `.catch` — Unauthorized/network failures were silent.
+- Fix: mcp-toggle-action.ts runMcpToggle + snapshot id/enabled + McpToggleActionStatusRows; onceRetry; onFailure→reportFailure. failure-states mcp_toggle_failed → network_failure (copy avoids database_write "could not be saved" collision).
+- Files: src/lib/mind/mcp-toggle-action.ts(+test), src/components/mind/fleet-panels.tsx, failure-states(+test), package.json, .handoff/NOTION_HANDOFF.md
+- Gates: typecheck pass; TS 1056/1056; lint touched 0e/3w; build pass.
+- Notion: child under mirror (40b1aa27… still 404).
+- Next: sweep; supabase-account silent catch noted; command-app mounts still blocked.

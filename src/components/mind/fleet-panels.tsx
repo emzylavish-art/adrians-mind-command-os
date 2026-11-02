@@ -65,6 +65,13 @@ import {
   snapshotOpenPageParams,
   type OpenPageActionState,
 } from "@/lib/mind/open-page-action";
+import {
+  McpToggleActionStatusRows,
+  onceRetry as onceMcpToggleRetry,
+  runMcpToggle,
+  snapshotMcpToggleParams,
+  type McpToggleActionState,
+} from "@/lib/mind/mcp-toggle-action";
 
 
 function botAvatarSrc(name: string) {
@@ -113,6 +120,7 @@ export function FleetPanel({
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
   const [openPageActionState, setOpenPageActionState] = useState<OpenPageActionState>({ status: "idle" });
+  const [mcpToggleActionState, setMcpToggleActionState] = useState<McpToggleActionState>({ status: "idle" });
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
   const [mcpListState, setMcpListState] = useState<McpListState>({ status: "loading" });
   const mcpListInFlight = useRef(false);
@@ -751,10 +759,31 @@ export function FleetPanel({
                     type="button"
                     className="min-h-11 rounded-panel border border-line px-3 text-sm"
                     onClick={() => {
-                      void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
-                        setMcpServers(result.servers);
-                        loadMcpTools();
+                      const params = snapshotMcpToggleParams({
+                        id: server.id,
+                        enabled: !server.enabled,
+                        label: server.label,
                       });
+                      const run = () => {
+                        setMcpToggleActionState({ status: "running", params });
+                        void runMcpToggle(params, mcpRegistryToggle).then((result) => {
+                          if (result.ok) {
+                            setMcpToggleActionState({ status: "ok", note: result.note });
+                            setMcpServers(result.servers);
+                            loadMcpTools();
+                            return;
+                          }
+                          setMcpToggleActionState({
+                            status: "error",
+                            kind: result.kind,
+                            message: result.message,
+                            params: result.params,
+                          });
+                          const retry = onceMcpToggleRetry(() => run());
+                          if (retry) onFailure?.(result.message, retry);
+                        });
+                      };
+                      run();
                     }}
                   >
                     {server.enabled ? "Turn off" : "Turn on"}
@@ -807,6 +836,36 @@ export function FleetPanel({
               </li>
             );
           }) : null}
+          <McpToggleActionStatusRows
+            state={mcpToggleActionState}
+            onRetry={
+              mcpToggleActionState.status === "error"
+                ? onceMcpToggleRetry(() => {
+                    const params = mcpToggleActionState.params;
+                    const run = () => {
+                      setMcpToggleActionState({ status: "running", params });
+                      void runMcpToggle(params, mcpRegistryToggle).then((result) => {
+                        if (result.ok) {
+                          setMcpToggleActionState({ status: "ok", note: result.note });
+                          setMcpServers(result.servers);
+                          loadMcpTools();
+                          return;
+                        }
+                        setMcpToggleActionState({
+                          status: "error",
+                          kind: result.kind,
+                          message: result.message,
+                          params: result.params,
+                        });
+                        const retry = onceMcpToggleRetry(() => run());
+                        if (retry) onFailure?.(result.message, retry);
+                      });
+                    };
+                    run();
+                  }) ?? (() => undefined)
+                : () => undefined
+            }
+          />
           <McpListStatusRows state={mcpListState} onRetry={onceListRetry(loadMcpServers)} />
           <McpToolsListStatusRows state={mcpToolsState} onRetry={onceListRetry(loadMcpTools)} />
         </ul>
