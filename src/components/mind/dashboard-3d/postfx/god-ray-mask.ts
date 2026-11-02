@@ -198,7 +198,7 @@ type FramebufferGl = {
 };
 
 /** Status of the currently bound FBO; null when the renderer can't say (tests, partial). */
-function boundFramebufferComplete(renderer: THREE.WebGLRenderer): boolean | null {
+export function boundFramebufferComplete(renderer: THREE.WebGLRenderer): boolean | null {
   try {
     const gl = (renderer as { getContext?: () => unknown }).getContext?.() as FramebufferGl | undefined;
     if (!gl || typeof gl.checkFramebufferStatus !== "function") return null;

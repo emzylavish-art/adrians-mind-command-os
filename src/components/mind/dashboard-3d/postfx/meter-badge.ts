@@ -2,6 +2,7 @@ import type { ContrastReport } from "./detail-backdrop-dim.ts";
 import type { SceneKeyLiftReport } from "./scene-key-lift.ts";
 import type { CardEdgeReport } from "./card-edge.ts";
 import type { ChartsDepthPlateReport } from "./charts-depth-plate.ts";
+import { formatVramBadge, postfxVramLedger, vramSourceCount, type PostfxVramLedger } from "./vram-ledger.ts";
 
 /**
  * #81→#83 debug badge: honest one-line state of the measured dim + meter
@@ -25,6 +26,12 @@ export function formatMeterBadge(
   lift?: SceneKeyLiftReport | null,
   edge?: CardEdgeReport | null,
   plate?: ChartsDepthPlateReport | null,
+  /**
+   * #120 postfx VRAM ledger. Omitted → read the live registry (bloom / god-ray
+   * mask / meter self-register), so the scene's existing call shows it with no
+   * wiring; null → no VRAM segment.
+   */
+  vram?: PostfxVramLedger | null,
 ): MeterBadge {
   if (!contrast) return { text: "dim: off", level: "idle" };
   const parts: string[] = [];
@@ -65,6 +72,8 @@ export function formatMeterBadge(
           ? `plate spread ${fmt(plate.spread)} +${fmt(plate.targetStrength)}`
           : `plate spread ${fmt(plate.spread)} ok`,
     );
+  const ledger = vram === undefined ? (vramSourceCount() > 0 ? postfxVramLedger() : null) : vram;
+  if (ledger && ledger.basis !== "none") parts.push(formatVramBadge(ledger));
   const warn = (b && b.multiplier > 1) || !!contrast.lastError;
   const level = warn ? "warn" : contrast.source === "measured" ? "ok" : "idle";
   return { text: parts.join(" · "), level };
