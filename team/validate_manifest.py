@@ -58,8 +58,12 @@ def validate():
         errors.append("Duplicate IDs in Windows bootstrap source catalogue.")
     for item in repositories:
         url = item.get("url", "")
-        if not url.startswith("https://github.com/") or not url.endswith(".git"):
-            errors.append(f"Repository source must be an HTTPS GitHub URL: {item.get('id')}")
+        if item.get("id") == "burp-suite":
+            valid_url = url == "https://portswigger.net/burp/communitydownload"
+        else:
+            valid_url = url.startswith("https://github.com/") and url.endswith(".git")
+        if not valid_url:
+            errors.append(f"Unverified or invalid official source URL: {item.get('id')}")
     if not BOOTSTRAP_SCRIPT_PATH.is_file():
         errors.append("Windows bootstrap PowerShell script is missing.")
 
