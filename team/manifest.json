@@ -385,6 +385,27 @@
         "timeout_seconds": "integer (optional)"
       },
       "safety": "Makes a provider request only when explicitly invoked. xAI/OpenRouter keys are read from environment variables; Ollama uses localhost. No credentials are logged or persisted. Provider usage may incur charges; select route explicitly."
+    },
+    {
+      "id": "notion.controller",
+      "agent": "knowledge",
+      "capabilities": [
+        "notion_search",
+        "notion_page_retrieval",
+        "notion_block_retrieval",
+        "explicit_page_append"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/runner.py",
+      "input_schema": {
+        "action": "search|retrieve-page|retrieve-children|append-text",
+        "query": "string (search)",
+        "id": "string (page/block id)",
+        "text": "string (append-text)",
+        "page_size": "integer (optional)",
+        "timeout_seconds": "integer (optional)"
+      },
+      "safety": "Requires NOTION_API_KEY from environment. Read actions only retrieve/search. append-text is a write action and requires explicit invocation. Never log or persist token."
     }
   ],
   "catalog": [
