@@ -15,6 +15,16 @@ export {
   type TunedBloomOpts,
 } from "./bloom-tuning.ts";
 export {
+  PREFILTER_MAX_TAPS,
+  PREFILTER_GLSL,
+  PREFILTER_HIGHPASS_FRAGMENT,
+  applyPrefilter,
+  prefilterFootprint,
+  prefilterTaps,
+  type PrefilterState,
+  type PrefilterTaps,
+} from "./bloom-prefilter.ts";
+export {
   BLOOM_BUDGET_TRIGGER_PIXELS,
   BLOOM_MIP0_CAP_PIXELS,
   BLOOM_MIP0_TIER_CAPS,

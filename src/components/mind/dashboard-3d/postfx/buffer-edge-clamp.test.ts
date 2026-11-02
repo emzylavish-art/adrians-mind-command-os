@@ -21,11 +21,29 @@ describe("postfx buffer edge clamp (hacker c108)", () => {
     assert.equal(vp.bufW, Math.round(7680 * vp.dpr));
   });
 
-  it("normal screens are untouched; junk / sub-spec maxEdge is ignored", () => {
+  it("normal screens are untouched; junk maxEdge is ignored", () => {
     assert.deepEqual(postfxViewport(1920, 1080, 2, undefined, 16384), postfxViewport(1920, 1080, 2));
-    for (const junk of [Number.NaN, 0, -1, 512, Infinity]) {
+    for (const junk of [Number.NaN, 0, -1, 0.5, Infinity]) {
       assert.equal(postfxViewport(7680, 2160, 2, undefined, junk).bufW, 13440, String(junk));
     }
+  });
+
+  it("gap #66: a WebGL1 GPU reporting maxTextureSize 1024 still clamps the buffer", () => {
+    const vp = postfxViewport(1920, 1080, 2, undefined, 1024);
+    assert.ok(vp.bufW <= 1024 && vp.bufH <= 1024, JSON.stringify(vp));
+    assert.equal(vp.bufW, 1024);
+    assert.ok(vp.dpr <= 1024 / 1920 + 1e-9);
+    const small = postfxViewport(800, 600, 1, undefined, 512);
+    assert.ok(small.bufW <= 512 && small.bufH <= 512, JSON.stringify(small));
+  });
+
+  it("gap #66: rebind honors capabilities.maxTextureSize 1024", () => {
+    const rb = createPostfxViewportRebind(() => ({
+      renderer: { setPixelRatio: () => {}, setSize: () => {}, capabilities: { maxTextureSize: 1024 } },
+      composer: { setPixelRatio: () => {}, setSize: () => {}, readBuffer: { depthTexture: null } },
+    }));
+    const r = rb.resize(1920, 1080, 2)!;
+    assert.ok(r.viewport.bufW <= 1024 && r.viewport.bufH <= 1024, JSON.stringify(r.viewport));
   });
 
   it("extreme CSS width can drop below POSTFX_MIN_DPR so the FBO stays valid", () => {
