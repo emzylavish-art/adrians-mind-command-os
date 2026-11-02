@@ -93,6 +93,21 @@ def tool_specs(manifest):
                 "oneOf": [{"required": ["action"]}, {"required": ["operation"]}],
                 "additionalProperties": False,
             }
+
+        elif name == "mcp.remote":
+            description = "Call an explicitly configured remote MCP server over HTTPS. Server and tool must be enabled/allowlisted in team/remote_mcp.json; bearer tokens are environment-only."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "call"]},
+                    "server": {"type": "string", "minLength": 1},
+                    "tool": {"type": "string"},
+                    "arguments": {"type": "object"},
+                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120}
+                },
+                "required": ["action", "server"],
+                "additionalProperties": False
+            }
         elif name == "team.worker":
             description = "Process at most one queued job using the worker's explicit allowlist. No arbitrary shell or code payloads are executed."
             schema = {
