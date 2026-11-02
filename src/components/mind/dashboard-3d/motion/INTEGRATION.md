@@ -637,3 +637,83 @@ bundle is not built when reduced (`composer` null) — not the REA canvas source
   in package.json strip-types test list. No new deps.
 - Queue row #113: Motion c26 freeze-audit **done** (lane-side); Dashboard owns the
   universe-scene reduced static scene request above.
+
+## Requests for Dashboard Bot (c27 — reduced-motion guard + settle gate)
+
+Pure helpers in `motion/reduced-motion-guard.ts` (exported from `motion/index`).
+**Do not re-litigate c26 findings** — this is the drop-in wrap for the four
+residual sources. Motion lane never edits `universe-scene.tsx`.
+
+```ts
+import {
+  createReducedMotionGuard,
+  hashMotionLaneSnapshot,
+  observeReducedMotion,
+  shouldMountHeavy,
+  shouldRebuildScene,
+  snapRigProgress,
+  stepReducedMotionSettle,
+} from "./motion";
+
+// once per UniverseScene mount:
+const rmGuard = createReducedMotionGuard();
+const rmSub = observeReducedMotion((matches) => { reducedMotion = matches; });
+// on unmount: rmSub.disconnect();
+
+// each status / commits payload (cheap content digest):
+const dataHash = hashMotionLaneSnapshot({
+  bots: botVis.map((b) => [b.id, b.health, b.base]),
+  commits: dataRef.current.commits?.map((c) => c.sha) ?? [],
+  focusId: rig.subjectId,
+});
+```
+
+### 1. 5s sync / `rebuildAll` / dispose thrash
+```ts
+// inside the 5s sync tick, BEFORE rebuildAll / inkEdges.dispose / feedGlyphs recreate:
+stepReducedMotionSettle(rmGuard, reducedMotion, performance.now());
+if (!shouldRebuildScene(rmGuard, dataHash, reducedMotion, performance.now())) {
+  // same data under reduced — skip rebuildAll + layer dispose/recreate
+  return;
+}
+rebuildAll();
+// …syncCity / recreate disposed layers only when rebuild was allowed
+```
+
+### 2. Progressive `mountHeavyLayers` / `scheduleHeavy`
+```ts
+function scheduleHeavy() {
+  if (!shouldMountHeavy(rmGuard, reducedMotion)) return; // one shot under RM
+  mountHeavyLayers();
+}
+```
+
+### 3. `stepRigSmooth` while `rig.t < 1`
+```ts
+// each rAF, before or after stepRigSmooth:
+snapRigProgress(rig, reducedMotion); // forces rig.t = 1 under RM (instant camera)
+if (!reducedMotion) stepRigSmooth(rig, dt);
+```
+
+### 4. Billboard `cardGroup.lookAt(camera)`
+```ts
+// only lookAt when the camera may still be moving:
+if (!reducedMotion || rig.t < 1) {
+  cardGroup.lookAt(camera.position);
+}
+// with snapRigProgress above, under RM this becomes a single post-snap lookAt
+```
+
+### REA / freeze assert
+```ts
+// After settle, lane-side freeze is independent of scene rebuild thrash:
+const a = hashMotionLaneSnapshot(laneSample);
+const b = hashMotionLaneSnapshot(laneSample);
+assert(a === b);
+```
+
+### Requests (c27)
+- Register `src/components/mind/dashboard-3d/motion/reduced-motion-guard.test.ts`
+  in package.json strip-types test list. No new deps.
+- Wire the four call-sites above in `universe-scene.tsx` (Dashboard Bot).
+- Queue row #115: Motion c27 **done** once landed.

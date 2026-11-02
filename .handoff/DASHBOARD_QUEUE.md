@@ -169,6 +169,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 112 | **Light — bloom bright-pass anti-alias prefilter** — `postfx/bloom-prefilter.ts`: when the bright target footprint > 2 drawing-buffer px (#110 budget), the high pass takes an n×n grid of thresholded bilinear taps across the footprint (n = ceil(f) to f=4, ceil(f/2) beyond, ≤16 taps); LDR box average (painter stars ≤0.98 keep full energy), Karis weight only on HDR excess. Same chunk in focus-bloom-guard. CPU model, 2-px highlight sweep: 4480×2520 (f≈3) flicker 1.55→0.10 (native 0.27), energy within 6% of native for f 2.5–9.5; 1080p stays the stock single tap. Gap #66 fixed in viewport-rebind (WebGL1 maxTextureSize 1024 honored). No scene wiring | **done** | light c111; register postfx/bloom-prefilter.test.ts |
 | 113 | **Motion c26 — reduced-motion freeze audit** — lane helpers bit-stable under RM (`reduced-freeze-audit.test.ts`); REA uniqueSamples before c24=4/c25=6 after=4; traced to Dashboard `universe-scene` 5s rebuildAll/dispose thrash + progressive heavy mount + camera ease (Requests for Dashboard Bot in motion/INTEGRATION.md) | **done** | Motion c26; Dashboard owns universe-scene reduced static scene |
 | 114 | **Light — god-ray occlusion mask anti-alias under #109 tap budget** — measure (CPU model like #112) whether the god-ray radial sampler shimmers on sub-texel bright sources when taps drop to 16 on >2.5 MP buffers; if flicker > native, jitter/prefilter the occlusion taps in postfx/god-rays.ts only | queued | Light lane next; postfx/ only |
+| 115 | **Motion c27 — reduced-motion guard + settle gate** — `createReducedMotionGuard` / `hashMotionLaneSnapshot` / `shouldRebuildScene` / `shouldMountHeavy` / `snapRigProgress` / `observeReducedMotion` (legacy addListener + SSR); INTEGRATION drop-in for 4 RM residual sources; hacker: key-order hash + length-collision + RM flap settle | **done** | Motion c27; Dashboard wires universe-scene |
 
 
 
@@ -181,7 +182,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 ## Next researched (tail — keep non-empty)
 
 - ~~**Motion c26 — reduced-motion freeze audit**~~ — **done (Cosmos Motion Bot c26)**: `reduced-freeze-audit.test.ts` 3/3 bit-stable; REA uniqueSamples before 4/6 after 4; residual = Dashboard universe-scene (INTEGRATION Requests).
-- **Motion c27 — reduced-motion settle gate helper** — export a tiny `hashMotionLaneSnapshot(...)` (or document the freeze-audit recipe) so Dashboard REA can assert lane-side freeze independently of universe-scene rebuild thrash; optional `createReducedMotionGuard` that no-ops dust/comet updates after first rest frame. Cosmos Motion Bot next.
+- ~~**Motion c27 — reduced-motion guard + settle gate**~~ — **done (Cosmos Motion Bot c27)**: `reduced-motion-guard.ts` + hacker tests (key-order hash, length-collision, SSR/legacy matchMedia, RM flap settle); INTEGRATION drop-in for 4 sources.
+- **Motion c28 — reduced-motion guard REA harness helper** — tiny node:test (or script) that feeds synthetic status hashes through `shouldRebuildScene` across a 5s wall clock and asserts ≤1 rebuild when payload stable; optional export of freeze-audit snapshot builder for Dashboard REA. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
