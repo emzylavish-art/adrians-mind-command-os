@@ -32,6 +32,19 @@ export {
   type SunScreen,
 } from "./god-rays.ts";
 export {
+  GOD_RAY_MAX_TAPS,
+  GOD_RAY_MIN_TAPS,
+  GOD_RAY_REF_PIXELS,
+  GOD_RAY_TAP_TIERS,
+  createGodRayBudget,
+  godRayTapParams,
+  godRayTapsFor,
+  godRayUniformEnergy,
+  type GodRayBudget,
+  type GodRayBudgetOpts,
+  type GodRayTapParams,
+} from "./god-ray-budget.ts";
+export {
   EXPOSURE_BY_TONE,
   EXPOSURE_EASE_MS,
   EXPOSURE_MAX,
@@ -213,6 +226,7 @@ export {
 export {
   POSTFX_MAX_DPR,
   POSTFX_MIN_DPR,
+  WEBGL2_MIN_MAX_EDGE,
   createPostfxViewportRebind,
   postfxViewport,
   rebindPostfxViewport,

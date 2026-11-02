@@ -311,3 +311,13 @@ const stopDprWatch = watchDevicePixelRatio(window, () => { lastResizeW = 0; onRe
 Charts depth plate: feather / blur / shadow CSS-px uniforms now follow the live viewport on every
 `setPlate` call (previously only on a fresh reading, so a resize during fade-out mis-scaled the edge).
 Test: `src/components/mind/dashboard-3d/postfx/viewport-rebind.test.ts` (register in `package.json` test script).
+
+## #109 god-ray adaptive tap budget (light c108)
+
+`god-ray-budget.ts` — taps scale with drawing-buffer pixels (48 ≤ 2.5 MP, floor 16)
+plus a frame-time backoff tier. Per-tap decay is re-based and the accumulation is
+normalised so a uniform bright field has identical energy at any tap count (no
+brightness pop when the budget changes). `createGodRayPass` reads the live
+`readBuffer` size + composer delta every render, so no extra wiring is needed;
+pass `{ adaptive: false }` to pin 48 taps. `postfxViewport(..., maxEdge)` clamps
+the buffer to the GPU max texture size (hacker c108).

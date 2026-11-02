@@ -40,21 +40,46 @@ export type ViewportChange = "none" | "size" | "dpr" | "both";
 
 const cssEdge = (v: number) => (Number.isFinite(v) && v >= 1 ? Math.round(v) : 1);
 
-/** CSS + drawing-buffer size for the postfx chain. Junk → 1×1 @ DPR 1. */
+/** Smallest GPU max texture/renderbuffer edge WebGL2 guarantees. */
+export const WEBGL2_MIN_MAX_EDGE = 2048;
+
+/**
+ * CSS + drawing-buffer size for the postfx chain. Junk → 1×1 @ DPR 1.
+ *
+ * HACKER (light c108): `maxEdge` = GPU max texture size. A window spanning two
+ * 4K monitors (7680 CSS px) at DPR 2 asked for a 13440-px-wide buffer; the
+ * browser silently clamps the canvas drawing buffer but EffectComposer's
+ * read/write targets + scene DepthTexture were allocated at the full size →
+ * texImage2D INVALID_VALUE / incomplete FBO → black or garbage frame with no
+ * error surfaced. With `maxEdge`, DPR is lowered so both edges fit.
+ */
 export function postfxViewport(
   cssW: number,
   cssH: number,
   rawDpr: number,
   maxDpr: number = POSTFX_MAX_DPR,
+  maxEdge?: number | null,
 ): PostfxViewport {
   const w = cssEdge(cssW);
   const h = cssEdge(cssH);
   const cap = Number.isFinite(maxDpr) && maxDpr > 0 ? maxDpr : POSTFX_MAX_DPR;
-  const dpr =
+  let dpr =
     Number.isFinite(rawDpr) && rawDpr > 0
       ? Math.min(cap, Math.max(POSTFX_MIN_DPR, rawDpr))
       : 1;
-  return { cssW: w, cssH: h, dpr, bufW: Math.max(1, Math.round(w * dpr)), bufH: Math.max(1, Math.round(h * dpr)) };
+  const edge =
+    maxEdge != null && Number.isFinite(maxEdge) && maxEdge >= WEBGL2_MIN_MAX_EDGE ? Math.floor(maxEdge) : null;
+  if (edge !== null) {
+    const fit = edge / Math.max(w, h);
+    if (dpr > fit) dpr = fit; // may drop below POSTFX_MIN_DPR: a valid FBO beats a sharp one
+  }
+  let bufW = Math.max(1, Math.round(w * dpr));
+  let bufH = Math.max(1, Math.round(h * dpr));
+  if (edge !== null) {
+    bufW = Math.min(edge, bufW);
+    bufH = Math.min(edge, bufH);
+  }
+  return { cssW: w, cssH: h, dpr, bufW, bufH };
 }
 
 export function viewportChange(prev: PostfxViewport | null | undefined, next: PostfxViewport): ViewportChange {
@@ -68,6 +93,8 @@ export function viewportChange(prev: PostfxViewport | null | undefined, next: Po
 export type RebindRenderer = {
   setPixelRatio: (r: number) => void;
   setSize: (w: number, h: number, updateStyle?: boolean) => void;
+  /** three WebGLRenderer.capabilities — maxTextureSize bounds the buffer edge. */
+  capabilities?: { maxTextureSize?: number } | null;
 };
 export type RebindComposer = {
   setPixelRatio: (r: number) => void;
@@ -81,7 +108,11 @@ export type RebindTargets = {
   composer?: RebindComposer | null;
   camera?: THREE.PerspectiveCamera | null;
   bloom?: { setSize: (w: number, h: number, pixelRatio?: number) => void } | null;
-  godRays?: { setDepthTexture: (tex: THREE.Texture | null, camera?: THREE.PerspectiveCamera) => void } | null;
+  godRays?: {
+    setDepthTexture: (tex: THREE.Texture | null, camera?: THREE.PerspectiveCamera) => void;
+    /** #109: optional — the pass also self-reads readBuffer size each render. */
+    setBufferSize?: (bufW: number, bufH: number) => number;
+  } | null;
   focusDepth?: { setDepthTexture: (tex: THREE.Texture | null) => void } | null;
   bloomGuard?: { setDepthTexture: (tex: THREE.Texture | null) => void } | null;
 };
@@ -134,7 +165,10 @@ export function rebindPostfxViewport(
   } catch {
     depth = null;
   }
-  run("godRays", t.godRays, () => t.godRays!.setDepthTexture(depth, t.camera ?? undefined));
+  run("godRays", t.godRays, () => {
+    t.godRays!.setDepthTexture(depth, t.camera ?? undefined);
+    t.godRays!.setBufferSize?.(vp.bufW, vp.bufH);
+  });
   run("focusDepth", t.focusDepth, () => t.focusDepth!.setDepthTexture(depth));
   run("bloomGuard", t.bloomGuard, () => t.bloomGuard!.setDepthTexture(depth));
   return { viewport: vp, change, applied, errors };
@@ -157,23 +191,32 @@ export type PostfxViewportRebind = {
  */
 export function createPostfxViewportRebind(
   getTargets: () => RebindTargets,
-  opts: { maxDpr?: number } = {},
+  opts: { maxDpr?: number; maxBufferEdge?: number } = {},
 ): PostfxViewportRebind {
+  const edgeOf = (t: RebindTargets | null | undefined) => {
+    if (opts.maxBufferEdge != null) return opts.maxBufferEdge;
+    try {
+      return t?.renderer?.capabilities?.maxTextureSize ?? null;
+    } catch {
+      return null;
+    }
+  };
   let vp: PostfxViewport | null = null;
   let last: RebindReport | null = null;
   let disposed = false;
-  const apply = (next: PostfxViewport, change: ViewportChange) => {
+  const apply = (next: PostfxViewport, change: ViewportChange, targets?: RebindTargets) => {
     vp = next;
-    last = rebindPostfxViewport(getTargets() ?? {}, next, change);
+    last = rebindPostfxViewport(targets ?? getTargets() ?? {}, next, change);
     return last;
   };
   return {
     resize(cssW, cssH, rawDpr) {
       if (disposed) return null;
-      const next = postfxViewport(cssW, cssH, rawDpr, opts.maxDpr);
+      const targets = getTargets() ?? {};
+      const next = postfxViewport(cssW, cssH, rawDpr, opts.maxDpr, edgeOf(targets));
       const change = viewportChange(vp, next);
       if (change === "none") return null;
-      return apply(next, change);
+      return apply(next, change, targets);
     },
     force() {
       if (disposed || !vp) return null;

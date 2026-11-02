@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";
 import { KEY_RGB, normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.ts";
+import { GOD_RAY_MAX_TAPS, createGodRayBudget, godRayTapParams, type GodRayBudgetOpts, type GodRayTapParams } from "./god-ray-budget.ts";
 
 /**
  * Depth-aware god-ray shafts (light lane, queue #11).
@@ -17,7 +18,8 @@ import { KEY_RGB, normalizeHealthTone, type HealthTone } from "../atmosphere/hea
  * the sun is behind the camera.
  */
 
-export const GOD_RAY_SAMPLES = 48;
+/** Max taps (loop bound). The live count is adaptive — see god-ray-budget.ts (#109). */
+export const GOD_RAY_SAMPLES = GOD_RAY_MAX_TAPS;
 
 export type GodRayInputs = {
   healthy: number;
@@ -77,7 +79,11 @@ export const GodRayShader = {
     depthBias: { value: 0.02 },
     sunUv: { value: new THREE.Vector2(0.5, 0.5) },
     intensity: { value: 0 },
+    /** Per-tap decay for the live tap count (re-based by godRayTapParams). */
     decay: { value: 0.955 },
+    /** Live tap count (<= SAMPLES) and its energy normalisation (#109). */
+    taps: { value: GOD_RAY_MAX_TAPS },
+    tapNorm: { value: 1 / (GOD_RAY_MAX_TAPS * 0.25) },
     density: { value: 0.82 },
     weight: { value: 0.42 },
     lumThreshold: { value: 0.55 },
@@ -103,6 +109,8 @@ export const GodRayShader = {
     uniform vec2 sunUv;
     uniform float intensity;
     uniform float decay;
+    uniform float taps;
+    uniform float tapNorm;
     uniform float density;
     uniform float weight;
     uniform float lumThreshold;
@@ -127,20 +135,23 @@ export const GodRayShader = {
     void main() {
       vec4 base = texture2D(tDiffuse, vUv);
       if (intensity <= 0.0) { gl_FragColor = base; return; }
-      vec2 delta = (vUv - sunUv) * (density / float(SAMPLES));
-      // Interleaved-gradient jitter hides the 48-step banding.
+      float n = clamp(taps, 1.0, float(SAMPLES));
+      // Same screen-space reach (density, UV) whatever the tap count.
+      vec2 delta = (vUv - sunUv) * (density / n);
+      // Interleaved-gradient jitter hides the step banding.
       float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
       vec2 uv = vUv - delta * jitter;
       float illum = 1.0;
       vec3 acc = vec3(0.0);
       for (int i = 0; i < SAMPLES; i++) {
+        if (float(i) >= n) break;
         uv -= delta;
         vec3 c;
         float m = emit(clamp(uv, 0.0, 1.0), c);
         acc += c * m * illum * weight;
         illum *= decay;
       }
-      acc /= float(SAMPLES) * 0.25;
+      acc *= tapNorm;
       // Shafts never lighten occluders' cores harshly: soft screen blend.
       vec3 rays = acc * tint * intensity;
       // Near occluders keep their silhouette: only a thin veil of scatter on top.
@@ -163,6 +174,15 @@ export type GodRayHandle = {
    * (RenderPass draws into readBuffer and does not swap).
    */
   setDepthTexture: (tex: THREE.Texture | null, camera?: THREE.PerspectiveCamera) => void;
+  /**
+   * #109: live tap budget. Auto-fed every render from the composer readBuffer
+   * size (device px) and the composer frame delta; exposed for tests / HUD.
+   */
+  readonly taps: number;
+  readonly tapParams: GodRayTapParams;
+  /** Manual override hooks (rebind / tests). */
+  setBufferSize: (bufW: number, bufH: number) => number;
+  sampleFrameMs: (ms: number) => number;
   dispose: () => void;
 };
 
@@ -170,7 +190,10 @@ type GodRayUniforms = {
   [K in keyof typeof GodRayShader.uniforms]: { value: (typeof GodRayShader.uniforms)[K]["value"] };
 };
 
-export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle {
+export function createGodRayPass(
+  init: Partial<GodRayInputs> = {},
+  budgetOpts: GodRayBudgetOpts & { adaptive?: boolean } = {},
+): GodRayHandle {
   const pass = new ShaderPass(GodRayShader);
   const u = pass.uniforms as unknown as GodRayUniforms;
   // ShaderPass clones uniforms; make sure Vector2/Color are per-instance.
@@ -187,6 +210,16 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
     pass.enabled = eff > 0.001;
   };
   apply();
+  const adaptive = budgetOpts.adaptive !== false;
+  const budget = createGodRayBudget(budgetOpts);
+  const applyTaps = (p: GodRayTapParams) => {
+    u.taps.value = p.taps;
+    u.decay.value = p.decay;
+    u.tapNorm.value = p.norm;
+  };
+  applyTaps(godRayTapParams(GOD_RAY_MAX_TAPS));
+  let lastBufW = -1;
+  let lastBufH = -1;
   let disposed = false;
   // HACKER: WebGL feedback loop — sampling a DepthTexture still attached to an FBO that a
   // later composer pass (or the next swap) renders into. Bind depth from the *current*
@@ -194,6 +227,21 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
   const baseRender = pass.render.bind(pass);
   pass.render = ((renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
     if (disposed) return;
+    if (adaptive) {
+      // Live drawing-buffer size of the frame we are about to shade (device px):
+      // follows composer.setPixelRatio / setSize with no extra wiring.
+      const rb = readBuffer as THREE.WebGLRenderTarget | undefined;
+      const bw = rb?.width ?? 0;
+      const bh = rb?.height ?? 0;
+      if (bw !== lastBufW || bh !== lastBufH) {
+        lastBufW = bw;
+        lastBufH = bh;
+        budget.setBuffer(bw, bh);
+      }
+      // EffectComposer passes seconds; ignore junk (handled in budget).
+      budget.sampleFrame(Number(deltaTime) * 1000);
+      applyTaps(budget.params);
+    }
     const liveDepth = liveSceneDepth(renderer, readBuffer as THREE.WebGLRenderTarget, depthTex);
     u.tDepth.value = liveDepth;
     u.useDepth.value = liveDepth ? 1 : 0;
@@ -210,6 +258,26 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
     pass,
     get intensity() {
       return disposed ? 0 : u.intensity.value;
+    },
+    get taps() {
+      return u.taps.value;
+    },
+    get tapParams() {
+      return { taps: u.taps.value, decay: u.decay.value, norm: u.tapNorm.value };
+    },
+    setBufferSize(bufW, bufH) {
+      if (disposed) return u.taps.value;
+      lastBufW = bufW;
+      lastBufH = bufH;
+      budget.setBuffer(bufW, bufH);
+      applyTaps(budget.params);
+      return u.taps.value;
+    },
+    sampleFrameMs(ms) {
+      if (disposed) return u.taps.value;
+      budget.sampleFrame(ms);
+      applyTaps(budget.params);
+      return u.taps.value;
     },
     update(inputs) {
       if (disposed) return;
