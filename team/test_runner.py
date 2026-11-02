@@ -73,13 +73,6 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(claimed["result"]["status"], "claimed")
             self.assertEqual(claimed["result"]["payload"], {"k": "v"})
 
-    def test_team_health_executes(self):
-        code, result = call({"operation": "invoke", "tool_id": "team.health", "input": {}})
-        self.assertEqual(code, 0)
-        self.assertEqual(result["status"], "ready")
-        self.assertEqual(result["result"]["status"], "ok")
-        self.assertIn("team/health.py", result["evidence"])
-
     def test_knowledge_search_executes(self):
         code, result = call({
             "operation": "invoke",
@@ -114,6 +107,24 @@ class RunnerTests(unittest.TestCase):
             })
             self.assertEqual(code, 0)
             self.assertEqual(completed["result"]["status"], "succeeded")
+
+    def test_allowlisted_worker_processes_health_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = str(Path(tmp) / "jobs.sqlite3")
+            code, queued = call({
+                "operation": "invoke", "tool_id": "team.queue",
+                "input": {"operation": "enqueue", "db": db, "task": "health check",
+                          "payload": {"tool_id": "team.health", "input": {}}},
+            })
+            self.assertEqual(code, 0)
+            self.assertEqual(queued["status"], "ready", queued)
+            code, outcome = call({
+                "operation": "invoke", "tool_id": "team.worker",
+                "input": {"db": db, "worker_id": "worker-test"},
+            })
+            self.assertEqual(code, 0)
+            self.assertEqual(outcome["status"], "ready", outcome)
+            self.assertEqual(outcome["result"]["status"], "succeeded")
 
     def test_unavailable_tool_is_not_claimed_ready(self):
         code, result = call({"operation": "invoke", "tool_id": "gods-eyes", "input": {}})
