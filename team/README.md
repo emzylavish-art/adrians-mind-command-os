@@ -14,6 +14,7 @@ runner); it does not perform model inference or claim external services are live
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"team.health","input":{}}'` — inspect repository-declared readiness.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"knowledge.search","input":{"path":"./notes","query":"agent tools"}}'` — search local knowledge files.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"team.queue","input":{"operation":"enqueue","task":"inspect repo","payload":{"capabilities":["source_inventory"]}}}'` — persist a worker job.
+- `python team/runner.py --task '{"operation":"invoke","tool_id":"team.agent.resolve","input":{"task":"inventory source","capabilities":["source_inventory"]}}'` — resolve the matching specialist prompt.
 
 ### JSON contract
 
@@ -85,3 +86,13 @@ authorization, tool policy, and any required human approval before external acti
 See [QUEUE.md](QUEUE.md) for the SQLite queue CLI and lease semantics. The queue
 persists tasks and worker claims, but it does not execute payloads. A worker process
 must be separately launched and must validate queued instructions before dispatch.
+
+
+## Specialist prompt resolution
+
+The `team.agent.resolve` tool returns the checked-in specialist prompt and declared
+requirements, either by explicit `agent_id` or by a task plus explicit capabilities.
+It does not execute model inference. Compatible hosts such as Grok, Codex, or Claude
+can use the returned prompt as their specialist instructions, then call the available
+MCP tools. An unresolved specialist returns blocked rather than receiving fabricated
+prompt content.
