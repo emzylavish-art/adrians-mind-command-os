@@ -77,6 +77,30 @@ def tool_specs(manifest):
                     "additionalProperties": False,
                 },
             })
+        elif tool_id == "team.queue":
+            specs.append({
+                "name": tool_id,
+                "description": "Operate the local SQLite durable task queue. Enqueued payloads are stored as data only and are never executed by this tool.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
+                        "task": {"type": "string"},
+                        "payload": {"type": "object"},
+                        "worker": {"type": "string"},
+                        "id": {"type": "string"},
+                        "result": {"type": "object"},
+                        "error": {"type": "string"},
+                        "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
+                        "lease_seconds": {"type": "integer", "minimum": 5, "maximum": 3600},
+                        "status": {"type": "string", "enum": ["queued", "claimed", "succeeded", "failed"]},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
+                        "db": {"type": "string"},
+                    },
+                    "required": ["action"],
+                    "additionalProperties": False,
+                },
+            })
         elif tool_id == "team.health":
             specs.append({
                 "name": tool_id,
