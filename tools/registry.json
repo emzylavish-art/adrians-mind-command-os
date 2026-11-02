@@ -249,6 +249,16 @@
       "source_url": "tools/bootstrap/Install-MindCommandTools.ps1",
       "team_agent": "engineering",
       "guardrail": "A repository bootstrap script and metadata are committed. This entry does not imply that its third-party tools are exposed as native AI adapters; use the actual tool readiness fields and MCP inventory."
+    },
+    {
+      "name": "L1B3RT4S",
+      "category": "llm-red-team-research",
+      "status": "source-pinned",
+      "install": "git-submodule-pinned",
+      "live": "not-connected",
+      "team_agent": "security",
+      "source_url": "https://github.com/elder-plinius/L1B3RT4S",
+      "guardrail": "Research/prompt corpus only. Do not use it to bypass service safeguards or deploy credential theft, phishing, or unauthorized actions."
     }
   ]
 }
