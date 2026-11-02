@@ -32,21 +32,30 @@
         "live-verified",
         "blocked",
         "restricted",
-        "identity-unconfirmed"
+        "identity-unconfirmed",
+        "source-verified"
       ]
     },
     "install": {
       "enum": [
         "not-installed",
         "installed",
-        "blocked"
+        "blocked",
+        "bootstrap-script-ready",
+        "repo-code-present"
       ]
     },
     "live": {
       "enum": [
         "not-connected",
         "connected",
-        "blocked"
+        "blocked",
+        "callable-cli-and-ci",
+        "callable-cli-runner-and-mcp",
+        "callable-cli-and-runner",
+        "callable-cli-runner",
+        "callable-runner-and-mcp",
+        "script-present-not-yet-run-on-user-pc"
       ]
     },
     "evidence": {
@@ -57,6 +66,12 @@
       "format": "date-time"
     },
     "guardrail": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "team_agent": {
       "type": "string"
     }
   },
