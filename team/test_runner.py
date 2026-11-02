@@ -53,6 +53,25 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result["result"]["status"], "ok")
         self.assertIn("team/health.py", result["evidence"])
 
+    def test_durable_queue_is_callable(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            db = str(Path(tmp) / "queue.sqlite3")
+            code, queued = call({
+                "operation": "invoke", "tool_id": "team.queue",
+                "input": {"action": "enqueue", "task": "test job", "payload": {"k": "v"}, "db": db},
+            })
+            self.assertEqual(code, 0)
+            self.assertEqual(queued["status"], "ready")
+            self.assertEqual(queued["result"]["status"], "queued")
+            code, claimed = call({
+                "operation": "invoke", "tool_id": "team.queue",
+                "input": {"action": "claim", "worker": "worker-1", "db": db},
+            })
+            self.assertEqual(code, 0)
+            self.assertEqual(claimed["result"]["status"], "claimed")
+            self.assertEqual(claimed["result"]["payload"], {"k": "v"})
+
     def test_team_health_executes(self):
         code, result = call({"operation": "invoke", "tool_id": "team.health", "input": {}})
         self.assertEqual(code, 0)
