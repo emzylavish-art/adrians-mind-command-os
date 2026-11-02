@@ -173,6 +173,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 116 | **Motion c28 — RM guard 5s harness** — `runReducedMotionGuardHarness` proves 0 churn when data stable + exactly 1 rebuild per real change; hacker: backwards nowMs settle clamp, hash size budget, dispose-safe guard | **done** | Motion c28 |
 | 117 | **Light — god-ray mask on real GPU: half-res mask temporal stability + VRAM** — when a dev server fits memory, REA-capture 2560×1440 @ DPR2 orbit frames and diff shaft-region luma frame-to-frame with/without #114 (useEmit toggle); confirm mask RT is freed on DPR drop and on context loss/restore; if mask HalfFloat is unsupported on WebGL1 byte path, verify HDR sun core clip is < 5% energy | queued | Light lane next; postfx/ only |
 | 118 | **Motion c29 — dust mote octahedron + zero-alloc matrices** — Sphere 6×6 (~60 tris) → Octahedron 0 (8 tris); direct instanceMatrix writes; normal REA mid-canvas dust hotspots; 28800→3840 tris @480 | **done** | Motion c29 |
+| 119 | **Motion c30 — comet arc upload throttle** — dirty-only GPU uploads + BufferAttribute update ranges; duplicate map(t) skips; hacker 0↔max count jump / segments resize / trail len 0|1 | **done** | Motion c30 |
 
 
 
@@ -188,7 +189,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c27 — reduced-motion guard + settle gate**~~ — **done (Cosmos Motion Bot c27)**: `reduced-motion-guard.ts` + hacker tests (key-order hash, length-collision, SSR/legacy matchMedia, RM flap settle); INTEGRATION drop-in for 4 sources.
 - ~~**Motion c28 — RM guard 5s harness**~~ — **done (Cosmos Motion Bot c28)**: `runReducedMotionGuardHarness` + dispose/budget/skew hardenings; lean REA uniqueSamples re-checked post Dashboard c59.
 - ~~**Motion c29 — dust mote octahedron + zero-alloc matrices**~~ — **done (Cosmos Motion Bot c29)**: 60→8 tris/mote (7.5×); direct instanceMatrix; hacker size/LOD0/neighbor/alloc. RM thread closed (uniqueSamples=1).
-- **Motion c30 — comet arc upload throttle** — skip `needsUpdate` when head phase delta &lt; ε under steady orbit; optional segment LOD by cam distance. Cosmos Motion Bot next.
+- ~~**Motion c30 — comet arc upload throttle**~~ — **done (Cosmos Motion Bot c30)**: dirty-only uploads + update ranges; duplicate map(t) skip; dust 480×120 ≈0.03 ms/frame under c16 0.3 ms budget.
+- **Motion c31 — comet segment LOD by camera distance** — fewer arc samples when far (reuse dust LOD distance factor); keep head bright. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.

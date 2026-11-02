@@ -756,3 +756,18 @@ dust wobble. Field tris at default 480: **28800 → 3840** (7.5×).
 ### Requests (c29)
 - Register `particles/dust-mote-perf.test.ts` in package.json strip-types list.
 - Queue row #117 Motion c29 **done**.
+
+## Requests for Dashboard Bot (c30 — comet arc upload throttle)
+
+No scene wiring change. `commit-comets` `update()` now:
+- skips all GPU work when `clock.map(t)` returns the same mapped time (duplicate tick)
+- on real motion, marks `BufferAttribute` update ranges before `needsUpdate`
+- skips redundant opacity writes
+
+CPU arc positions stay current whenever an upload runs — visible motion matches
+the pre-throttle path. Dust c29 recheck: 480×120 updates ≈0.03 ms/frame ≪ c16
+0.3 ms/frame budget (not a regression).
+
+### Requests (c30)
+- Register `particles/comet-arc-upload.test.ts` in package.json strip-types list.
+- Queue row for Motion c30 **done**.
