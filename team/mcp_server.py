@@ -78,7 +78,7 @@ def tool_specs(manifest):
                     "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
                     "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
                 },
-                "required": ["task"] if False else ["action"],
+                "oneOf": [{"required": ["action"]}, {"required": ["operation"]}],
                 "additionalProperties": False,
             }
         else:
