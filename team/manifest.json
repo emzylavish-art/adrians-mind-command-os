@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "name": "Mind Command OS Agent Team",
-  "description": "Interoperable specialist agents and callable tools for compatible AI runners.",
+  "description": "Interoperable specialist agents and callable tools for compatible AI runners. Includes an explicitly configured, HTTPS-only remote MCP bridge for AI-host integrations.",
   "entrypoint_contract": {
     "protocol": "json-stdin-json-stdout",
     "required_input": [
@@ -348,6 +348,24 @@
         "context": "object"
       },
       "safety": "Reads verified agent prompt files only; does not execute model inference or external actions."
+    },
+    {
+      "id": "mcp.remote",
+      "status": "ready",
+      "entrypoint": "python3 team/remote_mcp.py",
+      "agent": "engineering",
+      "capabilities": [
+        "remote_mcp_discovery",
+        "allowlisted_remote_tool_invocation"
+      ],
+      "input_schema": {
+        "action": "list|call",
+        "server": "string",
+        "tool": "string",
+        "arguments": "object",
+        "timeout_seconds": "integer"
+      },
+      "safety": "HTTPS only; server must be explicitly enabled and remote tool must be allowlisted. Bearer secrets are environment-only. No endpoints are enabled by default."
     }
   ],
   "catalog": [
