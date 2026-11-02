@@ -113,6 +113,13 @@
       "install_kind": "official-winget-package",
       "winget_id": "PortSwigger.BurpSuite.Community",
       "note": "Community edition only; PortSwigger's license terms apply."
+    },
+    {
+      "id": "l1b3rt4s",
+      "name": "L1B3RT4S",
+      "url": "https://github.com/elder-plinius/L1B3RT4S.git",
+      "install_kind": "source-checkout",
+      "note": "Prompt-injection/LLM red-team research corpus. Source checkout only; do not automatically execute attacks or bypass service safeguards."
     }
   ],
   "not_auto_integrated": [
