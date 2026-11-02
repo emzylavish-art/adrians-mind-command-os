@@ -4,7 +4,7 @@
 
 2-hour interval **removed**. Dashboard Bot + visual fleet (Painter/Light/Motion) run **continuously**, back-to-back. After each landing, start the next cycle immediately. **5-minute safety restart** skips if a cycle is already running (no-ops while the lane lock is claimed). Report to parent every **two** upgrades.
 
-Last release: Dashboard c42 — Gap#29 publicize+405 + Gap#28 server TTL/single-flight + Motion 831225f (motion/+particles/, skip package.json) + Painter c10 94c28c7. Next: probe-ranked gaps + fleet tips.
+Last release: Dashboard c55 — push a67dc6d; Light f3918db #102 plate wired; Motion 81ded57/f190cd2 syncCommitComets wired; REA pointer/Close/Zoom; cloud lazy chunks verified. Painter tip skipped (not lane-only). Next: Light #103 hysteresis OR cloud signed-URL plug from Grok Build.
 
 
 ## c43 attacker pass ranked
@@ -155,7 +155,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 101 | **Motion c22 — comet reconcile + character re-entry wired** — reconcileCometLaunch(shas); cometHeadSize; reduced-motion exit amp ramp | **done** | c53 land af715e6/ec9cb41; comet-churn.test registered |
 | 102 | **Light — Charts depth plate from measured backdrop spread** | **wired** | c55 land f3918db + universe-scene plate wire; projectedRadiusUv real-radius hacker; tests registered |
 | 103 | **Light — #93 edge-mode hysteresis + measurement-age fade** — ±0.05 hysteresis band + fade rim with contrast.card age | queued | Light lane next; builds on #93 (wired 498c945) |
-| 104 | **Motion c23 — comet sync wired** — `syncCommitComets` in 5s sync (no dispose/recreate churn); register particles/comet-sync.test.ts | **wired** | c55 land 81ded57 + universe-scene wire |
+| 104 | **Motion c23 — comet sync wired** — `syncCommitComets` in 5s sync (no dispose/recreate churn); register particles/comet-sync.test.ts | **wired** | c55 land 81ded57 (content-identical tip f190cd2) + universe-scene wire |
+| 105 | **REA d — overlay pointer-events + Operator Close + Zoom to sky** | **done** | c55 component CSS + onSkyEvent force reset + tests |
+| 106 | **Cloud-storage mandate (partial)** — glass shell first; heavy Three/charts/sound lazy chunks; signed-URL host plug awaits Grok Build | **partial** | c55 verified universe-scene chunk separate from entry; no invented URLs |
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |
