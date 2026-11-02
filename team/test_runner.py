@@ -63,7 +63,7 @@ class RunnerTests(unittest.TestCase):
                 "input": {"action": "enqueue", "task": "test job", "payload": {"k": "v"}, "db": db},
             })
             self.assertEqual(code, 0)
-            self.assertEqual(queued["status"], "ready")
+            self.assertEqual(queued["status"], "ready", queued)
             self.assertEqual(queued["result"]["status"], "queued")
             code, claimed = call({
                 "operation": "invoke", "tool_id": "team.queue",
