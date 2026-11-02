@@ -183,6 +183,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 118 | **Motion c29 — dust mote octahedron + zero-alloc matrices** — Sphere 6×6 (~60 tris) → Octahedron 0 (8 tris); direct instanceMatrix writes; normal REA mid-canvas dust hotspots; 28800→3840 tris @480 | **done** | Motion c29 |
 | 119 | **Motion c30 — comet arc upload throttle** — dirty-only GPU uploads + BufferAttribute update ranges; duplicate map(t) skips; hacker 0↔max count jump / segments resize / trail len 0|1 | **done** | Motion c30 |
 | 120 | **Light — postfx VRAM ledger** — one `postfxVramBytes()` readout summing live composer/bloom-chain/god-ray-mask/focus-depth RT bytes (from real RT sizes + texel types), shown in the `?dash3dDebug=1` meter badge, with a leak test that DPR drop, reduced motion and context loss return it to baseline. Why: c113 found the #114 mask silently pinning 29.5 MB while the pass was off; nothing in the scene would have shown it | queued | Light lane next; postfx/ only |
+| 121 | **Motion c31 — comet segment LOD by camera distance** — hysteretic drawRange thin (24→6 far); head continuous; hacker NaN/0/inside + threshold thrash + mid-trail seg change | **done** | Motion c31 |
 
 
 
@@ -199,7 +200,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c28 — RM guard 5s harness**~~ — **done (Cosmos Motion Bot c28)**: `runReducedMotionGuardHarness` + dispose/budget/skew hardenings; lean REA uniqueSamples re-checked post Dashboard c59.
 - ~~**Motion c29 — dust mote octahedron + zero-alloc matrices**~~ — **done (Cosmos Motion Bot c29)**: 60→8 tris/mote (7.5×); direct instanceMatrix; hacker size/LOD0/neighbor/alloc. RM thread closed (uniqueSamples=1).
 - ~~**Motion c30 — comet arc upload throttle**~~ — **done (Cosmos Motion Bot c30)**: dirty-only uploads + update ranges; duplicate map(t) skip; dust 480×120 ≈0.03 ms/frame under c16 0.3 ms budget.
-- **Motion c31 — comet segment LOD by camera distance** — fewer arc samples when far (reuse dust LOD distance factor); keep head bright. Cosmos Motion Bot next.
+- ~~**Motion c31 — comet segment LOD by camera distance**~~ — **done (Cosmos Motion Bot c31)**: hysteretic seg LOD 24→6; head continuous; NaN/thrash harden.
+- **Motion c32 — traveler trail point budget** — cap/resample polyline vertices by cam distance + speed; keep focus traveler full-res. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
