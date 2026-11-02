@@ -151,7 +151,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 83 | **Gap#58 Notion href allowlist** — https only; notion.so / www / app.notion.com / *.notion.site; neutralize js/data/http | **done** | c52 — sanitizeNotionHref in parse + Star Detail |
 | 84 | **Gap#57 Escape focus restore** — blur hidden close; restore to opener/canvas host; inert when closed | **done** | c52 — restoreFocusAfterDetailClose + canvas host tabIndex |
 | 85 | **Gap# empty Notes / Lock commits honesty** — surface real notes+lock.commits when present; keep no-source when absent | **done** | c53 — composeBotNotes + sanitizeLockCommitLines + known branches git log |
-| 86 | **Hostile Notion title sanitize in Star Detail** — show plain text only (already sanitizeNotionPlainText); verify no raw <b> in panel | **queued** | gap-feed #44 follow-up / attacker |
+| 86 | **Hostile Notion title sanitize in Star Detail** — show plain text only (already sanitizeNotionPlainText); verify no raw <b> in panel | **done** | c65 with #95 |
 | 87 | **Scene: focus restore visible ring** — canvas-host :focus-visible outline when Escape returns keyboard to stage | **done** | c52 — dashboard-3d.css :focus-visible on dash3d-canvas-host |
 | 88 | **Gap Dispatcher #59 — WebGL context-loss black screen** — honest overlay “3D view paused — graphics context lost, restoring…” + retry when restore fails | **done** | c52 — showContextLossOverlay + universe-scene preventDefault/restore/retry |
 | 89 | **Gap Dispatcher #60 — Focus stage chip covers System weather** — reserve skybar padding; chip stays clear of title | **done** | c52 — .dash3d-skybar padding-right 9.5rem |
@@ -160,7 +160,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 92 | **Light #84/#92 — meter focused Imagine card rect + liftBackdrop** — setCardProbe(true) in rebuild; liftBackdrop prefers card; bf1ca41 target align | **done** | c53 land e046153 postfx + universe-scene wire; card-probe + dim-target-align tests |
 | 93 | **Motion c21 traveler trails wired** — stepTravelerTrails + focus-churn resume; register tests | **done** | c53 land ab17f6f + universe-scene wire |
 | 94 | **Bot surfaces: Recent/Lock commits + Queue + Notes from real sources** — known branches git log (cached); lane INTEGRATION queue; notion titles | **done** | c53 bot-branches + status enrich; attacker on git/queue |
-| 95 | **Hostile Notion title sanitize in Star Detail** (was #86) | **queued** | attacker follow-up |
+| 95 | **Hostile Notion title sanitize in Star Detail** (was #86) | **done** | c65 — entity decode + tool-boilerplate strip in sanitizeNotionPlainText |
 | 96 | **Gap Dispatcher #62 — Charts trust raw values** — coerce finite ≥0; compact labels; no NaN SVG | **done** | c53 SparkBars finiteChartValue + formatCompact |
 | 97 | **Gap Dispatcher #63 — Dense chart series overflow** — window last 28 visible marks; no invisible Tab stops | **done** | c53 CHART_VISIBLE_MAX window |
 | 98 | **Gap Dispatcher #64 — Chart focus tooltip** — shared visible tip on :focus-visible (not 1×1 foreignObject) | **done** | c53 chart-focus-tip |

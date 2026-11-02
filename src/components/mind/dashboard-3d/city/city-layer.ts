@@ -416,6 +416,15 @@ export function createCityLayer(scene: THREE.Scene, kit: PainterlyKit): CityLaye
       const base = (c.userData.baseX as number) ?? 0;
       c.position.x = base + Math.sin(t * 0.05 + base) * 1.5;
     }
+    // Night-shift window flicker from real activity (steady under RM — early return above).
+    for (const [, ext] of exteriors) {
+      for (const obj of ext) {
+        if (!obj.userData.nightShift) continue;
+        const mat = (obj as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        if (!mat || !("opacity" in mat)) continue;
+        mat.opacity = 0.72 + 0.22 * (0.5 + 0.5 * Math.sin(t * 3.1 + obj.position.y));
+      }
+    }
   }
 
   function dispose() {

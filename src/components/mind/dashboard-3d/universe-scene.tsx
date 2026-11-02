@@ -946,14 +946,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     // --- Projects city / particles / postfx (progressive: idle after first sky frame) ---
     let city: ReturnType<typeof createCityLayer> | null = null;
     ensureDiveArtFn = () => city?.ensureDiveArt();
-    let layout: CityLayout = buildCityLayout(dataRef.current.projects);
+    let layout: CityLayout = buildCityLayout(dataRef.current.projects, { nowMs: Date.now(), reducedMotion });
     let layoutSig = "";
     let fly: FlyState = { ...FLY_HOME };
     const knownIds = () => new Set(layout.buildings.map((b) => b.id));
     let layoutProgressSig = "";
     const syncCity = () => {
       if (!city) return;
-      const next = buildCityLayout(dataRef.current.projects);
+      const next = buildCityLayout(dataRef.current.projects, { nowMs: Date.now(), reducedMotion });
       // Structure vs progress: live setBuildingProgress without full rebuild (Painter c11)
       const structSig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.x, b.z]));
       const progressSig = JSON.stringify(
