@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
-import { Link } from "@tanstack/react-router";
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -55,6 +55,8 @@ import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
+import { IntentPredictionChip } from "@/components/mind/intent-prediction-chip";
+import { pushComposerText, pushVoiceChunk } from "@/lib/intent";
 import {
   ComposerBar,
   type ComposerModelId,
@@ -65,6 +67,16 @@ import {
 } from "@/components/mind/voice-ui";
 
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
+const LazyShortcutSheetHost = lazy(() =>
+  import("@/components/mind/shortcut-sheet").then((mod) => ({ default: mod.ShortcutSheetHost })),
+);
+const LazyCameraCapture = lazy(() =>
+  import("@/components/mind/media/camera-capture").then((mod) => ({ default: mod.CameraCapture })),
+);
+const LazyCloudPicker = lazy(() =>
+  import("@/components/mind/media/cloud-picker").then((mod) => ({ default: mod.CloudPicker })),
+);
+
 import { DICTATE_MINT_TIMEOUT_MS, withDictateTimeout } from "@/components/mind/live-voice-bar/dictate-timeout";
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
@@ -97,7 +109,7 @@ import {
   readStoredVoiceChoice,
   writeStoredVoiceChoice,
 } from "@/lib/mind/voice/voices";
-import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import type { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import { appendDictationText } from "@/lib/mind/voice/dictation";
 import {
@@ -145,12 +157,13 @@ import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
+import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
+import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
-import { CameraCapture } from "@/components/mind/media/camera-capture";
-import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
-import { InlineImage } from "@/components/mind/media/inline-image";
+import type { CloudPickerAttach } from "@/components/mind/media/cloud-picker";
+import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { historyTextForImages, parseImagineCommand, toImageAttachments, type ImageAttachment } from "@/lib/mind/media";
+import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, collectClipboardImageFiles, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -477,8 +490,10 @@ function browserSpeechCtor(): (new () => BrowserSpeechRec) | null {
   return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
 }
 
-export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
+export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types").Workspace | null } = {}) {
+  const serverWorkspace = props.serverWorkspace ?? null;
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, cloudHydrating } = useMindWorkspace(serverWorkspace);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -609,6 +624,9 @@ export function CommandApp() {
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [imagineModel, setImagineModel] = useState<GrokImagineModel>(GROK_IMAGINE_MODEL);
+  const [imagineBusy, setImagineBusy] = useState(false);
+  const imagineTabLockRef = useRef(createImagineTabLock("composer"));
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1523,6 +1541,12 @@ export function CommandApp() {
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      ...(result.memorySaved === true
+                        ? {
+                            memorySaved: true as const,
+                            savedMemoryId: result.savedMemoryId ?? null,
+                          }
+                        : {}),
                     },
                   ],
                   retrievalLog: [{ at: new Date().toISOString(), ids: result.usedIds }, ...item.retrievalLog].slice(0, 20),
@@ -1591,6 +1615,48 @@ export function CommandApp() {
     setError(null);
   }
 
+
+
+  function useImageAsAgentInput(src: string, alt: string) {
+    if (!src.startsWith("data:image/")) {
+      setError("Only in-chat data URLs can be used as Agent vision input.");
+      return;
+    }
+    setPendingImages((prev) => {
+      if (prev.some((image) => image.dataUrl === src)) return prev;
+      if (prev.length >= 4) {
+        setError("You can attach up to 4 images per message.");
+        return prev;
+      }
+      return [...prev, { dataUrl: src, name: alt || `agent-input-${prev.length + 1}.jpg` }];
+    });
+    setView("agents");
+    setNotice("Image staged for Agent vision. Add a goal and run the planner.");
+  }
+
+  function acceptAgentImageDrop(event: React.DragEvent) {
+    event.preventDefault();
+    const dt = event.dataTransfer;
+    if (!dt) return;
+    const raw = dt.getData(AMCOS_IMAGE_DRAG_TYPE);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { dataUrl?: string; name?: string };
+        if (typeof parsed.dataUrl === "string") {
+          useImageAsAgentInput(parsed.dataUrl, parsed.name || "dragged-image");
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    const files = Array.from(dt.files ?? []).filter((file) => (file.type || "").startsWith("image/"));
+    for (const file of files.slice(0, 4)) void addImageAttachment(file);
+    if (files.length) {
+      setView("agents");
+      setNotice("Dropped image staged for Agent vision.");
+    }
+  }
 
   function downloadImageDataUrl(src: string, alt: string) {
     const link = document.createElement("a");
@@ -1661,20 +1727,78 @@ export function CommandApp() {
     void deliver(prepared.chat, prepared.text, wsRef.current, true, snapshotImages(toImageAttachments(prepared.images)));
   }
 
-  function exportActive() {
-    if (!active) return;
-    const packed = exportChat(ws, active.id);
-    if ("error" in packed) {
-      setError(packed.error);
+  function onComposerPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const imageFiles = collectClipboardImageFiles(event.clipboardData, 4);
+    if (imageFiles.length) {
+      event.preventDefault();
+      for (const file of imageFiles) void addImageAttachment(file);
       return;
     }
-    const blob = new Blob([packed.json], { type: "application/json" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = packed.filename;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
+    const html = event.clipboardData?.getData("text/html") || "";
+    const text = event.clipboardData?.getData("text/plain") || "";
+    const safeImg = extractSafeImageSrcFromHtml(html) || sanitizePastedImageCandidate(text);
+    if (html && /<img/i.test(html) && !safeImg) {
+      event.preventDefault();
+      setError("That paste included an unsafe image link (javascript/data HTML). It was blocked.");
+      return;
+    }
+    if (/^(javascript|vbscript):/i.test(text.trim())) {
+      event.preventDefault();
+      setError("That paste looked like a script URL. It was blocked.");
+      return;
+    }
+    if (html && !safeImg) {
+      // Prefer sanitized plain text over raw HTML blobs in the composer.
+      const cleaned = sanitizeComposerPasteText(html || text);
+      if (cleaned !== text) {
+        event.preventDefault();
+        const target = event.currentTarget;
+        const start = target.selectionStart ?? draft.length;
+        const end = target.selectionEnd ?? draft.length;
+        const next = draft.slice(0, start) + cleaned + draft.slice(end);
+        setDraft(next);
+      }
+    }
+  }
+
+    async function exportActive() {
+    if (!active) return;
+    try {
+      const store = tryCreateIndexedDbBlobStore();
+      const chat = ws.chats.find((item) => item.id === active.id);
+      if (!chat) {
+        setError("That chat is gone.");
+        return;
+      }
+      // Hydrate blobIds → dataUrls before export so consumers are not left with empty refs.
+      const hydratedMessages: typeof chat.messages = [];
+      for (const msg of chat.messages) {
+        if (!msg.images?.length) {
+          hydratedMessages.push(msg);
+          continue;
+        }
+        const images = await imagesForExport(msg.images, store);
+        hydratedMessages.push({
+          ...msg,
+          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? undefined })),
+        });
+      }
+      const hydratedWs = { ...ws, chats: ws.chats.map((item) => (item.id === active.id ? { ...item, messages: hydratedMessages } : item)) };
+      const packed = exportChat(hydratedWs, active.id);
+      if ("error" in packed) {
+        setError(packed.error);
+        return;
+      }
+      const blob = new Blob([packed.json], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = packed.filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Export failed.");
+    }
   }
 
   function runLookup(query: string) {
@@ -1944,7 +2068,7 @@ export function CommandApp() {
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
-    if (imagineInFlight.current || busy) return;
+    if (imagineInFlight.current || busy || imagineBusy) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
       setError("Write a prompt for Imagine, or use /imagine <prompt>.");
@@ -1956,9 +2080,14 @@ export function CommandApp() {
       });
       return;
     }
+    if (!imagineTabLockRef.current.tryAcquire()) {
+      setError("Imagine is already running in another tab. Wait for it to finish.");
+      return;
+    }
     if (!opts?.retry) setDraft("");
     setError(null);
     setBusy(true);
+    setImagineBusy(true);
     setLiveText("");
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -2036,7 +2165,7 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, n: 1 }),
+        body: JSON.stringify({ prompt, n: 1, model: resolveImagineModel(imagineModel) }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -2112,11 +2241,13 @@ export function CommandApp() {
     } finally {
       imagineInFlight.current = false;
       setBusy(false);
+      setImagineBusy(false);
+      imagineTabLockRef.current.release();
       setLiveText("");
     }
   }
 
-  async function runImagineEdit(imageDataUrl: string, promptRaw?: string, opts?: { retry?: boolean }) {
+  async function runImagineEdit(imageDataUrl: string, promptRaw?: string, extraImages: string[] = [], opts?: { retry?: boolean }) {
     if (imagineInFlight.current || busy) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
@@ -2129,7 +2260,7 @@ export function CommandApp() {
     }
     if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
       reportEmergencyStop("imagine:edit", () => {
-        void runImagineEdit(imageDataUrl, prompt, opts);
+        void runImagineEdit(imageDataUrl, prompt, extraImages, opts);
       });
       return;
     }
@@ -2146,7 +2277,11 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1 }),
+        body: JSON.stringify(
+          ([imageDataUrl, ...extraImages].length === 1
+            ? { prompt, image: imageDataUrl, mode: "edit", n: 1, model: resolveImagineModel(imagineModel) }
+            : { prompt, images: [imageDataUrl, ...extraImages], mode: "edit", n: 1, model: resolveImagineModel(imagineModel) })
+        ),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -2166,7 +2301,7 @@ export function CommandApp() {
         const params = imagineRetryParams(failure);
         reportFailure(failure.message, failure.kind, failure.target, () => {
           if (!params.imageDataUrl) return;
-          void runImagineEdit(params.imageDataUrl, params.prompt, { retry: true });
+          void runImagineEdit(params.imageDataUrl, params.prompt, [], { retry: true });
         });
         return;
       }
@@ -2244,13 +2379,14 @@ export function CommandApp() {
       const params = imagineRetryParams(failure);
       reportFailure(failure.message, failure.kind, failure.target, () => {
         if (!params.imageDataUrl) return;
-        void runImagineEdit(params.imageDataUrl, params.prompt, { retry: true });
+        void runImagineEdit(params.imageDataUrl, params.prompt, [], { retry: true });
       });
     } finally {
       imagineInFlight.current = false;
       setBusy(false);
     }
   }
+
   function enableMemory() {
     if (armMemory === "composer") {
       setMemoryChoice("on");
@@ -3153,7 +3289,8 @@ export function CommandApp() {
 
       publishConnectStage("connecting");
       const testAudioUrl = readDevTestAudioUrl();
-      const session = new RealtimeVoiceSession(
+      const { RealtimeVoiceSession: RealtimeVoiceSessionCtor } = await import("@/lib/mind/voice/realtime-session");
+      const session = new RealtimeVoiceSessionCtor(
         {
           onTranscript: (text) => {
             setVoiceLiveTranscript(clampLiveTranscript(text));
@@ -3161,6 +3298,7 @@ export function CommandApp() {
           },
           onPartialTranscript: (text) => {
             setVoiceLiveTranscript(clampLiveTranscript(text));
+            pushVoiceChunk(text);
           },
           onSpeechStarted: () => {
             if (overlayOpenRef.current) {
@@ -3417,7 +3555,7 @@ export function CommandApp() {
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
-    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-cloud-hydrating={cloudHydrating ? "1" : "0"} data-workspace-ready={ready ? "1" : "0"}>
       <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
           <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
@@ -3450,6 +3588,19 @@ export function CommandApp() {
             <Search className="size-4 shrink-0" />
             {!railCollapsed && <span>Search</span>}
           </button>
+          <button
+            type="button"
+            className={`nav-item mt-2 flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            aria-label="Keyboard shortcuts"
+            data-testid="nav-open-shortcuts"
+            onClick={() => {
+              window.dispatchEvent(new Event("mind:open-shortcut-sheet"));
+              setNavOpen(false);
+            }}
+          >
+            <span className="text-sm font-semibold" aria-hidden>?</span>
+            {!railCollapsed && <span>Shortcuts</span>}
+          </button>
         </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
           {NAV_GROUPS.map((group) => (
@@ -3481,22 +3632,28 @@ export function CommandApp() {
                   return (
                     <div key={`workspace-head-${item.id}`} className="contents">
                       {button}
-                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => (
+                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => {
+                        const routeOn =
+                          pathname === routeItem.href || pathname.startsWith(`${routeItem.href}/`);
+                        return (
                         <Link
                           key={routeItem.id}
                           to={routeItem.href}
                           title={routeItem.label}
                           aria-label={routeItem.label}
+                          aria-current={routeOn ? "page" : undefined}
+                          data-testid={`nav-route-${routeItem.id}`}
                           onClick={() => {
                             setNavOpen(false);
                             closeMenus();
                           }}
-                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
+                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${routeOn ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                         >
                           <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
                           {!railCollapsed && routeItem.label}
                         </Link>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 }
@@ -3642,10 +3799,13 @@ export function CommandApp() {
               onFocus={() => setPaletteOpen(true)}
               placeholder="Search or jump…"
               className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
+              role="combobox"
               aria-label="Search"
               aria-keyshortcuts="Control+K Meta+K"
               aria-expanded={paletteOpen}
               aria-controls="command-palette"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
@@ -3722,14 +3882,17 @@ export function CommandApp() {
           </div>
           <button
             type="button"
-            className="grid size-11 place-items-center rounded-full border border-line bg-white/5"
+            className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Alerts"
+            aria-expanded={bellOpen}
+            aria-controls="alerts-panel"
+            data-testid="alerts-toggle"
             onClick={() => {
               setBellOpen((open) => !open);
               setAccountOpen(false);
             }}
           >
-            <Bell className="size-4" />
+            <Bell className="size-4" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -3744,7 +3907,7 @@ export function CommandApp() {
           </button>
         </header>
         {bellOpen && (
-          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+          <div id="alerts-panel" className="border-b border-line bg-surface px-4 py-3 text-sm" data-testid="alerts-panel" role="region" aria-label="Alerts">
             <p className="font-semibold">Alerts</p>
             {ws.halted && <p className="mt-1 text-danger">Emergency stop is on. Sending and approvals are blocked.</p>}
             {ws.audit.length === 0 && !ws.halted && <p className="mt-1 text-muted">No alerts.</p>}
@@ -3853,7 +4016,7 @@ export function CommandApp() {
           {view === "dashboard" && (
             <div className="h-full min-h-0">
               <Suspense fallback={<p className="p-6 text-sm text-muted">Opening the dashboard…</p>}>
-                <DashboardApp embedded />
+                <DashboardApp />
               </Suspense>
             </div>
           )}
@@ -3933,8 +4096,26 @@ export function CommandApp() {
                     ))}
                   </div>
                   <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
+                  <IntentPredictionChip
+                    text={draft}
+                    source="keystroke"
+                    handlers={{
+                      setView: (view) => setView(view as View),
+                      navigate: (href) => {
+                        window.location.assign(href);
+                      },
+                      setModelTier: (tier) => setModelTier(tier as ModelTier),
+                      openModelPicker: () => setPaletteOpen(true),
+                      startVoice: () => {
+                        void openVoiceOverlay();
+                      },
+                      openPalette: () => setPaletteOpen(true),
+                      searchMemory: () => setView("memory"),
+                    }}
+                  />
                   <textarea
                     value={draft}
+                    onPaste={onComposerPaste}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
                     rows={3}
@@ -3958,16 +4139,52 @@ export function CommandApp() {
                     </button>
                     <button
                       type="button"
+                      data-testid="imagine-generate"
+                      aria-label="Imagine"
+                      aria-busy={imagineBusy}
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                      disabled={busy || ws.halted}
+                      disabled={busy || imagineBusy || ws.halted}
                       onClick={() => {
                         const viaCmd = parseImagineCommand(draft);
                         const prompt = viaCmd !== null ? viaCmd : draft.trim();
-                        void runImagine(prompt || undefined, null);
+                        if (!(prompt || "").trim()) {
+                          setError("Write a prompt for Imagine, or use /imagine <prompt>.");
+                          return;
+                        }
+                        void runImagine(prompt, null);
                       }}
                     >
-                      Imagine
+                      {imagineBusy ? "Imagining…" : "Imagine"}
                     </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL}
+                      onClick={() =>
+                        setImagineModel((current) =>
+                          current === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_MODEL : GROK_IMAGINE_QUALITY_MODEL,
+                        )
+                      }
+                    >
+                      {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
+                    </button>
+                    {pendingImages.length > 1 && (
+                      <button
+                        type="button"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                        disabled={busy || ws.halted}
+                        onClick={() => {
+                          const urls = pendingImages.map((image) => image.dataUrl).filter((url) => url.startsWith("data:image/"));
+                          if (urls.length < 2) {
+                            setError("Attach at least two images to edit them together.");
+                            return;
+                          }
+                          void runImagineEdit(urls[0]!, undefined, urls.slice(1));
+                        }}
+                      >
+                        Edit all with Imagine
+                      </button>
+                    )}
                     <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
                       type="button"
@@ -4238,21 +4455,6 @@ export function CommandApp() {
                   setActiveId(null);
                 });
               }}
-              onMemory={() => {
-                if (!active) return;
-                if (active.memory === "off") {
-                  setArmMemory(active.id);
-                  return;
-                }
-                setWs((prev) =>
-                  pushAudit(
-                    { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
-                    "memory_off",
-                    active.id,
-                    "retrieval stopped",
-                  ),
-                );
-              }}
               onSave={(content) => {
                 if (!active || active.memory !== "on") {
                   setError("Memory is off for this chat, so the note was not saved.");
@@ -4292,21 +4494,19 @@ export function CommandApp() {
               voiceOverlayOpen={voiceOverlayOpen}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
-              onComposerMemory={() => {
-                if ((active?.memory ?? memoryChoice) === "on") {
-                  if (active) {
-                    setWs((prev) =>
-                      pushAudit(
-                        { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
-                        "memory_off",
-                        active.id,
-                        "retrieval stopped",
-                      ),
-                    );
-                  } else setMemoryChoice("off");
+              onMemoryChange={(next) => {
+                if (!active) {
+                  setMemoryChoice(next);
                   return;
                 }
-                setArmMemory(active?.id ?? "composer");
+                setWs((prev) =>
+                  pushAudit(
+                    { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: next } : chat)) },
+                    next === "on" ? "memory_on" : "memory_off",
+                    active.id,
+                    next === "on" ? "owner enabled retrieval" : "retrieval stopped",
+                  ),
+                );
               }}
               onComposerMode={(next) => {
                 setAutonomy(next);
@@ -4331,8 +4531,15 @@ export function CommandApp() {
                 void runImagine(prompt || undefined, active);
               }}
               onEditImagine={(src) => void runImagineEdit(src)}
+              imagineModel={imagineModel}
+              onToggleImagineQuality={() =>
+                setImagineModel((current) =>
+                  current === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_MODEL : GROK_IMAGINE_QUALITY_MODEL,
+                )
+              }
               onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
               onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
+              onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -4521,12 +4728,12 @@ export function CommandApp() {
                 <div className="grid gap-2">
                 <textarea value={memoryText} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={3} className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <div className="flex flex-wrap gap-2">
-                  <select value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                  <select aria-label="Memory scope" value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                     <option value="global">Global</option>
                     <option value="project">Project</option>
                   </select>
                   {memoryScope === "project" && (
-                    <select value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                    <select aria-label="Memory project" value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                       <option value="">Choose project</option>
                       {ws.projects.map((project) => (
                         <option key={project.id} value={project.id}>{project.name}</option>
@@ -4643,7 +4850,20 @@ export function CommandApp() {
             >
               <p className="font-semibold">Bounded planner</p>
               <p className="mt-1 text-sm text-muted">Grok may call only three local reads: projects, chats, and notes. It stops after four steps or twenty seconds. It cannot use a shell, the network, or files. A live tool call was not verified in the last test. Run spends a model request.</p>
-              <textarea value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} placeholder="What should the planner look up?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+              <textarea
+                value={agentGoal}
+                onChange={(event) => setAgentGoal(event.target.value)}
+                placeholder="What should the planner look up? Drop an image here for vision."
+                rows={3}
+                className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm"
+                onDragOver={(event) => {
+                  if (event.dataTransfer?.types?.includes(AMCOS_IMAGE_DRAG_TYPE) || event.dataTransfer?.types?.includes("Files")) event.preventDefault();
+                }}
+                onDrop={(event) => acceptAgentImageDrop(event)}
+              />
+              {pendingImages.length > 0 && (
+                <p className="mt-2 text-xs text-muted">{pendingImages.length} image(s) staged for Agent vision. Run the planner to send them.</p>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || agentBusy}>Run planner</button>
                 <button
@@ -4662,7 +4882,7 @@ export function CommandApp() {
               {agentImages.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {agentImages.map((image, index) => (
-                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} />
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)} />
                   ))}
                 </div>
               )}
@@ -5269,20 +5489,23 @@ export function CommandApp() {
           if (file) void addImageAttachment(file);
         }}
       />
-      <CameraCapture
+      <Suspense fallback={null}><LazyCameraCapture
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onCapture={(dataUrl, name) => {
           setPendingImages((prev) => (prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]));
           setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
         }}
-      />
-      <CloudPicker
+      /></Suspense>
+      <Suspense fallback={null}><LazyCloudPicker
         open={cloudPickerOpen}
         onClose={() => setCloudPickerOpen(false)}
         onAttach={applyCloudAttach}
         onNotice={(message) => setNotice(message)}
-      />
+      /></Suspense>
+      <Suspense fallback={null}>
+        <LazyShortcutSheetHost />
+      </Suspense>
 
       {projectOpen && (
         <Overlay>
@@ -5626,7 +5849,6 @@ function ChatPane({
   onRetry,
   onExport,
   onDelete,
-  onMemory,
   onSave,
   onNew,
   onSpeak,
@@ -5653,7 +5875,7 @@ function ChatPane({
   voiceOverlayOpen,
   memoryChoice,
   mode,
-  onComposerMemory,
+  onMemoryChange,
   onComposerMode,
   composerEffort,
   onComposerEffort,
@@ -5665,9 +5887,12 @@ function ChatPane({
   onOpenCamera,
   onOpenCloud,
   onImagine,
+  imagineModel,
+  onToggleImagineQuality,
   onEditImagine,
   onSaveImage,
   onDownloadImage,
+  onUseAsAgentInput,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -5704,7 +5929,6 @@ function ChatPane({
   onRetry: () => void;
   onExport: () => void;
   onDelete: () => void;
-  onMemory: () => void;
   onSave: (content: string) => void;
   onNew: () => void;
   onSpeak: (text: string) => void;
@@ -5731,7 +5955,7 @@ function ChatPane({
   voiceOverlayOpen: boolean;
   memoryChoice: "off" | "on";
   mode: Autonomy;
-  onComposerMemory: () => void;
+  onMemoryChange: (next: "off" | "on") => void;
   onComposerMode: (mode: Autonomy) => void;
   composerEffort: ComposerModeId;
   onComposerEffort: (mode: ComposerModeId) => void;
@@ -5743,9 +5967,12 @@ function ChatPane({
   onOpenCamera: () => void;
   onOpenCloud: () => void;
   onImagine: () => void;
+  imagineModel: GrokImagineModel;
+  onToggleImagineQuality: () => void;
   onEditImagine: (src: string) => void;
   onSaveImage: (src: string, alt: string) => void;
   onDownloadImage: (src: string, alt: string) => void;
+  onUseAsAgentInput: (src: string, alt: string) => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -5855,6 +6082,11 @@ function ChatPane({
             </form>
           )}
           <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
+          {active && (
+            <div className="mt-3 max-w-md" data-testid="memory-chat-toggle-header">
+              <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
+            </div>
+          )}
           <div className="mt-3 xl:hidden">
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
             <div className="mt-3">
@@ -5889,7 +6121,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
+                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onUseAsAgentInput={onUseAsAgentInput} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
@@ -5928,6 +6160,11 @@ function ChatPane({
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSave(msg.content)}>Save as chat memory</button>
                 )}
               </div>
+              {msg.role === "assistant" && msg.memorySaved === true ? (
+                <div className="mt-2">
+                  <MemorySavedIndicator memorySaved={true} savedMemoryId={msg.savedMemoryId} />
+                </div>
+              ) : null}
             </article>
             );
           })}
@@ -6009,14 +6246,10 @@ function ChatPane({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onPaste={(event) => {
-              const items = Array.from(event.clipboardData?.items ?? []);
-              const imageItems = items.filter((item) => item.type.startsWith("image/"));
-              if (imageItems.length === 0) return;
+              const imageFiles = collectClipboardImageFiles(event.clipboardData, 4);
+              if (imageFiles.length === 0) return;
               event.preventDefault();
-              for (const item of imageItems.slice(0, 4)) {
-                const file = item.getAsFile();
-                if (file) onAddImageFile(file);
-              }
+              for (const file of imageFiles) onAddImageFile(file);
             }}
             placeholder={`Message (${modelTier})...`}
             className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
@@ -6045,8 +6278,21 @@ function ChatPane({
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCamera}>
               <Camera className="size-4" /> Camera
             </button>
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCloud}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCloud}>
               Drive
+            </button>
+            <button type="button" data-testid="imagine-generate" aria-label="Imagine" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+              Imagine
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL} onClick={onToggleImagineQuality}>
+              {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line" onClick={onListen} aria-label="Dictate">
+              <Mic className="size-4" />
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
               Imagine
@@ -6054,7 +6300,7 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
             <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
             <BrowserDictationControl
               state={dictationState}
@@ -6167,11 +6413,8 @@ function ChatPane({
           <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
           <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
         </section>
-        <section className="glass-panel rounded-panel p-3">
-          <button type="button" role="switch" aria-checked={memoryChoice === "on"} onClick={onComposerMemory} className="flex min-h-11 w-full items-center justify-between text-sm">
-            Memory: {memoryChoice === "on" ? "ON" : "OFF"}
-            <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
-          </button>
+        <section className="glass-panel rounded-panel p-3" data-testid="memory-chat-toggle-rail">
+          <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={!active || busy || halted} />
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
         </section>
         <section className="glass-panel rounded-panel p-3 text-sm" data-testid="agent-activity-live">

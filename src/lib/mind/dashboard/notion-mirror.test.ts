@@ -79,4 +79,73 @@ describe("notion-mirror (queue #9)", () => {
     assert.equal(cond.freshLabel, NO_MIRROR_SOURCE);
     assert.equal(freshnessLabel(30 * 60_000, false).includes("m"), true);
   });
+  it("lock fallback fills unmapped cosmos rows with real lock notes", () => {
+    const graph: NotionGraph = {
+      available: true,
+      mode: "snapshot",
+      generatedAt: "t",
+      pages: [],
+      edges: [],
+      botPageMap: {},
+      stats: { pages: 0, edges: 0, botsMapped: 0 },
+    };
+    const painter = bot("cosmos-painter", "Cosmos Painter Bot");
+    painter.lock = {
+      file: "dashboard-3d-visual-painter.lock",
+      owner: "Cosmos Painter Bot",
+      branch: "dashboard-3d-visual-painter",
+      status: "claimed",
+      claimed_at: "2026-11-01T19:20:19+01:00",
+      released_at: null,
+      commits: ["7a6e24f"],
+      notes: "Paused by user order",
+      worktree: "/workspace/mind-command-os-dashboard-painter",
+          heartbeatAt: null,
+          task: null,
+      raw: { heartbeat_at: "2026-11-01T19:20:19+01:00", task: "cycle paused" },
+    };
+    painter.notes = "Paused by user order";
+    const v = buildNotionMirrorView({ bots: [painter], graph, nowMs: NOW });
+    const row = v.rows[0]!;
+    assert.equal(row.pageId, null);
+    assert.equal(row.source, "lock");
+    assert.ok(row.freshLabel.startsWith("lock ·"));
+    assert.ok((row.title || "").includes("cycle paused") || (row.excerpt || "").includes("Paused"));
+  });
+
+});
+
+
+describe("notion-mirror Gap#31 outage", () => {
+  it("forces available=false and empty rows when graph.available is false", () => {
+    const view = buildNotionMirrorView({
+      bots: [
+        {
+          id: "logic",
+          name: "Logic",
+          health: "healthy",
+          lock: null,
+          branch: null,
+          lastActivityAt: null,
+          commits: [],
+          notes: "",
+          reason: "",
+        },
+      ],
+      graph: {
+        available: false,
+        mode: "unavailable",
+        reason: "MCP timeout",
+        generatedAt: "2026-11-01T12:00:00+01:00",
+        pages: [{ id: "stale", title: "should not show", url: "u", parentId: null, lastEdited: null, excerpt: "x", kind: "page" }],
+        edges: [],
+        botPageMap: { logic: "stale" },
+        stats: { pages: 1, edges: 0, botsMapped: 1 },
+      },
+      nowMs: Date.parse("2026-11-01T18:00:00+01:00"),
+    });
+    assert.equal(view.available, false);
+    assert.equal(view.rows.length, 0);
+    assert.match(view.reason || "", /MCP timeout|no source/i);
+  });
 });

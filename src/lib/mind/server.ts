@@ -8,12 +8,13 @@ import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 const MODEL = "grok-4.5";
 
 function envCheck() {
   return guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
@@ -33,7 +34,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   } catch {
     signedIn = false;
   }
-  const described = describePersistence(process.env.DATABASE_URL);
+  const described = describePersistence(resolveDatabaseUrl(process.env));
   const persistence = described.note;
   const databaseBackend = described.backend;
   if (!gate.ok) {
@@ -490,6 +491,79 @@ export const mcpRegistryCall = createServerFn({ method: "POST" })
       tool: result.tool,
       text: result.text,
     };
+  });
+
+
+/**
+ * Real per-connector verification for Tools.
+ * Soft-auth like mcpRegistryList: getSessionUser + same-site origin check.
+ * Signed-out → typed unauthenticated (no probes, no red banner).
+ * Never trusts a stored status badge.
+ */
+export const mcpConnectorVerify = createServerFn({ method: "POST" })
+  .middleware([
+    createMiddleware({ type: "function" })
+      .client(async ({ next }) => {
+        const { getBearerToken } = await import("../auth/client");
+        return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+      })
+      .server(async ({ next, context }) => {
+        const { assertSameSiteRequest } = await import("../auth/isolation.server");
+        assertSameSiteRequest();
+        return next({ context: { bearerToken: context.bearerToken as string | undefined } });
+      }),
+  ])
+  .validator((input: { target?: "all" | "mcp" | "oauth"; id?: string } = {}) => {
+    const target = input?.target === "mcp" || input?.target === "oauth" || input?.target === "all" ? input.target : "all";
+    const id = typeof input?.id === "string" ? input.id.trim().slice(0, 80) : "";
+    return { target, id };
+  })
+  .handler(async ({ data, context }) => {
+    const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
+    const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
+    const { resolveMcpListUserId } = await import("./mcp-list-auth");
+    const sessionUser = await getSessionUser(context.bearerToken);
+    const userId = resolveMcpListUserId({
+      sessionUser,
+      authConfigured,
+      gateIdentityEnabled: gateIdentityEnabled(),
+      databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+      devUserId: DEV_USER_ID,
+    });
+    const {
+      buildConnectorVerifyPayload,
+      verifyConnectors,
+      VERIFY_TIMEOUT_MS,
+      VERIFY_MAX_BYTES,
+    } = await import("./mcp/connector-verify");
+    if (!userId) {
+      return buildConnectorVerifyPayload(null, []);
+    }
+    const { getSql } = await import("../db");
+    let verifyTarget: { type: "all" } | { type: "mcp"; id: string } | { type: "oauth"; id: import("./connectors/store").ConnectorId };
+    if (data.target === "all" || !data.id) {
+      verifyTarget = { type: "all" };
+    } else if (data.target === "oauth") {
+      const { isConnectorId } = await import("./connectors/store");
+      if (!isConnectorId(data.id)) {
+        return buildConnectorVerifyPayload(userId, [{
+          id: data.id,
+          kind: "oauth",
+          label: data.id,
+          state: "error",
+          detail: "Unknown OAuth connector.",
+        }]);
+      }
+      verifyTarget = { type: "oauth", id: data.id };
+    } else {
+      verifyTarget = { type: "mcp", id: data.id };
+    }
+    const results = await verifyConnectors(userId, verifyTarget, {
+      getSql,
+      timeoutMs: VERIFY_TIMEOUT_MS,
+      maxBytes: VERIFY_MAX_BYTES,
+    });
+    return buildConnectorVerifyPayload(userId, results);
   });
 
 export const listMindMemories = createServerFn({ method: "GET" })

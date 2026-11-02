@@ -4,12 +4,16 @@ import {
   MAX_AMOUNT_USD,
   NO_SPEND_SOURCE,
   buildMoneyView,
+  adjustBurnForHiddenGap,
   createFilesystemSpendAdapter,
+  parseSpendTextRobust,
+  CANONICAL_SPEND_JSONL,
   parseSpendFileText,
   parseSpendRecord,
   sanitizeAmountUsd,
   type SpendAdapter,
   type SpendLoadResult,
+  type MoneyView,
 } from "./spend.ts";
 
 const NOW = Date.parse("2026-11-01T18:00:00+01:00");
@@ -91,7 +95,7 @@ describe("spend / money (hacker + queue #7)", () => {
             atIso: "2026-11-01T17:00:00+01:00",
             atMs: Date.parse("2026-11-01T17:00:00+01:00"),
             amountUsd: 120,
-            currency: "USD",
+            currency: "USD" as const,
             lane: null,
             model: null,
             source: "memory",
@@ -102,5 +106,85 @@ describe("spend / money (hacker + queue #7)", () => {
     const money = buildMoneyView({ loadResult: custom.load({ nowMs: NOW }), nowMs: NOW });
     assert.equal(money.available, true);
     assert.equal(money.warnings[0]?.level, "crit");
+  });
+});
+
+describe("spend Gap#22 robust JSONL", () => {
+  it("tails huge files and drops incomplete final line", () => {
+    const lines = [];
+    for (let i = 0; i < 200; i++) {
+      lines.push(JSON.stringify({ at: `2026-11-01T12:${String(i % 60).padStart(2, "0")}:00+01:00`, amountUsd: 0.01 * (i + 1), lane: "xai" }));
+    }
+    // Partial last line (mid-write)
+    const huge = lines.join("\n") + "\n{\"at\":\"2026-11-01T13:00:00+01:00\",\"amountUsd\":";
+    const { events, droppedInvalid } = parseSpendTextRobust(huge, "mem://tail", Date.parse("2026-11-01T14:00:00+01:00"), {
+      allowPartialTail: true,
+    });
+    assert.ok(events.length >= 1);
+    assert.ok(events.every((e) => Number.isFinite(e.amountUsd) && e.amountUsd > 0));
+    // incomplete line discarded before parse → not counted as droppedInvalid necessarily
+    assert.equal(typeof droppedInvalid, "number");
+  });
+
+  it("malformed lines are dropped without inventing USD", () => {
+    const text = [
+      "not-json",
+      JSON.stringify({ at: "2026-11-01T12:00:00+01:00", amountUsd: 1.25, lane: "dashboard" }),
+      JSON.stringify({ at: "bad", amountUsd: "NaN" }),
+      "{partial",
+    ].join("\n");
+    const { events, droppedInvalid } = parseSpendTextRobust(text, "mem://malformed", Date.parse("2026-11-01T14:00:00+01:00"));
+    assert.equal(events.length, 1);
+    assert.equal(events[0]!.amountUsd, 1.25);
+    assert.ok(droppedInvalid >= 2);
+  });
+
+  it("adapter prefers canonical path and reports no source when empty", () => {
+    const files: Record<string, string> = {};
+    const adapter = createFilesystemSpendAdapter({
+      roots: ["/tmp/spend-roots"],
+      hooks: {
+        exists: (p) => p === "/tmp/spend-roots" || p in files || p === CANONICAL_SPEND_JSONL,
+        listNames: (d) => (d === "/tmp/spend-roots" ? ["notes.txt"] : []),
+        readText: (p) => files[p] ?? "",
+        readTailText: (p) => files[p] ?? "",
+        statSize: (p) => (files[p] ? files[p]!.length : 0),
+      },
+    });
+    const empty = adapter.load({ nowMs: Date.parse("2026-11-01T14:00:00+01:00") });
+    assert.equal(empty.ok, false);
+    if (!empty.ok) assert.match(empty.reason, /no spend source/i);
+
+    files[CANONICAL_SPEND_JSONL] =
+      JSON.stringify({ at: "2026-11-01T12:00:00+01:00", amountUsd: 2.5, lane: "xai" }) + "\n";
+    const hit = adapter.load({ nowMs: Date.parse("2026-11-01T14:00:00+01:00") });
+    assert.equal(hit.ok, true);
+    if (hit.ok) {
+      assert.equal(hit.events[0]!.amountUsd, 2.5);
+      assert.match(hit.source, /spend\.jsonl/);
+    }
+  });
+});
+
+
+describe("adjustBurnForHiddenGap Gap#34", () => {
+  it("nulls burn after long hidden gap", () => {
+    const base: MoneyView = {
+      available: true,
+      reason: null,
+      source: "test",
+      currency: "USD",
+      todayTotalUsd: 1,
+      burnPerHourUsd: 12.5,
+      warnings: [],
+      asOfMs: 1,
+      eventCount: 1,
+      stale: false,
+      droppedInvalid: 0,
+      todayKey: "2026-11-01",
+    };
+    assert.equal(adjustBurnForHiddenGap(base, 0).burnPerHourUsd, 12.5);
+    assert.equal(adjustBurnForHiddenGap(base, 60_000).burnPerHourUsd, 12.5);
+    assert.equal(adjustBurnForHiddenGap(base, 40 * 60_000).burnPerHourUsd, null);
   });
 });

@@ -206,3 +206,77 @@ describe("search timeouts", () => {
     assert.equal(deepSearchTimeoutMs({ MIND_SEARCH_DEEP_TIMEOUT_MS: "nope" }), DEFAULT_DEEP_SEARCH_TIMEOUT_MS);
   });
 });
+
+
+describe("deep research partial timeout honesty", () => {
+  it("q1 succeeds and q2 hangs past the overall wall: keeps real citations and marks partial", async () => {
+    mock.timers.enable({ apis: ["setTimeout"], now: 0 });
+    try {
+      let calls = 0;
+      const pending = performDeepResearch({
+        query: "Toledo Bend marina zoning",
+        endpoint: "https://search.example/query",
+        key: "test-key",
+        timeoutMs: 20_000,
+        deepTimeoutMs: 45_000,
+        fetchImpl: ((_url: string, init?: RequestInit) => {
+          calls += 1;
+          if (calls === 1) {
+            return Promise.resolve(
+              Response.json({ results: [{ title: "Real source", url: "https://example.com/real" }] }),
+            );
+          }
+          return new Promise<Response>((_resolve, reject) => {
+            const signal = init?.signal;
+            if (!signal) return;
+            if (signal.aborted) {
+              reject(signal.reason);
+              return;
+            }
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+          });
+        }) as typeof fetch,
+      });
+      mock.timers.tick(45_000);
+      const result = await pending;
+      assert.equal(result.ok, true);
+      assert.equal(result.partial, true);
+      assert.deepEqual(result.citations.map((c) => c.url), ["https://example.com/real"]);
+      assert.match(result.summary ?? "", /timed out/i);
+      assert.equal(result.error.includes("invent"), false);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it("overall timeout with no citations returns SEARCH_TIMEOUT_REPLY", async () => {
+    mock.timers.enable({ apis: ["setTimeout"], now: 0 });
+    try {
+      const pending = performDeepResearch({
+        query: "Toledo Bend marina zoning",
+        endpoint: "https://search.example/query",
+        key: "test-key",
+        timeoutMs: 20_000,
+        deepTimeoutMs: 5_000,
+        fetchImpl: ((_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            const signal = init?.signal;
+            if (!signal) return;
+            if (signal.aborted) {
+              reject(signal.reason);
+              return;
+            }
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+          })) as typeof fetch,
+      });
+      mock.timers.tick(5_000);
+      const result = await pending;
+      assert.equal(result.ok, false);
+      assert.equal(result.partial, undefined);
+      assert.deepEqual(result.citations, []);
+      assert.equal(result.error, SEARCH_TIMEOUT_REPLY);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+});

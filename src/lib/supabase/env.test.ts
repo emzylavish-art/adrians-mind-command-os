@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveSupabaseEnv, isSupabaseConfigured } from "./env.ts";
+import {
+  resolveSupabaseEnv,
+  isSupabaseConfigured,
+  resolveSupabaseServiceRole,
+  isSupabaseServiceRoleConfigured,
+} from "./env.ts";
 
 describe("resolveSupabaseEnv", () => {
   it("returns null when both url and key are missing", () => {
@@ -69,6 +74,33 @@ describe("resolveSupabaseEnv", () => {
       isSupabaseConfigured({
         SUPABASE_URL: "https://x.supabase.co",
         SUPABASE_ANON_KEY: "k",
+      }),
+      true,
+    );
+  });
+});
+
+describe("resolveSupabaseServiceRole", () => {
+  it("requires url + service role key and ignores VITE_", () => {
+    assert.equal(resolveSupabaseServiceRole({}), null);
+    assert.deepEqual(
+      resolveSupabaseServiceRole({
+        SUPABASE_URL: "https://example.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: " sr ",
+      }),
+      { url: "https://example.supabase.co", serviceRoleKey: "sr" },
+    );
+    assert.equal(
+      resolveSupabaseServiceRole({
+        VITE_SUPABASE_URL: "https://vite.supabase.co",
+        VITE_SUPABASE_SERVICE_ROLE_KEY: "x",
+      } as Record<string, string | undefined>),
+      null,
+    );
+    assert.equal(
+      isSupabaseServiceRoleConfigured({
+        SUPABASE_URL: "https://example.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "k",
       }),
       true,
     );

@@ -6,6 +6,9 @@
  */
 export const GLSL_HASH_NOISE = /* glsl */ `
 vec2 paintWrap(vec2 p) {
+  // HACKER (c13): clamp before scale — huge world coords / Inf become NaN in mediump
+  // fract and band into sparkle; fold into a finite domain first.
+  p = clamp(p, -1.0e4, 1.0e4);
   // Keep domain bounded for mediump (~10-bit mantissa)
   return fract(p * 0.0025) * 400.0;
 }
@@ -36,7 +39,15 @@ float paintFbm(vec2 p) {
 }
 `;
 
-export const PAINTER_SHADER_VERSION = "painter-1.2.0";
+export const PAINTER_SHADER_VERSION = "painter-1.7.0";
+
+/**
+ * HACKER (c7): iOS Safari / WebGL1 often reject highp in fragments.
+ * Three.js ShaderMaterial `precision: "mediump"` pairs with this marker;
+ * all painter noise already uses paintWrap for mediump-safe domains.
+ */
+export const PAINTER_SHADER_PRECISION = "mediump" as const;
+
 
 /** Marker string tests assert is present for mediump hardening. */
 export const GLSL_MEDIUMP_GUARD = "paintWrap";

@@ -1,0 +1,6 @@
+# Cloudflare Pages burner (SSR via Nitro cloudflare_pages).
+# Default production build remains Vercel (vite nitro preset).
+name = "adrians-mind-burner"
+compatibility_date = "2026-09-19"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"

@@ -6,6 +6,9 @@ import { GLSL_HASH_NOISE } from "./glsl-noise.ts";
  * the edge, uv.y across. Weak-GPU safe: no derivatives extension, fixed-bound
  * loops only (paintFbm), all noise coordinates wrapped via paintWrap, uTime is
  * pre-wrapped CPU-side (sanitizeShaderTime) so mediump never overflows.
+ *
+ * c13: `uBleed` watercolor edge bleed from real edge weight (health severity +
+ * kind). Neutral default 0.35 — no fabricated activity.
  */
 export const InkWashEdgeShader = {
   name: "InkWashEdgeShader",
@@ -14,6 +17,8 @@ export const InkWashEdgeShader = {
     uTime: { value: 0 },
     uInk: { value: 0.65 },
     uPulse: { value: 0.35 },
+    /** Watercolor bleed / wet-edge pool strength from real weight (0..1.5). */
+    uBleed: { value: 0.35 },
   },
   vertexShader: /* glsl */ `
     // Camera-facing ribbon: position = edge centreline, aTangent = edge direction,
@@ -40,17 +45,21 @@ export const InkWashEdgeShader = {
     uniform float uTime;
     uniform float uInk;
     uniform float uPulse;
+    uniform float uBleed;
     varying vec2 vUv;
     ${GLSL_HASH_NOISE}
     void main() {
       float across = abs(vUv.y - 0.5) * 2.0;           // 0 centre .. 1 rim
+      float bleed = clamp(uBleed, 0.0, 1.5);
       // along-edge brush: stretched fbm so strokes read lengthwise
       float along = paintFbm(vec2(vUv.x * 14.0 + uTime * 0.04, vUv.y * 2.5));
-      // ragged wet edge: rim position wobbles along the stroke
-      float rim = 0.72 + (paintFbm(vec2(vUv.x * 9.0, 3.7)) - 0.5) * 0.35;
-      float edgeSoft = 1.0 - smoothstep(rim - 0.18, rim, across);
-      // pigment pooling: watercolor darkens where the wash dries at its edge
-      float pool = smoothstep(rim - 0.32, rim - 0.06, across) * edgeSoft;
+      // ragged wet edge: rim position wobbles along the stroke; bleed widens wet fringe
+      float rim = 0.72 + (paintFbm(vec2(vUv.x * 9.0, 3.7)) - 0.5) * 0.35 - bleed * 0.06;
+      float softW = 0.18 + bleed * 0.14;
+      float edgeSoft = 1.0 - smoothstep(rim - softW, rim + bleed * 0.05, across);
+      // pigment pooling: watercolor darkens where the wash dries at its edge (bleed boosts pool)
+      float pool = smoothstep(rim - (0.32 + bleed * 0.18), rim - 0.04, across) * edgeSoft;
+      pool *= 0.65 + bleed * 0.55;
       // dry-brush gaps: high-frequency streaks that skip paper
       float streak = paintNoise(vec2(vUv.x * 60.0, vUv.y * 7.0));
       float dry = smoothstep(0.18, 0.42, streak + along * 0.35);
@@ -62,10 +71,13 @@ export const InkWashEdgeShader = {
       float bead = exp(-d * d * 900.0) * (1.0 - across) * uPulse;
       float wash = smoothstep(0.15, 0.85, along);
       vec3 ink = uHealth * (0.40 + wash * uInk);
-      ink = mix(ink, uHealth * 0.38, pool * 0.55);      // darker pooled rim
+      ink = mix(ink, uHealth * (0.32 - bleed * 0.04), pool * (0.55 + bleed * 0.25)); // darker pooled rim
+      // c13: soft watercolor bleed halo just outside the stroke
+      float bleedHalo = smoothstep(rim, min(1.0, rim + 0.22 + bleed * 0.2), across) * edgeSoft;
+      ink = mix(ink, uHealth * 0.55 + vec3(0.08, 0.1, 0.18), bleedHalo * bleed * 0.45);
       ink += vec3(1.0, 0.97, 0.9) * bead * 0.9;           // warm paper-white highlight
       ink += (paintNoise(vUv * 80.0) - 0.5) * 0.06;      // paper grain
-      float alpha = edgeSoft * ends * (0.22 + wash * 0.55 + pool * 0.25) * mix(0.55, 1.0, dry);
+      float alpha = edgeSoft * ends * (0.22 + wash * 0.55 + pool * 0.25 + bleedHalo * bleed * 0.2) * mix(0.55, 1.0, dry);
       alpha = clamp(alpha + bead * 0.6, 0.0, 1.0);
       if (alpha < 0.02) discard;
       gl_FragColor = vec4(clamp(ink, 0.0, 1.0), alpha);

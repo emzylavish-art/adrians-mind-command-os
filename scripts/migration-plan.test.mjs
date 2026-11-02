@@ -60,7 +60,7 @@ test("owner schemas are globbed and the auth source stays in migrations/auth", (
   const migrationsDir = join(projectRoot(), "migrations");
   assert.deepEqual(
     pendingMigrations(readdirSync(migrationsDir), []).map((item) => item.name),
-    ["0001_auth.sql", "0002_mind.sql", "0003_fleet.sql", "0004_tool_run.sql"],
+    ["0001_auth.sql", "0002_mind.sql", "0003_fleet.sql", "0004_tool_run.sql", "0005_intel_patterns.sql", "0006_pattern_proposals.sql"],
   );
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
   assert.equal(readdirSync(migrationsDir).includes("0002_mind.sql"), true);

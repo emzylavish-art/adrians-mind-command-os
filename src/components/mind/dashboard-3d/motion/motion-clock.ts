@@ -93,7 +93,8 @@ export function createMotionClock(opts: MotionClockOpts = {}): MotionClock {
         }
         if (a.used < slot.used) slot = a;
       }
-      lastWallDt = mru ? wall - mru.wall : 0;
+      // Hacker c11: backwards worker clocks must not publish negative lastWallDt (LOD budget).
+      lastWallDt = mru ? Math.max(0, wall - mru.wall) : 0;
       const nextTime = mru ? mru.time + nominal : sanitizeTime(wall);
       slot.live = true;
       slot.wall = wall;
@@ -125,5 +126,43 @@ export function createMotionClock(opts: MotionClockOpts = {}): MotionClock {
   return clock;
 }
 
-/** One clock shared by every motion/particle module so all samplers stay phase-locked. */
-export const sharedMotionClock: MotionClock = createMotionClock();
+/**
+ * Process-wide clock so every sampler stays phase-locked.
+ * Hacker c7: `reset()` is a **no-op** on the shared singleton. Resetting it from one
+ * UniverseScene mount / HMR teardown (or a second canvas) snaps lagged motion time back
+ * to raw wall time and teleports stars/orbits/dust still ticking on another mount.
+ * Use `createMotionClock()` when you need a private, resettable clock (tests, isolated scenes).
+ */
+// Hacker c12: lazy singleton — importing motion-clock / star-pulse must not construct
+// a clock until first map()/hardReset (tree-shaking / no eager side effect).
+let _sharedMotionClockInner: MotionClock | null = null;
+function sharedInner(): MotionClock {
+  if (_sharedMotionClockInner == null) _sharedMotionClockInner = createMotionClock();
+  return _sharedMotionClockInner;
+}
+export const sharedMotionClock: MotionClock = {
+  map: (wallSeconds: number) => sharedInner().map(wallSeconds),
+  get time() {
+    return sharedInner().time;
+  },
+  get lastWallDt() {
+    return sharedInner().lastWallDt;
+  },
+  get anchorCount() {
+    return sharedInner().anchorCount;
+  },
+  reset() {
+    /* intentionally empty — see comment above */
+  },
+};
+
+/**
+ * Explicit hard reset of the process-wide shared clock.
+ * Prefer `createMotionClock()` for production isolation. Use this only in tests or a
+ * deliberate full-dashboard teardown when you accept a one-frame phase snap for every
+ * sampler still reading `sharedMotionClock`.
+ * Grep of origin/dashboard-3d (c8): nothing calls `sharedMotionClock.reset()` for effect.
+ */
+export function hardResetSharedMotionClockForTests(): void {
+  sharedInner().reset();
+}

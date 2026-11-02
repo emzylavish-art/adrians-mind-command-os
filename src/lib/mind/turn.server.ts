@@ -14,6 +14,7 @@ import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { readModelPayload } from "./stream";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
@@ -53,7 +54,7 @@ function isNote(item: unknown): item is NoteItem {
 
 function envCheck() {
   return guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
@@ -172,6 +173,9 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       mode: request.headers.get("sec-fetch-mode"),
       dest: request.headers.get("sec-fetch-dest"),
       method: request.method,
+      origin: request.headers.get("origin"),
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
     }) === "block"
   ) {
     return json({ ok: false, error: "Forbidden: cross-site request blocked" }, 403);

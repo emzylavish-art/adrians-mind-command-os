@@ -28,7 +28,7 @@ function bot(partial: Partial<BotNode> & { id: BotNode["id"] }): BotNode {
 }
 
 describe("bot-detail (real sources only)", () => {
-  it("reads heartbeat/task from lock.raw and formats WAT", () => {
+  it("reads heartbeat/task from lock.heartbeatAt (and falls back to raw when present)", () => {
     const lock: LockRecord = {
       file: "logic-wiring.lock",
       owner: "Logic Bot",
@@ -39,10 +39,17 @@ describe("bot-detail (real sources only)", () => {
       commits: ["abc1234 note"],
       notes: "hi",
       worktree: "/workspace/x",
+      heartbeatAt: "2026-11-01T12:05:00+01:00",
+      task: '"wiring search"',
       raw: { heartbeat_at: "2026-11-01T12:05:00+01:00", task: '"wiring search"' },
     };
     assert.equal(lockHeartbeat(lock), "2026-11-01T12:05:00+01:00");
     assert.equal(lockTask(lock), "wiring search");
+    // raw-only fallback still works for pre-publicize server shapes
+    assert.equal(
+      lockHeartbeat({ ...lock, heartbeatAt: null, task: null }),
+      "2026-11-01T12:05:00+01:00",
+    );
     assert.equal(lockHeartbeat(null), null);
     assert.match(formatWat("2026-11-01T12:00:00+01:00"), /WAT/);
     assert.equal(formatWat(null), NO_SOURCE);
@@ -94,5 +101,58 @@ describe("bot-detail (real sources only)", () => {
     assert.equal(view.notionPages[0]?.title, "Logic handoff");
     assert.equal(view.connections.some((c) => c.id === "dashboard"), true);
     assert.deepEqual(notionNeighborIds(graph, "p1"), ["p2"]);
+  });
+});
+
+
+describe("bot-detail Gap#35 publicized lock (no raw)", () => {
+  it("buildBotDetailView does not throw when lock.raw is omitted", () => {
+    const lock = {
+      file: "logic-wiring.lock",
+      owner: "logic",
+      branch: "dashboard-3d",
+      status: "claimed",
+      claimed_at: "2026-11-01T12:00:00+01:00",
+      released_at: null,
+      commits: [] as string[],
+      notes: "working",
+      worktree: "mind-command-os-logic",
+      heartbeatAt: "2026-11-01T12:05:00+01:00",
+      task: "wiring search",
+      // raw intentionally omitted — matches Gap#29 publicize
+    };
+    const bot = {
+      id: "logic" as const,
+      name: "Logic",
+      health: "healthy" as const,
+      lock,
+      branch: "dashboard-3d",
+      lastActivityAt: "2026-11-01T12:00:00+01:00",
+      commits: [] as string[],
+      notes: "",
+      reason: "lock claimed",
+    };
+    const detail = buildBotDetailView({
+      bot,
+      bots: [bot],
+      commits: [],
+      constellations: [],
+      constellationEdges: [],
+      notionGraph: {
+        available: false,
+        mode: "snapshot",
+        generatedAt: null,
+        pages: [],
+        edges: [],
+        botPageMap: {},
+        stats: { pages: 0, edges: 0, botsMapped: 0 },
+      },
+      fleetPlan: null,
+    });
+    assert.equal(detail.heartbeatAt, "2026-11-01T12:05:00+01:00");
+    assert.equal(detail.task, "wiring search");
+    assert.equal(lockHeartbeat(lock), "2026-11-01T12:05:00+01:00");
+    assert.equal(lockTask(lock), "wiring search");
+    assert.equal(lockHeartbeat({ ...lock, heartbeatAt: null, raw: undefined }), null);
   });
 });

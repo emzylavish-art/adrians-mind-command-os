@@ -7,7 +7,7 @@ import { escapeHtml } from "./connectors/oauth-callback-html.ts";
 import { pendingOAuthPath, isValidOAuthState } from "./connectors/store.ts";
 import { handleBuiltinMcpHttp } from "./mcp/builtin-server.ts";
 import { SEARCH_TIMEOUT_REPLY, DEFAULT_SEARCH_TIMEOUT_MS, DEFAULT_DEEP_SEARCH_TIMEOUT_MS } from "./research.ts";
-import { GROK_IMAGINE_MODEL } from "./media/imagine-shared.ts";
+import { GROK_IMAGINE_MODEL, resolveImagineModel } from "./media/imagine-shared.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const researchSrc = readFileSync(join(root, "src/lib/mind/research.ts"), "utf8");
@@ -65,19 +65,13 @@ describe("integration-security-c16", () => {
     assert.match(researchSrc, /boundAbortSignal/);
   });
 
-  it("Imagine unknown-model allowlist (deferred while media-integration.lock in progress)", () => {
-    // ffc677b adds resolveImagineModel + harden allowlist. Lane lock was in progress, so skipped.
-    const hasAllowlist = existsSync(hardenPath) && /resolveImagineModel/.test(readFileSync(hardenPath, "utf8") + imagineSrc);
-    const collapses =
-      /resolveImagineModel\(/.test(imagineSrc) ||
-      existsSync(join(root, "src/lib/mind/media/imagine-harden-h4h7.test.ts"));
-    assert.equal(
-      hasAllowlist || collapses,
-      false,
-      "Imagine H4 allowlist unexpectedly present — flip this test to assert unknown models are collapsed/rejected",
-    );
-    // Still prove Imagine surface from earlier media lane is present.
-    assert.equal(typeof GROK_IMAGINE_MODEL, "string");
+  it("Imagine unknown-model allowlist collapses arbitrary ids", () => {
+    // Media H4 landed: resolveImagineModel + harden allowlist + dedicated harden tests.
+    assert.equal(existsSync(hardenPath), true);
+    assert.match(imagineSrc, /resolveImagineModel\(/);
+    assert.equal(existsSync(join(root, "src/lib/mind/media/imagine-harden-h4h7.test.ts")), true);
+    assert.equal(resolveImagineModel("gpt-image-1"), GROK_IMAGINE_MODEL);
+    assert.equal(resolveImagineModel("grok-imagine-image-pro-ultra"), GROK_IMAGINE_MODEL);
     assert.match(commandApp, /onImagine|runImagine/);
   });
 

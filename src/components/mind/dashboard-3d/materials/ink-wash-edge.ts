@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { InkWashEdgeShader } from "../shaders/ink-wash-edge.ts";
 import { sanitizeFinite, sanitizeShaderTime } from "./paper-grain.ts";
+import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 
 export type HealthTone = "healthy" | "stalled" | "blocked" | "idle";
 
@@ -15,6 +16,8 @@ export type InkWashEdgeOptions = {
   health?: HealthTone | THREE.ColorRepresentation;
   ink?: number;
   pulse?: number;
+  /** Watercolor edge bleed from real weight (0..1.5). Neutral default 0.35. */
+  bleed?: number;
 };
 
 function resolveHealthColor(
@@ -46,6 +49,7 @@ function cloneUniforms(src: typeof InkWashEdgeShader.uniforms) {
     uTime: { value: 0 },
     uInk: { value: src.uInk.value },
     uPulse: { value: src.uPulse.value },
+    uBleed: { value: src.uBleed.value },
   };
 }
 
@@ -55,8 +59,10 @@ export function createInkWashEdgeMaterial(opts: InkWashEdgeOptions = {}): THREE.
   uniforms.uHealth.value.copy(resolveHealthColor(opts.health));
   if (opts.ink != null) uniforms.uInk.value = sanitizeFinite(opts.ink, 0.65, 0, 2);
   if (opts.pulse != null) uniforms.uPulse.value = sanitizeFinite(opts.pulse, 0.35, 0, 1);
+  if (opts.bleed != null) uniforms.uBleed.value = sanitizeFinite(opts.bleed, 0.35, 0, 1.5);
   return new THREE.ShaderMaterial({
     name: "InkWashEdgeMaterial",
+    precision: PAINTER_SHADER_PRECISION,
     uniforms,
     vertexShader: InkWashEdgeShader.vertexShader,
     fragmentShader: InkWashEdgeShader.fragmentShader,
@@ -78,6 +84,26 @@ export function setInkWashEdgeHealth(
     (mat.uniforms["uHealth"].value as THREE.Color).copy(resolveHealthColor(health));
   }
 }
+
+/** Real edge weight → watercolor bleed. Health severity + hub/link kind; no fabricated activity. */
+export function inkBleedFromWeight(tone: HealthTone, kind?: string): number {
+  const base: Record<HealthTone, number> = {
+    healthy: 0.28,
+    stalled: 0.55,
+    blocked: 0.88,
+    idle: 0.2,
+  };
+  const b = base[tone] ?? 0.35;
+  const kindMul = kind === "hub" ? 0.75 : 1.0;
+  return sanitizeFinite(b * kindMul, 0.35, 0, 1.5);
+}
+
+export function setInkWashEdgeBleed(mat: THREE.ShaderMaterial, bleed: number): void {
+  if (mat.uniforms["uBleed"]) {
+    mat.uniforms["uBleed"].value = sanitizeFinite(bleed, 0.35, 0, 1.5);
+  }
+}
+
 
 /**
  * Sanitize a parallel health-tone array for multi-edge updates.
@@ -118,6 +144,11 @@ export type InkWashRibbonOptions = {
 };
 
 export const INK_RIBBON_MAX_SEGMENTS = 256;
+/** Edges shorter than this (after sanitize) are degenerate — skip in batch helpers. */
+export const INK_EDGE_DEGENERATE_EPS = 1e-5;
+/** Hard cap for one-call ink edge adopt (prevents OOM on flood graphs). */
+export const INK_EDGES_MAX = 512;
+
 
 type Vec3Like = readonly [number, number, number] | { x: number; y: number; z: number };
 
@@ -128,6 +159,18 @@ function toVec3(v: Vec3Like): THREE.Vector3 {
     sanitizeFinite(Number(arr[1]), 0, -1e6, 1e6),
     sanitizeFinite(Number(arr[2]), 0, -1e6, 1e6),
   );
+}
+
+/** Finite edge length after coordinate sanitize; 0 for coincident/NaN endpoints. */
+export function measureInkEdgeLength(from: Vec3Like, to: Vec3Like): number {
+  const a = toVec3(from);
+  const b = toVec3(to);
+  const d = a.distanceTo(b);
+  return Number.isFinite(d) ? d : 0;
+}
+
+export function isDegenerateInkEdge(from: Vec3Like, to: Vec3Like, eps = INK_EDGE_DEGENERATE_EPS): boolean {
+  return measureInkEdgeLength(from, to) < eps;
 }
 
 /**

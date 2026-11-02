@@ -1,4 +1,6 @@
 import type { DashboardBotId } from "./types.ts";
+import { sanitizeNotionPlainText } from "./notion-plain.ts";
+import { sanitizeNotionHref } from "./safe-notion-url.ts";
 
 export type NotionSnapPage = {
   id: string;
@@ -44,11 +46,12 @@ export function parseNotionSnapshot(raw: unknown): NotionSnapshot | null {
     if (typeof page.id !== "string" || typeof page.title !== "string") continue;
     pages.push({
       id: page.id,
-      title: page.title,
-      url: typeof page.url === "string" ? page.url : `https://www.notion.so/${page.id.replace(/-/g, "")}`,
+      title: sanitizeNotionPlainText(page.title, 160),
+      url: sanitizeNotionHref(typeof page.url === "string" ? page.url : null, page.id) ??
+        `https://www.notion.so/${page.id.replace(/-/g, "")}`,
       parentId: typeof page.parentId === "string" ? page.parentId : null,
       lastEdited: typeof page.lastEdited === "string" ? page.lastEdited : null,
-      excerpt: typeof page.excerpt === "string" ? page.excerpt : "",
+      excerpt: typeof page.excerpt === "string" ? sanitizeNotionPlainText(page.excerpt, 280) : "",
       kind: typeof page.kind === "string" ? page.kind : "page",
     });
   }

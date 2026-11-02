@@ -17,6 +17,7 @@ import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiIntentOutcomesRouteImport } from './routes/api/intent/outcomes'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
@@ -25,6 +26,7 @@ import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
 import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
+import { Route as ApiMindMediaAssetUrlRouteImport } from './routes/api/mind/media/asset-url'
 import { Route as ApiMindPairingActionRouteImport } from './routes/api/mind/pairing/action'
 import { Route as ApiMindPairingCodeRouteImport } from './routes/api/mind/pairing/code'
 import { Route as ApiMindPairingHandshakeRouteImport } from './routes/api/mind/pairing/handshake'
@@ -93,6 +95,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiIntentOutcomesRoute = ApiIntentOutcomesRouteImport.update({
+  id: '/api/intent/outcomes',
+  path: '/api/intent/outcomes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
   id: '/api/mind/agent',
   path: '/api/mind/agent',
@@ -131,6 +138,11 @@ const ApiMindMcpToolsRoute = ApiMindMcpToolsRouteImport.update({
 const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
   id: '/api/mind/media/generate',
   path: '/api/mind/media/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindMediaAssetUrlRoute = ApiMindMediaAssetUrlRouteImport.update({
+  id: '/api/mind/media/asset-url',
+  path: '/api/mind/media/asset-url',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindPairingActionRoute = ApiMindPairingActionRouteImport.update({
@@ -287,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/personas': typeof PersonasRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
@@ -295,6 +308,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
@@ -332,6 +346,7 @@ export interface FileRoutesByTo {
   '/personas': typeof PersonasRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
@@ -340,6 +355,7 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
@@ -378,6 +394,7 @@ export interface FileRoutesById {
   '/personas': typeof PersonasRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
@@ -386,6 +403,7 @@ export interface FileRoutesById {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
@@ -425,6 +443,7 @@ export interface FileRouteTypes {
     | '/personas'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
@@ -433,6 +452,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/media/asset-url'
     | '/api/mind/pairing/action'
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
@@ -470,6 +490,7 @@ export interface FileRouteTypes {
     | '/personas'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
@@ -478,6 +499,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/media/asset-url'
     | '/api/mind/pairing/action'
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
@@ -515,6 +537,7 @@ export interface FileRouteTypes {
     | '/personas'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
@@ -523,6 +546,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/media/asset-url'
     | '/api/mind/pairing/action'
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
@@ -561,6 +585,7 @@ export interface RootRouteChildren {
   PersonasRoute: typeof PersonasRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiIntentOutcomesRoute: typeof ApiIntentOutcomesRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
@@ -569,6 +594,7 @@ export interface RootRouteChildren {
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
   ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
   ApiMindMediaGenerateRoute: typeof ApiMindMediaGenerateRoute
+  ApiMindMediaAssetUrlRoute: typeof ApiMindMediaAssetUrlRoute
   ApiMindPairingActionRoute: typeof ApiMindPairingActionRoute
   ApiMindPairingCodeRoute: typeof ApiMindPairingCodeRoute
   ApiMindPairingHandshakeRoute: typeof ApiMindPairingHandshakeRoute
@@ -656,6 +682,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/intent/outcomes': {
+      id: '/api/intent/outcomes'
+      path: '/api/intent/outcomes'
+      fullPath: '/api/intent/outcomes'
+      preLoaderRoute: typeof ApiIntentOutcomesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/agent': {
       id: '/api/mind/agent'
       path: '/api/mind/agent'
@@ -710,6 +743,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/media/generate'
       fullPath: '/api/mind/media/generate'
       preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/media/asset-url': {
+      id: '/api/mind/media/asset-url'
+      path: '/api/mind/media/asset-url'
+      fullPath: '/api/mind/media/asset-url'
+      preLoaderRoute: typeof ApiMindMediaAssetUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/pairing/action': {
@@ -913,6 +953,7 @@ const rootRouteChildren: RootRouteChildren = {
   PersonasRoute: PersonasRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiIntentOutcomesRoute: ApiIntentOutcomesRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,
@@ -921,6 +962,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
   ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
   ApiMindMediaGenerateRoute: ApiMindMediaGenerateRoute,
+  ApiMindMediaAssetUrlRoute: ApiMindMediaAssetUrlRoute,
   ApiMindPairingActionRoute: ApiMindPairingActionRoute,
   ApiMindPairingCodeRoute: ApiMindPairingCodeRoute,
   ApiMindPairingHandshakeRoute: ApiMindPairingHandshakeRoute,
@@ -952,3 +994,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

@@ -13,9 +13,11 @@ import {
   createGoogleDriveProvider,
   createDropboxProvider,
   createOneDriveProvider,
+  createSupabaseProvider,
   GOOGLE_DRIVE_FORBIDDEN_OPS,
   DROPBOX_FORBIDDEN_OPS,
   ONEDRIVE_FORBIDDEN_OPS,
+  SUPABASE_FORBIDDEN_OPS,
 } from "./providers/index.ts";
 import type { StorageProvider, StorageService } from "./types.ts";
 import { dirname, join as pathJoin } from "node:path";
@@ -74,6 +76,7 @@ function mockProviders(opts: {
     },
   });
   return {
+    supabase: make("supabase"),
     google_drive: make("google_drive"),
     dropbox: make("dropbox"),
     onedrive: make("onedrive"),
@@ -210,6 +213,7 @@ describe("storage rotation policy", () => {
       pathJoin(here, "providers/google-drive.ts"),
       pathJoin(here, "providers/dropbox.ts"),
       pathJoin(here, "providers/onedrive.ts"),
+      pathJoin(here, "providers/supabase.ts"),
     ];
     for (const file of files) {
       const src = readFileSync(file, "utf8");
@@ -230,6 +234,7 @@ describe("storage rotation policy", () => {
     assert.ok(GOOGLE_DRIVE_FORBIDDEN_OPS.length > 0);
     assert.ok(DROPBOX_FORBIDDEN_OPS.length > 0);
     assert.ok(ONEDRIVE_FORBIDDEN_OPS.length > 0);
+    assert.ok(SUPABASE_FORBIDDEN_OPS.length > 0);
   });
 
   it("ledger concurrency: parallel bumps do not lose updates", async () => {
@@ -288,6 +293,7 @@ describe("storage rotation policy", () => {
   });
 
   it("provider factories build without throwing", () => {
+    assert.equal(createSupabaseProvider().service, "supabase");
     assert.equal(createGoogleDriveProvider().service, "google_drive");
     assert.equal(createDropboxProvider().service, "dropbox");
     assert.equal(createOneDriveProvider().service, "onedrive");

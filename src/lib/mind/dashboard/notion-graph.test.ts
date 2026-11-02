@@ -45,3 +45,24 @@ describe("notion-graph", () => {
     assert.equal(pageForBot(graph, "logic"), null);
   });
 });
+
+describe("Gap#58 parseNotionSnapshot href allowlist", () => {
+  it("replaces non-Notion / javascript URLs with https www.notion.so/<id>", () => {
+    const snap = parseNotionSnapshot({
+      generatedAt: "2026-11-01T00:00:00+01:00",
+      source: "test",
+      pages: [
+        { id: "01234567-89ab-cdef-0123-456789abcdef", title: "Safe", url: "https://www.notion.so/abc", parentId: null, excerpt: "", kind: "page" },
+        { id: "11234567-89ab-cdef-0123-456789abcdef", title: "Evil", url: "http://evil.example/phish", parentId: null, excerpt: "", kind: "page" },
+        { id: "21234567-89ab-cdef-0123-456789abcdef", title: "JS", url: "javascript:alert(1)", parentId: null, excerpt: "", kind: "page" },
+      ],
+      edges: [],
+      botPageMap: {},
+    });
+    assert.ok(snap);
+    const byTitle = Object.fromEntries(snap!.pages.map((p) => [p.title, p.url]));
+    assert.match(byTitle.Safe!, /^https:\/\/www\.notion\.so\//);
+    assert.match(byTitle.Evil!, /^https:\/\/www\.notion\.so\/1123456789abcdef0123456789abcdef$/i);
+    assert.match(byTitle.JS!, /^https:\/\/www\.notion\.so\/2123456789abcdef0123456789abcdef$/i);
+  });
+});

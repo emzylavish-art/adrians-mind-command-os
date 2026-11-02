@@ -11,24 +11,31 @@ import {
 
 const DEFAULT_ACCOUNTS: StorageAccountConfig[] = [
   {
+    service: "supabase",
+    accountEmail: "media@xarxhdsnprpnosimehon.supabase.co",
+    capBytes: DEFAULT_CAPS.supabase,
+    order: 1,
+    enabled: true,
+  },
+  {
     service: "google_drive",
     accountEmail: "drive-placeholder@example.com",
     capBytes: DEFAULT_CAPS.google_drive,
-    order: 1,
+    order: 2,
     enabled: true,
   },
   {
     service: "dropbox",
     accountEmail: "dropbox-placeholder@example.com",
     capBytes: DEFAULT_CAPS.dropbox,
-    order: 2,
+    order: 3,
     enabled: true,
   },
   {
     service: "onedrive",
     accountEmail: "onedrive-placeholder@example.com",
     capBytes: DEFAULT_CAPS.onedrive,
-    order: 3,
+    order: 4,
     enabled: true,
   },
 ];

@@ -1,20 +1,27 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  authUserLoaderFallback,
   dashboardLoginSearch,
   emailPasswordGate,
+  formatLoginThrownError,
   isOwnerBrokerConfigured,
   loginErrorBannerFromSearch,
+  parseSupabaseOAuthProviders,
+  resolveEmailPasswordBackend,
   resolveLoginProviderAction,
+  serverFnRedirectHref,
 } from "./login-providers.ts";
 
+
 describe("resolveLoginProviderAction", () => {
-  it("routes Google/GitHub/Apple through Supabase when configured", () => {
+  it("routes Google/GitHub/Apple through Supabase when configured and listed", () => {
     for (const provider of ["google", "github", "apple"] as const) {
       assert.deepEqual(
         resolveLoginProviderAction(provider, {
           supabaseConfigured: true,
           betterAuthEnabled: true,
+          supabaseOAuthProviders: ["google", "github", "apple"],
         }),
         { kind: "supabase_oauth", provider },
       );
@@ -113,5 +120,149 @@ describe("isOwnerBrokerConfigured", () => {
       }),
       true,
     );
+  });
+});
+
+describe("parseSupabaseOAuthProviders", () => {
+  it("defaults to none when unset or empty", () => {
+    assert.deepEqual(parseSupabaseOAuthProviders(undefined), []);
+    assert.deepEqual(parseSupabaseOAuthProviders(""), []);
+    assert.deepEqual(parseSupabaseOAuthProviders(" , "), []);
+  });
+
+  it("parses a comma/space list and ignores unknown ids", () => {
+    assert.deepEqual(parseSupabaseOAuthProviders("google, github"), ["google", "github"]);
+    assert.deepEqual(parseSupabaseOAuthProviders("Apple GOOGLE twitter"), ["apple", "google"]);
+  });
+});
+
+describe("resolveLoginProviderAction supabase OAuth allowlist", () => {
+  it("disables Supabase OAuth providers when the allowlist is empty (default)", () => {
+    for (const provider of ["github", "apple"] as const) {
+      const action = resolveLoginProviderAction(provider, {
+        supabaseConfigured: true,
+        betterAuthEnabled: false,
+        supabaseOAuthProviders: [],
+      });
+      assert.equal(action.kind, "not_configured");
+      assert.equal((action as { message: string }).message, "Not enabled yet");
+    }
+  });
+
+  it("falls back to broker Google when Supabase Google is not allowlisted", () => {
+    assert.deepEqual(
+      resolveLoginProviderAction("google", {
+        supabaseConfigured: true,
+        betterAuthEnabled: true,
+        supabaseOAuthProviders: [],
+      }),
+      { kind: "better_auth", providerId: "grok-google", label: "Google" },
+    );
+  });
+
+  it("enables only listed Supabase OAuth providers", () => {
+    assert.deepEqual(
+      resolveLoginProviderAction("github", {
+        supabaseConfigured: true,
+        betterAuthEnabled: false,
+        supabaseOAuthProviders: ["github"],
+      }),
+      { kind: "supabase_oauth", provider: "github" },
+    );
+    const apple = resolveLoginProviderAction("apple", {
+      supabaseConfigured: true,
+      betterAuthEnabled: false,
+      supabaseOAuthProviders: ["github"],
+    });
+    assert.equal(apple.kind, "not_configured");
+    assert.equal((apple as { message: string }).message, "Not enabled yet");
+  });
+});
+
+describe("resolveEmailPasswordBackend", () => {
+  it("prefers Supabase when configured so existing Auth users keep working", () => {
+    assert.equal(
+      resolveEmailPasswordBackend({
+        supabaseConfigured: true,
+        betterAuthEmailEnabled: true,
+      }),
+      "supabase",
+    );
+  });
+
+  it("uses Better Auth email only when Supabase env is absent", () => {
+    assert.equal(
+      resolveEmailPasswordBackend({
+        supabaseConfigured: false,
+        betterAuthEmailEnabled: true,
+      }),
+      "better_auth",
+    );
+  });
+
+  it("returns none when neither backend is available", () => {
+    assert.equal(
+      resolveEmailPasswordBackend({
+        supabaseConfigured: false,
+        betterAuthEmailEnabled: false,
+      }),
+      "none",
+    );
+  });
+});
+
+
+describe("serverFnRedirectHref", () => {
+  it("reads href from a serialized serverFn redirect object", () => {
+    assert.equal(
+      serverFnRedirectHref({
+        href: "/dashboard",
+        statusCode: 307,
+        isSerializedRedirect: true,
+      }),
+      "/dashboard",
+    );
+  });
+
+  it("reads href from a thrown Response with Location", () => {
+    const res = new Response(null, {
+      status: 307,
+      headers: { Location: "/dashboard" },
+    });
+    assert.equal(serverFnRedirectHref(res), "/dashboard");
+  });
+
+  it("reads href nested under error (createServerFn shape)", () => {
+    assert.equal(
+      serverFnRedirectHref({
+        error: { href: "/login", statusCode: 307, isSerializedRedirect: true },
+      }),
+      "/login",
+    );
+  });
+
+  it("returns null for ordinary errors", () => {
+    assert.equal(serverFnRedirectHref(new Error("nope")), null);
+    assert.equal(serverFnRedirectHref("x"), null);
+  });
+});
+
+describe("authUserLoaderFallback", () => {
+  it("keeps configured true so a transient serverFn failure cannot paint not-configured", () => {
+    const fallback = authUserLoaderFallback(new Error("boom"));
+    assert.equal(fallback.configured, true);
+    assert.equal(fallback.user, null);
+  });
+});
+
+describe("formatLoginThrownError", () => {
+  it("prefers Error.message over the generic Something went wrong copy", () => {
+    assert.equal(formatLoginThrownError(new Error("Invalid login credentials")), "Invalid login credentials");
+  });
+
+  it("stringifies unknown objects instead of a blank generic", () => {
+    const msg = formatLoginThrownError({ code: "X", detail: "nope" });
+    assert.match(msg, /nope|X/);
+    assert.notEqual(msg, "Something went wrong.");
   });
 });

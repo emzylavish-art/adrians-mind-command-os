@@ -3816,3 +3816,4713 @@ aside.rail span.grid.size-11.rounded-2xl * {
   fill: #fff !important;
   background: #7c5cff !important;
 }
+
+/* —— Blueprint c42: de-overlap intentional dual composers (dock + LiveVoiceBar) ——
+   Both intentional: command dock (ASK/AUTO/Send) + Voice Speak bar. Voice lock claimed.
+   Mobile had ~80px overlap. Hide duplicate Ask field; stack dock above slim Speak strip
+   above tab bar; clamp bar width to viewport (tablet overflow). */
+@media (max-width: 767.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed {
+    left: 0.45rem !important;
+    right: 0.45rem !important;
+    bottom: calc(2.7rem + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__card,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__card {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0.45rem 0.65rem calc(0.45rem + env(safe-area-inset-bottom, 0px)) !important;
+    gap: 0.35rem !important;
+    border-radius: 1.15rem !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__safe {
+    padding: 0 !important;
+  }
+  /* Lift command dock above slim Speak strip (~3.25rem) + tab */
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock {
+    bottom: calc(2.7rem + 3.35rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+/* Tablet/desktop: never exceed viewport; clear rail when present */
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed {
+  left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+  right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+  width: auto !important;
+  max-width: calc(100vw - 1.5rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+  box-sizing: border-box !important;
+}
+@media (min-width: 768px) {
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    left: max(0.75rem, calc(18rem + 0.75rem)) !important;
+    max-width: calc(100vw - 18rem - 1.5rem) !important;
+  }
+}
+
+/* —— Blueprint c43: 44px minimum hit targets —— */
+button:not(:disabled),
+a[href],
+[role="button"],
+input:not([type="hidden"]),
+select,
+textarea,
+.composer-bar__plus,
+.composer-bar__model,
+.composer-speak-pill,
+nav.fixed[aria-label="Primary"] > button {
+  min-height: 44px !important;
+}
+nav.fixed[aria-label="Primary"] > button {
+  min-width: 44px !important;
+}
+.composer-bar__plus,
+.composer-bar__model,
+button.grid.size-9,
+button.grid.size-10,
+button.grid.size-11,
+.topbar button.grid {
+  min-width: 44px !important;
+  min-height: 44px !important;
+}
+/* Keep idle composer compact chips tappable without exploding dock height */
+@media (max-width: 767.98px) {
+  section.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    min-height: 44px !important;
+    height: 44px !important;
+  }
+}
+
+/* —— Blueprint c44: focus-visible rings + safe-area on fixed chrome —— */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.composer-bar__plus:focus-visible,
+.composer-bar__model:focus-visible,
+.composer-speak-pill:focus-visible,
+aside.rail nav button:focus-visible {
+  outline: 2px solid rgb(255 255 255 / 0.9) !important;
+  outline-offset: 2px !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] [role="button"]:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] textarea:focus-visible {
+  outline-color: rgb(9 9 11 / 0.9) !important;
+}
+.composer-bar.is-fixed,
+.composer-bar.is-fixed .composer-bar__safe,
+.composer-bar.is-fixed .composer-bar__card,
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+section.composer-dock {
+  padding-left: max(0px, env(safe-area-inset-left)) !important;
+  padding-right: max(0px, env(safe-area-inset-right)) !important;
+}
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+  padding-bottom: max(0.15rem, env(safe-area-inset-bottom)) !important;
+}
+
+/* —— Blueprint c45: kill horizontal overflow + wrap + keyboard room —— */
+html, body, #root, .shell, .main-stage {
+  max-width: 100vw !important;
+  overflow-x: clip !important;
+}
+.main-stage .mx-auto.flex.max-w-6xl,
+.composer-bar__card,
+.composer-dock,
+.floating-composer {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.main-stage button,
+.main-stage .rounded-full,
+.composer-dock button,
+aside.rail nav button span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Extra bottom padding so content clears dock + speak + tab when keyboard opens */
+@media (max-width: 767.98px) {
+  .main-stage,
+  .min-h-0.flex-1.overflow-auto,
+  .flex.min-h-0.min-w-0.flex-1.flex-col.pb-16 {
+    padding-bottom: calc(18rem + env(safe-area-inset-bottom)) !important;
+  }
+  /* When visual viewport shrinks (keyboard), keep fixed chrome inside */
+  @supports (height: 100dvh) {
+    .shell { min-height: 100dvh; height: 100dvh; }
+  }
+}
+
+/* HyperFrames-alternative mono motion (flag-gated component) */
+.mono-motion-graphic {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: rgb(244 246 251);
+}
+.mono-motion-graphic__core {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.9;
+}
+.mono-motion-graphic__ring {
+  position: absolute;
+  inset: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.35;
+  animation: mono-motion-breathe 2.4s ease-in-out infinite;
+}
+@keyframes mono-motion-breathe {
+  0%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.22;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mono-motion-graphic__ring {
+    animation: none;
+    opacity: 0.3;
+    transform: none;
+  }
+}
+
+/* —— Blueprint c46: force dock above Speak strip (specificity win) —— */
+@media (max-width: 767.98px) {
+  .main-stage section.command-card.composer-dock,
+  .main-stage section.floating-composer.composer-dock,
+  .main-stage .floating-composer.command-card.composer-dock,
+  section.floating-composer.command-card.composer-dock.rounded-panel,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.floating-composer.composer-dock[data-composer="floating"] {
+    bottom: calc(2.75rem + 4.25rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(2.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    height: auto !important;
+    max-height: 4.1rem !important;
+  }
+}
+
+/* —— Evolution c47: translucent glass so blur/frost reads; tablet dual-composer —— */
+.command-card,
+.glow-card,
+.dense-card,
+.rounded-panel.border.border-line.bg-surface,
+article.rounded-panel.border,
+.dash3d-chart-card,
+.dash3d-node-detail,
+[data-dash3d-node],
+.composer-dock,
+.floating-composer,
+.composer-bar__card {
+  background-color: rgb(12 12 14 / 0.55) !important;
+  backdrop-filter: blur(24px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+}
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .glow-card,
+html[data-theme="light"] .dense-card,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.7) !important;
+}
+/* Tablet (md, < lg): treat like mobile stack for dual composers */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    max-width: calc(100vw - 1.5rem) !important;
+  }
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    max-height: none !important;
+  }
+}
+
+/* —— Evolution c48: dash3d charts + node-detail cards (mono, CSS-only) —— */
+.dash3d-charts-panel,
+.dash3d-charts-panel.dash3d-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    url("/brand/textures/chart-grid-mono.jpg"),
+    rgb(10 10 12 / 0.72) !important;
+  background-size: auto, cover, auto !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1.15rem !important;
+  padding: 1rem !important;
+  backdrop-filter: blur(20px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.15) !important;
+}
+.dash3d-chart-card,
+.dash3d-node-detail,
+.dash3d-node-card,
+[data-dash3d-node],
+.dash3d-side .dash3d-glass {
+  background-color: rgb(12 12 14 / 0.62) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1rem !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.dash3d-node-detail:empty,
+.dash3d-node-card:empty,
+[data-dash3d-node]:empty {
+  min-height: 7rem !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #a1a1aa !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, cover !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"]::before,
+.dash3d-node-detail:empty::before,
+.dash3d-node-card:empty::before {
+  content: "No data yet" !important;
+  font-size: 0.78rem !important;
+  letter-spacing: 0.02em;
+  color: #a1a1aa !important;
+}
+.dash3d-chart-card svg rect,
+.dash3d-chart-card svg path {
+  fill: #d4d4d8 !important;
+  stroke: #a1a1aa !important;
+}
+.dash3d-chart-card svg line {
+  stroke: rgb(255 255 255 / 0.14) !important;
+}
+html[data-theme="light"] .dash3d-charts-panel,
+html[data-theme="light"] .dash3d-chart-card,
+html[data-theme="light"] .dash3d-node-detail {
+  background-color: rgb(255 255 255 / 0.82) !important;
+  border-color: rgb(9 9 11 / 0.12) !important;
+  color: #18181b !important;
+}
+
+/* —— Evolution c49: tablet — dock in-flow, Speak bar docked under content without cover —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    position: sticky !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 0.75rem !important;
+    z-index: 5 !important;
+  }
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed {
+    /* keep as shell child but out of crushing flex: already fixed→sticky */
+    flex: 0 0 auto !important;
+  }
+  .shell > .main-stage {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* —— Evolution c50: chip/tab hit targets + focus outline-style solid —— */
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage button.rounded-full,
+.composer-dock button.rounded-full,
+aside.rail nav button {
+  min-height: 44px !important;
+  min-width: 44px !important;
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline-style: solid !important;
+  outline-width: 2px !important;
+  outline-color: #f4f4f5 !important;
+  outline-offset: 2px !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] textarea:focus-visible {
+  outline-color: #09090b !important;
+}
+/* Masthead / suggestion contrast */
+.main-stage a.underline,
+.main-stage button.underline,
+.main-stage .text-accent.underline {
+  color: #f4f4f5 !important;
+  text-underline-offset: 0.2em;
+  opacity: 1 !important;
+}
+
+/* —— Evolution c51: denser empty panels + Connected mono warning chrome —— */
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted) {
+  min-height: 8rem !important;
+  padding: 1.35rem 1.25rem !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+.main-stage p.text-sm.text-danger,
+.main-stage .text-danger,
+.main-stage [class*="border-danger"] {
+  color: #e4e4e7 !important;
+  border-color: rgb(255 255 255 / 0.22) !important;
+  background: rgb(255 255 255 / 0.04) !important;
+}
+/* Rail mono assert after other lanes */
+aside.rail nav button:not(.bg-accent) {
+  color: #d4d4d8 !important;
+}
+aside.rail nav button:not(.bg-accent) svg,
+aside.rail nav button:not(.bg-accent) svg * {
+  stroke: #a1a1aa !important;
+  fill: #a1a1aa !important;
+  color: #a1a1aa !important;
+}
+.logo-mark, .logo-badge, aside span.grid.size-11.rounded-2xl {
+  background: #7c5cff !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c52: GPT-like stage rhythm (masthead → actions → dock) —— */
+.main-stage .mx-auto.flex.max-w-6xl.flex-col {
+  gap: 1.25rem !important;
+}
+.main-stage .masthead {
+  margin-bottom: 0.25rem !important;
+}
+.main-stage .flex.flex-wrap.gap-2.pb-1,
+.main-stage .flex.gap-2.overflow-x-auto.pb-1 {
+  padding-bottom: 0.5rem !important;
+  gap: 0.6rem !important;
+}
+@media (min-width: 1024px) {
+  .composer-bar.is-fixed .composer-bar__card {
+    box-shadow:
+      0 22px 56px rgb(0 0 0 / 0.55),
+      inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+    border-color: rgb(255 255 255 / 0.14) !important;
+  }
+}
+
+/* —— Evolution c53: undo tablet sticky (crushed mainW→0); fixed bar + main flex —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    position: fixed !important;
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: calc(100vw - 1.5rem) !important;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    z-index: 46 !important;
+  }
+  .shell > .main-stage,
+  .shell > .main-stage.flex-1 {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+}
+
+/* —— Evolution c54: tablet overflow — clamp Speak bar; don't cover dock bottom —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed {
+    max-width: min(42rem, calc(100vw - 1.5rem)) !important;
+    width: min(42rem, calc(100vw - 1.5rem)) !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    bottom: 0.75rem !important;
+  }
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* Prefer command dock on tablet; keep Speak reachable via dock voice controls */
+  body:has(section.composer-dock[data-composer="floating"]) .composer-bar.is-fixed {
+    opacity: 0.92;
+  }
+  .shell, .main-stage, html, body {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+  }
+}
+
+/* —— Evolution c55: prove glass — override Pass-8 backdrop-filter:none on tool/service cards —— */
+.tool-card,
+.service-card,
+.main-stage .grid > article.dense-card.card-texture,
+.dense-card.card-texture,
+.command-card,
+.glow-card,
+.dense-card,
+.composer-dock,
+.floating-composer,
+.composer-bar__card,
+.masthead,
+.dash3d-chart-card,
+.dash3d-glass {
+  backdrop-filter: blur(22px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+  background-color: rgb(12 12 14 / 0.58) !important;
+}
+html[data-theme="light"] .tool-card,
+html[data-theme="light"] .service-card,
+html[data-theme="light"] .dense-card.card-texture,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .composer-bar__card {
+  background-color: rgb(255 255 255 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+}
+/* Kill purple focus leftovers (mono shell) */
+.dense-card:focus-within,
+.settings-row:focus-within,
+.glow-card:focus-within,
+.floating-composer:focus-within,
+main:focus-visible {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2), 0 18px 48px rgb(0 0 0 / 0.45) !important;
+}
+html[data-theme="light"] :focus-visible {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(9 9 11 / 0.55) !important;
+}
+
+/* —— Evolution c56: GPT/Grok hero density — chips, type, empty wells —— */
+.main-stage .masthead h1,
+.main-stage .masthead .font-display,
+.main-stage h1.font-display,
+.main-stage .masthead h2 {
+  font-size: clamp(1.65rem, 4vw, 2.15rem) !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.02em !important;
+  font-weight: 650 !important;
+}
+.main-stage .masthead p,
+.main-stage .masthead .text-muted {
+  font-size: 0.95rem !important;
+  line-height: 1.45 !important;
+  color: #a1a1aa !important;
+  max-width: 36rem;
+}
+.main-stage .masthead {
+  padding: 1.35rem 1.35rem 1.2rem !important;
+  gap: 0.65rem !important;
+}
+/* Suggestion / action chips denser like GPT */
+.main-stage button.rounded-full,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage .flex.gap-2.overflow-x-auto > button {
+  min-height: 2.75rem !important;
+  padding: 0.55rem 1rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 550 !important;
+  letter-spacing: 0.01em;
+  border-radius: 999px !important;
+}
+.main-stage .flex.flex-col.gap-2 > button.rounded-full,
+.main-stage a.underline {
+  font-size: 0.95rem !important;
+  line-height: 1.4 !important;
+}
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel.border.border-line.bg-surface:has(> p.text-muted:only-child) {
+  min-height: 9.5rem !important;
+  padding: 1.5rem 1.35rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+}
+.main-stage .empty-state h2,
+.main-stage .empty-state h3,
+.main-stage [data-empty="true"] h2 {
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+}
+@media (max-width: 429.98px) {
+  .main-stage .masthead { padding: 1.1rem 1rem !important; }
+  .main-stage button.rounded-full { padding-inline: 0.85rem !important; font-size: 0.8125rem !important; }
+}
+
+/* —— Evolution c57: glass proof without relying on headless blur ——
+   Override opaque 0.96 dock fills so frost texture + translucency read on real devices.
+   Keep blur !important for capable browsers; headless still reports none. */
+section.command-card.composer-dock,
+section.floating-composer.composer-dock,
+.command-card.composer-dock,
+.floating-composer.command-card.composer-dock,
+form.composer-dock.command-card,
+.composer-bar__card,
+.command-card,
+.glow-card,
+.dense-card,
+.tool-card,
+.service-card,
+.masthead,
+.dash3d-glass,
+.dash3d-chart-card {
+  background-color: rgb(10 10 12 / 0.72) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  backdrop-filter: blur(24px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.15) !important;
+}
+@media (max-width: 767.98px) {
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock,
+  .command-card.composer-dock {
+    background: rgb(10 10 12 / 0.72) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 280px 280px !important;
+  }
+}
+html[data-theme="light"] section.command-card.composer-dock,
+html[data-theme="light"] .composer-bar__card,
+html[data-theme="light"] .command-card,
+html[data-theme="light"] .tool-card {
+  background-color: rgb(255 255 255 / 0.78) !important;
+  background-image: linear-gradient(180deg, #fff, rgb(244 244 245 / 0.9)) !important;
+  background-blend-mode: normal !important;
+}
+
+/* —— Evolution c58: 375 / 430 edge viewport rhythm —— */
+@media (max-width: 379.98px) {
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col { gap: 0.95rem !important; padding-inline: 0.85rem !important; }
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.45rem !important; }
+  .main-stage button.rounded-full { min-height: 2.6rem !important; font-size: 0.78rem !important; }
+  section.composer-dock:not(:focus-within) { padding: 0.55rem 0.65rem !important; }
+}
+@media (min-width: 380px) and (max-width: 429.98px) {
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.55rem !important; }
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col { gap: 1.05rem !important; }
+}
+@media (min-width: 430px) and (max-width: 767.98px) {
+  .main-stage .masthead { padding: 1.25rem 1.15rem !important; }
+  .main-stage .masthead h1, .main-stage .masthead .font-display { font-size: 1.75rem !important; }
+  .main-stage button.rounded-full { min-height: 2.85rem !important; padding-inline: 1.05rem !important; }
+}
+
+/* —— Evolution c59: a11y CSS-only from a11y-dead-controls.md ——
+   sidebar-plus contrast; ≥44px hit targets; coming-soon chrome; early Tab rings */
+
+/* New chat: axe color-contrast — mono high-contrast (purple stays on .logo-mark only) */
+.sidebar-plus,
+.sidebar-plus.bg-accent,
+aside .sidebar-plus,
+button.sidebar-plus {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 10px 28px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.55) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+.sidebar-plus:hover,
+.sidebar-plus.bg-accent:hover {
+  background: #ffffff !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] .sidebar-plus,
+html[data-theme="light"] .sidebar-plus.bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+  border-color: rgb(9 9 11 / 0.2) !important;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+}
+
+/* Hit targets ≥44×44: Dictate, Speak, Voice/Mute/Speak-last, Alerts, Attach */
+[data-testid="composer-mic-dictate"],
+.composer-mic-dictation,
+button.composer-mic-dictation {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  width: auto !important;
+  padding-inline: 0.55rem !important;
+}
+[data-testid="composer-speak"],
+.composer-speak-pill,
+button.composer-speak-pill {
+  min-height: 2.75rem !important;
+  padding-block: 0.45rem !important;
+}
+[data-testid="open-voice-mode"],
+[data-testid="voice-mode-toggle-composer"],
+[data-testid="live-voice-bar-mute"],
+[data-testid="voice-mute"],
+button[aria-label="Speak last reply"],
+button[aria-label="Alerts"],
+button[aria-label="Mute microphone"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  flex-shrink: 0 !important;
+}
+/* Alerts was ~18px wide despite size-11 — force square hit box */
+button[aria-label="Alerts"] {
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+}
+/* Attach on mobile */
+.composer-dock button[aria-label="Attach"],
+.composer-dock button:has(> svg):not([data-testid]):not([aria-label="Alerts"]),
+form.composer-dock button.min-h-10,
+.composer-bar button[aria-label="Attach"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+.composer-dock .flex.items-center.gap-2 > button,
+.composer-dock .flex.gap-2 > button,
+.floating-composer .flex.gap-2 > button {
+  min-height: 2.75rem !important;
+}
+
+/* ASK / AUTOMATIC / Memory tiles — were h33 on 390 */
+.main-stage button.min-h-16.rounded-panel,
+.main-stage .min-h-16.rounded-panel,
+.main-stage button.rounded-panel.min-h-16 {
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding: 0.55rem 0.75rem !important;
+  font-size: 0.72rem !important;
+  line-height: 1.15 !important;
+}
+
+/* /explore All filter chip width 41 → ≥44 */
+.main-stage button.min-h-11.rounded-panel,
+[data-testid="persona-directory"] button.min-h-11,
+.persona-directory button.min-h-11 {
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding-inline: 0.85rem !important;
+}
+
+/* /login Sign in / Sign up tabs min-h-10 (40) → 44 */
+[data-testid="login-password-submit"],
+.login-card button.min-h-10,
+main button.min-h-10.rounded-\[calc\(var\(--radius-panel\)-0\.15rem\)\],
+form button.min-h-10 {
+  min-height: 2.75rem !important;
+}
+/* login mode tabs specifically */
+main .rounded-panel button.min-h-10,
+[data-testid="login-error-banner"] ~ * button.min-h-10,
+form[data-testid] button.min-h-10,
+/* broader login route tabs */
+body:has([data-testid="login-password-submit"]) button.min-h-10 {
+  min-height: 2.75rem !important;
+  padding-inline: 0.9rem !important;
+}
+
+/* Coming-soon chrome — Connect Google, Generate Image/Video (+ any .service-setup) */
+button.is-coming-soon,
+.service-setup.is-coming-soon,
+a.is-coming-soon,
+button.is-coming-soon.min-h-11 {
+  position: relative !important;
+  opacity: 0.62 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(1) !important;
+  pointer-events: auto !important;
+  border-style: dashed !important;
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow: none !important;
+}
+button.is-coming-soon::after,
+.service-setup.is-coming-soon::after,
+a.is-coming-soon::after {
+  content: "Soon" !important;
+  display: inline-flex !important;
+  align-items: center;
+  margin-left: 0.5rem;
+  font-size: 0.62rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d4d4d8 !important;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  line-height: 1.2;
+  background: rgb(0 0 0 / 0.35);
+}
+html[data-theme="light"] button.is-coming-soon::after,
+html[data-theme="light"] .service-setup.is-coming-soon::after {
+  color: #3f3f46 !important;
+  background: rgb(255 255 255 / 0.7);
+  border-color: rgb(9 9 11 / 0.18);
+}
+
+/* Early Tab focus-visible on /login, /memory, /explore */
+body:has([data-testid="login-password-submit"]) :focus-visible,
+body:has([data-testid="login-oauth-google"]) :focus-visible,
+[data-testid="login-password-submit"]:focus-visible,
+[data-testid="login-oauth-google"]:focus-visible,
+[data-testid="login-oauth-github"]:focus-visible,
+[data-testid="login-back-home"]:focus-visible,
+main:has([href="/memory"]) :focus-visible,
+a[href="/memory"]:focus-visible,
+body:has([data-testid="persona-directory"]) :focus-visible,
+.persona-directory :focus-visible,
+.main-stage:has(.persona-directory) button:focus-visible,
+.main-stage:has(.persona-directory) a:focus-visible,
+.main-stage:has(.persona-directory) input:focus-visible {
+  outline: none !important;
+  box-shadow:
+    0 0 0 2px #0a0a0b,
+    0 0 0 4px #f4f4f5,
+    0 0 22px rgb(255 255 255 / 0.18) !important;
+}
+html[data-theme="light"] body:has([data-testid="login-password-submit"]) :focus-visible,
+html[data-theme="light"] .persona-directory :focus-visible {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #18181b !important;
+}
+/* Ensure first interactive controls can show ring (skip-link / tabs) */
+body:has([data-testid="login-password-submit"]) a:focus-visible,
+body:has([data-testid="login-password-submit"]) button:focus-visible,
+body:has([data-testid="login-password-submit"]) input:focus-visible {
+  outline-offset: 2px;
+}
+
+/* —— Evolution c60: a11y hit-target overrides beating idle-dock crush (2.05rem / 2.5rem) —— */
+@media (max-width: 767.98px) {
+  /* ASK / AUTOMATIC / Memory idle tiles — raise above prior 2.05rem + unlock row max-height */
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    max-height: 3rem !important;
+    min-height: 2.75rem !important;
+  }
+  .main-stage section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.floating-composer.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  .floating-composer.command-card.composer-dock:not(:focus-within) > .grid.gap-2 > button,
+  section.composer-dock:not(:focus-within) > .grid.gap-2 > button {
+    min-height: 2.75rem !important;
+    height: 2.75rem !important;
+    min-width: 2.75rem !important;
+  }
+  /* Attach idle circle was 2.5rem / font-size 0 */
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child,
+  section.floating-composer.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    height: 2.75rem !important;
+  }
+}
+
+/* Mono focus rings — kill residual purple Pass-8 glow on early Tab (/login /memory /explore /shell) */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+aside.rail nav button:focus-visible,
+.sidebar-plus:focus-visible,
+[data-testid="login-oauth-google"]:focus-visible,
+[data-testid="login-oauth-github"]:focus-visible,
+[data-testid="login-password-submit"]:focus-visible,
+[data-testid="login-back-home"]:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible,
+html[data-theme="light"] input:focus-visible,
+html[data-theme="light"] [role="button"]:focus-visible {
+  outline: 2px solid #18181b !important;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #18181b !important;
+}
+
+/* —— Evolution c61: sidebar-plus contrast beat rail [class*=text-]; tablet ASK tile stretch —— */
+aside.rail .sidebar-plus,
+aside.rail .sidebar-plus.bg-accent,
+aside.rail button.sidebar-plus,
+aside.rail .sidebar-plus[class*="text-"],
+aside.rail button.sidebar-plus[class*="text-"],
+aside.rail .sidebar-plus.text-accent-ink {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  -webkit-text-fill-color: #09090b !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+aside.rail .sidebar-plus *,
+aside.rail button.sidebar-plus * {
+  color: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail .sidebar-plus,
+html[data-theme="light"] aside.rail .sidebar-plus[class*="text-"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  -webkit-text-fill-color: #fafafa !important;
+}
+html[data-theme="light"] aside.rail .sidebar-plus * {
+  color: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Tablet+: stop ASK/AUTOMATIC/Memory grid stretching to ~374px row */
+@media (min-width: 768px) {
+  section.composer-dock > .grid.gap-2,
+  section.command-card.composer-dock > .grid.gap-2,
+  section.floating-composer.composer-dock > .grid.gap-2,
+  .main-stage section.composer-dock > .grid.gap-2 {
+    grid-template-rows: auto !important;
+    align-items: stretch !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+  section.composer-dock > .grid.gap-2 > button,
+  section.command-card.composer-dock > .grid.gap-2 > button,
+  section.floating-composer.composer-dock > .grid.gap-2 > button {
+    height: auto !important;
+    min-height: 3.5rem !important;
+    max-height: none !important;
+    align-self: stretch !important;
+  }
+}
+
+/* —— Evolution c62: tablet (768–1023) composer density — stop 900px dock / 374px ASK —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  section.command-card.composer-dock,
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock {
+    max-height: min(42vh, 22rem) !important;
+    overflow: auto !important;
+    height: auto !important;
+    inset: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+  }
+  section.composer-dock > .grid.gap-2,
+  section.command-card.composer-dock > .grid.gap-2,
+  section.floating-composer.composer-dock > .grid.gap-2 {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    gap: 0.45rem !important;
+    max-height: 3.25rem !important;
+    height: 3.25rem !important;
+    grid-template-rows: none !important;
+    overflow-x: auto !important;
+  }
+  section.composer-dock > .grid.gap-2 > button,
+  section.command-card.composer-dock > .grid.gap-2 > button,
+  section.floating-composer.composer-dock > .grid.gap-2 > button {
+    flex: 1 1 0 !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    height: 3.25rem !important;
+    max-height: 3.25rem !important;
+    overflow: hidden !important;
+    padding: 0.45rem 0.65rem !important;
+  }
+  /* Hide verbose tile subtitles on tablet (same as mobile idle) */
+  section.composer-dock > .grid.gap-2 > button .text-xs,
+  section.command-card.composer-dock > .grid.gap-2 > button .text-xs,
+  section.floating-composer.composer-dock > .grid.gap-2 > button .text-xs {
+    display: none !important;
+  }
+  section.composer-dock > .grid.gap-2 > button .text-sm,
+  section.command-card.composer-dock > .grid.gap-2 > button .text-sm {
+    font-size: 0.78rem !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* —— Evolution c63: mono hard-kill remaining purple chrome; loading status; aria-current —— */
+
+/* Kill ambient purple wash on body (B/W shell) */
+body {
+  background:
+    radial-gradient(ellipse 55% 45% at 78% -8%, rgb(255 255 255 / 0.04), transparent 55%),
+    radial-gradient(ellipse 40% 40% at 8% 18%, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-bg) !important;
+}
+
+/* Active nav (aria-current) — markup may omit bg-accent but keep purple utility shadows */
+aside.rail nav button[aria-current="page"],
+aside.rail nav a[aria-current="page"],
+aside nav button[aria-current="page"],
+aside.rail nav button[class*="shadow-[0_0_18px_rgb(124_92_255"],
+aside.rail nav button[class*="124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 8px 18px rgb(0 0 0 / 0.35) !important;
+  filter: none !important;
+}
+aside.rail nav button[aria-current="page"] *,
+aside.rail nav button[aria-current="page"] svg,
+aside.rail nav button[aria-current="page"] svg * {
+  color: #09090b !important;
+  stroke: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"],
+html[data-theme="light"] aside.rail nav button[class*="124_92_255"] {
+  background: #18181b !important;
+  color: #fafafa !important;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.12) !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"] * {
+  color: #fafafa !important;
+  stroke: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Settings / Help selected pills — force mono borders (no purple glow) */
+.main-stage button.tile-active,
+.main-stage button.border-accent,
+.main-stage button[aria-pressed="true"],
+.main-stage .tile-active {
+  border-color: #f4f4f5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 0 1px rgb(255 255 255 / 0.18) !important;
+}
+.main-stage button.tile-active.bg-accent,
+.main-stage button[aria-pressed="true"].bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+}
+html[data-theme="light"] .main-stage button.tile-active.bg-accent,
+html[data-theme="light"] .main-stage button[aria-pressed="true"].bg-accent {
+  background: #18181b !important;
+  color: #fafafa !important;
+  border-color: #18181b !important;
+}
+
+/* Loading shell on /explore /memory — presentational only (no focusables yet) */
+main.min-h-screen > p.text-sm.text-muted:only-child {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.72;
+  letter-spacing: 0.01em;
+}
+main.min-h-screen:has(> p.text-sm.text-muted:only-child) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* —— Evolution c64: motion — hover/press, sheets, reduced-motion —— */
+:root {
+  --dur-fast: 120ms;
+  --dur-med: 180ms;
+  --dur-slow: 280ms;
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.nav-item, .dense-card, .dense-row, .model-chip, .suggestion-chip, .sidebar-plus,
+button, .glow-card, .settings-row, a, .tool-card, .service-card,
+.main-stage .rounded-panel, .empty-state, .settings-card {
+  transition:
+    background var(--dur-med) var(--ease-soft),
+    color var(--dur-fast) var(--ease-soft),
+    border-color var(--dur-med) var(--ease-soft),
+    box-shadow var(--dur-med) var(--ease-soft),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-med) var(--ease-soft),
+    filter var(--dur-med) var(--ease-soft) !important;
+}
+
+button:not(:disabled):hover,
+.nav-item:hover,
+.dense-row:hover,
+.tool-card:hover,
+.service-card:hover,
+.settings-row:hover {
+  border-color: rgb(255 255 255 / 0.22);
+  transform: translateY(-1px);
+}
+button:not(:disabled):active,
+.nav-item:active,
+.dense-card:active,
+.dense-row:active,
+.tool-card:active {
+  transform: scale(0.985) translateY(0);
+}
+
+/* Sheets / overlays — smoother open; respect reduced motion */
+.overlay-backdrop {
+  animation: fade-in var(--dur-med) var(--ease-soft) both;
+}
+.overlay-panel,
+.floating-menu,
+[role="dialog"],
+[data-testid="alerts-panel"],
+.composer-dock:focus-within {
+  animation: sheet-rise var(--dur-slow) var(--ease-sheet) both;
+}
+@keyframes sheet-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.page-enter {
+  animation: page-fade var(--dur-slow) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-backdrop,
+  .overlay-panel,
+  .floating-menu,
+  [role="dialog"],
+  [data-testid="alerts-panel"],
+  .composer-dock:focus-within,
+  .page-enter,
+  .empty-state,
+  .mono-motion-graphic__ring {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+  button:not(:disabled):hover,
+  .nav-item:hover,
+  .dense-row:hover,
+  .tool-card:hover,
+  .service-card:hover {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c65: inner-page hero / empty density (Runs, Projects, Library…) —— */
+.main-stage .page-hero,
+.main-stage > .mx-auto .page-hero,
+.main-stage h2.font-display,
+.main-stage .font-display.text-3xl {
+  letter-spacing: -0.02em !important;
+  line-height: 1.15 !important;
+}
+.main-stage .page-hero {
+  padding: 1.15rem 1.25rem !important;
+  margin-bottom: 1rem !important;
+  border-radius: 1.25rem !important;
+  background-color: rgb(10 10 12 / 0.72) !important;
+  backdrop-filter: blur(18px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+}
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage .rounded-panel:has(> p.text-muted):has(svg) {
+  min-height: 10rem !important;
+  padding: 1.75rem 1.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.55rem !important;
+  text-align: center !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, cover !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+}
+.main-stage .empty-state p,
+.main-stage [data-empty="true"] p {
+  max-width: 28rem;
+  color: #a1a1aa !important;
+  font-size: 0.9rem !important;
+  line-height: 1.45 !important;
+}
+.main-stage .settings-card,
+.main-stage .settings-row {
+  border-radius: 1rem !important;
+}
+.main-stage .settings-row {
+  padding: 0.85rem 1rem !important;
+  min-height: 3rem;
+}
+.main-stage .settings-card + .settings-card,
+.main-stage section.rounded-panel + section.rounded-panel {
+  margin-top: 0.85rem !important;
+}
+
+/* —— Evolution c66: uncrush Voice mode / Switch chrome; alerts panel sheet —— */
+[data-testid="voice-mode-badge-header"],
+[data-testid="voice-mode-badge-composer"],
+[data-testid="open-voice-mode"] {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  height: auto !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+[data-testid="voice-mode-toggle-header"],
+[data-testid="voice-mode-toggle-composer"] {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  padding-inline: 0.65rem !important;
+}
+/* Top voice cluster — keep row, never stack glyphs sideways */
+.topbar [data-testid="voice-controls"],
+[data-testid="voice-controls"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  writing-mode: horizontal-tb !important;
+}
+[data-testid="alerts-panel"] {
+  border-radius: 1rem !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
+    rgb(10 10 12 / 0.88) !important;
+  backdrop-filter: blur(20px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  padding: 0.75rem 1rem !important;
+}
+
+/* —— Evolution c67: login depth/glass (AuthCard has no .login-card class) —— */
+main.grid.min-h-screen.place-items-center {
+  background:
+    radial-gradient(ellipse 55% 45% at 70% 8%, rgb(255 255 255 / 0.05), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 15% 85%, rgb(255 255 255 / 0.03), transparent 50%),
+    var(--color-bg) !important;
+}
+main.grid.min-h-screen.place-items-center > div[class*="max-w-"],
+main.grid.min-h-screen.place-items-center > div.rounded-panel {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(12 12 14 / 0.72) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    0 28px 80px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+  backdrop-filter: blur(24px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.15) !important;
+  border-radius: 1.35rem !important;
+}
+main.grid.min-h-screen.place-items-center input,
+main.grid.min-h-screen.place-items-center [data-testid="auth-not-configured"],
+main.grid.min-h-screen.place-items-center [data-testid="login-inline-notice"] {
+  background-color: rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+}
+/* Keep fa50cf6 login tabs ≥44px; mono selected pill */
+main.grid.min-h-screen.place-items-center button.min-h-10,
+main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center a[data-testid^="login-oauth"] {
+  min-height: 2.75rem !important;
+}
+.login-shell {
+  background:
+    radial-gradient(ellipse 50% 40% at 70% 10%, rgb(255 255 255 / 0.05), transparent 55%),
+    var(--color-bg) !important;
+}
+html[data-theme="light"] main.grid.min-h-screen.place-items-center > div[class*="max-w-"] {
+  background: rgb(255 255 255 / 0.88) !important;
+  background-image: none !important;
+  box-shadow: 0 24px 64px rgb(15 23 42 / 0.12) !important;
+}
+
+/* —— Evolution c68: explore/memory page-shell depth + inner card glass —— */
+.page-shell,
+[data-testid="persona-directory"],
+[data-testid="memory-manager"] {
+  min-height: 100dvh;
+}
+.page-shell .page-hero,
+[data-testid="persona-directory"] .page-hero,
+[data-testid="memory-manager"] .page-hero {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg"),
+    rgb(10 10 12 / 0.7) !important;
+  background-size: auto, 280px 280px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  backdrop-filter: blur(20px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: 1.25rem !important;
+  padding: 1.15rem 1.25rem !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 16px 40px rgb(0 0 0 / 0.35) !important;
+}
+.page-shell .glow-card,
+.page-shell .dense-card,
+[data-testid="persona-directory"] .glow-card,
+[data-testid="persona-directory"] .dense-card,
+[data-testid="memory-manager"] .glow-card,
+[data-testid="memory-manager"] .dense-card,
+[data-testid="memory-row"],
+[data-testid="persona-empty"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 45%),
+    url("/brand/textures/panel-noise-mono.jpg"),
+    rgb(12 12 14 / 0.68) !important;
+  background-size: auto, 220px 220px, auto !important;
+  background-blend-mode: soft-light, soft-light, normal !important;
+  backdrop-filter: blur(16px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.08) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.32) !important;
+}
+/* Settings / Tools / Connected card depth bump */
+.main-stage .settings-card,
+.main-stage .tool-card,
+.main-stage .service-card,
+.main-stage .dense-card.card-texture {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 14px 36px rgb(0 0 0 / 0.4) !important;
+}
+
+/* —— Evolution c69: charts/viz consistency (dash3d + any main-stage SVG) —— */
+.dash3d-chart-card,
+.dash3d-charts-panel .dash3d-chart-card,
+.main-stage [data-testid="charts-panel"] .rounded-panel,
+.main-stage .recharts-wrapper,
+.main-stage svg.chart,
+.main-stage [data-testid="chart-empty"] {
+  border-radius: 1rem !important;
+}
+.dash3d-chart-card svg text,
+.dash3d-charts-panel svg text,
+.main-stage svg text.axis,
+.main-stage .recharts-cartesian-axis-tick text,
+.main-stage .recharts-legend-item-text {
+  fill: #a1a1aa !important;
+  font-size: 0.65rem !important;
+  font-family: var(--font-sans), system-ui, sans-serif !important;
+}
+.dash3d-chart-card svg line,
+.dash3d-charts-panel svg .domain,
+.main-stage .recharts-cartesian-grid line {
+  stroke: rgb(255 255 255 / 0.1) !important;
+}
+.dash3d-chart-card [role="tooltip"],
+.dash3d-chart-tooltip,
+.main-stage .recharts-default-tooltip,
+.main-stage [role="tooltip"].chart-tooltip {
+  background: rgb(10 10 12 / 0.92) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 0.55rem !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  font-size: 0.75rem !important;
+  padding: 0.4rem 0.6rem !important;
+}
+.dash3d-chart-card [data-testid="chart-empty"],
+.main-stage [data-testid="chart-empty"],
+.dash3d-charts-panel [data-empty="true"] {
+  min-height: 8.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  text-align: center !important;
+  color: #a1a1aa !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 50%),
+    url("/brand/textures/chart-grid-mono.jpg") !important;
+  background-size: auto, cover !important;
+  border: 1px dashed rgb(255 255 255 / 0.12) !important;
+  border-radius: 0.85rem !important;
+  padding: 1.25rem !important;
+}
+.dash3d-charts-panel .dash3d-muted,
+.dash3d-chart-card h3 {
+  color: #d4d4d8 !important;
+  letter-spacing: -0.01em;
+}
+/* Legend mono chips */
+.dash3d-charts-panel .legend,
+.main-stage .recharts-legend-wrapper {
+  color: #a1a1aa !important;
+  font-size: 0.72rem !important;
+}
+
+/* —— Evolution c70: guard fa50cf6 a11y hit targets (do not regress) —— */
+[data-testid="alerts-toggle"],
+button[aria-label="Alerts"],
+[data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center button.min-h-10 {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #0a0a0b, 0 0 0 4px #f4f4f5 !important;
+}
+
+/* —— Nav flake fix: composer-bar__card (z 46, pointer-events:auto) sat on top of
+   mobile Primary tabs (z 40) and stole More/Build/Tools drawer clicks in headless.
+   Lift the Speak/composer strip above the tab bar and keep Primary above the card. */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .shell > [data-testid="composer-bar"].composer-bar,
+  body:has(section.composer-dock) .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(2.9rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* —— Evolution c71: typography scale vs GPT/Grok — consistent hierarchy —— */
+:root {
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 0.9375rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.125rem;
+  --text-display: clamp(1.65rem, 3.2vw, 2.25rem);
+  --leading-tight: 1.18;
+  --leading-snug: 1.32;
+  --leading-body: 1.5;
+  --leading-relaxed: 1.6;
+  --tracking-tighter: -0.025em;
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.08em;
+  --weight-body: 450;
+  --weight-medium: 550;
+  --weight-semibold: 600;
+  --weight-bold: 650;
+}
+
+body, .main-stage, .page-shell {
+  font-size: var(--text-base) !important;
+  line-height: var(--leading-body) !important;
+  letter-spacing: var(--tracking-normal);
+  font-weight: var(--weight-body);
+}
+
+.main-stage h1,
+.main-stage .font-display.text-3xl,
+.main-stage .font-display.text-4xl,
+.page-hero h1,
+.page-shell h1,
+.masthead h1,
+main.grid.min-h-screen h1 {
+  font-size: var(--text-display) !important;
+  line-height: var(--leading-tight) !important;
+  letter-spacing: var(--tracking-tighter) !important;
+  font-weight: var(--weight-bold) !important;
+}
+
+.main-stage h2,
+.main-stage .font-display.text-2xl,
+.page-hero h2,
+.page-shell h2 {
+  font-size: var(--text-2xl) !important;
+  line-height: var(--leading-snug) !important;
+  letter-spacing: var(--tracking-tight) !important;
+  font-weight: var(--weight-semibold) !important;
+}
+
+.main-stage h3,
+.main-stage .font-semibold,
+.settings-card .settings-row > div:first-child > p.font-semibold {
+  font-size: var(--text-md) !important;
+  line-height: var(--leading-snug) !important;
+  font-weight: var(--weight-semibold) !important;
+  letter-spacing: -0.01em;
+}
+
+.main-stage p,
+.main-stage .text-sm,
+.page-hero p,
+.page-shell .text-muted,
+.masthead p,
+.main-stage .text-muted {
+  font-size: var(--text-sm) !important;
+  line-height: var(--leading-relaxed) !important;
+  letter-spacing: 0.005em;
+}
+
+.meta-label,
+.main-stage .text-\[10px\],
+.main-stage .text-xs,
+.page-shell .meta-label {
+  font-size: var(--text-xs) !important;
+  line-height: 1.3 !important;
+  letter-spacing: var(--tracking-wide) !important;
+  font-weight: var(--weight-semibold) !important;
+  text-transform: uppercase;
+}
+
+.main-stage button,
+.main-stage a.min-h-11,
+aside.rail nav button {
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.01em;
+}
+
+/* —— Evolution c72: mono GenerateImage assets — empty + hero atmosphere —— */
+.main-stage .empty-state,
+.main-stage [data-empty="true"],
+.main-stage [data-testid="chart-empty"],
+.page-shell [data-testid="persona-empty"],
+.page-shell .dense-card.rounded-panel.border.border-line.p-6.text-center,
+.dash3d-chart-card [data-testid="chart-empty"] {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 45%),
+    url("/brand/textures/empty-state-illustration-mono.jpg"),
+    url("/brand/textures/empty-well-mono.jpg") !important;
+  background-size: auto, 140px 140px, cover !important;
+  background-position: center, center 28%, center !important;
+  background-repeat: no-repeat, no-repeat, repeat !important;
+  background-blend-mode: soft-light, normal, soft-light !important;
+  min-height: 11rem !important;
+  padding-top: 5.5rem !important;
+}
+
+.main-stage .page-hero,
+.page-shell .page-hero,
+.masthead,
+.main-stage .mx-auto > .rounded-panel.border.border-line:first-child {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 48%),
+    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 280px 280px !important;
+  background-position: center, center, center !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+}
+
+/* Help / Agents / Thread content panels — ensure frost depth when present */
+.main-stage .settings-card,
+.main-stage article.rounded-panel,
+.main-stage section.rounded-panel.border,
+.main-stage .help-card,
+.main-stage li.rounded-panel.border {
+  background-color: rgb(12 12 14 / 0.68) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    url("/brand/textures/panel-noise-mono.jpg") !important;
+  background-size: auto, 220px 220px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  backdrop-filter: blur(16px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.08) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 12px 28px rgb(0 0 0 / 0.32) !important;
+}
+
+/* —— Evolution c73: Thread / Help / Agents empty & prose panels glass fill —— */
+.main-stage .page-hero + .rounded-panel,
+.main-stage .prose,
+.main-stage [class*="help"] .rounded-panel,
+.main-stage .empty-state,
+.main-stage .rounded-panel.border.border-line.bg-surface,
+.main-stage .rounded-panel.border.border-line.p-4,
+.main-stage .rounded-panel.border.border-line.p-5,
+.main-stage .rounded-panel.border.border-line.p-6 {
+  background-color: rgb(12 12 14 / 0.7) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 260px 260px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  backdrop-filter: blur(16px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.1) !important;
+}
+
+/* —— Evolution c74: deepen desktop glass — Help / Agents / Thread (softest) ——
+   Do NOT touch Primary z48 or composer-bar z46 from nav-flake fix. */
+@media (min-width: 768px) {
+  /* Help list cards */
+  .main-stage section.mx-auto.max-w-3xl.space-y-3 .dense-card,
+  .main-stage section.mx-auto.max-w-3xl ul.space-y-2 > li.dense-card {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 42%),
+      url("/brand/textures/frost-card-texture.jpg"),
+      rgb(10 10 12 / 0.62) !important;
+    background-size: auto, 260px 260px, auto !important;
+    background-blend-mode: soft-light, soft-light, normal !important;
+    backdrop-filter: blur(22px) saturate(1.18) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.18) !important;
+    border: 1px solid rgb(255 255 255 / 0.16) !important;
+    border-radius: 1.15rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 16px 40px rgb(0 0 0 / 0.42) !important;
+    padding: 1rem 1.1rem !important;
+  }
+
+  /* Agents / Build ReaPanel + lookup forms */
+  .main-stage .masthead,
+  .main-stage section.p-4.md\:p-6 .masthead,
+  .main-stage section.p-4 .masthead {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
+      url("/brand/textures/hero-atmosphere-mono.jpg"),
+      url("/brand/textures/frost-card-texture.jpg"),
+      rgb(10 10 12 / 0.58) !important;
+    background-size: auto, cover, 280px 280px, auto !important;
+    background-blend-mode: soft-light, soft-light, soft-light, normal !important;
+    backdrop-filter: blur(24px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+    border: 1px solid rgb(255 255 255 / 0.15) !important;
+    border-radius: 1.25rem !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 18px 44px rgb(0 0 0 / 0.4) !important;
+    padding: 1.25rem 1.35rem !important;
+  }
+  .main-stage .dense-card.card-texture,
+  .main-stage form.mx-4.mb-6.rounded-panel,
+  .main-stage form.rounded-panel.border.border-line.bg-surface,
+  .main-stage .glow-card.whitespace-pre-wrap {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
+      url("/brand/textures/panel-noise-mono.jpg"),
+      rgb(12 12 14 / 0.6) !important;
+    background-size: auto, 220px 220px, auto !important;
+    background-blend-mode: soft-light, soft-light, normal !important;
+    backdrop-filter: blur(20px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.15) !important;
+    border: 1px solid rgb(255 255 255 / 0.15) !important;
+    border-radius: 1.15rem !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 14px 36px rgb(0 0 0 / 0.38) !important;
+  }
+  .main-stage .dense-card.card-texture li.rounded-panel.bg-bg {
+    background: rgb(0 0 0 / 0.35) !important;
+    border: 1px solid rgb(255 255 255 / 0.08) !important;
+  }
+
+  /* Thread masthead + empty stream well */
+  .main-stage section.flex.min-w-0.flex-1.flex-col > .masthead,
+  .main-stage .masthead.px-4.pt-4 {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
+      url("/brand/textures/hero-atmosphere-mono.jpg"),
+      rgb(10 10 12 / 0.55) !important;
+    background-size: auto, cover, auto !important;
+    background-blend-mode: soft-light, soft-light, normal !important;
+    backdrop-filter: blur(24px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    border-radius: 1.25rem !important;
+    margin: 0.75rem 1rem 0 !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 16px 40px rgb(0 0 0 / 0.4) !important;
+  }
+  .main-stage aside.flex.w-72,
+  .main-stage aside[class*="w-72"],
+  .main-stage aside.border-r {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 30%),
+      rgb(8 8 10 / 0.72) !important;
+    backdrop-filter: blur(18px) !important;
+    -webkit-backdrop-filter: blur(18px) !important;
+    border-right: 1px solid rgb(255 255 255 / 0.1) !important;
+  }
+}
+
+/* Re-assert nav flake stacking after glass rules (never regress 29c2f9b) */
+
+/* —— Evolution c75: pixel polish — radii, 1px borders, shadows, icon align —— */
+:root {
+  --radius-panel: 1.15rem;
+  --radius-pill: 999px;
+  --border-hairline: 1px solid rgb(255 255 255 / 0.14);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 14px 36px rgb(0 0 0 / 0.38);
+}
+
+.main-stage .rounded-panel,
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .settings-card,
+.main-stage .page-hero,
+.main-stage .masthead,
+.page-shell .page-hero,
+.page-shell .glow-card,
+.page-shell .dense-card {
+  border-radius: var(--radius-panel) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+.main-stage button.rounded-full,
+.main-stage .rounded-full,
+.topbar .rounded-full,
+aside .sidebar-plus {
+  border-radius: var(--radius-pill) !important;
+}
+
+/* Kill double-shadow banding — single soft stack */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .settings-card,
+.main-stage .rounded-panel.border {
+  box-shadow: var(--shadow-card) !important;
+}
+
+/* Topbar / chrome icon alignment */
+.topbar button.grid,
+.topbar button.size-9,
+.topbar button.size-11,
+.topbar [class*="size-9"],
+.topbar [class*="size-11"] {
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+.topbar button svg,
+.topbar a svg {
+  width: 1.05rem !important;
+  height: 1.05rem !important;
+}
+.topbar {
+  align-items: center !important;
+  gap: 0.5rem !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+/* Hairline consistency on inputs */
+.main-stage input,
+.main-stage textarea,
+.main-stage select {
+  border-width: 1px !important;
+  border-radius: var(--radius-panel) !important;
+}
+
+/* —— Evolution c76: deepen glass win — Help/Agents/Thread desktop (strict) ——
+   Separate color+image so longhands cannot wipe frost; keep z48/z46 intact. */
+@media (min-width: 768px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card,
+  .main-stage section.mx-auto.max-w-3xl.space-y-3 > ul > li.dense-card {
+    background-color: rgb(10 10 12 / 0.55) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 46%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 280px 280px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(24px) saturate(1.22) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.22) !important;
+    border: 1px solid rgb(255 255 255 / 0.18) !important;
+    border-radius: 1.15rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.12),
+      0 18px 44px rgb(0 0 0 / 0.46) !important;
+  }
+
+  .main-stage .masthead,
+  .main-stage .masthead.px-4.pt-4,
+  .main-stage section.flex.min-w-0.flex-1.flex-col > .masthead {
+    background-color: rgb(10 10 12 / 0.52) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 50%),
+      url("/brand/textures/hero-atmosphere-mono.jpg"),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, cover, 280px 280px !important;
+    background-blend-mode: soft-light, soft-light, soft-light !important;
+    backdrop-filter: blur(26px) saturate(1.24) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(1.24) !important;
+    border: 1px solid rgb(255 255 255 / 0.16) !important;
+    border-radius: 1.25rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.12),
+      0 20px 48px rgb(0 0 0 / 0.44) !important;
+  }
+
+  .main-stage .dense-card.card-texture,
+  .main-stage form.mx-4.mb-6.rounded-panel,
+  .main-stage form.rounded-panel.border.border-line.bg-surface,
+  .main-stage .glow-card.whitespace-pre-wrap.rounded-panel {
+    background-color: rgb(12 12 14 / 0.55) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 44%),
+      url("/brand/textures/panel-noise-mono.jpg"),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 220px 220px, 260px 260px !important;
+    background-blend-mode: soft-light, soft-light, soft-light !important;
+    backdrop-filter: blur(22px) saturate(1.18) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.18) !important;
+    border: 1px solid rgb(255 255 255 / 0.16) !important;
+    border-radius: 1.15rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 16px 40px rgb(0 0 0 / 0.42) !important;
+  }
+
+  /* Thread stream well + empty hero */
+  .main-stage [data-testid="chat-empty"],
+  .main-stage .chat-empty,
+  .main-stage section.flex.min-w-0.flex-1.flex-col .flex-1.overflow-y-auto {
+    background-color: rgb(8 8 10 / 0.35) !important;
+  }
+}
+
+/* —— Evolution c77: pixel polish II — hairline mono, icon optical center —— */
+.topbar .size-9,
+.topbar .size-11,
+.topbar button.grid {
+  box-sizing: border-box !important;
+}
+.topbar [data-testid="voice-controls"] {
+  align-items: center !important;
+  gap: 0.4rem !important;
+}
+.topbar [data-testid="voice-controls"] > * {
+  vertical-align: middle;
+}
+.composer-bar__card,
+.composer-bar .composer-bar__card {
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  border-radius: 1.25rem !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 18px 48px rgb(0 0 0 / 0.48) !important;
+}
+aside .sidebar-plus,
+aside button.sidebar-plus {
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+}
+/* Kill banding from stacked identical shadows on nested cards */
+.main-stage .dense-card .dense-card,
+.main-stage .glow-card .glow-card {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+
+/* Final reassert — never regress 29c2f9b */
+
+/* —— Evolution c78: Thread provider chrome → mono (purple only .logo-mark) ——
+   model-option-active + native radio accent were still purple/blue.
+   Markup owner: emzylavish-art (command-app ProviderPicker); CSS can reach both. */
+.model-option-active,
+fieldset .model-option-active,
+.main-stage .model-option-active,
+label.model-option-active {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.04)) !important;
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.04)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+  color: var(--color-fg) !important;
+}
+html[data-theme="light"] .model-option-active,
+html[data-theme="light"] .main-stage .model-option-active {
+  background: linear-gradient(180deg, rgb(15 23 42 / 0.08), rgb(15 23 42 / 0.03)) !important;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.18) !important;
+  color: var(--color-fg) !important;
+}
+
+/* Native radio/checkbox accent (browser default blue) → mono */
+.main-stage input[type="radio"],
+.main-stage input[type="checkbox"],
+fieldset input[type="radio"],
+aside input[type="radio"],
+main input[type="radio"],
+main input[type="checkbox"] {
+  accent-color: #e8ecf5 !important;
+}
+html[data-theme="light"] .main-stage input[type="radio"],
+html[data-theme="light"] .main-stage input[type="checkbox"],
+html[data-theme="light"] fieldset input[type="radio"] {
+  accent-color: #111827 !important;
+}
+
+/* Provider panel selected wash — no purple glow token */
+.main-stage fieldset label:has(input[type="radio"]:checked) {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03)) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16) !important;
+}
+
+/* chat-empty-hero TSX still has purple shadow utility — kill via CSS */
+.chat-empty-hero span.grid.size-16,
+.chat-empty-hero [class*="124_92_255"],
+.main-stage .chat-empty-hero span[class*="bg-accent"] {
+  background: rgb(255 255 255 / 0.1) !important;
+  color: var(--color-fg) !important;
+  box-shadow: 0 0 28px rgb(255 255 255 / 0.12) !important;
+}
+
+/* Glow token itself — keep logo purple via .logo-mark overrides below */
+:root {
+  --color-glow: #c8d0e0;
+}
+html[data-theme="light"] {
+  --color-glow: #64748b;
+}
+.logo-mark,
+.logo-badge {
+  /* re-assert purple ONLY here */
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow:
+    inset 0 0 18px rgb(124 92 255 / 0.35),
+    0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c79: mobile glass deepen — Help / Agents / Thread (<768) ——
+   Desktop deepen was min-width:768 only; softest remaining on phones. */
+@media (max-width: 767.98px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card,
+  .main-stage section.mx-auto.max-w-3xl.space-y-3 > ul > li.dense-card {
+    background-color: rgb(10 10 12 / 0.58) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 46%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 240px 240px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(18px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.15) !important;
+    border: 1px solid rgb(255 255 255 / 0.15) !important;
+    border-radius: 1.1rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 12px 32px rgb(0 0 0 / 0.4) !important;
+  }
+
+  .main-stage .masthead,
+  .main-stage .masthead.px-4.pt-4,
+  .main-stage section.flex.min-w-0.flex-1.flex-col > .masthead {
+    background-color: rgb(10 10 12 / 0.55) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 240px 240px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(20px) saturate(1.18) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.18) !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    border-radius: 1.15rem !important;
+    margin: 0.5rem 0.75rem 0 !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 14px 36px rgb(0 0 0 / 0.4) !important;
+  }
+
+  .main-stage .dense-card.card-texture,
+  .main-stage form.mx-4.mb-6.rounded-panel,
+  .main-stage form.rounded-panel.border.border-line.bg-surface,
+  .main-stage .glow-card.whitespace-pre-wrap.rounded-panel {
+    background-color: rgb(12 12 14 / 0.58) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 220px 220px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(18px) saturate(1.14) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.14) !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    border-radius: 1.1rem !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 12px 32px rgb(0 0 0 / 0.38) !important;
+  }
+
+  /* Reassert nav flake — never regress 29c2f9b after mobile glass */
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    z-index: 46 !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+
+/* —— Evolution c80: deepen login / dashboard auth glass (readable contrast) ——
+   Keep AuthCard text readable: inputs darker well, body text at --color-fg/muted. */
+main.grid.min-h-screen.place-items-center {
+  background:
+    radial-gradient(ellipse 55% 45% at 72% 6%, rgb(255 255 255 / 0.07), transparent 55%),
+    radial-gradient(ellipse 42% 36% at 12% 88%, rgb(255 255 255 / 0.04), transparent 52%),
+    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    var(--color-bg) !important;
+  background-size: auto, auto, cover, auto !important;
+  background-blend-mode: soft-light, soft-light, soft-light, normal !important;
+}
+main.grid.min-h-screen.place-items-center > div[class*="max-w-"],
+main.grid.min-h-screen.place-items-center > div.rounded-panel.border {
+  background-color: rgb(10 10 12 / 0.58) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 44%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  background-blend-mode: soft-light, soft-light !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow:
+    0 32px 88px rgb(0 0 0 / 0.58),
+    inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(28px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2) !important;
+}
+/* Readable contrast: titles/fg stay bright; muted ≥ ~#9aa3b5; inputs darker */
+main.grid.min-h-screen.place-items-center h1,
+main.grid.min-h-screen.place-items-center .font-display {
+  color: #f4f6fb !important;
+}
+main.grid.min-h-screen.place-items-center .text-muted,
+main.grid.min-h-screen.place-items-center p.text-sm {
+  color: #b4bccb !important;
+}
+main.grid.min-h-screen.place-items-center input,
+main.grid.min-h-screen.place-items-center textarea {
+  background-color: rgb(0 0 0 / 0.45) !important;
+  color: #f4f6fb !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+}
+main.grid.min-h-screen.place-items-center label,
+main.grid.min-h-screen.place-items-center [class*="text-"] {
+  /* don't force every utility — only ensure labels readable */
+}
+main.grid.min-h-screen.place-items-center label {
+  color: #e8ecf5 !important;
+}
+/* fa50cf6 a11y: keep ≥44px hit targets on login controls */
+main.grid.min-h-screen.place-items-center button.min-h-10,
+main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"],
+main.grid.min-h-screen.place-items-center a[data-testid^="login-oauth"],
+main.grid.min-h-screen.place-items-center [data-testid="login-back-home"] {
+  min-height: 2.75rem !important;
+}
+/* Selected auth mode pill — mono, not purple */
+main.grid.min-h-screen.place-items-center button.bg-accent,
+main.grid.min-h-screen.place-items-center [aria-pressed="true"] {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  box-shadow: none !important;
+}
+
+.login-shell,
+.login-card {
+  background-color: rgb(10 10 12 / 0.58) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 44%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 280px 280px !important;
+  border: 1px solid rgb(255 255 255 / 0.15) !important;
+  backdrop-filter: blur(26px) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.18) !important;
+}
+
+/* —— Evolution c81: global non-logo hue sweep — kill residual purple/teal washes ——
+   CSS-reachable only. Purple remains exclusively on .logo-mark / .logo-badge. */
+/* Early shell washes that still paint without always being overridden */
+body,
+html,
+.shell,
+#root,
+.app-shell {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 80% -10%, rgb(255 255 255 / 0.04), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 10% 100%, rgb(255 255 255 / 0.03), transparent 50%) !important;
+}
+/* Kill any leftover purple inset/bloom utilities on non-logo nodes */
+.main-stage [class*="124_92_255"]:not(.logo-mark):not(.logo-badge),
+.main-stage [class*="7c5cff"]:not(.logo-mark),
+aside [class*="124_92_255"]:not(.logo-mark),
+.topbar [class*="124_92_255"],
+.composer-bar [class*="124_92_255"] {
+  box-shadow: none !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  text-shadow: none !important;
+}
+/* Teal / cyan accents that sneak in via status */
+.main-stage .text-info,
+.main-stage [class*="text-teal"],
+.main-stage [class*="text-cyan"],
+.main-stage [class*="text-sky"] {
+  color: var(--color-info) !important;
+}
+/* Status ok/warn/danger stay semantic but desaturate blooms */
+.main-stage [class*="shadow"][class*="ok"],
+.main-stage [class*="shadow"][class*="warn"] {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+/* Focus rings already mono in c63+ — reassert */
+:focus-visible {
+  outline: 2px solid rgb(232 236 245 / 0.85) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px rgb(232 236 245 / 0.45) !important;
+}
+.logo-mark:focus-visible,
+.logo-badge:focus-visible {
+  /* logo may keep purple focus if needed — still mono ring for a11y */
+  outline: 2px solid rgb(232 236 245 / 0.9) !important;
+}
+
+/* Voice listening / accent chips → mono white lift */
+.main-stage .text-accent,
+.topbar .text-accent,
+aside .text-accent:not(.logo-mark),
+.voice-mode-badge .text-accent,
+[data-testid="voice-controls"] .text-accent {
+  color: #e8ecf5 !important;
+}
+.main-stage .bg-accent\/15,
+.main-stage .bg-accent\/20,
+.main-stage [class*="bg-accent/"],
+.main-stage span.bg-accent\/15,
+.main-stage span[class*="bg-accent"] {
+  background-color: rgb(255 255 255 / 0.1) !important;
+  color: #e8ecf5 !important;
+}
+/* Selected tiles that use bg-accent — keep high-contrast mono (not purple) */
+.main-stage button.bg-accent,
+.main-stage .bg-accent.text-accent-ink,
+.main-stage .bg-accent.text-white,
+aside .sidebar-plus.bg-accent,
+aside button.bg-accent {
+  background-color: #e8ecf5 !important;
+  background-image: none !important;
+  color: #0a0d14 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35) !important;
+}
+
+
+
+/* Final nav stack reassert (29c2f9b) */
+
+/* —— Evolution c82: fix remaining hue hits from route sweep ——
+   - --color-line navy (#243044 sat~0.31) → neutral gray
+   - bot-avatar-* chromatic skins → mono
+   - bot-avatar-img / input-glow / promo-banner / sidebar-plus purple leftovers
+   Semantic ok/warn/danger kept for status meaning (listed in scorecard). */
+:root,
+html {
+  --color-line: #2c3038;
+  --color-glow: #c8d0e0;
+  --color-navy: #0c0e12;
+}
+html[data-theme="light"] {
+  --color-line: #d8dbe2;
+  --color-glow: #64748b;
+  --color-navy: #eef0f4;
+}
+
+.bot-avatar,
+.bot-avatar-pink,
+.bot-avatar-teal,
+.bot-avatar-amber,
+.bot-avatar-violet,
+.bot-avatar-sky {
+  background: linear-gradient(145deg, #3a3f4a, #1a1d24) !important;
+  color: #e8ecf5 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 12px rgb(255 255 255 / 0.08) !important;
+}
+.bot-avatar-img {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 4px 14px rgb(0 0 0 / 0.35) !important;
+}
+html[data-theme="light"] .bot-avatar-img {
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.1), 0 4px 12px rgb(15 23 42 / 0.08) !important;
+}
+
+.input-glow:focus,
+.input-glow:focus-within {
+  border-color: rgb(232 236 245 / 0.45) !important;
+  box-shadow: 0 0 0 1px rgb(232 236 245 / 0.25), 0 0 20px rgb(255 255 255 / 0.08) !important;
+}
+
+.promo-banner {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.03)),
+    rgb(14 18 28 / 0.75) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+
+.sidebar-plus,
+aside .sidebar-plus,
+aside button.sidebar-plus {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 10px 28px rgb(0 0 0 / 0.4),
+    inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+}
+
+.floating-menu {
+  box-shadow:
+    0 24px 64px rgb(0 0 0 / 0.6),
+    0 0 0 1px rgb(255 255 255 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+}
+
+/* border-line utility surfaces — force neutral in case token lag */
+.border-line,
+[class*="border-line"] {
+  border-color: #2c3038 !important;
+}
+html[data-theme="light"] .border-line,
+html[data-theme="light"] [class*="border-line"] {
+  border-color: #d8dbe2 !important;
+}
+
+/* Logo purple final reassert */
+.logo-mark,
+.logo-badge,
+aside .logo-mark,
+main .logo-mark {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow:
+    inset 0 0 18px rgb(124 92 255 / 0.35),
+    0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+/* Nav stack final (29c2f9b) */
+
+/* —— Evolution c83: mono skeleton / shimmer + CLS-stable slots ——
+   One shimmer recipe; skeleton rows reserve content-like min-heights. */
+:root {
+  --glass-radius: 1.15rem;
+  --glass-radius-sm: 0.85rem;
+  --glass-border: 1px solid rgb(255 255 255 / 0.14);
+  --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%), rgb(12 12 14 / 0.92);
+  --glass-shadow: 0 22px 56px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  --glass-blur: blur(22px) saturate(1.15);
+  --dim-backdrop: rgb(5 7 13 / 0.72);
+  --skel-h-line: 0.75rem;
+  --skel-h-title: 1.75rem;
+  --skel-h-card: 5.5rem;
+  --skel-gap: 0.65rem;
+}
+
+.skeleton,
+[data-loading="true"],
+.skeleton.h-3,
+.main-stage .skeleton {
+  position: relative !important;
+  overflow: hidden !important;
+  border-radius: var(--glass-radius-sm) !important;
+  background: rgb(255 255 255 / 0.055) !important;
+  background-image: none !important;
+  min-height: var(--skel-h-line) !important;
+  /* kill layout jump: fixed block formatting */
+  display: block !important;
+  flex-shrink: 0 !important;
+}
+.skeleton.h-3 { min-height: var(--skel-h-line) !important; height: var(--skel-h-line) !important; }
+.skeleton.h-4,
+.skeleton.h-5 { min-height: 1.1rem !important; }
+.skeleton.h-8,
+.skeleton.h-10,
+.skeleton.h-12 { min-height: 2.5rem !important; }
+.skeleton::after,
+[data-loading="true"]::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.04) 35%,
+    rgb(255 255 255 / 0.12) 50%,
+    rgb(255 255 255 / 0.04) 65%,
+    transparent 100%
+  ) !important;
+  background-size: 220% 100% !important;
+  animation: skel-mono-shimmer 1.35s ease-in-out infinite !important;
+  pointer-events: none !important;
+}
+@keyframes skel-mono-shimmer {
+  from { transform: translateX(-45%); }
+  to { transform: translateX(45%); }
+}
+/* Prefer transform-only shimmer (no background-position CLS) */
+.skeleton,
+[data-loading="true"] {
+  animation: none !important;
+}
+html[data-theme="light"] .skeleton,
+html[data-theme="light"] [data-loading="true"] {
+  background: rgb(15 23 42 / 0.06) !important;
+}
+html[data-theme="light"] .skeleton::after,
+html[data-theme="light"] [data-loading="true"]::after {
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(15 23 42 / 0.04) 35%,
+    rgb(15 23 42 / 0.1) 50%,
+    rgb(15 23 42 / 0.04) 65%,
+    transparent 100%
+  ) !important;
+}
+/* Chat loading block — match message bubble footprint */
+.main-stage .skeleton.h-3 + .skeleton.h-3 {
+  margin-top: var(--skel-gap) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after,
+  [data-loading="true"]::after {
+    animation: none !important;
+    opacity: 0.35 !important;
+  }
+}
+
+/* —— Evolution c84: one glass recipe for overlays / menus / sheets / toasts —— */
+.overlay-backdrop,
+[role="dialog"].fixed.inset-0,
+.shortcut-sheet-shell,
+div.fixed.inset-0.z-50.grid.place-items-center {
+  background: var(--dim-backdrop) !important;
+  backdrop-filter: blur(10px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.08) !important;
+}
+
+.overlay-panel,
+.floating-menu,
+.shortcut-sheet-panel,
+.composer-bar__model-menu,
+.live-voice-bar__plus-menu,
+[data-testid="alerts-panel"],
+[role="menu"],
+[role="listbox"],
+[role="tooltip"],
+.dash3d-chart-tooltip,
+.toast,
+[data-testid*="toast"],
+[class*="toast"] {
+  border-radius: var(--glass-radius) !important;
+  border: var(--glass-border) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
+    rgb(12 12 14 / 0.94) !important;
+  box-shadow: var(--glass-shadow) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  color: var(--color-fg) !important;
+}
+
+/* Model picker opens upward — origin + same glass */
+.composer-bar__model-menu {
+  bottom: calc(100% + 0.55rem) !important;
+  top: auto !important;
+  transform-origin: bottom left !important;
+  min-width: 16.5rem !important;
+  padding: 0.4rem !important;
+  z-index: 60 !important;
+}
+.live-voice-bar__plus-menu {
+  bottom: calc(100% + 0.45rem) !important;
+  transform-origin: bottom left !important;
+  min-width: 11rem !important;
+  z-index: 60 !important;
+}
+.floating-menu {
+  transform-origin: top center !important;
+  z-index: 55 !important;
+}
+[data-testid="alerts-panel"] {
+  margin: 0.35rem 0.75rem 0.5rem !important;
+}
+
+/* Menu row chrome */
+.composer-bar__model-option,
+.live-voice-bar__plus-item,
+.floating-menu button,
+.floating-menu [role="menuitem"],
+[role="menu"] [role="menuitem"],
+[role="listbox"] [role="option"] {
+  border-radius: var(--glass-radius-sm) !important;
+  min-height: 2.5rem !important;
+}
+.live-voice-bar__plus-item:hover {
+  background: rgb(255 255 255 / 0.08) !important; /* was purple */
+}
+
+/* Model ico / beta — mono (was chromatic) */
+.composer-bar__model-ico {
+  background: linear-gradient(135deg, #e8ecf5, #6b7280 55%, #1f2430) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25) !important;
+}
+.composer-bar__model-beta {
+  background: rgb(255 255 255 / 0.1) !important;
+  color: #e8ecf5 !important;
+}
+
+html[data-theme="light"] .overlay-panel,
+html[data-theme="light"] .floating-menu,
+html[data-theme="light"] .composer-bar__model-menu,
+html[data-theme="light"] .live-voice-bar__plus-menu,
+html[data-theme="light"] [data-testid="alerts-panel"],
+html[data-theme="light"] [role="menu"] {
+  background: rgb(255 255 255 / 0.96) !important;
+  border-color: rgb(15 23 42 / 0.12) !important;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.8) !important;
+  color: #0a0d14 !important;
+}
+
+/* —— Evolution c85: hover / active / selected / disabled — Grok/ChatGPT mono —— */
+/* List rows & dense cards */
+.main-stage .dense-card,
+.main-stage .dense-row,
+.main-stage li.dense-card,
+.main-stage article.dense-card {
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease !important;
+}
+.main-stage .dense-card:hover,
+.main-stage .dense-row:hover,
+.main-stage li.dense-card:hover {
+  background-color: rgb(255 255 255 / 0.07) !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
+}
+.main-stage .dense-card:active,
+.main-stage .dense-row:active {
+  transform: scale(0.992) !important;
+  background-color: rgb(255 255 255 / 0.05) !important;
+}
+
+/* Nav / rail */
+aside.rail nav button,
+aside nav button,
+nav[aria-label="Primary"] button {
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease !important;
+}
+aside.rail nav button:hover,
+aside nav button:hover {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: var(--color-fg) !important;
+}
+aside.rail nav button[aria-current="page"],
+aside.rail nav button.bg-accent,
+aside nav button.tile-active,
+aside nav button[aria-current="page"] {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  box-shadow: none !important;
+}
+aside.rail nav button:disabled,
+aside nav button:disabled,
+.main-stage button:disabled,
+.composer-bar button:disabled {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.15) !important;
+}
+
+/* Chips / pills */
+.main-stage button.rounded-full,
+.main-stage .rounded-full.border,
+.masthead button.min-h-11.rounded-full,
+.main-stage [class*="rounded-full"].border {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+.main-stage button.rounded-full:hover:not(:disabled),
+.masthead button.min-h-11.rounded-full:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.2) !important;
+}
+.main-stage button.rounded-full.bg-accent,
+.main-stage button.rounded-full.tile-active,
+.masthead button.min-h-11.rounded-full.bg-accent {
+  background: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  border-color: transparent !important;
+}
+
+/* Menu options */
+.composer-bar__model-option:hover,
+.live-voice-bar__plus-item:hover,
+.floating-menu button:hover,
+.floating-menu [role="menuitem"]:hover,
+[role="menu"] [role="menuitem"]:hover {
+  background: rgb(255 255 255 / 0.08) !important;
+}
+.composer-bar__model-option.is-selected,
+.composer-bar__model-option[aria-selected="true"],
+[role="option"][aria-selected="true"] {
+  background: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16) !important;
+}
+.composer-bar__model-option:disabled,
+.live-voice-bar__plus-item:disabled {
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+}
+
+/* Waveform bars — mono (was purple gradient) */
+.voice-zone .waveform span {
+  background: linear-gradient(180deg, #e8ecf5, #6b7280) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-stage .dense-card,
+  .main-stage .dense-row,
+  aside.rail nav button,
+  .main-stage button.rounded-full {
+    transition: none !important;
+  }
+  .main-stage .dense-card:active,
+  .main-stage .dense-row:active {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c86: landscape phone + ultrawide desktop layout —— */
+/* Landscape phone 844×390 (and similar short viewports) */
+@media (max-height: 480px) and (orientation: landscape) {
+  .shell,
+  .main-stage {
+    padding-bottom: 0 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    bottom: 0.35rem !important;
+  }
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    min-height: 2.75rem !important;
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+    padding-block: 0.35rem !important;
+  }
+  .topbar { padding-block: 0.35rem !important; }
+  .masthead { margin-top: 0.35rem !important; padding: 0.65rem 0.85rem !important; }
+  .main-stage .page-hero,
+  .main-stage .masthead h2.font-display {
+    font-size: 1.35rem !important;
+  }
+}
+
+/* Very wide: cap content, center, no stretched cards */
+@media (min-width: 1600px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl,
+  .main-stage section.mx-auto {
+    max-width: 72rem !important; /* ~1152px */
+    margin-inline: auto !important;
+    width: 100% !important;
+  }
+  .main-stage .dense-card,
+  .main-stage .glow-card,
+  .main-stage .settings-card,
+  .main-stage .rounded-panel.border {
+    max-width: 100% !important;
+  }
+  /* Thread columns: don't let center pane balloon past ~48rem inside stage */
+  .main-stage section.flex.min-w-0.flex-1.flex-col {
+    max-width: 56rem !important;
+    margin-inline: auto !important;
+  }
+}
+@media (min-width: 1920px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl {
+    max-width: 76rem !important;
+  }
+  .shell {
+    /* subtle side letterbox wash — prevents infinite stretch feel */
+    background-image:
+      radial-gradient(ellipse 40% 60% at 0% 40%, rgb(255 255 255 / 0.03), transparent 55%),
+      radial-gradient(ellipse 40% 60% at 100% 40%, rgb(255 255 255 / 0.03), transparent 55%) !important;
+  }
+}
+@media (min-width: 2560px) {
+  .main-stage > section,
+  .main-stage .page-shell,
+  .main-stage .mx-auto.max-w-3xl,
+  .main-stage .mx-auto.max-w-6xl {
+    max-width: 80rem !important; /* 1280 */
+  }
+  aside.rail {
+    max-width: 18rem !important;
+  }
+}
+
+/* Help 2-col grid: don't stretch single cards on ultrawide */
+@media (min-width: 1600px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 {
+    max-width: 48rem !important;
+  }
+}
+
+/* —— Evolution c87: long-content stress — ellipsis + wrap —— */
+/* Thread / chat titles */
+aside .truncate,
+.main-stage .truncate,
+.rail .truncate,
+[data-testid*="chat"] .truncate,
+aside button span.truncate,
+.main-stage span.truncate,
+.main-stage .min-w-0.truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+/* Bot / agent names in lists */
+.main-stage .dense-card .font-semibold,
+.main-stage .dense-row .font-semibold,
+.main-stage article.dense-card h3,
+.main-stage [class*="bot"] .font-semibold {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+/* Long messages — wrap, don't blow horizontal scroll */
+.main-stage article.max-w-3xl,
+.main-stage .chat-stream article,
+.main-stage [data-testid="message-body"],
+.main-stage .message-body,
+.chat-stream {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+}
+.main-stage article.max-w-3xl pre,
+.main-stage .chat-stream pre,
+.main-stage article.max-w-3xl code {
+  white-space: pre-wrap !important;
+  overflow-x: auto !important;
+  max-width: 100% !important;
+}
+/* Masthead titles with long AI Chat / thread names */
+.masthead h2.font-display,
+.main-stage h2.font-display {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+/* Provider labels */
+.main-stage fieldset label,
+.model-option-active,
+.composer-bar__model-option-title {
+  min-width: 0 !important;
+}
+.composer-bar__model-option-title {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 14rem !important;
+}
+/* Prevent shell horizontal CLS from long content */
+.shell,
+.main-stage,
+.page-shell {
+  overflow-x: clip !important;
+  max-width: 100vw !important;
+}
+
+/* Final guards — 29c2f9b nav stack */
+
+/* fa50cf6: keep alerts toggle ≥44px */
+[data-testid="alerts-toggle"] {
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+
+/* —— Evolution c88: harden aside/list truncate; model stub still TSX —— */
+aside.rail span.truncate,
+aside span.truncate,
+aside button .truncate,
+aside .max-w-\[14rem\].truncate {
+  display: inline-block !important;
+  max-width: 14rem !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: bottom;
+}
+
+/* Reassert guards */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+
+/* Single consolidated nav stack (survivors may remain earlier — this wins) */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    z-index: 48 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+
+/* —— Evolution c90: mild paint budget (nested blur cheaper, not removed) —— */
+.main-stage .masthead .dense-card,
+.main-stage .overlay-panel .dense-card,
+[data-testid="alerts-panel"] .dense-card {
+  backdrop-filter: blur(10px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.05) !important;
+}
+@media (max-width: 767.98px) {
+  .main-stage .dense-card.card-texture {
+    backdrop-filter: blur(14px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(1.1) !important;
+  }
+  /* keep single nav stack */
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+
+/* —— Evolution c92: microinteractions — composer focus + send press (markup exists) —— */
+.floating-composer:focus-within,
+.composer-dock:focus-within,
+[data-composer="floating"]:focus-within,
+section.command-card.composer-dock:focus-within,
+section.command-card.composer-dock:has(textarea:focus),
+section.command-card.composer-dock:has(input:focus) {
+  border-color: rgb(255 255 255 / 0.22) !important;
+  box-shadow:
+    0 0 0 1px rgb(232 236 245 / 0.35),
+    0 0 0 4px rgb(232 236 245 / 0.08),
+    0 22px 56px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+html[data-theme="light"] .floating-composer:focus-within,
+html[data-theme="light"] .composer-dock:focus-within {
+  border-color: rgb(15 23 42 / 0.2) !important;
+  box-shadow:
+    0 0 0 1px rgb(15 23 42 / 0.2),
+    0 0 0 4px rgb(15 23 42 / 0.06),
+    0 18px 44px rgb(15 23 42 / 0.12) !important;
+}
+.floating-composer textarea:focus,
+.composer-dock textarea:focus,
+.floating-composer input:focus,
+.composer-dock input:focus {
+  outline: none !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12) !important;
+}
+
+/* Send press — submit in floating composer / dock */
+.floating-composer button[type="submit"],
+.composer-dock button[type="submit"],
+form.floating-composer button[type="submit"] {
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease !important;
+}
+.floating-composer button[type="submit"]:hover:not(:disabled),
+.composer-dock button[type="submit"]:hover:not(:disabled) {
+  filter: brightness(1.06) !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.35) !important;
+}
+.floating-composer button[type="submit"]:active:not(:disabled),
+.composer-dock button[type="submit"]:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  filter: brightness(0.95) !important;
+}
+.floating-composer button[type="submit"]:disabled,
+.composer-dock button[type="submit"]:disabled {
+  opacity: 0.45 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-composer button[type="submit"],
+  .composer-dock button[type="submit"] {
+    transition: none !important;
+  }
+  .floating-composer button[type="submit"]:active:not(:disabled) {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c93: message appear + typing/waiting indicator (existing markup) —— */
+@keyframes msg-appear {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.main-stage article.max-w-3xl.rounded-panel,
+.chat-stream article.max-w-3xl {
+  animation: msg-appear 220ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+/* Stagger-ish: later siblings slightly delayed via nth (cap) */
+.main-stage article.max-w-3xl.rounded-panel:nth-child(n+2) { animation-delay: 20ms; }
+.main-stage article.max-w-3xl.rounded-panel:nth-child(n+4) { animation-delay: 40ms; }
+
+/* Waiting for Grok skeleton card = typing indicator surface */
+.main-stage div.max-w-3xl[aria-live="polite"],
+.main-stage div.max-w-3xl.space-y-2.rounded-panel[aria-live="polite"] {
+  position: relative !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 50%),
+    rgb(12 12 14 / 0.82) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 12px 32px rgb(0 0 0 / 0.35) !important;
+}
+/* Typing dots via three skeleton lines → soften into pulse dots look */
+.main-stage div[aria-live="polite"] .skeleton.h-3 {
+  border-radius: 999px !important;
+  max-width: 4.5rem !important;
+  height: 0.55rem !important;
+  min-height: 0.55rem !important;
+  opacity: 0.85;
+}
+.main-stage div[aria-live="polite"] .skeleton.h-3:nth-child(2) { max-width: 3.2rem !important; }
+.main-stage div[aria-live="polite"] .skeleton.h-3:nth-child(3) { max-width: 3.8rem !important; }
+.main-stage div[aria-live="polite"] .skeleton.h-3:nth-child(4) { max-width: 2.6rem !important; }
+
+/* Live "writing" stream card */
+.main-stage article.max-w-3xl.rounded-panel:has(> p.text-xs.text-muted) {
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-stage article.max-w-3xl.rounded-panel,
+  .chat-stream article.max-w-3xl {
+    animation: none !important;
+  }
+}
+
+/* —— Evolution c94: Copy / Regenerate / Speak / Edit hover actions on messages —— */
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 {
+  opacity: 0.72;
+  transition: opacity 140ms ease !important;
+}
+.main-stage article.max-w-3xl:hover .mt-2.flex.flex-wrap.gap-3,
+.main-stage article.max-w-3xl:focus-within .mt-2.flex.flex-wrap.gap-3 {
+  opacity: 1 !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button {
+  border-radius: 999px !important;
+  padding: 0.35rem 0.7rem !important;
+  border: 1px solid transparent !important;
+  color: #e8ecf5 !important; /* mono — was text-accent purple path */
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.08) !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:active:not(:disabled) {
+  background: rgb(255 255 255 / 0.12) !important;
+}
+.main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:disabled {
+  opacity: 0.4 !important;
+}
+/* Copy-code on fenced blocks */
+.main-stage [data-testid="copy-code"],
+.md-code-block + button,
+pre.md-code-block ~ button[data-testid="copy-code"] {
+  border-radius: 0.65rem !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e8ecf5 !important;
+  padding: 0.35rem 0.65rem !important;
+}
+.main-stage [data-testid="copy-code"]:hover {
+  background: rgb(255 255 255 / 0.12) !important;
+}
+html[data-theme="light"] .main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button {
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .main-stage article.max-w-3xl .mt-2.flex.flex-wrap.gap-3 > button:hover:not(:disabled) {
+  background: rgb(15 23 42 / 0.06) !important;
+  border-color: rgb(15 23 42 / 0.14) !important;
+}
+
+/* —— Evolution c95: chat markdown / code — ChatGPT·Claude polish, mono —— */
+.md-prose {
+  display: grid !important;
+  gap: 0.65rem !important;
+  color: var(--color-fg) !important;
+  font-size: 0.95rem !important;
+  line-height: 1.65 !important;
+}
+.md-p { white-space: pre-wrap; margin: 0; }
+.md-h, .md-prose h1, .md-prose h2, .md-prose h3 {
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.3 !important;
+  margin: 0.15rem 0 0 !important;
+}
+.md-prose h1 { font-size: 1.35rem !important; }
+.md-prose h2 { font-size: 1.2rem !important; }
+.md-prose h3 { font-size: 1.05rem !important; }
+
+.md-inline-code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.84em !important;
+  padding: 0.12em 0.4em !important;
+  border-radius: 0.4rem !important;
+  background: rgb(255 255 255 / 0.08) !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  color: #f4f6fb !important;
+}
+
+.md-quote {
+  margin: 0 !important;
+  border-left: 3px solid rgb(255 255 255 / 0.28) !important; /* was purple */
+  padding: 0.35rem 0 0.35rem 0.9rem !important;
+  color: #c4cad6 !important;
+  background: rgb(255 255 255 / 0.03) !important;
+  border-radius: 0 0.5rem 0.5rem 0 !important;
+}
+
+.md-ul, .md-ol {
+  margin: 0 !important;
+  padding-left: 1.35rem !important;
+  display: grid !important;
+  gap: 0.25rem !important;
+}
+.md-ul { list-style: disc; }
+.md-ol { list-style: decimal; }
+
+.md-code-block {
+  margin: 0 !important;
+  padding: 0.85rem 1rem !important;
+  border-radius: 0.85rem !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 40%),
+    rgb(8 8 10 / 0.92) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+  overflow-x: auto !important;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.82rem !important;
+  line-height: 1.55 !important;
+  color: #e8ecf5 !important;
+  tab-size: 2 !important;
+}
+.md-code-block code {
+  font-family: inherit !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  white-space: pre !important;
+}
+
+.md-table-wrap {
+  overflow-x: auto !important;
+  border-radius: 0.85rem !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  background: rgb(10 10 12 / 0.55) !important;
+}
+.md-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: 0.88rem !important;
+}
+.md-table th,
+.md-table td {
+  padding: 0.55rem 0.75rem !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08) !important;
+  text-align: left !important;
+  vertical-align: top !important;
+}
+.md-table th {
+  font-weight: 650 !important;
+  background: rgb(255 255 255 / 0.05) !important;
+  color: #f4f6fb !important;
+}
+.md-table tr:last-child td { border-bottom: 0 !important; }
+.md-table tbody tr:hover td {
+  background: rgb(255 255 255 / 0.03) !important;
+}
+
+.md-hr {
+  border: 0 !important;
+  border-top: 1px solid rgb(255 255 255 / 0.12) !important;
+  margin: 0.35rem 0 !important;
+}
+
+/* message-body fenced pre (non-md-prose path) */
+.main-stage pre:not(.md-code-block),
+.main-stage [data-testid="message-body"] pre {
+  border-radius: 0.85rem !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  background: rgb(8 8 10 / 0.92) !important;
+  padding: 0.85rem 1rem !important;
+  overflow-x: auto !important;
+  font-family: "IBM Plex Mono", ui-monospace, monospace !important;
+  font-size: 0.82rem !important;
+}
+
+html[data-theme="light"] .md-inline-code {
+  background: rgb(15 23 42 / 0.06) !important;
+  border-color: rgb(15 23 42 / 0.1) !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .md-code-block,
+html[data-theme="light"] .main-stage pre:not(.md-code-block) {
+  background: rgb(248 250 252) !important;
+  border-color: rgb(15 23 42 / 0.12) !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .md-quote {
+  border-left-color: rgb(15 23 42 / 0.25) !important;
+  color: #334155 !important;
+  background: rgb(15 23 42 / 0.03) !important;
+}
+html[data-theme="light"] .md-table-wrap {
+  background: rgb(255 255 255 / 0.9) !important;
+  border-color: rgb(15 23 42 / 0.12) !important;
+}
+html[data-theme="light"] .md-table th {
+  background: rgb(15 23 42 / 0.04) !important;
+  color: #0a0d14 !important;
+}
+
+/* —— Evolution c96: guards after micro/md polish —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c97: lowest dim = glass — deepen Help/Agents/Thread + glow-cards —— */
+@media (min-width: 768px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card,
+  .main-stage section.mx-auto.max-w-3xl.space-y-3 > ul > li.dense-card,
+  .main-stage .glow-card.rounded-panel.border.border-line,
+  .main-stage article.glow-card {
+    background-color: rgb(10 10 12 / 0.62) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 48%),
+      url("/brand/textures/frost-card-texture.jpg") !important;
+    background-size: auto, 280px 280px !important;
+    background-blend-mode: soft-light, soft-light !important;
+    backdrop-filter: blur(26px) saturate(1.24) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(1.24) !important;
+    border-color: rgb(255 255 255 / 0.2) !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 20px 48px rgb(0 0 0 / 0.48) !important;
+  }
+  .main-stage .masthead {
+    background-color: rgb(10 10 12 / 0.58) !important;
+    backdrop-filter: blur(28px) saturate(1.26) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.26) !important;
+  }
+}
+@media (max-width: 767.98px) {
+  .main-stage section.max-w-3xl > ul.space-y-2 > li.dense-card,
+  .main-stage .glow-card.rounded-panel {
+    background-color: rgb(10 10 12 / 0.7) !important;
+    backdrop-filter: blur(20px) saturate(1.16) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.16) !important;
+    border-color: rgb(255 255 255 / 0.16) !important;
+  }
+}
+
+/* —— Evolution c98: icon set consistency — stroke / size / optical center —— */
+aside.rail nav button svg,
+aside.rail nav a svg,
+aside.rail .nav-item svg,
+.topbar button svg,
+.topbar a svg,
+.composer-bar button svg,
+.composer-bar a svg,
+.composer-dock button svg,
+.floating-composer button svg,
+.floating-menu svg,
+[role="menu"] svg,
+nav.fixed[aria-label="Primary"] button svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+  stroke-width: 1.75px !important;
+  vector-effect: non-scaling-stroke;
+}
+aside.rail nav button svg *,
+aside.rail nav a svg *,
+.topbar button svg *,
+.composer-bar button svg *,
+.composer-dock button svg *,
+.floating-composer button svg *,
+.floating-menu svg *,
+[role="menu"] svg *,
+nav.fixed[aria-label="Primary"] button svg * {
+  stroke-width: 1.75px !important;
+}
+aside.rail nav button:has(> svg:only-child),
+aside.rail button.size-11,
+.topbar button:has(> svg:only-child),
+.topbar button.grid,
+.composer-bar button:has(> svg:only-child),
+.composer-dock button:has(> svg:only-child),
+.floating-composer button:has(> svg:only-child) {
+  display: inline-grid !important;
+  place-items: center !important;
+  line-height: 0 !important;
+}
+aside.rail nav button.nav-item {
+  align-items: center !important;
+}
+aside.rail nav button.nav-item svg {
+  flex-shrink: 0 !important;
+  translate: 0 0.5px;
+}
+
+/* —— Evolution c99: dark-mode secondary/tertiary AA floor on glass (measured) —— */
+html:not([data-theme="light"]) {
+  --color-muted: #b4bccb;
+}
+html:not([data-theme="light"]) .text-muted,
+html:not([data-theme="light"]) .main-stage .text-muted,
+html:not([data-theme="light"]) .page-shell .text-muted,
+html:not([data-theme="light"]) .masthead .text-muted,
+html:not([data-theme="light"]) aside .text-muted,
+html:not([data-theme="light"]) aside .text-xs.text-muted {
+  color: #b4bccb !important;
+}
+html:not([data-theme="light"]) .meta-label,
+html:not([data-theme="light"]) .main-stage .text-\[10px\],
+html:not([data-theme="light"]) .main-stage .text-xs:not(.font-bold):not(.font-semibold) {
+  color: #a8b0c0 !important;
+}
+html:not([data-theme="light"]) .main-stage .dense-card .text-muted,
+html:not([data-theme="light"]) .main-stage .glow-card .text-muted,
+html:not([data-theme="light"]) .main-stage .rounded-panel .text-muted,
+html:not([data-theme="light"]) .login-card .text-muted {
+  color: #c0c7d6 !important;
+}
+html:not([data-theme="light"]) .main-stage input::placeholder,
+html:not([data-theme="light"]) .main-stage textarea::placeholder,
+html:not([data-theme="light"]) .composer-bar textarea::placeholder,
+html:not([data-theme="light"]) .floating-composer textarea::placeholder {
+  color: #9aa3b5 !important;
+  opacity: 1 !important;
+}
+
+/* —— Evolution c100: glass readability polish — login + empty wells —— */
+.login-card,
+main.grid.min-h-screen.place-items-center .rounded-panel {
+  background-color: rgb(10 10 12 / 0.66) !important;
+  backdrop-filter: blur(28px) saturate(1.22) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.22) !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 24px 56px rgb(0 0 0 / 0.5) !important;
+}
+.main-stage [data-testid="chat-empty"],
+.main-stage .empty-state,
+.main-stage [data-empty="true"] {
+  background-color: rgb(10 10 12 / 0.5) !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+}
+
+/* —— Evolution c101: guards after glass/icon/AA —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c102: raise glass floor — main-stage panels / Rea shells (rescore lowest) —— */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .rounded-panel.border.border-line.bg-surface,
+.main-stage form.rounded-panel.border.border-line,
+.main-stage section.rounded-panel.border.border-line,
+.page-shell .dense-card,
+.page-shell .rounded-panel.border.border-line.bg-surface {
+  background-color: rgb(12 12 14 / 0.64) !important;
+  backdrop-filter: blur(22px) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.18) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 14px 36px rgb(0 0 0 / 0.4) !important;
+}
+.main-stage .dense-card.card-texture,
+.main-stage .glow-card.card-texture {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 46%),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, 260px 260px !important;
+  background-blend-mode: soft-light, soft-light !important;
+}
+/* Composer dock glass (headless often saw blur:none / low alpha) */
+.floating-composer,
+.composer-dock,
+.composer-bar__card {
+  background-color: rgb(10 10 12 / 0.72) !important;
+  backdrop-filter: blur(24px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+}
+
+/* —— Evolution c103: phone feel — tap highlight + touch-action (no 300ms) —— */
+html, body {
+  -webkit-tap-highlight-color: transparent !important;
+  tap-highlight-color: transparent !important;
+}
+button, a, [role="button"], [role="menuitem"],
+.nav-item, .sidebar-plus, .composer-bar button, .floating-composer button,
+nav.fixed[aria-label="Primary"] button {
+  -webkit-tap-highlight-color: rgb(255 255 255 / 0.08) !important;
+  touch-action: manipulation !important;
+}
+/* Keep pan-y on primary scroll surfaces so lists still fling */
+.main-stage,
+.main-stage .overflow-auto,
+.main-stage .overflow-y-auto,
+.min-h-0.flex-1.overflow-auto,
+.chat-stream,
+aside.rail nav {
+  touch-action: pan-y !important;
+}
+
+/* —— Evolution c104: phone feel — overscroll contain + momentum scroll —— */
+html, body {
+  overscroll-behavior-y: none !important;
+  overscroll-behavior-x: none !important;
+}
+.main-stage,
+.main-stage .overflow-auto,
+.main-stage .overflow-y-auto,
+.min-h-0.flex-1.overflow-auto,
+.chat-stream,
+aside.rail,
+aside.rail nav,
+.floating-menu,
+[role="menu"],
+.overlay-panel {
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+.composer-bar__model-menu {
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* —— Evolution c105: phone landscape safe areas —— */
+@media (max-height: 480px) and (orientation: landscape) {
+  .shell,
+  .main-stage,
+  .page-shell {
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+  }
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    padding-left: max(0.35rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.35rem, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: max(0.15rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed {
+    left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+    bottom: max(0.35rem, env(safe-area-inset-bottom, 0px)) !important;
+    width: auto !important;
+  }
+  .floating-composer,
+  .composer-dock {
+    margin-left: max(0px, env(safe-area-inset-left, 0px));
+    margin-right: max(0px, env(safe-area-inset-right, 0px));
+  }
+  .topbar {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+    padding-top: max(0.35rem, env(safe-area-inset-top, 0px)) !important;
+  }
+}
+/* Portrait phone: ensure left/right safe areas on fixed chrome too */
+@media (max-width: 767.98px) {
+  .topbar {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+  }
+  .floating-composer,
+  section[data-composer="floating"] {
+    margin-left: max(0.5rem, env(safe-area-inset-left, 0px));
+    margin-right: max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+/* —— Evolution c106: guards after glass + phone feel —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c107: Grok-reference layered glass (frost + highlight + inner glow + soft shadow) ——
+   Note: SwiftShader/CI often fails to rasterize backdrop-filter (WITH==NO blur crops).
+   These layers still read as glass without GPU blur; real devices keep the blur decls. */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .rounded-panel.border.border-line.bg-surface,
+.main-stage form.rounded-panel.border.border-line,
+.floating-composer,
+.composer-dock,
+.composer-bar__card,
+.login-card {
+  background-color: rgb(14 16 22 / 0.55) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 28%, transparent 55%),
+    linear-gradient(90deg, rgb(255 255 255 / 0.04), transparent 40%, rgb(255 255 255 / 0.03)),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, auto, 240px 240px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 0 0 1px rgb(255 255 255 / 0.06),
+    0 1px 0 rgb(255 255 255 / 0.04),
+    0 18px 48px rgb(0 0 0 / 0.45),
+    0 4px 12px rgb(0 0 0 / 0.25) !important;
+  backdrop-filter: blur(28px) saturate(1.28) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.28) !important;
+}
+/* Top highlight edge hairline */
+.main-stage .dense-card::before,
+.main-stage .glow-card::before,
+.composer-dock::before,
+.floating-composer::before,
+.composer-bar__card::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 0 auto 0 !important;
+  height: 1px !important;
+  border-radius: inherit !important;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent) !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+.main-stage .dense-card,
+.main-stage .glow-card,
+.composer-dock,
+.floating-composer,
+.composer-bar__card {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+/* —— Evolution c108: translucent surface-2 tiles inside glass (kill opaque flats) —— */
+.main-stage .bg-surface-2,
+.main-stage .rounded-panel.bg-surface-2,
+.composer-dock .bg-surface-2,
+.floating-composer .bg-surface-2 {
+  background-color: rgb(255 255 255 / 0.05) !important;
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 60%) !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  backdrop-filter: blur(12px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.1) !important;
+}
+.main-stage .bg-bg,
+.composer-dock textarea.bg-bg,
+.floating-composer textarea {
+  background-color: rgb(0 0 0 / 0.28) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05) !important;
+}
+
+/* —— Evolution c109: depth elevation — masthead / stage / stacked cards —— */
+.main-stage .masthead {
+  background-color: rgb(12 14 20 / 0.5) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 50%),
+    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 280px 280px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 24px 56px rgb(0 0 0 / 0.5),
+    0 8px 20px rgb(0 0 0 / 0.28) !important;
+  transform: translateZ(0);
+}
+.main-stage .dense-card + .dense-card,
+.main-stage .glow-card + .glow-card {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 0 0 1px rgb(255 255 255 / 0.05),
+    0 14px 36px rgb(0 0 0 / 0.38) !important;
+}
+/* Stage sits behind elevated chrome */
+.main-stage {
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgb(255 255 255 / 0.04), transparent 55%) !important;
+}
+aside.rail {
+  box-shadow: 4px 0 32px rgb(0 0 0 / 0.35) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.08) !important;
+}
+
+/* —— Evolution c110: depth micro-planes — hover lift + content wells —— */
+@media (hover: hover) and (pointer: fine) {
+  .main-stage .dense-card:hover,
+  .main-stage .glow-card:hover,
+  .main-stage li.dense-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 0 0 1px rgb(255 255 255 / 0.08),
+      0 22px 48px rgb(0 0 0 / 0.48) !important;
+  }
+}
+.main-stage .overflow-auto > .rounded-panel,
+.main-stage [data-testid="chat-empty"],
+.main-stage .empty-state {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 -1px 0 rgb(0 0 0 / 0.25),
+    0 16px 40px rgb(0 0 0 / 0.4) !important;
+}
+.composer-bar.is-fixed .composer-bar__card,
+.shell > .composer-bar.is-fixed .composer-bar__card {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 0 0 1px rgb(255 255 255 / 0.06),
+    0 20px 56px rgb(0 0 0 / 0.55),
+    0 0 0 1px rgb(0 0 0 / 0.35) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .main-stage .dense-card:hover,
+  .main-stage .glow-card:hover,
+  .main-stage li.dense-card:hover {
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c111: guards after glass/depth —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* c111b: win composer/card glass specificity after older !important recipes */
+section.command-card.composer-dock,
+section.composer-dock.rounded-panel,
+.shell .composer-bar__card,
+.shell .floating-composer,
+.main-stage article.glow-card.rounded-panel,
+.main-stage li.dense-card.card-texture {
+  background-color: rgb(14 16 22 / 0.55) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 28%, transparent 55%),
+    linear-gradient(90deg, rgb(255 255 255 / 0.04), transparent 40%, rgb(255 255 255 / 0.03)),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, auto, 240px 240px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+  border: 1px solid rgb(255 255 255 / 0.18) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 0 0 1px rgb(255 255 255 / 0.06),
+    0 1px 0 rgb(255 255 255 / 0.04),
+    0 18px 48px rgb(0 0 0 / 0.45),
+    0 4px 12px rgb(0 0 0 / 0.25) !important;
+  backdrop-filter: blur(28px) saturate(1.28) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.28) !important;
+}
+
+/* —— Evolution c112: mono non-logo avatars (owner-video #4 remnant) ——
+   Keep purple ONLY on .logo-mark / .logo-badge. */
+aside.rail span.grid.size-11:not(.logo-mark):not(.logo-badge),
+aside.rail span.bg-gradient-to-br,
+.topbar span.bg-gradient-to-br,
+.topbar span.grid.size-11:not(.logo-mark),
+span.grid.size-11.shrink-0.place-items-center.rounded-2xl:not(.logo-mark):not(.logo-badge),
+span.from-info.to-accent,
+span[class*="from-info"][class*="to-accent"] {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04)) !important;
+  background-image: linear-gradient(135deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.05)) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 0 18px rgb(255 255 255 / 0.08) !important;
+  color: #f4f6fb !important;
+}
+/* Kill purple glow utilities on non-logo chrome */
+aside.rail [class*="shadow-[0_0_18px_rgb(124_92_255"],
+.topbar [class*="shadow-[0_0_18px_rgb(124_92_255"],
+span[class*="124_92_255"]:not(.logo-mark):not(.logo-badge) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 14px rgb(255 255 255 / 0.06) !important;
+}
+
+/* —— Evolution c113: tool / action pill margin rhythm (owner-video #14) —— */
+.main-stage .flex.flex-wrap.items-center.gap-2 > button,
+.main-stage .flex.flex-wrap.gap-2 > button,
+.main-stage .flex.flex-wrap.gap-3 > button,
+.composer-dock .flex.flex-wrap.items-center.gap-2 > button,
+.floating-composer .flex.flex-wrap.items-center.gap-2 > button {
+  margin: 0 !important;
+}
+.main-stage .flex.flex-wrap.items-center.gap-2,
+.main-stage .flex.flex-wrap.gap-2,
+.composer-dock .mt-2.flex.flex-wrap.items-center.gap-2 {
+  gap: 0.5rem !important;
+  row-gap: 0.5rem !important;
+  column-gap: 0.5rem !important;
+}
+/* Tool-name chips if present */
+.main-stage [data-testid*="tool"],
+.main-stage .tool-chip,
+.main-stage code.tool-pill {
+  margin: 0.15rem 0.25rem !important;
+  padding: 0.25rem 0.55rem !important;
+  border-radius: 999px !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  background: rgb(255 255 255 / 0.06) !important;
+}
+
+/* —— Evolution c114: mobile focused composer stays bottom-anchored (owner-video #9) —— */
+@media (max-width: 767.98px) {
+  .floating-composer:focus-within,
+  .composer-dock:focus-within,
+  section[data-composer="floating"]:focus-within {
+    position: fixed !important;
+    left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    margin: 0 !important;
+    max-height: min(70vh, 28rem) !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    z-index: 47 !important;
+  }
+}
+
+/* —— Evolution c115: card padding floor (owner-video #12) —— */
+.main-stage .dense-card,
+.main-stage .glow-card,
+.main-stage .rounded-panel.border.border-line.bg-surface,
+.main-stage li.dense-card {
+  padding: max(0.9rem, 0.85rem) !important;
+}
+.main-stage .dense-card.p-4,
+.main-stage .glow-card.p-4 {
+  padding: 1rem !important;
+}
+.composer-dock .min-h-16.rounded-panel,
+.floating-composer .min-h-16.rounded-panel {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+
+/* —— Evolution c116: guards after regression/owner-video fixes —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c117: phone/tablet safe-area + keyboard clearance (375/430/768) —— */
+@media (max-width: 1023.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed.inset-x-0.bottom-0 {
+    padding-left: max(0.25rem, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(0.25rem, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 48 !important;
+  }
+  .floating-composer,
+  section[data-composer="floating"],
+  .composer-dock {
+    left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+    right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 46 !important;
+    max-width: none !important;
+  }
+  .main-stage,
+  .page-shell,
+  .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: max(0px, env(safe-area-inset-left, 0px));
+    padding-right: max(0px, env(safe-area-inset-right, 0px));
+  }
+  /* Soft keyboard: keep focused composer above home indicator */
+  .floating-composer:focus-within,
+  .composer-dock:focus-within,
+  section[data-composer="floating"]:focus-within {
+    bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    max-height: min(62vh, 26rem) !important;
+  }
+}
+
+/* —— Evolution c118: tablet 768–1023 overflow/wrap + nav stack —— */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    display: none !important; /* rail owns nav on tablet; avoid z30 ghost bar */
+  }
+  .main-stage h1,
+  .main-stage h2,
+  .main-stage .masthead p,
+  .main-stage button,
+  aside.rail span.truncate {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  aside.rail {
+    max-width: 16rem !important;
+  }
+  .main-stage .flex.flex-wrap {
+    max-width: 100% !important;
+  }
+  .floating-composer,
+  .composer-dock,
+  section[data-composer="floating"] {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0.75rem !important;
+    z-index: auto !important;
+  }
+  .main-stage {
+    padding-bottom: 1.5rem !important;
+  }
+}
+/* Universal overflow guard */
+html, body {
+  overflow-x: clip !important;
+  max-width: 100vw !important;
+}
+.main-stage, .page-shell, .shell {
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* —— Evolution c119: mono focus-visible / hover / active consistency —— */
+:where(button, a, [role="button"], [role="menuitem"], input, textarea, select):focus-visible {
+  outline: 2px solid #f4f4f5 !important;
+  outline-offset: 2px !important;
+  box-shadow:
+    0 0 0 2px rgb(10 10 11 / 0.95),
+    0 0 0 4px rgb(244 244 245 / 0.95) !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(button, a[href], [role="button"], [role="menuitem"]):hover:not(:disabled):not(.bg-accent) {
+    background-color: rgb(255 255 255 / 0.07) !important;
+    border-color: rgb(255 255 255 / 0.18) !important;
+  }
+  :where(button.bg-accent, a.bg-accent):hover:not(:disabled) {
+    filter: brightness(1.06) !important;
+  }
+}
+:where(button, a[href], [role="button"]):active:not(:disabled) {
+  transform: translateY(1px) !important;
+  filter: brightness(0.96) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"]):active:not(:disabled) {
+    transform: none !important;
+  }
+}
+/* Keep logo purple only */
+.logo-mark:focus-visible,
+.logo-badge:focus-visible {
+  outline-color: rgb(124 92 255) !important;
+}
+
+/* —— Evolution c120: empty-state + chart wells at phone/tablet viewports —— */
+.empty-state,
+[data-empty="true"],
+[data-testid="chart-empty"],
+[data-testid="persona-empty"],
+.dash3d-chart-card,
+.dash3d-chart-card [data-testid="chart-empty"],
+.main-stage .dense-card.rounded-panel.border.border-line.p-6.text-center,
+.page-shell .dense-card.rounded-panel.border.border-line.p-6.text-center {
+  background-color: rgb(14 16 22 / 0.58) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 50%),
+    url("/brand/textures/empty-well-mono.jpg"),
+    url("/brand/textures/frost-card-texture.jpg") !important;
+  background-size: auto, cover, 240px 240px !important;
+  background-blend-mode: soft-light, soft-light, soft-light !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 0 0 1px rgb(255 255 255 / 0.05),
+    0 14px 36px rgb(0 0 0 / 0.4) !important;
+  backdrop-filter: blur(20px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.15) !important;
+  min-height: 7.5rem !important;
+  padding: 1.15rem !important;
+  color: #c0c7d6 !important;
+}
+@media (max-width: 767.98px) {
+  .empty-state,
+  [data-testid="chart-empty"],
+  [data-testid="persona-empty"] {
+    min-height: 6.5rem !important;
+    padding: 1rem !important;
+  }
+}
+
+/* —— Evolution c121: guards after viewport/focus/empty polish —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed { z-index: 48 !important; }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card,
+  .floating-composer,
+  section[data-composer="floating"] { z-index: 46 !important; }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* c121 strengthened: win over utility z-45 / tiny pb on Primary + floating composer */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  nav[aria-label="Primary"].fixed {
+    z-index: 48 !important;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .floating-composer,
+  section.command-card.composer-dock,
+  section[data-composer="floating"],
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* c121 final: beat dual-class z-45 recipes (section.floating-composer.composer-dock) */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    z-index: 48 !important;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock,
+  form.floating-composer.composer-dock,
+  [data-composer="floating"].floating-composer.composer-dock,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.command-card.composer-dock {
+    z-index: 46 !important;
+  }
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+/* —— Evolution c122: typography rhythm (5-viewport scale + muted AA) —— */
+:root {
+  --type-h1: clamp(1.65rem, 1.35rem + 1.2vw, 2.25rem);
+  --type-h2: clamp(1.125rem, 1.05rem + 0.35vw, 1.35rem);
+  --type-h3: clamp(1rem, 0.95rem + 0.2vw, 1.125rem);
+  --type-body: 0.9375rem;
+  --type-muted: 0.875rem;
+  --type-meta: 0.6875rem;
+  --leading-tight: 1.18;
+  --leading-body: 1.55;
+  --leading-relaxed: 1.65;
+  --tracking-display: -0.025em;
+  --tracking-title: -0.015em;
+  --tracking-body: 0.005em;
+  --tracking-meta: 0.06em;
+}
+.main-stage h1,
+.page-shell h1,
+.masthead h1 {
+  font-size: var(--type-h1) !important;
+  line-height: var(--leading-tight) !important;
+  letter-spacing: var(--tracking-display) !important;
+  font-weight: 650 !important;
+}
+.main-stage h2,
+.page-shell h2,
+.masthead h2,
+.main-stage .font-semibold.text-sm {
+  font-size: var(--type-h2) !important;
+  line-height: 1.3 !important;
+  letter-spacing: var(--tracking-title) !important;
+  font-weight: 600 !important;
+}
+.main-stage h3,
+.page-shell h3 {
+  font-size: var(--type-h3) !important;
+  line-height: 1.35 !important;
+  letter-spacing: var(--tracking-title) !important;
+}
+.main-stage p,
+.main-stage .text-sm,
+.page-shell p {
+  font-size: var(--type-body) !important;
+  line-height: var(--leading-body) !important;
+  letter-spacing: var(--tracking-body) !important;
+}
+.main-stage .text-muted,
+.page-shell .text-muted,
+aside .text-muted,
+.masthead .text-muted {
+  font-size: var(--type-muted) !important;
+  line-height: var(--leading-relaxed) !important;
+  letter-spacing: 0.01em !important;
+  color: #b8c0d0 !important; /* AA on glass/dark */
+}
+.meta-label,
+.main-stage .text-\[10px\],
+aside .text-\[10px\],
+.main-stage .uppercase.tracking-wide {
+  font-size: var(--type-meta) !important;
+  line-height: 1.35 !important;
+  letter-spacing: var(--tracking-meta) !important;
+  font-weight: 600 !important;
+}
+
+/* —— Evolution c123: nav/rail icon stroke+size unify + active-row glow —— */
+/* Note: desktop sidebar is <aside> without .rail class; target aside nav + Primary. */
+aside nav button svg,
+aside nav a svg,
+aside .nav-item svg,
+aside.md\:w-64 nav button svg,
+nav[aria-label="Primary"] button svg,
+nav.fixed[aria-label="Primary"] button svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  min-height: 1rem !important;
+  stroke-width: 1.75px !important;
+}
+aside nav button svg *,
+aside nav a svg *,
+aside nav button svg path,
+aside nav button svg line,
+aside nav button svg circle,
+aside nav button svg polyline,
+aside nav button svg rect,
+nav[aria-label="Primary"] button svg *,
+nav[aria-label="Primary"] button svg path {
+  stroke-width: 1.75px !important;
+}
+/* Active / current row: tonal pill + soft mono glow (beats purple-glow strippers) */
+aside nav button[aria-current="page"],
+aside nav button.bg-accent,
+aside nav button[class*="bg-accent"],
+aside nav .nav-item.bg-accent,
+aside nav button[class*="shadow-[0_0_18px_rgb(124_92_255"] {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 0 24px rgb(255 255 255 / 0.14),
+    0 0 40px rgb(255 255 255 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.65) !important;
+}
+aside nav button[aria-current="page"] svg,
+aside nav button.bg-accent svg,
+aside nav button[class*="bg-accent"] svg,
+aside nav button[aria-current="page"] svg *,
+aside nav button.bg-accent svg * {
+  color: #09090b !important;
+  stroke: currentColor !important;
+  stroke-width: 1.75px !important;
+}
+/* Inactive tonal separation */
+aside nav button:not([aria-current="page"]):not(.bg-accent):not([class*="bg-accent"]) {
+  color: #b4bccb !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+aside nav button:not([aria-current="page"]):not(.bg-accent):not([class*="bg-accent"]):hover {
+  background: rgb(255 255 255 / 0.06) !important;
+  color: #e8ecf5 !important;
+}
+nav.fixed[aria-label="Primary"] button[aria-current="page"],
+nav.fixed[aria-label="Primary"] button.bg-accent {
+  color: #f4f6fb !important;
+  text-shadow: 0 0 12px rgb(255 255 255 / 0.25);
+}
+
+/* —— Evolution c124: hover/press motion timing + reduced-motion off —— */
+:where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card) {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 160ms ease,
+    transform 120ms ease,
+    filter 120ms ease,
+    opacity 140ms ease !important;
+}
+:where(button, a[href], [role="button"]):active:not(:disabled) {
+  transition-duration: 80ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card),
+  :where(button, a[href], [role="button"]):active:not(:disabled),
+  .main-stage article.max-w-3xl.rounded-panel,
+  .chat-stream article.max-w-3xl,
+  .page-enter,
+  .skeleton::after {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* —— Evolution c125: Systems rail block tonal separation —— */
+aside .text-\[10px\].uppercase,
+aside p.text-\[10px\],
+aside span.text-\[10px\].font-semibold,
+aside .text-\[10px\].font-semibold {
+  color: #9aa3b5 !important;
+  letter-spacing: 0.08em !important;
+  margin-top: 0.85rem !important;
+  margin-bottom: 0.35rem !important;
+}
+aside nav {
+  gap: 0.15rem !important;
+}
+aside.md\:flex,
+aside.md\:w-64,
+aside.fixed.inset-0 {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 28%),
+    rgb(8 10 14 / 0.92) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.08) !important;
+}
+/* Bottom Primary icons already 16/1.75 — reinforce */
+nav.fixed[aria-label="Primary"] button svg,
+nav.fixed[aria-label="Primary"] button svg * {
+  width: 1rem !important;
+  height: 1rem !important;
+  stroke-width: 1.75px !important;
+}
+
+/* —— Evolution c126: guards after type/icon/motion —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    z-index: 48 !important;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.command-card.composer-dock,
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+
+/* —— Evolution c128: active-row mono glow — beat purple-stripper specificity —— */
+aside nav button.bg-accent[class*="124_92_255"],
+aside nav button.bg-accent[class*="shadow-[0_0_18px"],
+aside nav button.bg-accent.text-white,
+aside.fixed nav button.bg-accent,
+aside.md\:w-64 nav button.bg-accent,
+aside nav button[aria-current="page"].bg-accent {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.1),
+    0 0 22px rgb(255 255 255 / 0.16),
+    0 0 48px rgb(255 255 255 / 0.07),
+    inset 0 1px 0 rgb(255 255 255 / 0.7) !important;
+  text-shadow: none !important;
+}
+aside nav button.bg-accent[class*="124_92_255"] svg,
+aside nav button.bg-accent.text-white svg,
+aside nav button.bg-accent[class*="124_92_255"] svg *,
+aside nav button.bg-accent.text-white svg * {
+  color: #09090b !important;
+  stroke: currentColor !important;
+  stroke-width: 1.75px !important;
+}
+/* —— Evolution c129: BA 375/768-home — no accidental revert; tighten phone masthead fold —— */
+@media (max-width: 429.98px) {
+  .main-stage .masthead h1,
+  .page-shell .masthead h1,
+  .main-stage h1.font-display {
+    font-size: clamp(1.45rem, 1.2rem + 2.2vw, 1.75rem) !important;
+    line-height: 1.15 !important;
+  }
+  .main-stage .masthead .text-muted,
+  .main-stage .masthead p {
+    font-size: 0.8125rem !important;
+    line-height: 1.45 !important;
+  }
+}
+
+/* —— Evolution c130: restore primary / secondary / tertiary ladder (AA≥4.5) —— */
+:root {
+  --text-primary: #f4f6fb;   /* ~18.6:1 on #05070d */
+  --text-secondary: #9aa3b5; /* ~7.9:1  — body muted / inactive nav */
+  --text-tertiary: #7a8499;  /* ~5.4:1  — meta, status, section labels */
+}
+html:not([data-theme="light"]) {
+  --color-muted: var(--text-secondary);
+}
+html:not([data-theme="light"]) .text-muted,
+html:not([data-theme="light"]) .main-stage .text-muted,
+html:not([data-theme="light"]) .page-shell .text-muted,
+html:not([data-theme="light"]) .masthead .text-muted,
+html:not([data-theme="light"]) aside .text-muted,
+html:not([data-theme="light"]) .main-stage .dense-card .text-muted,
+html:not([data-theme="light"]) .main-stage .glow-card .text-muted,
+html:not([data-theme="light"]) .main-stage .rounded-panel .text-muted {
+  color: var(--text-secondary) !important;
+}
+/* c122 override that flattened hierarchy */
+.main-stage .text-muted,
+.page-shell .text-muted,
+aside .text-muted,
+.masthead .text-muted {
+  color: var(--text-secondary) !important;
+}
+html:not([data-theme="light"]) h1,
+html:not([data-theme="light"]) h2,
+html:not([data-theme="light"]) h3,
+html:not([data-theme="light"]) .font-semibold,
+html:not([data-theme="light"]) .font-display {
+  color: var(--text-primary);
+}
+/* Tertiary: meta / 10px labels / status chips */
+html:not([data-theme="light"]) .text-\[10px\],
+html:not([data-theme="light"]) .meta-label,
+html:not([data-theme="light"]) .main-stage .text-xs.text-muted,
+html:not([data-theme="light"]) aside .text-\[10px\],
+html:not([data-theme="light"]) aside .text-\[10px\].font-semibold,
+html:not([data-theme="light"]) .main-stage .text-xs.text-muted,
+html:not([data-theme="light"]) span.rounded-full.border.border-line.text-xs,
+html:not([data-theme="light"]) .main-stage p.text-xs.text-muted {
+  color: var(--text-tertiary) !important;
+}
+/* Inactive rail labels stay secondary (readable step below primary active) */
+aside nav button:not(.bg-accent):not([class*="bg-accent"]) {
+  color: var(--text-secondary) !important;
+}
+
+/* —— Evolution c131: Library / Runs / Projects density, dividers, empty wells —— */
+/* Runs (+ agents) bare empty li → dashed well like Library */
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-3 > li.text-sm.text-muted,
+.min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.text-sm.text-muted,
+.main-stage ul.mt-4.space-y-3 > li.text-sm.text-muted:only-child,
+.main-stage ul.space-y-3 > li.text-sm.text-muted:only-child {
+  text-align: center !important;
+  min-height: 7.5rem !important;
+  padding: 1.75rem 1.25rem !important;
+  border-radius: 1.1rem !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgb(255 255 255 / 0.05), transparent 65%),
+    rgb(12 16 24 / 0.92) !important;
+  display: grid !important;
+  place-items: center !important;
+  color: var(--text-tertiary) !important;
+}
+/* Library "No files yet." inside list */
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted:only-child,
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted,
+aside.rounded-panel ul li.text-muted:only-child {
+  text-align: center !important;
+  min-height: 6.5rem !important;
+  margin-top: 0.5rem !important;
+  padding: 1.5rem 1rem !important;
+  border-radius: 1rem !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+  background: rgb(8 10 16 / 0.85) !important;
+  color: var(--text-tertiary) !important;
+  display: grid !important;
+  place-items: center !important;
+}
+/* Projects empty + list-row density */
+.main-stage article.glow-card.rounded-panel,
+.main-stage article.rounded-panel.border.border-line.bg-surface {
+  padding: 1rem 1.05rem !important;
+}
+.main-stage article.rounded-panel.border.border-line.bg-surface + article.rounded-panel,
+.main-stage .grid.gap-3 > article.rounded-panel {
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+/* Runs list rows when present */
+.main-stage ul.mt-4.space-y-3 > li.rounded-panel {
+  padding: 0.85rem 1rem !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  background: rgb(12 12 14 / 0.55) !important;
+}
+.main-stage ul.mt-4.space-y-3 > li.rounded-panel + li.rounded-panel {
+  margin-top: 0.65rem !important;
+}
+/* Divider tonality between stacked panels */
+.main-stage .grid.gap-3 > *,
+.main-stage section .mt-4.grid > * {
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+
+/* —— Evolution c132: dropdown / popover / cmdk elevation unify —— */
+:root {
+  --menu-radius: 1.15rem;
+  --menu-blur: blur(24px) saturate(1.2);
+  --menu-bg: rgb(12 12 14 / 0.78);
+  --menu-border: 1px solid rgb(255 255 255 / 0.12);
+  --menu-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 16px 40px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(255 255 255 / 0.04);
+}
+#command-palette,
+.absolute.z-30.mt-2.max-h-80,
+[role="menu"],
+[role="listbox"],
+[data-radix-popper-content-wrapper] > *,
+.shadow-panel.rounded-panel.border.border-line.bg-surface {
+  border-radius: var(--menu-radius) !important;
+  background: var(--menu-bg) !important;
+  border: var(--menu-border) !important;
+  box-shadow: var(--menu-shadow) !important;
+  backdrop-filter: var(--menu-blur) !important;
+  -webkit-backdrop-filter: var(--menu-blur) !important;
+}
+#command-palette button,
+[role="menu"] [role="menuitem"],
+[role="listbox"] [role="option"] {
+  border-radius: 0.75rem !important;
+  min-height: 2.5rem !important;
+}
+#command-palette button:hover,
+[role="menu"] [role="menuitem"]:hover,
+[role="listbox"] [role="option"]:hover {
+  background: rgb(255 255 255 / 0.06) !important;
+}
+
+/* —— Evolution c133: guards after hierarchy/routes/menus —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    z-index: 48 !important;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.command-card.composer-dock,
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+}
+
+
+/* —— Evolution c134: beat c123 inactive #b4bccb; phone h1; Library empty radius —— */
+aside nav button:not([aria-current="page"]):not(.bg-accent):not([class*="bg-accent"]),
+aside nav button.text-muted:not(.bg-accent) {
+  color: var(--text-secondary, #9aa3b5) !important;
+}
+@media (max-width: 429.98px) {
+  .main-stage h1,
+  .page-shell h1,
+  .masthead h1,
+  .main-stage h1.font-display,
+  .main-stage .font-display.text-3xl {
+    font-size: clamp(1.45rem, 1.2rem + 2.2vw, 1.75rem) !important;
+    line-height: 1.15 !important;
+  }
+}
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted:only-child,
+aside.glow-card ul.mt-3.space-y-1 > li.text-muted,
+aside.glow-card.rounded-panel ul > li.text-muted {
+  border-radius: 1rem !important;
+  border: 1px dashed rgb(255 255 255 / 0.14) !important;
+  background: rgb(8 10 16 / 0.85) !important;
+  color: var(--text-tertiary, #7a8499) !important;
+  min-height: 6.5rem !important;
+  padding: 1.5rem 1rem !important;
+  display: grid !important;
+  place-items: center !important;
+  list-style: none !important;
+}
+
+/* —— Evolution c136: Thread / provider / status badges → mono chips (B&W rule) —— */
+/* Empty-thread Zap halo + any leftover purple bloom utilities */
+.main-stage span.rounded-full.bg-accent\/20.text-accent,
+.main-stage span[class*="bg-accent/20"][class*="text-accent"],
+.main-stage span[class*="shadow-[0_0_28px_rgb(124_92_255"],
+.main-stage [class*="124_92_255/0.45"] {
+  background: rgb(255 255 255 / 0.1) !important;
+  background-image: none !important;
+  color: #e8ecf5 !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 0 18px rgb(255 255 255 / 0.08) !important;
+  filter: none !important;
+}
+/* Provider / external mark chips (OB warn, BP info) + ok/warn/info tonal washes */
+.main-stage .bg-info\/15,
+.main-stage .bg-warn\/15,
+.main-stage .bg-ok\/15,
+.main-stage [class*="bg-info/15"],
+.main-stage [class*="bg-warn/15"],
+.main-stage [class*="bg-ok/15"],
+.main-stage span[class*="bg-info"],
+.main-stage span[class*="bg-warn"] {
+  background: rgb(255 255 255 / 0.08) !important;
+  background-image: none !important;
+  color: #e8ecf5 !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+}
+.main-stage .text-info,
+.main-stage .text-warn,
+.main-stage .text-ok,
+.main-stage [class*="text-info"],
+.main-stage [class*="text-warn"],
+.main-stage [class*="text-ok"],
+.main-stage .border-ok\/40,
+.main-stage [class*="border-ok"],
+.main-stage [class*="border-info"],
+.main-stage [class*="border-warn"] {
+  color: #d4d4d8 !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
+}
+/* Keep semantic error red for real error banners only (Error Banners Bot) */
+.main-stage [role="alert"] .text-danger,
+.main-stage [data-testid*="error"] .text-danger,
+.main-stage .text-danger[role="alert"],
+[data-testid="error-banner"] ,
+[data-testid="error-banner"] * {
+  /* do not override danger inside error banners */
+}
+
+/* —— Evolution c137: stray-color sweep — neutralize residual chroma (logo + error exempt) —— */
+:root {
+  --text-tertiary: #8a8a8a; /* was #7a8499 (cool blue); true gray, AA on #05070d ~5.5 */
+  --color-info: #c8c8c8;
+  --color-ok: #d4d4d8;
+  --color-warn: #d4d4d8;
+  --color-glow: #c8c8c8;
+}
+html:not([data-theme="light"]) .text-\[10px\],
+html:not([data-theme="light"]) .meta-label,
+html:not([data-theme="light"]) aside .text-\[10px\],
+html:not([data-theme="light"]) .main-stage .text-xs.text-muted,
+html:not([data-theme="light"]) span.rounded-full.border.border-line.text-xs {
+  color: var(--text-tertiary) !important;
+}
+/* dash3d purple inset / cyan wash → mono */
+.dash3d-glass,
+.dash3d-pill,
+.dash3d-skip-link,
+.dash3d-hud-focus-toggle {
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 12px 28px rgb(0 0 0 / 0.4) !important;
+}
+.dash3d-root.dash3d-universe {
+  /* keep deep stage; strip blue cast without touching canvas */
+  background-color: #07070a !important;
+}
+.dash3d-skip-link {
+  border-color: rgb(255 255 255 / 0.35) !important;
+}
+/* Any remaining utility purple blooms outside logo */
+[class*="124_92_255"]:not(.logo-mark):not(.logo-badge),
+[class*="7c5cff"]:not(.logo-mark):not(.logo-badge),
+[class*="49_194_255"] {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 8px 22px rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  outline-color: rgb(232 236 245 / 0.85) !important;
+}
+.logo-mark,
+.logo-badge,
+.logo-mark *,
+.logo-badge * {
+  /* purple allowed — restore intentional bloom if a broad rule hit */
+}
+
+/* —— Evolution c138: phone glass deepen (375/390/430) + CAP dash3d overlay blur —— */
+@media (max-width: 430.98px) {
+  :root {
+    --glass-blur: blur(20px) saturate(1.12); /* single layer target */
+    --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.02) 46%), rgb(8 8 10 / 0.78);
+    --glass-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      inset 0 0 24px rgb(255 255 255 / 0.04),
+      0 18px 48px rgb(0 0 0 / 0.72);
+    --glass-border: 1px solid rgb(255 255 255 / 0.18);
+  }
+  /* Cards / composer / bottom nav — one backdrop-filter each */
+  .main-stage .glow-card,
+  .main-stage .command-card,
+  .main-stage .dense-card,
+  .main-stage article.rounded-panel.border.border-line,
+  .main-stage .rounded-panel.border.border-line.bg-surface {
+    background: var(--glass-bg) !important;
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 48%) !important; /* no new url() */
+    border: var(--glass-border) !important;
+    box-shadow: var(--glass-shadow) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+  }
+  .composer-dock,
+  .floating-composer,
+  section.command-card.composer-dock,
+  [data-composer="floating"],
+  .composer-bar__card {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 44%),
+      rgb(6 6 8 / 0.82) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 44%) !important;
+    border: 1px solid rgb(255 255 255 / 0.2) !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 0 28px rgb(255 255 255 / 0.05),
+      0 22px 56px rgb(0 0 0 / 0.75) !important;
+    backdrop-filter: blur(20px) saturate(1.12) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.12) !important;
+  }
+  nav.fixed[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 40%),
+      rgb(8 8 10 / 0.82) !important;
+    border-top: 1px solid rgb(255 255 255 / 0.16) !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      0 -12px 36px rgb(0 0 0 / 0.55) !important;
+    backdrop-filter: blur(18px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+  }
+}
+/* Dashboard Bot: do NOT deepen blur on large WebGL overlays — CAP / tonal fill */
+.dash3d-node-detail,
+.dash3d-node-detail.is-open,
+.dash3d-charts-panel,
+.dash3d-charts-panel.dash3d-glass,
+.dash3d-side.dash3d-node-detail {
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 50%),
+    rgb(10 10 12 / 0.88) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 50%) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 14px 36px rgb(0 0 0 / 0.5) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+
+/* —— Evolution c139: motion — animate transform/opacity only (60fps / no layout thrash) —— */
+:where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card) {
+  transition:
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+:where(button, a[href], [role="button"]):active:not(:disabled) {
+  transform: scale(0.98) !important;
+  transition-duration: 80ms !important;
+}
+:where(button, a[href], [role="button"]):hover:not(:disabled) {
+  /* tonal hover without transitioning background */
+}
+.nav-item,
+.dense-card,
+.glow-card,
+.model-chip,
+.suggestion-chip,
+.sidebar-plus,
+aside nav button,
+nav[aria-label="Primary"] button {
+  transition:
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+/* Convert common layout-property transitions */
+.composer-dock,
+.floating-composer,
+.command-card,
+.rounded-panel,
+.dash3d-pill,
+.dash3d-glass {
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+/* Keyframes: keep opacity/transform only where we control them */
+@keyframes mono-motion-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.02); }
+}
+@keyframes skel-mono-shimmer {
+  0% { transform: translateX(-40%); opacity: 0.35; }
+  100% { transform: translateX(140%); opacity: 0.55; }
+}
+@keyframes sheet-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes page-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* will-change only on frequently hovered chrome */
+aside nav button,
+nav[aria-label="Primary"] button,
+.composer-dock button,
+.main-stage button.bg-accent {
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card),
+  .composer-dock,
+  .floating-composer,
+  .command-card,
+  .rounded-panel,
+  aside nav button,
+  nav[aria-label="Primary"] button {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+}
+
+/* —— Evolution c140: guards after badges/color/glass/motion —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    z-index: 48 !important;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.command-card.composer-dock,
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+  filter: none !important;
+}
+
+
+/* —— Evolution c141: dash3d HUD stray chroma leftovers —— */
+.dash3d-hud-focus-toggle,
+.dash3d-pill,
+.dash3d-side-close,
+.dash3d-skip-link {
+  color: #c8c8c8 !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
+  background-image: none !important;
+}
+.dash3d-hud-focus-toggle:hover,
+.dash3d-pill:hover,
+.dash3d-side-close:hover {
+  color: #e8e8e8 !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
+
+/* === PERF ASSETS BLOCK START (visual/perf-assets) ===
+   WebP overrides for brand textures (smaller transfer). CSS vars --tex-* default
+   to local webp; Media Storage Fleet signed URLs swap via resolveVisualAssetUrls
+   once Grok Build mounts VisualAssetsBoot (see /workspace/audit/perf/owner-prompts.md).
+   Gate-until-ready + blur deferral live in unfinished.patch until root boot lands.
+*/
+:root {
+  --tex-hero-bg: url("/brand/hero-bg.webp");
+  --tex-logo-mark: url("/brand/logo-mark.webp");
+  --tex-frost: url("/brand/textures/frost-card-texture.webp");
+  --tex-hero-grain: url("/brand/textures/hero-mono-grain.webp");
+  --tex-hero-atmosphere: url("/brand/textures/hero-atmosphere-mono.webp");
+  --tex-panel-noise: url("/brand/textures/panel-noise-mono.webp");
+  --tex-empty-well: url("/brand/textures/empty-well-mono.webp");
+  --tex-chart-grid: url("/brand/textures/chart-grid-mono.webp");
+  --tex-empty-illustration: url("/brand/textures/empty-state-illustration-mono.webp");
+  --tex-og: url("/og.webp");
+}
+body {
+  background-image:
+    linear-gradient(180deg, rgb(5 5 7 / 0.82), rgb(5 5 7 / 0.92)),
+    var(--tex-hero-grain) !important;
+  background-size: auto, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+}
+html[data-theme="light"] body {
+  background-image:
+    linear-gradient(180deg, rgb(250 250 250 / 0.88), rgb(250 250 250 / 0.94)),
+    var(--tex-hero-grain) !important;
+}
+.masthead {
+  background-image:
+    var(--tex-hero-bg),
+    radial-gradient(ellipse 42% 120% at 78% -20%, rgb(124 92 255 / 0.18), transparent 70%),
+    radial-gradient(ellipse 28% 80% at 92% 40%, rgb(40 90 180 / 0.12), transparent 70%) !important;
+}
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero,
+.composer-bar__card,
+.tool-card,
+.service-card {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    var(--tex-frost) !important;
+  background-size: auto, 420px 420px;
+  background-blend-mode: soft-light, soft-light;
+}
+/* === PERF ASSETS BLOCK END === */
+
+/* PERF ASSETS first-paint gate — until VisualAssetsBoot sets .visual-assets-ready */
+html:not(.visual-assets-ready) body,
+html:not(.visual-assets-ready) .masthead,
+html:not(.visual-assets-ready) .glow-card,
+html:not(.visual-assets-ready) .command-card,
+html:not(.visual-assets-ready) .floating-composer,
+html:not(.visual-assets-ready) .glass-panel,
+html:not(.visual-assets-ready) .dense-card,
+html:not(.visual-assets-ready) .settings-card,
+html:not(.visual-assets-ready) .page-hero {
+  background-image: none !important;
+}
+html:not(.visual-assets-ready) .topbar,
+html:not(.visual-assets-ready) .glow-card,
+html:not(.visual-assets-ready) .command-card,
+html:not(.visual-assets-ready) .floating-composer {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

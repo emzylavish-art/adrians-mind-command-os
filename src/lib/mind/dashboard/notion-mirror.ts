@@ -79,19 +79,42 @@ export function buildNotionMirrorView(input: {
   for (const bot of input.bots) {
     const page = pageForBot(graph, bot.id);
     if (!page) {
+      // No Notion page mapped — surface real lock/notes content when present (never invent pages).
+      const lock = bot.lock;
+      // Gap#35: prefer promoted heartbeatAt; raw may be omitted after publicize
+      const hbRawTop = lock?.heartbeatAt ? String(lock.heartbeatAt) : "";
+      const hbRawBag =
+        lock?.raw && typeof lock.raw === "object"
+          ? String((lock.raw as Record<string, unknown>).heartbeat_at ?? (lock.raw as Record<string, unknown>).heartbeatAt ?? "")
+          : "";
+      const hb = hbRawTop || hbRawBag || lock?.claimed_at || bot.lastActivityAt || null;
+      const hbMs = parseTimeMs(hb, nowMs);
+      const ageMs = hbMs != null ? Math.max(0, nowMs - hbMs) : null;
+      const notes = sanitizeLabelText(bot.notes || lock?.notes || "", 140) || null;
+      const taskTop = lock?.task ? sanitizeLabelText(String(lock.task), 100) || null : null;
+      const taskRaw =
+        lock?.raw && typeof lock.raw === "object"
+          ? sanitizeLabelText(String((lock.raw as Record<string, unknown>).task ?? ""), 100) || null
+          : null;
+      const task = taskTop || taskRaw;
+      const hasLockContent = Boolean(lock || notes || task || hb);
       rows.push({
         botId: bot.id,
         botName: sanitizeLabelText(bot.name, 80),
         pageId: null,
-        title: null,
+        title: hasLockContent ? task || notes || `${lock?.status ?? "lock"} · ${lock?.file ?? "unmapped"}` : null,
         url: null,
-        lastEdited: null,
-        lastEditedMs: null,
-        ageMs: null,
-        stale: false,
-        freshLabel: NO_MIRROR_SOURCE,
-        excerpt: null,
-        source: graph.mode,
+        lastEdited: hb,
+        lastEditedMs: hbMs,
+        ageMs,
+        stale: ageMs != null ? ageMs > staleMs : false,
+        freshLabel: hasLockContent
+          ? ageMs != null
+            ? `lock · ${freshnessLabel(ageMs, ageMs > staleMs)}`
+            : "lock · no Notion page"
+          : NO_MIRROR_SOURCE,
+        excerpt: notes,
+        source: hasLockContent ? "lock" : graph.mode,
       });
       continue;
     }

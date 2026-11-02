@@ -12,3 +12,4 @@ export { loadMoneyView, buildMoneyView, createFilesystemSpendAdapter, NO_SPEND_S
 export { buildDashboardCharts } from "./chart-series.ts";
 export { buildOperatorTargets, filterOperatorTargets, sanitizePaletteText } from "./operator-palette.ts";
 export { buildNotionMirrorView } from "./notion-mirror.ts";
+export { buildForeverContractGuard, queueHealthTone, detectLaneIdle } from "./forever-contract.ts";

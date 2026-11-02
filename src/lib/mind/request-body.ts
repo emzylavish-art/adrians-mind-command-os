@@ -120,7 +120,7 @@ export function parseModelTierField(value: unknown): ParseModelTierResult {
     return { ok: true, tier: "Auto" };
   }
   if (typeof value !== "string" || !isModelTier(value)) {
-    return { ok: false, error: "Unknown model tier. Choose Auto, Fast, Expert, Heavy, or Build." };
+    return { ok: false, error: "Unknown model tier. Choose Auto, Fast, Expert, Heavy, Build, or Orchestrator." };
   }
   return { ok: true, tier: value };
 }

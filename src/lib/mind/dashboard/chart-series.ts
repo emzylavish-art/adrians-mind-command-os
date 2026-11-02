@@ -15,7 +15,7 @@ export const MAX_BOTS = 18;
 export const MAX_HOURS = 24;
 export const MAX_HEALTH_BUCKETS = 24;
 
-export type ChartPoint = { label: string; value: number };
+export type ChartPoint = { label: string; value: number; /** Optional paired series (e.g. releases). */ altValue?: number };
 export type ChartSeries = {
   id: string;
   title: string;
@@ -155,11 +155,12 @@ export function buildLockHealthShare(
       emptyReason: NO_CHART_SOURCE,
     };
   }
-  // paired points: for each hour, net = claims - releases (clamped >=0) as "active pressure"
+  // Gap#50: zero-fill every hour in the window; pair claims (value) + releases (altValue).
+  const windowStart = nowMs - MAX_HEALTH_BUCKETS * 3600_000;
   const byHour = new Map<string, { claims: number; releases: number; order: number }>();
   for (const e of lockEv) {
     if (!Number.isFinite(e.atMs)) continue;
-    if (nowMs - e.atMs > MAX_HEALTH_BUCKETS * 3600_000) continue;
+    if (e.atMs < windowStart || e.atMs > nowMs) continue;
     const key = watHourKey(e.atMs);
     const row = byHour.get(key) ?? { claims: 0, releases: 0, order: e.atMs };
     if (e.kind === "lock_claim") row.claims += 1;
@@ -167,18 +168,29 @@ export function buildLockHealthShare(
     row.order = Math.min(row.order, e.atMs);
     byHour.set(key, row);
   }
+  // Fill empty hours so gaps in activity stay visible on the x axis.
+  const hourMs = 3600_000;
+  const startHour = Math.floor(windowStart / hourMs) * hourMs;
+  for (let t = startHour; t <= nowMs; t += hourMs) {
+    const key = watHourKey(t);
+    if (!byHour.has(key)) byHour.set(key, { claims: 0, releases: 0, order: t });
+  }
   const points = [...byHour.entries()]
     .sort((a, b) => a[1].order - b[1].order)
     .slice(-MAX_HOURS)
     .map(([label, row]) => {
-      const net = Math.max(0, row.claims); // real claim count that hour
-      return { label: `${label} ·c${row.claims}/r${row.releases}`, value: net };
-    })
-    .filter((p) => finiteNonNeg(p.value) != null);
+      const claims = finiteNonNeg(row.claims) ?? 0;
+      const releases = finiteNonNeg(row.releases) ?? 0;
+      return {
+        label: `${label} ·c${claims}/r${releases}`,
+        value: claims,
+        altValue: releases,
+      };
+    });
   return {
     id: "lock-health-share",
     title,
-    unit: "claims",
+    unit: "claims|releases",
     points,
     source: "timeline lock events",
     emptyReason: points.length ? null : NO_CHART_SOURCE,

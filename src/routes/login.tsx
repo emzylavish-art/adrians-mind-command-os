@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useState, type FormEvent, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   getSupabaseAuthUser,
@@ -8,13 +8,22 @@ import {
 } from "@/lib/supabase/actions";
 import { safeRedirectPath } from "@/lib/supabase/safe-redirect";
 import { oauthAuthorizeTarget } from "@/lib/supabase/oauth-redirect";
-import { authEnabled, signIn } from "@/lib/auth/client";
+import { authEnabled, authClient, signIn } from "@/lib/auth/client";
+import { emailAndPasswordEnabled } from "@/lib/auth/email-password";
 import {
+  authUserLoaderFallback,
   emailPasswordGate,
+  formatLoginThrownError,
   loginErrorBannerFromSearch,
+  resolveEmailPasswordBackend,
   resolveLoginProviderAction,
+  serverFnRedirectHref,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
+
+const LazyMonoMotion = lazy(() =>
+  import("@/components/mind/motion/MonoMotionGraphic").then((m) => ({ default: m.MonoMotionGraphic })),
+);
 
 type LoginSearch = {
   next?: string;
@@ -29,8 +38,10 @@ export const Route = createFileRoute("/login")({
   loader: async () => {
     try {
       return await getSupabaseAuthUser();
-    } catch {
-      return { configured: false, user: null };
+    } catch (err) {
+      // Never claim not-configured on a transient serverFn/hydration failure —
+      // that paints a false banner in the in-app browser while SSR was fine.
+      return authUserLoaderFallback(err);
     }
   },
   component: Login,
@@ -55,6 +66,9 @@ function AuthBrand({ title, subtitle }: { title: string; subtitle?: string }) {
       <span className="logo-mark grid size-11 place-items-center rounded-2xl text-lg font-bold tracking-tight">
         A
       </span>
+      <Suspense fallback={null}>
+        <LazyMonoMotion className="mt-1" />
+      </Suspense>
       <div>
         <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
           Adrian&apos;s Mind
@@ -172,6 +186,7 @@ function Login() {
   const next = safeRedirectPath(search.next);
   const supabaseConfigured = Boolean(data.configured);
   const brokerConfigured = Boolean(data.brokerConfigured);
+  const supabaseOAuthProviders = data.supabaseOAuthProviders ?? [];
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -187,17 +202,47 @@ function Login() {
     setBusy(true);
     setBanner(null);
     setInfo(null);
-    const gate = emailPasswordGate(supabaseConfigured);
+    const backend = resolveEmailPasswordBackend({
+      supabaseConfigured,
+      betterAuthEmailEnabled: emailAndPasswordEnabled,
+    });
+    const gate = emailPasswordGate(backend !== "none");
     if (!gate.ok) {
       setInfo(gate.message);
       setBusy(false);
       return;
     }
     try {
+      // Prefer Supabase when configured so existing Auth users keep working.
+      // Better Auth email is only used when Supabase env is absent.
+      if (backend === "better_auth") {
+        const name = email.split("@")[0] || "Owner";
+        const result =
+          mode === "sign-up"
+            ? await authClient.signUp.email({ email, password, name })
+            : await authClient.signIn.email({ email, password });
+        if (result.error) {
+          const message = result.error.message || "Sign-in failed.";
+          setBanner(
+            mode === "sign-in" && /invalid|credential|password/i.test(message)
+              ? "That email and password do not match. If this is your first time, switch to Sign up."
+              : message,
+          );
+          return;
+        }
+        window.location.assign(next);
+        return;
+      }
       const action = mode === "sign-in" ? signInWithPassword : signUpWithPassword;
       const result = await action({
         data: { email, password, next },
       });
+      // Success path: serverFn may RETURN the serialized redirect (not throw).
+      const redirectTo = serverFnRedirectHref(result);
+      if (redirectTo) {
+        window.location.assign(redirectTo);
+        return;
+      }
       if (result && "ok" in result && result.ok === false) {
         setBanner(result.error);
         return;
@@ -207,8 +252,14 @@ function Login() {
         setMode("sign-in");
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+      // createServerFn turns `throw redirect(...)` into a thrown Response (or a
+      // serialized redirect object). Follow it; do not paint it as a failure.
+      const redirectTo = serverFnRedirectHref(err);
+      if (redirectTo) {
+        window.location.assign(redirectTo);
+        return;
+      }
+      const message = formatLoginThrownError(err);
       if (!/redirect/i.test(message)) {
         setBanner(message);
       }
@@ -224,6 +275,7 @@ function Login() {
     const action = resolveLoginProviderAction(provider, {
       supabaseConfigured,
       betterAuthEnabled: brokerConfigured && authEnabled,
+      supabaseOAuthProviders,
     });
     try {
       if (action.kind === "not_configured") {
@@ -251,8 +303,12 @@ function Login() {
         errorCallbackURL: `/login?next=${encodeURIComponent(next)}`,
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+      const redirectTo = serverFnRedirectHref(err);
+      if (redirectTo) {
+        window.location.assign(redirectTo);
+        return;
+      }
+      const message = formatLoginThrownError(err);
       if (!/redirect/i.test(message)) {
         setBanner(message);
       }
@@ -407,18 +463,33 @@ function Login() {
         <div className="flex flex-col gap-2">
           {oauthButtons.map((item) => {
             const Icon = item.icon;
+            const action = resolveLoginProviderAction(item.id, {
+              supabaseConfigured,
+              betterAuthEnabled: brokerConfigured && authEnabled,
+              supabaseOAuthProviders,
+            });
+            const disabled = busy || action.kind === "not_configured";
+            const note = action.kind === "not_configured" ? action.message : undefined;
             return (
-              <button
-                key={item.id}
-                type="button"
-                disabled={busy}
-                data-testid={`login-oauth-${item.id}`}
-                onClick={() => void onProvider(item.id)}
-                className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                <Icon />
-                {item.label}
-              </button>
+              <div key={item.id} className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  title={note}
+                  aria-label={note ? `${item.label} (${note})` : item.label}
+                  data-testid={`login-oauth-${item.id}`}
+                  onClick={() => void onProvider(item.id)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <Icon />
+                  {item.label}
+                </button>
+                {note ? (
+                  <p className="px-1 text-xs text-muted" data-testid={`login-oauth-${item.id}-note`}>
+                    {note}
+                  </p>
+                ) : null}
+              </div>
             );
           })}
         </div>

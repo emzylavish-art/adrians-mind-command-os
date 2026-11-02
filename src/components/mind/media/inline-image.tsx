@@ -40,7 +40,7 @@ export function InlineImage({
             event.dataTransfer.effectAllowed = "copy";
           }}
         >
-          <img src={safeSrc} alt={safeAlt} className="max-h-64 max-w-full object-contain" draggable={false} />
+          <img src={safeSrc} alt={safeAlt} className="max-h-64 max-w-full object-contain" loading="lazy" decoding="async" draggable={false} />
         </button>
         <div className="flex flex-wrap gap-2">
           {onEditImagine && (
@@ -76,7 +76,7 @@ export function InlineImage({
             if (event.key === "Escape") setOpen(false);
           }}
         >
-          <img src={safeSrc} alt={safeAlt} className="max-h-[90vh] max-w-[90vw] object-contain" />
+          <img src={safeSrc} alt={safeAlt} className="max-h-[90vh] max-w-[90vw] object-contain" loading="lazy" decoding="async" />
         </div>
       )}
     </>

@@ -9,6 +9,7 @@ import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 const MAX_BODY = 2_500_000;
 
@@ -62,6 +63,9 @@ export async function handleAgentRun(request: Request): Promise<Response> {
       mode: request.headers.get("sec-fetch-mode"),
       dest: request.headers.get("sec-fetch-dest"),
       method: request.method,
+      origin: request.headers.get("origin"),
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
     }) === "block"
   ) {
     return json({ ok: false, error: "Forbidden: cross-site request blocked", log: [] }, 403);
@@ -86,7 +90,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const limited = consumeMindRateLimit("agent", userId, 6);
   if (!limited.ok) return jsonRateLimited(AGENT_RATE_LIMIT_REPLY, limited.retryAfterSec, { log: [] });
   const gate = guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
