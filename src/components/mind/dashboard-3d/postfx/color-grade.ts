@@ -9,27 +9,34 @@ export type ColorGradeTuning = {
   vignette: number;
 };
 
+const _ambient = AMBIENT_RGB ?? {
+  healthy: [0.42, 0.72, 0.58] as const,
+  stalled: [0.72, 0.58, 0.32] as const,
+  blocked: [0.72, 0.38, 0.48] as const,
+  idle: [0.42, 0.48, 0.62] as const,
+};
+
 export const GRADE_BY_TONE: Record<HealthTone, ColorGradeTuning> = {
   healthy: {
-    tint: AMBIENT_RGB.healthy,
+    tint: _ambient.healthy,
     contrast: 1.05,
     saturation: 1.08,
     vignette: 0.22,
   },
   stalled: {
-    tint: AMBIENT_RGB.stalled,
+    tint: _ambient.stalled,
     contrast: 1.08,
     saturation: 0.95,
     vignette: 0.28,
   },
   blocked: {
-    tint: AMBIENT_RGB.blocked,
+    tint: _ambient.blocked,
     contrast: 1.12,
     saturation: 0.9,
     vignette: 0.34,
   },
   idle: {
-    tint: AMBIENT_RGB.idle,
+    tint: _ambient.idle,
     contrast: 1.0,
     saturation: 0.92,
     vignette: 0.2,
@@ -37,12 +44,14 @@ export const GRADE_BY_TONE: Record<HealthTone, ColorGradeTuning> = {
 };
 
 export function colorGradeParamsForTone(tone: HealthTone): ColorGradeTuning {
-  const g = GRADE_BY_TONE[normalizeHealthTone(tone)];
+  const key = normalizeHealthTone(tone);
+  const g = GRADE_BY_TONE[key] ?? GRADE_BY_TONE.idle;
+  const tintSrc = g?.tint ?? AMBIENT_RGB?.[key] ?? AMBIENT_RGB?.idle ?? ([0.42, 0.48, 0.62] as const);
   return {
-    tint: [...g.tint] as [number, number, number],
-    contrast: g.contrast,
-    saturation: g.saturation,
-    vignette: g.vignette,
+    tint: [...tintSrc] as [number, number, number],
+    contrast: g?.contrast ?? 1,
+    saturation: g?.saturation ?? 1,
+    vignette: g?.vignette ?? 0.2,
   };
 }
 

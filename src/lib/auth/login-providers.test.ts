@@ -1,14 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  authUserLoaderFallback,
   dashboardLoginSearch,
   emailPasswordGate,
-  resolveEmailPasswordBackend,
+  formatLoginThrownError,
   isOwnerBrokerConfigured,
   loginErrorBannerFromSearch,
   parseSupabaseOAuthProviders,
+  resolveEmailPasswordBackend,
   resolveLoginProviderAction,
+  serverFnRedirectHref,
 } from "./login-providers.ts";
+
 
 describe("resolveLoginProviderAction", () => {
   it("routes Google/GitHub/Apple through Supabase when configured and listed", () => {
@@ -204,5 +208,61 @@ describe("resolveEmailPasswordBackend", () => {
       }),
       "none",
     );
+  });
+});
+
+
+describe("serverFnRedirectHref", () => {
+  it("reads href from a serialized serverFn redirect object", () => {
+    assert.equal(
+      serverFnRedirectHref({
+        href: "/dashboard",
+        statusCode: 307,
+        isSerializedRedirect: true,
+      }),
+      "/dashboard",
+    );
+  });
+
+  it("reads href from a thrown Response with Location", () => {
+    const res = new Response(null, {
+      status: 307,
+      headers: { Location: "/dashboard" },
+    });
+    assert.equal(serverFnRedirectHref(res), "/dashboard");
+  });
+
+  it("reads href nested under error (createServerFn shape)", () => {
+    assert.equal(
+      serverFnRedirectHref({
+        error: { href: "/login", statusCode: 307, isSerializedRedirect: true },
+      }),
+      "/login",
+    );
+  });
+
+  it("returns null for ordinary errors", () => {
+    assert.equal(serverFnRedirectHref(new Error("nope")), null);
+    assert.equal(serverFnRedirectHref("x"), null);
+  });
+});
+
+describe("authUserLoaderFallback", () => {
+  it("keeps configured true so a transient serverFn failure cannot paint not-configured", () => {
+    const fallback = authUserLoaderFallback(new Error("boom"));
+    assert.equal(fallback.configured, true);
+    assert.equal(fallback.user, null);
+  });
+});
+
+describe("formatLoginThrownError", () => {
+  it("prefers Error.message over the generic Something went wrong copy", () => {
+    assert.equal(formatLoginThrownError(new Error("Invalid login credentials")), "Invalid login credentials");
+  });
+
+  it("stringifies unknown objects instead of a blank generic", () => {
+    const msg = formatLoginThrownError({ code: "X", detail: "nope" });
+    assert.match(msg, /nope|X/);
+    assert.notEqual(msg, "Something went wrong.");
   });
 });

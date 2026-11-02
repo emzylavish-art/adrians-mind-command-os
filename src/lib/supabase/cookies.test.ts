@@ -49,3 +49,16 @@ describe("mergeCookieOptions", () => {
     assert.equal(merged.httpOnly, true);
   });
 });
+
+describe("isProductionRuntime insecure cookie escape", () => {
+  it("treats MIND_ALLOW_INSECURE_COOKIES=1 as non-prod so local HTTP can store auth cookies", () => {
+    assert.equal(
+      isProductionRuntime({
+        NODE_ENV: "production",
+        VERCEL: "1",
+        MIND_ALLOW_INSECURE_COOKIES: "1",
+      }),
+      false,
+    );
+  });
+});

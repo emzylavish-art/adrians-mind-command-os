@@ -35,6 +35,9 @@ function guardSite(request: Request): Response | null {
       mode: request.headers.get("sec-fetch-mode"),
       dest: request.headers.get("sec-fetch-dest"),
       method: request.method,
+      origin: request.headers.get("origin"),
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
     }) === "block"
   ) {
     return json({ ok: false, error: "Forbidden: cross-site request blocked" }, 403);

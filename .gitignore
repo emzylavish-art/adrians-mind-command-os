@@ -13,3 +13,5 @@ dist/
 *.pem
 .DS_Store
 .data/
+.env.local.proof
+scripts/_window-proof.mjs

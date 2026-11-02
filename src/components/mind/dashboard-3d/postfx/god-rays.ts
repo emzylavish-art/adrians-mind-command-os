@@ -175,7 +175,7 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
   const u = pass.uniforms as unknown as GodRayUniforms;
   // ShaderPass clones uniforms; make sure Vector2/Color are per-instance.
   u.sunUv.value = new THREE.Vector2(0.5, 0.5);
-  u.tint.value = new THREE.Color(...KEY_RGB.healthy);
+  u.tint.value = new THREE.Color(...(KEY_RGB?.healthy ?? [1, 0.92, 0.72]));
   let base = godRayIntensity({ healthy: 0, total: 0, reducedMotion: false, ...init });
   let fade = 1;
   /** Sticky depth from setDepthTexture; rebound per-frame from active readBuffer when possible. */
@@ -215,7 +215,9 @@ export function createGodRayPass(init: Partial<GodRayInputs> = {}): GodRayHandle
       if (disposed) return;
       base = godRayIntensity(inputs);
       if (inputs.tone !== undefined) {
-        u.tint.value.setRGB(...KEY_RGB[normalizeHealthTone(inputs.tone)]);
+        const tone = normalizeHealthTone(inputs.tone);
+        const rgb = KEY_RGB?.[tone] ?? KEY_RGB?.idle ?? [0.85, 0.88, 1.0];
+        u.tint.value.setRGB(...rgb);
       }
       apply();
     },
