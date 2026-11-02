@@ -133,6 +133,15 @@ class MCPServerTests(unittest.TestCase):
             self.assertEqual(result["status"], "ready", result)
             self.assertEqual(result["result"]["status"], "succeeded")
 
+    def test_agent_prompt_resolver_via_mcp(self):
+        responses = rpc([{
+            "jsonrpc": "2.0", "id": 13, "method": "tools/call",
+            "params": {"name": "team.agent.resolve", "arguments": {"agent_id": "orchestrator"}},
+        }])
+        result = json.loads(responses[0]["result"]["content"][0]["text"])
+        self.assertEqual(result["status"], "ready")
+        self.assertIn("Orchestrator", result["result"]["prompt"])
+
     def test_unavailable_tool_is_error_not_simulated(self):
         responses = rpc([{
             "jsonrpc": "2.0", "id": 8, "method": "tools/call",
