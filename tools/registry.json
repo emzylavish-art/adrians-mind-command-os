@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "repository": "emzylavish-art/adrians-mind-command-os",
+  "note": "Registry of requested tools. `source` values are confirmed only where explicitly listed; entries requiring identity/source resolution remain marked unresolved. Never treat registry presence as installed/live.",
+  "tools": [
+    {
+      "name": "Everything Claude Code",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "Superpowers",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "GSD Core",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "UI UX Pro Max",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "n8n-MCP",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "LightRAG",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "Claude Mem",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "Obsidian Skills",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "Awesome Claude Code",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "REA — Reverse Engineer Anything",
+      "category": "agent-workflow",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "Ghidra",
+      "category": "authorized-defensive-analysis",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "name": "JADX",
+      "category": "authorized-defensive-analysis",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "name": "Frida",
+      "category": "authorized-defensive-analysis",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "name": "Burp Suite",
+      "category": "authorized-defensive-analysis",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "name": "OWASP ZAP",
+      "category": "authorized-defensive-analysis",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "name": "GDB",
+      "category": "authorized-defensive-analysis",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "name": "x64dbg",
+      "category": "authorized-defensive-analysis",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "name": "BlackEye",
+      "category": "security-risk",
+      "status": "restricted",
+      "install": "blocked",
+      "live": "blocked",
+      "guardrail": "No phishing or credential-collection deployment."
+    },
+    {
+      "name": "God's Eyes",
+      "category": "unresolved",
+      "status": "identity-unconfirmed",
+      "install": "not-installed",
+      "live": "not-connected"
+    },
+    {
+      "name": "Arrow EA",
+      "category": "unresolved",
+      "status": "identity-unconfirmed",
+      "install": "not-installed",
+      "live": "not-connected"
+    }
+  ]
+}
