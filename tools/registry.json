@@ -1,79 +1,88 @@
 {
   "schemaVersion": 1,
   "repository": "emzylavish-art/adrians-mind-command-os",
-  "note": "Registry of requested tools. `source` values are confirmed only where explicitly listed; entries requiring identity/source resolution remain marked unresolved. Never treat registry presence as installed/live.",
+  "note": "Registry of requested tools. Presence in this registry means catalogued, not installed on the owner's PC. `bootstrap-script-ready` means a Windows installer is committed but has not been run on the owner's PC. Unresolved identities remain unresolved.",
   "tools": [
     {
       "name": "Everything Claude Code",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/affaan-m/ECC"
     },
     {
       "name": "Superpowers",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/obra/superpowers"
     },
     {
       "name": "GSD Core",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/gsd-build/get-shit-done"
     },
     {
       "name": "UI UX Pro Max",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill"
     },
     {
       "name": "n8n-MCP",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/czlonkowski/n8n-mcp"
     },
     {
       "name": "LightRAG",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/HKUDS/LightRAG"
     },
     {
       "name": "Claude Mem",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/thedotmack/claude-mem"
     },
     {
       "name": "Obsidian Skills",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/kepano/obsidian-skills"
     },
     {
       "name": "Awesome Claude Code",
       "category": "agent-workflow",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
-      "team_agent": "engineering"
+      "team_agent": "engineering",
+      "source_url": "https://github.com/subinium/awesome-claude-code"
     },
     {
       "name": "REA — Reverse Engineer Anything",
@@ -86,65 +95,72 @@
     {
       "name": "Ghidra",
       "category": "authorized-defensive-analysis",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
       "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
-      "team_agent": "security"
+      "team_agent": "security",
+      "source_url": "https://github.com/NationalSecurityAgency/ghidra"
     },
     {
       "name": "JADX",
       "category": "authorized-defensive-analysis",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
       "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
-      "team_agent": "security"
+      "team_agent": "security",
+      "source_url": "https://github.com/skylot/jadx"
     },
     {
       "name": "Frida",
       "category": "authorized-defensive-analysis",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
       "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
-      "team_agent": "security"
+      "team_agent": "security",
+      "source_url": "https://github.com/frida/frida"
     },
     {
       "name": "Burp Suite",
       "category": "authorized-defensive-analysis",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
       "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
-      "team_agent": "security"
+      "team_agent": "security",
+      "source_url": "https://portswigger.net/burp/communitydownload"
     },
     {
       "name": "OWASP ZAP",
       "category": "authorized-defensive-analysis",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
       "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
-      "team_agent": "security"
+      "team_agent": "security",
+      "source_url": "https://github.com/zaproxy/zaproxy"
     },
     {
       "name": "GDB",
       "category": "authorized-defensive-analysis",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
       "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
-      "team_agent": "security"
+      "team_agent": "security",
+      "source_url": "https://github.com/bminor/binutils-gdb"
     },
     {
       "name": "x64dbg",
       "category": "authorized-defensive-analysis",
-      "status": "source-resolution-required",
-      "install": "not-installed",
+      "status": "source-verified",
+      "install": "bootstrap-script-ready",
       "live": "not-connected",
       "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
-      "team_agent": "security"
+      "team_agent": "security",
+      "source_url": "https://github.com/x64dbg/x64dbg"
     },
     {
       "name": "BlackEye",
@@ -191,15 +207,6 @@
     },
     {
       "name": "Mind Command OS Durable Worker Queue",
-      "category": "local-worker-runtime",
-      "status": "implemented",
-      "install": "repo-code-present",
-      "live": "callable-cli-and-runner",
-      "guardrail": "SQLite local persistence; queue does not execute payloads or establish that workers are running.",
-      "team_agent": "worker-runtime"
-    },
-    {
-      "name": "Mind Command OS Durable Queue",
       "category": "durable-worker-queue",
       "status": "implemented",
       "install": "repo-code-present",
@@ -224,6 +231,24 @@
       "live": "callable-runner-and-mcp",
       "guardrail": "Returns agent contract prompt and requirements; external model/runtime execution remains host-controlled.",
       "team_agent": "orchestrator"
+    },
+    {
+      "name": "Mind Command OS Team Health",
+      "category": "repository-health",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "team_agent": "observability"
+    },
+    {
+      "name": "Mind Command OS Windows Tool Bootstrap",
+      "category": "windows-installation",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "script-present-not-yet-run-on-user-pc",
+      "source_url": "tools/bootstrap/Install-MindCommandTools.ps1",
+      "team_agent": "engineering",
+      "guardrail": "Installs listed upstream software and clones source repositories on the owner's Windows machine only after the owner runs the script; does not configure provider credentials or silently overwrite client settings."
     }
   ]
 }
