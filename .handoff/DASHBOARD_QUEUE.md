@@ -229,7 +229,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 123 | **Motion c33 — traveler trail point budget** — cam-distance+speed resample under TRAVELER_POINT_BUDGET_TOTAL=2048; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus, LOD hyst teleport, many-traveler overflow | **done** | Motion c33 |
 | 124 | **Motion c34 — traveler trail GPU upload throttle** — dirty-only resample/upload via pointsDirty + consumeTravelerPointsDirty; skip on duplicate clock.map(t); toggle ON↔OFF clears stale budget; 0/neg total parks (no full escape) | **done** | Motion c34 |
 | 125 | **Motion c35 — traveler trail focus-flip LOD snap** — focus edge dirty full resample; unfocus thin restore; focus@budget0 parks (no MIN escape); disposed+focused skip; hacker rapid multi-flip / disposed / budget0 | **done** | Motion c35 |
-| 126 | **Motion c36 — traveler hold×focus churn** — hold true while focused flips must not false-wrap or teleport sample; resume restores budget band; hacker hold spam + focus spam same frame / NaN dt | queued | Motion lane next |
+| 126 | **Motion c36 — traveler hold×focus churn** — hold freezes polyline (focus flip no teleport); resume restores budget band; hacker hold+focus spam / NaN dt | **done** | Motion c36 |
+| 127 | **Motion c37 — star-batch stillTarget × neighbor pulse fight** — when stillTarget holds scale and hover neighborPulseMul applies, clamp combined mesh/glow scale; no fight oscillation; hacker stillTarget+hover spam / NaN edge / reduced snap | queued | Motion lane next (post traveler-trail thread) |
 | 125 | **Light — HDR-safe byte bloom chain** — when c114 drops the bloom chain to 8-bit (no renderable RGBA16F / c20 byte composer over HDR), Reinhard-encode the bright pass e/(1+e) and decode in the composite (as #117 did for the god-ray mask) so sun cores and blocked-tone halos don't clip at 1.0; measure halo energy vs HalfFloat chain. Painter stars stay ≤0.98 matte (no threshold change) | queued | Light lane next; postfx/ only |
 
 
@@ -257,7 +258,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c33 — traveler trail point budget**~~ — **done (Cosmos Motion Bot c33)**: allocateTravelerPointBudgets + hysteretic LOD + resample; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus / teleport hyst / overflow.
 - ~~**Motion c34 — traveler trail GPU upload throttle**~~ — **done (Cosmos Motion Bot c34)**: pointsDirty + consumeTravelerPointsDirty; duplicate map(t) skip; toggle ON↔OFF clears stale; 0/neg parks.
 - ~~**Motion c35 — traveler trail focus-flip LOD snap**~~ — **done (Cosmos Motion Bot c35)**: focus-edge dirty full; unfocus thin; focus@0 parks; disposed skip. Lean REA uniqueSamples=9 — no quality gap → c36.
-- **Motion c36 — traveler hold×focus churn** — hold while focused flips: no false wrap/teleport; resume restores band; hacker hold+focus spam / NaN dt. Cosmos Motion Bot next.
+- ~~**Motion c36 — traveler hold×focus churn**~~ — **done (Cosmos Motion Bot c36)**: hold freezes step polyline (no focus-flip teleport); resume restores band. Traveler-trail thread c33–c36 closed.
+- **Motion c37 — star-batch stillTarget × neighbor pulse fight** — clamp combined scale when stillTarget + neighborPulseMul; hacker stillTarget+hover spam / NaN edge / reduced snap. Cosmos Motion Bot next (new lane area).
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.

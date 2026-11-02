@@ -1,5 +1,5 @@
 /**
- * Landing-trail batch step (Cosmos Motion Bot c21; c33–c35 point budget / throttle / focus-flip).
+ * Landing-trail batch step (Cosmos Motion Bot c21; c33–c36 point budget / throttle / focus-flip / hold×focus).
  *
  * One call per frame for all landing travelers: applies an optional scene-wide hold
  * (panel open / flyover / focus) through the c21 churn-safe pause/resume, steps each
@@ -203,18 +203,21 @@ export function stepTravelerTrails(
       tr.pointsBudget = budget;
 
       // c35: focus edge forces dirty full/thin snap (no one-frame stale cache).
+      // c36: under hold (or holdOwned pause), do NOT resample — focus flips must not
+      // teleport the frozen sample. Desired budget is recorded; geometry applies on resume.
       const focusNow = tr.focused === true;
-      if (focusNow !== (tr._wasFocused === true)) {
+      const frozenByHold = hold === true || tr.holdOwned === true;
+      if (!frozenByHold && focusNow !== (tr._wasFocused === true)) {
         tr._lastMappedT = undefined;
         tr._lastBudgetSig = Number.NaN;
-        tr._wasFocused = focusNow;
-      } else {
-        tr._wasFocused = focusNow;
       }
+      tr._wasFocused = focusNow;
 
       const sameT = tr._lastMappedT === mappedT;
       const sameBudget = tr._lastBudgetSig === budget;
-      if (sameT && sameBudget && tr._stepPtsRef) {
+      if (frozenByHold && tr._stepPtsRef) {
+        pts = tr._stepPtsRef;
+      } else if (sameT && sameBudget && tr._stepPtsRef) {
         pts = tr._stepPtsRef;
       } else {
         tr.resampleCount = (tr.resampleCount ?? 0) + 1;
