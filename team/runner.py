@@ -40,6 +40,43 @@ def invoke(tool_id, payload, manifest):
             limitations=[f"Tool status is {tool.get('status')}; invocation is disabled."],
         )
 
+    if tool_id == "team.agent.resolve":
+        agent_id = payload.get("agent_id")
+        if not agent_id:
+            task = payload.get("task")
+            capabilities = payload.get("capabilities", [])
+            if not isinstance(task, str) or not task.strip() or not isinstance(capabilities, list) or not capabilities:
+                return envelope("blocked", limitations=["Provide agent_id or a task with explicit capabilities."])
+            routed = subprocess.run(
+                [sys.executable, str(ROUTER)],
+                input=json.dumps({"task": task, "capabilities": capabilities, "context": payload.get("context", {})}),
+                capture_output=True, text=True, cwd=ROOT, check=False,
+            )
+            try:
+                dispatch = json.loads(routed.stdout).get("dispatch")
+            except json.JSONDecodeError:
+                dispatch = None
+            if not dispatch:
+                return envelope("blocked", result=routed.stdout,
+                                limitations=[routed.stderr.strip() or "No specialist dispatch was produced."])
+            agent_id = dispatch.get("agent_id")
+        agent = next((item for item in manifest.get("agents", []) if item.get("id") == agent_id), None)
+        if agent is None:
+            return envelope("blocked", limitations=[f"Unknown agent ID: {agent_id}"])
+        prompt_path = ROOT / "team" / "agents" / f"{agent_id}.md"
+        if not prompt_path.is_file():
+            return envelope(
+                "blocked", evidence=[f"team/manifest.json#agents/{agent_id}"],
+                limitations=[f"No verified prompt file exists for {agent_id}; source/identity may be unresolved."],
+            )
+        return envelope(
+            "ready",
+            {"agent_id": agent_id, "role": agent.get("role"), "declared_status": agent.get("status"),
+             "prompt": prompt_path.read_text(encoding="utf-8"), "requires": agent.get("requires", [])},
+            [str(prompt_path.relative_to(ROOT))],
+            ["Prompt resolution does not execute an LLM agent or connect required external runtimes."]
+        )
+
     if tool_id == "team.queue":
         operation = payload.get("action", payload.get("operation"))
         if operation not in {"enqueue", "claim", "complete", "fail", "list"}:
