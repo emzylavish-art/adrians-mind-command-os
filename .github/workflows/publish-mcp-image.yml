@@ -19,6 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+      - name: Validate image tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: python -c 'import os,re,sys; sys.exit(0 if re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", os.environ["IMAGE_TAG"]) else 1)'
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
