@@ -41,4 +41,4 @@ jobs:
       - name: Smoke-test MCP server initialize and tool listing
         run: |
           printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | python team/mcp_server.py > /tmp/mcp-response.jsonl
-          python -c "import json; lines=[json.loads(x) for x in open('/tmp/mcp-response.jsonl')]; assert lines[0]['result']['serverInfo']['name']=='mind-command-os-tools'; assert 'rea.scan' in [t['name'] for t in lines[1]['result']['tools']]"
+          python -c "import json; lines=[json.loads(x) for x in open('/tmp/mcp-response.jsonl')]; assert lines[0]['result']['serverInfo']['name']=='mind-command-os-tools'; assert 'rea.scan' in [t['name'] for t in lines[1]['result']['tools']]; assert 'security.scan' in [t['name'] for t in lines[1]['result']['tools']]"
