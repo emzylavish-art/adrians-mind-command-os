@@ -20,6 +20,7 @@ import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/med
 import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
 import { Route as ApiMindMediaStorageStatusRouteImport } from './routes/api/mind/media/storage/status'
 import { Route as ApiMindMediaStorageUploadRouteImport } from './routes/api/mind/media/storage/upload'
+import { Route as ApiMindMediaAssetUrlRouteImport } from './routes/api/mind/media/asset-url'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -78,6 +79,11 @@ const ApiMindMediaStorageUploadRoute =
     path: '/api/mind/media/storage/upload',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiMindMediaAssetUrlRoute = ApiMindMediaAssetUrlRouteImport.update({
+  id: '/api/mind/media/asset-url',
+  path: '/api/mind/media/asset-url',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
+    | '/api/mind/media/asset-url'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
+    | '/api/mind/media/asset-url'
   id:
     | '__root__'
     | '/'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
+    | '/api/mind/media/asset-url'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -173,6 +185,7 @@ export interface RootRouteChildren {
   ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
   ApiMindMediaStorageStatusRoute: typeof ApiMindMediaStorageStatusRoute
   ApiMindMediaStorageUploadRoute: typeof ApiMindMediaStorageUploadRoute
+  ApiMindMediaAssetUrlRoute: typeof ApiMindMediaAssetUrlRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -254,6 +267,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMediaStorageUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/media/asset-url': {
+      id: '/api/mind/media/asset-url'
+      path: '/api/mind/media/asset-url'
+      fullPath: '/api/mind/media/asset-url'
+      preLoaderRoute: typeof ApiMindMediaAssetUrlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -269,6 +289,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
   ApiMindMediaStorageStatusRoute: ApiMindMediaStorageStatusRoute,
   ApiMindMediaStorageUploadRoute: ApiMindMediaStorageUploadRoute,
+  ApiMindMediaAssetUrlRoute: ApiMindMediaAssetUrlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

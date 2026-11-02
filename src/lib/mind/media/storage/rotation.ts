@@ -5,7 +5,8 @@ import { bumpLedgerUsed, readLedgerUsed, setLedgerUsed } from "./ledger.ts";
 import { createDefaultProviders } from "./providers/index.ts";
 import { sanitizeFolderSegments, sanitizeStorageFileName, sniffMime } from "./safe-name.ts";
 import {
-  MAX_UPLOAD_BYTES,
+  PROVIDER_FILE_LIMITS,
+  STORE_MEDIA_MAX_BYTES,
   type AccountPublicStatus,
   type StorageAccountConfig,
   type StorageProvider,
@@ -49,8 +50,10 @@ async function resolveUsed(
 
 /**
  * Opt-in offload for Imagine images, camera captures, and attachments.
- * Picks Drive → Dropbox → OneDrive (configurable order). Switches when
- * used + fileSize > cap × threshold. NEVER deletes existing media.
+ * Picks Supabase → Drive → Dropbox → OneDrive (configurable order).
+ * Switches when used + fileSize > cap × threshold.
+ * Files over a provider's per-file limit (Supabase: 50 MiB) skip to the next account.
+ * NEVER deletes existing media.
  *
  * Wire from Imagine / camera / attach handlers — see WIRING.md.
  */
@@ -61,10 +64,10 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
   if (!(input.bytes instanceof Uint8Array) || input.bytes.byteLength === 0) {
     return { ok: false, error: "Upload body is empty.", code: "invalid_input" };
   }
-  if (input.bytes.byteLength > MAX_UPLOAD_BYTES) {
+  if (input.bytes.byteLength > STORE_MEDIA_MAX_BYTES) {
     return {
       ok: false,
-      error: `File exceeds the ${MAX_UPLOAD_BYTES} byte upload cap.`,
+      error: `File exceeds the ${STORE_MEDIA_MAX_BYTES} byte upload cap.`,
       code: "invalid_input",
     };
   }
@@ -74,12 +77,21 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
   const folderSegments = sanitizeFolderSegments(input.folderSegments ?? ["media"]);
   const config = loadStorageAccountsConfig(deps.configPath);
   const accounts = orderedEnabledAccounts(config);
-  const providers = deps.providers ?? createDefaultProviders();
   const env = deps.env ?? process.env;
+  const providers = deps.providers ?? createDefaultProviders(fetch, env);
 
   let switchedFrom: StorageService | undefined;
+  let switchDetail: string | undefined;
+  let sawFileLimitSkip = false;
+  let sawCapSkip = false;
   let lastConnectedService: StorageService | undefined;
   let anyConnected = false;
+
+  const noteSkip = (service: StorageService, detail: string) => {
+    if (switchedFrom) return;
+    switchedFrom = service;
+    switchDetail = detail;
+  };
 
   for (const account of accounts) {
     const tokenResult = resolveStorageAccessToken(input.ownerId, account.service, env);
@@ -91,11 +103,19 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
     const provider = providers[account.service];
     if (!provider) continue;
 
+    const fileLimit = PROVIDER_FILE_LIMITS[account.service];
+    if (typeof fileLimit === "number" && input.bytes.byteLength > fileLimit) {
+      sawFileLimitSkip = true;
+      noteSkip(account.service, `skipped ${account.service} (file exceeds ${fileLimit} byte per-file limit)`);
+      continue;
+    }
+
     const { used, quota } = await resolveUsed(provider, tokenResult.token, account, deps.ledgerPath);
     const cap = account.capBytes > 0 ? account.capBytes : quota.totalBytes || account.capBytes;
 
     if (nearCap(used, input.bytes.byteLength, cap, config.switchThreshold)) {
-      if (!switchedFrom) switchedFrom = account.service;
+      sawCapSkip = true;
+      noteSkip(account.service, `switched from ${account.service} (near cap)`);
       continue;
     }
 
@@ -106,6 +126,7 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
         fileName,
         mimeType,
         folderSegments,
+        mediaKind: input.mediaKind,
       });
       const newUsed = await bumpLedgerUsed(
         account.service,
@@ -119,7 +140,7 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
 
       const switchEvent =
         switchedFrom && switchedFrom !== account.service
-          ? `switched from ${switchedFrom} (near cap) → ${account.service}`
+          ? `${switchDetail ?? `switched from ${switchedFrom} (near cap)`} → ${account.service}`
           : undefined;
 
       appendStorageAudit(
@@ -150,7 +171,9 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed.";
       // Do not leak tokens if an error message somehow included one.
-      const safe = message.replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]");
+      const safe = message
+        .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
+        .replace(/eyJ[A-Za-z0-9._-]+/g, "[REDACTED]");
       return { ok: false, error: safe, code: "upload_failed" };
     }
   }
@@ -159,7 +182,7 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
     return {
       ok: false,
       error:
-        "No storage accounts are connected. Connect Google Drive, Dropbox, and/or OneDrive on ServiceBoard (or set MIND_GOOGLE_DRIVE_TOKEN / MIND_DROPBOX_TOKEN / MIND_ONEDRIVE_TOKEN).",
+        "No storage accounts are connected. Connect Supabase Storage (MIND_SUPABASE_URL or SUPABASE_URL, plus SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY), Google Drive, Dropbox, and/or OneDrive on ServiceBoard (or set MIND_GOOGLE_DRIVE_TOKEN / MIND_DROPBOX_TOKEN / MIND_ONEDRIVE_TOKEN).",
       code: "not_connected",
     };
   }
@@ -179,6 +202,15 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
     deps.auditPath,
   );
 
+  if (sawFileLimitSkip && !sawCapSkip) {
+    return {
+      ok: false,
+      error:
+        "The file exceeds the per-file limit on every connected account that could accept it. Nothing was deleted.",
+      code: "storage_full",
+    };
+  }
+
   return {
     ok: false,
     error:
@@ -193,8 +225,8 @@ export async function storageStatusForOwner(
 ): Promise<AccountPublicStatus[]> {
   const config = loadStorageAccountsConfig(deps.configPath);
   const accounts = orderedEnabledAccounts(config);
-  const providers = deps.providers ?? createDefaultProviders();
   const env = deps.env ?? process.env;
+  const providers = deps.providers ?? createDefaultProviders(fetch, env);
   const out: AccountPublicStatus[] = [];
 
   for (const account of accounts) {
