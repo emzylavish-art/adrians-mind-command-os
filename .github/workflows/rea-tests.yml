@@ -8,6 +8,7 @@ on:
       - "tools/knowledge/**"
       - "tools/bootstrap/**"
       - "tools/registry.json"
+      - "policies/**"
       - "team/**"
       - ".mcp.json"
       - "Dockerfile.mcp"
@@ -44,6 +45,8 @@ jobs:
           python -m json.tool tools/bootstrap/upstream-sources.json > /dev/null
       - name: Validate Windows bootstrap metadata
         run: python tools/bootstrap/validate_bootstrap.py
+      - name: Run budget policy unit tests
+        run: python -m unittest discover -s policies -p 'test_*.py'
       - name: Run REA unit tests
         run: python -m unittest discover -s tools/rea -p 'test_*.py'
       - name: Run security review unit tests
