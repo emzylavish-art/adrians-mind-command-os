@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Validate the Mind Command OS registry and team manifest consistency."""
+"""Validate the Mind Command OS registry, manifest, and Windows bootstrap catalogue."""
 import json
 import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "team" / "manifest.json"
 REGISTRY_PATH = ROOT / "tools" / "registry.json"
+BOOTSTRAP_CATALOG_PATH = ROOT / "tools" / "bootstrap" / "upstream-sources.json"
+BOOTSTRAP_SCRIPT_PATH = ROOT / "tools" / "bootstrap" / "Install-MindCommandTools.ps1"
 
 
 def slug(value):
@@ -19,7 +20,9 @@ def slug(value):
 def validate():
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    bootstrap = json.loads(BOOTSTRAP_CATALOG_PATH.read_text(encoding="utf-8"))
     errors = []
+
     agent_ids = {agent.get("id") for agent in manifest.get("agents", [])}
     tool_ids = [tool.get("id") for tool in manifest.get("tools", [])]
     if len(tool_ids) != len(set(tool_ids)):
@@ -48,9 +51,42 @@ def validate():
     for item in registry_items:
         if item.get("team_agent") and item.get("team_agent") not in agent_ids and item.get("team_agent") != "unmapped":
             errors.append(f"Registry item {item.get('name')} references unknown agent {item.get('team_agent')}")
+
+    repositories = bootstrap.get("repositories", [])
+    source_ids = [item.get("id") for item in repositories]
+    if len(source_ids) != len(set(source_ids)):
+        errors.append("Duplicate IDs in Windows bootstrap source catalogue.")
+    for item in repositories:
+        url = item.get("url", "")
+        if not url.startswith("https://github.com/") or not url.endswith(".git"):
+            errors.append(f"Repository source must be an HTTPS GitHub URL: {item.get('id')}")
+    if not BOOTSTRAP_SCRIPT_PATH.is_file():
+        errors.append("Windows bootstrap PowerShell script is missing.")
+
+    verified_registry_ids = {
+        slug(item.get("name", ""))
+        for item in registry_items
+        if item.get("status") == "source-verified"
+    }
+    expected_verified_ids = set(source_ids) | {"burp-suite"}
+    if verified_registry_ids != expected_verified_ids:
+        errors.append(
+            "Source-verified registry entries do not match bootstrap catalogue: "
+            f"registry={sorted(verified_registry_ids)}, catalogue={sorted(expected_verified_ids)}"
+        )
+
+    excluded_ids = {item.get("id") for item in bootstrap.get("not_auto_integrated", [])}
+    if excluded_ids & set(source_ids):
+        errors.append("An excluded or unresolved tool was accidentally added to the bootstrap source list.")
+    if not {"blackeye", "gods-eyes", "arrow-ea"}.issubset(excluded_ids):
+        errors.append("BlackEye, God's Eyes, and Arrow EA must remain explicitly excluded.")
+
     if errors:
         return False, errors
-    return True, [f"Validated {len(agent_ids)} agents, {len(tool_ids)} callable tool declarations, and {len(registry_items)} registry entries."]
+    return True, [
+        f"Validated {len(agent_ids)} agents, {len(tool_ids)} callable tool declarations, "
+        f"{len(registry_items)} registry entries, and {len(repositories)} upstream source checkouts."
+    ]
 
 
 def main():
