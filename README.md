@@ -15,7 +15,9 @@ The repository-native tools currently exposed to compatible AI runners are:
 - `team.queue` — durable SQLite job management.
 - `team.worker` — bounded worker using an explicit allowlist.
 - `team.agent.resolve` — specialist prompt resolution for host-side model execution.
-- `mcp.remote` — HTTPS remote MCP discovery/call bridge with explicit server and tool allowlists (no endpoints enabled by default).\n- `model.generate` — explicit Grok/xAI, OpenRouter, or Ollama route with environment-only credentials and paid-route budget preflight.\n- `notion.controller` — Notion search/retrieval and explicit text append using `NOTION_API_KEY`.
+- `mcp.remote` — HTTPS remote MCP discovery/call bridge with explicit server and tool allowlists (no endpoints enabled by default).
+- `model.generate` — explicit Grok/xAI, OpenRouter, or Ollama route with environment-only credentials and paid-route budget preflight.
+- `notion.controller` — Notion search/retrieval and explicit text append using `NOTION_API_KEY`.
 
 List the declared tools:
 
