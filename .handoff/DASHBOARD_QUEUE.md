@@ -23,6 +23,12 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+## Dashboard c71 (2026-11-03T00:13:21+01:00 WAT) — Painter c30 Notion galaxy watercolor adopt
+**Wired:** `kit.createNotionGalaxyPages` in rebuildPages (kind pigment + ink child edges); dispose via galaxyPages.dispose; tint clear restores kind pigments via update.
+**Registered:** motion c35 traveler-focus-flip test. Updated notion-pages-matte wiring test.
+**Next:** gap-feed / queue / Imagine lane wash polish.
+
 ## Dashboard c70 (2026-11-03T00:10:31+01:00 WAT) — Gap#68 RM freeze regression
 **Fix:** skip 5s soft comet sync when RM hash unchanged; gate alias soft-sync with `!reducedMotion`; skip comet setCamDistance under RM (LOD band thrash); CSS2D labelRenderer only when camera moved under RM.
 **Tests:** gap68-rm-freeze-wired + full suite.
@@ -223,9 +229,10 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 123 | **Motion c33 — traveler trail point budget** — cam-distance+speed resample under TRAVELER_POINT_BUDGET_TOTAL=2048; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus, LOD hyst teleport, many-traveler overflow | **done** | Motion c33 |
 | 124 | **Motion c34 — traveler trail GPU upload throttle** — dirty-only resample/upload via pointsDirty + consumeTravelerPointsDirty; skip on duplicate clock.map(t); toggle ON↔OFF clears stale budget; 0/neg total parks (no full escape) | **done** | Motion c34 |
 | 125 | **Motion c35 — traveler trail focus-flip LOD snap** — focus edge dirty full resample; unfocus thin restore; focus@budget0 parks (no MIN escape); disposed+focused skip; hacker rapid multi-flip / disposed / budget0 | **done** | Motion c35 |
-| 126 | **Motion c36 — traveler hold×focus churn** — hold true while focused flips must not false-wrap or teleport sample; resume restores budget band; hacker hold spam + focus spam same frame / NaN dt | queued | Motion lane next |
+| 126 | **Motion c36 — traveler hold×focus churn** — hold freezes polyline (focus flip no teleport); resume restores budget band; hacker hold+focus spam / NaN dt | **done** | Motion c36 |
+| 127 | **Motion c37 — star-batch stillTarget × neighbor pulse fight** — when stillTarget holds scale and hover neighborPulseMul applies, clamp combined mesh/glow scale; no fight oscillation; hacker stillTarget+hover spam / NaN edge / reduced snap | queued | Motion lane next (post traveler-trail thread) |
 | 125L | **Light — HDR-safe byte bloom chain** (Light #125; Motion c35 also took 125 → this row is 125L) — `postfx/bloom-hdr-chain.ts` + `createTunedBloomPass`: whenever the c114 chain is 8-bit, every chain write is gamma-2 Reinhard encoded e = sqrt(c/(1+c)) and every chain read decodes the 4 texel centres before filtering (per-sampler `<s>_lcTexel` set in material.onBeforeRender from the bound texture; WebGL1-safe), so blurs + composite stay linear in real radiance. Plain Reinhard was not enough: the curve is concave so hardware-bilinear encoded reads under-read every edge (model: sun 58–67%) and its 1/255 low step still underflowed deep-mip tails (painter 38%). Focus-guard high pass encoded too; all-or-nothing patch (missing hook → stock byte chain, sticky); lazy, so HalfFloat chains never recompile. Real r187 chain on SwiftShader WebGL2 (960×540 Float32 readback): HDR sun 12 + blocked 2.5 star — stock byte 7.5% of HalfFloat bloom energy, reach 63 px vs 279 → encoded 101.5%, reach 282; painter 0.98 star (also the c20 byte composer case) — stock byte 52.9%, tail >40 px 16.9% → encoded 100.0% / 100.7%; guard path 101.5%. Threshold/strength unchanged (painter matte ≤0.98 untouched). `hdrEncode:false` / `chainFormat:'byte'` A/B. No scene wiring | **done** | light c115; register postfx/bloom-hdr-chain.test.ts |
-| 127 | **Light — god-ray byte mask decode-before-filter** — #117's 8-bit god-ray emission mask uses plain Reinhard e/(1+e) and the radial loop reads it with hardware bilinear; #125 showed both under-read (concave curve at sun edges, 1/255 underflow on dim far emission). Port the #125 gamma-2 curve + 4-tap decode (mask texel uniform) to `postfx/god-ray-mask.ts`; measure shaft energy vs HalfFloat mask in the SwiftShader harness | queued | Light lane next; postfx/ only |
+| 128 | **Light — god-ray byte mask decode-before-filter** — #117's 8-bit god-ray emission mask uses plain Reinhard e/(1+e) and the radial loop reads it with hardware bilinear; #125 showed both under-read (concave curve at sun edges, 1/255 underflow on dim far emission). Port the #125 gamma-2 curve + 4-tap decode (mask texel uniform) to `postfx/god-ray-mask.ts`; measure shaft energy vs HalfFloat mask in the SwiftShader harness | queued | Light lane next; postfx/ only |
 
 
 
@@ -252,7 +259,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c33 — traveler trail point budget**~~ — **done (Cosmos Motion Bot c33)**: allocateTravelerPointBudgets + hysteretic LOD + resample; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus / teleport hyst / overflow.
 - ~~**Motion c34 — traveler trail GPU upload throttle**~~ — **done (Cosmos Motion Bot c34)**: pointsDirty + consumeTravelerPointsDirty; duplicate map(t) skip; toggle ON↔OFF clears stale; 0/neg parks.
 - ~~**Motion c35 — traveler trail focus-flip LOD snap**~~ — **done (Cosmos Motion Bot c35)**: focus-edge dirty full; unfocus thin; focus@0 parks; disposed skip. Lean REA uniqueSamples=9 — no quality gap → c36.
-- **Motion c36 — traveler hold×focus churn** — hold while focused flips: no false wrap/teleport; resume restores band; hacker hold+focus spam / NaN dt. Cosmos Motion Bot next.
+- ~~**Motion c36 — traveler hold×focus churn**~~ — **done (Cosmos Motion Bot c36)**: hold freezes step polyline (no focus-flip teleport); resume restores band. Traveler-trail thread c33–c36 closed.
+- **Motion c37 — star-batch stillTarget × neighbor pulse fight** — clamp combined scale when stillTarget + neighborPulseMul; hacker stillTarget+hover spam / NaN edge / reduced snap. Cosmos Motion Bot next (new lane area).
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.

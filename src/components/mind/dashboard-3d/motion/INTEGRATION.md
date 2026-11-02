@@ -840,3 +840,14 @@ When `enablePointBudget` is on and `trail.focused` flips:
 - Register `motion/traveler-focus-flip.test.ts` in package.json strip-types list.
 - Queue row #125 Motion c35 **done** (note: Light also queued a #125 — renumber if needed).
 - Lean REA c35: uniqueSamples=9, 0 page errors — motion still reads; no c36 quality gap from captures.
+
+## Requests for Dashboard Bot (c36 — hold × focus churn)
+
+While `hold: true` (panel/flyover), focus flips must not resample the traveler
+polyline — sample position stays frozen. Desired `pointsBudget` still updates;
+geometry snaps to the budget band on resume via dirty resample.
+
+### Requests (c36)
+- Register `motion/traveler-hold-focus.test.ts` in package.json strip-types list.
+- Queue row #126 Motion c36 **done**.
+- Traveler-trail thread (c33–c36) complete — next Motion pick is outside trails unless REA says otherwise.

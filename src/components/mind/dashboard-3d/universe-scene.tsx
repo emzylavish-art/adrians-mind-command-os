@@ -41,7 +41,6 @@ import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/type
 import { botWorldPosition, LANE_DEFS } from "@/lib/mind/dashboard/constellations";
 import { dashboardSceneSyncSignature } from "@/lib/mind/dashboard/scene-sync-sig";
 import { starSetColorNeedsApply, type StarSetColorState } from "@/lib/mind/dashboard/star-set-color";
-import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
   rebuildQueueRoad,
@@ -824,64 +823,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       mk("Conductor", nudges, "#2dd4bf", [-6.5, -2.5, 5.5]);
     }
 
-    // Notion page galaxy — instanced sprites for perf
-    const pageGeo = new THREE.SphereGeometry(0.12, 8, 8);
+    // Painter c30: Notion page galaxy watercolor (replaces MeshBasic interim c68).
     let pageMesh: THREE.InstancedMesh | null = null;
+    let galaxyPages: ReturnType<typeof kit.createNotionGalaxyPages> | null = null;
 
     function rebuildPages(status: DashboardStatus) {
-      if (pageMesh) {
-        pageGroup.remove(pageMesh);
-        pageMesh.dispose();
-        pageMesh = null;
-      }
       pageIdByIndex.length = 0;
-      const pages = status.notionGraph.pages;
-      if (!pages.length) return;
-      const positions = pageStarPositions(pages.length, 16);
-      // c68 hacker: MeshBasic (no emissive LED) until Painter ships instance-safe page stars.
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0x9bb7ff,
-        transparent: true,
-        opacity: 0.92,
-      });
-      pageMesh = new THREE.InstancedMesh(pageGeo, mat, pages.length);
-      pageMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(pages.length * 3), 3);
-      const dummy = new THREE.Object3D();
-      const baseCol = new THREE.Color(0x9bb7ff);
-      pages.forEach((p, i) => {
-        pageIdByIndex[i] = p.id;
-        const [x, y, z] = positions[i]!;
-        dummy.position.set(x, y, z);
-        dummy.scale.setScalar(1);
-        dummy.updateMatrix();
-        pageMesh!.setMatrixAt(i, dummy.matrix);
-        pageMesh!.setColorAt(i, baseCol);
-      });
-      pageMesh.instanceMatrix.needsUpdate = true;
-      if (pageMesh.instanceColor) pageMesh.instanceColor.needsUpdate = true;
-      pageGroup.add(pageMesh);
-
-      // parent/child edges (cap for perf)
-      const idToPos = new Map<string, THREE.Vector3>();
-      pages.forEach((p, i) => {
-        const [x, y, z] = positions[i]!;
-        idToPos.set(p.id, new THREE.Vector3(x, y, z));
-      });
-      let drawn = 0;
-      for (const e of status.notionGraph.edges) {
-        if (e.kind !== "child") continue;
-        const a = idToPos.get(e.from);
-        const b = idToPos.get(e.to);
-        if (!a || !b) continue;
-        const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-        edgeGroup.add(
-          new THREE.Line(
-            geo,
-            new THREE.LineBasicMaterial({ color: 0x4a5d8c, transparent: true, opacity: 0.22 }),
-          ),
-        );
-        if (++drawn > 80) break;
+      const pages = (status.notionGraph.pages ?? []).map((p) => ({ id: p.id, kind: p.kind }));
+      const edges = (status.notionGraph.edges ?? []).map((e) => ({ from: e.from, to: e.to, kind: e.kind }));
+      if (!galaxyPages) {
+        if (!sceneAlive || kit.disposed) return;
+        galaxyPages = kit.createNotionGalaxyPages(pages, edges, { layoutRadius: 16 });
+        pageGroup.add(galaxyPages.group);
+      } else {
+        galaxyPages.update(pages, edges);
       }
+      pageMesh = galaxyPages.pageMesh;
+      const ids = ((pageMesh?.userData as { pageIds?: string[] } | undefined)?.pageIds) ?? [];
+      for (let i = 0; i < ids.length; i++) pageIdByIndex[i] = ids[i]!;
     }
 
     // Painter c9: batched lane nebulae (replace MeshBasicMaterial tint spheres)
@@ -1313,29 +1272,29 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       tipEl.style.left = `${Math.min(rect.width - 200, Math.max(8, clientX - rect.left + 12))}px`;
       tipEl.style.top = `${Math.min(rect.height - 80, Math.max(8, clientY - rect.top + 12))}px`;
     };
-    const pageIndexById = () => {
-      const m = new Map<string, number>();
-      pageIdByIndex.forEach((id, i) => m.set(id, i));
-      return m;
-    };
     const tintNotionNeighbors = (focusId: string | null) => {
       if (!pageMesh || !pageMesh.instanceColor) return;
-      const base = new THREE.Color(0x9bb7ff);
+      // Clear focus → restore kind pigments via galaxy update (not flat MeshBasic blue).
+      if (!focusId) {
+        if (galaxyPages) {
+          const pages = (dataRef.current.notionGraph.pages ?? []).map((p) => ({ id: p.id, kind: p.kind }));
+          const edges = (dataRef.current.notionGraph.edges ?? []).map((e) => ({ from: e.from, to: e.to, kind: e.kind }));
+          galaxyPages.update(pages, edges);
+          pageMesh = galaxyPages.pageMesh;
+        }
+        return;
+      }
       const hot = new THREE.Color(0xffe08a);
       const dim = new THREE.Color(0x3a4566);
-      const idx = pageIndexById();
       const neigh = new Set<string>();
-      if (focusId) {
-        neigh.add(focusId);
-        for (const e of dataRef.current.notionGraph.edges) {
-          if (e.from === focusId && !e.to.startsWith("bot:")) neigh.add(e.to);
-          if (e.to === focusId && !e.from.startsWith("bot:")) neigh.add(e.from);
-        }
+      neigh.add(focusId);
+      for (const e of dataRef.current.notionGraph.edges) {
+        if (e.from === focusId && !e.to.startsWith("bot:")) neigh.add(e.to);
+        if (e.to === focusId && !e.from.startsWith("bot:")) neigh.add(e.from);
       }
       for (let i = 0; i < pageIdByIndex.length; i++) {
         const id = pageIdByIndex[i]!;
-        if (!focusId) pageMesh.setColorAt(i, base);
-        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x7c5cff));
+        if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x7c5cff));
         else pageMesh.setColorAt(i, dim);
       }
       pageMesh.instanceColor.needsUpdate = true;
@@ -2436,7 +2395,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       comets?.dispose();
       feedGlyphs.dispose();
       sphereGeo.dispose();
-      pageGeo.dispose();
+      try { galaxyPages?.dispose(); } catch { /* */ }
+      galaxyPages = null;
+      pageMesh = null;
       travelerGeo.dispose();
       starTex.dispose();
       skyMat.map?.dispose();
