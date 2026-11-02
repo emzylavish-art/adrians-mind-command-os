@@ -40,6 +40,42 @@ def invoke(tool_id, payload, manifest):
             limitations=[f"Tool status is {tool.get('status')}; invocation is disabled."],
         )
 
+    if tool_id == "model.generate":
+        provider = payload.get("provider")
+        prompt = payload.get("prompt")
+        messages = payload.get("messages")
+        if messages is None:
+            if not isinstance(prompt, str) or not prompt.strip():
+                return envelope("blocked", limitations=["model.generate requires prompt or messages."])
+            messages = [{"role": "user", "content": prompt}]
+        if not isinstance(messages, list) or not messages:
+            return envelope("blocked", limitations=["messages must be a non-empty list."])
+        if provider not in {"grok", "openrouter", "ollama"}:
+            return envelope("blocked", limitations=["provider must be grok, openrouter, or ollama."])
+        command = [sys.executable, str(ROOT / "team" / "provider_router.py"),
+                   "--provider", provider, "--prompt", json.dumps(messages)]
+        if payload.get("model"):
+            command.extend(["--model", str(payload["model"])])
+        command.extend(["--timeout", str(payload.get("timeout_seconds", 60))])
+        try:
+            completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True,
+                                       timeout=int(payload.get("timeout_seconds", 60)) + 5, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Provider invocation failed: {type(exc).__name__}."])
+        if completed.returncode != 0:
+            try:
+                error = json.loads(completed.stderr or completed.stdout).get("error")
+            except (json.JSONDecodeError, AttributeError):
+                error = None
+            return envelope("blocked", evidence=["team/provider_router.py"],
+                            limitations=[error or "Provider call did not complete."])
+        try:
+            result = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope("blocked", limitations=["Provider router returned invalid JSON."])
+        return envelope("ready", result, ["team/provider_router.py"],
+                        ["This invocation made an external or local model request; provider billing and availability depend on the selected route."])
+
     if tool_id == "team.agent.resolve":
         agent_id = payload.get("agent_id")
         if not agent_id:
