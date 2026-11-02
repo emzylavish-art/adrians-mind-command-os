@@ -548,3 +548,17 @@ command on Zack's PC.
 - Notion children: H24 https://app.notion.com/p/40cb95f33e42817e85bcd7d6d950675b · H25 https://app.notion.com/p/40cb95f33e4281cab098e1f62b9aa7b2 · H26 https://app.notion.com/p/40cb95f33e42816eb53fd3a38516d425 · H27 https://app.notion.com/p/40cb95f33e428107a528f1e2571d90f6
 - Original handoff 40b1aa27632381768d58cde0731f142a still 404; mirror used.
 - Lock released.
+
+## 2026-11-02T23:50:46+01:00 (Africa/Lagos) — Error Banners Bot — merge abort + Merge Gate / Gap Dispatcher handoffs
+- Gap id: MERGE-ABORT-PI + HANDOFF-MG + REQUEST-GD (no new H28 code)
+- What: Retried `git merge origin/preview/integration` (`5d400c8`) into `error-banners`. **ABORTED** — conflicts beyond `.handoff/NOTION_HANDOFF.md`: `package.json`, `src/components/mind/fleet-panels.tsx`, `src/components/mind/supabase-account.tsx`. `git merge --abort`. Tip unchanged.
+- Files: `/workspace/handoffs/error-banners-to-merge-gate.md`, `/workspace/handoffs/error-banners-to-gap-dispatcher.md`, `.handoff/NOTION_HANDOFF.md` (this entry). No product source changes.
+- SHA: origin/error-banners remains `32864b112ead8d5b82b9afb4788f149a903a7f50` (H16–H27 + docs). Handoff commit SHA TBD after this append.
+- Gates: no code change; prior tip gates stand (Conductor verified H24–H27). Merge not landed → no post-merge gates.
+- integration.lock: held by Logic Bot (not Merge Gate) as of claim time — noted in Merge Gate handoff.
+- Vercel daily deploy limit until ~Nov 3 4 PM CST / Nov 3 11 PM WAT.
+- Next: Merge Gate resolves PI∪error-banners when lock free; Gap Dispatcher assigns H28+ if any in allowed files. command-app mounts still blocked for this lane.
+- Forbidden respected: no command-app / styles shell / voice / media / mcp / server.ts edits; no force-push; no merge to main.
+
+- Notion children: merge abort / Merge Gate https://app.notion.com/p/40cb95f33e428142b40bf3b0a22af734 · Gap Dispatcher request https://app.notion.com/p/40cb95f33e4281b9a2caecb3ac200290
+- Workspace handoffs: /workspace/handoffs/error-banners-to-merge-gate.md · /workspace/handoffs/error-banners-to-gap-dispatcher.md
