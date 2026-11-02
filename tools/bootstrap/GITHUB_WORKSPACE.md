@@ -7,9 +7,9 @@ This is the GitHub-side installation path. It does not touch the owner's Windows
 Open this repository in a GitHub Codespace. The committed `.devcontainer/devcontainer.json` runs `tools/bootstrap/install-github-workspace.sh` during Codespace creation. The setup script:
 
 - installs the declared Frida and LightRAG Python packages in the Codespace;
-- installs the n8n-MCP and UI UX Pro Max CLI packages globally in the Codespace;
-- clones/fast-forward-updates each source-confirmed upstream repository under `.tools/upstream/`;
-- leaves a pre-existing non-Git directory untouched and continues after an individual upstream/package failure.
+- installs the n8n-MCP and UI UX Pro Max CLI packages globally (`n8n-mcp` and `uipro`);
+- initializes each pinned upstream submodule, including nested submodules, with a depth-1 checkout;
+- downloads the current Ghidra and JADX release archives plus the OWASP ZAP Linux archive into `.tools/apps`, and installs Temurin JDK 25 when the default Java is older than 21.
 
 Run the presence check at any time:
 

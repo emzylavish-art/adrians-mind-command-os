@@ -1,33 +1,40 @@
 # Tooling Setup Status — GitHub
 
 **Repository:** https://github.com/emzylavish-art/adrians-mind-command-os  
-**Status:** Tool inventory and integration scaffolding are committed; the listed external tools are NOT installed or live-connected by this document.
+**Checked:** 2026-11-02  
+**Parent commit before this setup pass:** `509b066bbab8c3c91fd8437a1ff6ea29a8b2ab08`
 
-## What exists in this repository
-- `docs/TOOLING_CATALOG_AND_INTEGRATION_PLAN.md` — candidate tool catalog, required provenance, security review, integration lifecycle.
-- `docs/IMPLEMENTATION_BACKLOG.md` — implementation work and acceptance gates.
-- `docs/AGENT_AUTONOMY_AND_APPROVAL_CONTRACT.md` — agent action/approval boundaries.
-- `docs/MIND_COMMAND_SOURCE_OF_TRUTH.md` — status/evidence rules.
+## What was executed
 
-## Setup truth
-GitHub can hold manifests, adapters, workflows, code, and setup instructions. It does not itself install software on the user's PC or provision a runtime. No external MCP endpoint, provider credential, hosted worker, or local installation is confirmed by these docs. Treat every connector as **planned/unverified** until a specific adapter is implemented, configured outside the repository, tested, and its live connection verified.
+The previous stop was pinned submodule metadata only. This pass checked out every pinned upstream module, installed the declared Linux packages, and smoke-checked the commands that can run here.
 
-## Catalog status
-The tooling catalog includes candidate references to Everything Claude Code, Superpowers, GSD Core, UI UX Pro Max, n8n-MCP, LightRAG, Claude Mem, Obsidian Skills, Awesome Claude Code, REA, Ghidra, JADX, Frida, Burp Suite, OWASP ZAP, GDB, and x64dbg. These are not asserted to be installed. BlackEye is explicitly restricted from credential-collection operation. God's Eyes and Arrow EA remain unidentified until their exact source and purpose are supplied.
+- All 24 pinned `upstream/` submodules initialized at their recorded commits, including nested Frida and x64dbg submodules. Missing nested checkouts after recursive init: 0.
+- Python: `frida-tools` 14.11.0 (`frida` 17.25.1) and `lightrag-hku` 1.5.7 import and the Frida CLI responds to `--version`.
+- npm: `n8n-mcp` 2.96.1 (`n8n-mcp` on PATH) and `ui-ux-pro-max-cli` 2.15.0 (binary name is `uipro`, not `ui-ux-pro-max`). `uipro --help` runs.
+- Release runtimes extracted under the gitignored `.tools/apps` directory: JADX 1.5.6 (`jadx --version`), OWASP ZAP 2.17.0 (`zap.sh -version` printed 2.17.0 on Java 17), Ghidra 12.2 public. Temurin JDK 25.0.5 is under `.tools/jdk`. With `JAVA_HOME` set and `/dev/fd` linked to `/proc/self/fd`, `analyzeHeadless` prints its usage text.
+- Native team tests: `python3 -m unittest discover -s team -p 'test_*.py'` — 57 tests, OK. `python3 team/health.py` reported health ok. `python3 tools/bootstrap/validate_bootstrap.py` passed.
 
-## Required next implementation sequence
-1. Resolve and pin upstream sources/versions, licenses, supported platforms, and dependencies.
-2. Add machine-readable manifests and integration adapters only for confirmed tools.
-3. Configure credentials through approved secrets management; never commit secrets.
-4. Add health checks, adapter contract tests, and explicit status/evidence.
-5. Verify live connections individually; mark only evidence-backed states.
-6. Keep local installation and hosted deployment separate from GitHub documentation and do not claim them without verification.
+## Not installed, and why
+
+| Item | Result |
+| --- | --- |
+| BlackEye | Not installed. Phishing and credential-harvesting setup stays excluded. No separate repository was created. |
+| God's Eyes, Arrow EA, Blackbox, VoiceStudio, OpenSEO | Not installed. Exact source identity is still unconfirmed in the registry. |
+| Zapia | Not configured. Needs an owner-authorized endpoint and credentials. |
+| Burp Suite Community | Not installed here. The committed installer uses Windows `winget` (`PortSwigger.BurpSuite.Community`). This Linux workspace has no winget. |
+| x64dbg binary | Source and nested deps are checked out. The Windows GUI binary is not runnable on Linux. |
+| GDB binary | Source checkout `upstream/gdb` is present. No root package install is available in this workspace, and the binary was not built. |
+| ComfyUI, Open Higgsfield, WeKnora, OpenWhispr, OpenProject, Cal.diy, Chatwoot, Cap | Source checkouts are present. They are not running services. Each still needs its own runtime, database, or provider credentials. |
+| LightRAG server | Package is installed. A model or embedding provider and local config are still required before it is live. |
+| UI UX Pro Max skill activation | CLI is installed. `uipro init` was not run, so no assistant skill files were written into the repo. |
+
+Security and reverse-engineering tools are for owned or explicitly authorized targets only.
 
 ## Status vocabulary
+
 - **Documented:** reference and intended use recorded.
 - **Scaffolded:** integration contract/configuration structure exists.
 - **Implemented:** code exists.
 - **Tested:** relevant automated tests pass.
 - **Live-verified:** real connection or operation succeeded with timestamped evidence.
 - **Blocked:** missing source, permission, credential, runtime, or required approval.
-
