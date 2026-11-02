@@ -14,6 +14,15 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(out["dispatch"]["agent_id"], "rea")
         self.assertEqual(out["status"], "ready")
 
+    def test_security_capability_routes_with_partial_disclosure(self):
+        out = router.route(
+            {"task": "review owned source", "capabilities": ["secure_code_review"]},
+            router.load(),
+        )
+        self.assertEqual(out["dispatch"]["agent_id"], "security")
+        self.assertEqual(out["status"], "partial")
+        self.assertTrue(out["limitations"])
+
     def test_unmatched_capability_blocks(self):
         out = router.route({"task": "x", "capabilities": ["unlisted_ability"]}, router.load())
         self.assertEqual(out["status"], "blocked")
