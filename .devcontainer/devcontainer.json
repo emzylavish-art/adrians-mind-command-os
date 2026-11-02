@@ -20,6 +20,7 @@
     }
   },
   "remoteEnv": {
-    "MIND_COMMAND_TOOLS_ROOT": "${containerWorkspaceFolder}/.tools"
+    "MIND_COMMAND_TOOLS_ROOT": "${containerWorkspaceFolder}/.tools",
+    "PATH": "${containerWorkspaceFolder}/.tools/npm/bin:${containerEnv:PATH}"
   }
 }
