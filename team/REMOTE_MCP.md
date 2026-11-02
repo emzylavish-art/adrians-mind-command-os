@@ -42,3 +42,13 @@ service, DNS name, or cloud deployment. A hosting target, secret, and deployment
 authorization are still required. Local SQLite queue persistence is suitable for a
 single persistent container volume; it is not shared durable storage for ephemeral
 multi-instance serverless deployments.
+
+
+## Publish the container image
+
+A manual GitHub Actions workflow is available at
+`.github/workflows/publish-mcp-image.yml`. In GitHub, open **Actions → Publish hosted
+MCP container → Run workflow** and supply an image tag. It publishes to
+`ghcr.io/<owner>/<repository>:<tag>` using the repository's GitHub Actions token.
+The workflow validates the tag. Publishing the image is not the same as deploying a
+running service; the hosting platform must still be configured with `MCP_AUTH_TOKEN`.
