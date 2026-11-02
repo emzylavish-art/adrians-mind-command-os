@@ -78,8 +78,11 @@ import {
   estimateTextureBytes,
   pushBudgetItem,
   sanitizeTextureBudgetBytes,
+  noteTextureBudgetReport,
+  createBudgetDegradeState,
   PAINTER_TEXTURE_BUDGET_BYTES,
   type PainterlyTextureBudgetReport,
+  type PainterlyBudgetDegradeState,
 } from "./painter-texture-budget.ts";
 import { markImagineNodeReleased } from "./imagine-node.ts";
 
@@ -172,6 +175,11 @@ export type PainterlyKit = {
   textureBudgetBytes: number;
   /** Report estimated texture bytes across kit-owned / tracked maps. */
   textureBudget: () => PainterlyTextureBudgetReport;
+  /**
+   * HACKER (c17): soft-cap enforcement state — when overBudget, pass grain/fiber degrade.
+   * Previously report-only (silent).
+   */
+  budgetMeta: PainterlyBudgetDegradeState;
   /** Detach context listeners (set by attachPainterlyContextHandlers). */
   detachContext: (() => void) | null;
   /** Last per-material tick error message (null if healthy). Never throws out of tick. */
@@ -237,6 +245,7 @@ function inertShaderMaterial(name: string): THREE.ShaderMaterial {
       uPool: { value: 0 },
       uProgress: { value: 0 },
       uWindowGlow: { value: 0 },
+      uDryBrush: { value: 0 },
       uTextMap: { value: null },
       uHasText: { value: 0 },
     },
@@ -393,6 +402,7 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       postDisposeCallCount: 0,
       lastReason: null,
     },
+    budgetMeta: createBudgetDegradeState(),
     createStarMaterial(starOpts) {
       // HACKER (c15): fail-safe - inert no-op instead of throw (StrictMode/HMR/async)
       if (kit.disposed) {
@@ -753,13 +763,29 @@ export function painterlyKitTextureBudget(kit: PainterlyKit): PainterlyTextureBu
       }
     }
   }
-  return {
+  const report: PainterlyTextureBudgetReport = {
     bytes,
     budget,
     overBudget: bytes > budget,
     remaining: Math.max(0, budget - bytes),
     items,
   };
+  // HACKER (c17): enforce soft cap — degrade visibly (not silent)
+  if (!kit.budgetMeta) kit.budgetMeta = createBudgetDegradeState();
+  noteTextureBudgetReport(kit.budgetMeta, report);
+  if (kit.budgetMeta.degraded && !kit.disposed && kit.painterlyPass?.uniforms) {
+    const u = kit.painterlyPass.uniforms;
+    // Ease paper grain / fiber so over-budget skies look flatter (visible signal)
+    if (u["grain"]) {
+      const g = Number(u["grain"].value);
+      if (Number.isFinite(g)) u["grain"].value = Math.min(g, 0.04);
+    }
+    if (u["fiber"]) {
+      const f = Number(u["fiber"].value);
+      if (Number.isFinite(f)) u["fiber"].value = Math.min(f, 0.12);
+    }
+  }
+  return report;
 }
 
 /** Pure helper for tests: count outstanding disposables before/after dispose. */
