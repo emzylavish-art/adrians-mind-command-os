@@ -82,6 +82,43 @@ def invoke(tool_id, payload, manifest):
                             limitations=["REA returned non-JSON output."])
         return envelope("ready", report, ["tools/rea/rea.py"], [])
 
+    if tool_id == "security.scan":
+        path = payload.get("path", ".")
+        command = [sys.executable, str(ROOT / "tools" / "security_review" / "security_review.py"), path, "--json"]
+        output_path = payload.get("out")
+        if output_path:
+            command.extend(["--out", str(output_path)])
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=int(payload.get("timeout_seconds", 60)),
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Security scan invocation failed: {exc}"])
+        if completed.returncode:
+            return envelope(
+                "blocked",
+                result=completed.stdout.strip() or None,
+                evidence=["tools/security_review/security_review.py"],
+                limitations=[completed.stderr.strip() or f"Security scan exited with {completed.returncode}"],
+            )
+        try:
+            report = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope(
+                "blocked", result=completed.stdout,
+                evidence=["tools/security_review/security_review.py"],
+                limitations=["Security scanner returned non-JSON output."],
+            )
+        return envelope(
+            "ready", report, ["tools/security_review/security_review.py"],
+            ["Heuristic findings require human validation; this is not a complete SAST assessment."],
+        )
+
     return envelope(
         "not_implemented",
         evidence=[f"team/manifest.json#tools/{tool_id}"],
