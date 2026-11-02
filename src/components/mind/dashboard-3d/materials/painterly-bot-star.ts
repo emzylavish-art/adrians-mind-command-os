@@ -4,11 +4,18 @@ import {
   setStarWatercolorColor,
   setStarHalo,
   setStarGrain,
+  setStarMatte,
   starGrainFromHealth,
   type StarSurfaceOptions,
   type StarHealthTone,
 } from "./star-surface.ts";
 import { sanitizeFinite, sanitizePainterColor, PAINTER_IDLE_RGB } from "./paper-grain.ts";
+import {
+  applyPainterOutputSafeFlags,
+  starMatteFromStatus,
+  sanitizeStarHalo,
+  PAINTER_MATTE_DEFAULT,
+} from "./painter-output.ts";
 
 export type PainterlyBotStarOptions = StarSurfaceOptions & {
   /** When idle, lower emissive (mirrors prior MeshStandardMaterial behavior). */
@@ -28,6 +35,8 @@ export type PainterlyBotStarBundle = {
   setHalo: (halo: number) => void;
   /** Override pigment granulation (locks auto-sync from health). */
   setGrain: (grain: number) => void;
+  /** Override bloom-safe corona matte (locks). */
+  setMatte: (matte: number) => void;
 };
 
 /**
@@ -55,15 +64,16 @@ export function createPainterlyBotStar(
   // Halo from real idle/active status (neutral default — no fabricated pulse)
   const halo =
     opts.halo != null
-      ? opts.halo
+      ? sanitizeStarHalo(opts.halo, 0.55)
       : idle
         ? 0.18
-        : sanitizeFinite(0.2 + emissive * 0.55, 0.65, 0, 1.5);
+        : sanitizeStarHalo(0.2 + emissive * 0.55, 0.65);
   // c15: pigment granulation from real health (blocked settles heaviest)
   const grain =
     opts.grain != null
       ? opts.grain
       : starGrainFromHealth(health, idle);
+  const matte = starMatteFromStatus(idle, opts.matte);
   const meshMaterial = kit.createStarMaterial({
     color: opts.color,
     emissiveIntensity: emissive,
@@ -71,19 +81,34 @@ export function createPainterlyBotStar(
     stroke: opts.stroke,
     halo,
     health,
+    idle,
+    matte,
     forceFallback: opts.forceFallback,
   });
   const glowSafe = sanitizePainterColor(opts.color ?? 0xffffff, PAINTER_IDLE_RGB);
+  // c21: matte scales additive glow so Light bloom sees paint, not a white fireball
+  const glowScale = 0.35 + (1 - matte) * 0.45;
   const glowMaterial = new THREE.SpriteMaterial({
     map: kit.starSpriteTexture,
-    color: glowSafe.color,
+    color: glowSafe.color.clone().multiplyScalar(glowScale),
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+    opacity: sanitizeFinite(0.55 + (1 - matte) * 0.35, 0.7, 0.2, 1),
   });
+  // HACKER (c21): additive sprites must not be toneMapped (double wash / HDR spike)
+  applyPainterOutputSafeFlags(glowMaterial, { transparent: true, premultipliedAlpha: true });
+  if (kit.starSpriteTexture && "colorSpace" in kit.starSpriteTexture) {
+    try {
+      kit.starSpriteTexture.colorSpace = THREE.SRGBColorSpace;
+    } catch {
+      /* */
+    }
+  }
   if (!glowSafe.ok) {
     (glowMaterial.userData as { starColorError?: string }).starColorError = glowSafe.reason ?? "color-bad";
   }
+  (glowMaterial.userData as { painterMatte?: number }).painterMatte = matte;
   kit.bindSharedTexture(glowMaterial, "starSprite");
   const setColor = (color: THREE.ColorRepresentation, emissiveIntensity?: number) => {
     const em =
@@ -99,5 +124,11 @@ export function createPainterlyBotStar(
   };
   const setHalo = (h: number) => setStarHalo(meshMaterial, h);
   const setGrain = (g: number) => setStarGrain(meshMaterial, g);
-  return { meshMaterial, glowMaterial, setColor, setHalo, setGrain };
+  const setMatte = (m: number) => {
+    setStarMatte(meshMaterial, m);
+    const mm = sanitizeFinite(m, PAINTER_MATTE_DEFAULT, 0, 1);
+    (glowMaterial.userData as { painterMatte?: number }).painterMatte = mm;
+    glowMaterial.opacity = sanitizeFinite(0.55 + (1 - mm) * 0.35, 0.7, 0.2, 1);
+  };
+  return { meshMaterial, glowMaterial, setColor, setHalo, setGrain, setMatte };
 }

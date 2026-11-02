@@ -34,6 +34,16 @@ import {
   LORE_PLAQUE_OFFSET_UNITS,
 } from "./painter-depth.ts";
 import {
+  applyPainterOutputSafeFlags,
+  bloomSafeClampRgb,
+  starMatteFromStatus,
+  sanitizeStarHalo,
+  PAINTER_MATTE_DEFAULT,
+  PAINTER_MATTE_IDLE,
+  PAINTER_HDR_CEILING,
+  PAINTER_BLOOM_SAFE_CEILING,
+} from "./painter-output.ts";
+import {
   createPainterlyKit,
   disposePainterlyKit,
   disposeAllPainterlyKits,
@@ -136,7 +146,7 @@ import {
   INK_EDGES_MAX,
   INK_EDGE_DEGENERATE_EPS,
 } from "./ink-wash-edge.ts";
-import { createStarWatercolorMaterial, tickStarMaterial, setStarHalo, setStarGrain, setStarWatercolorColor, starGrainFromHealth, STAR_GRAIN_BY_HEALTH } from "./star-surface.ts";
+import { createStarWatercolorMaterial, createStarSpriteTexture, tickStarMaterial, setStarHalo, setStarGrain, setStarMatte, setStarWatercolorColor, starGrainFromHealth, STAR_GRAIN_BY_HEALTH } from "./star-surface.ts";
 import {
   GLSL_HASH_NOISE,
   GLSL_MEDIUMP_GUARD,
@@ -2380,5 +2390,70 @@ describe("painter c20: constellation plaque stack layered paper", () => {
     assert.match(LorePlaqueShader.fragmentShader, /uStackLift/);
     bottom.dispose();
     top.dispose();
+  });
+});
+
+
+describe("hacker pass c21: HDR halo/grain bloom blowout / toneMapped / premul / colorSpace", () => {
+  it("legacy HDR pigment (>1) soft-caps under matte; matte=1 stays ≤ bloom-safe ceiling", () => {
+    const hot: [number, number, number] = [1.4, 1.55, 1.2];
+    const open = bloomSafeClampRgb(hot, 0);
+    assert.ok(Math.max(...open) <= PAINTER_HDR_CEILING + 1e-6);
+    assert.ok(Math.max(...open) > 1.0, "matte=0 may keep mild HDR headroom");
+    const safe = bloomSafeClampRgb(hot, 1);
+    assert.ok(Math.max(...safe) <= PAINTER_BLOOM_SAFE_CEILING + 1e-6);
+    // NaN channels → finite
+    const nan = bloomSafeClampRgb([NaN, 2, 2], 1);
+    assert.ok(nan.every((v) => Number.isFinite(v)));
+  });
+
+  it("sanitizeStarHalo rejects >1 HDR (was 1.5); grain spikes clamped", () => {
+    assert.ok(sanitizeStarHalo(1.5) <= 1);
+    assert.ok(sanitizeStarHalo(-3) === 0);
+    const m = createStarWatercolorMaterial({ halo: 1.5, grain: 2, emissiveIntensity: 3, matte: 1 });
+    assert.ok((m.uniforms["uHalo"]!.value as number) <= 1);
+    assert.ok((m.uniforms["uGrain"]!.value as number) <= 1);
+    assert.ok((m.uniforms["uMatte"]!.value as number) >= 0.99);
+    m.dispose();
+  });
+
+  it("painter materials: toneMapped false + premultipliedAlpha (no washout / dark fringes)", () => {
+    const m = createStarWatercolorMaterial({ color: 0x3cd687 });
+    assert.equal(m.toneMapped, false);
+    assert.equal(m.premultipliedAlpha, true);
+    assert.equal(m.transparent, true);
+    assert.ok((m.userData as { painterOutputSafe?: { toneMapped: boolean } }).painterOutputSafe);
+    // glow path via flags helper
+    const sprite = { transparent: true, toneMapped: true, premultipliedAlpha: false, needsUpdate: false, userData: {} };
+    applyPainterOutputSafeFlags(sprite as never, { transparent: true, premultipliedAlpha: true });
+    assert.equal((sprite as { toneMapped: boolean }).toneMapped, false);
+    assert.equal((sprite as { premultipliedAlpha: boolean }).premultipliedAlpha, true);
+    m.dispose();
+  });
+
+  it("WatercolorStarShader exposes uMatte + bloomSafeClamp; premul output", () => {
+    assert.ok(WatercolorStarShader.uniforms.uMatte);
+    assert.match(WatercolorStarShader.fragmentShader, /bloomSafeClamp/);
+    assert.match(WatercolorStarShader.fragmentShader, /uMatte/);
+    assert.match(WatercolorStarShader.fragmentShader, /pigment \* alpha/);
+    assert.doesNotMatch(WatercolorStarShader.fragmentShader, /clamp\(pigment,\s*0\.0,\s*1\.6\)/);
+  });
+});
+
+describe("painter c21: star corona bloom-safe matte", () => {
+  it("createBotStar / createStarWatercolorMaterial apply matte; idle quieter than active", () => {
+    assert.equal(starMatteFromStatus(true), PAINTER_MATTE_IDLE);
+    assert.equal(starMatteFromStatus(false), PAINTER_MATTE_DEFAULT);
+    const idle = createStarWatercolorMaterial({ idle: true, color: 0x8899aa });
+    const active = createStarWatercolorMaterial({ idle: false, color: 0x3cd687 });
+    assert.ok((idle.uniforms["uMatte"]!.value as number) > (active.uniforms["uMatte"]!.value as number));
+    setStarMatte(active, 1);
+    setStarHalo(active, 0.9);
+    assert.ok(Math.abs((active.uniforms["uMatte"]!.value as number) - 1) < 1e-6);
+    // locked matte survives setColor emissive path
+    setStarWatercolorColor(active, 0xff0000, 0.9);
+    assert.ok(Math.abs((active.uniforms["uMatte"]!.value as number) - 1) < 1e-6);
+    idle.dispose();
+    active.dispose();
   });
 });

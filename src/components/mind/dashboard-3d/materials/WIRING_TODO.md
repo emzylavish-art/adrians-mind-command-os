@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 20)
+## Status vs origin/dashboard-3d (verified cycle 21)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -38,6 +38,7 @@ Zack asked Dashboard Bot to wire these. Until they land in `universe-scene` / ci
 | **Lore plaque stack (c20)** | Overlapping plaques at one star z-fight without stack index. | `createLorePlaqueMaterial({ stackIndex });` or `setLorePlaqueStackIndex(mat, i, mesh)` |
 | **`createBuildingBrushPool` (c17)** | Per-building mats OOM/stall at city scale. | City rebuild: `const pool = createBuildingBrushPool({ floors }); mesh.material = pool.materialForProgress(p); pool.syncFromProgresses(list)` |
 | **`textureBudget()` degraded (c17/c18)** | Soft cap was silent; now `kit.budgetMeta.degraded` eases grain/fiber — surface in UI/debug. | Once/frame or on rebuild: `const b = kit.textureBudget(); if (kit.budgetMeta.degraded) /* badge */` |
+| **Star corona matte (c21)** | Without `matte`/`health`/`idle`, defaults still bloom-safe (`uMatte≈0.85`); pass real idle for quieter corona. | `kit.createBotStar({ …, idle, health, matte? })` — already on createBotStar path |
 | **Ink edge `weight` (c13)** | Bleed stays kind/health default; activity-weighted watercolor needs real weight. | `kit.createInkEdges(edges.map(e => ({ …, weight: e.activity })))` |
 | **Composer RT type (c20)** | Half-float unsupported / MSAA mismatch → black painterly pass. | `const rt = resolvePainterlyRenderTargetType({ halfFloatSupported: probeHalfFloatRenderTargetSupport(gl) }); new EffectComposer(renderer, new WebGLRenderTarget(w,h,{ type: rt.type }))` |
 
@@ -332,3 +333,27 @@ composer = new EffectComposer(renderer, rt);
 - `uStackLift` soft paper shade by stack index.
 - Lore + lane nebula get log-depth `onBeforeCompile` / shader chunks for `logarithmicDepthBuffer` cameras.
 - Ink edges / nebulae use `PAINTER_RENDER_ORDER` so blend order does not flicker against lore.
+
+
+## c21 — star corona bloom-safe matte (painter only)
+
+```ts
+const star = kit.createBotStar({
+  color: HEALTH_COLOR[bot.health],
+  idle: bot.health === "idle",
+  health: bot.health,
+  // matte defaults: idle 0.95 / active 0.85 — optional override
+});
+// star.meshMaterial.uniforms.uMatte — soft-caps pigment; glow opacity scaled
+```
+
+### For Cosmos Light Bot (do **not** edit in painter lane)
+
+Painter now emits bloom-**safe** star cores (`uMatte`, luminance soft-cap ≤~0.98, `toneMapped:false`, premultiplied alpha). Light should:
+
+1. **Keep** UnrealBloomPass thresholds tuned for mid-greys — do not lower threshold to “recover” old HDR fireballs (they are intentional gone).
+2. If bloom looks too dim on stars after c21: prefer a **small** threshold/strength nudge in `postfx/` owned by Light — not painter HDR reopen.
+3. Confirm composer still uses painter’s RT type hint (`resolvePainterlyRenderTargetType`) so half-float fallback stays honest.
+4. Do **not** force `toneMapped:true` on painter star/glow materials — that washes watercolor pigment (sRGB/ACES mismatch).
+
+Painter owns: `shaders/watercolor-star.ts`, `materials/star-surface.ts`, `painterly-bot-star.ts`, `painter-output.ts`. Light owns: `atmosphere/`, `postfx/`.
