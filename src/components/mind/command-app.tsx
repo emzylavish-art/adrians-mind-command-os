@@ -3097,7 +3097,16 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   }
 
   function interruptVoiceOverlay() {
+    // Force Speaking into barge so manual_interrupt always cuts playback + shows Interrupted.
+    if (bargeRef.current.phase !== "speaking" && bargeRef.current.phase !== "interrupted") {
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+    }
     pushBarge({ type: "manual_interrupt" });
+    // Belt-and-suspenders: always surface Interrupted even if barge was desynced.
+    holdInterruptedRef.current = true;
+    if (overlayOpenRef.current) setOverlayPhase("interrupted");
+    interruptSpeakPlayback();
+    voiceSession.current?.interruptPlayback();
   }
 
   async function openVoiceOverlay() {
@@ -3348,8 +3357,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 setOverlayPhase("connecting");
               } else if (status === "listening") {
                 if (!holdInterruptedRef.current) {
-                  if (bargeRef.current.phase !== "listening") pushBarge({ type: "session_listening" });
-                  setOverlayPhase("listening");
+                  // Do not clobber Speaking/Interrupted — Interrupt must stay clickable through TTS.
+                  setOverlayPhase((phase) => {
+                    if (phase === "speaking" || phase === "interrupted") return phase;
+                    return "listening";
+                  });
+                  if (bargeRef.current.phase !== "listening" && bargeRef.current.phase !== "speaking" && bargeRef.current.phase !== "interrupted") {
+                    pushBarge({ type: "session_listening" });
+                  }
                 }
               } else if (status === "idle" || status === "closed") {
                 pushBarge({ type: "session_idle" });
@@ -3438,6 +3453,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
             bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
             setOverlayPhase("speaking");
             setOverlayNotice("Dev test reply via TTS. Interrupt cuts playback.");
+            // Re-assert Speaking for SPEAKING_MIN_VISIBLE_MS so a fast response.done cannot hide Interrupt.
+            window.setTimeout(() => {
+              if (!overlayOpenRef.current || !voiceSession.current?.isOpen) return;
+              if (holdInterruptedRef.current) return;
+              if (bargeRef.current.phase === "interrupted") return;
+              bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+              setOverlayPhase("speaking");
+            }, SPEAKING_MIN_VISIBLE_MS);
           }
           voiceSession.current.speakText("It is about noon.");
         }, 2500);

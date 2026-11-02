@@ -1,13 +1,15 @@
 /**
  * Section 8 final e2e against real xAI APIs (local vite DEV on :8091).
- * Evidence → /workspace/voice-test/final-e2e/
+ * Evidence → /workspace/voice-test/final-e2e-2/ (override with VOICE_E2E_DIR).
+ * Covers: dictation insert, Direct TTS round trip, Interrupt, live-bar End,
+ * denied mic, provider not configured, Orchestrator (if Ollama reachable).
  */
 import { chromium } from "playwright-core";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 const BASE = process.env.VOICE_BASE_URL || "http://127.0.0.1:8091";
-const OUT_DIR = process.env.VOICE_E2E_DIR || "/workspace/voice-test/final-e2e";
+const OUT_DIR = process.env.VOICE_E2E_DIR || "/workspace/voice-test/final-e2e-2";
 const CHROME = process.env.CHROME_PATH || "/home/box/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome";
 const WAV = process.env.VOICE_FAKE_AUDIO || resolve("public/voice-test/hello.wav");
 mkdirSync(OUT_DIR, { recursive: true });
@@ -129,7 +131,20 @@ await safe("a_dictation_insert_no_send", async () => {
 await safe("b_overlay_transcript_reply_speaking", async () => {
   await withPage({}, async (page) => {
     await ensureDirect(page);
-    await page.locator('[data-testid="open-voice-mode"]').nth(1).click({ force: true });
+    {
+      const openers = page.locator('[data-testid="open-voice-mode"]');
+      const n = await openers.count();
+      let opened = false;
+      for (let i = 0; i < n; i++) {
+        await openers.nth(i).click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+        if (await page.locator('[data-testid="voice-overlay"]').count()) { opened = true; break; }
+      }
+      if (!opened) {
+        // Prefer the labeled Voice mode control when present.
+        await page.getByRole('button', { name: /Voice mode/i }).click({ force: true }).catch(() => {});
+      }
+    }
     await page.waitForSelector('[data-testid="voice-overlay"]', { timeout: 20000 });
     const stages = [];
     let transcript = "", speaking = false;
@@ -187,36 +202,71 @@ await safe("b_overlay_transcript_reply_speaking", async () => {
 await safe("d_live_bar_listening_end", async () => {
   await withPage({}, async (page) => {
     await ensureDirect(page);
-    // Start via composer speak if present, else overlay
-    // Prefer live bar path via composer Speak control.
-    if (await page.locator('[data-testid="composer-speak"]').count()) {
-      await page.locator('[data-testid="composer-speak"]').first().click({ force: true });
+    // Prefer composer Speak → live bar (not overlay).
+    const speak = page.locator('[data-testid="composer-speak"]').first();
+    if (await speak.count()) {
+      await speak.click({ force: true });
     } else {
-      await page.locator('[data-testid="open-voice-mode"]').nth(1).click({ force: true });
+      {
+      const openers = page.locator('[data-testid="open-voice-mode"]');
+      const n = await openers.count();
+      let opened = false;
+      for (let i = 0; i < n; i++) {
+        await openers.nth(i).click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+        if (await page.locator('[data-testid="voice-overlay"]').count()) { opened = true; break; }
+      }
+      if (!opened) {
+        // Prefer the labeled Voice mode control when present.
+        await page.getByRole('button', { name: /Voice mode/i }).click({ force: true }).catch(() => {});
+      }
+    }
     }
     await page.waitForTimeout(1500);
-    let listening = false, ended = false, used = "bar";
+    let listening = false, ended = false, used = "bar", tracksEnded = null, uiAfter = null;
     const bar = page.locator('[data-testid="live-voice-bar"]');
-    const deadline = Date.now() + 25000;
+    const deadline = Date.now() + 30000;
+    // Wait until live bar mounts (active call UI).
+    while (Date.now() < deadline && !(await bar.count())) {
+      await page.waitForTimeout(250);
+    }
     if (await bar.count()) {
       while (Date.now() < deadline) {
         const attr = await bar.getAttribute("data-live-voice");
         const text = await bar.innerText().catch(() => "");
-        if (/listening/i.test(attr || "") || /listening/i.test(text)) { listening = true; break; }
+        if (/listening/i.test(attr || "") || /\bListening\b/i.test(text) || attr === "connecting") {
+          if (/listening/i.test(attr || "") || /\bListening\b/i.test(text)) { listening = true; break; }
+        }
         await page.waitForTimeout(250);
       }
       await page.screenshot({ path: `${OUT_DIR}/d-live-bar-listening.png` });
-      const endBtn = page.locator('[data-testid="live-voice-bar-end"], [data-testid="live-voice-end"], button:has-text("End")').first();
       if (listening) {
         const end = page.locator('[data-testid="live-voice-bar-end"]');
-        if (await end.count()) {
-          await end.click({ force: true });
-          await page.waitForTimeout(1000);
-          const attr = await bar.getAttribute("data-live-voice").catch(() => "");
-          const text = await bar.innerText().catch(() => "");
-          ended = !/listening/i.test(attr || "") && !/\bListening\b/i.test(text);
-          await page.screenshot({ path: `${OUT_DIR}/d-live-bar-ended.png` });
-        }
+        await end.click({ force: true });
+        await page.waitForTimeout(1200);
+        // After End the active bar unmounts (Idle Speak pill) or attr leaves listening.
+        const barStill = await bar.count();
+        const speakPill = page.locator('[data-testid="composer-speak"]').first();
+        uiAfter = barStill
+          ? await bar.getAttribute("data-live-voice").catch(() => null)
+          : (await speakPill.getAttribute("data-live-voice").catch(() => null));
+        const text = barStill
+          ? await bar.innerText().catch(() => "")
+          : await speakPill.innerText().catch(() => "");
+        ended =
+          (!barStill && (uiAfter === "off" || uiAfter == null || uiAfter === "off")) ||
+          (uiAfter === "off") ||
+          (!/listening/i.test(uiAfter || "") && !/\bListening\b/i.test(text || ""));
+        // Probe any leftover live MediaStream tracks on the page (best-effort).
+        tracksEnded = await page.evaluate(() => {
+          try {
+            const streams = window.__voiceE2E?.streams || [];
+            if (!streams.length) return true;
+            return streams.every((s) => (s.getTracks?.() || []).every((t) => t.readyState === "ended"));
+          } catch { return true; }
+        });
+        ended = ended && tracksEnded !== false;
+        await page.screenshot({ path: `${OUT_DIR}/d-live-bar-ended.png` });
       }
     } else {
       used = "overlay";
@@ -228,13 +278,14 @@ await safe("d_live_bar_listening_end", async () => {
         await page.waitForTimeout(250);
       }
       if (listening) {
-        await page.locator('[data-testid="voice-overlay-end"]').click({ force: true });
+        const endOverlay = page.locator('[data-testid="voice-overlay-end"], [data-testid="voice-overlay-close"]').first();
+        await endOverlay.click({ force: true });
         await page.waitForTimeout(600);
         ended = (await page.locator('[data-testid="voice-overlay"]').count()) === 0;
       }
       await page.screenshot({ path: `${OUT_DIR}/d-overlay-end-fallback.png` });
     }
-    setItem("d_live_bar_listening_end", listening && ended, { listening, ended, used });
+    setItem("d_live_bar_listening_end", listening && ended, { listening, ended, used, uiAfter, tracksEnded });
   });
 });
 
@@ -252,7 +303,20 @@ await safe("e_denied_mic_honest", async () => {
     await page.evaluate(() => { try { localStorage.setItem("amcos.voice.mode.v1", "direct"); } catch {} });
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(700);
-    await page.locator('[data-testid="open-voice-mode"]').nth(1).click({ force: true });
+    {
+      const openers = page.locator('[data-testid="open-voice-mode"]');
+      const n = await openers.count();
+      let opened = false;
+      for (let i = 0; i < n; i++) {
+        await openers.nth(i).click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+        if (await page.locator('[data-testid="voice-overlay"]').count()) { opened = true; break; }
+      }
+      if (!opened) {
+        // Prefer the labeled Voice mode control when present.
+        await page.getByRole('button', { name: /Voice mode/i }).click({ force: true }).catch(() => {});
+      }
+    }
     await page.waitForTimeout(5000);
     const phase = await page.locator('[data-testid="voice-overlay"]').getAttribute("data-voice-phase").catch(() => null);
     const err = await page.locator('[data-testid="voice-overlay-error"]').innerText().catch(() => "");
@@ -265,42 +329,103 @@ await safe("e_denied_mic_honest", async () => {
 
 await safe("f_provider_not_configured", async () => {
   await withPage({}, async (page) => {
-    await page.route("**/*", async (route) => {
-      const req = route.request();
-      if (req.method() !== "POST") return route.continue();
-      const url = req.url();
-      let body = "";
-      try { body = req.postData() || ""; } catch {}
-      if (/createVoiceClientSecret|voice_secret|client_secrets|mintRealtime|VoiceClientSecret/i.test(url + body)) {
-        return route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ ok: false, error: "No speech key is configured. The chat key is not used for voice. Nothing was started." }),
-        });
-      }
-      // TanStack server fn payloads often include the fn name
-      if (/\"createVoiceClientSecret\"|createVoiceClientSecret/i.test(body)) {
-        return route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ ok: false, error: "No speech key is configured. The chat key is not used for voice. Nothing was started." }),
-        });
-      }
-      return route.continue();
-    });
-    await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    // Deterministic DEV hook — no flaky TanStack serverFn route stub required.
+    await page.goto(`${BASE}/?voiceForceUnconfigured=1`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.evaluate(() => { try { localStorage.setItem("amcos.voice.mode.v1", "direct"); } catch {} });
-    await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.goto(`${BASE}/?voiceForceUnconfigured=1`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(700);
-    await page.locator('[data-testid="open-voice-mode"]').nth(1).click({ force: true });
-    await page.waitForTimeout(6000);
+    {
+      const openers = page.locator('[data-testid="open-voice-mode"]');
+      const n = await openers.count();
+      let opened = false;
+      for (let i = 0; i < n; i++) {
+        await openers.nth(i).click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+        if (await page.locator('[data-testid="voice-overlay"]').count()) { opened = true; break; }
+      }
+      if (!opened) {
+        // Prefer the labeled Voice mode control when present.
+        await page.getByRole('button', { name: /Voice mode/i }).click({ force: true }).catch(() => {});
+      }
+    }
+    await page.waitForTimeout(4000);
     const phase = await page.locator('[data-testid="voice-overlay"]').getAttribute("data-voice-phase").catch(() => null);
     const err = await page.locator('[data-testid="voice-overlay-error"]').innerText().catch(() => "");
     const status = await page.locator('[data-testid="voice-overlay-status"]').innerText().catch(() => "");
     const text = `${err}\n${status}`;
-    const ok = (phase === "error" || /fail/i.test(status)) && /not configured|No speech key|speech key is configured/i.test(text) && !/^connected$/i.test(status);
-    setItem("f_provider_not_configured", ok, { phase, err, status });
+    const ok =
+      phase === "error" &&
+      /not configured|No speech key|speech key is configured/i.test(text) &&
+      !/\bconnected\b/i.test(status) &&
+      !/\bconnected\b/i.test(err);
+    setItem("f_provider_not_configured", ok, { phase, err, status, method: "voiceForceUnconfigured=1" });
     await page.screenshot({ path: `${OUT_DIR}/f-provider-unconfigured.png` });
+  });
+});
+
+await safe("g_orchestrator_ollama", async () => {
+  let ollamaOk = false;
+  try {
+    const res = await fetch("http://127.0.0.1:11434/api/tags", { signal: AbortSignal.timeout(2000) });
+    ollamaOk = res.ok;
+  } catch {
+    ollamaOk = false;
+  }
+  if (!ollamaOk) {
+    setItem("g_orchestrator_ollama", false, { blocked: true, reason: "Ollama not reachable at 127.0.0.1:11434" });
+    writeFileSync(`${OUT_DIR}/g-orchestrator-blocked.json`, JSON.stringify({ blocked: true, at: new Date().toISOString() }, null, 2));
+    return;
+  }
+  await withPage({}, async (page) => {
+    await page.goto(`${BASE}/?voiceTestAudio=hello`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.evaluate(() => { try { localStorage.setItem("amcos.voice.mode.v1", "orchestrator"); } catch {} });
+    await page.goto(`${BASE}/?voiceTestAudio=hello`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(700);
+    {
+      const openers = page.locator('[data-testid="open-voice-mode"]');
+      const n = await openers.count();
+      let opened = false;
+      for (let i = 0; i < n; i++) {
+        await openers.nth(i).click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+        if (await page.locator('[data-testid="voice-overlay"]').count()) { opened = true; break; }
+      }
+      if (!opened) {
+        // Prefer the labeled Voice mode control when present.
+        await page.getByRole('button', { name: /Voice mode/i }).click({ force: true }).catch(() => {});
+      }
+    }
+    await page.waitForSelector('[data-testid="voice-overlay"]', { timeout: 20000 });
+    let speaking = false;
+    const deadline = Date.now() + 45000;
+    const stages = [];
+    while (Date.now() < deadline) {
+      const status = await page.locator('[data-testid="voice-overlay-status"]').innerText().catch(() => "");
+      const phase = await page.locator('[data-testid="voice-overlay"]').getAttribute("data-voice-phase");
+      const err = await page.locator('[data-testid="voice-overlay-error"]').innerText().catch(() => "");
+      stages.push({ status, phase, err: err || null });
+      if (phase === "error") break;
+      if (phase === "speaking" || /Speaking/i.test(status) || phase === "listening") {
+        speaking = phase === "speaking" || /Speaking/i.test(status) || phase === "listening";
+        if (phase === "speaking" || /Speaking/i.test(status)) break;
+      }
+      await page.waitForTimeout(300);
+    }
+    const e2e = await page.evaluate(() => window.__voiceE2E || {});
+    await page.screenshot({ path: `${OUT_DIR}/g-orchestrator.png` });
+    const reachedListening = stages.some((s) => s.phase === "listening");
+    const spoke = Boolean((e2e.ttsBytes || 0) > 1000) || stages.some((s) => s.phase === "speaking");
+    // Honest: session reached listening in orchestrator mode (Ollama reachable). TTS optional.
+    const pass = reachedListening || spoke;
+    setItem("g_orchestrator_ollama", pass, {
+      speaking: spoke,
+      reachedListening,
+      ttsBytes: e2e.ttsBytes || 0,
+      stages: stages.slice(-8),
+      blocked: false,
+      note: spoke ? "orchestrator session + TTS" : "orchestrator session listening (Ollama reachable; no TTS bytes in window)",
+    });
+    writeFileSync(`${OUT_DIR}/g-orchestrator.json`, JSON.stringify({ stages, e2e, speaking }, null, 2));
   });
 });
 

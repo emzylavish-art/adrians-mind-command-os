@@ -217,7 +217,10 @@ describe("RealtimeVoiceSession Speaking ↔ playback sync", () => {
 
     assert.ok(pending.length > 0);
     pending[0]!();
-    await new Promise((r) => setTimeout(r, 10));
+    // SPEAKING_HOLD_MS keeps Speaking briefly even after playback drains.
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(statuses.at(-1), "speaking");
+    await new Promise((r) => setTimeout(r, 1000));
     assert.equal(statuses.at(-1), "listening");
     session.close();
   });
