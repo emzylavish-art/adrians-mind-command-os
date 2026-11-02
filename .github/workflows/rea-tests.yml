@@ -38,6 +38,8 @@ jobs:
           python -m json.tool .mcp.json > /dev/null
       - name: Run REA unit tests
         run: python -m unittest discover -s tools/rea -p 'test_*.py'
+      - name: Run security review unit tests
+        run: python -m unittest discover -s tools/security_review -p 'test_*.py'
       - name: Run offline knowledge search tests
         run: python -m unittest discover -s tools/knowledge -p 'test_*.py'
       - name: Run agent team tests
@@ -48,8 +50,10 @@ jobs:
         run: python tools/rea/rea.py tools/rea --json > /tmp/rea-report.json
       - name: Smoke-test router CLI
         run: echo '{"task":"inspect source","capabilities":["source_inventory"]}' | python team/router.py
-      - name: Smoke-test shared JSON runner
+      - name: Smoke-test shared JSON runner REA
         run: echo '{"operation":"invoke","tool_id":"rea.scan","input":{"path":"team"}}' | python team/runner.py
+      - name: Smoke-test shared JSON runner security review
+        run: echo '{"operation":"invoke","tool_id":"security.scan","input":{"path":"team"}}' | python team/runner.py
       - name: Smoke-test MCP server initialize and tool listing
         run: |
           printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | python team/mcp_server.py > /tmp/mcp-response.jsonl
