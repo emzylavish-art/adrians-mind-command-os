@@ -54,6 +54,16 @@ def tool_specs(manifest):
         elif tool_id == "team.health":
             specs.append({
                 "name": tool_id,
+                "description": "Return an offline readiness report for the agent manifest and tool entrypoints. Does not test external providers or credentials.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            })
+        elif tool_id == "team.health":
+            specs.append({
+                "name": tool_id,
                 "description": "Return an offline readiness report for manifest-listed agents and tool entrypoints. Does not probe external services.",
                 "inputSchema": {
                     "type": "object",
