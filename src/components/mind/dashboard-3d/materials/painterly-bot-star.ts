@@ -1,11 +1,20 @@
 import * as THREE from "three";
 import type { PainterlyKit } from "./use-painterly-kit.ts";
-import { setStarWatercolorColor, setStarHalo, type StarSurfaceOptions } from "./star-surface.ts";
+import {
+  setStarWatercolorColor,
+  setStarHalo,
+  setStarGrain,
+  starGrainFromHealth,
+  type StarSurfaceOptions,
+  type StarHealthTone,
+} from "./star-surface.ts";
 import { sanitizeFinite, sanitizePainterColor, PAINTER_IDLE_RGB } from "./paper-grain.ts";
 
 export type PainterlyBotStarOptions = StarSurfaceOptions & {
   /** When idle, lower emissive (mirrors prior MeshStandardMaterial behavior). */
   idle?: boolean;
+  /** Real bot health tone — drives pigment granulation when `grain` omitted. */
+  health?: StarHealthTone | string;
 };
 
 export type PainterlyBotStarBundle = {
@@ -17,6 +26,8 @@ export type PainterlyBotStarBundle = {
   setColor: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void;
   /** Override brush-stroke halo (locks auto-sync from emissive). */
   setHalo: (halo: number) => void;
+  /** Override pigment granulation (locks auto-sync from health). */
+  setGrain: (grain: number) => void;
 };
 
 /**
@@ -34,6 +45,7 @@ export function createPainterlyBotStar(
   opts: PainterlyBotStarOptions = {},
 ): PainterlyBotStarBundle {
   const idle = !!opts.idle;
+  const health = opts.health;
   const emissive =
     opts.emissiveIntensity != null
       ? opts.emissiveIntensity
@@ -47,12 +59,18 @@ export function createPainterlyBotStar(
       : idle
         ? 0.18
         : sanitizeFinite(0.2 + emissive * 0.55, 0.65, 0, 1.5);
+  // c15: pigment granulation from real health (blocked settles heaviest)
+  const grain =
+    opts.grain != null
+      ? opts.grain
+      : starGrainFromHealth(health, idle);
   const meshMaterial = kit.createStarMaterial({
     color: opts.color,
     emissiveIntensity: emissive,
-    grain: opts.grain,
+    grain,
     stroke: opts.stroke,
     halo,
+    health,
     forceFallback: opts.forceFallback,
   });
   const glowSafe = sanitizePainterColor(opts.color ?? 0xffffff, PAINTER_IDLE_RGB);
@@ -80,5 +98,6 @@ export function createPainterlyBotStar(
     }
   };
   const setHalo = (h: number) => setStarHalo(meshMaterial, h);
-  return { meshMaterial, glowMaterial, setColor, setHalo };
+  const setGrain = (g: number) => setStarGrain(meshMaterial, g);
+  return { meshMaterial, glowMaterial, setColor, setHalo, setGrain };
 }

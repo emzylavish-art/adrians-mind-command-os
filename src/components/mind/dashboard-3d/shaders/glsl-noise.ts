@@ -39,7 +39,7 @@ float paintFbm(vec2 p) {
 }
 `;
 
-export const PAINTER_SHADER_VERSION = "painter-1.7.0";
+export const PAINTER_SHADER_VERSION = "painter-1.8.0";
 
 /**
  * HACKER (c7): iOS Safari / WebGL1 often reject highp in fragments.

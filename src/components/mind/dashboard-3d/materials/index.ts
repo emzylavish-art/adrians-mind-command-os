@@ -38,7 +38,11 @@ export {
   tickStarMaterial,
   setStarWatercolorColor,
   setStarHalo,
+  setStarGrain,
+  starGrainFromHealth,
+  STAR_GRAIN_BY_HEALTH,
   type StarSurfaceOptions,
+  type StarHealthTone,
 } from "./star-surface.ts";
 export {
   createPainterlyBotStar,
@@ -157,6 +161,7 @@ export {
   usePainterlyKitFactory,
   type PainterlyKit,
   type PainterlyKitOptions,
+  type PainterlyKitDisposeMeta,
   type PainterlyTickOptions,
   type PainterlyTextureSlot,
   type PainterlyTextureBinding,

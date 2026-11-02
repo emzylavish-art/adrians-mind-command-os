@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 14)
+## Status vs origin/dashboard-3d (verified cycle 15)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -185,11 +185,29 @@ kit.createInkEdges(edges.map(e => ({
 
 - `uPool` / wash from real lane health inside `createLaneNebulae` (blocked pools heaviest). **No extra Dashboard Bot wiring** — already on shared mats.
 - Mesh pool: `neb.update` no longer `new THREE.Mesh` every poll (flicker-safe).
-- After `disposePainterlyKit`, create*/bind throw `painterly-kit-disposed` (no UAF on disposed textures).
+- After `disposePainterlyKit`, create/bind return inert no-ops + `disposeMeta` (c15 fail-safe; no throw into live dashboard).
 - Nebula wash uses period-continuous sin/cos orbit (wrap-seam safe with `sanitizeShaderTime`).
 
 ```ts
 // Already wired — health drives pool automatically:
 kit.createLaneNebulae(lanes.map(l => ({ health: l.health, center: l.center })));
-// Do not call create* after disposePainterlyKit — throws painterly-kit-disposed.
+// Post-dispose create/bind return inert no-ops + disposeMeta (c15); prefer fresh kit on remount.
 ```
+
+
+## c15 — post-dispose fail-safe + star pigment granulation
+
+- **Hacker:** c14 `painterly-kit-disposed` throw could crash the live dashboard when StrictMode/HMR/unmount races hit deferred `createImagineNodeMaterial` (requestIdleCallback / TextureLoader). create/bind now return inert no-op materials/handles, `console.warn` once, and set `kit.disposeMeta.postDisposeCall`.
+- **Visual:** star pigment granulation from real bot health via `starGrainFromHealth` / `createBotStar({ health, idle })` / `setStarGrain`. Shader uses anisotropic fiber grain through `paintWrap` (mediump-safe; no raw `vUv*90`).
+- **Wiring (optional improve):** pass real health tone for full granulation ladder:
+
+```ts
+const star = kit.createBotStar({
+  color: HEALTH_COLOR[bot.health],
+  idle: bot.health === "idle",
+  health: bot.health, // blocked settles heaviest pigment
+});
+// already wired path (idle boolean only) still gets idle vs healthy grain
+```
+
+- No required Dashboard Bot change — idle boolean path already drives grain; health tone is additive.
