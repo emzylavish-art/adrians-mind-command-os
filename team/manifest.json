@@ -331,6 +331,23 @@
         "timeout_seconds": "integer"
       },
       "safety": "One-shot queue consumer; dispatches only allowlisted local tools; rejects arbitrary commands and code payloads."
+    },
+    {
+      "id": "team.agent.resolve",
+      "agent": "orchestrator",
+      "capabilities": [
+        "agent_prompt_resolution",
+        "dispatch"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/runner.py",
+      "input_schema": {
+        "agent_id": "string",
+        "task": "string",
+        "capabilities": "string[]",
+        "context": "object"
+      },
+      "safety": "Reads verified agent prompt files only; does not execute model inference or external actions."
     }
   ],
   "catalog": [
@@ -573,6 +590,16 @@
       "install": "repo-code-present",
       "live": "callable-cli-runner",
       "guardrail": "Explicit one-shot processing only through allowlisted local tools; no arbitrary shell or code execution."
+    },
+    {
+      "id": "mind-command-os-agent-prompt-resolver",
+      "name": "Mind Command OS Agent Prompt Resolver",
+      "category": "agent-routing",
+      "agent": "orchestrator",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-runner-and-mcp",
+      "guardrail": "Returns agent contract prompt and requirements; external model/runtime execution remains host-controlled."
     }
   ]
 }
