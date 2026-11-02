@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Tiny local MCP stdio server exposing manifest-listed Mind Command tools.
-
-Implements JSON-RPC 2.0 initialize, tools/list, and tools/call over newline-delimited
-stdio. This is a minimal MCP-compatible transport, not a full model or agent host.
-"""
+"""Minimal MCP stdio server for ready Mind Command OS tools."""
 import json
 import sys
 from pathlib import Path
@@ -11,7 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "team"))
 import runner  # noqa: E402
-
 
 SERVER_INFO = {"name": "mind-command-os-tools", "version": "0.1.0"}
 PROTOCOL_VERSION = "2025-03-26"
@@ -22,123 +17,73 @@ def tool_specs(manifest):
     for tool in manifest.get("tools", []):
         if tool.get("status") != "ready":
             continue
-        tool_id = tool.get("id")
-        if tool_id == "rea.scan":
-            specs.append({
-                "name": tool_id,
-                "description": "Inventory a source directory and report languages, dependencies, entrypoints, and review markers. Offline; does not execute scanned source.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Directory or file path, relative to repository root unless absolute."},
-                        "out": {"type": "string", "description": "Optional output file path."},
-                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
-                    },
-                    "additionalProperties": False,
+        name = tool.get("id")
+        if name == "rea.scan":
+            description = "Inventory a source directory and report languages, dependencies, entrypoints, and review markers. Offline; does not execute scanned source."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "out": {"type": "string"},
+                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
                 },
-            })
-        elif tool_id == "security.scan":
-            specs.append({
-                "name": tool_id,
-                "description": "Perform an offline heuristic static security review of source files. Does not execute code or make network requests; findings require human validation.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Authorized source directory or file, relative to repository root unless absolute."},
-                        "out": {"type": "string", "description": "Optional output file path."},
-                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
-                    },
-                    "additionalProperties": False,
+                "additionalProperties": False,
+            }
+        elif name == "security.scan":
+            description = "Run offline heuristic static security review. Does not execute code or make network requests; human validation is required."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Owned or authorized source path."},
+                    "out": {"type": "string"},
+                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
                 },
-            })
-        elif tool_id == "team.queue":
-            specs.append({
-                "name": tool_id,
-                "description": "Manage durable local SQLite worker jobs. Queue records payloads only and never executes jobs. Use worker_id to claim/complete/fail jobs.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "action": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
-                        "operation": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
-                        "db": {"type": "string", "description": "Optional SQLite database path; defaults to team/queue.sqlite3."},
-                        "task": {"type": "string"},
-                        "payload": {"type": "object"},
-                        "worker_id": {"type": "string"},
-                        "job_id": {"type": "string"},
-                        "result": {"type": "object"},
-                        "error": {"type": "string"},
-                        "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
-                        "lease_seconds": {"type": "integer", "minimum": 5, "maximum": 3600},
-                        "status": {"type": "string", "enum": ["queued", "claimed", "succeeded", "failed"]},
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
-                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
-                    },
-                    
-                    "additionalProperties": False,
+                "additionalProperties": False,
+            }
+        elif name == "knowledge.search":
+            description = "Search local Markdown and text knowledge files using offline lexical retrieval."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "query": {"type": "string", "minLength": 1},
+                    "top_k": {"type": "integer", "minimum": 1, "maximum": 50},
+                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
                 },
-            })
-        elif tool_id == "knowledge.search":
-            specs.append({
-                "name": tool_id,
-                "description": "Search local Markdown and text knowledge files using offline lexical retrieval. Requires a query; no remote store is contacted.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Local knowledge directory or file."},
-                        "query": {"type": "string", "minLength": 1},
-                        "top_k": {"type": "integer", "minimum": 1, "maximum": 50},
-                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
-                    },
-                    "required": ["query"],
-                    "additionalProperties": False,
+                "required": ["query"],
+                "additionalProperties": False,
+            }
+        elif name == "team.health":
+            description = "Return offline readiness for manifest entries and tool entrypoints. Does not test external services or credentials."
+            schema = {"type": "object", "properties": {}, "additionalProperties": False}
+        elif name == "team.queue":
+            description = "Manage local SQLite durable worker jobs. Queue records payloads only; it never executes queued jobs."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
+                    "operation": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
+                    "db": {"type": "string"},
+                    "task": {"type": "string"},
+                    "payload": {"type": "object"},
+                    "worker": {"type": "string"},
+                    "worker_id": {"type": "string"},
+                    "id": {"type": "string"},
+                    "job_id": {"type": "string"},
+                    "result": {"type": "object"},
+                    "error": {"type": "string"},
+                    "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
+                    "lease_seconds": {"type": "integer", "minimum": 5, "maximum": 3600},
+                    "status": {"type": "string", "enum": ["queued", "claimed", "succeeded", "failed"]},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
+                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
                 },
-            })
-        elif tool_id == "team.health":
-            specs.append({
-                "name": tool_id,
-                "description": "Return an offline readiness report for the agent manifest and tool entrypoints. Does not test external providers or credentials.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": False,
-                },
-            })
-        elif tool_id == "team.queue":
-            specs.append({
-                "name": tool_id,
-                "description": "Operate the local SQLite durable task queue. Enqueued payloads are stored as data only and are never executed by this tool.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "action": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
-                        "task": {"type": "string"},
-                        "payload": {"type": "object"},
-                        "worker": {"type": "string"},
-                        "id": {"type": "string"},
-                        "result": {"type": "object"},
-                        "error": {"type": "string"},
-                        "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
-                        "lease_seconds": {"type": "integer", "minimum": 5, "maximum": 3600},
-                        "status": {"type": "string", "enum": ["queued", "claimed", "succeeded", "failed"]},
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
-                        "db": {"type": "string"},
-                    },
-                    "required": ["action"],
-                    "additionalProperties": False,
-                },
-            })
-        elif tool_id == "team.health":
-            specs.append({
-                "name": tool_id,
-                "description": "Return an offline readiness report for manifest-listed agents and tool entrypoints. Does not probe external services.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 60},
-                    },
-                    "additionalProperties": False,
-                },
-            })
+                "required": ["task"] if False else ["action"],
+                "additionalProperties": False,
+            }
+        else:
+            continue
+        specs.append({"name": name, "description": description, "inputSchema": schema})
     return specs
 
 
