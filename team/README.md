@@ -13,6 +13,7 @@ runner); it does not perform model inference or claim external services are live
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"security.scan","input":{"path":"."}}'` — run the offline defensive security scan.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"team.health","input":{}}'` — inspect repository-declared readiness.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"knowledge.search","input":{"path":"./notes","query":"agent tools"}}'` — search local knowledge files.
+- `python team/runner.py --task '{"operation":"invoke","tool_id":"team.queue","input":{"operation":"enqueue","task":"inspect repo","payload":{"capabilities":["source_inventory"]}}}'` — persist a worker job.
 
 ### JSON contract
 
@@ -56,7 +57,7 @@ python team/mcp_server.py
 ```
 
 Configure an MCP client to launch that command from the repository root. The current
-server publishes `rea.scan`, `security.scan`, `team.health`, and `knowledge.search`, the currently implemented ready
+server publishes `rea.scan`, `security.scan`, `team.health`, `knowledge.search`, and `team.queue`, the currently implemented ready
 tool adapters. The server implements `initialize`, `tools/list`, and `tools/call`;
 it does not launch model agents or invent adapters for unresolved tools.
 
@@ -77,3 +78,10 @@ The shared runner and MCP server expose this as `team.queue` with actions
 `enqueue`, `claim`, `complete`, `fail`, and `list`. For isolated tests, pass a
 temporary `db` path. Do not put secrets into queued payloads. A worker must apply
 authorization, tool policy, and any required human approval before external actions.
+
+
+## Durable queue
+
+See [QUEUE.md](QUEUE.md) for the SQLite queue CLI and lease semantics. The queue
+persists tasks and worker claims, but it does not execute payloads. A worker process
+must be separately launched and must validate queued instructions before dispatch.
