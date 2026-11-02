@@ -58,6 +58,13 @@ import {
   snapshotMcpTrySelectParams,
   type McpCallActionState,
 } from "@/lib/mind/mcp-call-action";
+import {
+  OpenPageActionStatusRows,
+  onceRetry as onceOpenPageRetry,
+  runOpenPage,
+  snapshotOpenPageParams,
+  type OpenPageActionState,
+} from "@/lib/mind/open-page-action";
 
 
 function botAvatarSrc(name: string) {
@@ -105,6 +112,7 @@ export function FleetPanel({
   const workerHealthGeneration = useRef(0);
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
+  const [openPageActionState, setOpenPageActionState] = useState<OpenPageActionState>({ status: "idle" });
   const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
   const [mcpListState, setMcpListState] = useState<McpListState>({ status: "loading" });
   const mcpListInFlight = useRef(false);
@@ -537,18 +545,24 @@ export function FleetPanel({
           type="button"
           className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
           onClick={() => {
+            const params = snapshotOpenPageParams(pageUrl);
             const run = () => {
-              void inspectWebPage({ data: { url: pageUrl } }).then((result) => {
+              setOpenPageActionState({ status: "running", url: params.url });
+              void runOpenPage(params, inspectWebPage).then((result) => {
                 if (result.ok) {
-                  setPageNote(`${result.title}\n${result.excerpt}`);
+                  setOpenPageActionState({ status: "ok", note: result.note });
+                  setPageNote(result.note);
                   return;
                 }
-                setPageNote(result.error);
-                onFailure?.(result.error, run);
-              }).catch((error: unknown) => {
-                const message = error instanceof Error ? error.message : "The page was not opened.";
-                setPageNote(message);
-                onFailure?.(message, run);
+                setOpenPageActionState({
+                  status: "error",
+                  kind: result.kind,
+                  message: result.message,
+                  params: result.params,
+                });
+                setPageNote(null);
+                const retry = onceOpenPageRetry(() => run());
+                if (retry) onFailure?.(result.message, retry);
               });
             };
             run();
@@ -557,7 +571,39 @@ export function FleetPanel({
           Open page
         </button>
       </div>
-      {pageNote ? <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{pageNote}</p> : null}
+      <OpenPageActionStatusRows
+        state={openPageActionState}
+        onRetry={
+          openPageActionState.status === "error"
+            ? onceOpenPageRetry(() => {
+                const params = openPageActionState.params;
+                const run = () => {
+                  setOpenPageActionState({ status: "running", url: params.url });
+                  void runOpenPage(params, inspectWebPage).then((result) => {
+                    if (result.ok) {
+                      setOpenPageActionState({ status: "ok", note: result.note });
+                      setPageNote(result.note);
+                      return;
+                    }
+                    setOpenPageActionState({
+                      status: "error",
+                      kind: result.kind,
+                      message: result.message,
+                      params: result.params,
+                    });
+                    setPageNote(null);
+                    const retry = onceOpenPageRetry(() => run());
+                    if (retry) onFailure?.(result.message, retry);
+                  });
+                };
+                run();
+              }) ?? (() => undefined)
+            : () => undefined
+        }
+      />
+      {pageNote && openPageActionState.status !== "error" ? (
+        <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{pageNote}</p>
+      ) : null}
       <ul className="tool-list mt-4 space-y-2 text-sm">
         {toolCatalog().map((tool) => (
           <li key={tool.id} className="tool-card dense-card flex flex-col gap-1 p-3" data-available={tool.available ? "true" : "false"}>

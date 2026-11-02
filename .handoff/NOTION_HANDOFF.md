@@ -496,3 +496,20 @@ command on Zack's PC.
 - Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e428173be4be400afbaedfa
 - Blocked: command-app.tsx shouldShowFailureBanner at loadMcpLists catch ≈603–613 + reload after sign-in (Grok Build); View log for MessageBody/MemoryManager; voice/, media/, agent-planner banners; Vercel team auth.
 - Lock releasing.
+
+## 2026-11-02T15:33:52-06:00 (America/Chicago) — Error Banners Bot — H24 OAuth connect/disconnect banners
+- Gap: ServiceBoard Connect/Disconnect catch → muted `setNote` only; no red Retry / View log.
+- Lock: /workspace/locks/error-banners.lock (claimed; releasing after H25 + Notion).
+- preview/integration merge ABORTED (conflict in .handoff/NOTION_HANDOFF.md); continued on tip 700abb8.
+- Fix: oauth-board-action.ts runOauthBoardAction + snapshot params + OauthBoardActionStatusRows; onceRetry; optional onFailure→reportFailure. failure-states oauth_connect_failed / oauth_disconnect_failed → network_failure.
+- Files: src/lib/mind/oauth-board-action.ts(+test), src/components/mind/service-board.tsx, failure-states(+test), package.json test list.
+- Gates: typecheck pass; TS strip-types 1052/1052; lint touched 0e/4w (pre-existing hooks/unused); build pass.
+- Notion: child under mirror (requested 40b1aa27… still try-then-fallback).
+- Next: H25 Open page muted pageNote.
+
+## 2026-11-02T15:33:52-06:00 (America/Chicago) — Error Banners Bot — H25 Open page action banner
+- Gap: Tools panel Open page catch/ok:false → muted pageNote; Retry via top onFailure only; no inline red banner with identical-URL Retry.
+- Fix: open-page-action.ts runOpenPage + snapshotOpenPageParams + OpenPageActionStatusRows; onceRetry; onFailure→reportFailure (already wired open_page_failed in command-app). failure-states open_page_failed → network_failure.
+- Files: src/lib/mind/open-page-action.ts(+test), src/components/mind/fleet-panels.tsx, failure-states(+test), package.json test list.
+- Gates: same as H24 (combined).
+- Blocked still: command-app.tsx mounts (Grok Build); voice/; media/; agent-planner; Vercel preview; ServiceBoard onFailure mount in command-app (optional prop ready).
