@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { relativeLuminance } from "./wcag-contrast.ts";
+import { registerVramSource, type VramRendererLike } from "./vram-ledger.ts";
 import type { UvRect } from "./detail-backdrop-dim.ts";
 
 /**
@@ -317,10 +318,14 @@ export function createRegionReader(maxRects = 2): RegionReader {
   scene.add(quad);
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   let disposed = false;
+  // #120 ledger: readback target (counts once the GPU allocated it).
+  let vramRenderer: VramRendererLike = null;
+  const unregisterVram = registerVramSource("meter", () => (disposed ? null : { targets: vramRenderer ? [rt] : [], renderer: vramRenderer }));
 
   return {
     async read(renderer, src, rects) {
       if (disposed) throw new Error("meter-disposed");
+      vramRenderer = renderer as unknown as VramRendererLike;
       const list = rects.slice(0, maxRects);
       if (!list.length) return [];
       const prev = renderer.getRenderTarget();
@@ -355,6 +360,8 @@ export function createRegionReader(maxRects = 2): RegionReader {
     dispose() {
       if (disposed) return;
       disposed = true;
+      unregisterVram();
+      vramRenderer = null;
       rt.dispose();
       material.dispose();
       geometry.dispose();

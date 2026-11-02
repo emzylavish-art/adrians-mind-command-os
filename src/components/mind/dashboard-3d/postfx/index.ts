@@ -10,6 +10,7 @@ export {
   safeBloomSize,
   bloomMipSizes,
   createTunedBloomPass,
+  bloomChainType,
   type BloomTuning,
   type TunedBloomHandle,
   type TunedBloomOpts,
@@ -267,3 +268,20 @@ export {
   type RebindTargets,
   type ViewportChange,
 } from "./viewport-rebind.ts";
+export {
+  VRAM_SOURCE_ORDER,
+  componentBytes,
+  formatVramBadge,
+  measurePostfxVram,
+  postfxVramBytes,
+  postfxVramLedger,
+  registerVramSource,
+  renderTargetAllocated,
+  renderTargetBytes,
+  texelBytes,
+  vramSourceCount,
+  type PostfxVramLedger,
+  type VramSource,
+  type VramSourceName,
+  type VramSourceSnapshot,
+} from "./vram-ledger.ts";

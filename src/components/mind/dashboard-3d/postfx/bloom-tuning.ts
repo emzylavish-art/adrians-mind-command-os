@@ -4,6 +4,8 @@ import { normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.
 import { BLOOM_KERNEL_RADII, bloomScaleFor, rebasedBlurKernel } from "./bloom-budget.ts";
 import { createGodRayBudget, type GodRayBudgetOpts } from "./god-ray-budget.ts";
 import { applyPrefilter, prefilterUniformDefaults, PREFILTER_HIGHPASS_FRAGMENT, type PrefilterState } from "./bloom-prefilter.ts";
+import { boundFramebufferComplete, godRayMaskType } from "./god-ray-mask.ts";
+import { registerVramSource, type VramRendererLike } from "./vram-ledger.ts";
 
 export type BloomTuning = {
   strength: number;
@@ -47,6 +49,17 @@ export type TunedBloomHandle = {
   readonly frameTier: number;
   /** #112: bright-pass prefilter layout used by the last render (n = 1 → stock). */
   readonly prefilter: PrefilterState;
+  /**
+   * c114 hacker: texel type of the bloom mip chain. Stock UnrealBloomPass always
+   * allocates HalfFloat; on WebGL2 without EXT_color_buffer_float/_half_float that
+   * FBO is incomplete and bloom silently vanishes, and over the painter c20 byte
+   * composer fallback it holds 2× the VRAM for HDR the source doesn't have.
+   */
+  readonly chainType: THREE.TextureDataType;
+  /** c114: true once a HalfFloat chain FBO came back incomplete (sticky byte chain). */
+  readonly halfFloatRejected: boolean;
+  /** #120: the chain render targets (VRAM ledger / leak tests). */
+  readonly chainTargets: readonly THREE.WebGLRenderTarget[];
 };
 
 export type TunedBloomOpts = {
@@ -56,7 +69,30 @@ export type TunedBloomOpts = {
   frameOpts?: GodRayBudgetOpts;
   /** #112 bright-pass anti-alias prefilter (default on with the budget). */
   prefilter?: boolean;
+  /** c114: "auto" (default) = chain follows renderable HDR + composer source type; "stock" = always HalfFloat. */
+  chainFormat?: "auto" | "stock";
 };
+
+type ChainCaps = {
+  capabilities?: { isWebGL2?: boolean };
+  extensions?: { has?: (name: string) => boolean };
+  setRenderTarget?: (t: THREE.WebGLRenderTarget | null) => void;
+  getRenderTarget?: () => THREE.WebGLRenderTarget | null;
+};
+
+/**
+ * c114: chain texel type for this renderer + composer source, or null when the
+ * renderer can't be asked (partial test doubles → keep stock). Same rule as the
+ * #117 god-ray mask: HalfFloat only where RGBA16F is renderable AND the source
+ * carries HDR; byte composer (painter c20 fallback) → byte chain.
+ */
+export function bloomChainType(
+  renderer: ChainCaps | null | undefined,
+  sourceType: THREE.TextureDataType | null | undefined,
+): THREE.TextureDataType | null {
+  if (!renderer || typeof renderer.extensions?.has !== "function" || !renderer.capabilities) return null;
+  return godRayMaskType(renderer, sourceType ?? THREE.HalfFloatType);
+}
 
 /** Max bloom buffer edge — UnrealBloomPass allocates 5 mips ×2 targets. */
 export const BLOOM_MAX_EDGE = 4096;
@@ -181,9 +217,66 @@ export function createTunedBloomPass(
     pass.materialHighPassFilter.fragmentShader = PREFILTER_HIGHPASS_FRAGMENT;
     pass.materialHighPassFilter.needsUpdate = true;
   }
+  // c114 hacker: chain format guard (see TunedBloomHandle.chainType).
+  const chainTargets = (): THREE.WebGLRenderTarget[] =>
+    [pass.renderTargetBright, ...(pass.renderTargetsHorizontal ?? []), ...(pass.renderTargetsVertical ?? [])].filter(
+      (t): t is THREE.WebGLRenderTarget => !!t,
+    );
+  let chainType: THREE.TextureDataType = pass.renderTargetBright?.texture.type ?? THREE.HalfFloatType;
+  let halfRejected = false;
+  let probedSource: THREE.TextureDataType | null | undefined;
+  let probed = false;
+  const retype = (type: THREE.TextureDataType) => {
+    for (const t of chainTargets()) {
+      if (t.texture.type === type) continue;
+      t.texture.type = type;
+      t.dispose(); // three re-allocates with the new type on next bind
+    }
+    chainType = type;
+  };
+  const syncChainType = (renderer: ChainCaps, readBuffer: THREE.WebGLRenderTarget | undefined) => {
+    if (opts.chainFormat === "stock") return;
+    const src = readBuffer?.texture?.type;
+    if (probed && src === probedSource) return;
+    let want = bloomChainType(renderer, src);
+    if (want === null) return;
+    probed = true;
+    probedSource = src;
+    if (halfRejected) want = THREE.UnsignedByteType;
+    if (want !== chainType) retype(want);
+    if (want === THREE.HalfFloatType && pass.renderTargetBright && typeof renderer.setRenderTarget === "function") {
+      // Silent-black guard: bind once and ask the driver; incomplete → byte, sticky.
+      const prev = typeof renderer.getRenderTarget === "function" ? renderer.getRenderTarget() : null;
+      renderer.setRenderTarget(pass.renderTargetBright);
+      const ok = boundFramebufferComplete(renderer as unknown as THREE.WebGLRenderer);
+      renderer.setRenderTarget(prev);
+      if (ok === false) {
+        halfRejected = true;
+        retype(THREE.UnsignedByteType);
+      }
+    }
+  };
+  // #120 ledger: chain + the composer buffers this pass actually reads/writes.
+  let lastRenderer: VramRendererLike = null;
+  let lastRead: THREE.WebGLRenderTarget | null = null;
+  let lastWrite: THREE.WebGLRenderTarget | null = null;
+  const unregisterChain = registerVramSource("bloom", () =>
+    disposed || !lastRenderer ? null : { targets: chainTargets(), renderer: lastRenderer },
+  );
+  const unregisterComposer = registerVramSource("composer", () =>
+    disposed ? null : { targets: [lastRead, lastWrite], renderer: lastRenderer },
+  );
   const baseRender = pass.render.bind(pass);
   pass.render = function budgetedRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
     if (disposed) return;
+    lastRenderer = renderer as unknown as VramRendererLike;
+    lastRead = (readBuffer as THREE.WebGLRenderTarget | undefined) ?? null;
+    lastWrite = (writeBuffer as THREE.WebGLRenderTarget | undefined) ?? null;
+    try {
+      syncChainType(renderer as unknown as ChainCaps, readBuffer as THREE.WebGLRenderTarget | undefined);
+    } catch {
+      /* caps probe must never break the frame; stock chain stays */
+    }
     // EffectComposer passes seconds; junk / huge deltas are ignored by the budget.
     sampleFrame(Number(deltaTime) * 1000);
     if (prefilterOn) {
@@ -218,6 +311,9 @@ export function createTunedBloomPass(
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    unregisterChain();
+    unregisterComposer();
+    lastRenderer = lastRead = lastWrite = null;
     // three r187 UnrealBloomPass.dispose() never frees materialHighPassFilter —
     // one leaked program per context-loss rebuild / unmount. Free it here.
     const hp = pass.materialHighPassFilter;
@@ -238,6 +334,15 @@ export function createTunedBloomPass(
     },
     get prefilter() {
       return prefilter;
+    },
+    get chainType() {
+      return chainType;
+    },
+    get halfFloatRejected() {
+      return halfRejected;
+    },
+    get chainTargets() {
+      return chainTargets();
     },
   };
 }

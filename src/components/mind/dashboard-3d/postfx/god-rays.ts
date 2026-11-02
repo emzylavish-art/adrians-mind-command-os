@@ -3,6 +3,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { liveSceneDepth, markDepthClobbered } from "./depth-validity.ts";
 import { KEY_RGB, normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.ts";
 import { createGodRayMask } from "./god-ray-mask.ts";
+import { registerVramSource, type VramRendererLike } from "./vram-ledger.ts";
 import { GOD_RAY_MAX_TAPS, createGodRayBudget, godRayTapParams, type GodRayBudgetOpts, type GodRayTapParams } from "./god-ray-budget.ts";
 
 /**
@@ -241,6 +242,9 @@ export function createGodRayPass(
   // Declared before apply(): #117 frees the mask whenever the pass switches off.
   const maskMode = budgetOpts.emissionMask ?? "auto";
   const mask = createGodRayMask({ forceByte: maskMode === "byte" });
+  // #120 ledger: live emission-mask target (null when freed).
+  let vramRenderer: VramRendererLike = null;
+  const unregisterVram = registerVramSource("rays", () => (disposed ? null : { targets: [mask.target], renderer: vramRenderer }));
   const apply = () => {
     const eff = base * fade;
     u.intensity.value = eff;
@@ -268,6 +272,7 @@ export function createGodRayPass(
   const baseRender = pass.render.bind(pass);
   pass.render = ((renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
     if (disposed) return;
+    vramRenderer = renderer as unknown as VramRendererLike;
     if (adaptive) {
       // Live drawing-buffer size of the frame we are about to shade (device px):
       // follows composer.setPixelRatio / setSize with no extra wiring.
@@ -389,6 +394,8 @@ export function createGodRayPass(
     dispose() {
       if (disposed) return;
       disposed = true;
+      unregisterVram();
+      vramRenderer = null;
       u.tDepth.value = null;
       u.useDepth.value = 0;
       u.intensity.value = 0;
