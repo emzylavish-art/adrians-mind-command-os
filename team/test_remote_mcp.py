@@ -24,6 +24,15 @@ class RemoteMCPConfigTests(unittest.TestCase):
         with self.assertRaises(remote_mcp.RemoteMCPError):
             remote_mcp._server("demo", config)
 
+
+    def test_endpoint_can_be_read_from_environment(self):
+        config = {"servers": {"demo": {"enabled": True, "url_env": "DEMO_MCP_URL"}}}
+        with patch.dict(os.environ, {"DEMO_MCP_URL": "https://example.com/mcp"}):
+            self.assertEqual(remote_mcp._server("demo", config)[0], "https://example.com/mcp")
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(remote_mcp.RemoteMCPError):
+                remote_mcp._server("demo", config)
+
     def test_token_is_read_from_environment(self):
         config = {"servers": {"demo": {"enabled": True, "url": "https://example.com/mcp", "token_env": "DEMO_MCP_TOKEN"}}}
         with patch.dict(os.environ, {"DEMO_MCP_TOKEN": "secret"}):
