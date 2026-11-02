@@ -1688,6 +1688,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let lastBillboardCamX = Number.NaN;
     let lastBillboardCamY = Number.NaN;
     let lastBillboardCamZ = Number.NaN;
+    let lastLabelCamX = Number.NaN;
+    let lastLabelCamY = Number.NaN;
+    let lastLabelCamZ = Number.NaN;
     let lastSceneSyncSig = "";
     lastSceneSyncSig = dashboardSceneSyncSignature(dataRef.current);
     const travelOut = { x: 0, y: 0, z: 0 };
@@ -1936,8 +1939,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       dust?.update(wallT, reducedMotion);
       if (comets) {
         // Motion c31 optional: explicit cam distance for comet segment LOD (onBeforeRender also feeds).
-        const camDist = camera.position.length();
-        if (Number.isFinite(camDist)) comets.setCamDistance?.(camDist);
+        // Gap#68: under RM, skip setCamDistance thrash — LOD band flips rewrote arcs every frame.
+        if (!reducedMotion) {
+          const camDist = camera.position.length();
+          if (Number.isFinite(camDist)) comets.setCamDistance?.(camDist);
+        }
         comets.update(wallT, reducedMotion);
         stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
         // Motion c24 / queue #108: cached lines/heads — no per-frame getObjectByName thrash.
@@ -2176,7 +2182,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
       if (composer) composer.render();
       else renderer.render(scene, camera);
-      labelRenderer.render(scene, camera);
+      // Gap#68: CSS2D subpixel jitter under RM — reproject labels only when camera moved.
+      {
+        const cx = camera.position.x;
+        const cy = camera.position.y;
+        const cz = camera.position.z;
+        const camMoved =
+          !Number.isFinite(lastLabelCamX) ||
+          Math.abs(cx - lastLabelCamX) > 1e-4 ||
+          Math.abs(cy - lastLabelCamY) > 1e-4 ||
+          Math.abs(cz - lastLabelCamZ) > 1e-4;
+        if (!reducedMotion || camMoved) {
+          labelRenderer.render(scene, camera);
+          lastLabelCamX = cx;
+          lastLabelCamY = cy;
+          lastLabelCamZ = cz;
+        }
+      }
       if (freezePendingClear) {
         freezePendingClear = false;
         hideLastFrameFreeze(mount);
@@ -2204,10 +2226,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         });
         stepReducedMotionSettle(rmGuard, reducedMotion, now);
         if (!shouldRebuildScene(rmGuard, dataHash, reducedMotion, now)) {
-          if (comets) {
-            comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
-            reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
-          }
+          // Gap#68 / Motion c26: under RM with unchanged hash, skip soft comet sync
+          // (5s soft-sync was the periodic canvas jump).
         } else if (nextSig !== lastSceneSyncSig) {
           lastSceneSyncSig = nextSig;
           rebuildAll();
@@ -2220,8 +2240,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           // Do NOT dispose inkEdges/laneNebulae here — rebuildEdges/Nebulae update in place.
           feedGlyphs.dispose();
           feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
-        } else if (comets) {
+        } else if (comets && !reducedMotion) {
           // Commit list may still need soft sync when signature aliases (sha-stable no-op).
+          // Gap#68: never soft-sync under RM (canvas jump).
           comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
           reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
         }

@@ -22,6 +22,12 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 **Still unwired:** P0 Notion galaxy watercolor instance; P1 landing travelers. c27 fleet beacon WIRED.
 
 
+
+## Dashboard c70 (2026-11-03T00:10:31+01:00 WAT) — Gap#68 RM freeze regression
+**Fix:** skip 5s soft comet sync when RM hash unchanged; gate alias soft-sync with `!reducedMotion`; skip comet setCamDistance under RM (LOD band thrash); CSS2D labelRenderer only when camera moved under RM.
+**Tests:** gap68-rm-freeze-wired + full suite.
+**Next:** Notion galaxy watercolor (painter P0) when API ships; gap-feed / queue #125.
+
 ## Dashboard c69 (2026-11-03T00:06:29+01:00 WAT) — Painter c28 Still-unwired follow-ups
 **Wired:** lore setLorePlaqueLockAge + setLorePlaqueStackIndex; composer resolvePainterlyRenderTargetType + half-float probe; landing travelers → kit.createFleetBeacon (no MeshStandard LEDs); Motion c33 enablePointBudget+camDistance+focused; debug badge painter:degraded; registered light #120 + motion c34 tests.
 **Skipped:** Notion galaxy instanceColor watercolor (P0 painter c29) — needs star shader instance path; c34 BufferAttribute upload N/A (sphere travelers).
