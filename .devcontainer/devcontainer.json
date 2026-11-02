@@ -7,7 +7,7 @@
     },
     "ghcr.io/devcontainers/features/git:1": {}
   },
-  "postCreateCommand": "bash tools/bootstrap/install-github-workspace.sh",
+  "postCreateCommand": "git submodule update --init --recursive && bash tools/bootstrap/install-github-workspace.sh",
   "postStartCommand": "bash tools/bootstrap/verify-github-workspace.sh",
   "customizations": {
     "vscode": {
