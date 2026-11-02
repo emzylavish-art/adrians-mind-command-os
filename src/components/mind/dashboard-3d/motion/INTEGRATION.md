@@ -537,3 +537,43 @@ mat.size = cometHeadSize(head.userData.baseSize as number, sample, reducedMotion
 - Register in package.json `test` (strip-types list):
   `src/components/mind/dashboard-3d/motion/comet-churn.test.ts`. No new deps.
 - Queue row #96 (wire). Renumber freely on landing.
+
+## Comet sync without GPU churn + sha-stable orbits (c23)
+
+- Hacker c23: the scene's 5s sync still does `comets.dispose(); comets = createCommitComets(...)`
+  **unconditionally** — every 5s, 2 geometries + 2 materials per comet are freed and re-created
+  (12 GPU resources for 3 comets, reproduced in `particles/comet-sync.test.ts`) even when the
+  commit list is unchanged. Disposing the last vertex-colored LineBasicMaterial / PointsMaterial
+  lets three release the shader programs, so the next frame recompiles + re-uploads: a periodic
+  hitch with nothing new to draw.
+- `syncCommitComets(scene, prev, commits, opts)` — returns `prev` untouched when the derived
+  comet list (`commitCometKeys`) and options are unchanged; else disposes `prev` and rebuilds.
+- Orbits now derive from the sha (`cometOrbitForSha`), not the list index: a new commit no
+  longer moves every existing comet to another orbit. `reconcileCometLaunch` now follows a key
+  that moved index (carries landed / in-flight state), so a prepended commit launches **one**
+  comet instead of re-launching all six. Duplicate shas (same commit in two feeds) draw once.
+  Sha keys capped at `COMET_SHA_KEY_MAX` (128); feed scan bounded (4096 rows).
+- API: `createCommitComets` / `reconcileCometLaunch` signatures unchanged. New exports from
+  `./particles`: `syncCommitComets`, `commitCometKeys`, `cometOrbitForSha`, `COMET_SHA_KEY_MAX`,
+  `type CometOrbit`.
+
+```ts
+import { createCommitComets, syncCommitComets, createDustField } from "./particles";
+// in the 5s sync (progressive-WebGL `comets` may be null) — replaces
+// `comets.dispose(); comets = createCommitComets(...)`:
+if (comets) {
+  comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
+  reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion); // no-op when unchanged
+}
+```
+
+Same pattern (not motion lane, FYI): the 5s sync also disposes + recreates `inkEdges`,
+`laneNebulae` and `feedGlyphs` unconditionally.
+
+Optional perf nit for the per-frame comet loop (Dashboard-owned): `getObjectByName` per comet
+per frame walks the group; cache the line/head refs when `comets` changes identity.
+
+### Requests (c23)
+- Register in package.json `test` (strip-types list):
+  `src/components/mind/dashboard-3d/particles/comet-sync.test.ts`. No new deps.
+- Queue row #102 (wire). Renumber freely on landing.

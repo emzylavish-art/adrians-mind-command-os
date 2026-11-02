@@ -1208,3 +1208,37 @@ button.dash3d-zoomout.dash3d-glass,
   pointer-events: none;
   z-index: 1;
 }
+
+
+/* c55 REA: overlay pointer-events pass-through */
+/* CSS2D / freeze / ctx-loss overlays must not sit above HUD hit-targets. */
+.dash3d-canvas-wrap {
+  /* keep z-index 0; do not create a covering hit slab for non-canvas children */
+}
+.dash3d-canvas-wrap > div {
+  pointer-events: none !important;
+}
+.dash3d-canvas-wrap canvas {
+  pointer-events: auto;
+}
+/* Interactive CSS2D children (feed glyphs) re-enable hits without covering the skybar (z7). */
+.dash3d-canvas-wrap .dash3d-feed-glyph {
+  pointer-events: auto !important;
+}
+.dash3d-canvas-wrap .dash3d-label,
+.dash3d-canvas-wrap .dash3d-city-label {
+  pointer-events: none !important;
+}
+/* Operator dialog: root is the hit layer; panel + controls must stay above backdrop. */
+.dash3d-operator-root {
+  pointer-events: none;
+}
+.dash3d-operator-backdrop,
+.dash3d-operator-panel {
+  pointer-events: auto;
+}
+.dash3d-operator-panel button,
+.dash3d-operator-panel input,
+.dash3d-operator-panel label {
+  pointer-events: auto;
+}

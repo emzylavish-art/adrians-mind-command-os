@@ -9,6 +9,11 @@ export {
 } from "./dust-field.ts";
 export {
   createCommitComets,
+  syncCommitComets,
+  commitCometKeys,
+  cometOrbitForSha,
+  COMET_SHA_KEY_MAX,
+  type CometOrbit,
   cometTailFade,
   flushCometHeadSprite,
   HEAD_SPRITE_GRACE_MS,

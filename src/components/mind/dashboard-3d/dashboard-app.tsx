@@ -540,6 +540,7 @@ export function DashboardApp() {
             type="button"
             className="dash3d-glass dash3d-zoomout"
             data-testid="operator-open"
+            style={{ pointerEvents: "auto" }}
             aria-haspopup="dialog"
             aria-keyshortcuts="Meta+K Control+K"
             aria-label="Open operator console"
@@ -564,12 +565,15 @@ export function DashboardApp() {
           <button
             type="button"
             className="dash3d-glass dash3d-zoomout"
+            data-testid="zoom-to-sky"
+            style={{ pointerEvents: "auto" }}
             onClick={() => {
               unlockSound();
               setSelected(null);
               setNotionPage(null);
-              // scene also listens for empty-space click; this is accessible control
-              document.dispatchEvent(new CustomEvent("dash3d-sky"));
+              // Accessible twin of empty-space click: force universe-high + clear detail.
+              document.dispatchEvent(new CustomEvent("dash3d-sky", { detail: { force: true } }));
+              document.dispatchEvent(new CustomEvent("dash3d-fly", { detail: { type: "SKY" } }));
             }}
           >
             Zoom to sky
