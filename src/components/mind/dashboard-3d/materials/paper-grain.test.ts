@@ -47,6 +47,7 @@ import {
   createPainterlyKit,
   disposePainterlyKit,
   disposeAllPainterlyKits,
+  disposePainterlyKitsByScope,
   PAINTER_KIT_DISPOSED,
   livePainterlyKitCount,
   painterlyKitResourceCounts,
@@ -115,6 +116,10 @@ import {
 import {
   createCityGroundMaterial,
   tickCityGroundMaterial,
+  setCityGroundRing,
+  setCityGroundPlazaScale,
+  cityGroundPlazaScaleFromRadius,
+  CITY_GROUND_PLAZA_SCALE_MAX,
 } from "./city-ground.ts";
 import { CityGroundShader } from "../shaders/city-ground.ts";
 import {
@@ -2777,10 +2782,10 @@ describe("hacker pass c24: kit remount leak + hidden-tab tick pause", () => {
     withDomCanvas(() => {
       disposeAllPainterlyKits();
       assert.equal(livePainterlyKitCount(), 0);
-      const a = createPainterlyKit({ pass: { amount: 0.2 } });
+      const a = createPainterlyKit({ pass: { amount: 0.2 }, kitScope: "dashboard" });
       assert.equal(livePainterlyKitCount(), 1);
-      const b = createPainterlyKit({ pass: { amount: 0.2 } });
-      assert.equal(livePainterlyKitCount(), 2, "leak: two live kits");
+      const b = createPainterlyKit({ pass: { amount: 0.2 }, kitScope: "dashboard" });
+      assert.equal(livePainterlyKitCount(), 2, "leak: two live kits same scope");
       disposePainterlyKit(a);
       disposePainterlyKit(b);
       assert.equal(livePainterlyKitCount(), 0);
@@ -2790,11 +2795,16 @@ describe("hacker pass c24: kit remount leak + hidden-tab tick pause", () => {
   it("disposePriorLive clears prior kits on remount (route /dashboard leak fix)", () => {
     withDomCanvas(() => {
       disposeAllPainterlyKits();
-      createPainterlyKit({ pass: { amount: 0.1 } });
-      createPainterlyKit({ pass: { amount: 0.1 } });
+      createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
+      createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
       assert.ok(livePainterlyKitCount() >= 2);
-      const kit = createPainterlyKit({ pass: { amount: 0.2 }, disposePriorLive: true });
+      const kit = createPainterlyKit({
+        pass: { amount: 0.2 },
+        kitScope: "dashboard",
+        disposePriorLive: true,
+      });
       assert.equal(livePainterlyKitCount(), 1);
+      assert.equal(kit.kitScope, "dashboard");
       assert.equal(kit.disposed, false);
       disposePainterlyKit(kit);
       assert.equal(livePainterlyKitCount(), 0);
@@ -2869,5 +2879,144 @@ describe("painter c24: city plaza watercolor ground", () => {
     assert.ok((m.uniforms["uTime"]!.value as number) > 0);
     disposePainterlyKit(kit);
     g.document = prev;
+  });
+});
+
+
+describe("hacker pass c25: disposePriorLive scope safety + city ground extremes", () => {
+  function withDomCanvas<T>(fn: () => T): T {
+    const g = globalThis as { document?: { hidden: boolean; createElement: (tag: string) => unknown } };
+    const prev = g.document;
+    const grad = { addColorStop() {} };
+    g.document = {
+      hidden: false,
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            {
+              canvas: c,
+              fillStyle: "#000",
+              strokeStyle: "#000",
+              globalAlpha: 1,
+              createRadialGradient: () => grad,
+              createLinearGradient: () => grad,
+              getImageData: () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 }),
+            },
+            {
+              get(target, prop, recv) {
+                if (prop in target) return Reflect.get(target, prop, recv);
+                return () => grad;
+              },
+            },
+          );
+        return c;
+      },
+    };
+    try {
+      return fn();
+    } finally {
+      g.document = prev;
+    }
+  }
+
+  it("disposePriorLive without kitScope is a no-op (never global wipe)", () => {
+    withDomCanvas(() => {
+      disposeAllPainterlyKits();
+      const dash = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
+      const mini = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "minimap" });
+      assert.equal(livePainterlyKitCount(), 2);
+      const ignored = createPainterlyKit({ pass: { amount: 0.2 }, disposePriorLive: true });
+      // both prior kits must survive — disposePriorLive ignored without scope
+      assert.equal(dash.disposed, false);
+      assert.equal(mini.disposed, false);
+      assert.equal(livePainterlyKitCount(), 3);
+      assert.equal(ignored.kitScope, null);
+      disposeAllPainterlyKits();
+    });
+  });
+
+  it("disposePriorLive only disposes matching kitScope (minimap survives dashboard remount)", () => {
+    withDomCanvas(() => {
+      disposeAllPainterlyKits();
+      const dash = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "dashboard" });
+      const mini = createPainterlyKit({ pass: { amount: 0.1 }, kitScope: "minimap" });
+      assert.equal(livePainterlyKitCount(), 2);
+      const remount = createPainterlyKit({
+        pass: { amount: 0.2 },
+        kitScope: "dashboard",
+        disposePriorLive: true,
+      });
+      assert.equal(dash.disposed, true, "prior dashboard kit disposed");
+      assert.equal(mini.disposed, false, "minimap kit must stay alive");
+      assert.equal(livePainterlyKitCount(), 2); // mini + remount
+      assert.equal(disposePainterlyKitsByScope("minimap"), 1);
+      assert.equal(mini.disposed, true);
+      disposePainterlyKit(remount);
+      assert.equal(livePainterlyKitCount(), 0);
+    });
+  });
+
+  it("city ground: NaN ring → 0; extreme plazaScale clamps; radius mapper finite", () => {
+    const flat = createCityGroundMaterial({ ring: Number.NaN });
+    assert.equal(flat.uniforms["uRing"]!.value, 0);
+    assert.equal(setCityGroundRing(flat, Number.POSITIVE_INFINITY), 0);
+    assert.equal(setCityGroundRing(flat, 0.5), 0.5);
+    const huge = createCityGroundMaterial({ plazaScale: 1e9 });
+    assert.equal(huge.uniforms["uPlazaScale"]!.value, CITY_GROUND_PLAZA_SCALE_MAX);
+    const tiny = cityGroundPlazaScaleFromRadius(0.001);
+    assert.ok(tiny >= 0.05);
+    const far = setCityGroundPlazaScale(huge, 4000, { asRadius: true });
+    assert.equal(far, CITY_GROUND_PLAZA_SCALE_MAX);
+    assert.ok(CityGroundShader.uniforms.uPlazaScale);
+    assert.match(CityGroundShader.fragmentShader, /paintWrap/);
+    assert.match(CityGroundShader.fragmentShader, /ringAmt > 0\.001|uRing/);
+    flat.dispose();
+    huge.dispose();
+  });
+});
+
+describe("painter c25: sun MeshStandard → watercolor surface adopt", () => {
+  it("kit.createSunMaterial returns watercolor star bundle (surface only)", () => {
+    const g = globalThis as { document?: { hidden?: boolean } };
+    const prevDoc = g.document;
+    // reuse withDom from above via try/catch pattern
+    let kit: PainterlyKit | null = null;
+    try {
+      // minimal: may fail without canvas — then use createPainterlyBotStar path via createStarMaterial
+      disposeAllPainterlyKits();
+    } catch { /* */ }
+    function withDom<T>(fn: () => T): T | null {
+      const grad = { addColorStop() {} };
+      const docPrev = (globalThis as { document?: unknown }).document;
+      (globalThis as { document: unknown }).document = {
+        hidden: false,
+        createElement(tag: string) {
+          if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+          const c: Record<string, unknown> = { width: 64, height: 64 };
+          c.getContext = () =>
+            new Proxy(
+              { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+              { get(t, p, r) { return p in t ? Reflect.get(t, p, r) : () => grad; } },
+            );
+          return c;
+        },
+      };
+      try { return fn(); } finally { (globalThis as { document?: unknown }).document = docPrev; }
+    }
+    withDom(() => {
+      disposeAllPainterlyKits();
+      kit = createPainterlyKit({ pass: { amount: 0.2 }, kitScope: "dashboard" });
+      const sun = kit.createSunMaterial({ color: 0xffd27a });
+      assert.equal(sun.meshMaterial.type, "ShaderMaterial");
+      assert.match(sun.meshMaterial.name, /StarWatercolor|Watercolor/);
+      assert.equal(sun.meshMaterial.toneMapped, false);
+      // health recolor like universe-scene sun emissive path — surface API only
+      sun.setColor(0x3cd687, 0.9);
+      disposePainterlyKit(kit);
+      kit = null;
+    });
+    if (prevDoc !== undefined) g.document = prevDoc;
   });
 });

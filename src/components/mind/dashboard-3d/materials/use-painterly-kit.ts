@@ -94,10 +94,17 @@ import { markImagineNodeReleased } from "./imagine-node.ts";
 
 export type PainterlyKitOptions = {
   /**
-   * HACKER (c24): dispose every prior live kit before create — route navigate
-   * away from /dashboard and back without unmount dispose was leaking GPU mats.
+   * HACKER (c24/c25): dispose prior live kits that share the same `kitScope`
+   * before create — route remount leak guard. NEVER global: minimap/preview
+   * kits with a different scope stay alive. Requires kitScope when true.
    */
   disposePriorLive?: boolean;
+  /**
+   * Isolation key for this kit (e.g. "dashboard", "minimap", "preview").
+   * Required when disposePriorLive is true. StrictMode remounts of the same
+   * canvas share a scope; a second live canvas must use another scope.
+   */
+  kitScope?: string;
   pass?: PainterlyPassOptions;
   nebula?: NebulaTextureOptions;
   /** Soft cap for painter-owned texture bytes (default 48MiB). */
@@ -154,6 +161,8 @@ export type PainterlyKit = {
   textureBindings: PainterlyTextureBinding[];
   disposed: boolean;
   contextLost: boolean;
+  /** Scope key for disposePriorLive isolation (c25). */
+  kitScope: string | null;
   createStarMaterial: (opts?: StarSurfaceOptions) => THREE.ShaderMaterial;
   createBuildingMaterial: (opts?: BuildingSurfaceOptions) => THREE.ShaderMaterial;
   createLorePlaqueMaterial: (opts?: LorePlaqueOptions) => THREE.ShaderMaterial;
@@ -178,6 +187,11 @@ export type PainterlyKit = {
    * Glow is auto bindSharedTexture'd to kit.starSpriteTexture.
    */
   createBotStar: (opts?: PainterlyBotStarOptions) => PainterlyBotStarBundle;
+  /**
+   * Orchestrator sun watercolor surface (c25) — replaces MeshStandardMaterial sun.
+   * Surface only; Light owns bloom/emissive post. Same bundle API as createBotStar.
+   */
+  createSunMaterial: (opts?: PainterlyBotStarOptions) => PainterlyBotStarBundle;
   /**
    * One-line ink-wash constellation edges (replaces LineDashedMaterial rebuildEdges).
    * Batches by health → ≤4 draw calls; handle.update / handle.dispose.
@@ -397,9 +411,43 @@ export function disposeAllPainterlyKits(): number {
   return n;
 }
 
+/**
+ * Dispose live kits matching scope only (c25 safety).
+ * Returns how many were disposed. Empty/missing scope → no-op (never global).
+ */
+export function disposePainterlyKitsByScope(scope: string | null | undefined): number {
+  const key = typeof scope === "string" ? scope.trim() : "";
+  if (!key) return 0;
+  let n = 0;
+  for (const k of [...LIVE_PAINTER_KITS]) {
+    if (k.disposed) continue;
+    if (k.kitScope !== key) continue;
+    // Never dispose "self" mid-create — caller adds after this runs
+    disposePainterlyKit(k);
+    n += 1;
+  }
+  return n;
+}
+
 export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit {
+  const scopeRaw = opts.kitScope;
+  const kitScope =
+    typeof scopeRaw === "string" && scopeRaw.trim() ? scopeRaw.trim() : null;
+  // HACKER (c25): disposePriorLive is scoped — refusing global wipe protects
+  // minimap/preview kits and avoids StrictMode cross-canvas disposal.
   if (opts.disposePriorLive) {
-    disposeAllPainterlyKits();
+    if (!kitScope) {
+      try {
+        console.warn(
+          "[painterly-kit] disposePriorLive ignored without kitScope " +
+            '(pass kitScope: "dashboard" | "minimap" | …)',
+        );
+      } catch {
+        /* */
+      }
+    } else {
+      disposePainterlyKitsByScope(kitScope);
+    }
   }
   const tracked: THREE.ShaderMaterial[] = [];
   const trackedSkies: THREE.MeshBasicMaterial[] = [];
@@ -416,6 +464,7 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     textureBindings,
     disposed: false,
     contextLost: false,
+    kitScope,
     detachContext: null,
     lastTickError: null,
     lastTickErrorCount: 0,
@@ -526,6 +575,21 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
         return inertBotStar();
       }
       return createPainterlyBotStar(kit, starOpts);
+    },
+    createSunMaterial(sunOpts) {
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertBotStar();
+      }
+      // Surface only — Light owns bloom/god-rays; warm defaults for grok-build sun
+      return createPainterlyBotStar(kit, {
+        color: 0xffd27a,
+        emissiveIntensity: 1.05,
+        halo: 0.85,
+        idle: false,
+        health: "healthy",
+        ...sunOpts,
+      });
     },
     createInkEdges(edges = [], eOpts) {
       if (kit.disposed) {

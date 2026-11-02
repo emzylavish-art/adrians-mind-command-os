@@ -226,6 +226,12 @@ export {
 export {
   createCityGroundMaterial,
   tickCityGroundMaterial,
+  setCityGroundRing,
+  setCityGroundPlazaScale,
+  cityGroundPlazaScaleFromRadius,
+  CITY_GROUND_PLAZA_SCALE_MIN,
+  CITY_GROUND_PLAZA_SCALE_MAX,
+  CITY_GROUND_PLAZA_SCALE_DEFAULT,
   type CityGroundOptions,
 } from "./city-ground.ts";
 export {
@@ -238,6 +244,7 @@ export {
   tickPainterlyKit,
   disposePainterlyKit,
   disposeAllPainterlyKits,
+  disposePainterlyKitsByScope,
   PAINTER_KIT_DISPOSED,
   livePainterlyKitCount,
   attachPainterlyContextHandlers,

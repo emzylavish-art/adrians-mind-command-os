@@ -421,3 +421,36 @@ tickPainterlyKit(kit, t, { dpr, pauseWhenHidden: true });
 ### Hacker (c24)
 - `disposePriorLive: true` on kit create — route leave/reenter without dispose was leaking live kits.
 - `tickPainterlyKit` skips while `document.hidden` (rAF stop / background tab catch-up thrash).
+
+
+## c25 — sun watercolor surface + scoped disposePriorLive
+
+### disposePriorLive safety (c24 fix)
+`disposePriorLive` **requires** `kitScope`. Same-scope remounts dispose prior kits only.
+Minimap/preview must use a different scope (`"minimap"` / `"preview"`). Without
+`kitScope`, disposePriorLive is ignored (never a global wipe).
+
+```ts
+const kit = createPainterlyKit({
+  kitScope: "dashboard",
+  disposePriorLive: true, // only prior "dashboard" kits
+});
+// minimap:
+createPainterlyKit({ kitScope: "minimap" });
+```
+
+### Sun (universe-scene.tsx — Dashboard lane)
+
+```ts
+// Replace MeshStandardMaterial sun:
+const sun = kit.createSunMaterial({
+  color: 0xffd27a,
+  // health recolor:
+});
+sunMesh.material = sun.meshMaterial;
+// on rebuild health:
+sun.setColor(HEALTH_COLOR[bot.health], bot.health === "idle" ? 0.25 : 1.05);
+// Optional glow sprite with sun.glowMaterial — Light owns bloom/god-rays (do not retune here).
+```
+
+Painter owns surface (`createSunMaterial` → watercolor star). Light owns bloom/emissive postfx.

@@ -222,8 +222,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Painter — Imagine card paper bevel under focus**~~ — **done (Cosmos Painter Bot c22)**: `setImagineNodeFocus` eased `uFocus` bevel/deckle; `painterQualityFromDpr` cheap grain; no-op on released/swapped; camera passes focus only.
 - ~~**Painter — Imagine card aspect-safe deckle under non-square maps**~~ — **done (Cosmos Painter Bot c23)**: `uAspect` + letterbox content UV; `imagineAspectFromDims` never NaN; sampler-safe NPOT/anisotropy; extreme 1×4000 clamps.
 - ~~**Painter — city plaza watercolor ground**~~ — **done (Cosmos Painter Bot c24)**: `CityGroundMaterial` ink-wash plaza + wet rings (replaces MeshStandard+GridHelper); disposePriorLive + hidden-tab tick pause; WIRING for city-layer.
-- **Painter — sun MeshStandardMaterial → watercolor corona adopt** — next: grok-build sun still MeshStandard in universe-scene; provide/createBotStar or sun material + WIRING.
-- **Painter — Imagine card focus+aspect combined bevel under DPR cheap path** — later micro: focused letterboxed deckle at uQuality=0 (4K); no Light/Motion ownership.
+- ~~**Painter — sun MeshStandardMaterial → watercolor corona adopt**~~ — **done (Cosmos Painter Bot c25)**: `kit.createSunMaterial` watercolor surface + WIRING; disposePriorLive scoped by `kitScope`; city-ground NaN ring / extreme plazaScale harden.
+- **Painter — Imagine card focus+aspect combined bevel under DPR cheap path** — later micro: focused letterboxed deckle at uQuality=0 (4K).
 - ~~**Depth-aware god-ray shafts**~~ — **done (wired c9)**: god-ray pass + depth RT in universe-scene.
 - ~~**Health-reactive exposure ride**~~ — **done (wired c9)**: `createExposureRide` in universe-scene; idle until data; reduced-motion snaps.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.
