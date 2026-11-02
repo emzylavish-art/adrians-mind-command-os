@@ -10,6 +10,11 @@ export {
 export {
   createCommitComets,
   syncCommitComets,
+  applyCometLaunchSamples,
+  COMET_LAUNCH_LINE_OPACITY,
+  COMET_LAUNCH_LINE_OPACITY_REDUCED,
+  COMET_LAUNCH_HEAD_OPACITY,
+  COMET_LAUNCH_HEAD_OPACITY_REDUCED,
   commitCometKeys,
   cometOrbitForSha,
   COMET_SHA_KEY_MAX,

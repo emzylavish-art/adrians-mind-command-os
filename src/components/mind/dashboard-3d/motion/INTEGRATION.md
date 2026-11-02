@@ -570,8 +570,17 @@ if (comets) {
 Same pattern (not motion lane, FYI): the 5s sync also disposes + recreates `inkEdges`,
 `laneNebulae` and `feedGlyphs` unconditionally.
 
-Optional perf nit for the per-frame comet loop (Dashboard-owned): `getObjectByName` per comet
-per frame walks the group; cache the line/head refs when `comets` changes identity.
+Optional perf nit for the per-frame comet loop (Dashboard-owned): **done in motion c24** —
+`applyCometLaunchSamples(handle, samples, reducedMotion)` uses `handle.lines` / `handle.heads`
+(filled by `createCommitComets`, cleared on dispose). Zero `getObjectByName` per frame.
+Wire: replace the scene's per-comet name walk with one call after `stepCometLaunchEase`.
+
+### Requests (c24)
+- Register in package.json `test` (strip-types list):
+  `src/components/mind/dashboard-3d/particles/comet-apply.test.ts`,
+  `src/components/mind/dashboard-3d/particles/null-opts.test.ts`,
+  `src/components/mind/dashboard-3d/motion/traveler-holes.test.ts`. No new deps.
+- Queue row #108 (wire). Renumber freely on landing.
 
 ### Requests (c23)
 - Register in package.json `test` (strip-types list):

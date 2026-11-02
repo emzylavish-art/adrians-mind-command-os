@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { clampInt, finiteOr } from "../motion/sanitize.ts";
 import { sharedMotionClock, type MotionClock } from "../motion/motion-clock.ts";
+import { cometHeadSize, type CometLaunchSample } from "../motion/comet-launch-ease.ts";
 import { isDocumentHidden } from "./motion-lod.ts";
 
 export const COMET_SEGMENTS_MIN = 2;
@@ -18,6 +19,9 @@ export type CommitCometsHandle = {
   count: number;
   /** c22: sha per comet index (keys for reconcileCometLaunch). Optional for hand-built handles. */
   shas?: readonly string[];
+  /** c24: per-comet line / head refs by index (no per-frame getObjectByName). Emptied on dispose. */
+  lines?: readonly THREE.Line[];
+  heads?: readonly THREE.Points[];
   disposed: boolean;
   update: (tSeconds: number, reducedMotion: boolean) => void;
   dispose: () => void;
@@ -211,12 +215,14 @@ const syncMeta = new WeakMap<CommitCometsHandle, SyncMeta>();
 export function createCommitComets(
   scene: THREE.Scene,
   commits: readonly CommitTrailInput[] | null | undefined,
-  opts: CreateCommitCometsOpts = {},
+  opts: CreateCommitCometsOpts | null | undefined = {},
 ): CommitCometsHandle {
-  const max = clampInt(opts.max ?? COMET_MAX_DEFAULT, 0, COMET_MAX_HARD, COMET_MAX_DEFAULT);
-  const radius = Math.max(0.01, finiteOr(opts.radius ?? 14, 14));
-  const segments = clampInt(opts.segments ?? COMET_SEGMENTS_DEFAULT, COMET_SEGMENTS_MIN, 128, COMET_SEGMENTS_DEFAULT);
-  const clock = opts.clock ?? sharedMotionClock;
+  // Hacker c24: null / non-object opts threw on opts.max (5s sync / mount abort).
+  const o = opts && typeof opts === "object" ? opts : {};
+  const max = clampInt(o.max ?? COMET_MAX_DEFAULT, 0, COMET_MAX_HARD, COMET_MAX_DEFAULT);
+  const radius = Math.max(0.01, finiteOr(o.radius ?? 14, 14));
+  const segments = clampInt(o.segments ?? COMET_SEGMENTS_DEFAULT, COMET_SEGMENTS_MIN, 128, COMET_SEGMENTS_DEFAULT);
+  const clock = o.clock ?? sharedMotionClock;
   const group = new THREE.Group();
   group.name = "motion-commit-comets";
   scene.add(group);
@@ -295,6 +301,10 @@ export function createCommitComets(
   });
   handle.count = comets.length;
   handle.shas = list;
+  const lines = comets.map((c) => c.line);
+  const heads = comets.map((c) => c.head);
+  handle.lines = lines;
+  handle.heads = heads;
   syncMeta.set(handle, { max, radius, segments, clock });
 
   const writeArc = (c: CometState, head: number) => {
@@ -353,6 +363,8 @@ export function createCommitComets(
       (c.head.material as THREE.Material).dispose();
     }
     comets.length = 0;
+    lines.length = 0;
+    heads.length = 0;
     if (sprite) releaseHeadSprite();
     scene.remove(group);
   };
@@ -376,9 +388,10 @@ export function syncCommitComets(
   scene: THREE.Scene,
   prev: CommitCometsHandle | null | undefined,
   commits: readonly CommitTrailInput[] | null | undefined,
-  opts: CreateCommitCometsOpts = {},
+  opts: CreateCommitCometsOpts | null | undefined = {},
 ): CommitCometsHandle {
-  const o = opts ?? {};
+  // Hacker c24: non-object opts (null already ??'d) must not throw on o.max.
+  const o = opts && typeof opts === "object" ? opts : {};
   if (prev && !prev.disposed && prev.group.parent === scene) {
     const meta = syncMeta.get(prev);
     if (meta) {
@@ -397,4 +410,50 @@ export function syncCommitComets(
   }
   prev?.dispose();
   return createCommitComets(scene, commits, o);
+}
+
+/** Scene opacity scales the launch ease multiplies (match universe-scene c22 wiring). */
+export const COMET_LAUNCH_LINE_OPACITY = 0.55;
+export const COMET_LAUNCH_LINE_OPACITY_REDUCED = 0.22;
+export const COMET_LAUNCH_HEAD_OPACITY = 0.95;
+export const COMET_LAUNCH_HEAD_OPACITY_REDUCED = 0.35;
+
+/**
+ * c24: apply comet-launch samples to the comet meshes in one call — replaces the scene's
+ * per-frame loop that did two `group.getObjectByName` tree walks per comet per frame
+ * (string build + traversal) and repeated the opacity / cometHeadSize math inline.
+ * Same output as that loop: visible = sample.visible || reduced; line opacity
+ * 0.55·opacity (reduced 0.22); head opacity 0.95·opacity (reduced 0.35);
+ * head size = cometHeadSize(head.userData.baseSize). Missing / short samples hide that
+ * comet (never NaN); disposed handle → 0. Returns how many comets are visible. No alloc.
+ */
+export function applyCometLaunchSamples(
+  handle: CommitCometsHandle | null | undefined,
+  samples: ReadonlyArray<Readonly<CometLaunchSample> | null | undefined> | null | undefined,
+  reducedMotion: boolean,
+): number {
+  if (!handle || handle.disposed) return 0;
+  const lines = handle.lines;
+  const heads = handle.heads;
+  const n = Math.max(0, Math.min(handle.count | 0, lines ? lines.length : 0, heads ? heads.length : 0));
+  const list = Array.isArray(samples) ? samples : null;
+  let visibleCount = 0;
+  for (let i = 0; i < n; i++) {
+    const sample = list ? list[i] : null;
+    const line = lines![i]!;
+    const head = heads![i]!;
+    const op = sample ? finiteOr(sample.opacity, 0) : 0;
+    const vis = reducedMotion || (sample ? sample.visible === true : false);
+    const k = reducedMotion ? 1 : op < 0 ? 0 : op > 1 ? 1 : op;
+    line.visible = vis;
+    head.visible = vis;
+    (line.material as THREE.LineBasicMaterial).opacity =
+      (reducedMotion ? COMET_LAUNCH_LINE_OPACITY_REDUCED : COMET_LAUNCH_LINE_OPACITY) * k;
+    const hm = head.material as THREE.PointsMaterial;
+    hm.opacity = (reducedMotion ? COMET_LAUNCH_HEAD_OPACITY_REDUCED : COMET_LAUNCH_HEAD_OPACITY) * k;
+    const base = typeof head.userData.baseSize === "number" ? head.userData.baseSize : hm.size;
+    hm.size = cometHeadSize(base as number, sample ?? null, reducedMotion);
+    if (vis) visibleCount++;
+  }
+  return visibleCount;
 }

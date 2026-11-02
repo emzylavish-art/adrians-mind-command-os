@@ -95,15 +95,20 @@ export function seedDustParticles(count: number, radius: number, ySpread: number
  * Instanced cosmic dust. count clamped to [0, DUST_COUNT_MAX].
  * dispose() is idempotent; update() after dispose is a no-op.
  */
-export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = {}): DustFieldHandle {
-  const count = clampInt(opts.count ?? DUST_COUNT_DEFAULT, 0, DUST_COUNT_MAX, DUST_COUNT_DEFAULT);
-  const radius = finiteOr(opts.radius ?? 28, 28);
-  const ySpread = finiteOr(opts.ySpread ?? 16, 16);
-  const seed = finiteOr(opts.seed ?? 42, 42);
-  const size = Math.max(1e-4, finiteOr(opts.size ?? 0.09, 0.09));
-  const color = finiteOr(opts.color ?? 0x7aa2ff, 0x7aa2ff);
+export function createDustField(
+  scene: THREE.Scene,
+  opts: CreateDustFieldOpts | null | undefined = {},
+): DustFieldHandle {
+  // Hacker c24: null / non-object opts threw on opts.count (dust mount abort).
+  const o = opts && typeof opts === "object" ? opts : {};
+  const count = clampInt(o.count ?? DUST_COUNT_DEFAULT, 0, DUST_COUNT_MAX, DUST_COUNT_DEFAULT);
+  const radius = finiteOr(o.radius ?? 28, 28);
+  const ySpread = finiteOr(o.ySpread ?? 16, 16);
+  const seed = finiteOr(o.seed ?? 42, 42);
+  const size = Math.max(1e-4, finiteOr(o.size ?? 0.09, 0.09));
+  const color = finiteOr(o.color ?? 0x7aa2ff, 0x7aa2ff);
   const seeds = seedDustParticles(count, radius, ySpread, seed);
-  const clock = opts.clock ?? sharedMotionClock;
+  const clock = o.clock ?? sharedMotionClock;
 
   const gustState: WindGustState = createWindGustState();
   const gustOut: WindGustSample = createWindGustSample();
@@ -157,7 +162,7 @@ export function createDustField(scene: THREE.Scene, opts: CreateDustFieldOpts = 
   scene.add(mesh);
   handle.mesh = mesh;
 
-  const useLod = opts.lod !== false;
+  const useLod = o.lod !== false;
   const budget = createFrameBudget();
   let lastBudgetTime = Number.NaN;
   // The renderer hands us the real camera each draw — no scene wiring needed for LOD.
