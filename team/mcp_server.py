@@ -51,6 +51,31 @@ def tool_specs(manifest):
                     "additionalProperties": False,
                 },
             })
+        elif tool_id == "team.queue":
+            specs.append({
+                "name": tool_id,
+                "description": "Manage durable local SQLite worker jobs. Queue records payloads only and never executes jobs. Use worker_id to claim/complete/fail jobs.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
+                        "db": {"type": "string", "description": "Optional SQLite database path; defaults to team/queue.sqlite3."},
+                        "task": {"type": "string"},
+                        "payload": {"type": "object"},
+                        "worker_id": {"type": "string"},
+                        "job_id": {"type": "string"},
+                        "result": {"type": "object"},
+                        "error": {"type": "string"},
+                        "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
+                        "lease_seconds": {"type": "integer", "minimum": 5, "maximum": 3600},
+                        "status": {"type": "string", "enum": ["queued", "claimed", "succeeded", "failed"]},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
+                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
+                    },
+                    "required": ["operation"],
+                    "additionalProperties": False,
+                },
+            })
         elif tool_id == "knowledge.search":
             specs.append({
                 "name": tool_id,
