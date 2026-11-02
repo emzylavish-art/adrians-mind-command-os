@@ -201,11 +201,11 @@
         "durable_worker_jobs"
       ],
       "status": "partial",
-      "entrypoint": "team/queue.py",
+      "entrypoint": "team/worker.py",
       "requires": [
         "python3",
         "local_sqlite_database",
-        "worker_process_for_execution"
+        "explicit_worker_process"
       ]
     }
   ],
