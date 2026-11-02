@@ -313,27 +313,6 @@
         "error": "string"
       },
       "safety": "SQLite local queue; stores payloads only and never executes queued task data; worker must apply policy and approvals."
-    },
-    {
-      "id": "team.queue",
-      "agent": "worker-runtime",
-      "capabilities": [
-        "queue_management",
-        "durable_worker_jobs"
-      ],
-      "status": "ready",
-      "entrypoint": "python3 team/queue.py",
-      "input_schema": {
-        "operation": "enqueue|claim|complete|fail|list",
-        "db": "string",
-        "task": "string",
-        "payload": "object",
-        "worker_id": "string",
-        "job_id": "string",
-        "result": "object",
-        "error": "string"
-      },
-      "safety": "Queue stores task payloads but never executes them; worker identity required for lease completion/failure."
     }
   ],
   "catalog": [
