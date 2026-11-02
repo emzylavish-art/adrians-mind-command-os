@@ -366,6 +366,25 @@
         "timeout_seconds": "integer"
       },
       "safety": "HTTPS only; server must be explicitly enabled and remote tool must be allowlisted. Bearer secrets are environment-only. No endpoints are enabled by default."
+    },
+    {
+      "id": "model.generate",
+      "agent": "orchestrator",
+      "capabilities": [
+        "model_inference",
+        "provider_routing",
+        "local_model_fallback"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/runner.py",
+      "input_schema": {
+        "provider": "grok|openrouter|ollama",
+        "prompt": "string",
+        "messages": "object[] (optional)",
+        "model": "string (optional)",
+        "timeout_seconds": "integer (optional)"
+      },
+      "safety": "Makes a provider request only when explicitly invoked. xAI/OpenRouter keys are read from environment variables; Ollama uses localhost. No credentials are logged or persisted. Provider usage may incur charges; select route explicitly."
     }
   ],
   "catalog": [
