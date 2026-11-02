@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """Validate the Mind Command OS registry and team manifest consistency."""
 import json
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "team" / "manifest.json"
 REGISTRY_PATH = ROOT / "tools" / "registry.json"
+
+
+def slug(value):
+    """Normalize human-readable catalog names into stable IDs."""
+    value = value.lower().replace("—", "-").replace("–", "-")
+    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", value)).strip("-")
 
 
 def validate():
@@ -29,12 +36,8 @@ def validate():
             if not (ROOT / entrypoint).exists():
                 errors.append(f"Tool {tool.get('id')} entrypoint does not exist: {entrypoint}")
 
-    manifest_catalog = {item.get("id"): item for item in manifest.get("catalog", [])}
     registry_items = registry.get("tools", [])
-    registry_ids = {
-        item.get("name", "").strip().lower().replace(" ", "-")
-        for item in registry_items
-    }
+    registry_ids = {slug(item.get("name", "")) for item in registry_items}
     if len(registry_ids) != len(registry_items):
         errors.append("Duplicate normalized names in registry.")
     for item in manifest.get("catalog", []):
