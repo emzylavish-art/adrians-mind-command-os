@@ -36,6 +36,7 @@ import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition, LANE_DEFS } from "@/lib/mind/dashboard/constellations";
 import { dashboardSceneSyncSignature } from "@/lib/mind/dashboard/scene-sync-sig";
+import { starSetColorNeedsApply, type StarSetColorState } from "@/lib/mind/dashboard/star-set-color";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
@@ -370,7 +371,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     mount.appendChild(labelRenderer.domElement);
 
     // Sky dome with painterly nebula
-    let kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 }, disposePriorLive: true });
+    let kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 }, kitScope: "dashboard", disposePriorLive: true });
     let sceneAlive = true;
     let atm: HealthAtmosphereHandle | null = null;
     try {
@@ -426,20 +427,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const fleetLineGroup = new THREE.Group();
     scene.add(fleetLineGroup);
 
-    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; cardPlane?: THREE.Mesh; personPlane?: THREE.Mesh; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void };
+    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; cardPlane?: THREE.Mesh; personPlane?: THREE.Mesh; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void; starColorState?: StarSetColorState | null };
     const botVis: BotVis[] = [];
     const botMeshes: THREE.Mesh[] = [];
     const pageIdByIndex: string[] = [];
 
     const sphereGeo = new THREE.SphereGeometry(0.42, 28, 28);
-    // Orchestrator sun
+    // Orchestrator sun — Painter c25 watercolor surface (Light owns bloom/god-rays)
+    const sunStar = kit.createSunMaterial({ color: 0xffd27a });
     const sunMesh = new THREE.Mesh(
       new THREE.SphereGeometry(0.95, 32, 32),
-      new THREE.MeshStandardMaterial({ color: 0xffd27a, emissive: 0xffb347, emissiveIntensity: 1.2, roughness: 0.4 }),
+      sunStar.meshMaterial,
     );
     sunMesh.position.set(0, 1.2, 0);
     sunMesh.userData.botId = "grok-build";
     scene.add(sunMesh);
+    const sunGlow = new THREE.Sprite(sunStar.glowMaterial);
+    sunGlow.scale.set(3.2, 3.2, 3.2);
+    sunGlow.position.copy(sunMesh.position);
+    scene.add(sunGlow);
 
     const MAX_SCENE_BOTS = 48; // Gap#11: hard cap so a spiked payload cannot kill the tab
     const PORTRAIT_FALLBACK = "/dashboard-3d/art/portrait-dashboard.webp";
@@ -511,8 +517,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const pos = new THREE.Vector3(...posArr);
         if (bot.id === "grok-build") {
           sunMesh.position.copy(pos);
-          const mat = sunMesh.material as THREE.MeshStandardMaterial;
-          mat.emissive = new THREE.Color(HEALTH_COLOR[bot.health]);
+          sunGlow.position.copy(pos);
+          sunStar.setColor(
+            HEALTH_COLOR[bot.health],
+            bot.health === "idle" ? 0.25 : 1.05,
+          );
           continue;
         }
         const color = HEALTH_COLOR[bot.health];
@@ -1832,10 +1841,17 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         n.mesh.scale.setScalar(scaleMul);
         n.glow.scale.setScalar(pulse.glow * (scaleMul / Math.max(1e-6, pulse.scale)));
-        if (n.setColor) n.setColor(HEALTH_COLOR[n.health], pulse.emissive);
-        else {
-          const mat = n.mesh.material as THREE.MeshStandardMaterial;
-          if (mat.emissiveIntensity != null) mat.emissiveIntensity = pulse.emissive;
+        // Painter c26 / Dashboard c63: clamp emissive and skip setColor when unchanged (neon wipe).
+        {
+          const gate = starSetColorNeedsApply(n.starColorState, n.health, pulse.emissive);
+          n.starColorState = gate.next;
+          if (gate.apply) {
+            if (n.setColor) n.setColor(HEALTH_COLOR[n.health], gate.emissive);
+            else {
+              const mat = n.mesh.material as THREE.MeshStandardMaterial;
+              if (mat.emissiveIntensity != null) mat.emissiveIntensity = gate.emissive;
+            }
+          }
         }
         n.mesh.position.set(pos.x, pos.y, pos.z);
         n.glow.position.set(pos.x, pos.y, pos.z);
@@ -2371,6 +2387,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       skyMat.map?.dispose();
       skyMat.dispose();
       sceneAlive = false;
+      try {
+        scene.remove(sunGlow);
+        releasePainterlyMaterial(kit, sunStar.meshMaterial);
+        sunStar.glowMaterial.dispose();
+      } catch { /* */ }
       disposePainterlyKit(kit);
       while (ownedPortraitTextures.length) {
         const tex = ownedPortraitTextures.pop()!;

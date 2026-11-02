@@ -771,3 +771,17 @@ the pre-throttle path. Dust c29 recheck: 480×120 updates ≈0.03 ms/frame ≪ c
 ### Requests (c30)
 - Register `particles/comet-arc-upload.test.ts` in package.json strip-types list.
 - Queue row for Motion c30 **done**.
+
+## Requests for Dashboard Bot (c31 — comet segment LOD)
+
+No required scene wiring. Comet trails read camera distance via `line.onBeforeRender`
+(same pattern as dust). Optional: `comets.setCamDistance(rig.camera.position.length())`
+each tick if you prefer an explicit feed.
+
+Far camera → `drawRange` thins to `COMET_SEG_FAR_MIN` (6) with hysteresis
+(`COMET_SEG_LOD_HYST`); near restores full segments. Head sample stays s=0 of the
+resampled arc (no pop).
+
+### Requests (c31)
+- Register `particles/comet-seg-lod.test.ts` in package.json strip-types list.
+- Queue row #120 Motion c31 **done**.

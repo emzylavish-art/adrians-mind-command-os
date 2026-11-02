@@ -2,7 +2,13 @@ import * as THREE from "three";
 import { clampInt, finiteOr } from "../motion/sanitize.ts";
 import { sharedMotionClock, type MotionClock } from "../motion/motion-clock.ts";
 import { cometHeadSize, type CometLaunchSample } from "../motion/comet-launch-ease.ts";
-import { isDocumentHidden } from "./motion-lod.ts";
+import {
+  COMET_SEG_LOD_NEAR,
+  createCometSegLodState,
+  isDocumentHidden,
+  stepCometSegLod,
+  type CometSegLodState,
+} from "./motion-lod.ts";
 
 export const COMET_SEGMENTS_MIN = 2;
 export const COMET_SEGMENTS_DEFAULT = 24;
@@ -41,6 +47,10 @@ export type CommitCometsHandle = {
   lines?: readonly THREE.Line[];
   heads?: readonly THREE.Points[];
   disposed: boolean;
+  /** c31: live segment LOD state (read-only view). */
+  segLod?: CometSegLodState;
+  /** c31: test / scene hook — override camera distance used for segment LOD. */
+  setCamDistance?: (distance: number) => void;
   update: (tSeconds: number, reducedMotion: boolean) => void;
   dispose: () => void;
 };
@@ -59,14 +69,21 @@ type CometState = {
   incline: number;
   yaw: number;
   color: number;
+  /** Linear RGB of the trail hue (for LOD color rebuild). */
+  cr: number;
+  cg: number;
+  cb: number;
   line: THREE.Line;
   positions: Float32Array;
+  colors: Float32Array;
   head: THREE.Points;
   headPos: Float32Array;
   /** Last head phase uploaded to the GPU (NaN = never). */
   lastUploadedHead: number;
   lastLineOpacity: number;
   lastHeadOpacity: number;
+  /** Last segment count uploaded (force GPU when LOD changes). */
+  lastUploadedSegs: number;
 };
 
 /** Tail brightness at u∈[0,1] (0 = head). Additive blending makes 0 fully transparent. */
@@ -315,13 +332,18 @@ export function createCommitComets(
       incline: orbit.incline,
       yaw: orbit.yaw,
       color: color.getHex(),
+      cr: color.r,
+      cg: color.g,
+      cb: color.b,
       line,
       positions,
+      colors,
       head,
       headPos,
       lastUploadedHead: Number.NaN,
       lastLineOpacity: Number.NaN,
       lastHeadOpacity: Number.NaN,
+      lastUploadedSegs: -1,
     });
   });
   handle.count = comets.length;
@@ -332,16 +354,32 @@ export function createCommitComets(
   handle.heads = heads;
   syncMeta.set(handle, { max, radius, segments, clock });
 
+  const segLod = createCometSegLodState(segments);
+  handle.segLod = segLod;
+  // Default near so first frames are full until onBeforeRender / setCamDistance fires.
+  let camDistance = COMET_SEG_LOD_NEAR;
+  handle.setCamDistance = (d: number) => {
+    camDistance = d;
+  };
+  const onBeforeRender: THREE.Object3D["onBeforeRender"] = (_r, _s, camera) => {
+    const d = camera.position.length();
+    if (Number.isFinite(d)) camDistance = d;
+  };
+  for (const c of comets) {
+    c.line.onBeforeRender = onBeforeRender;
+  }
+
   /**
-   * c30: always write CPU positions (identical motion). GPU upload is dirty-only:
-   * skipped when |head - lastUploadedHead| < COMET_ARC_PHASE_EPS (stalled clock /
-   * duplicate map(t)). When uploading, mark update ranges so three can bufferSubData
-   * just the arc / head floats instead of a blind full-buffer invalidate.
+   * c30/c31: write CPU positions (+ colors for active LOD). GPU upload is dirty-only
+   * when phase stalls; always force when active segment count changes (no pop: head is
+   * always sample s=0 of the resampled arc).
    */
-  const writeArc = (c: CometState, head: number, forceUpload = false): boolean => {
+  const writeArc = (c: CometState, head: number, activeSeg: number, forceUpload = false): boolean => {
+    const nSeg = Math.max(2, Math.min(segments, Math.trunc(activeSeg)));
     const pos = c.positions;
-    const denom = segments - 1; // >= 1 by clamp
-    for (let s = 0; s < segments; s++) {
+    const cols = c.colors;
+    const denom = nSeg - 1;
+    for (let s = 0; s < nSeg; s++) {
       const u = s / denom;
       const ang = head - u * 0.85;
       const r = radius * (0.85 + 0.15 * Math.sin(ang * 0.5 + c.phase));
@@ -352,25 +390,39 @@ export function createCommitComets(
       pos[o] = x;
       pos[o + 1] = y;
       pos[o + 2] = z;
+      const f = cometTailFade(u);
+      cols[o] = c.cr * f;
+      cols[o + 1] = c.cg * f;
+      cols[o + 2] = c.cb * f;
     }
     c.headPos[0] = pos[0]!;
     c.headPos[1] = pos[1]!;
     c.headPos[2] = pos[2]!;
+    c.line.geometry.setDrawRange(0, nSeg);
 
+    const segChanged = c.lastUploadedSegs !== nSeg;
     const stalled =
       !forceUpload &&
+      !segChanged &&
       Number.isFinite(c.lastUploadedHead) &&
       Math.abs(head - c.lastUploadedHead) < COMET_ARC_PHASE_EPS;
     if (stalled) return false;
 
+    const floatCount = nSeg * 3;
     const attr = c.line.geometry.getAttribute("position") as THREE.BufferAttribute;
-    const floatCount = segments * 3;
     if (floatCount > 0 && typeof attr.clearUpdateRanges === "function") {
       attr.clearUpdateRanges();
       attr.addUpdateRange(0, floatCount);
     }
     attr.needsUpdate = true;
     arcUploadStats.arcs++;
+
+    const colAttr = c.line.geometry.getAttribute("color") as THREE.BufferAttribute;
+    if (colAttr && floatCount > 0 && typeof colAttr.clearUpdateRanges === "function") {
+      colAttr.clearUpdateRanges();
+      colAttr.addUpdateRange(0, floatCount);
+    }
+    if (colAttr) colAttr.needsUpdate = true;
 
     const headAttr = c.head.geometry.getAttribute("position") as THREE.BufferAttribute;
     if (typeof headAttr.clearUpdateRanges === "function") {
@@ -381,6 +433,7 @@ export function createCommitComets(
     arcUploadStats.heads++;
 
     c.lastUploadedHead = head;
+    c.lastUploadedSegs = nSeg;
     return true;
   };
 
@@ -395,28 +448,37 @@ export function createCommitComets(
     }
   };
 
-  for (const c of comets) writeArc(c, c.phase, true);
+  const initialActive = stepCometSegLod(segLod, camDistance, segments);
+  for (const c of comets) writeArc(c, c.phase, initialActive, true);
 
-  // Duplicate update(t) with the same mapped wall time → no GPU work (c30).
+  // Duplicate update(t) with the same mapped wall time → no GPU work (c30),
+  // unless segment LOD band changed since last frame.
   let lastMappedT = Number.NaN;
+  let lastActiveSeg = initialActive;
 
   handle.update = (tSeconds: number, reducedMotion: boolean) => {
     if (handle.disposed) return;
+    const activeSeg = stepCometSegLod(segLod, camDistance, segments);
+    const lodChanged = activeSeg !== lastActiveSeg;
+    lastActiveSeg = activeSeg;
     if (reducedMotion) {
-      for (const c of comets) setOpacity(c, LINE_OPACITY_REDUCED, HEAD_OPACITY_REDUCED);
-      lastMappedT = Number.NaN; // force re-upload when motion resumes
+      for (const c of comets) {
+        setOpacity(c, LINE_OPACITY_REDUCED, HEAD_OPACITY_REDUCED);
+        // Keep drawRange / rest pose coherent under RM.
+        if (lodChanged) writeArc(c, c.phase, activeSeg, true);
+      }
+      lastMappedT = Number.NaN;
       return;
     }
     if (isDocumentHidden()) return;
     const t = clock.map(tSeconds);
-    if (t === lastMappedT && comets.length > 0) {
-      // Opacity already at motion values from the prior call; arcs match this t.
+    if (t === lastMappedT && !lodChanged && comets.length > 0) {
       return;
     }
     lastMappedT = t;
     for (const c of comets) {
       setOpacity(c, LINE_OPACITY, HEAD_OPACITY);
-      writeArc(c, t * c.speed + c.phase, false);
+      writeArc(c, t * c.speed + c.phase, activeSeg, lodChanged);
     }
   };
 
@@ -426,6 +488,7 @@ export function createCommitComets(
     for (const c of comets) {
       // Hacker c25: context-loss / double-dispose may null materials before we run.
       if (c.line) {
+        c.line.onBeforeRender = () => {};
         group.remove(c.line);
         c.line.geometry?.dispose?.();
         const lm = c.line.material as THREE.Material | null | undefined;

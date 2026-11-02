@@ -78,3 +78,82 @@ export function lodCount(full: number, distanceFactor: number, budget: number, m
 export function isDocumentHidden(doc: { hidden?: boolean } | undefined = (globalThis as { document?: { hidden?: boolean } }).document): boolean {
   return Boolean(doc && doc.hidden === true);
 }
+
+/** c31 — comet arc segment LOD (fewer samples when the camera is far). */
+export const COMET_SEG_LOD_NEAR = LOD_NEAR;
+export const COMET_SEG_LOD_FAR = LOD_FAR;
+/** Distance hysteresis band (world units) so threshold oscillation cannot flicker. */
+export const COMET_SEG_LOD_HYST = 12;
+/** Minimum arc vertices when fully thinned (still a readable streak; ≥ COMET_SEGMENTS_MIN). */
+export const COMET_SEG_FAR_MIN = 6;
+
+export type CometSegLodState = {
+  /** Live segment count written into the trail. */
+  active: number;
+  /** 0 = full/near band, 1 = thin/far band. */
+  band: 0 | 1;
+  full: number;
+};
+
+export type CometSegLodOpts = {
+  near?: number;
+  far?: number;
+  hyst?: number;
+  farMin?: number;
+};
+
+export function createCometSegLodState(full: number): CometSegLodState {
+  const n = Math.max(0, Math.trunc(finiteOr(full, 0)));
+  return { active: n, band: 0, full: n };
+}
+
+/**
+ * Hysteretic segment count from camera distance.
+ * NaN / non-finite / ≤0 distance → treat as near (full) — camera "inside" a comet
+ * must not thin. Infinity → far band. Changing `full` mid-flight reclamps active.
+ */
+export function stepCometSegLod(
+  state: CometSegLodState | null | undefined,
+  camDistance: number,
+  full: number,
+  opts?: CometSegLodOpts,
+): number {
+  const nFull = Math.max(0, Math.trunc(finiteOr(full, 0)));
+  if (!state) return nFull;
+  if (state.full !== nFull) {
+    state.full = nFull;
+    state.active = Math.min(Math.max(state.active, 0), nFull);
+  }
+  if (nFull === 0) {
+    state.active = 0;
+    state.band = 0;
+    return 0;
+  }
+
+  const near = finiteOr(opts?.near ?? COMET_SEG_LOD_NEAR, COMET_SEG_LOD_NEAR);
+  const far = Math.max(near + 1, finiteOr(opts?.far ?? COMET_SEG_LOD_FAR, COMET_SEG_LOD_FAR));
+  const hyst = Math.max(0, finiteOr(opts?.hyst ?? COMET_SEG_LOD_HYST, COMET_SEG_LOD_HYST));
+  const farMin = Math.min(
+    nFull,
+    Math.max(2, Math.trunc(finiteOr(opts?.farMin ?? COMET_SEG_FAR_MIN, COMET_SEG_FAR_MIN))),
+  );
+
+  // Hostile / inside: stay full. Infinity → far.
+  let d: number;
+  if (!Number.isFinite(camDistance)) {
+    d = camDistance === Number.POSITIVE_INFINITY ? far + 1 : 0;
+  } else if (camDistance <= 0) {
+    d = 0;
+  } else {
+    d = camDistance;
+  }
+
+  if (state.band === 0) {
+    if (d >= far) state.band = 1;
+  } else {
+    if (d <= far - hyst) state.band = 0;
+  }
+
+  state.active = state.band === 0 ? nFull : farMin;
+  return state.active;
+}
