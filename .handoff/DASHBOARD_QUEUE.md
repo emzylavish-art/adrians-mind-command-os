@@ -216,7 +216,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 122 | **Motion c32 — painter glow desaturate** — GLOW_BASE 2→1.25; clampGlowScale cap 1.45 on pulse+focus (n.glow.scale); hacker NaN/Inf/over-boost | **done** | Motion c32; Painter c26 request |
 | 123 | **Motion c33 — traveler trail point budget** — cam-distance+speed resample under TRAVELER_POINT_BUDGET_TOTAL=2048; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus, LOD hyst teleport, many-traveler overflow | **done** | Motion c33 |
 | 124 | **Motion c34 — traveler trail GPU upload throttle** — dirty-only resample/upload via pointsDirty + consumeTravelerPointsDirty; skip on duplicate clock.map(t); toggle ON↔OFF clears stale budget; 0/neg total parks (no full escape) | **done** | Motion c34 |
-| 125 | **Motion c35 — traveler trail focus-flip LOD snap** — when `focused` flips mid-flight, force dirty resample to full then hysteretic restore on unfocus; no one-frame hole; hacker focus spam / NaN speed / hold+focus | queued | Motion lane next |
+| 125 | **Motion c35 — traveler trail focus-flip LOD snap** — focus edge dirty full resample; unfocus thin restore; focus@budget0 parks (no MIN escape); disposed+focused skip; hacker rapid multi-flip / disposed / budget0 | **done** | Motion c35 |
+| 126 | **Motion c36 — traveler hold×focus churn** — hold true while focused flips must not false-wrap or teleport sample; resume restores budget band; hacker hold spam + focus spam same frame / NaN dt | queued | Motion lane next |
 | 125 | **Light — HDR-safe byte bloom chain** — when c114 drops the bloom chain to 8-bit (no renderable RGBA16F / c20 byte composer over HDR), Reinhard-encode the bright pass e/(1+e) and decode in the composite (as #117 did for the god-ray mask) so sun cores and blocked-tone halos don't clip at 1.0; measure halo energy vs HalfFloat chain. Painter stars stay ≤0.98 matte (no threshold change) | queued | Light lane next; postfx/ only |
 
 
@@ -243,7 +244,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Motion c32 — painter glow desaturate**~~ — **done (Cosmos Motion Bot c32)**: GLOW_BASE 1.25 + GLOW_SCALE_CAP 1.45; Painter c26 request via handoff.
 - ~~**Motion c33 — traveler trail point budget**~~ — **done (Cosmos Motion Bot c33)**: allocateTravelerPointBudgets + hysteretic LOD + resample; focus full-res; opt-in enablePointBudget; hacker glow@cap×focus / teleport hyst / overflow.
 - ~~**Motion c34 — traveler trail GPU upload throttle**~~ — **done (Cosmos Motion Bot c34)**: pointsDirty + consumeTravelerPointsDirty; duplicate map(t) skip; toggle ON↔OFF clears stale; 0/neg parks.
-- **Motion c35 — traveler trail focus-flip LOD snap** — focused flip mid-flight forces dirty full resample then hysteretic restore; hacker focus spam / NaN speed / hold+focus. Cosmos Motion Bot next.
+- ~~**Motion c35 — traveler trail focus-flip LOD snap**~~ — **done (Cosmos Motion Bot c35)**: focus-edge dirty full; unfocus thin; focus@0 parks; disposed skip. Lean REA uniqueSamples=9 — no quality gap → c36.
+- **Motion c36 — traveler hold×focus churn** — hold while focused flips: no false wrap/teleport; resume restores band; hacker hold+focus spam / NaN dt. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
