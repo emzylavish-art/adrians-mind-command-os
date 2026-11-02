@@ -827,3 +827,16 @@ When `enablePointBudget` is on:
 - Register `motion/traveler-upload-throttle.test.ts` in package.json strip-types list.
 - Queue row #124 Motion c34 **done**.
 - Optional wire: after traveler tick, if `consumeTravelerPointsDirty(tr)` then upload line positions from `tr.activePoints` / full `tr.points`.
+
+## Requests for Dashboard Bot (c35 — focus-flip LOD snap)
+
+When `enablePointBudget` is on and `trail.focused` flips:
+- Focus edge forces dirty resample to full polyline (then `consumeTravelerPointsDirty`)
+- Unfocus restores hysteretic cam thin — no one-frame empty hole
+- `pointBudgetTotal === 0` parks even focused travelers (no MIN escape)
+- `trail.disposed === true` (or null ease/sample) is skipped safely under focus
+
+### Requests (c35)
+- Register `motion/traveler-focus-flip.test.ts` in package.json strip-types list.
+- Queue row #125 Motion c35 **done** (note: Light also queued a #125 — renumber if needed).
+- Lean REA c35: uniqueSamples=9, 0 page errors — motion still reads; no c36 quality gap from captures.
