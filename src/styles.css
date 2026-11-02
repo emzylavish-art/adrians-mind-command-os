@@ -90,7 +90,7 @@ html[data-theme="light"] {
 
 .masthead {
   background:
-    url("/brand/hero-bg.jpg") center top / cover no-repeat,
+    var(--tex-hero-bg) center top / cover no-repeat,
     radial-gradient(ellipse 42% 120% at 78% -20%, rgb(124 92 255 / 0.18), transparent 70%),
     radial-gradient(ellipse 28% 80% at 92% 40%, rgb(40 90 180 / 0.12), transparent 70%);
   border-radius: var(--radius-panel);
@@ -1081,7 +1081,7 @@ html[data-theme="light"] [data-loading="true"] {
 html[data-theme="light"] .masthead {
   background:
     linear-gradient(90deg, rgb(255 255 255 / 0.92), rgb(255 255 255 / 0.7) 55%, rgb(255 255 255 / 0.35)),
-    url("/brand/hero-bg.jpg") center top / cover no-repeat,
+    var(--tex-hero-bg) center top / cover no-repeat,
     radial-gradient(ellipse 42% 120% at 78% -20%, rgb(109 77 255 / 0.14), transparent 70%);
   box-shadow: 0 0 0 1px rgb(15 23 42 / 0.06), 0 12px 32px rgb(15 23 42 / 0.06);
 }
@@ -1403,7 +1403,7 @@ body {
   background-color: var(--color-bg);
   background-image:
     linear-gradient(180deg, rgb(5 5 7 / 0.82), rgb(5 5 7 / 0.92)),
-    url("/brand/textures/hero-mono-grain.jpg");
+    var(--tex-hero-grain);
   background-size: auto, cover;
   background-position: center, center;
   background-attachment: fixed, fixed;
@@ -1412,7 +1412,7 @@ body {
 html[data-theme="light"] body {
   background-image:
     linear-gradient(180deg, rgb(250 250 250 / 0.88), rgb(250 250 250 / 0.94)),
-    url("/brand/textures/hero-mono-grain.jpg");
+    var(--tex-hero-grain);
 }
 
 .glow-card,
@@ -1424,7 +1424,7 @@ html[data-theme="light"] body {
 .page-hero {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
-    url("/brand/textures/frost-card-texture.jpg");
+    var(--tex-frost);
   background-size: auto, 420px 420px;
   background-blend-mode: soft-light, soft-light;
 }
@@ -1572,7 +1572,7 @@ html[data-theme="light"] .min-h-0.flex-1.overflow-auto ul.mt-4.space-y-2 > li.te
 .dash3d-charts-panel.dash3d-glass {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
-    url("/brand/textures/frost-card-texture.jpg"),
+    var(--tex-frost),
     rgb(12 12 14 / 0.82) !important;
   background-size: auto, 360px 360px, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -1707,7 +1707,7 @@ html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-
   isolation: isolate;
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 35%),
-    url("/brand/textures/hero-mono-grain.jpg"),
+    var(--tex-hero-grain),
     rgb(5 5 7 / 0.94) !important;
   background-size: auto, cover, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -1728,7 +1728,7 @@ html[data-theme="light"] nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-
 .dash3d-skybar-card {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 45%),
-    url("/brand/textures/frost-card-texture.jpg"),
+    var(--tex-frost),
     rgb(12 12 14 / 0.8) !important;
   background-size: auto, 320px 320px, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -1867,7 +1867,7 @@ aside nav button:not(:disabled) {
 .dash3d-node-detail {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 55%),
-    url("/brand/textures/frost-card-texture.jpg"),
+    var(--tex-frost),
     rgb(10 10 12 / 0.86) !important;
   background-size: auto, 280px 280px, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -2375,6 +2375,9 @@ html[data-theme="light"] .composer-mic-dictation {
 .composer-speak-live[data-live-voice="listening"] .composer-speak-live__bars i,
 .composer-speak-live[data-live-voice="user-speaking"] .composer-speak-live__bars i,
 .composer-speak-live[data-live-voice="assistant-speaking"] .composer-speak-live__bars i {
+  animation: composer-speak-breathe 0.9s ease-in-out infinite;
+  transform-origin: center bottom;
+}
 
 /* Map existing tip composer controls toward Grok row */
 @media (max-width: 767.98px) {
@@ -2813,6 +2816,13 @@ html[data-theme="light"] .live-voice-bar__ask {
   position: absolute;
   width: 1px;
   height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .live-call-grid,
 .live-voice-bar__controls,
 .live-voice-bar .live-call-grid,
@@ -2934,7 +2944,7 @@ header button.grid {
 .main-stage li.rounded-panel.border {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 50%),
-    url("/brand/textures/frost-card-texture.jpg"),
+    var(--tex-frost),
     rgb(12 12 14 / 0.88) !important;
   background-size: auto, 280px 280px, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -3022,7 +3032,6 @@ aside .text-xs.text-muted,
   letter-spacing: 0.01em;
 }
 
-}}
 
 /* —— Cycle 32 / item 1+3 harden: fixed mobile composer dock (sticky fails under overflow) —— */
 @media (max-width: 767.98px) {
@@ -3165,7 +3174,7 @@ section.command-card.composer-dock,
 aside.fixed.inset-0.z-40.flex {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, 320px 320px !important;
   background-blend-mode: soft-light, soft-light !important;
   /* solid base underneath so depth reads even if backdrop-filter is noop */
@@ -3542,7 +3551,7 @@ li.rounded-panel.border.border-line,
   background-color: rgb(12 12 14 / 0.72) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, 320px 320px !important;
   background-blend-mode: soft-light, soft-light !important;
   border-color: rgb(255 255 255 / 0.12) !important;
@@ -3676,8 +3685,8 @@ html[data-theme="light"] .main-stage .flex.flex-wrap.gap-2 > button {
 .dash3d-chart-card [data-testid="chart-empty"] {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 50%),
-    url("/brand/textures/empty-well-mono.jpg"),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-empty-well),
+    var(--tex-frost) !important;
   background-size: auto, cover, 280px 280px !important;
   background-position: center, center, center !important;
   min-height: 7.5rem !important;
@@ -3705,8 +3714,8 @@ button.is-coming-soon::after,
 .dash3d-charts-panel {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
-    url("/brand/textures/chart-grid-mono.jpg"),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-chart-grid),
+    var(--tex-frost) !important;
   background-size: auto, cover, 300px 300px !important;
   background-blend-mode: soft-light, multiply, soft-light !important;
   padding: 1rem !important;
@@ -3773,8 +3782,8 @@ html[data-theme="light"] .dash3d-chart-card svg line {
 .composer-bar__card {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
-    url("/brand/textures/panel-noise-mono.jpg"),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-panel-noise),
+    var(--tex-frost) !important;
   background-size: auto, 220px 220px, 320px 320px !important;
   background-blend-mode: soft-light, soft-light, soft-light !important;
 }
@@ -4078,7 +4087,7 @@ html[data-theme="light"] .composer-bar__card {
 .dash3d-charts-panel.dash3d-glass {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 40%),
-    url("/brand/textures/chart-grid-mono.jpg"),
+    var(--tex-chart-grid),
     rgb(10 10 12 / 0.72) !important;
   background-size: auto, cover, auto !important;
   border: 1px solid rgb(255 255 255 / 0.12) !important;
@@ -4107,7 +4116,7 @@ html[data-theme="light"] .composer-bar__card {
   color: #a1a1aa !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 55%),
-    url("/brand/textures/empty-well-mono.jpg") !important;
+    var(--tex-empty-well) !important;
   background-size: auto, cover !important;
 }
 .dash3d-chart-card [data-testid="chart-empty"]::before,
@@ -4412,7 +4421,7 @@ form.composer-dock.command-card,
   background-color: rgb(10 10 12 / 0.72) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, 280px 280px !important;
   background-blend-mode: soft-light, soft-light !important;
   backdrop-filter: blur(24px) saturate(1.15) !important;
@@ -4425,7 +4434,7 @@ form.composer-dock.command-card,
     background: rgb(10 10 12 / 0.72) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-frost) !important;
     background-size: auto, 280px 280px !important;
   }
 }
@@ -4984,7 +4993,7 @@ button:not(:disabled):active,
   text-align: center !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
-    url("/brand/textures/empty-well-mono.jpg") !important;
+    var(--tex-empty-well) !important;
   background-size: auto, cover !important;
   background-blend-mode: soft-light, soft-light !important;
   border: 1px dashed rgb(255 255 255 / 0.14) !important;
@@ -5061,7 +5070,7 @@ main.grid.min-h-screen.place-items-center > div[class*="max-w-"],
 main.grid.min-h-screen.place-items-center > div.rounded-panel {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 42%),
-    url("/brand/textures/frost-card-texture.jpg"),
+    var(--tex-frost),
     rgb(12 12 14 / 0.72) !important;
   background-size: auto, 280px 280px, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -5107,7 +5116,7 @@ html[data-theme="light"] main.grid.min-h-screen.place-items-center > div[class*=
 [data-testid="memory-manager"] .page-hero {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
-    url("/brand/textures/frost-card-texture.jpg"),
+    var(--tex-frost),
     rgb(10 10 12 / 0.7) !important;
   background-size: auto, 280px 280px, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -5128,7 +5137,7 @@ html[data-theme="light"] main.grid.min-h-screen.place-items-center > div[class*=
 [data-testid="persona-empty"] {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 45%),
-    url("/brand/textures/panel-noise-mono.jpg"),
+    var(--tex-panel-noise),
     rgb(12 12 14 / 0.68) !important;
   background-size: auto, 220px 220px, auto !important;
   background-blend-mode: soft-light, soft-light, normal !important;
@@ -5197,7 +5206,7 @@ html[data-theme="light"] main.grid.min-h-screen.place-items-center > div[class*=
   color: #a1a1aa !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 50%),
-    url("/brand/textures/chart-grid-mono.jpg") !important;
+    var(--tex-chart-grid) !important;
   background-size: auto, cover !important;
   border: 1px dashed rgb(255 255 255 / 0.12) !important;
   border-radius: 0.85rem !important;
@@ -5354,8 +5363,8 @@ aside.rail nav button {
 .dash3d-chart-card [data-testid="chart-empty"] {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 45%),
-    url("/brand/textures/empty-state-illustration-mono.jpg"),
-    url("/brand/textures/empty-well-mono.jpg") !important;
+    var(--tex-empty-illustration),
+    var(--tex-empty-well) !important;
   background-size: auto, 140px 140px, cover !important;
   background-position: center, center 28%, center !important;
   background-repeat: no-repeat, no-repeat, repeat !important;
@@ -5370,8 +5379,8 @@ aside.rail nav button {
 .main-stage .mx-auto > .rounded-panel.border.border-line:first-child {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 48%),
-    url("/brand/textures/hero-atmosphere-mono.jpg"),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-hero-atmosphere),
+    var(--tex-frost) !important;
   background-size: auto, cover, 280px 280px !important;
   background-position: center, center, center !important;
   background-blend-mode: soft-light, soft-light, soft-light !important;
@@ -5386,7 +5395,7 @@ aside.rail nav button {
   background-color: rgb(12 12 14 / 0.68) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
-    url("/brand/textures/panel-noise-mono.jpg") !important;
+    var(--tex-panel-noise) !important;
   background-size: auto, 220px 220px !important;
   background-blend-mode: soft-light, soft-light !important;
   backdrop-filter: blur(16px) saturate(1.08) !important;
@@ -5407,7 +5416,7 @@ aside.rail nav button {
   background-color: rgb(12 12 14 / 0.7) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 42%),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, 260px 260px !important;
   background-blend-mode: soft-light, soft-light !important;
   backdrop-filter: blur(16px) saturate(1.1) !important;
@@ -5422,7 +5431,7 @@ aside.rail nav button {
   .main-stage section.mx-auto.max-w-3xl ul.space-y-2 > li.dense-card {
     background:
       linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 42%),
-      url("/brand/textures/frost-card-texture.jpg"),
+      var(--tex-frost),
       rgb(10 10 12 / 0.62) !important;
     background-size: auto, 260px 260px, auto !important;
     background-blend-mode: soft-light, soft-light, normal !important;
@@ -5442,8 +5451,8 @@ aside.rail nav button {
   .main-stage section.p-4 .masthead {
     background:
       linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
-      url("/brand/textures/hero-atmosphere-mono.jpg"),
-      url("/brand/textures/frost-card-texture.jpg"),
+      var(--tex-hero-atmosphere),
+      var(--tex-frost),
       rgb(10 10 12 / 0.58) !important;
     background-size: auto, cover, 280px 280px, auto !important;
     background-blend-mode: soft-light, soft-light, soft-light, normal !important;
@@ -5460,7 +5469,7 @@ aside.rail nav button {
   .main-stage .glow-card.whitespace-pre-wrap {
     background:
       linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
-      url("/brand/textures/panel-noise-mono.jpg"),
+      var(--tex-panel-noise),
       rgb(12 12 14 / 0.6) !important;
     background-size: auto, 220px 220px, auto !important;
     background-blend-mode: soft-light, soft-light, normal !important;
@@ -5480,7 +5489,7 @@ aside.rail nav button {
   .main-stage .masthead.px-4.pt-4 {
     background:
       linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
-      url("/brand/textures/hero-atmosphere-mono.jpg"),
+      var(--tex-hero-atmosphere),
       rgb(10 10 12 / 0.55) !important;
     background-size: auto, cover, auto !important;
     background-blend-mode: soft-light, soft-light, normal !important;
@@ -5585,7 +5594,7 @@ aside .sidebar-plus {
     background-color: rgb(10 10 12 / 0.55) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 46%),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-frost) !important;
     background-size: auto, 280px 280px !important;
     background-blend-mode: soft-light, soft-light !important;
     backdrop-filter: blur(24px) saturate(1.22) !important;
@@ -5603,8 +5612,8 @@ aside .sidebar-plus {
     background-color: rgb(10 10 12 / 0.52) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 50%),
-      url("/brand/textures/hero-atmosphere-mono.jpg"),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-hero-atmosphere),
+      var(--tex-frost) !important;
     background-size: auto, cover, 280px 280px !important;
     background-blend-mode: soft-light, soft-light, soft-light !important;
     backdrop-filter: blur(26px) saturate(1.24) !important;
@@ -5623,8 +5632,8 @@ aside .sidebar-plus {
     background-color: rgb(12 12 14 / 0.55) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 44%),
-      url("/brand/textures/panel-noise-mono.jpg"),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-panel-noise),
+      var(--tex-frost) !important;
     background-size: auto, 220px 220px, 260px 260px !important;
     background-blend-mode: soft-light, soft-light, soft-light !important;
     backdrop-filter: blur(22px) saturate(1.18) !important;
@@ -5755,7 +5764,7 @@ html[data-theme="light"] {
     background-color: rgb(10 10 12 / 0.58) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 46%),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-frost) !important;
     background-size: auto, 240px 240px !important;
     background-blend-mode: soft-light, soft-light !important;
     backdrop-filter: blur(18px) saturate(1.15) !important;
@@ -5773,7 +5782,7 @@ html[data-theme="light"] {
     background-color: rgb(10 10 12 / 0.55) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 48%),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-frost) !important;
     background-size: auto, 240px 240px !important;
     background-blend-mode: soft-light, soft-light !important;
     backdrop-filter: blur(20px) saturate(1.18) !important;
@@ -5793,7 +5802,7 @@ html[data-theme="light"] {
     background-color: rgb(12 12 14 / 0.58) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 44%),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-frost) !important;
     background-size: auto, 220px 220px !important;
     background-blend-mode: soft-light, soft-light !important;
     backdrop-filter: blur(18px) saturate(1.14) !important;
@@ -5825,7 +5834,7 @@ main.grid.min-h-screen.place-items-center {
   background:
     radial-gradient(ellipse 55% 45% at 72% 6%, rgb(255 255 255 / 0.07), transparent 55%),
     radial-gradient(ellipse 42% 36% at 12% 88%, rgb(255 255 255 / 0.04), transparent 52%),
-    url("/brand/textures/hero-atmosphere-mono.jpg"),
+    var(--tex-hero-atmosphere),
     var(--color-bg) !important;
   background-size: auto, auto, cover, auto !important;
   background-blend-mode: soft-light, soft-light, soft-light, normal !important;
@@ -5835,7 +5844,7 @@ main.grid.min-h-screen.place-items-center > div.rounded-panel.border {
   background-color: rgb(10 10 12 / 0.58) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 44%),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, 280px 280px !important;
   background-blend-mode: soft-light, soft-light !important;
   border: 1px solid rgb(255 255 255 / 0.16) !important;
@@ -5887,7 +5896,7 @@ main.grid.min-h-screen.place-items-center [aria-pressed="true"] {
   background-color: rgb(10 10 12 / 0.58) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 44%),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, 280px 280px !important;
   border: 1px solid rgb(255 255 255 / 0.15) !important;
   backdrop-filter: blur(26px) saturate(1.18) !important;
@@ -6895,7 +6904,7 @@ html[data-theme="light"] .md-table th {
     background-color: rgb(10 10 12 / 0.62) !important;
     background-image:
       linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 48%),
-      url("/brand/textures/frost-card-texture.jpg") !important;
+      var(--tex-frost) !important;
     background-size: auto, 280px 280px !important;
     background-blend-mode: soft-light, soft-light !important;
     backdrop-filter: blur(26px) saturate(1.24) !important;
@@ -7061,7 +7070,7 @@ main.grid.min-h-screen.place-items-center .rounded-panel {
 .main-stage .glow-card.card-texture {
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 46%),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, 260px 260px !important;
   background-blend-mode: soft-light, soft-light !important;
 }
@@ -7197,7 +7206,7 @@ aside.rail nav,
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 28%, transparent 55%),
     linear-gradient(90deg, rgb(255 255 255 / 0.04), transparent 40%, rgb(255 255 255 / 0.03)),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, auto, 240px 240px !important;
   background-blend-mode: soft-light, soft-light, soft-light !important;
   border: 1px solid rgb(255 255 255 / 0.18) !important;
@@ -7259,8 +7268,8 @@ aside.rail nav,
   background-color: rgb(12 14 20 / 0.5) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 50%),
-    url("/brand/textures/hero-atmosphere-mono.jpg"),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-hero-atmosphere),
+    var(--tex-frost) !important;
   background-size: auto, cover, 280px 280px !important;
   background-blend-mode: soft-light, soft-light, soft-light !important;
   box-shadow:
@@ -7352,7 +7361,7 @@ section.composer-dock.rounded-panel,
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 28%, transparent 55%),
     linear-gradient(90deg, rgb(255 255 255 / 0.04), transparent 40%, rgb(255 255 255 / 0.03)),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-frost) !important;
   background-size: auto, auto, 240px 240px !important;
   background-blend-mode: soft-light, soft-light, soft-light !important;
   border: 1px solid rgb(255 255 255 / 0.18) !important;
@@ -7590,8 +7599,8 @@ html, body {
   background-color: rgb(14 16 22 / 0.58) !important;
   background-image:
     linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 50%),
-    url("/brand/textures/empty-well-mono.jpg"),
-    url("/brand/textures/frost-card-texture.jpg") !important;
+    var(--tex-empty-well),
+    var(--tex-frost) !important;
   background-size: auto, cover, 240px 240px !important;
   background-blend-mode: soft-light, soft-light, soft-light !important;
   border: 1px solid rgb(255 255 255 / 0.16) !important;
@@ -8469,6 +8478,14 @@ nav[aria-label="Primary"] button,
   --tex-chart-grid: url("/brand/textures/chart-grid-mono.webp");
   --tex-empty-illustration: url("/brand/textures/empty-state-illustration-mono.webp");
   --tex-og: url("/og.webp");
+  --tex-avatar-documents: url("/avatars/avatar-documents.webp");
+  --tex-avatar-research: url("/avatars/avatar-research.webp");
+  --tex-avatar-build: url("/avatars/avatar-build.webp");
+  --tex-avatar-notion: url("/avatars/avatar-notion.webp");
+  --tex-avatar-email: url("/avatars/avatar-email.webp");
+  --tex-bot-sheet: url("/avatars/bot-sheet.jpg");
+  --tex-icon-bots: url("/icons/bots.svg");
+  --tex-sidebar-gradient: url("/brand/textures/panel-noise-mono.webp");
 }
 body {
   background-image:
@@ -8525,4 +8542,139 @@ html:not(.visual-assets-ready) .command-card,
 html:not(.visual-assets-ready) .floating-composer {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+
+/* —— Pass-9 / c143: Chat layout — main-stage flex, banner width, Model above composer ——
+   Dual composers: floating dock + fixed LiveVoiceBar. md padding-bottom:2.5rem left the
+   dock under the Speak strip; header Model chip overflowed the topbar; banners min-w-0
+   squeezed. CSS-only. Keep nav z48 > composer z46. */
+.shell > .main-stage,
+.shell > .main-stage.flex-1,
+div.shell > div.main-stage {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+}
+body:has(.composer-bar.is-fixed) .main-stage {
+  padding-bottom: calc(12.5rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+@media (min-width: 768px) {
+  body:has(.composer-bar.is-fixed) .main-stage {
+    padding-bottom: calc(11.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+@media (min-width: 1024px) {
+  body:has(.floating-composer.composer-dock) .composer-bar.is-fixed .composer-bar__ask,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+  body:has(.floating-composer.composer-dock) .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed {
+    max-height: 5.25rem !important;
+  }
+  body:has(.composer-bar.is-fixed) .floating-composer.composer-dock,
+  body:has(.composer-bar.is-fixed) section.command-card.composer-dock {
+    margin-bottom: 5.75rem !important;
+    position: relative;
+    z-index: 45;
+  }
+}
+.main-stage .flex.flex-col.gap-3.rounded-panel.border.border-accent\/40,
+.main-stage .rounded-panel.border.border-accent\/40,
+.main-stage [role="alert"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: min(100%, 18rem) !important;
+  box-sizing: border-box !important;
+}
+.main-stage .flex.flex-col.gap-3.rounded-panel.border .min-w-0.flex-1,
+.main-stage .rounded-panel.border .min-w-0.flex-1 {
+  min-width: min(100%, 16rem) !important;
+  flex: 1 1 auto !important;
+}
+.topbar {
+  flex-wrap: wrap !important;
+  max-width: 100% !important;
+  overflow-x: clip !important;
+  row-gap: 0.45rem !important;
+}
+.topbar .model-chip,
+.model-chip {
+  position: relative;
+  z-index: 47 !important;
+  flex-shrink: 0 !important;
+}
+.composer-bar.is-fixed .composer-bar__model,
+.composer-bar__model {
+  position: relative;
+  z-index: 47 !important;
+}
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed,
+.shell > [data-testid="composer-bar"].composer-bar {
+  z-index: 46 !important;
+}
+nav.fixed[aria-label="Primary"],
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"] {
+  z-index: 48 !important;
+}
+.rail,
+aside.rail {
+  background-image:
+    linear-gradient(180deg, rgb(10 14 24 / 0.92), rgb(7 10 18 / 0.97)),
+    var(--tex-sidebar-gradient, var(--tex-panel-noise)) !important;
+  background-size: auto, 280px 280px !important;
+  background-blend-mode: normal, soft-light !important;
+}
+.logo-mark {
+  color: #7c5cff !important;
+}
+img[src*="avatar-documents"] { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 0 0 3px rgb(255 255 255 / 0.04); }
+img[src*="avatar-research"] { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18), 0 0 12px rgb(255 255 255 / 0.06); }
+img[src*="avatar-build"] { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22); }
+img[src*="avatar-notion"] { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12); }
+img[src*="avatar-email"] { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16); filter: grayscale(0.15) contrast(1.05); }
+
+/* Pass-9 waveform pulse — transform/opacity only */
+@keyframes pass9-wave-pulse {
+  0%, 100% { opacity: 0.45; transform: scaleY(0.55); }
+  50% { opacity: 1; transform: scaleY(1); }
+}
+.waveform > span,
+.composer-speak-live__bars i,
+.live-voice-bars i {
+  transform-origin: center bottom;
+  animation: pass9-wave-pulse 1s ease-in-out infinite;
+}
+.waveform > span:nth-child(2),
+.composer-speak-live__bars i:nth-child(2) { animation-delay: 0.08s; }
+.waveform > span:nth-child(3),
+.composer-speak-live__bars i:nth-child(3) { animation-delay: 0.16s; }
+.waveform > span:nth-child(4),
+.composer-speak-live__bars i:nth-child(4) { animation-delay: 0.24s; }
+.waveform > span:nth-child(5) { animation-delay: 0.32s; }
+@media (prefers-reduced-motion: reduce) {
+  .waveform > span,
+  .composer-speak-live__bars i,
+  .live-voice-bars i {
+    animation: none !important;
+    opacity: 0.7 !important;
+    transform: none !important;
+  }
+}
+
+/* Pass-9 input focus glow */
+.main-stage textarea:focus-visible,
+.composer-dock textarea:focus-visible,
+.floating-composer textarea:focus-visible,
+.composer-bar__ask-input:focus-visible,
+.input-glow:focus-visible {
+  outline: none !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.55),
+    0 0 0 4px rgb(255 255 255 / 0.12),
+    0 0 28px rgb(255 255 255 / 0.08) !important;
 }

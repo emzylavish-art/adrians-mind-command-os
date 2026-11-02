@@ -9,6 +9,7 @@ export async function resolveVisualAssetUrls(
   keys: string[] = VISUAL_ASSET_KEYS,
 ): Promise<Record<string, string>> {
   try {
+    // SWAP POINT: Fleet signed URLs via getAssetUrls; falls back to /<key> in acceptAssetUrl.
     return await getAssetUrls(keys);
   } catch {
     const out: Record<string, string> = {};

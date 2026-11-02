@@ -14,7 +14,15 @@ export type VisualAssetId =
   | "emptyWell"
   | "chartGrid"
   | "emptyIllustration"
-  | "og";
+  | "og"
+  | "avatarDocuments"
+  | "avatarResearch"
+  | "avatarBuild"
+  | "avatarNotion"
+  | "avatarEmail"
+  | "botSheet"
+  | "iconBots"
+  | "sidebarGradient";
 
 export type VisualAssetEntry = {
   id: VisualAssetId;
@@ -99,6 +107,53 @@ export const VISUAL_ASSET_MAP: Record<VisualAssetId, VisualAssetEntry> = {
     cssVar: "--tex-og",
     avifKey: "og.avif",
     jpgKey: "og.jpg",
+  },
+  avatarDocuments: {
+    id: "avatarDocuments",
+    key: "avatars/avatar-documents.webp",
+    cssVar: "--tex-avatar-documents",
+    jpgKey: "avatars/avatar-documents.png",
+  },
+  avatarResearch: {
+    id: "avatarResearch",
+    key: "avatars/avatar-research.webp",
+    cssVar: "--tex-avatar-research",
+    jpgKey: "avatars/avatar-research.png",
+  },
+  avatarBuild: {
+    id: "avatarBuild",
+    key: "avatars/avatar-build.webp",
+    cssVar: "--tex-avatar-build",
+    jpgKey: "avatars/avatar-build.png",
+  },
+  avatarNotion: {
+    id: "avatarNotion",
+    key: "avatars/avatar-notion.webp",
+    cssVar: "--tex-avatar-notion",
+    jpgKey: "avatars/avatar-notion.png",
+  },
+  avatarEmail: {
+    id: "avatarEmail",
+    key: "avatars/avatar-email.webp",
+    cssVar: "--tex-avatar-email",
+    jpgKey: "avatars/avatar-email.png",
+  },
+  botSheet: {
+    id: "botSheet",
+    key: "avatars/bot-sheet.jpg",
+    cssVar: "--tex-bot-sheet",
+  },
+  iconBots: {
+    id: "iconBots",
+    key: "icons/bots.svg",
+    cssVar: "--tex-icon-bots",
+  },
+  sidebarGradient: {
+    id: "sidebarGradient",
+    key: "brand/textures/panel-noise-mono.webp",
+    cssVar: "--tex-sidebar-gradient",
+    avifKey: "brand/textures/panel-noise-mono.avif",
+    jpgKey: "brand/textures/panel-noise-mono.jpg",
   },
 };
 
