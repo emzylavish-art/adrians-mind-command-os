@@ -23,6 +23,12 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+## Dashboard c71 (2026-11-03T00:13:21+01:00 WAT) — Painter c30 Notion galaxy watercolor adopt
+**Wired:** `kit.createNotionGalaxyPages` in rebuildPages (kind pigment + ink child edges); dispose via galaxyPages.dispose; tint clear restores kind pigments via update.
+**Registered:** motion c35 traveler-focus-flip test. Updated notion-pages-matte wiring test.
+**Next:** gap-feed / queue / Imagine lane wash polish.
+
 ## Dashboard c70 (2026-11-03T00:10:31+01:00 WAT) — Gap#68 RM freeze regression
 **Fix:** skip 5s soft comet sync when RM hash unchanged; gate alias soft-sync with `!reducedMotion`; skip comet setCamDistance under RM (LOD band thrash); CSS2D labelRenderer only when camera moved under RM.
 **Tests:** gap68-rm-freeze-wired + full suite.
