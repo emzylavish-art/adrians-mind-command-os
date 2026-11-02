@@ -56,6 +56,18 @@ def tool_specs(manifest):
         elif name == "team.health":
             description = "Return offline readiness for manifest entries and tool entrypoints. Does not test external services or credentials."
             schema = {"type": "object", "properties": {}, "additionalProperties": False}
+        elif name == "team.agent.resolve":
+            description = "Resolve a specialist prompt from the repository, or select by explicit capabilities. Returns prompt text and requirements; does not run model inference."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "agent_id": {"type": "string"},
+                    "task": {"type": "string"},
+                    "capabilities": {"type": "array", "items": {"type": "string"}},
+                    "context": {"type": "object"},
+                },
+                "additionalProperties": False,
+            }
         elif name == "team.queue":
             description = "Manage local SQLite durable worker jobs. Queue records payloads only; it never executes queued jobs."
             schema = {
