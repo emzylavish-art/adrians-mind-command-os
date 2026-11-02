@@ -1,8 +1,7 @@
-import io
 import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import provider_router
 
@@ -26,11 +25,7 @@ class ProviderRouterTests(unittest.TestCase):
         self.assertTrue(status["ollama"]["requires_local_service"])
 
     def test_openrouter_response_is_parsed(self):
-        response = io.BytesIO(json.dumps({
-            "choices": [{"message": {"content": "hello"}}]
-        }).encode())
-        response.__enter__ = lambda: response
-        response.__exit__ = lambda *args: None
+        response = Mock()\n        response.read.return_value = json.dumps({\n            "choices": [{"message": {"content": "hello"}}]\n        }).encode()\n        response.__enter__.return_value = response
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-token"}), patch.object(
             provider_router.urllib.request, "urlopen", return_value=response
         ):
