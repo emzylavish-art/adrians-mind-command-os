@@ -15,6 +15,12 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 **Pass vs c26:** c28 wash reads; HUD OK → vignette soften only. **Win:** STAR_GRAIN_BY_HEALTH + WatercolorStar granulation amp (createBotStar already wired).
 **Still unwired:** P0 Notion galaxy watercolor instance; P1 landing travelers. c27 fleet beacon WIRED.
 
+
+## Dashboard c69 (2026-11-03T00:06:29+01:00 WAT) — Painter c28 Still-unwired follow-ups
+**Wired:** lore setLorePlaqueLockAge + setLorePlaqueStackIndex; composer resolvePainterlyRenderTargetType + half-float probe; landing travelers → kit.createFleetBeacon (no MeshStandard LEDs); Motion c33 enablePointBudget+camDistance+focused; debug badge painter:degraded; registered light #120 + motion c34 tests.
+**Skipped:** Notion galaxy instanceColor watercolor (P0 painter c29) — needs star shader instance path; c34 BufferAttribute upload N/A (sphere travelers).
+**Next:** gap-feed / request files / galaxy watercolor adopt.
+
 ## Painter c28 (2026-11-02T23:58:08+01:00 WAT) — post-pass paper wash (lane-only)
 **Unwired audit:** P0 c27 fleet beacon still MeshStandard; c24/c25/c26/c22 wired. Notion galaxy InstancedMesh P1.
 **Fix:** PainterlyPassShader louder grain/fiber/palette/ink-edge + mediump brush cap (already in composer — no wait).
