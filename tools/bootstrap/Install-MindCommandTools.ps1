@@ -153,6 +153,7 @@ if (-not $SkipPythonPackages) {
 
 if (-not $SkipDesktopTools) {
     Write-Step "Desktop reverse-engineering and security tools"
+    # burp-suite: PortSwigger.BurpSuite.Community (Burp Suite Community Edition only)
     foreach ($package in @("ZAP.ZAP", "PortSwigger.BurpSuite.Community")) {
         Invoke-WingetInstall $package
     }
