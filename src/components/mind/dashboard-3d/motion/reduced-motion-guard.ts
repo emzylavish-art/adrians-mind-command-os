@@ -1,20 +1,20 @@
 /**
- * Motion c27 — reduced-motion guard + settle gate + lane snapshot hash.
+ * Motion c27/c28 — reduced-motion guard + settle gate + lane snapshot hash.
  *
  * Pure helpers for Dashboard Bot to wrap universe-scene rebuild / rig /
  * billboard / progressive heavy-mount paths under prefers-reduced-motion.
  * Never imports Three or scene modules.
  *
- * Hacker c27 hardenings:
- *  - hashMotionLaneSnapshot canonicalizes plain-object key order + content
- *    digests (not length), so insertion-order / length-alike collisions die.
- *  - observeReducedMotion tolerates missing matchMedia (SSR) and legacy
- *    MediaQueryList addListener/removeListener-only hosts.
- *  - settle gate + sticky heavy-spent flag survive rapid RM media flaps.
+ * Hacker c27: canonical key-order hash, SSR/legacy matchMedia, RM flap settle.
+ * Hacker c28: backwards/skewed nowMs clamp; hash size budget; dispose-safe API;
+ *             runReducedMotionGuardHarness (simulated 5s wall clock).
  */
 import { finiteOr } from "./sanitize.ts";
 
 export const REDUCED_MOTION_SETTLE_MS = 480;
+
+/** Max canonical-string characters hashed before returning an overflow digest. */
+export const HASH_MOTION_SNAPSHOT_MAX_CHARS = 65_536;
 
 export type ReducedMotionGuardOpts = {
   /** Sticky settle window after an RM edge (ms). Default REDUCED_MOTION_SETTLE_MS. */
@@ -30,11 +30,38 @@ export type ReducedMotionGuardState = {
   /** Last reduced flag seen by stepReducedMotionSettle / decision helpers. */
   lastReduced: boolean;
   primed: boolean;
+  /** Monotonic-ish last nowMs; used to detect backwards clock skew. */
+  lastNowMs: number;
+  disposed: boolean;
 };
 
 export type ReducedMotionSubscription = {
   matches: boolean;
   disconnect: () => void;
+};
+
+export type HashMotionSnapshotOpts = {
+  /** Override HASH_MOTION_SNAPSHOT_MAX_CHARS for this call. */
+  maxChars?: number;
+};
+
+export type ReducedMotionGuardHarnessOpts = {
+  durationMs?: number;
+  frameMs?: number;
+  reducedMotion?: boolean;
+  payloadAt: (tMs: number, frame: number) => unknown;
+  settleMs?: number;
+};
+
+export type ReducedMotionGuardHarnessReport = {
+  frames: number;
+  rebuildCount: number;
+  heavyCount: number;
+  finalRigT: number;
+  rebuildAtMs: number[];
+  durationMs: number;
+  frameMs: number;
+  reducedMotion: boolean;
 };
 
 type MatchMediaFn = ((query: string) => MediaQueryList | { matches: boolean }) | null | undefined;
@@ -49,76 +76,116 @@ function fnv1aHex(s: string): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
+type CanonBudget = { used: number; max: number; overflow: boolean };
+
+function pushCanon(budget: CanonBudget, chunk: string): string {
+  if (budget.overflow) return "";
+  const next = budget.used + chunk.length;
+  if (next > budget.max) {
+    budget.overflow = true;
+    return "";
+  }
+  budget.used = next;
+  return chunk;
+}
+
 /**
  * Stable canonical JSON for hashing. Plain objects get sorted keys; arrays keep
- * order; cycles become "[Circular]"; ±0 collapses to 0; NaN → "null"-like token.
+ * order; cycles become "[Circular]"; ±0 collapses to 0; NaN → token.
+ * Stops early when `budget` is exhausted.
  */
-function canonicalize(value: unknown, seen: WeakSet<object>): string {
-  if (value === null) return "null";
-  if (value === undefined) return "undefined";
+function canonicalize(value: unknown, seen: WeakSet<object>, budget: CanonBudget): string {
+  if (budget.overflow) return "";
+  if (value === null) return pushCanon(budget, "null");
+  if (value === undefined) return pushCanon(budget, "undefined");
   const t = typeof value;
   if (t === "number") {
-    if (Number.isNaN(value as number)) return "NaN";
-    // Object.is(+0,-0) is false; we want one digest for both.
-    if (value === 0) return "0";
-    if (!Number.isFinite(value as number)) return String(value);
-    return String(value);
+    if (Number.isNaN(value as number)) return pushCanon(budget, "NaN");
+    if (value === 0) return pushCanon(budget, "0");
+    if (!Number.isFinite(value as number)) return pushCanon(budget, String(value));
+    return pushCanon(budget, String(value));
   }
-  if (t === "boolean" || t === "bigint") return String(value);
-  if (t === "string") return JSON.stringify(value);
-  if (t === "symbol") return `Symbol(${String((value as symbol).description ?? "")})`;
-  if (t === "function") return `fn:${(value as { name?: string }).name ?? ""}`;
-  if (t !== "object") return JSON.stringify(String(value));
+  if (t === "boolean" || t === "bigint") return pushCanon(budget, String(value));
+  if (t === "string") return pushCanon(budget, JSON.stringify(value));
+  if (t === "symbol") return pushCanon(budget, `Symbol(${String((value as symbol).description ?? "")})`);
+  if (t === "function") return pushCanon(budget, `fn:${(value as { name?: string }).name ?? ""}`);
+  if (t !== "object") return pushCanon(budget, JSON.stringify(String(value)));
 
   const obj = value as object;
-  if (seen.has(obj)) return '"[Circular]"';
+  if (seen.has(obj)) return pushCanon(budget, '"[Circular]"');
   seen.add(obj);
 
   if (Array.isArray(value)) {
-    const parts: string[] = ["["];
+    const parts: string[] = [];
+    const open = pushCanon(budget, "[");
+    if (budget.overflow) return open;
+    parts.push(open);
     for (let i = 0; i < value.length; i++) {
-      if (i) parts.push(",");
-      parts.push(canonicalize(value[i], seen));
+      if (budget.overflow) break;
+      if (i) {
+        const c = pushCanon(budget, ",");
+        if (budget.overflow) break;
+        parts.push(c);
+      }
+      parts.push(canonicalize(value[i], seen, budget));
     }
-    parts.push("]");
+    if (!budget.overflow) parts.push(pushCanon(budget, "]"));
     return parts.join("");
   }
 
-  // Map / Set — deterministic by sorted stringified entries
   if (value instanceof Map) {
     const entries: string[] = [];
     for (const [k, v] of value) {
-      entries.push(`${canonicalize(k, seen)}:${canonicalize(v, seen)}`);
+      if (budget.overflow) break;
+      entries.push(`${canonicalize(k, seen, budget)}:${canonicalize(v, seen, budget)}`);
     }
     entries.sort();
-    return `Map{${entries.join(",")}}`;
+    return pushCanon(budget, "Map{") + (budget.overflow ? "" : entries.join(",")) + (budget.overflow ? "" : pushCanon(budget, "}"));
   }
   if (value instanceof Set) {
     const entries: string[] = [];
-    for (const v of value) entries.push(canonicalize(v, seen));
+    for (const v of value) {
+      if (budget.overflow) break;
+      entries.push(canonicalize(v, seen, budget));
+    }
     entries.sort();
-    return `Set{${entries.join(",")}}`;
+    return pushCanon(budget, "Set{") + (budget.overflow ? "" : entries.join(",")) + (budget.overflow ? "" : pushCanon(budget, "}"));
   }
 
   const rec = value as Record<string, unknown>;
   const keys = Object.keys(rec).sort();
-  const parts: string[] = ["{"];
+  const parts: string[] = [];
+  parts.push(pushCanon(budget, "{"));
   for (let i = 0; i < keys.length; i++) {
+    if (budget.overflow) break;
     const k = keys[i]!;
-    if (i) parts.push(",");
-    parts.push(JSON.stringify(k), ":", canonicalize(rec[k], seen));
+    if (i) parts.push(pushCanon(budget, ","));
+    if (budget.overflow) break;
+    parts.push(pushCanon(budget, JSON.stringify(k)));
+    if (budget.overflow) break;
+    parts.push(pushCanon(budget, ":"));
+    if (budget.overflow) break;
+    parts.push(canonicalize(rec[k], seen, budget));
   }
-  parts.push("}");
+  if (!budget.overflow) parts.push(pushCanon(budget, "}"));
   return parts.join("");
 }
 
 /**
- * Cheap, allocation-light content digest of a motion/status snapshot for
- * change detection (rebuild gate) and REA lane-side freeze asserts.
+ * Cheap content digest of a motion/status snapshot. Caps canonical size at
+ * `maxChars` (default HASH_MOTION_SNAPSHOT_MAX_CHARS) so huge payloads cannot
+ * cliff the main thread — overflow returns a stable sentinel digest.
  */
-export function hashMotionLaneSnapshot(value: unknown): string {
+export function hashMotionLaneSnapshot(value: unknown, opts?: HashMotionSnapshotOpts): string {
+  const max = Math.max(
+    64,
+    Math.floor(finiteOr(opts?.maxChars ?? HASH_MOTION_SNAPSHOT_MAX_CHARS, HASH_MOTION_SNAPSHOT_MAX_CHARS)),
+  );
   try {
-    return fnv1aHex(canonicalize(value, new WeakSet()));
+    const budget: CanonBudget = { used: 0, max, overflow: false };
+    const canon = canonicalize(value, new WeakSet(), budget);
+    if (budget.overflow) return fnv1aHex(`overflow:${max}`);
+    return fnv1aHex(canon);
   } catch {
     return fnv1aHex("throw");
   }
@@ -133,21 +200,46 @@ export function createReducedMotionGuard(opts?: ReducedMotionGuardOpts): Reduced
     settleMs,
     lastReduced: false,
     primed: false,
+    lastNowMs: 0,
+    disposed: false,
   };
+}
+
+/** Mark guard disposed — subsequent rebuild/heavy decisions deny; settle no-ops. */
+export function disposeReducedMotionGuard(guard: ReducedMotionGuardState | null | undefined): void {
+  if (!guard) return;
+  guard.disposed = true;
+}
+
+function sanitizeNowMs(nowMs: number): number {
+  // Reject NaN / ±Infinity / negatives — treat as 0 so settle math stays finite.
+  if (!Number.isFinite(nowMs) || nowMs < 0) return 0;
+  return nowMs;
 }
 
 /**
  * Track reduced-motion edges. Rising edge (false→true) opens a settle window
  * so rapid media flaps cannot re-arm heavy mount or force redundant rebuilds.
+ * Backwards nowMs clamps settleUntil so a clock rewind cannot strand settle
+ * in the far future relative to the new timeline.
  */
 export function stepReducedMotionSettle(
   guard: ReducedMotionGuardState | null | undefined,
   reducedMotion: boolean,
   nowMs: number,
 ): void {
-  if (!guard) return;
-  const now = finiteOr(nowMs, 0);
+  if (!guard || guard.disposed) return;
+  const now = sanitizeNowMs(nowMs);
   const reduced = Boolean(reducedMotion);
+
+  // Clock skew / rewind: pull settle window back onto the new timeline.
+  if (now < guard.lastNowMs) {
+    if (guard.settleUntilMs > now + guard.settleMs) {
+      guard.settleUntilMs = now + guard.settleMs;
+    }
+  }
+  guard.lastNowMs = now;
+
   if (reduced && !guard.lastReduced) {
     guard.settleUntilMs = now + guard.settleMs;
   }
@@ -155,12 +247,12 @@ export function stepReducedMotionSettle(
 }
 
 function inSettle(guard: ReducedMotionGuardState, nowMs: number): boolean {
-  return finiteOr(nowMs, 0) < guard.settleUntilMs;
+  return sanitizeNowMs(nowMs) < guard.settleUntilMs;
 }
 
 /**
  * Under reduced: allow rebuild only when `dataHash` differs from the last
- * accepted hash (or on first call). When motion is on, always allow.
+ * accepted hash (or on first call). When motion is on, always allow (unless disposed).
  * Records the hash when a rebuild is permitted.
  */
 export function shouldRebuildScene(
@@ -170,6 +262,7 @@ export function shouldRebuildScene(
   nowMs: number = 0,
 ): boolean {
   if (!guard) return true;
+  if (guard.disposed) return false;
   stepReducedMotionSettle(guard, reducedMotion, nowMs);
   const hash = typeof dataHash === "string" ? dataHash : hashMotionLaneSnapshot(dataHash);
   if (!reducedMotion) {
@@ -182,20 +275,20 @@ export function shouldRebuildScene(
     guard.primed = true;
     return true;
   }
-  // Same hash under reduced — skip, even mid-settle flap.
-  void inSettle; // settle tracked for heavy/observers; rebuild is hash-keyed
+  void inSettle;
   return false;
 }
 
 /**
- * Under reduced: permit progressive heavy mount exactly once, then sticky-block
- * (survives RM flaps during settle). When motion is on, always allow.
+ * Under reduced: permit progressive heavy mount exactly once, then sticky-block.
+ * Disposed → always deny. When motion is on and not disposed, always allow.
  */
 export function shouldMountHeavy(
   guard: ReducedMotionGuardState | null | undefined,
   reducedMotion: boolean,
 ): boolean {
   if (!guard) return true;
+  if (guard.disposed) return false;
   if (!reducedMotion) return true;
   if (guard.heavyMountedOnce) return false;
   guard.heavyMountedOnce = true;
@@ -211,6 +304,58 @@ export function snapRigProgress(
 ): void {
   if (!rig || !reducedMotion) return;
   rig.t = 1;
+}
+
+/**
+ * Lane-side harness: drive shouldRebuildScene / shouldMountHeavy / snapRigProgress
+ * over a simulated wall clock. Proves zero rebuild churn when data is stable and
+ * exactly one rebuild per real payload change under reduced motion.
+ */
+export function runReducedMotionGuardHarness(
+  opts: ReducedMotionGuardHarnessOpts,
+): ReducedMotionGuardHarnessReport {
+  const durationMs = Math.max(0, Math.floor(finiteOr(opts.durationMs ?? 5000, 5000)));
+  const frameMs = Math.max(1, Math.floor(finiteOr(opts.frameMs ?? 100, 100)));
+  const reduced = Boolean(opts.reducedMotion ?? true);
+  const guard = createReducedMotionGuard({ settleMs: opts.settleMs });
+  const rig = { t: 0 };
+  let rebuildCount = 0;
+  let heavyCount = 0;
+  const rebuildAtMs: number[] = [];
+  let frames = 0;
+  const payloadAt = typeof opts.payloadAt === "function" ? opts.payloadAt : () => null;
+
+  for (let t = 0; t <= durationMs; t += frameMs) {
+    frames++;
+    let payload: unknown;
+    try {
+      payload = payloadAt(t, frames - 1);
+    } catch {
+      payload = { __harness_payload_throw: true };
+    }
+    const hash = hashMotionLaneSnapshot(payload);
+    if (shouldRebuildScene(guard, hash, reduced, t)) {
+      rebuildCount++;
+      rebuildAtMs.push(t);
+    }
+    if (shouldMountHeavy(guard, reduced)) heavyCount++;
+    snapRigProgress(rig, reduced);
+    if (!reduced && rig.t < 1) {
+      // mimic a short ease when motion is on
+      rig.t = Math.min(1, rig.t + frameMs / 400);
+    }
+  }
+
+  return {
+    frames,
+    rebuildCount,
+    heavyCount,
+    finalRigT: rig.t,
+    rebuildAtMs,
+    durationMs,
+    frameMs,
+    reducedMotion: reduced,
+  };
 }
 
 /**

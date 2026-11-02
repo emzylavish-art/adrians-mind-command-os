@@ -380,3 +380,21 @@ tickPainterlyKit(kit, t, { dpr: renderer.getPixelRatio() });
 
 Unchanged from c20: Dashboard must adopt kit materials + `tickPainterlyKit` each frame. New for c22: pass `{ dpr }` into tick and call `setImagineNodeFocus(mat, 0|1)` when click-and-zoom focus enters/leaves an Imagine card (camera lane).
 
+
+## c23 — aspect-safe Imagine deckle under non-square maps
+
+```ts
+import { setImagineNodeMap, imagineAspectFromDims } from "./materials";
+
+// After TextureLoader:
+setImagineNodeMap(imagineMat, tex, {
+  maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+  maxAnisotropy: gl.getParameter(gl.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 1,
+});
+// uAspect set from real image dims; letterbox wash in bars; deckle follows content UV.
+// Missing/0-height → uAspect = 1 (neutral). No camera/EXIF decode in painter lane.
+```
+
+- `imagineAspectFromDims` never NaN; clamps to [1/16, 16] (1×4000 → letterbox).
+- `applyImagineSamplerSafe`: always no mipmaps + ClampToEdge + anisotropy ≤ GPU max (WebGL1 NPOT black guard).
+- Painter owns: `shaders/imagine-node.ts`, `materials/imagine-node.ts`.

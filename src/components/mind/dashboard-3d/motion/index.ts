@@ -270,14 +270,20 @@ export {
 } from "./state-prune.ts";
 
 export {
+  HASH_MOTION_SNAPSHOT_MAX_CHARS,
   REDUCED_MOTION_SETTLE_MS,
   createReducedMotionGuard,
+  disposeReducedMotionGuard,
   hashMotionLaneSnapshot,
   observeReducedMotion,
+  runReducedMotionGuardHarness,
   shouldMountHeavy,
   shouldRebuildScene,
   snapRigProgress,
   stepReducedMotionSettle,
+  type HashMotionSnapshotOpts,
+  type ReducedMotionGuardHarnessOpts,
+  type ReducedMotionGuardHarnessReport,
   type ReducedMotionGuardOpts,
   type ReducedMotionGuardState,
   type ReducedMotionSubscription,

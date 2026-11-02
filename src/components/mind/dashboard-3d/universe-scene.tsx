@@ -25,6 +25,7 @@ import {
   beginImagineNodeMapBind,
   setImagineNodeMapIfGeneration,
   setImagineNodeMapFailed,
+  setImagineNodeFocus,
   setLorePlaqueNotesCached,
   releasePainterlyMaterial,
   type PainterlyKit,
@@ -425,7 +426,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const fleetLineGroup = new THREE.Group();
     scene.add(fleetLineGroup);
 
-    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; cardPlane?: THREE.Mesh; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void };
+    type BotVis = { id: string; mesh: THREE.Mesh; glow: THREE.Sprite; label: CSS2DObject; health: Health; base: THREE.Vector3; cardPlane?: THREE.Mesh; personPlane?: THREE.Mesh; setColor?: (color: THREE.ColorRepresentation, emissiveIntensity?: number) => void };
     const botVis: BotVis[] = [];
     const botMeshes: THREE.Mesh[] = [];
     const pageIdByIndex: string[] = [];
@@ -628,7 +629,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         label.position.set(pos.x, pos.y + 0.75, pos.z);
         botGroup.add(label);
 
-        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone(), cardPlane, setColor: star.setColor });
+        botVis.push({ id: bot.id, mesh, glow, label, health: bot.health, base: pos.clone(), cardPlane, personPlane: person, setColor: star.setColor });
       }
     }
 
@@ -1928,7 +1929,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       liveExposure.apply(renderer, liveBloom ?? undefined);
 
       // Painter c11: always tick (freezes uTime under RM; also flushes throttled resizePass)
-      tickPainterlyKit(kit, t, { reducedMotion });
+      // Painter c22: Imagine card paper bevel — focus/hover → setImagineNodeFocus; kit tick eases (snaps under RM).
+      {
+        const focusId = rig.subjectId ?? null;
+        const hoverId = hoverBotId;
+        for (let bi = 0; bi < botVis.length; bi++) {
+          const n = botVis[bi]!;
+          const on = n.id === focusId || n.id === hoverId ? 1 : 0;
+          if (n.cardPlane?.material) setImagineNodeFocus(n.cardPlane.material as THREE.ShaderMaterial, on);
+          if (n.personPlane?.material) setImagineNodeFocus(n.personPlane.material as THREE.ShaderMaterial, on);
+        }
+      }
+      tickPainterlyKit(kit, t, { reducedMotion, dpr: renderer.getPixelRatio() });
       try {
         const deg = !!kit.budgetMeta?.degraded;
         const prev = (mount as HTMLElement & { __painterDegraded?: boolean }).__painterDegraded;

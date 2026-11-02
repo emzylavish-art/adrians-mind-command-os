@@ -717,3 +717,29 @@ assert(a === b);
   in package.json strip-types test list. No new deps.
 - Wire the four call-sites above in `universe-scene.tsx` (Dashboard Bot).
 - Queue row #115: Motion c27 **done** once landed.
+
+## Requests for Dashboard Bot (c28 — RM guard harness)
+
+Lane-side proof that the c27 guard cuts rebuild churn:
+
+```ts
+import { runReducedMotionGuardHarness, hashMotionLaneSnapshot } from "./motion";
+
+const report = runReducedMotionGuardHarness({
+  durationMs: 5000,
+  frameMs: 100,
+  reducedMotion: true,
+  payloadAt: (t) => ({ /* same shape you feed shouldRebuildScene */ }),
+});
+// stable payload → report.rebuildCount === 1, heavyCount === 1, finalRigT === 1
+// one mid-window change → rebuildCount === 2
+```
+
+Also: `disposeReducedMotionGuard(guard)` on UniverseScene unmount (post-dispose
+rebuild/heavy deny). `hashMotionLaneSnapshot` caps at `HASH_MOTION_SNAPSHOT_MAX_CHARS`
+(65_536) — overflow returns a stable sentinel (no main-thread cliff).
+
+### Requests (c28)
+- Register `reduced-motion-guard-harness.test.ts` (+ ensure guard.test.ts) in
+  package.json strip-types list. No new deps.
+- Queue row #116 Motion c28 **done**.
