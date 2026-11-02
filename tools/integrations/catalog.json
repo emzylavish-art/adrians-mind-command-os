@@ -107,17 +107,23 @@
       "id": "notion.controller",
       "name": "Notion controller",
       "kind": "workspace-api-integration",
-      "status": "connector-available-in-chat-only",
-      "entrypoint": null,
+      "status": "adapter-implemented",
+      "entrypoint": "tools/notion/controller.py",
       "activation": {
-        "credential": "Notion integration token stored as secret/environment variable",
-        "required_scopes": [
-          "read content",
-          "write content only for explicitly invoked operations"
+        "env": [
+          "NOTION_API_KEY"
+        ],
+        "api_version": "2022-06-28",
+        "actions": [
+          "search",
+          "retrieve-page",
+          "retrieve-children",
+          "append-text"
         ]
       },
       "live": "not-verified",
-      "notes": "Repository-native Notion API adapter not yet implemented; do not claim this repository can access the connected ChatGPT Notion connector."
+      "notes": "Requires a Notion integration token and the target page/database to be shared with that integration. append-text is explicit and mutating.",
+      "runner_tool": "notion.controller"
     },
     {
       "id": "files.rag",
