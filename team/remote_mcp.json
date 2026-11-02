@@ -1,5 +1,13 @@
 {
   "schema_version": "1.0.0",
   "description": "Named remote MCP HTTP endpoints. Enable each integration explicitly, use HTTPS, and put bearer secrets in environment variables. No endpoint is enabled by default.",
-  "servers": {}
+  "servers": {
+    "n8n-mcp": {
+      "enabled": false,
+      "url_env": "N8N_MCP_URL",
+      "token_env": "N8N_MCP_TOKEN",
+      "allowed_tools": [],
+      "notes": "Enable only after setting an HTTPS MCP endpoint and a reviewed explicit tool allowlist."
+    }
+  }
 }
