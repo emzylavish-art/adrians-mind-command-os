@@ -96,3 +96,10 @@ It does not execute model inference. Compatible hosts such as Grok, Codex, or Cl
 can use the returned prompt as their specialist instructions, then call the available
 MCP tools. An unresolved specialist returns blocked rather than receiving fabricated
 prompt content.
+
+
+## Client setup and hosted transport
+
+See [CLIENTS.md](CLIENTS.md) for MCP client configuration examples and the distinction
+between stdio and hosted HTTP transports. See [REMOTE_MCP.md](REMOTE_MCP.md) for
+container setup, authentication requirements, and hosting limitations.
