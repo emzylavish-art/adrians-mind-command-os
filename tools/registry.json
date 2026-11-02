@@ -206,7 +206,7 @@
       "team_agent": "knowledge"
     },
     {
-      "name": "Mind Command OS Durable Worker Queue",
+      "name": "Mind Command OS Durable Queue",
       "category": "durable-worker-queue",
       "status": "implemented",
       "install": "repo-code-present",
