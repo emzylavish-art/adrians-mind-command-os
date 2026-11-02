@@ -180,3 +180,11 @@ Write-Host "Claude-oriented skills/plugins may need explicit activation in the r
 Write-Host "God's Eyes and Arrow EA are excluded until their exact official projects are identified."
 Write-Host "BlackEye remains excluded because phishing/credential-harvesting deployment is not integrated."
 Write-Host "For a rerun, execute this same script again; source checkouts use fast-forward-only updates."
+
+Write-Step "Verify detected installations"
+$verificationScript = Join-Path $PSScriptRoot "Test-MindCommandTools.ps1"
+if (Test-Path -LiteralPath $verificationScript) {
+    & $verificationScript -InstallRoot $InstallRoot
+} else {
+    Write-Warn "Installation verification script was not found at $verificationScript."
+}
