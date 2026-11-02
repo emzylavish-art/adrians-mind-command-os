@@ -34,3 +34,5 @@ jobs:
         run: python tools/rea/rea.py tools/rea --json > /tmp/rea-report.json
       - name: Smoke-test router CLI
         run: echo '{"task":"inspect source","capabilities":["source_inventory"]}' | python team/router.py
+      - name: Smoke-test shared JSON runner
+        run: echo '{"operation":"invoke","tool_id":"rea.scan","input":{"path":"team"}}' | python team/runner.py
