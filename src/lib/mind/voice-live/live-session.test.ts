@@ -300,3 +300,52 @@ describe("LiveVoiceSession", () => {
     setLiveVoiceOccupied(false);
   });
 });
+
+describe("LiveVoiceSession End releases mic", () => {
+  it("end() stops mic tracks and returns phase to off (Idle)", async () => {
+    setLiveVoiceOccupied(false);
+    const { allTracksEnded } = await import("../voice/spam-guard.ts");
+    let created: FakeSocket | undefined;
+    const phases: string[] = [];
+    const tracks = [
+      {
+        readyState: "live",
+        stop() {
+          this.readyState = "ended";
+        },
+      },
+    ];
+    const session = new LiveVoiceSession(
+      { onState: (s) => phases.push(s.phase) },
+      {
+        mintSecret: async () => ({ ok: true, value: "ephemeral", expiresAt: Date.now() + 60_000 }),
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        socketFactory: () => {
+          created = new FakeSocket();
+          queueMicrotask(() => created?.openNow());
+          return created!;
+        },
+      },
+    );
+    await session.start();
+    assert.ok(phases.includes("listening") || session.isActive);
+    // Inject a live mic stand-in (skipMic path) to prove End releases tracks.
+    const fakeMic = {
+      stop() {
+        for (const t of tracks) t.stop();
+      },
+      setMuted() {},
+    };
+    (session as unknown as { mic: typeof fakeMic | null }).mic = fakeMic;
+    session.end("Live voice ended.");
+    assert.equal(session.isActive, false);
+    assert.equal(phases.at(-1), "off");
+    assert.equal(isLiveVoiceOccupied(), false);
+    assert.equal(allTracksEnded({ getTracks: () => tracks }), true);
+    assert.ok(tracks.every((t) => t.readyState === "ended"));
+  });
+});

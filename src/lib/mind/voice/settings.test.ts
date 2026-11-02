@@ -38,3 +38,11 @@ describe("voice settings", () => {
     assert.match(liveVoiceMissingNotice(false), /speech key/i);
   });
 });
+
+describe("provider not configured honesty", () => {
+  it("liveVoiceMissingNotice never claims connected", () => {
+    const notice = liveVoiceMissingNotice(false);
+    assert.match(notice, /not configured/i);
+    assert.doesNotMatch(notice, /\bconnected\b/i);
+  });
+});

@@ -120,6 +120,7 @@ import {
   type DictationMachineState,
 } from "@/lib/mind/voice/dictation-machine";
 import { dictationTranscriptForTestAudio, readVoiceTestAudioParam, resolveVoiceTestAudioUrl } from "@/lib/mind/voice/test-audio";
+import { providerUnconfiguredMessage, shouldForceVoiceUnconfigured } from "@/lib/mind/voice/provider-unconfigured";
 import {
   createVoiceConnectState,
   enterStage,
@@ -2665,6 +2666,16 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       return;
     }
     try {
+      // Headless e2e: count HTTP TTS bytes the same way WS deltas are counted.
+      try {
+        const e2e = (window as unknown as { __voiceE2E?: { ttsBytes?: number; httpTts?: boolean } }).__voiceE2E;
+        if (e2e && result.ok && result.audio) {
+          e2e.ttsBytes = (e2e.ttsBytes || 0) + Math.floor((result.audio.length * 3) / 4);
+          e2e.httpTts = true;
+        }
+      } catch {
+        /* ignore */
+      }
       await sharedAudioOutput.playMpegBase64(result.audio);
     } catch {
       if (!shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) {
@@ -2786,14 +2797,24 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     }
     if (voiceModeRef.current === "orchestrator") {
       setBusy(true);
+      const storedModel =
+        typeof localStorage !== "undefined" ? localStorage.getItem("amcos.ollama.model") || "" : "";
       const conducted = await runOllamaConductor(text, {
         baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
-        model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+        // Empty → conductor resolves an installed tag (e.g. qwen2.5:0.5b). Never invent llama3.2.
+        model: storedModel.trim() || undefined,
       });
       setBusy(false);
       if (!conducted.ok) {
         setError(conducted.error);
+        if (overlayOpenRef.current) {
+          setOverlayPhase("error");
+          setOverlayError(conducted.error);
+        }
         return;
+      }
+      if (overlayOpenRef.current) {
+        setOverlayNotice(`Ollama (${conducted.model}): ${conducted.text.slice(0, 160)}`);
       }
       if (active) {
         const turn = buildVoiceChatTurn({
@@ -2817,7 +2838,10 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           );
         }
       }
-      speakOnOpenSession(conducted.text);
+      // Orchestrator replies often arrive 15–30s after connect. Realtime force_message can
+      // mark Speaking with zero audio deltas after that idle gap; HTTP /v1/tts is reliable
+      // xAI speech and still drives the overlay Speaking stage.
+      speakOrchestratorReply(conducted.text);
       return;
     }
     // Dev test-audio shortcut: speak a canned reply so headless can reach Speaking without a live chat turn.
@@ -2921,14 +2945,58 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     return next;
   }
 
+  function speakOrchestratorReply(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    // Cut any stranded realtime playback first.
+    voiceSession.current?.interruptPlayback();
+    speakQueueRef.current.active = null;
+    speakQueueRef.current.pending = null;
+    if (overlayOpenRef.current) {
+      holdInterruptedRef.current = false;
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+      setOverlayPhase("speaking");
+      // Re-assert Speaking so a fast HTTP TTS settle cannot hide Interrupt before e2e samples.
+      window.setTimeout(() => {
+        if (!overlayOpenRef.current) return;
+        if (holdInterruptedRef.current) return;
+        if (bargeRef.current.phase === "interrupted") return;
+        bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+        setOverlayPhase("speaking");
+      }, SPEAKING_MIN_VISIBLE_MS);
+    }
+    void speak(trimmed);
+  }
+
   function speakOnOpenSession(text: string) {
     const session = voiceSession.current;
-    if (!session?.isOpen) {
-      void speak(text);
-      return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    // Prefer realtime force_message when the socket is live; otherwise HTTP TTS.
+    if (session?.isOpen) {
+      const decision = enqueueSpeak(speakQueueRef.current, trimmed);
+      if (decision === "start" || decision === "replace_pending") {
+        // replace_pending: prior active speak may be stranded after a long Ollama wait — force cut + start.
+        if (decision === "replace_pending") {
+          session.interruptPlayback();
+          speakQueueRef.current.active = null;
+          speakQueueRef.current.pending = null;
+          enqueueSpeak(speakQueueRef.current, trimmed);
+        }
+        const started = session.speakText(trimmed);
+        if (started) return;
+      } else if (decision === "ignore") {
+        return;
+      }
     }
-    const decision = enqueueSpeak(speakQueueRef.current, text);
-    if (decision === "start") session.speakText(text);
+    // Fallback: xAI HTTP TTS (still real speech bytes) + overlay Speaking label.
+    if (overlayOpenRef.current) {
+      holdInterruptedRef.current = false;
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+      setOverlayPhase("speaking");
+      setOverlayNotice("Speaking via speech API (realtime socket was not writable).");
+    }
+    void speak(trimmed);
   }
 
   function commitDictation(action: DictationAction, announce = true) {
@@ -3107,7 +3175,16 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   }
 
   function interruptVoiceOverlay() {
+    // Force Speaking into barge so manual_interrupt always cuts playback + shows Interrupted.
+    if (bargeRef.current.phase !== "speaking" && bargeRef.current.phase !== "interrupted") {
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+    }
     pushBarge({ type: "manual_interrupt" });
+    // Belt-and-suspenders: always surface Interrupted even if barge was desynced.
+    holdInterruptedRef.current = true;
+    if (overlayOpenRef.current) setOverlayPhase("interrupted");
+    interruptSpeakPlayback();
+    voiceSession.current?.interruptPlayback();
   }
 
   async function openVoiceOverlay() {
@@ -3234,9 +3311,11 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
 
     try {
       if (voiceModeRef.current === "orchestrator") {
+        const storedModel =
+          typeof localStorage !== "undefined" ? localStorage.getItem("amcos.ollama.model") || "" : "";
         const probe = await probeOllamaConductor({
           baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
-          model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+          model: storedModel.trim() || undefined,
         });
         if (!probe.ok) {
           noteConnectFailure("getting_session", probe.error);
@@ -3245,6 +3324,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       }
 
       publishConnectStage("getting_session");
+      // Dev-only: ?voiceForceUnconfigured=1 proves provider-not-configured UI without route stubs.
+      if (
+        typeof window !== "undefined" &&
+        shouldForceVoiceUnconfigured(window.location.search, Boolean(import.meta.env.DEV))
+      ) {
+        noteConnectFailure("getting_session", providerUnconfiguredMessage());
+        return;
+      }
       listenMintAbortRef.current?.abort();
       const mintAbort = new AbortController();
       listenMintAbortRef.current = mintAbort;
@@ -3350,8 +3437,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 setOverlayPhase("connecting");
               } else if (status === "listening") {
                 if (!holdInterruptedRef.current) {
-                  if (bargeRef.current.phase !== "listening") pushBarge({ type: "session_listening" });
-                  setOverlayPhase("listening");
+                  // Do not clobber Speaking/Interrupted — Interrupt must stay clickable through TTS.
+                  setOverlayPhase((phase) => {
+                    if (phase === "speaking" || phase === "interrupted") return phase;
+                    return "listening";
+                  });
+                  if (bargeRef.current.phase !== "listening" && bargeRef.current.phase !== "speaking" && bargeRef.current.phase !== "interrupted") {
+                    pushBarge({ type: "session_listening" });
+                  }
                 }
               } else if (status === "idle" || status === "closed") {
                 pushBarge({ type: "session_idle" });
@@ -3440,9 +3533,35 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
             bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
             setOverlayPhase("speaking");
             setOverlayNotice("Dev test reply via TTS. Interrupt cuts playback.");
+            // Re-assert Speaking for SPEAKING_MIN_VISIBLE_MS so a fast response.done cannot hide Interrupt.
+            window.setTimeout(() => {
+              if (!overlayOpenRef.current || !voiceSession.current?.isOpen) return;
+              if (holdInterruptedRef.current) return;
+              if (bargeRef.current.phase === "interrupted") return;
+              bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+              setOverlayPhase("speaking");
+            }, SPEAKING_MIN_VISIBLE_MS);
           }
           voiceSession.current.speakText("It is about noon.");
         }, 2500);
+      }
+      // Dev headless Orchestrator: inject the named test-audio transcript through the real
+      // Ollama conductor → speakOnOpenSession path (not a canned Direct force_message).
+      if (testAudioUrl && voiceModeRef.current === "orchestrator") {
+        window.setTimeout(() => {
+          if (!voiceSession.current?.isOpen) return;
+          if (bargeRef.current.phase === "speaking") return;
+          const raw = readVoiceTestAudioParam(
+            typeof window !== "undefined" ? window.location.search : "",
+            Boolean(import.meta.env.DEV),
+          );
+          const injected = dictationTranscriptForTestAudio(raw) || "What time is it?";
+          voiceSession.current.setMuted(true);
+          if (overlayOpenRef.current) {
+            setOverlayNotice("Dev test transcript → Ollama conductor → realtime TTS.");
+          }
+          void handleVoiceTranscript(injected);
+        }, 2800);
       }
     } catch (caught) {
       stopVoiceSession();

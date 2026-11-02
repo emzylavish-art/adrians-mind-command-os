@@ -1,41 +1,34 @@
-# Voice overlay needs from Voice Wiring
+# Voice Overlay → Wiring needs (Orchestrator TTS after long Ollama wait)
 
-Date: 2026-11-01 (Africa/Lagos)
-Lane: voice-integration
-Context: After merging `origin/preview/integration` (da3ae5f) into `voice-integration`, overlay→shared-session wiring is **blocked**. Do not fake a second `useLiveVoiceSession()` in the overlay.
+**Owner context:** Voice Integration Bot · branch `voice-integration` · 2026-11-02 (America/Chicago)
 
-## What exists today (integration + origin/voice-wiring @ c304fa3)
+## Symptom we hit
 
-- `useLiveVoiceSession()` — per-hook `LiveVoiceSession` in a React ref (`start` / `end` / `pressMic` / `toggleMute` / `sendText`). **Not a process-wide singleton.**
-- `LiveVoiceBar` owns one hook instance.
-- Occupancy (`isLiveVoiceOccupied` / `setLiveVoiceOccupied` / `LIVE_VOICE_BUSY_MESSAGE`) is a **mutex**: blocks a second mic; does **not** attach a second UI to the same session.
-- `listen({ mode: "start" | "stop" | "toggle" })` lives in `command-app.tsx` and still opens a **separate** `RealtimeVoiceSession` for the overlay/PTT path. It is **not** exported from `voice-live/`.
+In the Command OS overlay (`RealtimeVoiceSession` in `src/lib/mind/voice/`), Orchestrator mode:
 
-## Goal (Voice Integration)
+1. Realtime STT / injected `voiceTestAudio=question` transcript reaches the Ollama conductor fine.
+2. Ollama (`qwen2.5:0.5b` locally) replies in ~15–25s.
+3. Calling `speakText` → `conversation.item.create` + `force_message` marks **Speaking** locally but yields **zero** `response.output_audio.delta` / `response.audio.delta` bytes on the open realtime socket.
+4. Direct mode (force_message ~2.5s after connect) still gets realtime TTS deltas.
 
-Opening the voice-mode overlay should call the **same** live session the bottom bar uses (`listen({mode:'start'})` / shared start). Closing / End should stop that shared session. If the bar is already live, the overlay must **attach** (UI-only) — never mint a second realtime connection or hold a second mic. Keep overlay stages, Interrupt, echo guard, Retry, and chat-turn persistence.
+WS around the failed force path showed only `ping` + benign `Cancellation failed: no active response found` — no audio deltas after the long idle gap.
 
-## Missing API (please add in voice-live; Voice Integration will consume only)
+## Overlay fix (this lane — do not revert casually)
 
-1. **Shared session handle** — one `LiveVoiceSession` (or store) both `LiveVoiceBar` and the overlay can subscribe to. Options:
-   - module singleton + `getLiveVoiceSession()` / `subscribeLiveVoiceSession(listener)`, or
-   - lift `useLiveVoiceSession` to `command-app` and pass `{ state, start, end, … }` into bar + overlay.
-2. **`listen({ mode: "start" | "stop" | "toggle" })` (or documented aliases)** on that shared handle:
-   - `start`: start mic if idle; if already active, no-op / attach.
-   - `stop` / `end`: release mic and tear down once (bar + overlay both go idle).
-3. **Attach semantics** — when occupied by the bar, overlay open must subscribe to phase/level/transcript/error without calling `start()` again and without hitting `LIVE_VOICE_BUSY_MESSAGE`.
-4. **Overlay-facing phase mapping** — map live phases (`connecting` / `listening` / `thinking` / `assistant_speaking` / …) to overlay stages (`Connecting` / `Listening` / `Thinking` / `Speaking` / `Interrupted — listening` / error), including barge-in / Interrupt → interrupted-listening.
-5. **Callbacks the overlay already relies on** — user + assistant transcripts (for chat-turn save), errors, notices, mute, and a way to interrupt playback that respects the echo guard.
-6. **Occupancy contract update** — document that overlay + bar share one occupant; `isOverlayMicOpen` should mean “overlay UI open on the shared session,” not “overlay holds a second mic.”
-7. **Exports only** — if anything new is needed, export it from `src/lib/mind/voice-live/index.ts`. Voice Integration will **not** edit `voice-live/` or `live-voice-bar/`.
+Orchestrator replies now go through **xAI HTTP `/v1/tts`** via `speakOrchestratorReply` in `command-app.tsx` (still real xAI speech + overlay Speaking / Interrupt). Realtime stays capture-only for STT. Direct still uses realtime `force_message`.
 
-## What Voice Integration will do once the API lands
+## Ask for Voice Wiring (`src/lib/mind/voice-live/`)
 
-- Minimal overlay (and overlay-mount-only `command-app` touch): open → shared `listen({mode:'start'})` / start; close/End → shared stop/end; attach when already active.
-- Unit tests: overlay opens while bar live (no second session); overlay closes and releases mic when it owned the start; occupancy respected.
-- Will **not** edit `live-voice-bar/`, `voice-live/`, `styles.css`, or non-mount `command-app` regions.
+`LiveVoiceSession.speakForce` uses the same `force_message` shape **without** an HTTP fallback. Live Orchestrator turns that wait on local Ollama will likely hit the same silent-Speaking failure after a long gap.
 
-## Explicit non-fixes
+Please consider one of:
 
-- Do not call a second `useLiveVoiceSession()` from the overlay (would be a second session).
-- Do not keep overlay on `RealtimeVoiceSession` while the bar uses `LiveVoiceSession` (defeats single-mic goal).
+1. HTTP `/v1/tts` (or shared `SharedAudioOutput` MPEG path) fallback when no audio delta arrives within ~2s of `speakForce`, or
+2. A realtime keepalive / short `session.update` during the Ollama wait so `force_message` still emits PCM, or
+3. Documented guidance that Wiring Orchestrator must not rely on `force_message` after multi-second conductor latency.
+
+We did **not** edit `voice-live/` in this lane.
+
+## Evidence
+
+`/workspace/voice-test/final-e2e-2/g-orchestrator-roundtrip.*` — transcript + Ollama notice + Speaking + HTTP TTS bytes; Direct regression still green with realtime TTS bytes.

@@ -170,3 +170,92 @@ describe("RealtimeVoiceSession", () => {
     }
   });
 });
+
+type FakeOutput = SharedAudioOutput & { isPlaying: boolean };
+
+describe("RealtimeVoiceSession Speaking ↔ playback sync", () => {
+  it("keeps speaking through response.done until local playback drains", async () => {
+    let created: FakeSocket | undefined;
+    const statuses: string[] = [];
+    const pending: Array<() => void> = [];
+    const output = {
+      isPlaying: true,
+      interrupt() {
+        output.isPlaying = false;
+        while (pending.length) pending.pop()?.();
+      },
+      async playPcm16Base64() {
+        output.isPlaying = true;
+        await new Promise<void>((resolve) => {
+          pending.push(() => {
+            output.isPlaying = false;
+            resolve();
+          });
+        });
+      },
+    } as unknown as FakeOutput;
+
+    const session = new RealtimeVoiceSession(
+      { onStatus: (status) => statuses.push(status) },
+      output,
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created!;
+      },
+    );
+    await session.connect("ephemeral-test", { captureOnly: true });
+    // Pretend capture is on so settle goes to listening.
+    (session as unknown as { capturing: boolean }).capturing = true;
+
+    created!.emitMessage({ type: "response.output_audio.delta", delta: "AAAA" });
+    assert.equal(statuses.at(-1), "speaking");
+
+    created!.emitMessage({ type: "response.done" });
+    // Still speaking — playback has not finished.
+    assert.equal(statuses.at(-1), "speaking");
+
+    assert.ok(pending.length > 0);
+    pending[0]!();
+    // SPEAKING_HOLD_MS keeps Speaking briefly even after playback drains.
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(statuses.at(-1), "speaking");
+    await new Promise((r) => setTimeout(r, 1000));
+    assert.equal(statuses.at(-1), "listening");
+    session.close();
+  });
+
+  it("interrupt clears speaking wait so a later done cannot strand Speaking", async () => {
+    let created: FakeSocket | undefined;
+    const statuses: string[] = [];
+    const output = {
+      isPlaying: true,
+      interrupt() {
+        output.isPlaying = false;
+      },
+      async playPcm16Base64() {
+        await new Promise<void>(() => {
+          /* never resolves — interrupt bumps epoch */
+        });
+      },
+    } as unknown as FakeOutput;
+
+    const session = new RealtimeVoiceSession(
+      { onStatus: (status) => statuses.push(status) },
+      output,
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created!;
+      },
+    );
+    await session.connect("ephemeral-test");
+    created!.emitMessage({ type: "response.output_audio.delta", delta: "AAAA" });
+    assert.equal(statuses.at(-1), "speaking");
+    session.interruptPlayback();
+    created!.emitMessage({ type: "response.done" });
+    // After interrupt, playsInFlight is 0 and isPlaying false → listening/idle.
+    assert.ok(["listening", "idle"].includes(statuses.at(-1) || ""));
+    session.close();
+  });
+});

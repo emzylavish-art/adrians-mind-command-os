@@ -7,6 +7,8 @@ import { resolveXaiVoiceId } from "./voices.ts";
 export const REALTIME_ENDPOINT = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 export const REALTIME_MODEL = "grok-voice-latest";
 export const REALTIME_SAMPLE_RATE = 24000;
+/** Keep Speaking long enough for Interrupt to paint (headless + fast TTS). */
+export const SPEAKING_HOLD_MS = 900;
 
 export type RealtimeHandlers = {
   onTranscript?: (text: string) => void;
@@ -92,6 +94,16 @@ export class RealtimeVoiceSession {
   private testAudioUrl: string | null = null;
   private testAudioTimer: ReturnType<typeof setInterval> | null = null;
   private forceSpeak = false;
+  /** Bumped on interrupt so in-flight play finally-handlers ignore stale work. */
+  private speakEpoch = 0;
+  /** Outstanding playPcm16 promises from assistant audio deltas. */
+  private playsInFlight = 0;
+  /** response.done arrived while local playback still running. */
+  private awaitingPlaybackEnd = false;
+  /** performance.now()/Date.now() when Speaking began. */
+  private speakingStartedAt = 0;
+  /** Skip the next response.done (from response.cancel before force_message). */
+  private ignoreDoneFromCancel = false;
 
   constructor(
     handlers: RealtimeHandlers = {},
@@ -240,20 +252,72 @@ export class RealtimeVoiceSession {
     }
     if (type === "response.output_audio.delta" || type === "response.audio.delta") {
       if (msg.delta) {
-        this.handlers.onStatus?.("speaking");
-        void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE });
+        this.queueAssistantPcm(msg.delta);
       }
       return;
     }
     if (type === "response.done") {
+      if (this.ignoreDoneFromCancel) {
+        this.ignoreDoneFromCancel = false;
+        return;
+      }
       this.forceSpeak = false;
-      this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
+      // Keep Speaking until local playback actually ends (Interrupt stays visible/clickable).
+      if (this.playsInFlight > 0 || this.output.isPlaying) {
+        this.awaitingPlaybackEnd = true;
+        this.markSpeaking();
+      } else if (this.speakingStartedAt) {
+        this.awaitingPlaybackEnd = true;
+        this.settleAfterSpeaking();
+      } else {
+        this.awaitingPlaybackEnd = false;
+        this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
+      }
     }
+  }
+
+  private markSpeaking() {
+    if (!this.speakingStartedAt) this.speakingStartedAt = Date.now();
+    this.handlers.onStatus?.("speaking");
+  }
+
+  private settleAfterSpeaking() {
+    const elapsed = this.speakingStartedAt ? Date.now() - this.speakingStartedAt : SPEAKING_HOLD_MS;
+    const wait = Math.max(0, SPEAKING_HOLD_MS - elapsed);
+    const epoch = this.speakEpoch;
+    const finish = () => {
+      if (epoch !== this.speakEpoch) return;
+      if (this.playsInFlight > 0 || this.output.isPlaying) return;
+      this.awaitingPlaybackEnd = false;
+      this.speakingStartedAt = 0;
+      if (this.open) this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
+    };
+    if (wait === 0) finish();
+    else setTimeout(finish, wait);
+  }
+
+  /** Start Speaking when PCM playback is queued; leave Speaking only after response.done + drain + hold. */
+  private queueAssistantPcm(deltaB64: string) {
+    const epoch = this.speakEpoch;
+    this.markSpeaking();
+    this.playsInFlight += 1;
+    void this.output.playPcm16Base64(deltaB64, { sampleRate: REALTIME_SAMPLE_RATE }).finally(() => {
+      if (epoch !== this.speakEpoch) return;
+      this.playsInFlight = Math.max(0, this.playsInFlight - 1);
+      // Do not leave Speaking between chunks — only after response.done requested settle.
+      if (this.playsInFlight === 0 && this.awaitingPlaybackEnd && !this.output.isPlaying) {
+        this.settleAfterSpeaking();
+      }
+    });
   }
 
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback() {
     this.forceSpeak = false;
+    this.speakEpoch += 1;
+    this.playsInFlight = 0;
+    this.awaitingPlaybackEnd = false;
+    this.speakingStartedAt = 0;
     this.output.interrupt();
     this.send({ type: "response.cancel" });
   }
@@ -380,15 +444,31 @@ export class RealtimeVoiceSession {
     this.handlers.onStatus?.("idle");
   }
 
-  /** Speak assistant text through the shared realtime → SharedAudioOutput path. */
-  speakText(text: string) {
+  /** Speak assistant text through the shared realtime → SharedAudioOutput path.
+   *  Returns false when the socket cannot accept the force_message (caller may fall back). */
+  speakText(text: string): boolean {
     const trimmed = text.trim();
-    if (!trimmed || !this.open) return;
+    if (!trimmed || !this.open) return false;
+    if (!this.ws || this.ws.readyState !== 1) {
+      this.handlers.onError?.("Voice realtime socket is not open. Nothing was spoken over realtime.");
+      return false;
+    }
     if (this.testAudioTimer) {
       clearInterval(this.testAudioTimer);
       this.testAudioTimer = null;
     }
     this.forceSpeak = true;
+    this.speakEpoch += 1;
+    this.playsInFlight = 0;
+    this.awaitingPlaybackEnd = false;
+    this.speakingStartedAt = 0;
+    // Only ignore response.done briefly so a cancel-with-no-active-response cannot
+    // swallow the real force_message completion (and we still expect audio deltas).
+    this.ignoreDoneFromCancel = true;
+    const clearIgnore = globalThis.setTimeout(() => {
+      this.ignoreDoneFromCancel = false;
+    }, 400);
+    void clearIgnore;
     this.output.interrupt();
     this.send({ type: "response.cancel" });
     this.send({
@@ -400,7 +480,8 @@ export class RealtimeVoiceSession {
         content: [{ type: "output_text", text: trimmed.slice(0, 500) }],
       },
     });
-    this.handlers.onStatus?.("speaking");
+    this.markSpeaking();
+    return true;
   }
 
   close() {
