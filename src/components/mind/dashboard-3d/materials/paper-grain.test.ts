@@ -21,6 +21,8 @@ import {
   sanitizeLoreNotes,
   LORE_MAX_NOTES,
   LORE_MAX_CHARS_PER_NOTE,
+  LORE_ATLAS_MIN,
+  LORE_ATLAS_DEFAULT,
 } from "./lore-plaque.ts";
 import {
   createPainterlyKit,
@@ -116,6 +118,12 @@ import {
   painterlyAmountFromHealth,
   setPainterlyPassHealth,
   setPainterlyPassAmount,
+  setPainterlyPassFiber,
+  sanitizePainterlyPassUniforms,
+  painterlyFiberFromAmount,
+  PAINTER_FIBER_DEFAULT,
+  PAINTER_FIBER_MIN,
+  PAINTER_FIBER_MAX,
   painterlyPassResizeStats,
   PAINTER_PASS_MAX_EDGE,
   PAINTER_PASS_MAX_DPR,
@@ -801,7 +809,7 @@ describe("painter c6: post-pass amount from constellation health", () => {
 
   it("PainterlyPassShader still exposes amount/grain/wash; version bumped", () => {
     assert.ok(PainterlyPassShader.uniforms.amount);
-    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.[678]/);
+    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.[6789]/);
     assert.equal(PAINTER_SHADER_PRECISION, "mediump");
   });
 });
@@ -1614,7 +1622,7 @@ describe("hacker pass c13: invalid star colors + compile fallback + mediump wrap
 
   it("paintWrap GLSL clamps large coords (mediump banding guard present)", () => {
     assert.match(GLSL_HASH_NOISE, /clamp\(p,\s*-1\.0e4,\s*1\.0e4\)/);
-    assert.equal(PAINTER_SHADER_VERSION, "painter-1.8.0");
+    assert.equal(PAINTER_SHADER_VERSION, "painter-1.9.0");
   });
 });
 
@@ -1825,5 +1833,81 @@ describe("hacker pass c15: star granulation mediump + health pigment", () => {
       Math.abs((idleStar.meshMaterial.uniforms["uGrain"]!.value as number) - STAR_GRAIN_BY_HEALTH.idle) < 1e-6,
     );
     disposePainterlyKit(kit);
+  });
+});
+
+describe("hacker pass c16: NaN pass uniforms + empty lore atlas growth + fiber", () => {
+  it("tickPainterlyPass / sanitizePainterlyPassUniforms repair NaN amount/grain/wash/fiber", () => {
+    const pass = createPainterlyPass({ amount: 0.4 });
+    pass.uniforms["amount"]!.value = NaN;
+    pass.uniforms["grain"]!.value = Infinity;
+    pass.uniforms["wash"]!.value = -Infinity;
+    if (pass.uniforms["fiber"]) pass.uniforms["fiber"].value = NaN;
+    const repaired = sanitizePainterlyPassUniforms(pass);
+    assert.ok(repaired >= 3);
+    assert.ok(Number.isFinite(pass.uniforms["amount"]!.value as number));
+    assert.ok(Number.isFinite(pass.uniforms["grain"]!.value as number));
+    assert.ok(Number.isFinite(pass.uniforms["wash"]!.value as number));
+    assert.ok(Number.isFinite(pass.uniforms["fiber"]!.value as number));
+    // tick also scrubs
+    pass.uniforms["amount"]!.value = NaN;
+    tickPainterlyPass(pass, 12);
+    assert.ok(Number.isFinite(pass.uniforms["amount"]!.value as number));
+    assert.ok(Number.isFinite(pass.uniforms["time"]!.value as number));
+    disposePainterlyPass(pass);
+  });
+
+  it("safePainterlyPassSize(0,0) stays min edge; huge dt time sanitizes", () => {
+    const z = safePainterlyPassSize(0, 0, 1);
+    assert.equal(z.drawingWidth, 1);
+    assert.equal(z.drawingHeight, 1);
+    const pass = createPainterlyPass({});
+    tickPainterlyPass(pass, 1e12); // hidden-tab resume huge clock
+    assert.ok((pass.uniforms["time"]!.value as number) < PAINTER_TIME_PERIOD);
+    assert.ok((pass.uniforms["time"]!.value as number) >= 0);
+    disposePainterlyPass(pass);
+  });
+
+  it("empty lore atlases use LORE_ATLAS_MIN (fleet growth), filled keep default", () => {
+    const empty = createLoreTextAtlas("", {});
+    assert.equal(empty.empty, true);
+    assert.equal(empty.width, LORE_ATLAS_MIN);
+    assert.equal(empty.height, LORE_ATLAS_MIN);
+    empty.dispose();
+    const filled = createLoreTextAtlas(["lock claimed painter lane"], {});
+    assert.equal(filled.empty, false);
+    assert.equal(filled.width, LORE_ATLAS_DEFAULT);
+    filled.dispose();
+    // Many empties stay tiny — soft growth check
+    const many = [];
+    for (let i = 0; i < 48; i++) many.push(createLoreTextAtlas(null, { seed: i }));
+    const bytes = many.reduce((s, a) => s + a.width * a.height * 4, 0);
+    assert.ok(bytes < 48 * LORE_ATLAS_DEFAULT * LORE_ATLAS_DEFAULT * 4);
+    assert.ok(bytes <= 48 * LORE_ATLAS_MIN * LORE_ATLAS_MIN * 4);
+    for (const a of many) a.dispose();
+  });
+});
+
+describe("painter c16: paper-grain fiber direction in post-pass", () => {
+  it("PainterlyPassShader exposes fiber + paintWrap anisotropic grain", () => {
+    assert.match(PainterlyPassShader.fragmentShader, /uniform float fiber/);
+    assert.match(PainterlyPassShader.fragmentShader, /paintWrap\(fUv\)/);
+    assert.match(PainterlyPassShader.fragmentShader, /dot\(uv \* 56\.0, dir\)/);
+    assert.ok(PainterlyPassShader.uniforms.fiber);
+  });
+
+  it("setPassHealth drives fiber from real amount; setFiber locks", () => {
+    assert.ok(painterlyFiberFromAmount(PAINTER_AMOUNT_MAX) > painterlyFiberFromAmount(PAINTER_AMOUNT_MIN));
+    const pass = createPainterlyPass({ amount: 0.2 });
+    const low = setPainterlyPassHealth(pass, { healthy: 0, total: 10 });
+    const fiberLow = pass.uniforms["fiber"]!.value as number;
+    const high = setPainterlyPassHealth(pass, { healthy: 10, total: 10 });
+    const fiberHigh = pass.uniforms["fiber"]!.value as number;
+    assert.ok(high > low);
+    assert.ok(fiberHigh > fiberLow);
+    setPainterlyPassFiber(pass, 0.5);
+    setPainterlyPassAmount(pass, 0.8);
+    assert.ok(Math.abs((pass.uniforms["fiber"]!.value as number) - 0.5) < 1e-6);
+    disposePainterlyPass(pass);
   });
 });

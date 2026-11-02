@@ -198,9 +198,13 @@ export function createLoreTextAtlas(
   notes: unknown,
   opts: LoreTextAtlasOptions = {},
 ): LoreTextAtlas {
-  const width = sanitizeAtlasEdge(opts.width ?? LORE_ATLAS_DEFAULT, LORE_ATLAS_DEFAULT, opts.maxTextureSize);
-  const height = sanitizeAtlasEdge(opts.height ?? LORE_ATLAS_DEFAULT, LORE_ATLAS_DEFAULT, opts.maxTextureSize);
   const sanitized = sanitizeLoreNotes(notes, opts.maxNotes, opts.maxChars);
+  // HACKER (c16): empty lock-note plaques must not allocate full 512^2 atlases per bot
+  // (48 bots × 1MiB ≈ OOM / overBudget storm). Prefer min edge unless caller overrides.
+  const empty = sanitized.notes.length === 0;
+  const defaultEdge = empty && opts.width == null && opts.height == null ? LORE_ATLAS_MIN : LORE_ATLAS_DEFAULT;
+  const width = sanitizeAtlasEdge(opts.width ?? defaultEdge, defaultEdge, opts.maxTextureSize);
+  const height = sanitizeAtlasEdge(opts.height ?? defaultEdge, defaultEdge, opts.maxTextureSize);
   const seed = Number.isFinite(opts.seed) ? (opts.seed as number) : 3;
   const inkCss = typeof opts.inkCss === "string" && opts.inkCss ? opts.inkCss : "rgba(230,236,248,0.92)";
   const accentCss = typeof opts.accentCss === "string" && opts.accentCss ? opts.accentCss : "rgba(125,200,255,0.35)";
