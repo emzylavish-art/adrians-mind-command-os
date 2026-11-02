@@ -40,6 +40,25 @@ def invoke(tool_id, payload, manifest):
             limitations=[f"Tool status is {tool.get('status')}; invocation is disabled."],
         )
 
+    if tool_id == "team.health":
+        command = [sys.executable, str(ROOT / "team" / "health.py"), "--json"]
+        try:
+            completed = subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True,
+                timeout=int(payload.get("timeout_seconds", 30)), check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Health check invocation failed: {exc}"])
+        try:
+            report = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope("blocked", result=completed.stdout,
+                            evidence=["team/health.py"],
+                            limitations=[completed.stderr.strip() or "Health check returned non-JSON output."])
+        status = "ready" if completed.returncode == 0 and report.get("status") == "ok" else "partial"
+        return envelope(status, report, ["team/health.py"],
+                        ["Offline status and entrypoint checks only; external services are not probed."])
+
     adapters = {
         "rea.scan": ROOT / "tools" / "rea" / "rea.py",
         "security.scan": ROOT / "tools" / "security_review" / "security_review.py",
