@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -34,6 +35,7 @@ class MCPServerTests(unittest.TestCase):
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("knowledge.search", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
 
     def test_call_rea_scan(self):
@@ -95,6 +97,20 @@ class MCPServerTests(unittest.TestCase):
         result = json.loads(responses[0]["result"]["content"][0]["text"])
         self.assertEqual(result["status"], "ready")
         self.assertIsInstance(result["result"]["results"], list)
+
+    def test_queue_enqueue_via_mcp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = str(Path(tmp) / "queue.sqlite3")
+            responses = rpc([{
+                "jsonrpc": "2.0", "id": 12, "method": "tools/call",
+                "params": {"name": "team.queue", "arguments": {
+                    "operation": "enqueue", "db": db, "task": "MCP queue test",
+                    "payload": {"intent": "verify"},
+                }},
+            }])
+            result = json.loads(responses[0]["result"]["content"][0]["text"])
+            self.assertEqual(result["status"], "ready")
+            self.assertEqual(result["result"]["status"], "queued")
 
     def test_unavailable_tool_is_error_not_simulated(self):
         responses = rpc([{
