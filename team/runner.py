@@ -40,6 +40,45 @@ def invoke(tool_id, payload, manifest):
             limitations=[f"Tool status is {tool.get('status')}; invocation is disabled."],
         )
 
+    if tool_id == "notion.controller":
+        action = payload.get("action")
+        if action not in {"search", "retrieve-page", "retrieve-children", "append-text"}:
+            return envelope("blocked", limitations=["Notion action must be search, retrieve-page, retrieve-children, or append-text."])
+        command = [sys.executable, str(ROOT / "tools" / "notion" / "controller.py"), action,
+                   "--timeout", str(payload.get("timeout_seconds", 30))]
+        if action == "search":
+            query = payload.get("query")
+            if not isinstance(query, str) or not query.strip():
+                return envelope("blocked", limitations=["Notion search requires a non-empty query."])
+            command.extend(["--query", query])
+        else:
+            page_id = payload.get("id")
+            if not isinstance(page_id, str) or not page_id.strip():
+                return envelope("blocked", limitations=["Notion action requires an id."])
+            command.extend(["--id", page_id])
+            if action in {"retrieve-children"}:
+                command.extend(["--page-size", str(payload.get("page_size", 100))])
+            if action == "append-text":
+                text = payload.get("text")
+                if not isinstance(text, str) or not text.strip():
+                    return envelope("blocked", limitations=["append-text requires non-empty text."])
+                command.extend(["--text", text])
+        try:
+            completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True,
+                                       timeout=int(payload.get("timeout_seconds", 30)) + 5, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Notion invocation failed: {type(exc).__name__}."])
+        output = completed.stdout or completed.stderr
+        try:
+            result = json.loads(output)
+        except json.JSONDecodeError:
+            return envelope("blocked", limitations=["Notion controller returned invalid JSON."])
+        if completed.returncode != 0 or "error" in result:
+            return envelope("blocked", result=result, evidence=["tools/notion/controller.py"],
+                            limitations=["Notion request was not successful. Check token permissions and integration sharing."])
+        return envelope("ready", result, ["tools/notion/controller.py"],
+                        ["Notion access requires NOTION_API_KEY and page/database sharing. append-text is a write operation and only runs when explicitly requested."])
+
     if tool_id == "model.generate":
         provider = payload.get("provider")
         prompt = payload.get("prompt")
