@@ -85,7 +85,6 @@ import {
   createCometLaunchState,
   createCometLaunchSample,
   reconcileCometLaunch,
-  cometHeadSize,
   stepCometLaunchEase,
   createTravelerEaseState,
   createTravelerEaseSample,
@@ -93,11 +92,18 @@ import {
   stepTravelerTrails,
   pauseTraveler,
   resumeTraveler,
+  createReducedMotionGuard,
+  disposeReducedMotionGuard,
+  hashMotionLaneSnapshot,
+  shouldMountHeavy,
+  shouldRebuildScene,
+  snapRigProgress,
+  stepReducedMotionSettle,
   type TravelerEaseState,
   type TravelerEaseSample,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
-import { createCommitComets, syncCommitComets, createDustField } from "./particles";
+import { createCommitComets, syncCommitComets, createDustField, applyCometLaunchSamples } from "./particles";
 import { createFeedGlyphs } from "./feed-glyphs";
 import { createCityLayer } from "./city/city-layer";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -372,6 +378,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     // Sky dome with painterly nebula
     let kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 }, kitScope: "dashboard", disposePriorLive: true });
+    const rmGuard = createReducedMotionGuard();
     let sceneAlive = true;
     let atm: HealthAtmosphereHandle | null = null;
     try {
@@ -526,7 +533,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         const color = HEALTH_COLOR[bot.health];
         // Painter c7/c15: watercolor core + glow; health already on createBotStar.
-        const star = kit.createBotStar({ color, idle: bot.health === "idle", health: bot.health });
+        const star = kit.createBotStar({ color, idle: bot.health === "idle", health: bot.health, matte: bot.health === "idle" ? 0.95 : 0.85 });
         const mesh = new THREE.Mesh(sphereGeo, star.meshMaterial);
         mesh.position.copy(pos);
         mesh.userData.botId = bot.id;
@@ -1187,7 +1194,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     };
     const scheduleHeavy = () => {
-      // c59 / Motion c26: under reduced motion mount everything in one step (no late canvas churn).
+      // Motion c27: under RM mount heavy exactly once (sticky).
+      if (!shouldMountHeavy(rmGuard, reducedMotion)) return;
       if (reducedMotion) {
         mountHeavyLayers();
         return;
@@ -1689,9 +1697,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
 
       if (rig.t < 1) {
+        // Motion c27: snapRigProgress forces t=1 under RM (instant camera).
+        snapRigProgress(rig, reducedMotion);
         if (reducedMotion) {
-          // c59 / Motion c26: snap — multi-frame ease changes every mesh projection under RM.
-          rig = { ...rig, t: 1 };
           applyPose(rig.to.position, rig.to.lookAt);
         } else {
           const stepped = stepRigSmooth(rig, dt, 1.35);
@@ -1897,28 +1905,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city?.tick(wallT, reducedMotion);
       dust?.update(wallT, reducedMotion);
       if (comets) {
-      comets.update(wallT, reducedMotion);
-      stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
-      for (let ci = 0; ci < comets.count; ci++) {
-        const sample = cometLaunchSamples[ci];
-        if (!sample) continue;
-        const line = comets.group.getObjectByName(`motion-comet-${ci}`);
-        const head = comets.group.getObjectByName(`motion-comet-head-${ci}`);
-        if (line) {
-          line.visible = sample.visible || reducedMotion;
-          const mat = (line as THREE.Line).material as THREE.LineBasicMaterial;
-          if (mat && "opacity" in mat) mat.opacity = (reducedMotion ? 0.22 : 0.55) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
-        }
-        if (head) {
-          head.visible = sample.visible || reducedMotion;
-          const mat = (head as THREE.Points).material as THREE.PointsMaterial;
-          if (mat && "opacity" in mat) {
-            mat.opacity = (reducedMotion ? 0.35 : 0.95) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
-            const base = typeof head.userData.baseSize === "number" ? head.userData.baseSize : (mat.size || 0.2);
-            mat.size = cometHeadSize(base, sample, reducedMotion);
-          }
-        }
-      }
+        comets.update(wallT, reducedMotion);
+        stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
+        // Motion c24 / queue #108: cached lines/heads — no per-frame getObjectByName thrash.
+        applyCometLaunchSamples(comets, cometLaunchSamples, reducedMotion);
       }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
@@ -2172,9 +2162,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       if (now - sync > 5000) {
         sync = now;
-        // c59: skip dispose/recreate thrash when status signature unchanged (all modes).
+        // c59 signature + Motion c27 RM guard (skip rebuild under RM when hash unchanged).
         const nextSig = dashboardSceneSyncSignature(dataRef.current);
-        if (nextSig !== lastSceneSyncSig) {
+        const dataHash = hashMotionLaneSnapshot({
+          sig: nextSig,
+          focusId: rig.subjectId ?? null,
+        });
+        stepReducedMotionSettle(rmGuard, reducedMotion, now);
+        if (!shouldRebuildScene(rmGuard, dataHash, reducedMotion, now)) {
+          if (comets) {
+            comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
+            reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
+          }
+        } else if (nextSig !== lastSceneSyncSig) {
           lastSceneSyncSig = nextSig;
           rebuildAll();
           syncCity();
@@ -2392,6 +2392,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         releasePainterlyMaterial(kit, sunStar.meshMaterial);
         sunStar.glowMaterial.dispose();
       } catch { /* */ }
+      disposeReducedMotionGuard(rmGuard);
       disposePainterlyKit(kit);
       while (ownedPortraitTextures.length) {
         const tex = ownedPortraitTextures.pop()!;
