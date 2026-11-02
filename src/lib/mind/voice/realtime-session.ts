@@ -444,10 +444,15 @@ export class RealtimeVoiceSession {
     this.handlers.onStatus?.("idle");
   }
 
-  /** Speak assistant text through the shared realtime → SharedAudioOutput path. */
-  speakText(text: string) {
+  /** Speak assistant text through the shared realtime → SharedAudioOutput path.
+   *  Returns false when the socket cannot accept the force_message (caller may fall back). */
+  speakText(text: string): boolean {
     const trimmed = text.trim();
-    if (!trimmed || !this.open) return;
+    if (!trimmed || !this.open) return false;
+    if (!this.ws || this.ws.readyState !== 1) {
+      this.handlers.onError?.("Voice realtime socket is not open. Nothing was spoken over realtime.");
+      return false;
+    }
     if (this.testAudioTimer) {
       clearInterval(this.testAudioTimer);
       this.testAudioTimer = null;
@@ -457,7 +462,13 @@ export class RealtimeVoiceSession {
     this.playsInFlight = 0;
     this.awaitingPlaybackEnd = false;
     this.speakingStartedAt = 0;
+    // Only ignore response.done briefly so a cancel-with-no-active-response cannot
+    // swallow the real force_message completion (and we still expect audio deltas).
     this.ignoreDoneFromCancel = true;
+    const clearIgnore = globalThis.setTimeout(() => {
+      this.ignoreDoneFromCancel = false;
+    }, 400);
+    void clearIgnore;
     this.output.interrupt();
     this.send({ type: "response.cancel" });
     this.send({
@@ -470,6 +481,7 @@ export class RealtimeVoiceSession {
       },
     });
     this.markSpeaking();
+    return true;
   }
 
   close() {

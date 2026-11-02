@@ -93,3 +93,42 @@ describe("ollama conductor", () => {
     if (!result.ok) assert.match(result.error, /not allowed|localhost/i);
   });
 });
+
+describe("resolveOllamaModel", () => {
+  it("returns an explicit model without calling tags", async () => {
+    let called = false;
+    const { resolveOllamaModel } = await import("./ollama-conductor.ts");
+    const model = await resolveOllamaModel({
+      model: "explicit-model",
+      fetchImpl: async () => {
+        called = true;
+        return new Response("{}", { status: 200 });
+      },
+    });
+    assert.equal(model, "explicit-model");
+    assert.equal(called, false);
+  });
+
+  it("picks an installed tag when DEFAULT_OLLAMA_MODEL is missing", async () => {
+    const { resolveOllamaModel, FALLBACK_OLLAMA_MODEL } = await import("./ollama-conductor.ts");
+    const model = await resolveOllamaModel({
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ models: [{ name: "qwen2.5:0.5b" }, { name: "other:latest" }] }), {
+          status: 200,
+        }),
+    });
+    assert.equal(model, "qwen2.5:0.5b");
+    assert.equal(FALLBACK_OLLAMA_MODEL, "qwen2.5:0.5b");
+  });
+
+  it("prefers llama3.2 when it is installed", async () => {
+    const { resolveOllamaModel } = await import("./ollama-conductor.ts");
+    const model = await resolveOllamaModel({
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ models: [{ name: "qwen2.5:0.5b" }, { name: "llama3.2:latest" }] }), {
+          status: 200,
+        }),
+    });
+    assert.equal(model, "llama3.2:latest");
+  });
+});
