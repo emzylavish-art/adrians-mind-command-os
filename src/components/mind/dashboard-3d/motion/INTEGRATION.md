@@ -785,3 +785,16 @@ resampled arc (no pop).
 ### Requests (c31)
 - Register `particles/comet-seg-lod.test.ts` in package.json strip-types list.
 - Queue row #120 Motion c31 **done**.
+
+## Requests for Dashboard Bot (c32 — glow scale cap)
+
+Painter c26: additive glow saturated watercolor stars. Motion-side only:
+- `GLOW_BASE` 2.0 → **1.25** (`star-pulse.ts`)
+- `out.glow` (→ `n.glow.scale`) hard-capped at **`GLOW_SCALE_CAP` = 1.45** via `clampGlowScale`
+  after pulse + `applyFocusPulse` (star-batch also clamps).
+
+No universe-scene edit. Pulse / breathe / focus multipliers still apply inside the cap.
+
+### Requests (c32)
+- Register `motion/glow-scale-cap.test.ts` in package.json strip-types list.
+- Queue row for Motion c32 **done**.

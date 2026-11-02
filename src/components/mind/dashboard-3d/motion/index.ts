@@ -11,6 +11,9 @@ export {
   normalizePulseHealth,
   pulsePhaseFromId,
   sampleStarPulse,
+  GLOW_BASE,
+  GLOW_SCALE_CAP,
+  clampGlowScale,
   type PulseHealth,
   type PulseSample,
 } from "./star-pulse.ts";
