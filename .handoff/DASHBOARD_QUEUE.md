@@ -52,7 +52,7 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 | Gap | Rank | Action |
 |-----|------|--------|
 | #26 ink-edge `nhopVisibleIds` TDZ crash | **P0 — fixed c41** | Hoist filter sets before apply; `edge-visibility` helper + regression tests |
-| #27 Filters toggle under Notion Mirror (1280×800) | **P1 next** | Reposition toggle to skybar/toolbar; z-order in dashboard-3d.css |
+| #27 Filters toggle under Notion Mirror (1280×800) | **done c66** | Docked under skybar right (z16); clear of Mirror left |
 | #28 Status API ~1s / 214KB / serial blocking | **P2** | Server-side short TTL + single-flight; lazy timeline/notionGraph (dashboard lane) |
 | #29 Status leaks `/workspace` paths + raw notes; non-GET 200 | **P1 security** | Redact paths/raw; 405 non-GET before public deploy |
 | Motion tip `a65cd9a` | note | Touches `package.json` outside lane — land **motion/ only**; add any needed test script entries in dashboard lane after review (no new runtime deps unless essential) |
@@ -201,6 +201,9 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 4. Report at least every **two** upgrades.
 
 ## Next researched (tail — keep non-empty)
+
+- **Notion page galaxy watercolor (Painter follow-up)** — replace InstancedMesh MeshStandard Notion stars with painter pigment when lane ships instance-safe API.
+- **Light #120 postfx VRAM ledger** — wire meter badge when Light lands `postfxVramBytes()`.
 
 - **City night-shift windows wired (Dashboard)** — apply `nightShiftFloors` from real lock claimed_at/released_at in city layer (queue researched item); register night-shift.test.ts (c64 registered).
 

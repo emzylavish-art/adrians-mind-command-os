@@ -904,8 +904,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       rebuildPages(status);
       rebuildNebulae(status);
       if (status.fleetPlan) {
-        rebuildLandingPaths(landingGroup, status.fleetPlan);
-        rebuildQueueRoad(queueGroup, status.fleetPlan);
+        rebuildLandingPaths(landingGroup, status.fleetPlan, kit);
+        rebuildQueueRoad(queueGroup, status.fleetPlan, kit);
         rebuildFleetLaneLines(fleetLineGroup, status.fleetPlan, (id) => {
           if (id === "grok-build") return sunMesh.position.clone();
           const v = botVis.find((b) => b.id === id);
