@@ -35,3 +35,16 @@ the declared tool contract. The MCP server is launched with
 payloads are not executed by the queue itself. External model providers,
 browser runtimes, remote knowledge stores, and unresolved tools are not
 represented as connected merely because they appear in the manifest.
+
+
+## Windows 11 tool installation
+
+Download this private repository as a ZIP, extract it, and double-click
+`INSTALL-MIND-COMMAND-TOOLS.cmd`. It launches the PowerShell bootstrap in
+`tools/bootstrap/Install-MindCommandTools.ps1`.
+
+The bootstrap installs the safe source-verified tools listed in
+`tools/bootstrap/upstream-sources.json` under your Windows user profile.
+It does not configure provider keys or modify Codex/Claude settings. God's Eyes
+and Arrow EA remain uninstalled until their exact official projects are confirmed.
+BlackEye is excluded.
