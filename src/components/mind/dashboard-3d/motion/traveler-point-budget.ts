@@ -137,8 +137,13 @@ export function allocateTravelerPointBudgets(
     wants.push(Math.min(full, withSpeed));
   }
 
-  // If focused alone overflow, scale focused down proportionally (still ≥ MIN when full≥MIN).
+  // If focused alone overflow, scale focused down proportionally (still ≥ MIN when
+  // full≥MIN and cap>0). c35: cap===0 → hard park (0), never MIN-escape under focus.
   if (reserved > cap) {
+    if (cap === 0) {
+      for (let i = 0; i < wants.length; i++) wants[i] = 0;
+      return wants;
+    }
     const scale = cap / reserved;
     for (let i = 0; i < wants.length; i++) {
       const tr = trails[i];

@@ -1,5 +1,5 @@
 /**
- * Landing-trail batch step (Cosmos Motion Bot c21; c33 point budget; c34 upload throttle).
+ * Landing-trail batch step (Cosmos Motion Bot c21; c33–c35 point budget / throttle / focus-flip).
  *
  * One call per frame for all landing travelers: applies an optional scene-wide hold
  * (panel open / flyover / focus) through the c21 churn-safe pause/resume, steps each
@@ -57,6 +57,10 @@ export type TravelerTrail = {
   _lastBudgetSig?: number;
   /** c34: cached pts ref passed to ease (avoid slice alloc on skip). */
   _stepPtsRef?: ReadonlyArray<Readonly<TravelerXyz>>;
+  /** c35: Dashboard marks true after mesh dispose — step skips safely. */
+  disposed?: boolean;
+  /** c35: previous focused latch for edge-forced dirty resample. */
+  _wasFocused?: boolean;
 };
 
 export type TravelerTrailsOpts = {
@@ -164,7 +168,7 @@ export function stepTravelerTrails(
 
   for (let i = 0; i < n; i++) {
     const tr = trails[i];
-    if (!tr || !tr.ease || !tr.sample) continue;
+    if (!tr || tr.disposed === true || !tr.ease || !tr.sample) continue;
     if (hold) {
       if (!tr.ease.paused) {
         pauseTraveler(tr.ease);
@@ -185,6 +189,7 @@ export function stepTravelerTrails(
         tr._lastBudgetSig = -1;
         tr._lastMappedT = undefined;
         tr._stepPtsRef = undefined;
+        tr._wasFocused = undefined;
         tr.pointsDirty = true;
       }
       pts = tr.points ?? EMPTY_PTS;
@@ -196,6 +201,16 @@ export function stepTravelerTrails(
       budget = Math.trunc(budget);
       if (budget > full) budget = full;
       tr.pointsBudget = budget;
+
+      // c35: focus edge forces dirty full/thin snap (no one-frame stale cache).
+      const focusNow = tr.focused === true;
+      if (focusNow !== (tr._wasFocused === true)) {
+        tr._lastMappedT = undefined;
+        tr._lastBudgetSig = Number.NaN;
+        tr._wasFocused = focusNow;
+      } else {
+        tr._wasFocused = focusNow;
+      }
 
       const sameT = tr._lastMappedT === mappedT;
       const sameBudget = tr._lastBudgetSig === budget;
