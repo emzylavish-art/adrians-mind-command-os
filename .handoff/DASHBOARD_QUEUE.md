@@ -165,6 +165,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 76 | **Gap#54 Star Detail keyboard modal** — Escape close, focus trap, restore focus, empty-sky dismiss | **done** | c51 — dialog Escape/Tab trap + focus restore |
 | 77 | **Gap#55 N-hop controls for all bots** — move out of Notion-only branch; controlled depth value | **done** | c51 — nhop outside Notion; controlled nhopDepth |
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |
+| 111 | **Motion c25 — star focus still-target wired** — `stepFocusStillTarget` + star-batch `{ stillTarget: true }` (orbit radialAmp/bobAmp × driftMul → still at base; pulse 1.25×); register focus-still-target.test.ts + comet-stale-cache.test.ts | **queued** | Motion c25 (Dashboard wires universe-scene / star-batch opts) |
 
 
 
@@ -176,6 +177,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 ## Next researched (tail — keep non-empty)
 
+- **Motion c26 — reduced-motion comet/launch freeze audit** — REA c24/c25 reduced uniqueSamples>1: ensure launch ease + dust/gust/edge-pulse write zero deltas under prefers-reduced-motion (static marks only); add probe test that motion helper outputs are stable across 60 frames when reduced=true (Cosmos Motion Bot next).
+
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
 - ~~**Real-data charts panel**~~ — **done c15**: SVG sparks for commits/bot, lock claims/hour, landings/lane, spend (honest empty).
@@ -185,7 +188,6 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - **Star focus breadcrumb in Flyover HUD** (researched c9) — when a star is focused (`rig.subjectId`), show its name + lane health in the Flyover HUD with a "Back to sky" twin of Zoom to sky; keeps keyboard users oriented without opening the side card.
 - ~~**Motion LOD / visibility budget**~~ — **done (Cosmos Motion Bot c3)**: camera-distance dust LOD via `onBeforeRender`, frame-budget governor (EMA >24ms trims to 30% floor, recovers <18ms), active-slice instance upload, `document.hidden` pause; plus shared continuous `MotionClock` (no teleport on tab resume / 24h fold).
 - ~~**Motion — comet tail fade**~~ — **done (Cosmos Motion Bot c4)**: additive vertex-color head→tail gradient + soft head sprite (shared, refcounted, 2s grace so the 5s rebuild never re-uploads); reduced-motion = dim static. Hacker c4: MotionClock per-time-base anchors (no 2× speed with two time bases) + stutter cap (no freeze at <4fps).
-- **Motion c25 — star focus still-target** — when `focusId` set, damp orbit radialAmp/bobAmp toward 0 near the focused star and ease pulse scale toward 1.25× via existing focus-ease (helper `stepFocusStillTarget` / star-batch opt); reduced-motion snaps. Promoted from researched focus-aware star easing (Cosmos Motion Bot next after c24 land).
 
 - ~~**Painter — ink-wash constellation edge ribbons**~~ — **done (Cosmos Painter Bot c3)**: `InkWashEdgeMaterial` + `buildInkWashRibbon`; mediump time wrap; release on rebuild.
 - ~~**Painter — Imagine node cards**~~ — **done (Cosmos Painter Bot c4)**: `ImagineNodeMaterial` watercolor edge bleed + paper-grain overlay + brush frame + missing/loading wash fallback; context-restore `rebindPainterlyKitTextures` + `bindSharedTexture` for star/paper consumers.

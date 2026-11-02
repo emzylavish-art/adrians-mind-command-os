@@ -45,7 +45,9 @@ export {
   stepFocusDriftMul,
   stepFocusEase,
   stepFocusPulseMul,
+  stepFocusStillTarget,
   type FocusEaseState,
+  type FocusStillTargetOpts,
 } from "./focus-ease.ts";
 export {
   NODE_OPEN_DURATION,

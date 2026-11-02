@@ -355,12 +355,19 @@ export function createCommitComets(
     if (handle.disposed) return;
     handle.disposed = true;
     for (const c of comets) {
-      group.remove(c.line);
-      c.line.geometry.dispose();
-      (c.line.material as THREE.Material).dispose();
-      group.remove(c.head);
-      c.head.geometry.dispose();
-      (c.head.material as THREE.Material).dispose();
+      // Hacker c25: context-loss / double-dispose may null materials before we run.
+      if (c.line) {
+        group.remove(c.line);
+        c.line.geometry?.dispose?.();
+        const lm = c.line.material as THREE.Material | null | undefined;
+        if (lm && typeof lm.dispose === "function") lm.dispose();
+      }
+      if (c.head) {
+        group.remove(c.head);
+        c.head.geometry?.dispose?.();
+        const hm = c.head.material as THREE.Material | null | undefined;
+        if (hm && typeof hm.dispose === "function") hm.dispose();
+      }
     }
     comets.length = 0;
     lines.length = 0;
@@ -425,7 +432,9 @@ export const COMET_LAUNCH_HEAD_OPACITY_REDUCED = 0.35;
  * Same output as that loop: visible = sample.visible || reduced; line opacity
  * 0.55·opacity (reduced 0.22); head opacity 0.95·opacity (reduced 0.35);
  * head size = cometHeadSize(head.userData.baseSize). Missing / short samples hide that
- * comet (never NaN); disposed handle → 0. Returns how many comets are visible. No alloc.
+ * comet (never NaN); disposed handle → 0. Hacker c25: null/hole/missing-material
+ * slots in lines/heads are skipped (stale cache after sync/context-loss) — never throw.
+ * Returns how many comets are visible. No alloc.
  */
 export function applyCometLaunchSamples(
   handle: CommitCometsHandle | null | undefined,
@@ -435,21 +444,25 @@ export function applyCometLaunchSamples(
   if (!handle || handle.disposed) return 0;
   const lines = handle.lines;
   const heads = handle.heads;
-  const n = Math.max(0, Math.min(handle.count | 0, lines ? lines.length : 0, heads ? heads.length : 0));
+  if (!lines || !heads) return 0;
+  const n = Math.max(0, Math.min(handle.count | 0, lines.length, heads.length));
   const list = Array.isArray(samples) ? samples : null;
   let visibleCount = 0;
   for (let i = 0; i < n; i++) {
     const sample = list ? list[i] : null;
-    const line = lines![i]!;
-    const head = heads![i]!;
+    const line = lines[i];
+    const head = heads[i];
+    // Hacker c25: sparse / stale cache after sync, dispose, or WebGL context-loss.
+    if (!line || !head) continue;
+    const lm = line.material as THREE.LineBasicMaterial | null | undefined;
+    const hm = head.material as THREE.PointsMaterial | null | undefined;
+    if (!lm || !hm) continue;
     const op = sample ? finiteOr(sample.opacity, 0) : 0;
     const vis = reducedMotion || (sample ? sample.visible === true : false);
     const k = reducedMotion ? 1 : op < 0 ? 0 : op > 1 ? 1 : op;
     line.visible = vis;
     head.visible = vis;
-    (line.material as THREE.LineBasicMaterial).opacity =
-      (reducedMotion ? COMET_LAUNCH_LINE_OPACITY_REDUCED : COMET_LAUNCH_LINE_OPACITY) * k;
-    const hm = head.material as THREE.PointsMaterial;
+    lm.opacity = (reducedMotion ? COMET_LAUNCH_LINE_OPACITY_REDUCED : COMET_LAUNCH_LINE_OPACITY) * k;
     hm.opacity = (reducedMotion ? COMET_LAUNCH_HEAD_OPACITY_REDUCED : COMET_LAUNCH_HEAD_OPACITY) * k;
     const base = typeof head.userData.baseSize === "number" ? head.userData.baseSize : hm.size;
     hm.size = cometHeadSize(base as number, sample ?? null, reducedMotion);

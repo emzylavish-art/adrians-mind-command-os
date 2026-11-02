@@ -586,3 +586,11 @@ Wire: replace the scene's per-comet name walk with one call after `stepCometLaun
 - Register in package.json `test` (strip-types list):
   `src/components/mind/dashboard-3d/particles/comet-sync.test.ts`. No new deps.
 - Queue row #102 (wire). Renumber freely on landing.
+
+### Requests (c25)
+- Wire `stepStarFieldBatch(..., { stillTarget: true })` (or call `stepFocusStillTarget` per focused star after pulse sample).
+- Register in package.json `test` strip-types list:
+  `src/components/mind/dashboard-3d/motion/focus-still-target.test.ts`,
+  `src/components/mind/dashboard-3d/particles/comet-stale-cache.test.ts`. No new deps.
+- Queue row #111 (wire). Hacker c25: applyCometLaunchSamples skips null/hole/missing-material cache slots; dispose null-safe.
+

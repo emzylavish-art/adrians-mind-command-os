@@ -1,5 +1,5 @@
 /**
- * Focus-aware star easing (Cosmos Motion Bot c5).
+ * Focus-aware star easing (Cosmos Motion Bot c5 / still-target helper c25).
  *
  * When a star is selected/hovered (`focusId`), its pulse scale eases toward 1.25× and
  * orbit-drift amplitude damps to 0 so click-and-zoom lands on a still target.
@@ -9,7 +9,11 @@
 import { damp } from "./ease.ts";
 import { finiteOr } from "./sanitize.ts";
 import type { PulseSample } from "./star-pulse.ts";
-import type { Xyz } from "./orbit-drift.ts";
+import {
+  sampleOrbitDrift,
+  type OrbitDriftOpts,
+  type Xyz,
+} from "./orbit-drift.ts";
 
 export const FOCUS_PULSE_SCALE = 1.25;
 export const FOCUS_PULSE_LAMBDA = 8;
@@ -110,3 +114,65 @@ export function applyFocusDrift(out: Xyz, base: Readonly<Xyz>, driftMul: number)
   out.z = bz + (oz - bz) * m;
   return out;
 }
+
+/** Reused orbit opts for still-target — zero hot-path alloc (c25). */
+const STILL_ORBIT_OPTS: OrbitDriftOpts = {
+  radialAmp: 0.35,
+  bobAmp: 0.2,
+};
+
+export type FocusStillTargetOpts = {
+  /** Base orbit radial amp before driftMul scale. Default 0.35 (star-batch). */
+  radialAmp?: number;
+  /** Base orbit bob amp before driftMul scale. Default 0.2 (star-batch). */
+  bobAmp?: number;
+  yawSpeed?: number;
+  clock?: OrbitDriftOpts["clock"];
+};
+
+const EMPTY_STILL_OPTS: FocusStillTargetOpts = Object.freeze({});
+
+/**
+ * c25: one-call still-target for a focused star.
+ * Steps focus ease → applyFocusPulse → orbit with amps × driftMul (0 when focused).
+ * When reduced-motion or driftMul ≈ 0, pins `pos` at `base` (no orbit residual).
+ * Mutates `state`, `pulse`, and `pos`. Returns `state`.
+ * Call after a fresh pulse sample each frame (applyFocusPulse multiplies in place).
+ */
+export function stepFocusStillTarget(
+  state: FocusEaseState,
+  pulse: PulseSample,
+  pos: Xyz,
+  base: Readonly<Xyz>,
+  starId: string | null | undefined,
+  focusId: string | null | undefined,
+  tSeconds: number,
+  phase: number,
+  dt: number,
+  reducedMotion: boolean,
+  opts: FocusStillTargetOpts = EMPTY_STILL_OPTS,
+): FocusEaseState {
+  const o = opts && typeof opts === "object" ? opts : EMPTY_STILL_OPTS;
+  stepFocusEase(state, starId, focusId, dt, reducedMotion);
+  applyFocusPulse(pulse, state.pulseMul);
+  const drift = finiteOr(state.driftMul, 1);
+  const bx = Number.isFinite(base.x) ? base.x : 0;
+  const by = Number.isFinite(base.y) ? base.y : 0;
+  const bz = Number.isFinite(base.z) ? base.z : 0;
+  if (reducedMotion || drift <= 1e-6) {
+    pos.x = bx;
+    pos.y = by;
+    pos.z = bz;
+    return state;
+  }
+  const baseRadial = finiteOr(o.radialAmp ?? 0.35, 0.35);
+  const baseBob = finiteOr(o.bobAmp ?? 0.2, 0.2);
+  STILL_ORBIT_OPTS.radialAmp = baseRadial * drift;
+  STILL_ORBIT_OPTS.bobAmp = baseBob * drift;
+  STILL_ORBIT_OPTS.yawSpeed = o.yawSpeed;
+  STILL_ORBIT_OPTS.clock = o.clock;
+  sampleOrbitDrift(pos, base, tSeconds, phase, false, STILL_ORBIT_OPTS);
+  STILL_ORBIT_OPTS.clock = undefined;
+  return state;
+}
+

@@ -62,6 +62,12 @@ export type StarBatchOpts = {
   xfade?: ReadonlyArray<HealthPulseCrossfadeState | null | undefined> | null;
   /** c19 opt-in: 1-hop neighbor ids of `focusId` → soft drift floor. */
   neighbors?: ReadonlySet<string> | null;
+  /**
+   * c25 opt-in: use `stepFocusStillTarget` — orbit radialAmp/bobAmp scale with
+   * driftMul (focused → still at base, no full-orbit-then-squash). Default off
+   * keeps c16–c24 behaviour bit-for-bit.
+   */
+  stillTarget?: boolean;
 };
 
 /** Reused crossfade temps/opts — no per-star allocation (c19). */
@@ -317,11 +323,33 @@ export function stepStarFieldBatch(
     } else {
       sampleStarPulse(pulse, tSeconds, ph, health, reducedMotion, clock);
     }
-    stepFocusEase(focusState, id, focusId, dt, reducedMotion);
-    if (neighbors) stepNeighborDriftDamp(focusState, id, focusId, neighbors, dt, reducedMotion);
-    applyFocusPulse(pulse, focusState.pulseMul);
-    sampleOrbitDrift(pos, base, tSeconds, ph, reducedMotion, STAR_BATCH_ORBIT_OPTS);
-    applyFocusDrift(pos, base, focusState.driftMul);
+    if (o.stillTarget) {
+      // c25: ease (+ optional neighbor damp), pulse, orbit with amps × driftMul.
+      // Matches stepFocusStillTarget; inlined so neighbor damp can run between ease and orbit.
+      stepFocusEase(focusState, id, focusId, dt, reducedMotion);
+      if (neighbors) stepNeighborDriftDamp(focusState, id, focusId, neighbors, dt, reducedMotion);
+      applyFocusPulse(pulse, focusState.pulseMul);
+      const drift = finiteOr(focusState.driftMul, 1);
+      if (reducedMotion || drift <= 1e-6) {
+        pos.x = Number.isFinite(base.x) ? base.x : 0;
+        pos.y = Number.isFinite(base.y) ? base.y : 0;
+        pos.z = Number.isFinite(base.z) ? base.z : 0;
+      } else {
+        const ra = STAR_BATCH_ORBIT_OPTS.radialAmp ?? 0.35;
+        const ba = STAR_BATCH_ORBIT_OPTS.bobAmp ?? 0.2;
+        STAR_BATCH_ORBIT_OPTS.radialAmp = ra * drift;
+        STAR_BATCH_ORBIT_OPTS.bobAmp = ba * drift;
+        sampleOrbitDrift(pos, base, tSeconds, ph, false, STAR_BATCH_ORBIT_OPTS);
+        STAR_BATCH_ORBIT_OPTS.radialAmp = ra;
+        STAR_BATCH_ORBIT_OPTS.bobAmp = ba;
+      }
+    } else {
+      stepFocusEase(focusState, id, focusId, dt, reducedMotion);
+      if (neighbors) stepNeighborDriftDamp(focusState, id, focusId, neighbors, dt, reducedMotion);
+      applyFocusPulse(pulse, focusState.pulseMul);
+      sampleOrbitDrift(pos, base, tSeconds, ph, reducedMotion, STAR_BATCH_ORBIT_OPTS);
+      applyFocusDrift(pos, base, focusState.driftMul);
+    }
 
     // Belt: keep outs finite even if upstream ever regresses NaN handling.
     if (!Number.isFinite(pos.x)) pos.x = 0;
