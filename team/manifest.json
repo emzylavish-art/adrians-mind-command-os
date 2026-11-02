@@ -296,10 +296,10 @@
     },
     {
       "id": "team.queue",
-      "agent": "orchestrator",
+      "agent": "worker-runtime",
       "capabilities": [
-        "durable_task_queue",
-        "worker_coordination"
+        "queue_management",
+        "durable_worker_jobs"
       ],
       "status": "ready",
       "entrypoint": "python3 team/queue.py",
@@ -310,7 +310,8 @@
         "worker": "string",
         "id": "string",
         "result": "object",
-        "error": "string"
+        "error": "string",
+        "db": "string"
       },
       "safety": "SQLite local queue; stores payloads only and never executes queued task data; worker must apply policy and approvals."
     }
@@ -540,21 +541,11 @@
       "id": "mind-command-os-durable-queue",
       "name": "Mind Command OS Durable Queue",
       "category": "durable-worker-queue",
-      "agent": "orchestrator",
-      "status": "implemented",
-      "install": "repo-code-present",
-      "live": "callable-cli-and-runner",
-      "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval."
-    },
-    {
-      "id": "mind-command-os-durable-queue",
-      "name": "Mind Command OS Durable Worker Queue",
-      "category": "local-worker-runtime",
       "agent": "worker-runtime",
       "status": "implemented",
       "install": "repo-code-present",
       "live": "callable-cli-and-runner",
-      "guardrail": "SQLite local persistence; queue does not execute payloads or establish that workers are running."
+      "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval."
     }
   ]
 }
