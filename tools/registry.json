@@ -188,6 +188,15 @@
       "live": "callable-cli-runner-and-mcp",
       "guardrail": "Local lexical search only; semantic search and external knowledge stores are not connected.",
       "team_agent": "knowledge"
+    },
+    {
+      "name": "Mind Command OS Durable Queue",
+      "category": "durable-worker-queue",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-runner",
+      "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval.",
+      "team_agent": "orchestrator"
     }
   ]
 }
