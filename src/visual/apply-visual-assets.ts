@@ -34,6 +34,26 @@ function setCssVars(urls: Record<VisualAssetId, string>) {
   }
 }
 
+/** Swap plain `/<key>` <img> srcs to signed (or fallback) URLs after paint. */
+function rewritePlainAssetImgs(urls: Record<VisualAssetId, string>) {
+  const byKey = new Map<string, string>();
+  for (const entry of Object.values(VISUAL_ASSET_MAP)) {
+    const url = urls[entry.id];
+    if (!url) continue;
+    byKey.set(entry.key, url);
+    if (entry.jpgKey) byKey.set(entry.jpgKey, url);
+    if (entry.avifKey) byKey.set(entry.avifKey, url);
+  }
+  document.querySelectorAll("img[src]").forEach((node) => {
+    const img = node as HTMLImageElement;
+    const src = img.getAttribute("src") || "";
+    if (!src.startsWith("/") || src.startsWith("//")) return;
+    const key = src.replace(/^\/+/, "");
+    const next = byKey.get(key);
+    if (next && next !== src) img.src = next;
+  });
+}
+
 /**
  * Load deferred visual CSS (textures / heavy glass re-apply), resolve URLs,
  * set --tex-* vars, then flip html.visual-assets-ready so gate lifts.
@@ -52,6 +72,7 @@ export function bootVisualAssets(): void {
       try {
         const urls = await resolveVisualAssetUrlById();
         setCssVars(urls);
+        rewritePlainAssetImgs(urls);
       } catch {
         // Keep solid shell if resolver fails.
       }
