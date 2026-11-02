@@ -60,6 +60,17 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result["result"]["status"], "ok")
         self.assertIn("team/health.py", result["evidence"])
 
+    def test_knowledge_search_executes(self):
+        code, result = call({
+            "operation": "invoke",
+            "tool_id": "knowledge.search",
+            "input": {"path": "team", "query": "manifest agent tool", "top_k": 3},
+        })
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "ready")
+        self.assertIsInstance(result["result"]["results"], list)
+        self.assertIn("tools/knowledge/knowledge_search.py", result["evidence"])
+
     def test_unavailable_tool_is_not_claimed_ready(self):
         code, result = call({"operation": "invoke", "tool_id": "gods-eyes", "input": {}})
         self.assertEqual(code, 0)
