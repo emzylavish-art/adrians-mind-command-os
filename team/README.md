@@ -59,3 +59,21 @@ Configure an MCP client to launch that command from the repository root. The cur
 server publishes `rea.scan`, `security.scan`, `team.health`, and `knowledge.search`, the currently implemented ready
 tool adapters. The server implements `initialize`, `tools/list`, and `tools/call`;
 it does not launch model agents or invent adapters for unresolved tools.
+
+
+## Durable local task queue
+
+`team/queue.py` provides a SQLite-backed queue with atomic worker claims, leases,
+attempt counts, retry handling, and worker-identity checks. It stores task payloads
+as data; it never executes them.
+
+```bash
+python team/queue.py enqueue --task "inventory repository" --payload '{"path":"."}'
+python team/queue.py claim --worker worker-1
+python team/queue.py list
+```
+
+The shared runner and MCP server expose this as `team.queue` with actions
+`enqueue`, `claim`, `complete`, `fail`, and `list`. For isolated tests, pass a
+temporary `db` path. Do not put secrets into queued payloads. A worker must apply
+authorization, tool policy, and any required human approval before external actions.
