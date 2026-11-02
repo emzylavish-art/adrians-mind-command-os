@@ -109,6 +109,13 @@ export type PainterlyTextureBinding = {
   target?: string;
 };
 
+export type PainterlyKitDisposeMeta = {
+  postDisposeCall: boolean;
+  postDisposeWarned: boolean;
+  postDisposeCallCount: number;
+  lastReason: string | null;
+};
+
 export type PainterlyKit = {
   painterlyPass: ShaderPass;
   starSpriteTexture: THREE.CanvasTexture | THREE.DataTexture;
@@ -174,10 +181,169 @@ export type PainterlyKit = {
   lastTickUniformWrites: number;
   /** Frozen clock used while reducedMotion is honored. */
   frozenTickTime: number;
+  /**
+   * HACKER (c15): post-dispose create/bind meta - fail-safe (never throw into the live dashboard).
+   * `postDisposeCall` flips true if any create or bind runs after disposePainterlyKit.
+   */
+  disposeMeta: PainterlyKitDisposeMeta;
 };
 
-/** Thrown by kit create/bind after disposePainterlyKit — prevents use-after-free on disposed textures. */
+/**
+ * Reason / meta flag for post-dispose create or bind.
+ * c14 threw this as an Error (could crash StrictMode/HMR/async races on the live dashboard).
+ * c15: create/bind return inert no-ops, warn once, and set disposeMeta instead.
+ */
 export const PAINTER_KIT_DISPOSED = "painterly-kit-disposed";
+
+function notePostDisposeCall(kit: PainterlyKit): void {
+  kit.disposeMeta.postDisposeCall = true;
+  kit.disposeMeta.postDisposeCallCount += 1;
+  kit.disposeMeta.lastReason = PAINTER_KIT_DISPOSED;
+  if (!kit.disposeMeta.postDisposeWarned) {
+    kit.disposeMeta.postDisposeWarned = true;
+    try {
+      console.warn(
+        "[painterly-kit] create/bind after dispose - returning inert no-op (StrictMode/HMR/async race)",
+      );
+    } catch {
+      /* console may be unavailable in some test hosts */
+    }
+  }
+}
+
+/** Transparent idle pigment — not tracked, safe to .dispose() from callers. */
+function inertShaderMaterial(name: string): THREE.ShaderMaterial {
+  const mat = new THREE.ShaderMaterial({
+    name,
+    uniforms: {
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color(0.36, 0.42, 0.55) },
+      uEmissive: { value: 0 },
+      uGrain: { value: 0 },
+      uStroke: { value: 0 },
+      uHalo: { value: 0 },
+      uMap: { value: null },
+      uHasMap: { value: 0 },
+      uPaperMap: { value: null },
+      uHasPaper: { value: 0 },
+      uAccent: { value: new THREE.Color(0.36, 0.42, 0.55) },
+      uBase: { value: new THREE.Color(0.36, 0.42, 0.55) },
+      uHealth: { value: new THREE.Color(0.36, 0.42, 0.55) },
+      uPulse: { value: 0 },
+      uBleed: { value: 0 },
+      uWash: { value: 0 },
+      uOpacity: { value: 0 },
+      uPool: { value: 0 },
+      uProgress: { value: 0 },
+      uWindowGlow: { value: 0 },
+      uTextMap: { value: null },
+      uHasText: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      void main() {
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      void main() {
+        gl_FragColor = vec4(0.2, 0.22, 0.28, 0.0);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+  });
+  mat.userData.painterMaterialMeta = {
+    compileError: PAINTER_KIT_DISPOSED,
+    fallback: true,
+    inert: true,
+  };
+  mat.userData.painterInert = true;
+  return mat;
+}
+
+function inertSkyMaterial(): THREE.MeshBasicMaterial {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x0c1224,
+    side: THREE.BackSide,
+    depthWrite: false,
+    transparent: true,
+    opacity: 0,
+  });
+  mat.userData.painterInert = true;
+  mat.userData.painterMaterialMeta = {
+    compileError: PAINTER_KIT_DISPOSED,
+    fallback: true,
+    inert: true,
+  };
+  return mat;
+}
+
+function inertBotStar(): PainterlyBotStarBundle {
+  const meshMaterial = inertShaderMaterial("StarWatercolorMaterialInert");
+  const glowMaterial = new THREE.SpriteMaterial({
+    color: 0x5a6a88,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  glowMaterial.userData.painterInert = true;
+  return {
+    meshMaterial,
+    glowMaterial,
+    setColor: () => {},
+    setHalo: () => {},
+    setGrain: () => {},
+  };
+}
+
+function inertInkEdges(): PainterlyInkEdgesHandle {
+  const group = new THREE.Group();
+  group.name = "PainterlyInkEdgesInert";
+  return {
+    group,
+    update: () => {},
+    tick: () => {},
+    dispose: () => {},
+    get edgeCount() {
+      return 0;
+    },
+    get skippedDegenerate() {
+      return 0;
+    },
+    get truncated() {
+      return false;
+    },
+    get drawCalls() {
+      return 0;
+    },
+  };
+}
+
+function inertLaneNebulae(): PainterlyLaneNebulaeHandle {
+  const group = new THREE.Group();
+  group.name = "PainterlyLaneNebulaeInert";
+  return {
+    group,
+    update: () => {},
+    tick: () => {},
+    dispose: () => {},
+    get count() {
+      return 0;
+    },
+    get truncated() {
+      return false;
+    },
+    get skippedInvalid() {
+      return 0;
+    },
+    get materialCount() {
+      return 0;
+    },
+    get meshPoolSize() {
+      return 0;
+    },
+  };
+}
 
 /** HACKER (c7): track live kits so StrictMode double-mount leaks can be audited/disposed. */
 const LIVE_PAINTER_KITS = new Set<PainterlyKit>();
@@ -220,32 +386,54 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
     lastTickUniformWrites: 0,
     frozenTickTime: 0,
     textureBudgetBytes,
+    disposeMeta: {
+      postDisposeCall: false,
+      postDisposeWarned: false,
+      postDisposeCallCount: 0,
+      lastReason: null,
+    },
     createStarMaterial(starOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      // HACKER (c15): fail-safe - inert no-op instead of throw (StrictMode/HMR/async)
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("StarWatercolorMaterialInert");
+      }
       const m = createStarWatercolorMaterial(starOpts);
       tracked.push(m);
       return m;
     },
     createBuildingMaterial(bOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("BuildingBrushMaterialInert");
+      }
       const m = createBuildingBrushMaterial(bOpts);
       tracked.push(m);
       return m;
     },
     createLorePlaqueMaterial(pOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("LorePlaqueMaterialInert");
+      }
       const m = createLorePlaqueMaterialImpl(pOpts);
       tracked.push(m);
       return m;
     },
     createInkWashEdgeMaterial(eOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("InkWashEdgeMaterialInert");
+      }
       const m = createInkWashEdgeMaterialImpl(eOpts);
       tracked.push(m);
       return m;
     },
     createImagineNodeMaterial(iOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("ImagineNodeMaterialInert");
+      }
       const m = createImagineNodeMaterialImpl({
         ...iOpts,
         paperMap: iOpts?.paperMap === undefined ? kit.paperGrainTexture : iOpts.paperMap,
@@ -256,13 +444,19 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       return m;
     },
     createSkyMaterial(skyOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertSkyMaterial();
+      }
       const m = createNebulaSkyMaterial(skyOpts ?? opts.nebula);
       trackedSkies.push(m);
       return m;
     },
     bindSharedTexture(material, slot, target = "map") {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return;
+      }
       // Replace existing binding for same material+slot
       for (let i = textureBindings.length - 1; i >= 0; i--) {
         const b = textureBindings[i]!;
@@ -281,21 +475,33 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
       resizePainterlyPass(kit.painterlyPass, width, height, dpr);
     },
     createBotStar(starOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertBotStar();
+      }
       return createPainterlyBotStar(kit, starOpts);
     },
     createInkEdges(edges = [], eOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertInkEdges();
+      }
       return createPainterlyInkEdges(kit, edges, eOpts);
     },
     createLaneNebulaMaterial(nOpts) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("LaneNebulaMaterialInert");
+      }
       const m = createLaneNebulaMaterialImpl(nOpts);
       tracked.push(m);
       return m;
     },
     createLaneNebulae(lanes = []) {
-      if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertLaneNebulae();
+      }
       return createPainterlyLaneNebulae(kit, lanes);
     },
     textureBudget() {

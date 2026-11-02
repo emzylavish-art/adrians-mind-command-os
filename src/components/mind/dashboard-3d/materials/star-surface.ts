@@ -3,6 +3,27 @@ import { sanitizeFinite, sanitizeShaderTime, sanitizePainterColor, PAINTER_IDLE_
 import { WatercolorStarShader } from "../shaders/watercolor-star.ts";
 import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 
+/** Real bot/lane health tones that drive pigment granulation (no fabricated activity). */
+export type StarHealthTone = "healthy" | "stalled" | "blocked" | "idle";
+
+/** Pigment granulation by real health — blocked settles heaviest; idle stays fine. */
+export const STAR_GRAIN_BY_HEALTH: Record<StarHealthTone, number> = {
+  healthy: 0.2,
+  stalled: 0.3,
+  blocked: 0.42,
+  idle: 0.12,
+};
+
+export function starGrainFromHealth(health?: StarHealthTone | string | null, idle?: boolean): number {
+  if (health === "healthy" || health === "stalled" || health === "blocked" || health === "idle") {
+    return STAR_GRAIN_BY_HEALTH[health];
+  }
+  // Wired path often only passes idle boolean from bot.health === "idle"
+  if (idle === true) return STAR_GRAIN_BY_HEALTH.idle;
+  if (idle === false) return STAR_GRAIN_BY_HEALTH.healthy;
+  return STAR_GRAIN_BY_HEALTH.healthy;
+}
+
 export type StarSurfaceOptions = {
   color?: THREE.ColorRepresentation;
   emissiveIntensity?: number;
@@ -10,6 +31,8 @@ export type StarSurfaceOptions = {
   stroke?: number;
   /** Brush-stroke corona; defaults from emissive (real status). */
   halo?: number;
+  /** Real bot health — drives default uGrain when `grain` omitted. */
+  health?: StarHealthTone | string;
   /**
    * HACKER (c13): force identity-tint fallback material (tests / known-bad GLSL).
    * Records `userData.painterMaterialMeta.compileError` — never silent black.
@@ -98,7 +121,12 @@ export function createStarWatercolorMaterial(
     if (opts.emissiveIntensity != null) {
       uniforms.uEmissive.value = sanitizeFinite(opts.emissiveIntensity, 0.85, 0, 3);
     }
-    if (opts.grain != null) uniforms.uGrain.value = sanitizeFinite(opts.grain, 0.22, 0, 1);
+    if (opts.grain != null) {
+      uniforms.uGrain.value = sanitizeFinite(opts.grain, 0.22, 0, 1);
+    } else {
+      // c15: default granulation from real health / idle (neutral healthy if unknown)
+      uniforms.uGrain.value = starGrainFromHealth(opts.health, undefined);
+    }
     if (opts.stroke != null) uniforms.uStroke.value = sanitizeFinite(opts.stroke, 0.55, 0, 1);
     const em = uniforms.uEmissive.value as number;
     if (opts.halo != null) {
@@ -172,6 +200,14 @@ export function setStarHalo(mat: THREE.ShaderMaterial, halo: number): void {
   (mat.userData as { haloLocked?: boolean }).haloLocked = true;
 }
 
+/** Override pigment granulation (locks auto-sync from health/emissive). */
+export function setStarGrain(mat: THREE.ShaderMaterial, grain: number): void {
+  if (mat.uniforms["uGrain"]) {
+    mat.uniforms["uGrain"].value = sanitizeFinite(grain, 0.22, 0, 1);
+  }
+  (mat.userData as { grainLocked?: boolean }).grainLocked = true;
+}
+
 export function setStarWatercolorColor(
   mat: THREE.ShaderMaterial,
   color: THREE.ColorRepresentation,
@@ -186,6 +222,10 @@ export function setStarWatercolorColor(
     // Keep halo honest to real status emissive unless locked
     if (mat.uniforms["uHalo"] && !(mat.userData as { haloLocked?: boolean }).haloLocked) {
       mat.uniforms["uHalo"].value = sanitizeFinite(0.2 + em * 0.55, 0.55, 0, 1.5);
+    }
+    // c15: quiet granulation when idle/low emissive; richer pigment when active — unless locked
+    if (mat.uniforms["uGrain"] && !(mat.userData as { grainLocked?: boolean }).grainLocked) {
+      mat.uniforms["uGrain"].value = starGrainFromHealth(undefined, em < 0.4);
     }
   }
 }

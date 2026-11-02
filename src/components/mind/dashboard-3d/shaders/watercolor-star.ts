@@ -4,6 +4,8 @@ import { GLSL_HASH_NOISE } from "./glsl-noise.ts";
  * Watercolor star / bot-node spheres.
  * c12: painted brush-stroke halo (`uHalo`) driven from real status via createBotStar
  * (idle → low halo; active → stronger ink corona). No fabricated activity.
+ * c15: anisotropic pigment granulation (`uGrain`) — fiber-stretched, paintWrap-safe
+ * mediump sampling; strength from real bot health via createBotStar / setStarGrain.
  */
 export const WatercolorStarShader = {
   name: "WatercolorStarShader",
@@ -47,7 +49,12 @@ export const WatercolorStarShader = {
       float rings = paintFbm(vUv * 18.0 + uTime * 0.08);
       float stroke = smoothstep(0.35, 0.75, rings) * uStroke;
       float bloom = smoothstep(0.15, 0.85, paintFbm(vUv * 6.0 - uTime * 0.05)) * 0.22;
-      float grain = (paintNoise(vUv * 90.0 + uTime * 0.05) - 0.5) * uGrain;
+      // c15: anisotropic pigment granulation — fiber stretch + mediump-safe wrap
+      // (avoid raw vUv*90 floor banding on weak GPUs; paintWrap keeps domain finite)
+      vec2 gUv = paintWrap(vUv * vec2(22.0, 48.0) + vec2(uTime * 0.03, -uTime * 0.025));
+      float gFine = paintNoise(gUv);
+      float gFiber = paintFbm(paintWrap(vUv * vec2(5.5, 16.0) + uTime * 0.018));
+      float grain = (gFine - 0.5) * uGrain * (0.5 + gFiber * 0.95);
       vec3 pigment = uColor * (0.55 + uEmissive * 0.65);
       pigment += pigment * stroke * 0.35;
       pigment += uColor * bloom;

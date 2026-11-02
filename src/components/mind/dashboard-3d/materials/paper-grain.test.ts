@@ -93,7 +93,7 @@ import {
   INK_EDGES_MAX,
   INK_EDGE_DEGENERATE_EPS,
 } from "./ink-wash-edge.ts";
-import { createStarWatercolorMaterial, tickStarMaterial, setStarHalo, setStarWatercolorColor } from "./star-surface.ts";
+import { createStarWatercolorMaterial, tickStarMaterial, setStarHalo, setStarGrain, setStarWatercolorColor, starGrainFromHealth, STAR_GRAIN_BY_HEALTH } from "./star-surface.ts";
 import {
   GLSL_HASH_NOISE,
   GLSL_MEDIUMP_GUARD,
@@ -801,7 +801,7 @@ describe("painter c6: post-pass amount from constellation health", () => {
 
   it("PainterlyPassShader still exposes amount/grain/wash; version bumped", () => {
     assert.ok(PainterlyPassShader.uniforms.amount);
-    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.[67]/);
+    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.[678]/);
     assert.equal(PAINTER_SHADER_PRECISION, "mediump");
   });
 });
@@ -1614,7 +1614,7 @@ describe("hacker pass c13: invalid star colors + compile fallback + mediump wrap
 
   it("paintWrap GLSL clamps large coords (mediump banding guard present)", () => {
     assert.match(GLSL_HASH_NOISE, /clamp\(p,\s*-1\.0e4,\s*1\.0e4\)/);
-    assert.equal(PAINTER_SHADER_VERSION, "painter-1.7.0");
+    assert.equal(PAINTER_SHADER_VERSION, "painter-1.8.0");
   });
 });
 
@@ -1662,65 +1662,49 @@ describe("painter c13: ink-edge watercolor bleed from real weight", () => {
   });
 });
 
-describe("hacker pass c14: kit use-after-dispose + nebula mesh churn + wrap seam", () => {
-  it("create* after disposePainterlyKit throws painterly-kit-disposed (no UAF on textures)", () => {
-    // Minimal kit via real factory needs DOM for star sprite — use stub then mark disposed
-    // through disposePainterlyKit on a real kit is heavy; assert guard on a live kit path:
-    const tracked: import("three").ShaderMaterial[] = [];
-    let disposed = false;
-    const kit = {
-      get disposed() { return disposed; },
-      set disposed(v: boolean) { disposed = v; },
-      tracked,
-      trackedSkies: [],
-      textureBindings: [] as { material: unknown; slot: string; target?: string }[],
-      contextLost: false,
-      starSpriteTexture: { dispose() {} },
-      paperGrainTexture: { dispose() {} },
-      painterlyPass: { uniforms: {} },
-      createStarMaterial(o?: object) {
-        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
-        const m = createStarWatercolorMaterial(o as never);
-        tracked.push(m);
-        return m;
-      },
-      createLaneNebulae(lanes: unknown[] = []) {
-        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
-        return createPainterlyLaneNebulae(kit as never, lanes as never);
-      },
-      createBotStar() {
-        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
-        return null;
-      },
-      createImagineNodeMaterial() {
-        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
-        return null;
-      },
-    } as unknown as PainterlyKit & { disposed: boolean };
-    // Before dispose: create works
-    const m = (kit as unknown as { createStarMaterial: Function }).createStarMaterial({ color: 0x3dd68c });
-    assert.ok(m);
-    disposed = true;
-    assert.throws(
-      () => (kit as unknown as { createStarMaterial: Function }).createStarMaterial({}),
-      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
-    );
-    assert.throws(
-      () => (kit as unknown as { createLaneNebulae: Function }).createLaneNebulae([]),
-      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
-    );
-    assert.throws(
-      () => (kit as unknown as { createBotStar: Function }).createBotStar({}),
-      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
-    );
-    assert.throws(
-      () => (kit as unknown as { createImagineNodeMaterial: Function }).createImagineNodeMaterial({}),
-      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
-    );
-    m.dispose();
+describe("hacker pass c14/c15: kit use-after-dispose fail-safe + nebula mesh churn + wrap seam", () => {
+  it("create* after dispose returns inert no-op + disposeMeta (no throw / no UAF)", () => {
+    let kit: PainterlyKit | null = null;
+    try {
+      kit = createPainterlyKit({ pass: { amount: 0.2 } });
+    } catch {
+      // jsdom-less hosts may fail canvas star sprite — still assert constant + grain helpers
+      assert.equal(PAINTER_KIT_DISPOSED, "painterly-kit-disposed");
+      assert.ok(STAR_GRAIN_BY_HEALTH.blocked > STAR_GRAIN_BY_HEALTH.healthy);
+      return;
+    }
+    disposePainterlyKit(kit);
+    assert.equal(kit.disposed, true);
+    assert.equal(kit.disposeMeta.postDisposeCall, false);
+    const star = kit.createStarMaterial({});
+    assert.ok(star.userData.painterInert);
+    assert.equal(kit.disposeMeta.postDisposeCall, true);
+    assert.equal(kit.disposeMeta.lastReason, PAINTER_KIT_DISPOSED);
+    assert.ok(kit.disposeMeta.postDisposeCallCount >= 1);
+    // Must NOT grow tracked after dispose
+    assert.equal(kit.tracked.length, 0);
+    const bot = kit.createBotStar({});
+    assert.ok(bot.meshMaterial.userData.painterInert);
+    bot.setColor(0xff0000);
+    bot.setHalo(1);
+    bot.setGrain(1);
+    const neb = kit.createLaneNebulae([{ health: "blocked", center: [0, 0, 0] }]);
+    assert.equal(neb.count, 0);
+    neb.update([{ health: "healthy", center: [1, 0, 0] }]);
+    assert.equal(neb.count, 0);
+    const img = kit.createImagineNodeMaterial({});
+    assert.ok(img.userData.painterInert);
+    // bindSharedTexture must not throw
+    kit.bindSharedTexture({} as never, "starSprite");
+    assert.ok(kit.disposeMeta.postDisposeCallCount >= 5);
+    star.dispose();
+    bot.meshMaterial.dispose();
+    bot.glowMaterial.dispose();
+    img.dispose();
+    neb.dispose();
   });
 
-  it("real createPainterlyKit create* throws after disposePainterlyKit", () => {
+  it("deferred createImagineNodeMaterial after dispose (universe-scene race) does not throw", () => {
     let kit: PainterlyKit | null = null;
     try {
       kit = createPainterlyKit({ pass: { amount: 0.2 } });
@@ -1729,12 +1713,16 @@ describe("hacker pass c14: kit use-after-dispose + nebula mesh churn + wrap seam
       return;
     }
     disposePainterlyKit(kit);
-    assert.equal(kit.disposed, true);
-    assert.throws(() => kit!.createStarMaterial({}), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
-    assert.throws(() => kit!.createBotStar({}), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
-    assert.throws(() => kit!.createLaneNebulae([]), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
-    assert.throws(() => kit!.createImagineNodeMaterial({}), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
-    assert.throws(() => kit!.bindSharedTexture({} as never, "starSprite"), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
+    // Simulate requestIdleCallback / TextureLoader race after StrictMode unmount
+    assert.doesNotThrow(() => {
+      for (let i = 0; i < 6; i++) {
+        const m = kit!.createImagineNodeMaterial({});
+        assert.ok(m.userData.painterInert);
+        m.dispose();
+      }
+    });
+    assert.equal(kit.tracked.length, 0);
+    assert.ok(kit.disposeMeta.postDisposeWarned);
   });
 
   it("lane nebula update with flickering lanes reuses mesh pool (no per-frame Mesh alloc storm)", () => {
@@ -1790,5 +1778,52 @@ describe("painter c14: lane nebula pigment pooling from real health", () => {
     assert.ok(Math.abs((healthy.uniforms["uPool"]!.value as number) - LANE_POOL_BY_HEALTH.blocked) < 1e-6);
     blocked.dispose();
     healthy.dispose();
+  });
+});
+
+describe("hacker pass c15: star granulation mediump + health pigment", () => {
+  it("WatercolorStarShader uses paintWrap anisotropic grain (not raw vUv*90)", () => {
+    assert.match(WatercolorStarShader.fragmentShader, /paintWrap\(vUv \* vec2\(22\.0, 48\.0\)/);
+    assert.match(WatercolorStarShader.fragmentShader, /gFiber/);
+    assert.doesNotMatch(WatercolorStarShader.fragmentShader, /vUv \* 90\.0/);
+  });
+
+  it("starGrainFromHealth: blocked > stalled > healthy > idle; idle boolean path", () => {
+    assert.ok(STAR_GRAIN_BY_HEALTH.blocked > STAR_GRAIN_BY_HEALTH.stalled);
+    assert.ok(STAR_GRAIN_BY_HEALTH.stalled > STAR_GRAIN_BY_HEALTH.healthy);
+    assert.ok(STAR_GRAIN_BY_HEALTH.healthy > STAR_GRAIN_BY_HEALTH.idle);
+    assert.equal(starGrainFromHealth("blocked"), STAR_GRAIN_BY_HEALTH.blocked);
+    assert.equal(starGrainFromHealth(undefined, true), STAR_GRAIN_BY_HEALTH.idle);
+    assert.equal(starGrainFromHealth(undefined, false), STAR_GRAIN_BY_HEALTH.healthy);
+    assert.equal(starGrainFromHealth("nope"), STAR_GRAIN_BY_HEALTH.healthy);
+  });
+
+  it("createBotStar / createStarWatercolorMaterial apply health grain; setStarGrain locks", () => {
+    const blocked = createStarWatercolorMaterial({ health: "blocked" });
+    const idle = createStarWatercolorMaterial({ health: "idle" });
+    assert.ok((blocked.uniforms["uGrain"]!.value as number) > (idle.uniforms["uGrain"]!.value as number));
+    setStarGrain(idle, 0.5);
+    assert.ok(Math.abs((idle.uniforms["uGrain"]!.value as number) - 0.5) < 1e-6);
+    setStarWatercolorColor(idle, 0x3dd68c, 0.9);
+    // locked — stays 0.5 despite active emissive
+    assert.ok(Math.abs((idle.uniforms["uGrain"]!.value as number) - 0.5) < 1e-6);
+    blocked.dispose();
+    idle.dispose();
+
+    let kit: PainterlyKit | null = null;
+    try {
+      kit = createPainterlyKit({ pass: { amount: 0.2 } });
+    } catch {
+      return;
+    }
+    const star = kit.createBotStar({ health: "blocked", idle: false });
+    assert.ok(
+      Math.abs((star.meshMaterial.uniforms["uGrain"]!.value as number) - STAR_GRAIN_BY_HEALTH.blocked) < 1e-6,
+    );
+    const idleStar = kit.createBotStar({ idle: true });
+    assert.ok(
+      Math.abs((idleStar.meshMaterial.uniforms["uGrain"]!.value as number) - STAR_GRAIN_BY_HEALTH.idle) < 1e-6,
+    );
+    disposePainterlyKit(kit);
   });
 });
