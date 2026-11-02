@@ -9,6 +9,12 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+## Painter c28 (2026-11-02T23:58:08+01:00 WAT) — post-pass paper wash (lane-only)
+**Unwired audit:** P0 c27 fleet beacon still MeshStandard; c24/c25/c26/c22 wired. Notion galaxy InstancedMesh P1.
+**Fix:** PainterlyPassShader louder grain/fiber/palette/ink-edge + mediump brush cap (already in composer — no wait).
+**WIRING:** Still-unwired table at top; Dashboard P0 = createFleetBeacon. Motion/Light: no new ask.
+
 ## Painter c27 (2026-11-02T23:50:07+01:00 WAT) — fleet queue string-light beacons
 **Target:** top neon arc = fleet-plan-layer `ball()` MeshStandard (queue y≈8.8). City brush done; dust=Motion; sky wired.
 **Painter:** `kit.createFleetBeacon` + hacker tests. **WIRING → Dashboard** ball() adopt. Motion c32 owns glow — no dup. Light: no bloom chase.
