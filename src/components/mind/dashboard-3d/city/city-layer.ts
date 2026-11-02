@@ -3,6 +3,8 @@ import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
   createBuildingBrushPool,
   tickBuildingMaterial,
+  releasePainterlyMaterial,
+  type PainterlyKit,
 } from "../materials";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { Health } from "@/lib/mind/dashboard/types";
@@ -63,7 +65,7 @@ function makeCloudTexture(): THREE.CanvasTexture {
  * The Projects city: painted brush buildings on a dark-glass plaza far below the universe,
  * under a cloud deck. Floors = real task counts; lit windows = real progress only.
  */
-export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
+export function createCityLayer(scene: THREE.Scene, kit: PainterlyKit): CityLayerHandle {
   const group = new THREE.Group();
   group.name = "dash3d-city";
   scene.add(group);
@@ -71,24 +73,18 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   clouds.name = "dash3d-clouds";
   scene.add(clouds);
 
-  // --- static: dark glass plaza + grid
+  // --- static: Painter c24 watercolor plaza (ink rings in shader — no GridHelper)
   const groundGeo = new THREE.CircleGeometry(40, 64);
-  const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x0a1020,
-    roughness: 0.25,
-    metalness: 0.6,
-    transparent: true,
-    opacity: 0.92,
+  const groundMat = kit.createCityGroundMaterial({
+    base: 0x0a1020,
+    ink: 0x2b3a66,
+    accent: 0x8ea0ff,
+    ring: 0.45,
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = CITY_Y;
   group.add(ground);
-  const grid = new THREE.GridHelper(60, 30, 0x2b3a66, 0x16203d);
-  grid.position.y = CITY_Y + 0.01;
-  (grid.material as THREE.Material).transparent = true;
-  (grid.material as THREE.Material).opacity = 0.45;
-  group.add(grid);
   const cityLight = new THREE.HemisphereLight(0x8ea0ff, 0x0a0f20, 1.1);
   cityLight.position.set(0, CITY_Y + 20, 0);
   group.add(cityLight);
@@ -429,9 +425,8 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     scene.remove(clouds);
     // cityBackdropGroup is inside group — cleared with group; mats/geos already in owned*
     groundGeo.dispose();
-    groundMat.dispose();
-    grid.geometry.dispose();
-    (grid.material as THREE.Material).dispose();
+    // Kit-tracked CityGroundMaterial — release from kit (not bare dispose).
+    releasePainterlyMaterial(kit, groundMat);
     for (const m of cloudMats) m.dispose();
     cloudTex.dispose();
     for (const m of backdropMats) {

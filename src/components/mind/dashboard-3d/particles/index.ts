@@ -3,6 +3,7 @@ export {
   createDustField,
   seedDustParticles,
   DUST_COUNT_DEFAULT,
+  DUST_MOTE_MAX_TRIS,
   DUST_COUNT_MAX,
   type CreateDustFieldOpts,
   type DustFieldHandle,

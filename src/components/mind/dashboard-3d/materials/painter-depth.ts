@@ -8,6 +8,8 @@ import { sanitizeFinite } from "./paper-grain.ts";
 export const PAINTER_RENDER_ORDER = {
   nebula: -2,
   sky: -1,
+  /** City plaza under buildings (c24). */
+  ground: 0,
   star: 0,
   inkEdge: 1,
   loreBase: 2,

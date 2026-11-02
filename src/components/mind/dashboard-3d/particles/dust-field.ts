@@ -13,6 +13,8 @@ import { createFrameBudget, dustDistanceFactor, isDocumentHidden, lodCount } fro
 
 export const DUST_COUNT_MAX = 2048;
 export const DUST_COUNT_DEFAULT = 480;
+/** Octahedron detail-0 triangle budget per mote (Sphere 6×6 was ~60). */
+export const DUST_MOTE_MAX_TRIS = 8;
 
 export type DustFieldHandle = {
   mesh: THREE.InstancedMesh | null;
@@ -105,7 +107,12 @@ export function createDustField(
   const radius = finiteOr(o.radius ?? 28, 28);
   const ySpread = finiteOr(o.ySpread ?? 16, 16);
   const seed = finiteOr(o.seed ?? 42, 42);
-  const size = Math.max(1e-4, finiteOr(o.size ?? 0.09, 0.09));
+  const rawSize = o.size ?? 0.09;
+  // Hacker c29: NaN/±Inf/≤0 sizes used to feed SphereGeometry and produce empty/NaN bounds.
+  const size = (() => {
+    const s = finiteOr(rawSize, 0.09);
+    return s > 0 && Number.isFinite(s) ? s : 0.09;
+  })();
   const color = finiteOr(o.color ?? 0x7aa2ff, 0x7aa2ff);
   const seeds = seedDustParticles(count, radius, ySpread, seed);
   const clock = o.clock ?? sharedMotionClock;
@@ -140,7 +147,9 @@ export function createDustField(
     return handle;
   }
 
-  const geo = new THREE.SphereGeometry(size, 6, 6);
+  // c29: Octahedron detail-0 = 8 tris vs Sphere(6,6) ≈60 — same one-draw InstancedMesh,
+  // ~7.5× fewer vertices for the mid-canvas dust field that dominates normal REA churn.
+  const geo = new THREE.OctahedronGeometry(size, 0);
   const mat = new THREE.MeshBasicMaterial({
     color,
     transparent: true,
@@ -150,13 +159,30 @@ export function createDustField(
   const mesh = new THREE.InstancedMesh(geo, mat, count);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.frustumCulled = true;
-  const dummy = new THREE.Object3D();
+  const imArr = mesh.instanceMatrix.array as Float32Array;
+  const writeInstance = (i: number, x: number, y: number, z: number, s: number) => {
+    // Column-major TRS with identity rotation — no Object3D / updateMatrix per mote.
+    const o = i * 16;
+    imArr[o] = s;
+    imArr[o + 1] = 0;
+    imArr[o + 2] = 0;
+    imArr[o + 3] = 0;
+    imArr[o + 4] = 0;
+    imArr[o + 5] = s;
+    imArr[o + 6] = 0;
+    imArr[o + 7] = 0;
+    imArr[o + 8] = 0;
+    imArr[o + 9] = 0;
+    imArr[o + 10] = s;
+    imArr[o + 11] = 0;
+    imArr[o + 12] = x;
+    imArr[o + 13] = y;
+    imArr[o + 14] = z;
+    imArr[o + 15] = 1;
+  };
   for (let i = 0; i < count; i++) {
     const s = seeds[i]!;
-    dummy.position.set(s.x, s.y, s.z);
-    dummy.scale.setScalar(s.scale);
-    dummy.updateMatrix();
-    mesh.setMatrixAt(i, dummy.matrix);
+    writeInstance(i, s.x, s.y, s.z, s.scale);
   }
   mesh.instanceMatrix.needsUpdate = true;
   scene.add(mesh);
@@ -178,16 +204,13 @@ export function createDustField(
   const writeRestPoses = () => {
     for (let i = 0; i < count; i++) {
       const s = seeds[i]!;
-      dummy.position.set(s.x, s.y, s.z);
-      dummy.scale.setScalar(s.scale);
-      dummy.updateMatrix();
-      handle.mesh!.setMatrixAt(i, dummy.matrix);
+      writeInstance(i, s.x, s.y, s.z, s.scale);
     }
     handle.lod.active = count;
     handle.mesh!.count = count;
     const im = handle.mesh!.instanceMatrix;
     im.clearUpdateRanges();
-    im.addUpdateRange(0, count * 16);
+    if (count > 0) im.addUpdateRange(0, count * 16);
     im.needsUpdate = true;
   };
 
@@ -223,16 +246,20 @@ export function createDustField(
     for (let i = 0; i < active; i++) {
       const s = seeds[i]!;
       const wobble = Math.sin(t * s.speed + s.phase) * s.amp;
-      dummy.position.set(s.x + wobble * 0.4 + gx, s.y + wobble + gy, s.z - wobble * 0.25 + gz);
-      dummy.scale.setScalar(s.scale);
-      dummy.updateMatrix();
-      handle.mesh!.setMatrixAt(i, dummy.matrix);
+      writeInstance(
+        i,
+        s.x + wobble * 0.4 + gx,
+        s.y + wobble + gy,
+        s.z - wobble * 0.25 + gz,
+        s.scale,
+      );
     }
     // Upload only the active slice (LOD) instead of the whole 2048×16 float buffer.
     const im = handle.mesh.instanceMatrix;
     im.clearUpdateRanges();
-    im.addUpdateRange(0, active * 16);
-    im.needsUpdate = true;
+    // Hacker c29: active=0 → skip addUpdateRange(0,0) quirks on some three versions.
+    if (active > 0) im.addUpdateRange(0, active * 16);
+    im.needsUpdate = active > 0;
   };
 
   handle.dispose = () => {

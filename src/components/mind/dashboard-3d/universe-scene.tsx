@@ -370,7 +370,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     mount.appendChild(labelRenderer.domElement);
 
     // Sky dome with painterly nebula
-    let kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 } });
+    let kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 }, disposePriorLive: true });
     let sceneAlive = true;
     let atm: HealthAtmosphereHandle | null = null;
     try {
@@ -1144,7 +1144,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (heavyMounted || cancelledProgressive) return;
       heavyMounted = true;
       try {
-        city = createCityLayer(scene);
+        city = createCityLayer(scene, kit);
         ensureDiveArtFn = () => city?.ensureDiveArt();
         layoutSig = "";
         layoutProgressSig = "";
