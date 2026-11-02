@@ -8,7 +8,7 @@
  */
 import { damp } from "./ease.ts";
 import { finiteOr } from "./sanitize.ts";
-import type { PulseSample } from "./star-pulse.ts";
+import { clampGlowScale, GLOW_BASE, type PulseSample } from "./star-pulse.ts";
 import {
   sampleOrbitDrift,
   type OrbitDriftOpts,
@@ -93,7 +93,8 @@ export function stepFocusEase(
 export function applyFocusPulse(out: PulseSample, pulseMul: number): PulseSample {
   const m = finiteOr(pulseMul, 1);
   out.scale = finiteOr(out.scale, 1) * m;
-  out.glow = finiteOr(out.glow, 2) * (1 + (m - 1) * 0.5);
+  // c32: ease glow gently with focus, then hard-cap for painter additive bloom.
+  out.glow = clampGlowScale(finiteOr(out.glow, GLOW_BASE) * (1 + (m - 1) * 0.5));
   return out;
 }
 

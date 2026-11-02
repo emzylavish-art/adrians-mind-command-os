@@ -11,6 +11,10 @@ export const PAINTER_PASS_MAX_DPR = 3;
 export const PAINTER_AMOUNT_MIN = 0.08;
 export const PAINTER_AMOUNT_MAX = 0.85;
 export const PAINTER_AMOUNT_DEFAULT = 0.42;
+/** c28: default paper grain (was 0.09 — unread on full dash). */
+export const PAINTER_PASS_GRAIN_DEFAULT = 0.18;
+/** c28: max UV brush offset (mediump-safe). */
+export const PAINTER_PASS_BRUSH_OFFSET_MAX = 0.022;
 /** Coalesce rapid resizePass storms — min ms between actual setSize calls. */
 export const PAINTER_RESIZE_MIN_INTERVAL_MS = 48;
 
@@ -21,7 +25,7 @@ export const PainterlyPassShader = {
     tDiffuse: { value: null as THREE.Texture | null },
     time: { value: 0 },
     amount: { value: PAINTER_AMOUNT_DEFAULT },
-    grain: { value: 0.09 },
+    grain: { value: PAINTER_PASS_GRAIN_DEFAULT },
     wash: { value: 0.38 },
     /** c16: anisotropic paper-fiber strength 0..1 (from real setPassHealth amount). */
     fiber: { value: 0.35 },
@@ -44,9 +48,10 @@ export const PainterlyPassShader = {
     ${GLSL_HASH_NOISE}
     void main() {
       vec2 uv = vUv;
-      // c16: paper-fiber direction from real amount (deterministic tilt — no fabricated weather)
+      // c16/c28: paper-fiber + readable wash (still driven only by real amount)
+      float amt = clamp(amount, 0.0, 0.85);
       float fib = clamp(fiber, 0.0, 1.0);
-      float ang = amount * 1.2;
+      float ang = amt * 1.2;
       vec2 dir = vec2(cos(ang), sin(ang));
       vec2 perp = vec2(-dir.y, dir.x);
       vec2 fUv = vec2(
@@ -54,37 +59,46 @@ export const PainterlyPassShader = {
         dot(uv * 56.0, perp) * mix(1.0, 0.42, fib)
       );
       float n = paintFbm(paintWrap(fUv) + time * 0.04);
+      // c28 HACKER: soft-cap brush offset so mediump + max amount cannot walk UVs off-sheet
+      float brushScale = min(amt * 0.028, 0.022);
       vec2 brush = (vec2(
         paintNoise(paintWrap(uv * 48.0 + vec2(time * 0.02, 0.0))),
         paintNoise(paintWrap(uv * 48.0 + vec2(0.0, 3.1)))
-      ) - 0.5) * amount * 0.014;
-      // Stretch brush slightly along fiber so wash follows paper grain
-      brush += dir * ((n - 0.5) * amount * 0.006 * fib);
-      vec4 c = texture2D(tDiffuse, uv + brush);
+      ) - 0.5) * brushScale;
+      brush += dir * ((n - 0.5) * min(amt * 0.012 * fib, 0.01));
+      vec2 suv = clamp(uv + brush, 0.0, 1.0);
+      vec4 c = texture2D(tDiffuse, suv);
       vec4 blur = (
-        texture2D(tDiffuse, uv + vec2( brush.x, 0.0)) +
-        texture2D(tDiffuse, uv + vec2(-brush.x, 0.0)) +
-        texture2D(tDiffuse, uv + vec2(0.0,  brush.y)) +
-        texture2D(tDiffuse, uv + vec2(0.0, -brush.y))
+        texture2D(tDiffuse, clamp(suv + vec2( brush.x, 0.0), 0.0, 1.0)) +
+        texture2D(tDiffuse, clamp(suv + vec2(-brush.x, 0.0), 0.0, 1.0)) +
+        texture2D(tDiffuse, clamp(suv + vec2(0.0,  brush.y), 0.0, 1.0)) +
+        texture2D(tDiffuse, clamp(suv + vec2(0.0, -brush.y), 0.0, 1.0))
       ) * 0.25;
-      c.rgb = mix(c.rgb, blur.rgb, wash);
-      // anisotropic paper grain (fiber-stretched)
-      float g = (n - 0.5) * grain * amount * (0.65 + fib * 0.55);
+      float washAmt = clamp(wash, 0.0, 1.0) * mix(0.85, 1.15, amt);
+      c.rgb = mix(c.rgb, blur.rgb, clamp(washAmt, 0.0, 0.72));
+      // anisotropic paper grain (fiber-stretched) — c28 louder default grain
+      float g = (n - 0.5) * grain * amt * (0.85 + fib * 0.7);
       c.rgb += g;
-      // Unified painterly palette (c11): warm paper midtones + cool indigo shadows
-      // driven only by real amount (from setPassHealth) — no fabricated scene data.
+      // c28: second-octave granulation (pigment settle) without extra textures
+      float g2 = (paintNoise(paintWrap(fUv * 2.3 - time * 0.02)) - 0.5) * grain * amt * 0.45;
+      c.rgb += g2 * mix(0.6, 1.0, fib);
+      // Unified painterly palette (c11/c28): warmer paper + cooler indigo
       float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-      vec3 paperWarm = vec3(1.02, 0.97, 0.90);
-      vec3 indigoCool = vec3(0.90, 0.93, 1.08);
-      float warmAmt = smoothstep(0.15, 0.65, luma) * amount;
-      float coolAmt = (1.0 - smoothstep(0.05, 0.45, luma)) * amount;
-      c.rgb *= mix(vec3(1.0), paperWarm, warmAmt * 0.22);
-      c.rgb *= mix(vec3(1.0), indigoCool, coolAmt * 0.18);
-      // Soft pigment lift on mids so sky/stars/city share one wash grade
-      c.rgb = mix(c.rgb, c.rgb * vec3(0.96, 0.98, 1.04), 0.14 * amount);
-      // Paper vignette (tuned): stronger edge pool, softer center
-      float vig = smoothstep(1.22, 0.28, length(uv - 0.5));
-      c.rgb *= mix(0.72, 1.0, vig);
+      vec3 paperWarm = vec3(1.03, 0.96, 0.88);
+      vec3 indigoCool = vec3(0.88, 0.92, 1.10);
+      float warmAmt = smoothstep(0.15, 0.65, luma) * amt;
+      float coolAmt = (1.0 - smoothstep(0.05, 0.45, luma)) * amt;
+      c.rgb *= mix(vec3(1.0), paperWarm, warmAmt * 0.32);
+      c.rgb *= mix(vec3(1.0), indigoCool, coolAmt * 0.26);
+      c.rgb = mix(c.rgb, c.rgb * vec3(0.95, 0.97, 1.05), 0.2 * amt);
+      // c28: ink edge pool from luma contrast (watercolor line without sobel taps blowup)
+      float edge = abs(luma - blur.r * 0.299 - blur.g * 0.587 - blur.b * 0.114);
+      c.rgb *= 1.0 - smoothstep(0.02, 0.14, edge) * amt * 0.22;
+      // Paper vignette: pigment pools at deckle
+      float vig = smoothstep(1.18, 0.22, length(uv - 0.5));
+      c.rgb *= mix(0.68, 1.0, vig);
+      // HACKER (c28): final clamp — no Inf/NaN out of wash math
+      c.rgb = clamp(c.rgb, 0.0, 1.2);
       gl_FragColor = c;
     }
   `,
@@ -387,7 +401,8 @@ export function sanitizePainterlyPassUniforms(pass: ShaderPass): number {
   }
   if (u["grain"]) {
     const cur = u["grain"].value as number;
-    const v = sanitizeFinite(cur, 0.09, 0, 1);
+    // c28: scrub NaN grain to PAINTER_PASS_GRAIN_DEFAULT
+    const v = sanitizeFinite(cur, PAINTER_PASS_GRAIN_DEFAULT, 0, 1);
     if (v !== cur) {
       u["grain"].value = v;
       repaired += 1;
@@ -454,7 +469,7 @@ export function createPainterlyPass(opts: PainterlyPassOptions = {}): ShaderPass
   if (opts.amount != null) setPainterlyPassAmount(pass, opts.amount);
   else if (!fallback) setPainterlyPassAmount(pass, PAINTER_AMOUNT_DEFAULT);
   if (opts.grain != null && pass.uniforms["grain"]) {
-    pass.uniforms["grain"].value = sanitizeFinite(opts.grain, 0.09, 0, 1);
+    pass.uniforms["grain"].value = sanitizeFinite(opts.grain, PAINTER_PASS_GRAIN_DEFAULT, 0, 1);
   }
   if (opts.wash != null && pass.uniforms["wash"]) {
     pass.uniforms["wash"].value = sanitizeFinite(opts.wash, 0.38, 0, 1);

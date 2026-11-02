@@ -67,6 +67,11 @@ import {
   type PainterlyBotStarBundle,
 } from "./painterly-bot-star.ts";
 import {
+  createFleetBeacon as createFleetBeaconImpl,
+  type FleetBeaconOptions,
+  type PainterlyFleetBeaconBundle,
+} from "./fleet-beacon.ts";
+import {
   createPainterlyInkEdges,
   type PainterlyInkEdgeInput,
   type PainterlyInkEdgesOptions,
@@ -192,6 +197,10 @@ export type PainterlyKit = {
    * Surface only; Light owns bloom/emissive post. Same bundle API as createBotStar.
    */
   createSunMaterial: (opts?: PainterlyBotStarOptions) => PainterlyBotStarBundle;
+  /**
+   * Fleet plan queue/landing beacons (c27) — replaces MeshStandardMaterial ball() in fleet-plan-layer.
+   */
+  createFleetBeacon: (opts?: FleetBeaconOptions) => PainterlyFleetBeaconBundle;
   /**
    * One-line ink-wash constellation edges (replaces LineDashedMaterial rebuildEdges).
    * Batches by health → ≤4 draw calls; handle.update / handle.dispose.
@@ -590,6 +599,19 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
         health: "healthy",
         ...sunOpts,
       });
+    },
+    createFleetBeacon(beaconOpts) {
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        const inert = inertBotStar();
+        return {
+          ...inert,
+          setStatus: () => {},
+          setReached: () => {},
+          radius: 0.4,
+        };
+      }
+      return createFleetBeaconImpl(kit, beaconOpts);
     },
     createInkEdges(edges = [], eOpts) {
       if (kit.disposed) {

@@ -85,7 +85,6 @@ import {
   createCometLaunchState,
   createCometLaunchSample,
   reconcileCometLaunch,
-  cometHeadSize,
   stepCometLaunchEase,
   createTravelerEaseState,
   createTravelerEaseSample,
@@ -93,11 +92,18 @@ import {
   stepTravelerTrails,
   pauseTraveler,
   resumeTraveler,
+  createReducedMotionGuard,
+  disposeReducedMotionGuard,
+  hashMotionLaneSnapshot,
+  shouldMountHeavy,
+  shouldRebuildScene,
+  snapRigProgress,
+  stepReducedMotionSettle,
   type TravelerEaseState,
   type TravelerEaseSample,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
-import { createCommitComets, syncCommitComets, createDustField } from "./particles";
+import { createCommitComets, syncCommitComets, createDustField, applyCometLaunchSamples } from "./particles";
 import { createFeedGlyphs } from "./feed-glyphs";
 import { createCityLayer } from "./city/city-layer";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -372,6 +378,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     // Sky dome with painterly nebula
     let kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 }, kitScope: "dashboard", disposePriorLive: true });
+    const rmGuard = createReducedMotionGuard();
     let sceneAlive = true;
     let atm: HealthAtmosphereHandle | null = null;
     try {
@@ -526,7 +533,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         const color = HEALTH_COLOR[bot.health];
         // Painter c7/c15: watercolor core + glow; health already on createBotStar.
-        const star = kit.createBotStar({ color, idle: bot.health === "idle", health: bot.health });
+        const star = kit.createBotStar({ color, idle: bot.health === "idle", health: bot.health, matte: bot.health === "idle" ? 0.95 : 0.85 });
         const mesh = new THREE.Mesh(sphereGeo, star.meshMaterial);
         mesh.position.copy(pos);
         mesh.userData.botId = bot.id;
@@ -824,11 +831,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const pages = status.notionGraph.pages;
       if (!pages.length) return;
       const positions = pageStarPositions(pages.length, 16);
-      const mat = new THREE.MeshStandardMaterial({
+      // c68 hacker: MeshBasic (no emissive LED) until Painter ships instance-safe page stars.
+      const mat = new THREE.MeshBasicMaterial({
         color: 0x9bb7ff,
-        emissive: 0x4960a8,
-        emissiveIntensity: 0.55,
-        roughness: 0.5,
+        transparent: true,
+        opacity: 0.92,
       });
       pageMesh = new THREE.InstancedMesh(pageGeo, mat, pages.length);
       pageMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(pages.length * 3), 3);
@@ -897,8 +904,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       rebuildPages(status);
       rebuildNebulae(status);
       if (status.fleetPlan) {
-        rebuildLandingPaths(landingGroup, status.fleetPlan);
-        rebuildQueueRoad(queueGroup, status.fleetPlan);
+        rebuildLandingPaths(landingGroup, status.fleetPlan, kit);
+        rebuildQueueRoad(queueGroup, status.fleetPlan, kit);
         rebuildFleetLaneLines(fleetLineGroup, status.fleetPlan, (id) => {
           if (id === "grok-build") return sunMesh.position.clone();
           const v = botVis.find((b) => b.id === id);
@@ -939,14 +946,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     // --- Projects city / particles / postfx (progressive: idle after first sky frame) ---
     let city: ReturnType<typeof createCityLayer> | null = null;
     ensureDiveArtFn = () => city?.ensureDiveArt();
-    let layout: CityLayout = buildCityLayout(dataRef.current.projects);
+    let layout: CityLayout = buildCityLayout(dataRef.current.projects, { nowMs: Date.now(), reducedMotion });
     let layoutSig = "";
     let fly: FlyState = { ...FLY_HOME };
     const knownIds = () => new Set(layout.buildings.map((b) => b.id));
     let layoutProgressSig = "";
     const syncCity = () => {
       if (!city) return;
-      const next = buildCityLayout(dataRef.current.projects);
+      const next = buildCityLayout(dataRef.current.projects, { nowMs: Date.now(), reducedMotion });
       // Structure vs progress: live setBuildingProgress without full rebuild (Painter c11)
       const structSig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.x, b.z]));
       const progressSig = JSON.stringify(
@@ -1187,7 +1194,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     };
     const scheduleHeavy = () => {
-      // c59 / Motion c26: under reduced motion mount everything in one step (no late canvas churn).
+      // Motion c27: under RM mount heavy exactly once (sticky).
+      if (!shouldMountHeavy(rmGuard, reducedMotion)) return;
       if (reducedMotion) {
         mountHeavyLayers();
         return;
@@ -1689,9 +1697,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
 
       if (rig.t < 1) {
+        // Motion c27: snapRigProgress forces t=1 under RM (instant camera).
+        snapRigProgress(rig, reducedMotion);
         if (reducedMotion) {
-          // c59 / Motion c26: snap — multi-frame ease changes every mesh projection under RM.
-          rig = { ...rig, t: 1 };
           applyPose(rig.to.position, rig.to.lookAt);
         } else {
           const stepped = stepRigSmooth(rig, dt, 1.35);
@@ -1897,28 +1905,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       city?.tick(wallT, reducedMotion);
       dust?.update(wallT, reducedMotion);
       if (comets) {
-      comets.update(wallT, reducedMotion);
-      stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
-      for (let ci = 0; ci < comets.count; ci++) {
-        const sample = cometLaunchSamples[ci];
-        if (!sample) continue;
-        const line = comets.group.getObjectByName(`motion-comet-${ci}`);
-        const head = comets.group.getObjectByName(`motion-comet-head-${ci}`);
-        if (line) {
-          line.visible = sample.visible || reducedMotion;
-          const mat = (line as THREE.Line).material as THREE.LineBasicMaterial;
-          if (mat && "opacity" in mat) mat.opacity = (reducedMotion ? 0.22 : 0.55) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
-        }
-        if (head) {
-          head.visible = sample.visible || reducedMotion;
-          const mat = (head as THREE.Points).material as THREE.PointsMaterial;
-          if (mat && "opacity" in mat) {
-            mat.opacity = (reducedMotion ? 0.35 : 0.95) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
-            const base = typeof head.userData.baseSize === "number" ? head.userData.baseSize : (mat.size || 0.2);
-            mat.size = cometHeadSize(base, sample, reducedMotion);
-          }
-        }
-      }
+        // Motion c31 optional: explicit cam distance for comet segment LOD (onBeforeRender also feeds).
+        const camDist = camera.position.length();
+        if (Number.isFinite(camDist)) comets.setCamDistance?.(camDist);
+        comets.update(wallT, reducedMotion);
+        stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
+        // Motion c24 / queue #108: cached lines/heads — no per-frame getObjectByName thrash.
+        applyCometLaunchSamples(comets, cometLaunchSamples, reducedMotion);
       }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
@@ -1956,7 +1949,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           if (n.personPlane?.material) setImagineNodeFocus(n.personPlane.material as THREE.ShaderMaterial, on);
         }
       }
-      tickPainterlyKit(kit, t, { reducedMotion, dpr: renderer.getPixelRatio() });
+      tickPainterlyKit(kit, t, { reducedMotion, dpr: renderer.getPixelRatio(), pauseWhenHidden: true });
       try {
         const deg = !!kit.budgetMeta?.degraded;
         const prev = (mount as HTMLElement & { __painterDegraded?: boolean }).__painterDegraded;
@@ -2172,9 +2165,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       if (now - sync > 5000) {
         sync = now;
-        // c59: skip dispose/recreate thrash when status signature unchanged (all modes).
+        // c59 signature + Motion c27 RM guard (skip rebuild under RM when hash unchanged).
         const nextSig = dashboardSceneSyncSignature(dataRef.current);
-        if (nextSig !== lastSceneSyncSig) {
+        const dataHash = hashMotionLaneSnapshot({
+          sig: nextSig,
+          focusId: rig.subjectId ?? null,
+        });
+        stepReducedMotionSettle(rmGuard, reducedMotion, now);
+        if (!shouldRebuildScene(rmGuard, dataHash, reducedMotion, now)) {
+          if (comets) {
+            comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
+            reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
+          }
+        } else if (nextSig !== lastSceneSyncSig) {
           lastSceneSyncSig = nextSig;
           rebuildAll();
           syncCity();
@@ -2392,6 +2395,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         releasePainterlyMaterial(kit, sunStar.meshMaterial);
         sunStar.glowMaterial.dispose();
       } catch { /* */ }
+      disposeReducedMotionGuard(rmGuard);
       disposePainterlyKit(kit);
       while (ownedPortraitTextures.length) {
         const tex = ownedPortraitTextures.pop()!;

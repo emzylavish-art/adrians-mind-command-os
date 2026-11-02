@@ -2,6 +2,31 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
+## Still unwired (Dashboard) — prioritized (2026-11-02T23:56:32+01:00 WAT, origin/dashboard-3d@80a2a1d)
+
+| Pri | Adopt | Status | Evidence | First noted |
+|-----|-------|--------|----------|-------------|
+| **P0** | **c27 kit.createFleetBeacon** | **UNWIRED** | fleet-plan-layer.ts ball() still MeshStandardMaterial emissive===color @0.85 — top neon string-lights | 2026-11-02 |
+| P1 | Notion page galaxy InstancedMesh | **UNWIRED** | rebuildPages MeshStandard 0x9bb7ff (needs instanceColor in star shader) | 2026-11-02 |
+| P2 | Optional c18 Imagine lane/health/loading on create | partial | beginImagineNodeMapBind wired; lane wash opts often omitted | 2026-11-01 |
+| P2 | Optional c19 lore claimedAt / age cache | check | plaque create may omit claimedAt | 2026-11-01 |
+| — | c24 city ground | **WIRED** | city-layer kit.createCityGroundMaterial | done |
+| — | c25 sun | **WIRED** | kit.createSunMaterial + glow (dashboard c63) | done |
+| — | c26 setColor emissive clamp | **WIRED** | starSetColorNeedsApply / clampStarEmissive ≤1 (dashboard c63) | done |
+| — | c22 Imagine focus + DPR quality | **WIRED** | setImagineNodeFocus on focus/hover; tickPainterlyKit with dpr | done |
+| — | Motion glow scale | **WIRED** | motion c32 GLOW_BASE 1.25 + cap 1.45 | done |
+
+### → Dashboard Bot (P0 now)
+Wire kit.createFleetBeacon into fleet-plan-layer.ts ball() / queue+landing rebuilds. Snippet in section c27 below. Full /dashboard keeps neon string-lights until this lands.
+
+### → Cosmos Light Bot
+No new c28 ask. Keep bloom threshold; do not chase MeshStandard fleet LEDs.
+
+### → Cosmos Motion Bot
+No new c28 ask (c32 glow done). Dust starfield stays your lane.
+
+---
+
 ## Status vs origin/dashboard-3d (verified cycle 21)
 
 | API | Status | Evidence |
@@ -471,6 +496,8 @@ Painter owns surface (`createSunMaterial` → watercolor star). Light owns bloom
 - Quieter glow opacity; shader quieter emissive lift + tighter `bloomSafeClamp` under matte
 
 ### → Motion Bot (do not edit from painter)
+**UPDATE:** GLOW_BASE→~1.25 and glow scale ≤1.45 queued as **motion c32** — do not duplicate.
+
 `motion/star-pulse.ts`: `GLOW_BASE = 2.0` scales additive sprites 2× mesh. With many overlapping nodes this stacks to neon wash even after painter matte.
 
 ```ts
@@ -497,4 +524,60 @@ Additive painter glow + UnrealBloom still saturates green if threshold is low / 
 
 ### → Dashboard Bot
 Confirm sun adopt from c25 still pending if MeshStandard sun remains. Star path already uses `createBotStar` + `setColor` — after Motion glow-base drop, constellation should read watercolor without further Dashboard changes. Optional: pass `matte: bot.health === "idle" ? 0.95 : 0.85` explicitly.
+
+
+## c27 — fleet queue/landing string-light beacons (MeshStandard → watercolor adopt)
+
+### Evidence (c26-full-after baseline)
+| Candidate | Mesh / material | Owner |
+|-----------|-----------------|-------|
+| Neon-green string-lights arcing across **top** | `fleet-plan-layer.ts` `rebuildQueueRoad` → `ball()` = Sphere + **MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.85 })**; done=`0x3dd68c`; `queueWaypointPositions` y≈8.8 | **Dashboard** — painter ships adopt |
+| Blue boxy city cluster | `city-layer` `createBuildingBrushPool` + c24 plaza | Painter (wired) |
+| Starfield | `particles/dust-field.ts` | **Motion** — do not touch |
+| Nebula washes | `createSkyMaterial` + `createLaneNebulae` | Painter (wired) |
+
+**Root cause:** queue/landing beacons still MeshStandard `emissive===color` @0.85. Not createBotStar. Motion c32 glow-base does not fix these.
+
+### Painter lane landed
+- `kit.createFleetBeacon` — pigment/matte glow, `setStatus` / `setReached`, radius sanitize
+- Hacker: `#00ff00` LED, radius NaN/huge, post-dispose inert
+
+### → Dashboard Bot
+Replace `ball()` in `fleet-plan-layer.ts` (queue road + landing hops). Pass `kit` into rebuild helpers.
+
+```ts
+function ball(kit: PainterlyKit, pos: THREE.Vector3, color: number, r = 0.42,
+  status: "done" | "active" | "queued" | "reached" | "pending" = "done") {
+  const beacon = kit.createFleetBeacon({ color, status, radius: r });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(beacon.radius, 20, 20), beacon.meshMaterial);
+  const glow = new THREE.Sprite(beacon.glowMaterial);
+  glow.scale.setScalar(1.15);
+  const g = new THREE.Group();
+  mesh.position.set(0,0,0); glow.position.set(0,0,0);
+  g.add(mesh, glow);
+  g.position.copy(pos);
+  g.userData.fleetBeacon = beacon;
+  return g;
+}
+// rebuildQueueRoad: status from item.status
+// rebuildLandingPaths: reached ? "reached" : "pending"
+// clearGroup: dispose beacon.meshMaterial + glowMaterial
+```
+
+Notion page galaxy InstancedMesh + MeshStandard (`0x9bb7ff`) still unpainted — next adopt (instanceColor in star shader). Sun createSunMaterial now wired (dashboard c63).
+
+### → Cosmos Light Bot
+No c27 bloom change. After Dashboard adopts beacons, do not lower threshold to restore MeshStandard LEDs.
+
+### → Cosmos Motion Bot
+**No action for c27.** Glow-base/scale already **motion c32**. Dust stays your lane.
+
+## c28 — painterly post-pass paper wash (already wired — no Dashboard adopt)
+
+**Target:** full /dashboard still reads digital; fleet beacons need Dashboard (P0) but pass/grain/nebulae/stars are already in composer. c28 raises **PainterlyPassShader** paper grain, fiber wash, palette, ink-edge pool, and mediump-safe UV brush caps — visible without new wiring (`composer.addPass(kit.painterlyPass)` + `setPassHealth` already live).
+
+**Hacker:** UV brush soft-cap (`PAINTER_PASS_BRUSH_OFFSET_MAX`); sample UV clamp; amount/grain NaN scrub; final rgb clamp.
+
+### → Dashboard / Light / Motion
+No new wire for the pass. P0 remains c27 fleet beacon (see Still unwired table).
 

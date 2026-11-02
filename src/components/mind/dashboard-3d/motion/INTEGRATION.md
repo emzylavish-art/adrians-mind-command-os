@@ -785,3 +785,31 @@ resampled arc (no pop).
 ### Requests (c31)
 - Register `particles/comet-seg-lod.test.ts` in package.json strip-types list.
 - Queue row #120 Motion c31 **done**.
+
+## Requests for Dashboard Bot (c32 — glow scale cap)
+
+Painter c26: additive glow saturated watercolor stars. Motion-side only:
+- `GLOW_BASE` 2.0 → **1.25** (`star-pulse.ts`)
+- `out.glow` (→ `n.glow.scale`) hard-capped at **`GLOW_SCALE_CAP` = 1.45** via `clampGlowScale`
+  after pulse + `applyFocusPulse` (star-batch also clamps).
+
+No universe-scene edit. Pulse / breathe / focus multipliers still apply inside the cap.
+
+### Requests (c32)
+- Register `motion/glow-scale-cap.test.ts` in package.json strip-types list.
+- Queue row for Motion c32 **done**.
+
+## Requests for Dashboard Bot (c33 — traveler trail point budget)
+
+Optional opt-in (default off → bit-identical). When `stepTravelerTrails(..., { enablePointBudget: true, camDistance })`:
+- `allocateTravelerPointBudgets` caps polyline vertices under `TRAVELER_POINT_BUDGET_TOTAL` (2048)
+- hysteretic cam-distance LOD (`TRAVELER_POINT_NEAR/FAR/HYST`, far min 2) + speed weighting
+- focused trails (`trail.focused = true`) keep full point count first
+- thinned trails resample via `resampleTravelerPolyline` into `trail.activePoints`
+
+No universe-scene edit required until Dashboard opts in. Pass `camDistance` (e.g. `rig.camera.position.length()`) and set `focused`/`speed` on trails.
+
+### Requests (c33)
+- Register `motion/traveler-point-budget.test.ts` in package.json strip-types list.
+- Queue row #123 Motion c33 **done**.
+- Wire: `enablePointBudget: true` + `camDistance` on the traveler tick; mark focus traveler `focused: true`.

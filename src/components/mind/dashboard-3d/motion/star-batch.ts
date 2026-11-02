@@ -22,6 +22,8 @@ import {
   pulsePhaseFromId,
   type PulseHealth,
   type PulseSample,
+  GLOW_BASE,
+  clampGlowScale,
 } from "./star-pulse.ts";
 import { sampleOrbitDrift, type OrbitDriftOpts, type Xyz } from "./orbit-drift.ts";
 import {
@@ -71,8 +73,8 @@ export type StarBatchOpts = {
 };
 
 /** Reused crossfade temps/opts — no per-star allocation (c19). */
-const XF_TMP_FROM: PulseSample = { scale: 1, glow: 2, emissive: 0.5 };
-const XF_TMP_TO: PulseSample = { scale: 1, glow: 2, emissive: 0.5 };
+const XF_TMP_FROM: PulseSample = { scale: 1, glow: GLOW_BASE, emissive: 0.5 };
+const XF_TMP_TO: PulseSample = { scale: 1, glow: GLOW_BASE, emissive: 0.5 };
 const XF_OPTS: HealthPulseCrossfadeOpts = {};
 
 const EMPTY_BATCH_OPTS: StarBatchOpts = Object.freeze({});
@@ -187,9 +189,9 @@ export function createStarBatchScratch(
       f.pulseMul = 1;
       f.driftMul = 1;
       reuse.focus[i] = f;
-      const p = reuse.pulse[i] ?? { scale: 1, glow: 2, emissive: 0.5 };
+      const p = reuse.pulse[i] ?? { scale: 1, glow: GLOW_BASE, emissive: 0.5 };
       p.scale = 1;
-      p.glow = 2;
+      p.glow = GLOW_BASE;
       p.emissive = 0.5;
       reuse.pulse[i] = p;
     }
@@ -219,7 +221,7 @@ export function createStarBatchScratch(
     posXYZ,
     pos,
     focus: Array.from({ length: cap }, () => createFocusEaseState()),
-    pulse: Array.from({ length: cap }, () => ({ scale: 1, glow: 2, emissive: 0.5 })),
+    pulse: Array.from({ length: cap }, () => ({ scale: 1, glow: GLOW_BASE, emissive: 0.5 })),
   };
   return scratch;
 }
@@ -240,7 +242,7 @@ export function disposeStarBatchScratch(scratch: StarBatchScratch): void {
     const p = scratch.pulse[i];
     if (p) {
       p.scale = 1;
-      p.glow = 2;
+      p.glow = GLOW_BASE;
       p.emissive = 0.5;
     }
   }
@@ -356,7 +358,8 @@ export function stepStarFieldBatch(
     if (!Number.isFinite(pos.y)) pos.y = 0;
     if (!Number.isFinite(pos.z)) pos.z = 0;
     if (!Number.isFinite(pulse.scale)) pulse.scale = 1;
-    if (!Number.isFinite(pulse.glow)) pulse.glow = 2;
+    if (!Number.isFinite(pulse.glow)) pulse.glow = GLOW_BASE;
+    pulse.glow = clampGlowScale(pulse.glow);
     if (!Number.isFinite(pulse.emissive)) pulse.emissive = 0.5;
 
     stepped++;

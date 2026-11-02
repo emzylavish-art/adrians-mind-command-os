@@ -24,7 +24,23 @@ const AMP: Record<PulseHealth, number> = {
   idle: 0,
 };
 
-const GLOW_BASE = 2.0;
+/** Painter c26 / Motion c32: was 2.0 — saturated additive watercolor glow. */
+export const GLOW_BASE = 1.25;
+/** Hard cap for out.glow (scene applies as n.glow.scale). */
+export const GLOW_SCALE_CAP = 1.45;
+
+/** Sanitize + clamp glow scale into [0, GLOW_SCALE_CAP]. NaN → GLOW_BASE. */
+export function clampGlowScale(glow: number): number {
+  if (!Number.isFinite(glow)) {
+    if (glow === Number.POSITIVE_INFINITY) return GLOW_SCALE_CAP;
+    if (glow === Number.NEGATIVE_INFINITY) return 0;
+    return GLOW_BASE;
+  }
+  if (glow < 0) return 0;
+  if (glow > GLOW_SCALE_CAP) return GLOW_SCALE_CAP;
+  return glow;
+}
+
 const GLOW_AMP: Record<PulseHealth, number> = {
   healthy: 0.3,
   stalled: 0.12,
@@ -66,7 +82,8 @@ export function sampleStarPulse(
   const h = normalizePulseHealth(health);
   if (reducedMotion || h === "idle") {
     out.scale = 1;
-    out.glow = h === "idle" ? 1.6 : GLOW_BASE;
+    // Idle was 1.6 (> CAP); keep dimmer-than-base feel but respect the painter cap.
+    out.glow = clampGlowScale(h === "idle" ? Math.min(GLOW_BASE, 1.15) : GLOW_BASE);
     out.emissive = EMISSIVE_BASE[h];
     return out;
   }
@@ -75,7 +92,7 @@ export function sampleStarPulse(
   const speed = SPEED[h];
   const wave = Math.sin(t * speed + ph);
   out.scale = 1 + wave * AMP[h];
-  out.glow = GLOW_BASE + wave * GLOW_AMP[h];
+  out.glow = clampGlowScale(GLOW_BASE + wave * GLOW_AMP[h]);
   out.emissive = EMISSIVE_BASE[h] + Math.sin(t * (speed + 0.8) + ph) * EMISSIVE_AMP[h];
   return out;
 }
