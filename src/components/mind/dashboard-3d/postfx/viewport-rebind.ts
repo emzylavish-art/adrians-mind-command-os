@@ -52,6 +52,10 @@ export const WEBGL2_MIN_MAX_EDGE = 2048;
  * read/write targets + scene DepthTexture were allocated at the full size →
  * texImage2D INVALID_VALUE / incomplete FBO → black or garbage frame with no
  * error surfaced. With `maxEdge`, DPR is lowered so both edges fit.
+ *
+ * GAP #66 (light c111): any finite positive `maxEdge` is honored. The old
+ * `>= WEBGL2_MIN_MAX_EDGE` guard silently switched the clamp off on WebGL1 /
+ * low-end GPUs that report 1024 — exactly the devices that need it most.
  */
 export function postfxViewport(
   cssW: number,
@@ -68,7 +72,7 @@ export function postfxViewport(
       ? Math.min(cap, Math.max(POSTFX_MIN_DPR, rawDpr))
       : 1;
   const edge =
-    maxEdge != null && Number.isFinite(maxEdge) && maxEdge >= WEBGL2_MIN_MAX_EDGE ? Math.floor(maxEdge) : null;
+    maxEdge != null && Number.isFinite(maxEdge) && maxEdge >= 1 ? Math.floor(maxEdge) : null;
   if (edge !== null) {
     const fit = edge / Math.max(w, h);
     if (dpr > fit) dpr = fit; // may drop below POSTFX_MIN_DPR: a valid FBO beats a sharp one

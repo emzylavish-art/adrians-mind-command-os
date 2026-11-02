@@ -3,6 +3,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.ts";
 import { BLOOM_KERNEL_RADII, bloomScaleFor, rebasedBlurKernel } from "./bloom-budget.ts";
 import { createGodRayBudget, type GodRayBudgetOpts } from "./god-ray-budget.ts";
+import { applyPrefilter, prefilterUniformDefaults, PREFILTER_HIGHPASS_FRAGMENT, type PrefilterState } from "./bloom-prefilter.ts";
 
 export type BloomTuning = {
   strength: number;
@@ -44,6 +45,8 @@ export type TunedBloomHandle = {
   readonly chainScale: number;
   /** #110: #109 frame-time backoff tier driving the mip-0 cap. */
   readonly frameTier: number;
+  /** #112: bright-pass prefilter layout used by the last render (n = 1 → stock). */
+  readonly prefilter: PrefilterState;
 };
 
 export type TunedBloomOpts = {
@@ -51,6 +54,8 @@ export type TunedBloomOpts = {
   budget?: boolean;
   /** Frame-time backoff thresholds (shared shape with god-ray-budget #109). */
   frameOpts?: GodRayBudgetOpts;
+  /** #112 bright-pass anti-alias prefilter (default on with the budget). */
+  prefilter?: boolean;
 };
 
 /** Max bloom buffer edge — UnrealBloomPass allocates 5 mips ×2 targets. */
@@ -165,11 +170,34 @@ export function createTunedBloomPass(
     }
     return scale;
   };
+  // #112: swap the stock high-pass fragment for the prefiltered one (same
+  // uniforms object, so UnrealBloomPass threshold writes keep working). With
+  // taps = 1 it is the stock single tap, so 1080p output is unchanged.
+  const prefilterOn = budgetOn && opts.prefilter !== false;
+  let prefilter: PrefilterState = { nx: 1, ny: 1, n: 1, spacingX: 0, spacingY: 0 };
+  if (prefilterOn && pass.materialHighPassFilter && pass.highPassUniforms) {
+    Object.assign(pass.highPassUniforms, prefilterUniformDefaults(THREE.Vector2));
+    pass.materialHighPassFilter.uniforms = pass.highPassUniforms as unknown as THREE.ShaderMaterial["uniforms"];
+    pass.materialHighPassFilter.fragmentShader = PREFILTER_HIGHPASS_FRAGMENT;
+    pass.materialHighPassFilter.needsUpdate = true;
+  }
   const baseRender = pass.render.bind(pass);
   pass.render = function budgetedRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
     if (disposed) return;
     // EffectComposer passes seconds; junk / huge deltas are ignored by the budget.
     sampleFrame(Number(deltaTime) * 1000);
+    if (prefilterOn) {
+      // Live sizes: readBuffer = drawing buffer, bright = half of mip 0. Writes
+      // into whichever high-pass uniforms are active (focus guard swaps its own).
+      const bright = pass.renderTargetBright;
+      prefilter = applyPrefilter(
+        pass.highPassUniforms as unknown as Record<string, { value: unknown }>,
+        readBuffer?.width ?? rawW,
+        readBuffer?.height ?? rawH,
+        bright?.width ?? Math.round(rawW / 2),
+        bright?.height ?? Math.round(rawH / 2),
+      );
+    }
     return baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
   };
   const update = (next: HealthTone) => {
@@ -207,6 +235,9 @@ export function createTunedBloomPass(
     },
     get frameTier() {
       return tier;
+    },
+    get prefilter() {
+      return prefilter;
     },
   };
 }

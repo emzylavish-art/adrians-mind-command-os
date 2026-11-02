@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { LuminosityHighPassShader } from "three/examples/jsm/shaders/LuminosityHighPassShader.js";
+import { PREFILTER_GLSL } from "./bloom-prefilter.ts";
 import { liveSceneDepth } from "./depth-validity.ts";
 import { FOCUS_BAND, FOCUS_RAMP, focusBandWeight } from "./focus-depth.ts";
 import { linearDepthOf, sunScreenUv } from "./god-rays.ts";
@@ -113,6 +114,10 @@ export const FocusBloomGuardShader = {
     radius: { value: BLOOM_GUARD_RADIUS },
     feather: { value: BLOOM_GUARD_FEATHER },
     guard: { value: 0 },
+    // #112: same bright-pass prefilter as the tuned bloom (taps = 1 → stock).
+    uPrefilterTaps: { value: 1 },
+    uPrefilterSpacing: { value: new THREE.Vector2(0, 0) },
+    uSrcTexel: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: LuminosityHighPassShader.vertexShader,
   fragmentShader: /* glsl */ `
@@ -135,13 +140,10 @@ export const FocusBloomGuardShader = {
     uniform float feather;
     uniform float guard;
     varying vec2 vUv;
+    ${PREFILTER_GLSL}
 
     void main() {
-      vec4 texel = texture2D(tDiffuse, vUv);
-      float v = luminance(texel.xyz);
-      vec4 outputColor = vec4(defaultColor.rgb, defaultOpacity);
-      float alpha = smoothstep(luminosityThreshold, luminosityThreshold + smoothWidth, v);
-      vec4 bright = mix(outputColor, texel, alpha);
+      vec4 bright = lightBrightPass(vUv);
       float outside;
       if (useDepth > 0.5) {
         float fragZ = texture2D(tDepth, vUv).x;
