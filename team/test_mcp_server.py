@@ -35,6 +35,7 @@ class MCPServerTests(unittest.TestCase):
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("knowledge.search", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("team.worker", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
 
@@ -111,6 +112,26 @@ class MCPServerTests(unittest.TestCase):
             result = json.loads(responses[0]["result"]["content"][0]["text"])
             self.assertEqual(result["status"], "ready")
             self.assertEqual(result["result"]["status"], "queued")
+
+    def test_call_allowlisted_worker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = str(Path(tmp) / "queue.sqlite3")
+            rpc([{
+                "jsonrpc": "2.0", "id": 20, "method": "tools/call",
+                "params": {"name": "team.queue", "arguments": {
+                    "operation": "enqueue", "db": db, "task": "health job",
+                    "payload": {"tool_id": "team.health", "input": {}},
+                }},
+            }])
+            responses = rpc([{
+                "jsonrpc": "2.0", "id": 21, "method": "tools/call",
+                "params": {"name": "team.worker", "arguments": {
+                    "worker_id": "mcp-worker", "db": db,
+                }},
+            }])
+            result = json.loads(responses[0]["result"]["content"][0]["text"])
+            self.assertEqual(result["status"], "ready", result)
+            self.assertEqual(result["result"]["status"], "succeeded")
 
     def test_unavailable_tool_is_error_not_simulated(self):
         responses = rpc([{
