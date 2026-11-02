@@ -130,11 +130,78 @@ const LINE_OPACITY_REDUCED = 0.45;
 const HEAD_OPACITY = 0.95;
 const HEAD_OPACITY_REDUCED = 0.4;
 
-function hashHue(sha: string): number {
+/** c23: max sha chars used for identity / hue / orbit (hostile mega-sha must not burn a frame). */
+export const COMET_SHA_KEY_MAX = 128;
+
+function shaKey(sha: string): string {
+  return sha.length > COMET_SHA_KEY_MAX ? sha.slice(0, COMET_SHA_KEY_MAX) : sha;
+}
+
+function hashSha(sha: string): number {
   let h = 0;
   for (let i = 0; i < sha.length; i++) h = (h * 33 + sha.charCodeAt(i)) | 0;
-  return (h >>> 0) % 360;
+  return h >>> 0;
 }
+
+function hashHue(sha: string): number {
+  return hashSha(sha) % 360;
+}
+
+/** Second, decorrelated 32-bit hash (FNV-1a) so orbit params don't track the hue. */
+function hashSha2(sha: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < sha.length; i++) {
+    h ^= sha.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+export type CometOrbit = { phase: number; speed: number; incline: number; yaw: number };
+
+/**
+ * c23: orbit params derived from the commit sha (not the list index), so when a new commit
+ * is prepended the existing comets keep their exact orbits and only the new one appears.
+ * Ranges match the old index-derived ones (speed 0.22–0.32, incline 0.25–0.49).
+ */
+export function cometOrbitForSha(sha: string): CometOrbit {
+  const key = typeof sha === "string" ? shaKey(sha) : "";
+  const a = hashSha2(key);
+  const b = hashSha(key);
+  return {
+    phase: ((a & 0xffff) / 0x10000) * Math.PI * 2,
+    speed: 0.22 + (((a >>> 16) & 0xff) / 255) * 0.1,
+    incline: 0.25 + ((b & 0xff) / 255) * 0.24,
+    yaw: (((b >>> 8) & 0xffff) / 0x10000) * Math.PI * 2,
+  };
+}
+
+/**
+ * c23: the exact comet list createCommitComets would build — non-empty string shas,
+ * first occurrence wins (duplicates across branch feeds were drawn as two identical
+ * comets), capped at `max`. Keys are capped at COMET_SHA_KEY_MAX chars.
+ */
+export function commitCometKeys(
+  commits: readonly CommitTrailInput[] | null | undefined,
+  max: number = COMET_MAX_DEFAULT,
+): string[] {
+  const cap = clampInt(max, 0, COMET_MAX_HARD, COMET_MAX_DEFAULT);
+  const out: string[] = [];
+  if (!Array.isArray(commits) || cap === 0) return out;
+  // Bounded scan: a hostile 1e6-row feed of duplicates must not walk forever.
+  const scanMax = Math.min(commits.length, 4096);
+  for (let i = 0; i < scanMax && out.length < cap; i++) {
+    const c = commits[i] as CommitTrailInput | null | undefined;
+    if (!c || typeof c !== "object" || typeof c.sha !== "string" || c.sha.length === 0) continue;
+    const k = shaKey(c.sha);
+    if (out.includes(k)) continue;
+    out.push(k);
+  }
+  return out;
+}
+
+type SyncMeta = { max: number; radius: number; segments: number; clock: MotionClock };
+const syncMeta = new WeakMap<CommitCometsHandle, SyncMeta>();
 
 /**
  * Commit → comet trails. segments clamped ≥2 (avoids /0 → NaN arcs).
@@ -154,10 +221,7 @@ export function createCommitComets(
   group.name = "motion-commit-comets";
   scene.add(group);
 
-  const raw = Array.isArray(commits) ? commits : [];
-  const list = raw
-    .filter((c) => c && typeof c.sha === "string" && c.sha.length > 0)
-    .slice(0, max);
+  const list = commitCometKeys(commits, max);
 
   const comets: CometState[] = [];
   const handle: CommitCometsHandle = {
@@ -169,11 +233,11 @@ export function createCommitComets(
   };
 
   const sprite = list.length > 0 ? acquireHeadSprite() : null;
-  list.forEach((c, i) => {
+  list.forEach((sha, i) => {
     const positions = new Float32Array(segments * 3);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const hue = hashHue(c.sha!);
+    const hue = hashHue(sha);
     const color = new THREE.Color(`hsl(${hue}, 70%, 65%)`);
     // Head→tail gradient baked once into vertex colors (fade depends only on u).
     const colors = new Float32Array(segments * 3);
@@ -216,11 +280,12 @@ export function createCommitComets(
     // c22: fixed base for cometHeadSize (scene must not compound mat.size per frame).
     head.userData.baseSize = headMat.size;
     group.add(head);
+    const orbit = cometOrbitForSha(sha);
     comets.push({
-      phase: i * 1.7,
-      speed: 0.22 + (i % 3) * 0.05,
-      incline: 0.25 + (i % 4) * 0.08,
-      yaw: (i / Math.max(list.length, 1)) * Math.PI * 2,
+      phase: orbit.phase,
+      speed: orbit.speed,
+      incline: orbit.incline,
+      yaw: orbit.yaw,
       color: color.getHex(),
       line,
       positions,
@@ -229,7 +294,8 @@ export function createCommitComets(
     });
   });
   handle.count = comets.length;
-  handle.shas = list.map((c) => c.sha as string);
+  handle.shas = list;
+  syncMeta.set(handle, { max, radius, segments, clock });
 
   const writeArc = (c: CometState, head: number) => {
     const pos = c.positions;
@@ -292,4 +358,43 @@ export function createCommitComets(
   };
 
   return handle;
+}
+
+/**
+ * Hacker c23: the scene's 5s sync did `comets.dispose(); comets = createCommitComets(...)`
+ * unconditionally — 2 geometries + 2 materials per comet freed and re-created every 5s
+ * even when the commit list was unchanged. Disposing the last LineBasicMaterial(vertexColors)
+ * / PointsMaterial lets three release (and next frame recompile) the shader programs, plus
+ * fresh GPU buffer uploads: a periodic hitch with nothing new to show.
+ *
+ * `syncCommitComets` returns `prev` untouched when the derived comet list (commitCometKeys)
+ * and options are unchanged; otherwise disposes `prev` and builds a new handle.
+ * Callers compare the returned handle to decide whether to reconcile launches (or just
+ * always call reconcileCometLaunch — it is a no-op for unchanged keys).
+ */
+export function syncCommitComets(
+  scene: THREE.Scene,
+  prev: CommitCometsHandle | null | undefined,
+  commits: readonly CommitTrailInput[] | null | undefined,
+  opts: CreateCommitCometsOpts = {},
+): CommitCometsHandle {
+  const o = opts ?? {};
+  if (prev && !prev.disposed && prev.group.parent === scene) {
+    const meta = syncMeta.get(prev);
+    if (meta) {
+      const max = clampInt(o.max ?? COMET_MAX_DEFAULT, 0, COMET_MAX_HARD, COMET_MAX_DEFAULT);
+      const radius = Math.max(0.01, finiteOr(o.radius ?? 14, 14));
+      const segments = clampInt(o.segments ?? COMET_SEGMENTS_DEFAULT, COMET_SEGMENTS_MIN, 128, COMET_SEGMENTS_DEFAULT);
+      const clock = o.clock ?? sharedMotionClock;
+      if (meta.max === max && meta.radius === radius && meta.segments === segments && meta.clock === clock) {
+        const next = commitCometKeys(commits, max);
+        const cur = prev.shas ?? [];
+        let same = next.length === cur.length;
+        for (let i = 0; same && i < next.length; i++) same = next[i] === cur[i];
+        if (same) return prev;
+      }
+    }
+  }
+  prev?.dispose();
+  return createCommitComets(scene, commits, o);
 }

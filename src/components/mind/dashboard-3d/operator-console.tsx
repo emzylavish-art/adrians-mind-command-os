@@ -204,7 +204,16 @@ export function OperatorConsole({
           <button type="button" className="dash3d-pill" data-testid="operator-copy" onClick={() => void copyBot()}>
             {copied ? "Copied" : "Copy bot lock/branch"}
           </button>
-          <button type="button" className="dash3d-pill" onClick={() => onOpenChange(false)}>
+          <button
+            type="button"
+            className="dash3d-pill"
+            data-testid="operator-close"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenChange(false);
+            }}
+          >
             Close
           </button>
         </div>

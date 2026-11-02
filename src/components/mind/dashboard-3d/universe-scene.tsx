@@ -28,7 +28,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, createCardEdgePass, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, createCardEdgePass, createChartsDepthPlatePass, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -92,7 +92,7 @@ import {
   type TravelerEaseSample,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
-import { createCommitComets, createDustField } from "./particles";
+import { createCommitComets, syncCommitComets, createDustField } from "./particles";
 import { createFeedGlyphs } from "./feed-glyphs";
 import { createCityLayer } from "./city/city-layer";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -950,6 +950,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let detailDimHandle: ReturnType<typeof createDetailBackdropDimPass> | null = null;
     let sceneKeyLiftHandle: ReturnType<typeof createSceneKeyLiftPass> | null = null;
     let cardEdgeHandle: ReturnType<typeof createCardEdgePass> | null = null;
+    let chartsDepthPlateHandle: ReturnType<typeof createChartsDepthPlatePass> | null = null;
     // Light lane focus readability: key/rim follow focused star (dispose on unmount / context loss).
     let focusLight = createFocusLight(scene);
     // Light #67 / #60: Imagine portrait colour bounce (neutral when texture unloaded).
@@ -1028,6 +1029,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } catch {
         nextCardEdge = null;
       }
+      // Light #102: Charts frosted depth plate AFTER cardEdge, before painterly.
+      let nextPlate: typeof chartsDepthPlateHandle = null;
+      try {
+        nextPlate = createChartsDepthPlatePass();
+        composer.addPass(nextPlate.pass);
+      } catch {
+        nextPlate = null;
+      }
       composer.addPass(kit.painterlyPass);
       let nextGuard: typeof focusBloomGuardHandle = null;
       if (nextBloom) {
@@ -1051,6 +1060,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         try { cardEdgeHandle.dispose(); } catch { /* */ }
       }
       cardEdgeHandle = nextCardEdge;
+      if (chartsDepthPlateHandle && chartsDepthPlateHandle !== nextPlate) {
+        try { chartsDepthPlateHandle.dispose(); } catch { /* */ }
+      }
+      chartsDepthPlateHandle = nextPlate;
       exposureRide = createExposureRide({ tone: "idle", reducedMotion });
       exposureRide.apply(renderer);
       return {
@@ -1896,8 +1909,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           liveBloomGuard?.setDepthTexture(composer.readBuffer.depthTexture);
         }
         // Gap#67/#68/#79: per-rect measured dim — detail card (4.5:1 text) vs Charts (3:1 lines + 4.5:1 ticks).
+        let plateChartsIdx = -1;
+        let plateVp: DOMRect | null = null;
         if (liveDetailDim) {
           const vp = renderer.domElement.getBoundingClientRect();
+          plateVp = vp;
           const detailEl = document.querySelector<HTMLElement>(".dash3d-node-detail.is-open");
           const chartEl = document.querySelector<HTMLElement>("[data-testid=charts-panel]");
           const rects: DOMRect[] = [];
@@ -1917,6 +1933,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             );
           }
           if (chartEl) {
+            plateChartsIdx = rects.length;
             rects.push(chartEl.getBoundingClientRect());
             const cs = getComputedStyle(chartEl);
             const tickEl =
@@ -1948,6 +1965,16 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         portraitBounce.tick(dt * 1000);
 
         liveDetailDim?.tick(dt * 1000);
+        if (chartsDepthPlateHandle && plateVp) {
+          chartsDepthPlateHandle.setPlate(
+            liveDetailDim?.contrast ?? null,
+            liveDetailDim?.rects ?? null,
+            plateChartsIdx,
+            plateVp,
+            { reducedMotion },
+          );
+          chartsDepthPlateHandle.tick(dt * 1000);
+        }
         {
           const lift = sceneKeyLiftHandle;
           if (lift) {
@@ -1985,7 +2012,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
                     "position:absolute;left:0.75rem;bottom:0.75rem;z-index:4;max-width:min(92vw,28rem);padding:0.35rem 0.55rem;border-radius:8px;font:11px/1.35 ui-monospace,monospace;background:rgb(8 12 24 / 0.82);color:#e8eefc;pointer-events:none;";
                   mount.appendChild(badge);
                 }
-                const b = formatMeterBadge(liveDetailDim.contrast, lift.report, cardEdgeHandle?.report ?? null);
+                const b = formatMeterBadge(liveDetailDim.contrast, lift.report, cardEdgeHandle?.report ?? null, chartsDepthPlateHandle?.report ?? null);
                 badge.textContent = b.text;
                 badge.dataset.level = b.level;
                 badge.hidden = false;
@@ -2027,8 +2054,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         rebuildAll();
         syncCity();
         if (comets) {
-          comets.dispose();
-          comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+          comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
           reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
         }
         feedGlyphs.dispose();
@@ -2091,13 +2117,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     resizeObserver?.observe(mount);
     
     const onSkyEvent = () => {
+      // Always collapse flyover home when not already universe (city/interior).
       if (fly.level !== "universe") {
         dispatchFly({ type: "SKY" });
-        return;
       }
+      // Force a visible camera reset even when already at universe (star focus / dolly).
+      const high = { ...UNIVERSE_HIGH };
+      lookAt.set(...high.lookAt);
+      freePos.set(...high.position);
+      spherical.setFromVector3(freePos.clone().sub(lookAt));
       rig = flyTo(
         rig,
-        { ...UNIVERSE_HIGH },
+        high,
         [camera.position.x, camera.position.y, camera.position.z],
         [lookAt.x, lookAt.y, lookAt.z],
       );
@@ -2246,6 +2277,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       sceneKeyLiftHandle = null;
       try { cardEdgeHandle?.dispose(); } catch { /* */ }
       cardEdgeHandle = null;
+      try { chartsDepthPlateHandle?.dispose(); } catch { /* */ }
+      chartsDepthPlateHandle = null;
       hideContextLossOverlay(mount);
       focusDepthHandle?.dispose();
       postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth/bloomGuard/detailDim
