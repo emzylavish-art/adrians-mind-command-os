@@ -131,10 +131,10 @@
         "context_retrieval",
         "knowledge_organization"
       ],
-      "status": "adapter_required",
-      "entrypoint": "team/agents/knowledge.md",
+      "status": "partial",
+      "entrypoint": "tools/knowledge/knowledge_search.py",
       "requires": [
-        "configured_knowledge_store"
+        "local_knowledge_path"
       ]
     },
     {
@@ -261,6 +261,22 @@
         "json": "boolean"
       },
       "safety": "offline repository readiness report; no secrets, external calls, or provider probes"
+    },
+    {
+      "id": "knowledge.search",
+      "agent": "knowledge",
+      "capabilities": [
+        "context_retrieval",
+        "knowledge_organization"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/knowledge/knowledge_search.py",
+      "input_schema": {
+        "path": "string",
+        "query": "string",
+        "top_k": "integer"
+      },
+      "safety": "offline lexical search over local Markdown/text files; no external service"
     }
   ],
   "catalog": [
@@ -473,6 +489,16 @@
       "install": "repo-code-present",
       "live": "callable-cli-runner-and-mcp",
       "guardrail": "Offline heuristic scan of owned/authorized source; no execution, exploitation, or network calls; human review required."
+    },
+    {
+      "id": "mind-command-os-knowledge-search",
+      "name": "Mind Command OS Knowledge Search",
+      "category": "offline-knowledge-retrieval",
+      "agent": "knowledge",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "guardrail": "Local lexical search only; semantic search and external knowledge stores are not connected."
     }
   ]
 }
