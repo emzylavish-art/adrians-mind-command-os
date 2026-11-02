@@ -100,6 +100,36 @@ def invoke(tool_id, payload, manifest):
         return envelope("ready", response.get("result"), ["team/queue.py"],
                         ["Queue is persistent, but queued jobs are not executed by this interface."])
 
+    if tool_id == "team.worker":
+        worker_id = payload.get("worker_id")
+        if not isinstance(worker_id, str) or not worker_id.strip():
+            return envelope("blocked", limitations=["team.worker requires a non-empty worker_id."])
+        command = [sys.executable, str(ROOT / "team" / "worker.py"),
+                   "--worker-id", worker_id, "--once"]
+        if payload.get("db"):
+            command.extend(["--db", str(payload["db"])])
+        if "lease_seconds" in payload:
+            command.extend(["--lease-seconds", str(payload["lease_seconds"])])
+        try:
+            completed = subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True,
+                timeout=int(payload.get("timeout_seconds", 150)), check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Worker invocation failed: {exc}"])
+        try:
+            report = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope("blocked", result=completed.stdout,
+                            evidence=["team/worker.py"],
+                            limitations=[completed.stderr.strip() or "Worker returned invalid JSON."])
+        if completed.returncode or report.get("status") == "blocked":
+            return envelope("blocked", result=report,
+                            evidence=["team/worker.py"],
+                            limitations=[report.get("error") or completed.stderr.strip() or "Worker failed."])
+        return envelope("ready", report, ["team/worker.py"],
+                        ["One queued job was handled at most; worker executes only its explicit allowlist."])
+
     if tool_id == "knowledge.search":
         query = payload.get("query")
         if not isinstance(query, str) or not query.strip():
