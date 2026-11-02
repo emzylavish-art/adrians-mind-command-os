@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 17)
+## Status vs origin/dashboard-3d (verified cycle 18)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -10,6 +10,9 @@ Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materi
 | `createSkyMaterial` | **done** | sky mesh (may swap to Imagine backdrop) |
 | `createBotStar` | **done** | `rebuildBots` |
 | `createImagineNodeMaterial` / `setImagineNodeMap` | **done** | portraits, characters, scene arts |
+| `lane`/`health`/`loading` on Imagine + `setImagineNodeLaneWash` | optional c18 | missing-art wash from real bot lane+health; `beginImagineNodeMapBind` + `setImagineNodeMapIfGeneration` for TextureLoader races; `setImagineNodeMapFailed` on 404 |
+| `createBuildingBrushPool` post-dispose tombstone | optional c17/c18 | pool safe after dispose; city may adopt |
+| `textureBudget()` hysteresis | done in kit | degrade enter immediate; exit after 8 under-budget frames ×0.92 |
 | `createLorePlaqueMaterial` + text atlas | **done** | lock notes plaques |
 | `createInkEdges` | **done** | `rebuildEdges` (Dashboard Bot wired) |
 | `createLaneNebulae` | **done** | `rebuildNebulae` (Dashboard Bot wired) |
@@ -225,3 +228,26 @@ const star = kit.createBotStar({
 - **Hacker:** (1) WebGL1/compile failure on buildings was silent/throw — now `forceFallback` + try/catch with visible idle shell. (2) Soft texture budget was report-only — `textureBudget()` now sets `budgetMeta.degraded`, warns once, eases pass grain/fiber. (3) Per-building mats at city scale — ship `createBuildingBrushPool` (≤8 shared) for Dashboard adopt. (4) `setBuildingProgress` stays alloc-free at 60Hz; also drives `uDryBrush`.
 - **Visual:** dry-brush façade strokes (`uDryBrush`) from real progress via `buildingDryBrushFromProgress` / `setBuildingProgress`. Neutral 0 when progress unknown. Optional `setBuildingDryBrush` lock.
 - **Wiring:** **none required** for dry-brush (already on createBuildingBrushMaterial path city uses). Optional: adopt `createBuildingBrushPool` when building count is large; poll `kit.textureBudget()` to surface degrade.
+
+
+## c18 — Imagine missing-art wash + load races
+
+```ts
+const mat = kit.createImagineNodeMaterial({
+  lane: bot.lane,           // real lane id
+  health: bot.health,       // real health tone
+  loading: true,            // honest pulse until TextureLoader settles
+});
+const gen = beginImagineNodeMapBind(mat);
+loader.load(
+  url,
+  (tex) => setImagineNodeMapIfGeneration(mat, tex, gen, { maxTextureSize }),
+  undefined,
+  () => setImagineNodeMapFailed(mat, "load-failed"), // 404/CORS — wash stays
+);
+// Or sync: setImagineNodeMap(mat, tex) bumps gen so older in-flight binds are stale.
+```
+
+- Missing/loading art uses lane+health wash (`imagineWashFromLaneHealth`) — never fabricates portraits.
+- Building pool: `materialForProgress` after `dispose()` returns a live tombstone (no undefined crash).
+- Budget degrade: enter on overBudget; exit only after `BUDGET_HYSTERESIS_FRAMES` under `budget×BUDGET_HYSTERESIS_RATIO`.

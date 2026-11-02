@@ -19,6 +19,8 @@ export const ImagineNodeShader = {
     uBleed: { value: 0.55 },
     uFrame: { value: 0.72 },
     uOpacity: { value: 0.95 },
+    /** 1 while TextureLoader in flight — honest pulse; 0 when missing/settled. */
+    uLoading: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -39,6 +41,7 @@ export const ImagineNodeShader = {
     uniform float uBleed;
     uniform float uFrame;
     uniform float uOpacity;
+    uniform float uLoading;
     varying vec2 vUv;
     ${GLSL_HASH_NOISE}
     void main() {
@@ -49,10 +52,15 @@ export const ImagineNodeShader = {
       float bleedCut = mix(0.012, 0.085, clamp(uBleed, 0.0, 1.0));
       float softEdge = smoothstep(bleedCut, bleedCut + 0.05 + bleedNoise * 0.04, edgeDist);
 
-      // Fallback wash when Imagine asset is missing / still loading
+      // Fallback wash when Imagine asset is missing / still loading (lane+health tint via uniforms)
       float fiber = paintFbm(uv * vec2(11.0, 17.0) + uTime * 0.03);
       vec3 wash = mix(uWash, uWash * 1.4 + uAccent * 0.25, fiber * 0.65);
       wash += (paintNoise(uv * 80.0) - 0.5) * 0.08;
+      // Honest loading pulse — never invents a portrait; just breathes the wash
+      if (uLoading > 0.5 && uHasImage < 0.5) {
+        float pulse = 0.5 + 0.5 * sin(uTime * 2.4);
+        wash = mix(wash, wash * 1.15 + uAccent * 0.18, pulse * 0.35);
+      }
 
       vec3 pigment = wash;
       float imgA = 1.0;

@@ -67,10 +67,20 @@ import {
   PAINTER_TEXTURE_BUDGET_BYTES,
   noteTextureBudgetReport,
   createBudgetDegradeState,
+  BUDGET_HYSTERESIS_FRAMES,
+  BUDGET_HYSTERESIS_RATIO,
 } from "./painter-texture-budget.ts";
 import {
   markImagineNodeReleased,
   isImagineNodeReleased,
+  beginImagineNodeMapBind,
+  getImagineNodeBindGeneration,
+  setImagineNodeMapIfGeneration,
+  imagineWashFromLaneHealth,
+  setImagineNodeLaneWash,
+  setImagineNodeLoading,
+  setImagineNodeMapFailed,
+  IMAGINE_LANE_ACCENT_RGB,
 } from "./imagine-node.ts";
 import {
   createImagineNodeMaterial,
@@ -2005,6 +2015,152 @@ describe("painter c17: dry-brush facades from real progress", () => {
     setBuildingDryBrush(m, 0.9);
     setBuildingProgress(m, 0.1);
     assert.ok(Math.abs((m.uniforms["uDryBrush"]!.value as number) - 0.9) < 1e-6);
+    m.dispose();
+  });
+});
+
+
+describe("hacker pass c18: Imagine race / pool dispose / budget hysteresis / huge map", () => {
+  function fakeTex(w: number, h: number, extra: Record<string, unknown> = {}) {
+    return {
+      image: { width: w, height: h },
+      generateMipmaps: false,
+      needsUpdate: false,
+      colorSpace: "srgb",
+      disposed: false,
+      dispose() {
+        (this as { disposed: boolean }).disposed = true;
+      },
+      ...extra,
+    } as unknown as import("three").Texture;
+  }
+
+  it("stale TextureLoader loses to newer setImagineNodeMap (generation race)", () => {
+    const mat = createImagineNodeMaterial({ loading: true });
+    const genOld = beginImagineNodeMapBind(mat);
+    assert.equal(getImagineNodeBindGeneration(mat), genOld);
+    // Newer bind starts (rapid swap / second URL)
+    const newer = setImagineNodeMap(mat, fakeTex(64, 64));
+    assert.equal(newer.ok, true);
+    assert.equal(mat.uniforms["uHasImage"]!.value, 1);
+    const genNow = getImagineNodeBindGeneration(mat);
+    assert.ok(genNow > genOld);
+    // Late old completion must not overwrite
+    const stale = setImagineNodeMapIfGeneration(mat, fakeTex(32, 32), genOld);
+    assert.equal(stale.ok, false);
+    assert.equal(stale.reason, "stale-generation");
+    assert.equal(mat.uniforms["uHasImage"]!.value, 1);
+    assert.equal((mat.uniforms["uImage"]!.value as { image: { width: number } }).image.width, 64);
+    mat.dispose();
+  });
+
+  it("404/CORS fail records imagineMapError and blocks late success via generation bump", () => {
+    const mat = createImagineNodeMaterial({ lane: "visual-fleet", health: "healthy", loading: true });
+    assert.equal(mat.uniforms["uLoading"]!.value, 1);
+    assert.equal((mat.userData as { imagineMapError: string }).imagineMapError, "loading");
+    const gen = beginImagineNodeMapBind(mat);
+    setImagineNodeMapFailed(mat, "load-failed");
+    assert.equal(mat.uniforms["uHasImage"]!.value, 0);
+    assert.equal(mat.uniforms["uLoading"]!.value, 0);
+    assert.equal((mat.userData as { imagineMapError: string }).imagineMapError, "load-failed");
+    const late = setImagineNodeMapIfGeneration(mat, fakeTex(48, 48), gen);
+    assert.equal(late.reason, "stale-generation");
+    // CORS-tainted path still explicit
+    const tainted = sanitizeImagineImageTexture(fakeTex(64, 64), { maxTextureSize: 256 });
+    // Without DOM taint probe returns false — still accept; force reject via disposed
+    const disposed = fakeTex(64, 64);
+    (disposed as unknown as { disposed: boolean }).disposed = true;
+    assert.equal(sanitizeImagineImageTexture(disposed).reason, "texture-disposed");
+    mat.dispose();
+  });
+
+  it("huge dims beyond MAX_TEXTURE_SIZE reject with exceeds-max-texture-size (no silent bind)", () => {
+    const mat = createImagineNodeMaterial({ maxTextureSize: 128 });
+    const r = setImagineNodeMap(mat, fakeTex(4096, 4096), {
+      maxTextureSize: 128,
+      allowDownscale: false,
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, "exceeds-max-texture-size");
+    assert.equal(mat.uniforms["uHasImage"]!.value, 0);
+    assert.equal((mat.userData as { imagineMapError: string }).imagineMapError, "exceeds-max-texture-size");
+    mat.dispose();
+  });
+
+  it("building brush pool materialForProgress after dispose returns live tombstone (no undefined crash)", () => {
+    const pool = createBuildingBrushPool({ buckets: 4, floors: 8 });
+    const before = pool.materialForProgress(0.5);
+    assert.ok(before);
+    pool.dispose();
+    assert.equal(pool.materialCount, 0);
+    const after = pool.materialForProgress(0.75);
+    assert.ok(after, "must return a material after dispose");
+    assert.ok(after.uniforms?.["uProgress"]);
+    assert.equal((after.userData as { buildingPoolTombstone?: boolean }).buildingPoolTombstone, true);
+    // reassignment / sync must not throw
+    assert.doesNotThrow(() => pool.syncFromProgresses([0.1, 0.9]));
+    const again = pool.materialForProgress(1);
+    assert.equal(again, after);
+    after.dispose();
+  });
+
+  it("budget degrade hysteresis: no flicker when overBudget toggles every frame", () => {
+    const st = createBudgetDegradeState();
+    const budget = 1000;
+    // Flicker at the edge
+    for (let i = 0; i < 20; i++) {
+      noteTextureBudgetReport(st, {
+        bytes: i % 2 === 0 ? 1100 : 900,
+        budget,
+        overBudget: i % 2 === 0,
+      });
+    }
+    // Last sample under — still degraded unless streak+ratio met
+    assert.equal(st.degraded, true, "must stay degraded through edge flicker");
+    // Sustained recovery under hysteresis ratio
+    const exitNeed = budget * BUDGET_HYSTERESIS_RATIO;
+    for (let i = 0; i < BUDGET_HYSTERESIS_FRAMES; i++) {
+      noteTextureBudgetReport(st, { bytes: exitNeed - 1, budget, overBudget: false });
+    }
+    assert.equal(st.degraded, false);
+    assert.equal(st.warned, false, "warned resets on recovery so next exceed can warn");
+  });
+});
+
+describe("painter c18: Imagine missing-art wash from real lane+health", () => {
+  it("ImagineNodeShader exposes uLoading pulse for honest loading wash", () => {
+    assert.ok(ImagineNodeShader.uniforms.uLoading);
+    assert.match(ImagineNodeShader.fragmentShader, /uLoading/);
+    assert.match(ImagineNodeShader.fragmentShader, /Honest loading pulse|uLoading > 0\.5/);
+  });
+
+  it("imagineWashFromLaneHealth keys wash/accent by lane+health; unknown → idle neutral", () => {
+    const healthyFleet = imagineWashFromLaneHealth("visual-fleet", "healthy");
+    const blockedMerge = imagineWashFromLaneHealth("merge", "blocked");
+    const unknown = imagineWashFromLaneHealth(null, "not-a-health");
+    assert.equal(healthyFleet.health, "healthy");
+    assert.equal(healthyFleet.lane, "visual-fleet");
+    assert.deepEqual(
+      [healthyFleet.accent.r, healthyFleet.accent.g, healthyFleet.accent.b],
+      IMAGINE_LANE_ACCENT_RGB["visual-fleet"],
+    );
+    assert.equal(blockedMerge.health, "blocked");
+    assert.ok(blockedMerge.bleed > healthyFleet.bleed);
+    assert.equal(unknown.health, "idle");
+    assert.equal(unknown.lane, null);
+    // Missing art material uses wash (no fabricated map)
+    const m = createImagineNodeMaterial({
+      lane: "dashboard",
+      health: "stalled",
+      loading: true,
+    });
+    assert.equal(m.uniforms["uHasImage"]!.value, 0);
+    assert.equal(m.uniforms["uLoading"]!.value, 1);
+    assert.equal((m.userData as { imagineHealth: string }).imagineHealth, "stalled");
+    setImagineNodeLoading(m, false);
+    assert.equal(m.uniforms["uLoading"]!.value, 0);
+    setImagineNodeLaneWash(m, { lane: "rea", health: "healthy" });
+    assert.equal((m.userData as { imagineLane: string }).imagineLane, "rea");
     m.dispose();
   });
 });

@@ -7,6 +7,7 @@ import {
   PAPER_GRAIN_MIN_SIZE,
 } from "./paper-grain.ts";
 import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
+import { HEALTH_RGB, type HealthTone } from "./ink-wash-edge.ts";
 
 export type ImagineNodeOptions = {
   /** Imagine-generated Texture (portrait/character/scene). Null/undefined → wash fallback. */
@@ -21,6 +22,12 @@ export type ImagineNodeOptions = {
   opacity?: number;
   /** From gl.MAX_TEXTURE_SIZE; omit → mobile-safe default. */
   maxTextureSize?: number;
+  /** Real bot lane id — keys missing-art wash (neutral when unknown). */
+  lane?: string | null;
+  /** Real bot health tone — tints missing/loading wash. */
+  health?: string | null;
+  /** Honest in-flight load pulse (no fabricated portrait). */
+  loading?: boolean;
 };
 
 export type ImagineTextureSanitizeOptions = {
@@ -62,6 +69,7 @@ function cloneUniforms(src: typeof ImagineNodeShader.uniforms) {
     uBleed: { value: src.uBleed.value as number },
     uFrame: { value: src.uFrame.value as number },
     uOpacity: { value: src.uOpacity.value as number },
+    uLoading: { value: (src as { uLoading?: { value: number } }).uLoading?.value ?? 0 },
   };
 }
 
@@ -292,6 +300,80 @@ export function sanitizeImagineImageTexture(
   };
 }
 
+
+/* ---------- c18: lane/health missing-art wash + bind generation ---------- */
+
+/** Soft lane accent hues (RGB 0..1) — painter-owned wash keys, not Media portraits. */
+export const IMAGINE_LANE_ACCENT_RGB: Record<string, [number, number, number]> = {
+  orchestrator: [0.55, 0.72, 1.0],
+  conductor: [0.72, 0.58, 1.0],
+  dispatch: [1.0, 0.62, 0.42],
+  rea: [0.42, 0.88, 0.78],
+  merge: [1.0, 0.48, 0.58],
+  visual: [0.95, 0.72, 0.38],
+  logic: [0.45, 0.82, 0.95],
+  mcp: [0.58, 0.95, 0.55],
+  media: [0.92, 0.55, 0.82],
+  voice: [0.62, 0.78, 1.0],
+  errors: [1.0, 0.45, 0.45],
+  xai: [0.75, 0.85, 0.55],
+  pairing: [0.55, 0.95, 0.85],
+  dashboard: [0.48, 0.68, 0.95],
+  "visual-fleet": [0.78, 0.62, 1.0],
+};
+
+export type ImagineLaneWash = {
+  wash: THREE.Color;
+  accent: THREE.Color;
+  grain: number;
+  bleed: number;
+  health: HealthTone;
+  lane: string | null;
+};
+
+function resolveImagineHealthTone(health: string | null | undefined): HealthTone {
+  if (typeof health === "string" && Object.prototype.hasOwnProperty.call(HEALTH_RGB, health)) {
+    return health as HealthTone;
+  }
+  return "idle";
+}
+
+/**
+ * Honest missing/loading wash from real lane + health.
+ * Unknown lane/health → idle neutrals (never fabricates a portrait).
+ */
+export function imagineWashFromLaneHealth(
+  lane?: string | null,
+  health?: string | null,
+): ImagineLaneWash {
+  const tone = resolveImagineHealthTone(health);
+  const hr = HEALTH_RGB[tone];
+  const laneKey = typeof lane === "string" ? lane.trim().toLowerCase() : "";
+  const accentRgb: [number, number, number] =
+    laneKey && Object.prototype.hasOwnProperty.call(IMAGINE_LANE_ACCENT_RGB, laneKey)
+      ? IMAGINE_LANE_ACCENT_RGB[laneKey]!
+      : [hr[0] * 0.85 + 0.12, hr[1] * 0.85 + 0.12, hr[2] * 0.85 + 0.15];
+  const wash = new THREE.Color(hr[0] * 0.18 + 0.04, hr[1] * 0.18 + 0.05, hr[2] * 0.22 + 0.07);
+  const accent = new THREE.Color(accentRgb[0], accentRgb[1], accentRgb[2]);
+  const grain =
+    tone === "blocked" ? 0.38 : tone === "stalled" ? 0.32 : tone === "idle" ? 0.22 : 0.28;
+  const bleed =
+    tone === "blocked" ? 0.72 : tone === "stalled" ? 0.6 : tone === "idle" ? 0.42 : 0.55;
+  return { wash, accent, grain, bleed, health: tone, lane: laneKey || null };
+}
+
+export function getImagineNodeBindGeneration(mat: THREE.ShaderMaterial): number {
+  const gen = Number((mat.userData as Record<string, unknown>).imagineGeneration ?? 0);
+  return Number.isFinite(gen) ? gen : 0;
+}
+
+/** Bump bind generation so older TextureLoader completions become stale. */
+export function beginImagineNodeMapBind(mat: THREE.ShaderMaterial): number {
+  const next = getImagineNodeBindGeneration(mat) + 1;
+  (mat.userData as Record<string, unknown>).imagineGeneration = next;
+  return next;
+}
+
 /**
  * Painterly ShaderMaterial for Imagine people/characters/scenes on universe nodes.
  * Safe when the image is missing or still loading (procedural wash). Does NOT
@@ -300,12 +382,19 @@ export function sanitizeImagineImageTexture(
  */
 export function createImagineNodeMaterial(opts: ImagineNodeOptions = {}): THREE.ShaderMaterial {
   const uniforms = cloneUniforms(ImagineNodeShader.uniforms);
+  // Lane/health wash defaults first; explicit wash/accent override.
+  const laneWash = imagineWashFromLaneHealth(opts.lane, opts.health);
+  uniforms.uWash.value.copy(laneWash.wash);
+  uniforms.uAccent.value.copy(laneWash.accent);
+  uniforms.uGrain.value = laneWash.grain;
+  uniforms.uBleed.value = laneWash.bleed;
   if (opts.accent != null) uniforms.uAccent.value.set(opts.accent);
   if (opts.wash != null) uniforms.uWash.value.set(opts.wash);
   if (opts.grain != null) uniforms.uGrain.value = sanitizeFinite(opts.grain, 0.28, 0, 1);
   if (opts.bleed != null) uniforms.uBleed.value = sanitizeFinite(opts.bleed, 0.55, 0, 1);
   if (opts.frame != null) uniforms.uFrame.value = sanitizeFinite(opts.frame, 0.72, 0, 1);
   if (opts.opacity != null) uniforms.uOpacity.value = sanitizeFinite(opts.opacity, 0.95, 0, 1);
+  uniforms.uLoading.value = opts.loading ? 1 : 0;
   const mat = new THREE.ShaderMaterial({
     name: "ImagineNodeMaterial",
     precision: PAINTER_SHADER_PRECISION,
@@ -317,13 +406,18 @@ export function createImagineNodeMaterial(opts: ImagineNodeOptions = {}): THREE.
     side: THREE.DoubleSide,
   });
   (mat.userData as Record<string, unknown>).painterSlots = { paperMap: "uPaperMap" };
-  (mat.userData as Record<string, unknown>).imagineMapError = null;
+  (mat.userData as Record<string, unknown>).imagineMapError = opts.loading ? "loading" : null;
   (mat.userData as Record<string, unknown>).imagineOwnedMap = null;
   (mat.userData as Record<string, unknown>).maxTextureSize = opts.maxTextureSize;
   (mat.userData as Record<string, unknown>).imagineReleased = false;
   (mat.userData as Record<string, unknown>).imagineGeneration = 0;
+  (mat.userData as Record<string, unknown>).imagineLane = laneWash.lane;
+  (mat.userData as Record<string, unknown>).imagineHealth = laneWash.health;
   setImagineNodePaperMap(mat, opts.paperMap ?? null);
   setImagineNodeMap(mat, opts.map ?? null, { maxTextureSize: opts.maxTextureSize });
+  if (opts.loading && !(mat.uniforms["uHasImage"]?.value)) {
+    setImagineNodeLoading(mat, true);
+  }
   return mat;
 }
 
@@ -388,26 +482,84 @@ export function setImagineNodeMap(
       owned: false,
     };
   }
+  // HACKER (c18): bump generation so any older in-flight bind becomes stale.
+  const myGen = beginImagineNodeMapBind(mat);
+  return applyImagineNodeMapAtGeneration(mat, map, myGen, opts);
+}
+
+/**
+ * Apply map only if bind generation still matches (async TextureLoader / rapid swap).
+ * Does NOT bump generation — pair with beginImagineNodeMapBind.
+ */
+export function setImagineNodeMapIfGeneration(
+  mat: THREE.ShaderMaterial,
+  map: THREE.Texture | null | undefined,
+  generation: number,
+  opts: ImagineTextureSanitizeOptions = {},
+): ImagineTextureSanitizeResult {
+  if (isImagineNodeReleased(mat)) {
+    return {
+      ok: false,
+      texture: null,
+      reason: "material-released",
+      width: 0,
+      height: 0,
+      npot: false,
+      downscaled: false,
+      owned: false,
+    };
+  }
+  if (getImagineNodeBindGeneration(mat) !== generation) {
+    return {
+      ok: false,
+      texture: null,
+      reason: "stale-generation",
+      width: 0,
+      height: 0,
+      npot: false,
+      downscaled: false,
+      owned: false,
+    };
+  }
+  return applyImagineNodeMapAtGeneration(mat, map, generation, opts);
+}
+
+function applyImagineNodeMapAtGeneration(
+  mat: THREE.ShaderMaterial,
+  map: THREE.Texture | null | undefined,
+  generation: number,
+  opts: ImagineTextureSanitizeOptions = {},
+): ImagineTextureSanitizeResult {
+  if (!mat.uniforms?.["uImage"] || !mat.uniforms?.["uHasImage"]) {
+    return {
+      ok: false,
+      texture: null,
+      reason: "material-missing-uniforms",
+      width: 0,
+      height: 0,
+      npot: false,
+      downscaled: false,
+      owned: false,
+    };
+  }
   disposeOwnedImagineMap(mat);
   const maxTextureSize =
     opts.maxTextureSize ??
     ((mat.userData as Record<string, unknown>).maxTextureSize as number | undefined);
   const result = sanitizeImagineImageTexture(map, { ...opts, maxTextureSize });
-  if (!result.ok || !result.texture) {
-    mat.uniforms["uImage"].value = null;
-    mat.uniforms["uHasImage"].value = 0;
-    (mat.userData as Record<string, unknown>).imagineMapError = result.reason ?? "rejected";
-    return result;
-  }
-  // Re-check after sanitize/downscale — release may have won the race mid-flight.
-  if (isImagineNodeReleased(mat)) {
-    if (result.owned) {
-      try { result.texture.dispose(); } catch { /* */ }
+  // Stale / release check after sanitize (downscale may yield)
+  if (isImagineNodeReleased(mat) || getImagineNodeBindGeneration(mat) !== generation) {
+    if (result.owned && result.texture) {
+      try {
+        result.texture.dispose();
+      } catch {
+        /* */
+      }
     }
     return {
       ok: false,
       texture: null,
-      reason: "material-released",
+      reason: isImagineNodeReleased(mat) ? "material-released" : "stale-generation",
       width: result.width,
       height: result.height,
       npot: result.npot,
@@ -415,8 +567,31 @@ export function setImagineNodeMap(
       owned: false,
     };
   }
+  if (!result.ok || !result.texture) {
+    mat.uniforms["uImage"].value = null;
+    mat.uniforms["uHasImage"].value = 0;
+    // Keep uLoading on intentional missing map (create/loading wash). Clear only on
+    // hard rejects so 404-sized/tainted failures don't keep pulsing forever.
+    if (
+      mat.uniforms["uLoading"] &&
+      result.reason &&
+      result.reason !== "missing" &&
+      result.reason !== "material-released" &&
+      result.reason !== "stale-generation"
+    ) {
+      mat.uniforms["uLoading"].value = 0;
+    }
+    const prevErr = (mat.userData as Record<string, unknown>).imagineMapError;
+    if (result.reason === "missing" && prevErr === "loading") {
+      // preserve honest loading marker
+    } else {
+      (mat.userData as Record<string, unknown>).imagineMapError = result.reason ?? "rejected";
+    }
+    return result;
+  }
   mat.uniforms["uImage"].value = result.texture;
   mat.uniforms["uHasImage"].value = 1;
+  if (mat.uniforms["uLoading"]) mat.uniforms["uLoading"].value = 0;
   (mat.userData as Record<string, unknown>).imagineMapError = null;
   if (result.owned) {
     (mat.userData as Record<string, unknown>).imagineOwnedMap = result.texture;
@@ -442,4 +617,48 @@ export function tickImagineNodeMaterial(mat: THREE.ShaderMaterial, timeSeconds: 
 /** Dispose owned downscale maps attached to an Imagine material (idempotent). */
 export function disposeImagineNodeOwnedMaps(mat: THREE.ShaderMaterial): void {
   disposeOwnedImagineMap(mat);
+}
+
+
+/** Apply lane/health wash uniforms (keeps uHasImage untouched). */
+export function setImagineNodeLaneWash(
+  mat: THREE.ShaderMaterial,
+  opts: { lane?: string | null; health?: string | null } = {},
+): ImagineLaneWash {
+  const w = imagineWashFromLaneHealth(opts.lane, opts.health);
+  if (mat.uniforms?.["uWash"]?.value?.isColor) (mat.uniforms["uWash"].value as THREE.Color).copy(w.wash);
+  else if (mat.uniforms?.["uWash"]) mat.uniforms["uWash"].value = w.wash.clone();
+  if (mat.uniforms?.["uAccent"]?.value?.isColor) (mat.uniforms["uAccent"].value as THREE.Color).copy(w.accent);
+  else if (mat.uniforms?.["uAccent"]) mat.uniforms["uAccent"].value = w.accent.clone();
+  if (mat.uniforms?.["uGrain"]) mat.uniforms["uGrain"].value = w.grain;
+  if (mat.uniforms?.["uBleed"]) mat.uniforms["uBleed"].value = w.bleed;
+  (mat.userData as Record<string, unknown>).imagineLane = w.lane;
+  (mat.userData as Record<string, unknown>).imagineHealth = w.health;
+  return w;
+}
+
+/** Honest loading pulse; clears when map binds or fail is recorded. */
+export function setImagineNodeLoading(mat: THREE.ShaderMaterial, loading: boolean): void {
+  if (!mat.uniforms?.["uLoading"]) return;
+  const on = !!loading;
+  mat.uniforms["uLoading"].value = on ? 1 : 0;
+  if (on && !(mat.uniforms["uHasImage"]?.value)) {
+    (mat.userData as Record<string, unknown>).imagineMapError = "loading";
+  } else if (!on && (mat.userData as Record<string, unknown>).imagineMapError === "loading") {
+    (mat.userData as Record<string, unknown>).imagineMapError = null;
+  }
+}
+
+/** Explicit load failure (404/CORS/network) — wash stays; error is never silent. */
+export function setImagineNodeMapFailed(
+  mat: THREE.ShaderMaterial,
+  reason: string = "load-failed",
+): void {
+  if (isImagineNodeReleased(mat)) return;
+  disposeOwnedImagineMap(mat);
+  if (mat.uniforms?.["uImage"]) mat.uniforms["uImage"].value = null;
+  if (mat.uniforms?.["uHasImage"]) mat.uniforms["uHasImage"].value = 0;
+  if (mat.uniforms?.["uLoading"]) mat.uniforms["uLoading"].value = 0;
+  (mat.userData as Record<string, unknown>).imagineMapError = reason || "load-failed";
+  beginImagineNodeMapBind(mat);
 }

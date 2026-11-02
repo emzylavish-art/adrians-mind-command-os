@@ -251,13 +251,30 @@ export function createBuildingBrushPool(
     );
   }
   let disposed = false;
+  /** HACKER (c18): after dispose, materialForProgress must not return undefined (mesh.material crash). */
+  let tombstone: THREE.ShaderMaterial | null = null;
+  const ensureTombstone = (): THREE.ShaderMaterial => {
+    if (tombstone && !(tombstone as { disposed?: boolean }).disposed) return tombstone;
+    tombstone = createBuildingBrushMaterial({
+      ...opts,
+      progress: 0,
+      floors: opts.floors ?? 8,
+      dryBrush: 0,
+      windowGlow: 0,
+    });
+    (tombstone.userData as { buildingPoolTombstone?: boolean }).buildingPoolTombstone = true;
+    return tombstone;
+  };
   const materialForProgress = (progress: number) => {
+    if (disposed || mats.length === 0) return ensureTombstone();
     const p = sanitizeFinite(progress, 0, 0, 1);
     const idx = n === 1 ? 0 : Math.min(n - 1, Math.round(p * (n - 1)));
-    return mats[idx]!;
+    const mat = mats[idx];
+    if (!mat || (mat as { disposed?: boolean }).disposed) return ensureTombstone();
+    return mat;
   };
   const syncFromProgresses = (progresses: number[]) => {
-    if (disposed) return;
+    if (disposed || mats.length === 0) return;
     // Average progress per bucket from real inputs; empty bucket → 0
     const sums = new Float64Array(n);
     const counts = new Int32Array(n);
@@ -270,7 +287,9 @@ export function createBuildingBrushPool(
     }
     for (let i = 0; i < n; i++) {
       const avg = counts[i]! > 0 ? sums[i]! / counts[i]! : i / Math.max(1, n - 1);
-      setBuildingProgress(mats[i]!, counts[i]! > 0 ? avg : 0);
+      const mat = mats[i];
+      if (!mat || (mat as { disposed?: boolean }).disposed) continue;
+      setBuildingProgress(mat, counts[i]! > 0 ? avg : 0);
     }
   };
   const dispose = () => {
@@ -284,6 +303,14 @@ export function createBuildingBrushPool(
       }
     }
     mats.length = 0;
+    if (tombstone) {
+      try {
+        tombstone.dispose();
+      } catch {
+        /* */
+      }
+      tombstone = null;
+    }
   };
   return {
     materialForProgress,
