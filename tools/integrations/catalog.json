@@ -1,0 +1,168 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Canonical discoverability and activation inventory for the owner-approved GitHub-side integrations. Status describes repository implementation, not an assertion that external credentials or services are connected.",
+  "integrations": [
+    {
+      "id": "model.grok",
+      "name": "Grok / xAI",
+      "kind": "openai-compatible-model-route",
+      "status": "adapter-implemented",
+      "entrypoint": "team/provider_router.py",
+      "runner_tool": "model.generate",
+      "activation": {
+        "env": [
+          "XAI_API_KEY",
+          "MIND_COMMAND_BUDGET_LIMIT_USD",
+          "MIND_COMMAND_BUDGET_SPENT_USD"
+        ],
+        "optional": [
+          "XAI_MODEL"
+        ],
+        "default_model": "grok-3"
+      },
+      "live": "not-verified",
+      "notes": "Explicit invocation only; paid routes require budget preflight."
+    },
+    {
+      "id": "model.openrouter",
+      "name": "OpenRouter",
+      "kind": "openai-compatible-model-route",
+      "status": "adapter-implemented",
+      "entrypoint": "team/provider_router.py",
+      "runner_tool": "model.generate",
+      "activation": {
+        "env": [
+          "OPENROUTER_API_KEY",
+          "MIND_COMMAND_BUDGET_LIMIT_USD",
+          "MIND_COMMAND_BUDGET_SPENT_USD"
+        ],
+        "optional": [
+          "OPENROUTER_MODEL"
+        ],
+        "default_model": "openai/gpt-4o-mini"
+      },
+      "live": "not-verified",
+      "notes": "Explicit invocation only; paid routes require budget preflight."
+    },
+    {
+      "id": "model.ollama",
+      "name": "Ollama",
+      "kind": "local-model-route",
+      "status": "adapter-implemented",
+      "entrypoint": "team/provider_router.py",
+      "runner_tool": "model.generate",
+      "activation": {
+        "env": [
+          "OLLAMA_MODEL"
+        ],
+        "endpoint": "http://127.0.0.1:11434/api/chat",
+        "default_model": "llama3.2"
+      },
+      "live": "not-verified",
+      "notes": "Local service must be running in the execution environment; no remote Ollama host is configured."
+    },
+    {
+      "id": "mcp.remote",
+      "name": "Remote MCP integrations",
+      "kind": "mcp-client",
+      "status": "implemented",
+      "entrypoint": "team/remote_mcp.py",
+      "runner_tool": "mcp.remote",
+      "activation": {
+        "config": "team/remote_mcp.json",
+        "credential_handling": "environment-only",
+        "transport": "HTTPS",
+        "default_enabled": false
+      },
+      "live": "not-verified",
+      "notes": "Use explicit endpoint and tool allowlists; no endpoints are preconfigured."
+    },
+    {
+      "id": "n8n-mcp",
+      "name": "n8n-MCP",
+      "kind": "upstream-source-and-package",
+      "status": "codespaces-install-configured",
+      "source": "https://github.com/czlonkowski/n8n-mcp",
+      "activation": {
+        "codespaces_setup": "tools/bootstrap/install-github-workspace.sh",
+        "npm_package": "n8n-mcp"
+      },
+      "live": "not-verified",
+      "notes": "Needs an authorized n8n endpoint and integration-specific setup; source/package presence is not a live connection."
+    },
+    {
+      "id": "lightrag",
+      "name": "LightRAG",
+      "kind": "upstream-source-and-package",
+      "status": "codespaces-install-configured",
+      "source": "https://github.com/HKUDS/LightRAG",
+      "activation": {
+        "codespaces_setup": "tools/bootstrap/install-github-workspace.sh",
+        "python_package": "lightrag-hku[api]"
+      },
+      "live": "not-verified",
+      "notes": "Knowledge store/model/embedding configuration is required; not yet wired as a semantic RAG adapter."
+    },
+    {
+      "id": "notion.controller",
+      "name": "Notion controller",
+      "kind": "workspace-api-integration",
+      "status": "connector-available-in-chat-only",
+      "entrypoint": null,
+      "activation": {
+        "credential": "Notion integration token stored as secret/environment variable",
+        "required_scopes": [
+          "read content",
+          "write content only for explicitly invoked operations"
+        ]
+      },
+      "live": "not-verified",
+      "notes": "Repository-native Notion API adapter not yet implemented; do not claim this repository can access the connected ChatGPT Notion connector."
+    },
+    {
+      "id": "files.rag",
+      "name": "Files and semantic RAG",
+      "kind": "knowledge-integration",
+      "status": "partial",
+      "entrypoint": "tools/knowledge/knowledge_search.py",
+      "live": "local-lexical-only",
+      "notes": "Repository tool searches local Markdown/text. Semantic embedding/vector-store connector remains open; LightRAG source and package are configured for Codespaces."
+    },
+    {
+      "id": "video.browser",
+      "name": "Video/browser workflow",
+      "kind": "workflow-integration",
+      "status": "adapter-required",
+      "entrypoint": "team/agents/browser-workflow.md",
+      "live": "not-verified",
+      "notes": "No browser session or video generation provider is connected by this catalog. n8n-MCP can be activated after endpoint configuration."
+    },
+    {
+      "id": "governance.budget",
+      "name": "Budget policy",
+      "kind": "policy",
+      "status": "implemented-preflight",
+      "entrypoint": "policies/budget.py",
+      "live": "paid-model-preflight-enforced",
+      "notes": "Paid model routes require explicit limit/spend environment values and pause on exhausted budget unless explicit owner override. Spend accounting itself is externally supplied and is not automatically measured."
+    },
+    {
+      "id": "governance.approvals",
+      "name": "Approval and audit controls",
+      "kind": "governance",
+      "status": "partial",
+      "entrypoint": "team/agents/human-approval.md",
+      "live": "repository-contract-only",
+      "notes": "External side effects still require runtime-specific approval implementation and audit evidence."
+    },
+    {
+      "id": "governance.kill-switch",
+      "name": "Emergency stop",
+      "kind": "governance",
+      "status": "application-feature-existing",
+      "entrypoint": "src",
+      "live": "not-verified-in-this-adapter-pass",
+      "notes": "Do not infer model router shutdown from the app's emergency-stop UI; runtime enforcement must be separately verified."
+    }
+  ]
+}
