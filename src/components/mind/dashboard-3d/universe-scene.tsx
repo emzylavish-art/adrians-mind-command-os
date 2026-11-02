@@ -28,7 +28,7 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, createCardEdgePass, createChartsDepthPlatePass, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, createCardEdgePass, createChartsDepthPlatePass, createPostfxViewportRebind, watchDevicePixelRatio, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -513,7 +513,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         }
         const color = HEALTH_COLOR[bot.health];
         // Painter c7: watercolor core + glow (keeps botId pick target on mesh).
-        const star = kit.createBotStar({ color, idle: bot.health === "idle" });
+        const star = kit.createBotStar({ color, idle: bot.health === "idle", health: bot.health });
         const mesh = new THREE.Mesh(sphereGeo, star.meshMaterial);
         mesh.position.copy(pos);
         mesh.userData.botId = bot.id;
@@ -1084,6 +1084,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       factory: rebuildPostfxBundle,
     });
 
+    // Light #107: DPR + CSS size rebind for composer / bloom / depth consumers.
+    const postfxRebind = createPostfxViewportRebind(() => ({
+      renderer,
+      composer,
+      camera,
+      updateStyle: false,
+      bloom: postfxRecovery.bundle.bloom ?? bloomHandle,
+      godRays: postfxRecovery.bundle.godRays ?? raysHandle,
+      focusDepth: postfxRecovery.bundle.focusDepth ?? focusDepthHandle,
+      bloomGuard: postfxRecovery.bundle.focusBloomGuard ?? focusBloomGuardHandle,
+    }));
+
     let heavyMounted = false;
     let cancelledProgressive = false;
     const mountHeavyLayers = () => {
@@ -1112,8 +1124,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         } catch {
           try { composer = new EffectComposer(renderer); } catch { composer = null; }
         }
+        // Light #107: CSS-px composer seed before addPass (avoids css×dpr² pass sizes).
+        if (composer) {
+          postfxRebind.resize(mount.clientWidth, mount.clientHeight, window.devicePixelRatio);
+        }
         try {
           rebuildPostfxBundle();
+          postfxRebind.force();
           postfxRecovery.notifyRestored();
         } catch { /* postfx optional */ }
       }
@@ -1502,16 +1519,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         if (!sceneAlive || kit.disposed || kit.contextLost) return;
         const w = Math.max(1, mount.clientWidth || window.innerWidth || 1);
         const h = Math.max(1, mount.clientHeight || window.innerHeight || 1);
-        const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
         try {
-          renderer.setSize(w, h);
           labelRenderer.setSize(w, h);
-          composer?.setSize(w, h);
-          bloomHandle?.setSize?.(w, h, dpr);
-          kit.resizePass(w, h, dpr);
-          if (focusDepthHandle && composer?.readBuffer?.depthTexture) {
-            focusDepthHandle.setDepthTexture(composer.readBuffer.depthTexture);
-          }
+          postfxRebind.resize(w, h, window.devicePixelRatio);
+          postfxRebind.force();
+          kit.resizePass(w, h, postfxRebind.viewport?.dpr ?? 1);
         } catch {
           /* restore race — next resize wins */
         }
@@ -1995,7 +2007,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             }
             lift.tick(dt * 1000);
             if (cardEdgeHandle) {
-              cardEdgeHandle.setSeparation(liveDetailDim?.contrast.card ?? null, { reducedMotion });
+              cardEdgeHandle.setSeparation(liveDetailDim?.contrast.card ?? null, { reducedMotion, nowMs: now });
               cardEdgeHandle.tick(dt * 1000);
             }
             // Debug badge only when ?dash3dDebug=1 (off by default).
@@ -2023,7 +2035,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
               /* ignore badge */
             }
           } else if (cardEdgeHandle) {
-            cardEdgeHandle.setSeparation(liveDetailDim?.contrast.card ?? null, { reducedMotion });
+            cardEdgeHandle.setSeparation(liveDetailDim?.contrast.card ?? null, { reducedMotion, nowMs: now });
             cardEdgeHandle.tick(dt * 1000);
           }
         }
@@ -2089,24 +2101,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const onResize = () => {
       const w = Math.max(1, mount.clientWidth || 1);
       const h = Math.max(1, mount.clientHeight || 1);
-      if (w === lastResizeW && h === lastResizeH) return;
+      // Light #107: rebind dedupes on CSS size AND DPR (replaces w/h-only guard).
       lastResizeW = w;
       lastResizeH = h;
       camera.aspect = w / Math.max(1, h);
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h, false);
       labelRenderer.setSize(w, h);
-      composer?.setSize(w, h);
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
-      renderer.setPixelRatio(dpr);
-      bloomHandle?.setSize?.(w, h, dpr);
-      kit.resizePass(w, h, dpr);
-      if (raysHandle && composer?.readBuffer?.depthTexture) {
-        raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
-      }
-      if (focusDepthHandle && composer?.readBuffer?.depthTexture) {
-        focusDepthHandle.setDepthTexture(composer.readBuffer.depthTexture);
-      }
+      postfxRebind.resize(w, h, window.devicePixelRatio);
+      kit.resizePass(w, h, postfxRebind.viewport?.dpr ?? 1);
     };
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
@@ -2115,6 +2117,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           })
         : null;
     resizeObserver?.observe(mount);
+    // Light #107: browser zoom / monitor drag changes DPR without CSS size change.
+    const stopDprWatch = watchDevicePixelRatio(window, () => {
+      lastResizeW = 0;
+      onResize();
+    });
     
     const onSkyEvent = () => {
       // Always collapse flyover home when not already universe (city/interior).
@@ -2221,6 +2228,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     window.addEventListener("resize", onResize);
 
     return () => {
+      stopDprWatch();
+      postfxRebind.dispose();
       window.removeEventListener("resize", onResize);
       resizeObserver?.disconnect();
       document.removeEventListener("dash3d-focus-bot", onFocusBot);

@@ -56,11 +56,17 @@ import {
   createBuildingBrushMaterial,
   setBuildingProgress,
   setBuildingWindowGlow,
+  setBuildingDryBrush,
+  buildingDryBrushFromProgress,
+  createBuildingBrushPool,
+  BUILDING_BRUSH_POOL_MAX,
 } from "./building-surface.ts";
 import {
   estimateTextureBytes,
   sanitizeTextureBudgetBytes,
   PAINTER_TEXTURE_BUDGET_BYTES,
+  noteTextureBudgetReport,
+  createBudgetDegradeState,
 } from "./painter-texture-budget.ts";
 import {
   markImagineNodeReleased,
@@ -809,7 +815,7 @@ describe("painter c6: post-pass amount from constellation health", () => {
 
   it("PainterlyPassShader still exposes amount/grain/wash; version bumped", () => {
     assert.ok(PainterlyPassShader.uniforms.amount);
-    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.[6789]/);
+    assert.match(PAINTER_SHADER_VERSION, /^painter-1\.(?:[6-9]|10)/);
     assert.equal(PAINTER_SHADER_PRECISION, "mediump");
   });
 });
@@ -1622,7 +1628,7 @@ describe("hacker pass c13: invalid star colors + compile fallback + mediump wrap
 
   it("paintWrap GLSL clamps large coords (mediump banding guard present)", () => {
     assert.match(GLSL_HASH_NOISE, /clamp\(p,\s*-1\.0e4,\s*1\.0e4\)/);
-    assert.equal(PAINTER_SHADER_VERSION, "painter-1.9.0");
+    assert.equal(PAINTER_SHADER_VERSION, "painter-1.10.0");
   });
 });
 
@@ -1909,5 +1915,96 @@ describe("painter c16: paper-grain fiber direction in post-pass", () => {
     setPainterlyPassAmount(pass, 0.8);
     assert.ok(Math.abs((pass.uniforms["fiber"]!.value as number) - 0.5) < 1e-6);
     disposePainterlyPass(pass);
+  });
+});
+
+describe("hacker pass c17: building scale / 60Hz progress / budget degrade / WebGL1 fallback", () => {
+  it("setBuildingProgress is allocation-free across 60Hz×2s storm (no throw, dry tracks progress)", () => {
+    const m = createBuildingBrushMaterial({ floors: 12, progress: 0 });
+    assert.equal(m.uniforms["uDryBrush"]!.value, 0);
+    for (let i = 0; i < 120; i++) {
+      setBuildingProgress(m, (i % 11) / 10);
+    }
+    assert.ok(Number.isFinite(m.uniforms["uProgress"]!.value as number));
+    assert.ok(Number.isFinite(m.uniforms["uDryBrush"]!.value as number));
+    assert.ok((m.uniforms["uDryBrush"]!.value as number) > 0);
+    setBuildingProgress(m, NaN);
+    assert.equal(m.uniforms["uProgress"]!.value, 0);
+    assert.equal(m.uniforms["uDryBrush"]!.value, 0);
+    m.dispose();
+  });
+
+  it("createBuildingBrushPool keeps ≤ BUILDING_BRUSH_POOL_MAX mats for thousands of buildings", () => {
+    const pool = createBuildingBrushPool({ floors: 10, buckets: 8 });
+    assert.ok(pool.materialCount <= BUILDING_BRUSH_POOL_MAX);
+    assert.equal(pool.bucketCount, 8);
+    const seen = new Set();
+    for (let i = 0; i < 2000; i++) {
+      const mat = pool.materialForProgress((i % 100) / 99);
+      seen.add(mat);
+    }
+    assert.ok(seen.size <= BUILDING_BRUSH_POOL_MAX);
+    assert.equal(seen.size, pool.materialCount);
+    // Per-building create would be 2000 mats — pool stays tiny
+    assert.ok(pool.materialCount < 2000);
+    pool.syncFromProgresses([0, 0.5, 1, 0.25, 0.75]);
+    pool.dispose();
+    assert.equal(pool.materialCount, 0);
+  });
+
+  it("forceFallback building records compileError (WebGL1-safe, not silent black)", () => {
+    const m = createBuildingBrushMaterial({ forceFallback: true, progress: 0.4, accent: 0x7dc8ff });
+    const meta = m.userData.painterMaterialMeta as { fallback?: boolean; compileError?: string };
+    assert.equal(meta.fallback, true);
+    assert.equal(meta.compileError, "forceFallback");
+    assert.ok(m.name.includes("Fallback"));
+    assert.ok((m.uniforms["uProgress"]!.value as number) > 0);
+    m.dispose();
+  });
+
+  it("texture budget overBudget degrades visibly (grain/fiber) and warns once via budgetMeta", () => {
+    let kit: import("./use-painterly-kit.ts").PainterlyKit | null = null;
+    try {
+      kit = createPainterlyKit({ pass: { amount: 0.5, grain: 0.2 }, textureBudgetBytes: 64 });
+    } catch {
+      // DOM-less: unit-test noteTextureBudgetReport directly
+      const st = createBudgetDegradeState();
+      noteTextureBudgetReport(st, { bytes: 1000, budget: 64, overBudget: true });
+      assert.equal(st.degraded, true);
+      assert.equal(st.warned, true);
+      assert.ok(st.degradeCount >= 1);
+      return;
+    }
+    // Force over-budget by tiny cap — paper+star already exceed 64 bytes
+    const report = kit.textureBudget();
+    assert.equal(report.overBudget, true);
+    assert.equal(kit.budgetMeta.degraded, true);
+    assert.equal(kit.budgetMeta.warned, true);
+    assert.ok((kit.painterlyPass.uniforms["grain"]!.value as number) <= 0.04);
+    if (kit.painterlyPass.uniforms["fiber"]) {
+      assert.ok((kit.painterlyPass.uniforms["fiber"]!.value as number) <= 0.12);
+    }
+    disposePainterlyKit(kit);
+  });
+});
+
+describe("painter c17: dry-brush facades from real progress", () => {
+  it("BrushBuildingShader exposes uDryBrush + paintWrap dry strokes", () => {
+    assert.match(BrushBuildingShader.fragmentShader, /uDryBrush/);
+    assert.match(BrushBuildingShader.fragmentShader, /paintWrap/);
+    assert.match(BrushBuildingShader.fragmentShader, /bristle/);
+    assert.ok(BrushBuildingShader.uniforms.uDryBrush);
+  });
+
+  it("buildingDryBrushFromProgress: 0 at idle; rises with progress; setDryBrush locks", () => {
+    assert.equal(buildingDryBrushFromProgress(0), 0);
+    assert.ok(buildingDryBrushFromProgress(1) > buildingDryBrushFromProgress(0.2));
+    const m = createBuildingBrushMaterial({ progress: 0.5 });
+    const mid = m.uniforms["uDryBrush"]!.value as number;
+    assert.ok(mid > 0);
+    setBuildingDryBrush(m, 0.9);
+    setBuildingProgress(m, 0.1);
+    assert.ok(Math.abs((m.uniforms["uDryBrush"]!.value as number) - 0.9) < 1e-6);
+    m.dispose();
   });
 });
