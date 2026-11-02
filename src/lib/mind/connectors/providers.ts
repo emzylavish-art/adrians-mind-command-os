@@ -312,7 +312,7 @@ const onedriveProvider: OAuthProvider = {
     authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
     tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
   },
-  scopes: ["offline_access", "Files.ReadWrite"],
+  scopes: ["Files.ReadWrite", "offline_access"],
   pkce: true,
   tokenAuth: "body",
   revokeStyle: "none",

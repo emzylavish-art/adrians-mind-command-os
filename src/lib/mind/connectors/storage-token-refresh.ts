@@ -61,7 +61,7 @@ const PROVIDERS: Record<StorageOAuthService, RefreshProviderConfig> = {
     clientIdEnv: "MICROSOFT_OAUTH_CLIENT_ID",
     clientSecretEnv: "MICROSOFT_OAUTH_CLIENT_SECRET",
     refreshTokenEnv: "MIND_ONEDRIVE_REFRESH_TOKEN",
-    refreshScope: "offline_access Files.ReadWrite",
+    refreshScope: "Files.ReadWrite offline_access",
   },
 };
 
