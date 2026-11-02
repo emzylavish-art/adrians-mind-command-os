@@ -12,6 +12,7 @@ runner); it does not perform model inference or claim external services are live
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"rea.scan","input":{"path":"."}}'` — execute the REA scanner.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"security.scan","input":{"path":"."}}'` — run the offline defensive security scan.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"team.health","input":{}}'` — inspect repository-declared readiness.
+- `python team/runner.py --task '{"operation":"invoke","tool_id":"knowledge.search","input":{"path":"./notes","query":"agent tools"}}'` — search local knowledge files.
 
 ### JSON contract
 
@@ -55,6 +56,6 @@ python team/mcp_server.py
 ```
 
 Configure an MCP client to launch that command from the repository root. The current
-server publishes `rea.scan`, `security.scan`, and `team.health`, the currently implemented ready
+server publishes `rea.scan`, `security.scan`, `team.health`, and `knowledge.search`, the currently implemented ready
 tool adapters. The server implements `initialize`, `tools/list`, and `tools/call`;
 it does not launch model agents or invent adapters for unresolved tools.
