@@ -174,9 +174,11 @@
         "structured_logs",
         "health_checks"
       ],
-      "status": "contract_defined",
-      "entrypoint": "team/agents/observability.md",
-      "requires": []
+      "status": "partial",
+      "entrypoint": "team/health.py",
+      "requires": [
+        "python3"
+      ]
     },
     {
       "id": "human-approval",
@@ -245,6 +247,20 @@
         "out": "string"
       },
       "safety": "offline heuristic static review; no code execution or network requests; authorized source only"
+    },
+    {
+      "id": "team.health",
+      "agent": "observability",
+      "capabilities": [
+        "run_status",
+        "health_checks"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/health.py",
+      "input_schema": {
+        "json": "boolean"
+      },
+      "safety": "offline repository readiness report; no secrets, external calls, or provider probes"
     }
   ],
   "catalog": [
