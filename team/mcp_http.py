@@ -7,10 +7,13 @@ hosting; it does not expose a public endpoint by itself.
 import hmac
 import json
 import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlparse
 
-from mcp_server import runner, handle
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from mcp_server import runner, handle  # noqa: E402
 
 
 MAX_BODY_BYTES = 1_000_000
