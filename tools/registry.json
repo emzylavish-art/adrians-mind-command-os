@@ -206,6 +206,15 @@
       "live": "callable-cli-and-runner",
       "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval.",
       "team_agent": "worker-runtime"
+    },
+    {
+      "name": "Mind Command OS Allowlisted Worker",
+      "category": "durable-worker-runtime",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner",
+      "guardrail": "Explicit one-shot processing only through allowlisted local tools; no arbitrary shell or code execution.",
+      "team_agent": "worker-runtime"
     }
   ]
 }
