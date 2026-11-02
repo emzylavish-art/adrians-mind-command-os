@@ -41,7 +41,7 @@ def invoke(tool_id, payload, manifest):
         )
 
     if tool_id == "team.queue":
-        operation = payload.get("operation")
+        operation = payload.get("action", payload.get("operation"))
         if operation not in {"enqueue", "claim", "complete", "fail", "list"}:
             return envelope("blocked", limitations=["Queue operation must be enqueue, claim, complete, fail, or list."])
         db_path = str(payload.get("db", ROOT / "team" / "queue.sqlite3"))
@@ -55,14 +55,14 @@ def invoke(tool_id, payload, manifest):
             if "max_attempts" in payload:
                 command.extend(["--max-attempts", str(payload["max_attempts"])])
         elif operation == "claim":
-            worker = payload.get("worker_id")
+            worker = payload.get("worker", payload.get("worker_id"))
             if not isinstance(worker, str) or not worker.strip():
                 return envelope("blocked", limitations=["claim requires worker_id."])
             command.extend(["--worker", worker])
             if "lease_seconds" in payload:
                 command.extend(["--lease-seconds", str(payload["lease_seconds"])])
         elif operation in {"complete", "fail"}:
-            job_id, worker = payload.get("job_id"), payload.get("worker_id")
+            job_id, worker = payload.get("id", payload.get("job_id")), payload.get("worker", payload.get("worker_id"))
             if not all(isinstance(value, str) and value.strip() for value in (job_id, worker)):
                 return envelope("blocked", limitations=[f"{operation} requires job_id and worker_id."])
             command.extend(["--id", job_id, "--worker", worker])
