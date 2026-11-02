@@ -58,7 +58,8 @@ def tool_specs(manifest):
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},\n                        "operation": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
+                        "action": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
+                        "operation": {"type": "string", "enum": ["enqueue", "claim", "complete", "fail", "list"]},
                         "db": {"type": "string", "description": "Optional SQLite database path; defaults to team/queue.sqlite3."},
                         "task": {"type": "string"},
                         "payload": {"type": "object"},
