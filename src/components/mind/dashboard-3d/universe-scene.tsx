@@ -366,7 +366,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     mount.appendChild(labelRenderer.domElement);
 
     // Sky dome with painterly nebula
-    const kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 } });
+    let kit: PainterlyKit = createPainterlyKit({ pass: { amount: 0.42 } });
+    let sceneAlive = true;
     let atm: HealthAtmosphereHandle | null = null;
     try {
       atm = createHealthAtmosphere(scene, { attachFog: false, tone: "idle" });
@@ -479,6 +480,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     }
 
     function rebuildBots(list: BotNode[]) {
+      if (!sceneAlive || kit.disposed) return;
       // Hacker-pass c8: dispose per-bot materials on each 5 s rebuild (previously leaked
       // ~2 materials per bot per rebuild → thousands of orphaned materials per hour).
       // Gap#47: also release TextureLoader maps from the previous rebuild.
@@ -613,6 +615,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
     ];
     const mountSceneArt = (art: { url: string; pos: THREE.Vector3; scale: readonly [number, number] }) => {
+      if (!sceneAlive || kit.disposed) return;
       const mat = kit.createImagineNodeMaterial({});
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
       plane.position.copy(art.pos);
@@ -704,6 +707,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         });
       }
       if (!inkEdges) {
+        if (!sceneAlive || kit.disposed) return;
         inkEdges = kit.createInkEdges(mapInkInput(edgeRecs));
         edgeGroup.add(inkEdges.group);
       } else {
@@ -826,6 +830,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         id: l.id,
       }));
       if (!laneNebulae) {
+        if (!sceneAlive || kit.disposed) return;
         laneNebulae = kit.createLaneNebulae(lanes);
         nebulaGroup.add(laneNebulae.group);
       } else {
@@ -1481,7 +1486,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       pendingFocusBotId = null;
       // Flush painter resize against the restored pass on the next frame (avoid pending on disposed targets).
       requestAnimationFrame(() => {
-        if (kit.contextLost) return;
+        if (!sceneAlive || kit.disposed || kit.contextLost) return;
         const w = Math.max(1, mount.clientWidth || window.innerWidth || 1);
         const h = Math.max(1, mount.clientHeight || window.innerHeight || 1);
         const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
@@ -2204,6 +2209,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         motionPoseBag.focusById[id] ??= createFocusPoseHold();
         captureFocusPose(motionPoseBag.focusById[id]!, st);
       }
+      sceneAlive = false;
       cancelledProgressive = true;
       detachContext();
       city?.dispose();
@@ -2224,6 +2230,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       starTex.dispose();
       skyMat.map?.dispose();
       skyMat.dispose();
+      sceneAlive = false;
       disposePainterlyKit(kit);
       while (ownedPortraitTextures.length) {
         const tex = ownedPortraitTextures.pop()!;

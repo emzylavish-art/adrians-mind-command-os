@@ -6,7 +6,7 @@ import { useDashboardStatus } from "./use-dashboard-status";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
-import type { SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
+import type { HealthSoundHandle, SoundVoiceSpec } from "@/lib/mind/dashboard/health-sound";
 import { applyScrubToBots, formatWat, scrubAt } from "@/lib/mind/dashboard/time-scrub";
 import { buildDashboardCharts } from "@/lib/mind/dashboard/chart-series";
 import { TimeScrubber } from "./time-scrubber";
@@ -72,11 +72,6 @@ export function DashboardApp() {
     return () => mq.removeEventListener?.("change", apply);
   }, []);
 
-  type HealthSoundHandle = {
-    sync: (voices: SoundVoiceSpec[]) => void;
-    setMuted: (muted: boolean) => void;
-    dispose?: () => void;
-  };
   const soundRef = useRef<HealthSoundHandle | null>(null);
 
   const [soundMuted, setSoundMuted] = useState(true);
@@ -155,15 +150,15 @@ export function DashboardApp() {
     setOperatorPrefs(loadInitialOperatorPrefs());
   }, []);
   useEffect(() => {
-    let sound: (HealthSoundHandle & { setHidden?: (h: boolean) => void; setReducedMotion?: (r: boolean) => void; unlock?: () => void; muted?: boolean; dispose: () => void }) | null = null;
+    let sound: HealthSoundHandle | null = null;
     let cancelled = false;
-    const onVis = () => sound?.setHidden?.(document.hidden);
+    const onVis = () => sound?.setHidden(document.hidden);
     void import("@/lib/mind/dashboard/health-sound").then(({ createHealthSound }) => {
       if (cancelled) return;
-      sound = createHealthSound({ reducedMotion }) as typeof sound;
+      sound = createHealthSound({ reducedMotion });
       soundRef.current = sound;
-      sound?.setMuted(true);
-      setSoundMuted(Boolean(sound?.muted ?? true));
+      sound.setMuted(true);
+      setSoundMuted(Boolean(sound.muted));
       onVis();
     });
     document.addEventListener("visibilitychange", onVis);

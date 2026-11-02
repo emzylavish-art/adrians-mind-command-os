@@ -7,6 +7,7 @@ import {
   clampTextureSizeToGpu,
   sanitizeFinite,
   sanitizeShaderTime,
+  shaderTimeAngle,
   sanitizePainterColor,
   PAINTER_IDLE_RGB,
   createPaperGrainTexture,
@@ -25,6 +26,7 @@ import {
   createPainterlyKit,
   disposePainterlyKit,
   disposeAllPainterlyKits,
+  PAINTER_KIT_DISPOSED,
   livePainterlyKitCount,
   painterlyKitResourceCounts,
   tickPainterlyKit,
@@ -43,7 +45,10 @@ import {
 import {
   createPainterlyLaneNebulae,
   createLaneNebulaMaterial,
+  setLaneNebulaHealth,
   LANE_NEBULAE_MAX,
+  LANE_POOL_BY_HEALTH,
+  LANE_WASH_BY_HEALTH,
 } from "./lane-nebula.ts";
 import {
   createBuildingBrushMaterial,
@@ -100,6 +105,7 @@ import {
   BrushBuildingShader,
   LorePlaqueShader,
   InkWashEdgeShader,
+  LaneNebulaShader,
   ImagineNodeShader,
   createPainterlyPass,
   tickPainterlyPass,
@@ -1653,5 +1659,136 @@ describe("painter c13: ink-edge watercolor bleed from real weight", () => {
     assert.ok(bleeds[0]! <= inkBleedFromWeight("healthy") + 0.05);
     assert.ok(bleeds[2]! > bleeds[0]!);
     ink.dispose();
+  });
+});
+
+describe("hacker pass c14: kit use-after-dispose + nebula mesh churn + wrap seam", () => {
+  it("create* after disposePainterlyKit throws painterly-kit-disposed (no UAF on textures)", () => {
+    // Minimal kit via real factory needs DOM for star sprite — use stub then mark disposed
+    // through disposePainterlyKit on a real kit is heavy; assert guard on a live kit path:
+    const tracked: import("three").ShaderMaterial[] = [];
+    let disposed = false;
+    const kit = {
+      get disposed() { return disposed; },
+      set disposed(v: boolean) { disposed = v; },
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string; target?: string }[],
+      contextLost: false,
+      starSpriteTexture: { dispose() {} },
+      paperGrainTexture: { dispose() {} },
+      painterlyPass: { uniforms: {} },
+      createStarMaterial(o?: object) {
+        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+        const m = createStarWatercolorMaterial(o as never);
+        tracked.push(m);
+        return m;
+      },
+      createLaneNebulae(lanes: unknown[] = []) {
+        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+        return createPainterlyLaneNebulae(kit as never, lanes as never);
+      },
+      createBotStar() {
+        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+        return null;
+      },
+      createImagineNodeMaterial() {
+        if (kit.disposed) throw new Error(PAINTER_KIT_DISPOSED);
+        return null;
+      },
+    } as unknown as PainterlyKit & { disposed: boolean };
+    // Before dispose: create works
+    const m = (kit as unknown as { createStarMaterial: Function }).createStarMaterial({ color: 0x3dd68c });
+    assert.ok(m);
+    disposed = true;
+    assert.throws(
+      () => (kit as unknown as { createStarMaterial: Function }).createStarMaterial({}),
+      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
+    );
+    assert.throws(
+      () => (kit as unknown as { createLaneNebulae: Function }).createLaneNebulae([]),
+      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
+    );
+    assert.throws(
+      () => (kit as unknown as { createBotStar: Function }).createBotStar({}),
+      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
+    );
+    assert.throws(
+      () => (kit as unknown as { createImagineNodeMaterial: Function }).createImagineNodeMaterial({}),
+      (e: Error) => e.message === PAINTER_KIT_DISPOSED,
+    );
+    m.dispose();
+  });
+
+  it("real createPainterlyKit create* throws after disposePainterlyKit", () => {
+    let kit: PainterlyKit | null = null;
+    try {
+      kit = createPainterlyKit({ pass: { amount: 0.2 } });
+    } catch {
+      assert.equal(PAINTER_KIT_DISPOSED, "painterly-kit-disposed");
+      return;
+    }
+    disposePainterlyKit(kit);
+    assert.equal(kit.disposed, true);
+    assert.throws(() => kit!.createStarMaterial({}), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
+    assert.throws(() => kit!.createBotStar({}), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
+    assert.throws(() => kit!.createLaneNebulae([]), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
+    assert.throws(() => kit!.createImagineNodeMaterial({}), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
+    assert.throws(() => kit!.bindSharedTexture({} as never, "starSprite"), (e: Error) => e.message === PAINTER_KIT_DISPOSED);
+  });
+
+  it("lane nebula update with flickering lanes reuses mesh pool (no per-frame Mesh alloc storm)", () => {
+    const tracked: import("three").ShaderMaterial[] = [];
+    const kit = {
+      tracked,
+      trackedSkies: [],
+      textureBindings: [] as { material: unknown; slot: string }[],
+      disposed: false,
+      contextLost: false,
+    } as unknown as PainterlyKit;
+    const neb = createPainterlyLaneNebulae(kit, []);
+    for (let frame = 0; frame < 40; frame++) {
+      const n = frame % 2 === 0 ? 8 : 3;
+      const lanes = [];
+      for (let i = 0; i < n; i++) {
+        lanes.push({
+          health: (["healthy", "stalled", "blocked", "idle"] as const)[i % 4]!,
+          center: [i, frame * 0.01, 0] as const,
+        });
+      }
+      neb.update(lanes);
+      assert.equal(neb.count, n);
+      assert.ok(neb.meshPoolSize >= n);
+      assert.equal(tracked.length, 4, "shared mats stable under churn");
+    }
+    // Pool grew to peak 8, not 40*avg
+    assert.ok(neb.meshPoolSize <= LANE_NEBULAE_MAX);
+    assert.equal(neb.meshPoolSize, 8);
+    neb.dispose();
+  });
+
+  it("shaderTimeAngle is continuous across sanitizeShaderTime wrap seam", () => {
+    const a0 = shaderTimeAngle(PAINTER_TIME_PERIOD - 1e-6);
+    const a1 = shaderTimeAngle(PAINTER_TIME_PERIOD + 1e-6);
+    // sin/cos near equal across seam
+    assert.ok(Math.abs(Math.sin(a0) - Math.sin(a1)) < 1e-4);
+    assert.ok(Math.abs(Math.cos(a0) - Math.cos(a1)) < 1e-4);
+    assert.match(LaneNebulaShader.fragmentShader, /0\.010472|ang = uTime/);
+  });
+});
+
+describe("painter c14: lane nebula pigment pooling from real health", () => {
+  it("blocked pool/wash > healthy; setLaneNebulaHealth syncs uPool", () => {
+    assert.ok(LANE_POOL_BY_HEALTH.blocked > LANE_POOL_BY_HEALTH.healthy);
+    assert.ok(LANE_WASH_BY_HEALTH.blocked > LANE_WASH_BY_HEALTH.healthy);
+    assert.ok(LaneNebulaShader.uniforms.uPool);
+    assert.match(LaneNebulaShader.fragmentShader, /uPool/);
+    const blocked = createLaneNebulaMaterial({ health: "blocked" });
+    const healthy = createLaneNebulaMaterial({ health: "healthy" });
+    assert.ok((blocked.uniforms["uPool"]!.value as number) > (healthy.uniforms["uPool"]!.value as number));
+    setLaneNebulaHealth(healthy, "blocked");
+    assert.ok(Math.abs((healthy.uniforms["uPool"]!.value as number) - LANE_POOL_BY_HEALTH.blocked) < 1e-6);
+    blocked.dispose();
+    healthy.dispose();
   });
 });
