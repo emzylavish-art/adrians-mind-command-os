@@ -34,6 +34,18 @@ class RunnerTests(unittest.TestCase):
         self.assertIsInstance(result["result"], dict)
         self.assertIn("tools/rea/rea.py", result["evidence"])
 
+    def test_security_scan_executes(self):
+        code, result = call({
+            "operation": "invoke",
+            "tool_id": "security.scan",
+            "input": {"path": "team"},
+        })
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "ready")
+        self.assertIsInstance(result["result"], dict)
+        self.assertIn("tools/security_review/security_review.py", result["evidence"])
+        self.assertTrue(result["limitations"])
+
     def test_unavailable_tool_is_not_claimed_ready(self):
         code, result = call({"operation": "invoke", "tool_id": "gods-eyes", "input": {}})
         self.assertEqual(code, 0)
