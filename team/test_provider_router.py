@@ -24,9 +24,25 @@ class ProviderRouterTests(unittest.TestCase):
         self.assertTrue(status["ollama"]["configured"])
         self.assertTrue(status["ollama"]["requires_local_service"])
 
+
+    def test_paid_route_requires_budget_configuration(self):
+        with patch.dict(os.environ, {"XAI_API_KEY": "test-token"}, clear=True):
+            with self.assertRaisesRegex(provider_router.ProviderError, "budget preflight"):
+                provider_router.generate("grok", [{"role": "user", "content": "hi"}])
+
+    def test_paid_route_pauses_at_budget_exhaustion(self):
+        env = {
+            "XAI_API_KEY": "test-token",
+            "MIND_COMMAND_BUDGET_LIMIT_USD": "1",
+            "MIND_COMMAND_BUDGET_SPENT_USD": "1",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(provider_router.ProviderError, "budget is exhausted"):
+                provider_router.generate("grok", [{"role": "user", "content": "hi"}])
+
     def test_openrouter_response_is_parsed(self):
         response = Mock()\n        response.read.return_value = json.dumps({\n            "choices": [{"message": {"content": "hello"}}]\n        }).encode()\n        response.__enter__.return_value = response
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-token"}), patch.object(
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-token", "MIND_COMMAND_BUDGET_LIMIT_USD": "10", "MIND_COMMAND_BUDGET_SPENT_USD": "0"}), patch.object(
             provider_router.urllib.request, "urlopen", return_value=response
         ):
             result = provider_router.generate(
