@@ -3,26 +3,130 @@
   "target": "Windows 11",
   "install_root": "%USERPROFILE%\\AdriansMind",
   "repositories": [
-    {"id":"everything-claude-code","name":"Everything Claude Code","url":"https://github.com/affaan-m/ECC.git","install_kind":"source-checkout"},
-    {"id":"superpowers","name":"Superpowers","url":"https://github.com/obra/superpowers.git","install_kind":"source-checkout"},
-    {"id":"gsd-core","name":"GSD Core","url":"https://github.com/gsd-build/get-shit-done.git","install_kind":"source-checkout"},
-    {"id":"ui-ux-pro-max","name":"UI UX Pro Max","url":"https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git","install_kind":"source-and-npm-cli","npm_package":"ui-ux-pro-max-cli"},
-    {"id":"n8n-mcp","name":"n8n-MCP","url":"https://github.com/czlonkowski/n8n-mcp.git","install_kind":"source-and-npm-cli","npm_package":"n8n-mcp"},
-    {"id":"lightrag","name":"LightRAG","url":"https://github.com/HKUDS/LightRAG.git","install_kind":"source-and-python-package","python_package":"lightrag-hku[api]"},
-    {"id":"claude-mem","name":"Claude Mem","url":"https://github.com/thedotmack/claude-mem.git","install_kind":"source-checkout","note":"Plugin activation and provider configuration are not performed automatically."},
-    {"id":"obsidian-skills","name":"Obsidian Skills","url":"https://github.com/kepano/obsidian-skills.git","install_kind":"source-checkout"},
-    {"id":"awesome-claude-code","name":"Awesome Claude Code","url":"https://github.com/subinium/awesome-claude-code.git","install_kind":"reference-catalog"},
-    {"id":"ghidra","name":"Ghidra","url":"https://github.com/NationalSecurityAgency/ghidra.git","install_kind":"source-and-latest-release-archive","release_asset_regex":"^ghidra_.*\\.zip$","requires":"64-bit JDK 25"},
-    {"id":"jadx","name":"JADX","url":"https://github.com/skylot/jadx.git","install_kind":"source-and-latest-release-archive","release_asset_regex":"^jadx.*\\.zip$","requires":"64-bit Java runtime"},
-    {"id":"frida","name":"Frida","url":"https://github.com/frida/frida.git","install_kind":"source-and-python-package","python_package":"frida-tools"},
-    {"id":"owasp-zap","name":"OWASP ZAP","url":"https://github.com/zaproxy/zaproxy.git","install_kind":"source-and-winget","winget_id":"ZAP.ZAP"},
-    {"id":"gdb","name":"GDB","url":"https://github.com/bminor/binutils-gdb.git","install_kind":"source-and-msys2-package","msys2_package":"mingw-w64-ucrt-x86_64-gdb"},
-    {"id":"x64dbg","name":"x64dbg","url":"https://github.com/x64dbg/x64dbg.git","install_kind":"source-and-latest-release-archive","release_asset_regex":"(?i).*\\.zip$"},
-    {"id":"burp-suite","name":"Burp Suite Community Edition","url":"https://portswigger.net/burp/communitydownload","install_kind":"official-winget-package","winget_id":"PortSwigger.BurpSuite.Community","note":"Community edition only; PortSwigger's license terms apply."}
+    {
+      "id": "everything-claude-code",
+      "name": "Everything Claude Code",
+      "url": "https://github.com/affaan-m/ECC.git",
+      "install_kind": "source-checkout"
+    },
+    {
+      "id": "superpowers",
+      "name": "Superpowers",
+      "url": "https://github.com/obra/superpowers.git",
+      "install_kind": "source-checkout"
+    },
+    {
+      "id": "gsd-core",
+      "name": "GSD Core",
+      "url": "https://github.com/gsd-build/get-shit-done.git",
+      "install_kind": "source-checkout"
+    },
+    {
+      "id": "ui-ux-pro-max",
+      "name": "UI UX Pro Max",
+      "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git",
+      "install_kind": "source-and-npm-cli",
+      "npm_package": "ui-ux-pro-max-cli"
+    },
+    {
+      "id": "n8n-mcp",
+      "name": "n8n-MCP",
+      "url": "https://github.com/czlonkowski/n8n-mcp.git",
+      "install_kind": "source-and-npm-cli",
+      "npm_package": "n8n-mcp"
+    },
+    {
+      "id": "lightrag",
+      "name": "LightRAG",
+      "url": "https://github.com/HKUDS/LightRAG.git",
+      "install_kind": "source-and-python-package",
+      "python_package": "lightrag-hku[api]"
+    },
+    {
+      "id": "claude-mem",
+      "name": "Claude Mem",
+      "url": "https://github.com/thedotmack/claude-mem.git",
+      "install_kind": "source-checkout",
+      "note": "Plugin activation and provider configuration are not performed automatically."
+    },
+    {
+      "id": "obsidian-skills",
+      "name": "Obsidian Skills",
+      "url": "https://github.com/kepano/obsidian-skills.git",
+      "install_kind": "source-checkout"
+    },
+    {
+      "id": "awesome-claude-code",
+      "name": "Awesome Claude Code",
+      "url": "https://github.com/subinium/awesome-claude-code.git",
+      "install_kind": "reference-catalog"
+    },
+    {
+      "id": "ghidra",
+      "name": "Ghidra",
+      "url": "https://github.com/NationalSecurityAgency/ghidra.git",
+      "install_kind": "source-and-latest-release-archive",
+      "release_asset_regex": "^ghidra_.*\\.zip$",
+      "requires": "64-bit JDK 25"
+    },
+    {
+      "id": "jadx",
+      "name": "JADX",
+      "url": "https://github.com/skylot/jadx.git",
+      "install_kind": "source-and-latest-release-archive",
+      "release_asset_regex": "^jadx.*\\.zip$",
+      "requires": "64-bit Java runtime"
+    },
+    {
+      "id": "frida",
+      "name": "Frida",
+      "url": "https://github.com/frida/frida.git",
+      "install_kind": "source-and-python-package",
+      "python_package": "frida-tools"
+    },
+    {
+      "id": "owasp-zap",
+      "name": "OWASP ZAP",
+      "url": "https://github.com/zaproxy/zaproxy.git",
+      "install_kind": "source-and-winget",
+      "winget_id": "ZAP.ZAP"
+    },
+    {
+      "id": "gdb",
+      "name": "GDB",
+      "url": "https://github.com/gnutools/binutils-gdb.git",
+      "install_kind": "source-and-msys2-package",
+      "msys2_package": "mingw-w64-ucrt-x86_64-gdb",
+      "note": "GitHub mirror pinned as a submodule; MSYS2 package is the installable Windows runtime."
+    },
+    {
+      "id": "x64dbg",
+      "name": "x64dbg",
+      "url": "https://github.com/x64dbg/x64dbg.git",
+      "install_kind": "source-and-latest-release-archive",
+      "release_asset_regex": "(?i).*\\.zip$"
+    },
+    {
+      "id": "burp-suite",
+      "name": "Burp Suite Community Edition",
+      "url": "https://portswigger.net/burp/communitydownload",
+      "install_kind": "official-winget-package",
+      "winget_id": "PortSwigger.BurpSuite.Community",
+      "note": "Community edition only; PortSwigger's license terms apply."
+    }
   ],
   "not_auto_integrated": [
-    {"id":"blackeye","reason":"Phishing and credential-harvesting functionality is excluded."},
-    {"id":"gods-eyes","reason":"Exact project identity and official source have not been established."},
-    {"id":"arrow-ea","reason":"Exact product identity and official source have not been established."}
+    {
+      "id": "blackeye",
+      "reason": "Phishing and credential-harvesting functionality is excluded."
+    },
+    {
+      "id": "gods-eyes",
+      "reason": "Exact project identity and official source have not been established."
+    },
+    {
+      "id": "arrow-ea",
+      "reason": "Exact product identity and official source have not been established."
+    }
   ]
 }
