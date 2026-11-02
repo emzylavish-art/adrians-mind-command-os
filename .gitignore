@@ -13,3 +13,6 @@ dist/
 *.pem
 .DS_Store
 .data/
+
+# Local durable worker queue database
+*.sqlite3
