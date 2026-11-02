@@ -30,7 +30,7 @@ class MCPServerTests(unittest.TestCase):
         ])
         self.assertEqual(responses[0]["result"]["serverInfo"]["name"], "mind-command-os-tools")
         self.assertIn("rea.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
-        self.assertIn("security.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("security.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])\n        self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
 
     def test_call_rea_scan(self):
         responses = rpc([{
@@ -48,6 +48,15 @@ class MCPServerTests(unittest.TestCase):
         result = json.loads(responses[0]["result"]["content"][0]["text"])
         self.assertEqual(result["status"], "ready")
         self.assertIn("tools/security_review/security_review.py", result["evidence"])
+
+    def test_call_team_health(self):
+        responses = rpc([{
+            "jsonrpc": "2.0", "id": 10, "method": "tools/call",
+            "params": {"name": "team.health", "arguments": {}},
+        }])
+        result = json.loads(responses[0]["result"]["content"][0]["text"])
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["result"]["status"], "ok")
 
     def test_unavailable_tool_is_error_not_simulated(self):
         responses = rpc([{
