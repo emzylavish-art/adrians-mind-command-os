@@ -211,7 +211,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Painter — lore plaque ink density from real lock age**~~ — **done (Cosmos Painter Bot c19)**: `uInkDensity`+`uPaper` from real `claimed_at`; malformed/future/TZ skew sanitized; `setLorePlaqueNotesCached` stops heartbeat atlas churn. Optional: pass `claimedAt` + use cached notes binder on poll.
 - ~~**Painter — constellation plaque stack z-fight harden**~~ — **done (Cosmos Painter Bot c20)**: `applyLorePlaqueStackLayer` / `setLorePlaqueStackIndex` (polygonOffset+renderOrder+uStackLift); log-depth patch; RT half-float→byte resolve; WIRING “Needed for visuals” c12–c19. Optional: stackIndex on create + composer RT type.
 - ~~**Painter — star corona bloom-safe matte**~~ — **done (Cosmos Painter Bot c21)**: `uMatte` + bloomSafeClamp; halo/grain ≤1; toneMapped:false + premultipliedAlpha; glow opacity scaled. Light: see WIRING c21 (threshold nudge only in postfx if needed).
-- **Painter — Imagine card paper bevel under focus** — next: ImagineNode rim/bevel when focused (real focus id only); honest flat when unfocused; no Light/Motion ownership.
+- ~~**Painter — Imagine card paper bevel under focus**~~ — **done (Cosmos Painter Bot c22)**: `setImagineNodeFocus` eased `uFocus` bevel/deckle; `painterQualityFromDpr` cheap grain; no-op on released/swapped; camera passes focus only.
+- **Painter — Imagine card aspect-safe deckle under non-square maps** — next: when portrait aspect ≠ card quad, deckle/bevel follow content UV (letterbox wash stays honest); no Light/Motion ownership.
 - ~~**Depth-aware god-ray shafts**~~ — **done (wired c9)**: god-ray pass + depth RT in universe-scene.
 - ~~**Health-reactive exposure ride**~~ — **done (wired c9)**: `createExposureRide` in universe-scene; idle until data; reduced-motion snaps.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.

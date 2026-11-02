@@ -100,6 +100,11 @@ import {
   setImagineNodeLoading,
   setImagineNodeMapFailed,
   IMAGINE_LANE_ACCENT_RGB,
+  setImagineNodeFocus,
+  setImagineNodeQuality,
+  painterQualityFromDpr,
+  isImagineNodeFocusable,
+  IMAGINE_FOCUS_EASE,
 } from "./imagine-node.ts";
 import {
   createImagineNodeMaterial,
@@ -2455,5 +2460,146 @@ describe("painter c21: star corona bloom-safe matte", () => {
     assert.ok(Math.abs((active.uniforms["uMatte"]!.value as number) - 1) < 1e-6);
     idle.dispose();
     active.dispose();
+  });
+});
+
+
+describe("hacker pass c22: focus thrash / disposed / swapped / high-DPR quality", () => {
+  it("rapid setImagineNodeFocus only updates target — uFocus eases in tick (no uniform thrash)", () => {
+    const m = createImagineNodeMaterial({ focus: 0 });
+    assert.equal(m.uniforms["uFocus"]!.value, 0);
+    // pointer spam: 40 flips without tick — uFocus stays at last eased value (0)
+    for (let i = 0; i < 40; i++) {
+      const r = setImagineNodeFocus(m, i % 2);
+      assert.equal(r.ok, true);
+      assert.equal(r.target, i % 2);
+    }
+    assert.equal(m.uniforms["uFocus"]!.value, 0, "uFocus must not thrash on set");
+    assert.equal((m.userData as { imagineFocusTarget: number }).imagineFocusTarget, 1);
+    setImagineNodeFocus(m, 1);
+    // one tick with large dt eases toward 1 but not necessarily snap without enough time
+    tickImagineNodeMaterial(m, 0.1, { dt: 0.1 });
+    const mid = m.uniforms["uFocus"]!.value as number;
+    assert.ok(mid > 0.4 && mid < 1, `eased mid=${mid}`);
+    tickImagineNodeMaterial(m, 1.0, { dt: 0.5, snapFocus: false });
+    // another long ease
+    for (let i = 0; i < 30; i++) tickImagineNodeMaterial(m, 1 + i * 0.05, { dt: 0.05 });
+    assert.ok(Math.abs((m.uniforms["uFocus"]!.value as number) - 1) < 0.01);
+    // snap path
+    setImagineNodeFocus(m, 0);
+    tickImagineNodeMaterial(m, 10, { snapFocus: true });
+    assert.equal(m.uniforms["uFocus"]!.value, 0);
+    m.dispose();
+  });
+
+  it("setImagineNodeFocus no-ops on released/disposed; clears stuck focus on release", () => {
+    const m = createImagineNodeMaterial();
+    setImagineNodeFocus(m, 1);
+    tickImagineNodeMaterial(m, 1, { snapFocus: true });
+    assert.equal(m.uniforms["uFocus"]!.value, 1);
+    markImagineNodeReleased(m);
+    assert.equal(m.uniforms["uFocus"]!.value, 0, "release clears uFocus");
+    assert.equal((m.userData as { imagineFocusTarget: number }).imagineFocusTarget, 0);
+    const late = setImagineNodeFocus(m, 1);
+    assert.equal(late.ok, false);
+    assert.equal(late.reason, "material-released");
+    assert.equal(m.uniforms["uFocus"]!.value, 0, "no stuck focus after unmount");
+    tickImagineNodeMaterial(m, 2, { dt: 0.1 }); // must no-op
+    assert.equal(m.uniforms["uFocus"]!.value, 0);
+    m.dispose();
+    const afterDispose = setImagineNodeFocus(m, 1);
+    assert.equal(afterDispose.ok, false);
+  });
+
+  it("uniform update when material swapped by scene (wrong name) is rejected", () => {
+    const m = createImagineNodeMaterial();
+    m.name = "MeshBasicMaterialProxy"; // scene swapped
+    const r = setImagineNodeFocus(m, 1);
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, "material-swapped");
+    assert.equal(isImagineNodeFocusable(m), false);
+    // restore name but drop uniforms → missing-uniforms path via focusable false
+    m.name = "ImagineNodeMaterial";
+    delete (m.uniforms as Record<string, unknown>)["uFocus"];
+    const r2 = setImagineNodeFocus(m, 0.5);
+    assert.equal(r2.ok, false);
+    m.dispose();
+  });
+
+  it("painterQualityFromDpr tiers cheap path for 4K/high DPR; setImagineNodeQuality honors", () => {
+    const low = painterQualityFromDpr(1);
+    assert.equal(low.quality, 1);
+    assert.equal(low.cheap, false);
+    const mid = painterQualityFromDpr(2);
+    assert.ok(mid.quality < 1 && mid.quality > 0);
+    const hi = painterQualityFromDpr(3);
+    assert.equal(hi.quality, 0);
+    assert.equal(hi.cheap, true);
+    const m = createImagineNodeMaterial({ quality: 1 });
+    const q = setImagineNodeQuality(m, 3, { asDpr: true });
+    assert.equal(q.ok, true);
+    assert.equal(m.uniforms["uQuality"]!.value, 0);
+    tickImagineNodeMaterial(m, 0.5, { dpr: 1 });
+    assert.equal(m.uniforms["uQuality"]!.value, 1);
+    markImagineNodeReleased(m);
+    const dead = setImagineNodeQuality(m, 0.5);
+    assert.equal(dead.ok, false);
+    m.dispose();
+  });
+});
+
+describe("painter c22: Imagine card paper bevel under focus", () => {
+  it("ImagineNodeShader exposes uFocus/uQuality + bevel/deckle + cheap grain path", () => {
+    assert.ok(ImagineNodeShader.uniforms.uFocus);
+    assert.ok(ImagineNodeShader.uniforms.uQuality);
+    assert.match(ImagineNodeShader.fragmentShader, /uFocus/);
+    assert.match(ImagineNodeShader.fragmentShader, /uQuality/);
+    assert.match(ImagineNodeShader.fragmentShader, /bevel|deckle|paper bevel/i);
+    assert.match(ImagineNodeShader.fragmentShader, /qual > 0\.35|cheap/i);
+  });
+
+  it("createImagineNodeMaterial seeds focus/quality; setImagineNodeFocus is the only driver API", () => {
+    const m = createImagineNodeMaterial({ focus: 0.25, quality: 0.8 });
+    assert.ok(Math.abs((m.uniforms["uFocus"]!.value as number) - 0.25) < 1e-6);
+    assert.ok(Math.abs((m.uniforms["uQuality"]!.value as number) - 0.8) < 1e-6);
+    assert.equal((m.userData as { imagineFocusTarget: number }).imagineFocusTarget, 0.25);
+    assert.equal(m.toneMapped, false);
+    assert.equal(m.premultipliedAlpha, true);
+    assert.ok(IMAGINE_FOCUS_EASE > 0);
+    // NaN/OOB clamp
+    setImagineNodeFocus(m, Number.NaN);
+    assert.equal((m.userData as { imagineFocusTarget: number }).imagineFocusTarget, 0);
+    setImagineNodeFocus(m, 2);
+    assert.equal((m.userData as { imagineFocusTarget: number }).imagineFocusTarget, 1);
+    setImagineNodeFocus(m, -5);
+    assert.equal((m.userData as { imagineFocusTarget: number }).imagineFocusTarget, 0);
+    m.dispose();
+  });
+
+  it("tickImagineNodeMaterial / tickPainterlyKit dpr drives Imagine quality tier", () => {
+    const m = createImagineNodeMaterial({ quality: 1 });
+    assert.equal(m.uniforms["uQuality"]!.value, 1);
+    tickImagineNodeMaterial(m, 1.0, { dpr: 3 });
+    assert.equal(m.uniforms["uQuality"]!.value, 0);
+    tickImagineNodeMaterial(m, 1.1, { dpr: 1 });
+    assert.equal(m.uniforms["uQuality"]!.value, 1);
+    setImagineNodeFocus(m, 1);
+    tickImagineNodeMaterial(m, 1.2, { snapFocus: true });
+    assert.equal(m.uniforms["uFocus"]!.value, 1);
+    // Full kit path when DOM canvas available (matches c14/c15 pattern)
+    let kit: PainterlyKit | null = null;
+    try {
+      kit = createPainterlyKit({ pass: { amount: 0.2 } });
+    } catch {
+      m.dispose();
+      return;
+    }
+    const m2 = kit.createImagineNodeMaterial({});
+    tickPainterlyKit(kit, 2.0, { dpr: 3 });
+    assert.equal(m2.uniforms["uQuality"]!.value, 0);
+    tickPainterlyKit(kit, 2.1, { dpr: 1, reducedMotion: true });
+    assert.equal(m2.uniforms["uQuality"]!.value, 1);
+    disposePainterlyKit(kit);
+    m.dispose();
   });
 });

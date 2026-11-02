@@ -357,3 +357,26 @@ Painter now emits bloom-**safe** star cores (`uMatte`, luminance soft-cap ≤~0.
 4. Do **not** force `toneMapped:true` on painter star/glow materials — that washes watercolor pigment (sRGB/ACES mismatch).
 
 Painter owns: `shaders/watercolor-star.ts`, `materials/star-surface.ts`, `painterly-bot-star.ts`, `painter-output.ts`. Light owns: `atmosphere/`, `postfx/`.
+
+
+## c22 — Imagine card paper bevel under focus + DPR quality
+
+```ts
+import { setImagineNodeFocus, painterQualityFromDpr } from "./materials";
+
+// Camera / click-and-zoom lane (do NOT edit camera here — only call this API):
+setImagineNodeFocus(imagineMat, focused ? 1 : 0); // target 0..1; tick eases
+// Kit tick honors DPR cheap grain path (4K fill-rate):
+tickPainterlyKit(kit, t, { dpr: renderer.getPixelRatio() });
+```
+
+- Material-side bevel/deckle lift driven by eased `uFocus` (no camera/interaction edits).
+- `setImagineNodeFocus` no-ops on released / disposed / swapped mats (no stuck focus after unmount).
+- `uQuality` from `painterQualityFromDpr` — cheap single-tap grain when DPR ≥ ~2.75.
+- Painter owns: `shaders/imagine-node.ts`, `materials/imagine-node.ts`. Camera owns focus id → calls API only.
+
+
+## Needed for visuals to appear (c12–c22)
+
+Unchanged from c20: Dashboard must adopt kit materials + `tickPainterlyKit` each frame. New for c22: pass `{ dpr }` into tick and call `setImagineNodeFocus(mat, 0|1)` when click-and-zoom focus enters/leaves an Imagine card (camera lane).
+
