@@ -167,7 +167,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |
 | 111 | **Motion c25 — star focus still-target wired** — `stepFocusStillTarget` + star-batch `{ stillTarget: true }` (orbit radialAmp/bobAmp × driftMul → still at base; pulse 1.25×); register focus-still-target.test.ts + comet-stale-cache.test.ts | **wired** | c57 stillTarget:true + focus-still-target/comet-stale-cache tests registered |
 | 112 | **Light — bloom bright-pass anti-alias prefilter** — `postfx/bloom-prefilter.ts`: when the bright target footprint > 2 drawing-buffer px (#110 budget), the high pass takes an n×n grid of thresholded bilinear taps across the footprint (n = ceil(f) to f=4, ceil(f/2) beyond, ≤16 taps); LDR box average (painter stars ≤0.98 keep full energy), Karis weight only on HDR excess. Same chunk in focus-bloom-guard. CPU model, 2-px highlight sweep: 4480×2520 (f≈3) flicker 1.55→0.10 (native 0.27), energy within 6% of native for f 2.5–9.5; 1080p stays the stock single tap. Gap #66 fixed in viewport-rebind (WebGL1 maxTextureSize 1024 honored). No scene wiring | **done** | light c111; register postfx/bloom-prefilter.test.ts |
-| 113 | **Light — god-ray occlusion mask anti-alias under #109 tap budget** — measure (CPU model like #112) whether the god-ray radial sampler shimmers on sub-texel bright sources when taps drop to 16 on >2.5 MP buffers; if flicker > native, jitter/prefilter the occlusion taps in postfx/god-rays.ts only | queued | Light lane next; postfx/ only |
+| 113 | **Motion c26 — reduced-motion freeze audit** — lane helpers bit-stable under RM (`reduced-freeze-audit.test.ts`); REA uniqueSamples before c24=4/c25=6 after=4; traced to Dashboard `universe-scene` 5s rebuildAll/dispose thrash + progressive heavy mount + camera ease (Requests for Dashboard Bot in motion/INTEGRATION.md) | **done** | Motion c26; Dashboard owns universe-scene reduced static scene |
+| 114 | **Light — god-ray occlusion mask anti-alias under #109 tap budget** — measure (CPU model like #112) whether the god-ray radial sampler shimmers on sub-texel bright sources when taps drop to 16 on >2.5 MP buffers; if flicker > native, jitter/prefilter the occlusion taps in postfx/god-rays.ts only | queued | Light lane next; postfx/ only |
 
 
 
@@ -179,7 +180,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 ## Next researched (tail — keep non-empty)
 
-- **Motion c26 — reduced-motion comet/launch freeze audit** — REA c24/c25 reduced uniqueSamples>1: ensure launch ease + dust/gust/edge-pulse write zero deltas under prefers-reduced-motion (static marks only); add probe test that motion helper outputs are stable across 60 frames when reduced=true (Cosmos Motion Bot next).
+- ~~**Motion c26 — reduced-motion freeze audit**~~ — **done (Cosmos Motion Bot c26)**: `reduced-freeze-audit.test.ts` 3/3 bit-stable; REA uniqueSamples before 4/6 after 4; residual = Dashboard universe-scene (INTEGRATION Requests).
+- **Motion c27 — reduced-motion settle gate helper** — export a tiny `hashMotionLaneSnapshot(...)` (or document the freeze-audit recipe) so Dashboard REA can assert lane-side freeze independently of universe-scene rebuild thrash; optional `createReducedMotionGuard` that no-ops dust/comet updates after first rest frame. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
@@ -210,7 +212,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 - ~~**Painter — lore plaque ink density from real lock age**~~ — **done (Cosmos Painter Bot c19)**: `uInkDensity`+`uPaper` from real `claimed_at`; malformed/future/TZ skew sanitized; `setLorePlaqueNotesCached` stops heartbeat atlas churn. Optional: pass `claimedAt` + use cached notes binder on poll.
 - ~~**Painter — constellation plaque stack z-fight harden**~~ — **done (Cosmos Painter Bot c20)**: `applyLorePlaqueStackLayer` / `setLorePlaqueStackIndex` (polygonOffset+renderOrder+uStackLift); log-depth patch; RT half-float→byte resolve; WIRING “Needed for visuals” c12–c19. Optional: stackIndex on create + composer RT type.
 - ~~**Painter — star corona bloom-safe matte**~~ — **done (Cosmos Painter Bot c21)**: `uMatte` + bloomSafeClamp; halo/grain ≤1; toneMapped:false + premultipliedAlpha; glow opacity scaled. Light: see WIRING c21 (threshold nudge only in postfx if needed).
-- **Painter — Imagine card paper bevel under focus** — next: ImagineNode rim/bevel when focused (real focus id only); honest flat when unfocused; no Light/Motion ownership.
+- ~~**Painter — Imagine card paper bevel under focus**~~ — **done (Cosmos Painter Bot c22)**: `setImagineNodeFocus` eased `uFocus` bevel/deckle; `painterQualityFromDpr` cheap grain; no-op on released/swapped; camera passes focus only.
+- **Painter — Imagine card aspect-safe deckle under non-square maps** — next: when portrait aspect ≠ card quad, deckle/bevel follow content UV (letterbox wash stays honest); no Light/Motion ownership.
 - ~~**Depth-aware god-ray shafts**~~ — **done (wired c9)**: god-ray pass + depth RT in universe-scene.
 - ~~**Health-reactive exposure ride**~~ — **done (wired c9)**: `createExposureRide` in universe-scene; idle until data; reduced-motion snaps.
 - **Pairing beacon** — HP Pairing star becomes a lighthouse sweep when a paired PC heartbeat appears (env/agent URL); honest dark when absent.

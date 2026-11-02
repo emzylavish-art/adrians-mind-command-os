@@ -8,6 +8,7 @@ import {
 } from "./paper-grain.ts";
 import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
 import { HEALTH_RGB, type HealthTone } from "./ink-wash-edge.ts";
+import { applyPainterOutputSafeFlags } from "./painter-output.ts";
 
 export type ImagineNodeOptions = {
   /** Imagine-generated Texture (portrait/character/scene). Null/undefined → wash fallback. */
@@ -28,6 +29,10 @@ export type ImagineNodeOptions = {
   health?: string | null;
   /** Honest in-flight load pulse (no fabricated portrait). */
   loading?: boolean;
+  /** Initial focus 0..1 (usually 0; camera lane drives setImagineNodeFocus). */
+  focus?: number;
+  /** Grain quality 0..1 (1 full; 0 cheap for high DPR). */
+  quality?: number;
 };
 
 export type ImagineTextureSanitizeOptions = {
@@ -70,6 +75,8 @@ function cloneUniforms(src: typeof ImagineNodeShader.uniforms) {
     uFrame: { value: src.uFrame.value as number },
     uOpacity: { value: src.uOpacity.value as number },
     uLoading: { value: (src as { uLoading?: { value: number } }).uLoading?.value ?? 0 },
+    uFocus: { value: (src as { uFocus?: { value: number } }).uFocus?.value ?? 0 },
+    uQuality: { value: (src as { uQuality?: { value: number } }).uQuality?.value ?? 1 },
   };
 }
 
@@ -395,6 +402,9 @@ export function createImagineNodeMaterial(opts: ImagineNodeOptions = {}): THREE.
   if (opts.frame != null) uniforms.uFrame.value = sanitizeFinite(opts.frame, 0.72, 0, 1);
   if (opts.opacity != null) uniforms.uOpacity.value = sanitizeFinite(opts.opacity, 0.95, 0, 1);
   uniforms.uLoading.value = opts.loading ? 1 : 0;
+  const focus0 = sanitizeFinite(opts.focus ?? 0, 0, 0, 1);
+  uniforms.uFocus.value = focus0;
+  uniforms.uQuality.value = sanitizeFinite(opts.quality ?? 1, 1, 0, 1);
   const mat = new THREE.ShaderMaterial({
     name: "ImagineNodeMaterial",
     precision: PAINTER_SHADER_PRECISION,
@@ -413,11 +423,15 @@ export function createImagineNodeMaterial(opts: ImagineNodeOptions = {}): THREE.
   (mat.userData as Record<string, unknown>).imagineGeneration = 0;
   (mat.userData as Record<string, unknown>).imagineLane = laneWash.lane;
   (mat.userData as Record<string, unknown>).imagineHealth = laneWash.health;
+  (mat.userData as Record<string, unknown>).imagineFocusTarget = focus0;
+  (mat.userData as Record<string, unknown>).imagineFocusLastTime = 0;
+  (mat.userData as Record<string, unknown>).imagineMaterialEpoch = 1;
   setImagineNodePaperMap(mat, opts.paperMap ?? null);
   setImagineNodeMap(mat, opts.map ?? null, { maxTextureSize: opts.maxTextureSize });
   if (opts.loading && !(mat.uniforms["uHasImage"]?.value)) {
     setImagineNodeLoading(mat, true);
   }
+  applyPainterOutputSafeFlags(mat, { transparent: true, premultipliedAlpha: true });
   return mat;
 }
 
@@ -449,6 +463,9 @@ export function markImagineNodeReleased(mat: THREE.ShaderMaterial): void {
   (mat.userData as Record<string, unknown>).imagineReleased = true;
   const gen = Number((mat.userData as Record<string, unknown>).imagineGeneration ?? 0);
   (mat.userData as Record<string, unknown>).imagineGeneration = (Number.isFinite(gen) ? gen : 0) + 1;
+  // Clear focus so a stale pointer target cannot revive uFocus after unmount
+  (mat.userData as Record<string, unknown>).imagineFocusTarget = 0;
+  if (mat.uniforms?.["uFocus"]) mat.uniforms["uFocus"].value = 0;
 }
 
 export function setImagineNodeMap(
@@ -610,8 +627,157 @@ export function setImagineNodePaperMap(
   mat.uniforms["uHasPaper"].value = tex ? 1 : 0;
 }
 
-export function tickImagineNodeMaterial(mat: THREE.ShaderMaterial, timeSeconds: number): void {
+
+/* ---------- c22: focus ease + DPR quality ---------- */
+
+/** Focus ease rate (per second) — pointer spam only updates target; tick eases. */
+export const IMAGINE_FOCUS_EASE = 12;
+export const IMAGINE_FOCUS_SNAP_EPS = 0.004;
+
+export type ImagineFocusResult = {
+  ok: boolean;
+  reason: string | null;
+  target: number;
+  current: number;
+};
+
+export type ImagineQualityTier = {
+  quality: number;
+  dpr: number;
+  cheap: boolean;
+};
+
+/**
+ * Map devicePixelRatio → grain quality (1 = full, 0 = cheap 4K path).
+ */
+export function painterQualityFromDpr(dpr: number): ImagineQualityTier {
+  const d = sanitizeFinite(dpr, 1, 0.5, 4);
+  let quality = 1;
+  if (d >= 2.75) quality = 0;
+  else if (d > 1.35) quality = sanitizeFinite(1 - (d - 1.35) / 1.4, 0.5, 0, 1);
+  return { quality, dpr: d, cheap: quality < 0.45 };
+}
+
+/** Live Imagine material (not disposed, released, inert, or swapped-away). */
+export function isImagineNodeFocusable(mat: THREE.ShaderMaterial | null | undefined): boolean {
+  if (!mat || (mat as { disposed?: boolean }).disposed) return false;
+  if (isImagineNodeReleased(mat)) return false;
+  if (mat.name !== "ImagineNodeMaterial") return false;
+  if (!mat.uniforms?.["uFocus"]) return false;
+  return true;
+}
+
+/**
+ * Set focus *target* 0..1. Does not thrash uFocus every pointer event —
+ * tickImagineNodeMaterial eases toward the target. No-ops on disposed/released/swapped.
+ */
+export function setImagineNodeFocus(
+  mat: THREE.ShaderMaterial,
+  focus: number,
+): ImagineFocusResult {
+  const target = sanitizeFinite(focus, 0, 0, 1);
+  if (!isImagineNodeFocusable(mat)) {
+    const current = Number(mat?.uniforms?.["uFocus"]?.value ?? 0);
+    const reason = !mat
+      ? "material-missing"
+      : (mat as { disposed?: boolean }).disposed || isImagineNodeReleased(mat)
+        ? "material-released"
+        : mat.name !== "ImagineNodeMaterial"
+          ? "material-swapped"
+          : "material-missing-uniforms";
+    return {
+      ok: false,
+      reason,
+      target,
+      current: Number.isFinite(current) ? current : 0,
+    };
+  }
+  (mat.userData as Record<string, unknown>).imagineFocusTarget = target;
+  const current = Number(mat.uniforms["uFocus"]!.value ?? 0);
+  return {
+    ok: true,
+    reason: null,
+    target,
+    current: Number.isFinite(current) ? current : 0,
+  };
+}
+
+/** Apply DPR/quality tier (idempotent). No-op if released/swapped. */
+export function setImagineNodeQuality(
+  mat: THREE.ShaderMaterial,
+  qualityOrDpr: number,
+  opts: { asDpr?: boolean } = {},
+): ImagineFocusResult & { quality: number } {
+  const q = opts.asDpr
+    ? painterQualityFromDpr(qualityOrDpr).quality
+    : sanitizeFinite(qualityOrDpr, 1, 0, 1);
+  if (!isImagineNodeFocusable(mat)) {
+    return {
+      ok: false,
+      reason: isImagineNodeReleased(mat) ? "material-released" : "material-swapped",
+      target: q,
+      current: 0,
+      quality: q,
+    };
+  }
+  mat.uniforms["uQuality"]!.value = q;
+  (mat.userData as Record<string, unknown>).imagineQuality = q;
+  return {
+    ok: true,
+    reason: null,
+    target: q,
+    current: q,
+    quality: q,
+  };
+}
+
+export type ImagineTickOptions = {
+  /** Wall/frame delta hint; when omitted, derived from timeSeconds. */
+  dt?: number;
+  /** devicePixelRatio → updates uQuality cheap path. */
+  dpr?: number;
+  /** Snap focus (reduced-motion / tests). */
+  snapFocus?: boolean;
+};
+
+/**
+ * Tick time + ease focus toward target + optional DPR quality.
+ * HACKER (c22): released/swapped mats no-op (no stuck focus after unmount).
+ */
+export function tickImagineNodeMaterial(
+  mat: THREE.ShaderMaterial,
+  timeSeconds: number,
+  opts: ImagineTickOptions = {},
+): void {
+  if (!isImagineNodeFocusable(mat)) return;
   if (mat.uniforms["uTime"]) mat.uniforms["uTime"].value = sanitizeShaderTime(timeSeconds);
+  if (opts.dpr != null) {
+    setImagineNodeQuality(mat, opts.dpr, { asDpr: true });
+  }
+  const target = sanitizeFinite(
+    Number((mat.userData as Record<string, unknown>).imagineFocusTarget ?? 0),
+    0,
+    0,
+    1,
+  );
+  const cur = sanitizeFinite(Number(mat.uniforms["uFocus"]?.value ?? 0), 0, 0, 1);
+  if (opts.snapFocus) {
+    mat.uniforms["uFocus"]!.value = target;
+    (mat.userData as Record<string, unknown>).imagineFocusLastTime = timeSeconds;
+    return;
+  }
+  let dt = opts.dt;
+  if (dt == null) {
+    const last = Number((mat.userData as Record<string, unknown>).imagineFocusLastTime ?? timeSeconds);
+    dt = timeSeconds - last;
+    if (!Number.isFinite(dt) || dt < 0 || dt > 0.5) dt = 1 / 60;
+  }
+  dt = sanitizeFinite(dt as number, 1 / 60, 0, 0.25);
+  const alpha = 1 - Math.exp(-IMAGINE_FOCUS_EASE * dt);
+  let next = cur + (target - cur) * alpha;
+  if (Math.abs(target - next) < IMAGINE_FOCUS_SNAP_EPS) next = target;
+  mat.uniforms["uFocus"]!.value = next;
+  (mat.userData as Record<string, unknown>).imagineFocusLastTime = timeSeconds;
 }
 
 /** Dispose owned downscale maps attached to an Imagine material (idempotent). */

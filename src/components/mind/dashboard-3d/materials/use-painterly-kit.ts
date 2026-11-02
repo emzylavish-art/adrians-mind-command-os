@@ -7,6 +7,7 @@
  * 3. Stars: kit.createStarMaterial({ color }); Buildings: kit.createBuildingMaterial({...});
  * 4. Lore plaques: kit.createLorePlaqueMaterial({ accent }); edges: kit.createInkEdges(edges) (batched) or kit.createInkWashEdgeMaterial;
  * 5. Imagine cards/sprites: kit.createImagineNodeMaterial({ map }); setImagineNodeMap when load completes
+ *    Focus bevel: setImagineNodeFocus(mat, 0..1) — eased in tick; pass dpr in tickPainterlyKit for quality tier
  * 6. Sky: kit.createSkyMaterial(); lane clouds: kit.createLaneNebulae(lanes);
  * 7. attachPainterlyContextHandlers(renderer, kit) for webglcontextlost/restore.
  * 8. Each frame: tickPainterlyKit(kit, t, { reducedMotion }); kit.setPassHealth({ healthy, total, reducedMotion }).
@@ -97,6 +98,8 @@ export type PainterlyKitOptions = {
 export type PainterlyTickOptions = {
   /** When true, do not advance uTime / pass animation (low-power / a11y). */
   reducedMotion?: boolean;
+  /** devicePixelRatio — Imagine cheap grain path under high DPR (c22). */
+  dpr?: number;
 };
 
 /** Shared kit texture slots that survive context restore via rebind. */
@@ -634,7 +637,12 @@ export function tickPainterlyKit(
       else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, t);
       else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, t);
       else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, t);
-      else if (m.name === "ImagineNodeMaterial") tickImagineNodeMaterial(m, t);
+      else if (m.name === "ImagineNodeMaterial") {
+        tickImagineNodeMaterial(m, t, {
+          dpr: opts.dpr,
+          snapFocus: reduced,
+        });
+      }
       else if (m.name === "LaneNebulaMaterial") tickLaneNebulaMaterial(m, t);
       else if (m.uniforms?.["uTime"]) m.uniforms["uTime"].value = sanitizeShaderTime(t);
       else continue;

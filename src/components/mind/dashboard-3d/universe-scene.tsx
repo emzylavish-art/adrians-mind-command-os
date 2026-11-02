@@ -34,6 +34,7 @@ import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExp
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition, LANE_DEFS } from "@/lib/mind/dashboard/constellations";
+import { dashboardSceneSyncSignature } from "@/lib/mind/dashboard/scene-sync-sig";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
@@ -1176,6 +1177,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     };
     const scheduleHeavy = () => {
+      // c59 / Motion c26: under reduced motion mount everything in one step (no late canvas churn).
+      if (reducedMotion) {
+        mountHeavyLayers();
+        return;
+      }
       const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
       if (typeof ric === "function") ric(() => mountHeavyLayers(), { timeout: 2200 });
       else window.setTimeout(mountHeavyLayers, 200);
@@ -1639,6 +1645,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let labelsPaused = false;
     let raf = 0;
     let sync = 0;
+    let lastBillboardCamX = Number.NaN;
+    let lastBillboardCamY = Number.NaN;
+    let lastBillboardCamZ = Number.NaN;
+    let lastSceneSyncSig = "";
+    lastSceneSyncSig = dashboardSceneSyncSignature(dataRef.current);
     const travelOut = { x: 0, y: 0, z: 0 };
     const onVisibility = () => {
       // Animation #3: pause the loop while hidden; MotionClock absorbs the resume gap.
@@ -1668,9 +1679,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
 
       if (rig.t < 1) {
-        const stepped = stepRigSmooth(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.35);
-        rig = stepped.rig;
-        applyPose(stepped.position, stepped.lookAt);
+        if (reducedMotion) {
+          // c59 / Motion c26: snap — multi-frame ease changes every mesh projection under RM.
+          rig = { ...rig, t: 1 };
+          applyPose(rig.to.position, rig.to.lookAt);
+        } else {
+          const stepped = stepRigSmooth(rig, dt, 1.35);
+          rig = stepped.rig;
+          applyPose(stepped.position, stepped.lookAt);
+        }
       } else if (pendingFocusBotId) {
         const botId = pendingFocusBotId;
         pendingFocusBotId = null;
@@ -1685,9 +1702,24 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         tipEl.hidden = true;
       }
 
-      // billboard cards
-      for (const ch of cardGroup.children) {
-        ch.lookAt(camera.position);
+      // billboard cards — under reduced motion only when camera moved (c59 / Motion c26).
+      {
+        const cx = camera.position.x;
+        const cy = camera.position.y;
+        const cz = camera.position.z;
+        const camMoved =
+          !Number.isFinite(lastBillboardCamX) ||
+          Math.abs(cx - lastBillboardCamX) > 1e-4 ||
+          Math.abs(cy - lastBillboardCamY) > 1e-4 ||
+          Math.abs(cz - lastBillboardCamZ) > 1e-4;
+        if (!reducedMotion || camMoved) {
+          for (const ch of cardGroup.children) {
+            ch.lookAt(camera.position);
+          }
+          lastBillboardCamX = cx;
+          lastBillboardCamY = cy;
+          lastBillboardCamZ = cz;
+        }
       }
 
       const wallT = now * 0.001;
@@ -2112,18 +2144,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       if (now - sync > 5000) {
         sync = now;
-        rebuildAll();
-        syncCity();
-        if (comets) {
+        // c59: skip dispose/recreate thrash when status signature unchanged (all modes).
+        const nextSig = dashboardSceneSyncSignature(dataRef.current);
+        if (nextSig !== lastSceneSyncSig) {
+          lastSceneSyncSig = nextSig;
+          rebuildAll();
+          syncCity();
+          if (comets) {
+            comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
+            reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
+          }
+          // Feed glyphs: recreate only when feed ids changed (sig already says so).
+          // Do NOT dispose inkEdges/laneNebulae here — rebuildEdges/Nebulae update in place.
+          feedGlyphs.dispose();
+          feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+        } else if (comets) {
+          // Commit list may still need soft sync when signature aliases (sha-stable no-op).
           comets = syncCommitComets(scene, comets, dataRef.current.commits, { max: 6 });
           reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
         }
-        feedGlyphs.dispose();
-      inkEdges?.dispose();
-      inkEdges = null;
-      laneNebulae?.dispose();
-      laneNebulae = null;
-        feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };
     let loopStarted = false;
