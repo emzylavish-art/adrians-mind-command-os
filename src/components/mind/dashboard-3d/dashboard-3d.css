@@ -1190,3 +1190,21 @@ button.dash3d-zoomout.dash3d-glass,
 .dash3d-canvas-wrap [data-dash3d-ctx-loss] {
   z-index: 3;
 }
+
+
+/* Perf: canvas host skeleton until first WebGL frame */
+.dash3d-canvas-wrap[data-canvas-skeleton="true"] {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgb(40 55 110 / 0.45), transparent 70%),
+    linear-gradient(180deg, #070b16 0%, #0c1224 100%);
+}
+.dash3d-canvas-wrap[data-canvas-skeleton="true"]::after {
+  content: "Painting sky…";
+  position: absolute;
+  inset: auto 0 28% 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: rgb(200 210 240 / 0.7);
+  pointer-events: none;
+  z-index: 1;
+}

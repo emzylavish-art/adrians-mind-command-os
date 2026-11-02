@@ -359,6 +359,8 @@ Motion lane **does not edit `package.json`**. Please add these lane test files t
 - `src/components/mind/dashboard-3d/motion/star-batch-xfade.test.ts` (c19)
 - `src/components/mind/dashboard-3d/motion/edge-pulse-flip.test.ts` (c20)
 - `src/components/mind/dashboard-3d/motion/state-prune.test.ts` (c20)
+- `src/components/mind/dashboard-3d/motion/traveler-focus-churn.test.ts` (c21)
+- `src/components/mind/dashboard-3d/motion/traveler-trails.test.ts` (c21)
 - `src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts`
 - `src/components/mind/dashboard-3d/particles/motion-lod.test.ts`
 
@@ -479,3 +481,59 @@ pruneMotionStateMap(healthXfade, liveBotIdSet); // currently never pruned in uni
   orbit re-sample still uses `sharedMotionClock` via the default. Passing
   `{ clock, xfade, neighbors }` to the batch lets you delete that re-sample and the
   separate crossfade loop (queue #79).
+
+## Traveler focus churn + trail batch (c21)
+
+- Hacker c21: `stepTravelerEase` resume no longer snaps to absolute clock phase. While the
+  shared clock kept advancing during a pause, the first resumed frame teleported the marker
+  (measured 0.40 lap after a 4s pause) and opacity popped 0.55↔1 in one frame; reduced-motion
+  also silently cleared `paused`. Now: resume re-anchors from the frozen progress
+  (`phaseOffset`, folded into `[0,duration)`), the paused dim eases (τ 0.18s, clock-mapped
+  dt), reduced-motion keeps `paused` and leaving it continues from the static pose. New
+  state fields are optional; API and call sites unchanged.
+- `stepTravelerTrails(trails, t, dt, reducedMotion, { hold })` — one call replaces the
+  per-trail loop in universe-scene and returns the count of **genuine** forward loop wraps
+  (`isTravelerWrap`: small forward step across 1→0; never on hold/reduced/teleport):
+
+```ts
+import { stepTravelerTrails } from "./motion";
+// landingTrails entries already have { ease, sample, points, lastProgress }
+const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, {
+  hold: detailOpen || fly.flying, // optional scene-wide hold; never resumes a caller-owned pause
+});
+if (wraps > 0) dust.impulseGust(0.55, 0.12, -0.35, 0.45);
+for (const tr of landingTrails) { /* mesh.position / opacity / visible from tr.sample as today */ }
+```
+
+Capped at `TRAVELER_TRAILS_MAX` (256). Zero per-frame alloc. No new deps.
+Queue rows: #90 (wire, Dashboard) and #91 (Motion c22 probe) — numbered past local c52 #83–#89; renumber freely on landing.
+
+## Comet churn + character re-entry (c22)
+
+- Hacker c22 (#91): universe-scene's 5s sync does `clearCometLaunch` + `scheduleCometLaunchBurst`
+  after rebuilding comets, so **every landed comet blinks to opacity 0 and re-launches every
+  5 seconds even when the commit list is unchanged** (reproduced in `comet-churn.test.ts`).
+  The head size line `mat.size = max(0.12, mat.size * (0.85 + 0.15 * scale))` also compounds
+  per frame: each launch shrinks the head permanently and the 5s relaunch pins every head at
+  the 0.12 floor.
+- `reconcileCometLaunch(state, keys, reducedMotion, opts?)` — keyed by commit sha per slot:
+  unchanged key → untouched (landed stays at 1, in-flight keeps easing); new/changed key →
+  staggered launch (maxConcurrent respected; overflow parks visible, never hidden forever);
+  gone/empty key → hidden. Key compare capped at 128 chars. Legacy states adopt `keys`.
+- `cometHeadSize(baseSize, sample, reducedMotion)` — non-compounding; `particles/commit-comets`
+  now stores `head.userData.baseSize` and exposes `handle.shas`.
+- Character: `stepCharacterMotion` state gains optional `amp`; reduced-motion parks it at 0
+  and leaving reduced eases bob/breath back in (λ 6) instead of popping to full amplitude.
+  dt=0 resamples hold. No call-site change.
+
+```ts
+// init and in the 5s sync, after createCommitComets:
+reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion); // replaces clear+schedule
+// per frame, head:
+mat.size = cometHeadSize(head.userData.baseSize as number, sample, reducedMotion);
+```
+
+### Requests (c22)
+- Register in package.json `test` (strip-types list):
+  `src/components/mind/dashboard-3d/motion/comet-churn.test.ts`. No new deps.
+- Queue row #96 (wire). Renumber freely on landing.

@@ -4,6 +4,7 @@ import type { CityLayout } from "@/lib/mind/dashboard/city-layout";
 import type { AgentStat, ProjectBuilding, ProjectsDashboard } from "@/lib/mind/dashboard/projects";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { LastNodeBreadcrumb } from "@/lib/mind/dashboard/operator-palette";
+import { dashboardArtUrl } from "@/lib/mind/dashboard/art-urls";
 import {
   createBreadcrumbEaseSample,
   createBreadcrumbEaseState,
@@ -39,9 +40,18 @@ export function FlyoverHud({
   const crumbRef = useRef<HTMLDivElement | null>(null);
   const easeRef = useRef(createBreadcrumbEaseState());
   const sampleRef = useRef(createBreadcrumbEaseSample());
-  const reduced = useRef(
-    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+  // Gap#65 / #21: never read matchMedia during render/useRef init (SSR vs client text).
+  const reduced = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      reduced.current = !!mq.matches;
+    };
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
 
   useEffect(() => {
     setBreadcrumbFocus(easeRef.current, focusBot?.id ?? null);
@@ -206,7 +216,7 @@ export function BuildingInteriorPanel({
             <h2>Bot building</h2>
             <img
               className="dash3d-portrait"
-              src={`/dashboard-3d/art/portrait-${botFallback.id}.webp`}
+              src={dashboardArtUrl(`dashboard-3d/art/portrait-${botFallback.id}.webp`)}
               alt=""
               width={72}
               height={72}
@@ -250,7 +260,7 @@ export function BuildingInteriorPanel({
             {p.kind === "bot" || (p.bots && p.bots[0]) ? (
               <img
                 className="dash3d-portrait"
-                src={`/dashboard-3d/art/portrait-${(p.id.startsWith("bot-") ? p.id.slice(4) : String(p.bots[0] || p.id)).toLowerCase().replace(/\s+/g, "-").replace(/-bot$/, "")}.webp`}
+                src={dashboardArtUrl(`dashboard-3d/art/portrait-${(p.id.startsWith("bot-") ? p.id.slice(4) : String(p.bots[0] || p.id)).toLowerCase().replace(/\s+/g, "-").replace(/-bot$/, "")}.webp`)}
                 alt=""
                 width={72}
                 height={72}

@@ -249,7 +249,9 @@ export default defineConfig(({ command, isPreview }) => ({
     ...(command === "build" || isPreview
       ? [
           nitro({
-            preset: "vercel",
+            // Default stays Vercel. Cloudflare Pages burner: NITRO_PRESET=cloudflare_pages
+            // (see npm run build:cf + wrangler.toml). Do not flip the default.
+            preset: process.env.NITRO_PRESET || "vercel",
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.

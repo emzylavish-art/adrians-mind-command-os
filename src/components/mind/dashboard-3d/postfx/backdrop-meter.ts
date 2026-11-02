@@ -87,6 +87,12 @@ export type BackdropMeter = {
   fail: (token: number, error: unknown) => void;
   /** Fresh measurement for `key` or null (stale / other layout / none). */
   measurementFor: (key: string, nowMs: number) => MeterMeasurement | null;
+  /**
+   * #84: the latest measurement if still fresh, whatever layout key it was
+   * read for (caller checks which slots of its key still apply). Null when
+   * none / stale / clock skew.
+   */
+  latestFresh: (nowMs: number) => MeterMeasurement | null;
   readonly inFlight: boolean;
   readonly lastError: string | null;
   readonly reads: number;
@@ -209,6 +215,11 @@ export function createBackdropMeter(opts: { intervalMs?: number; maxAgeMs?: numb
       if (!latest || latest.key !== key || !Number.isFinite(nowMs)) return null;
       const age = nowMs - latest.atMs;
       // Negative age = clock skew, never "fresh forever".
+      return age >= 0 && age <= maxAge ? latest : null;
+    },
+    latestFresh(nowMs) {
+      if (!latest || !Number.isFinite(nowMs)) return null;
+      const age = nowMs - latest.atMs;
       return age >= 0 && age <= maxAge ? latest : null;
     },
     get inFlight() {

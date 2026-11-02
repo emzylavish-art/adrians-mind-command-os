@@ -84,6 +84,22 @@ export function resolveLoginProviderAction(
   };
 }
 
+export type EmailPasswordBackend = "supabase" | "better_auth" | "none";
+
+/**
+ * Prefer Supabase email/password when configured so existing Auth users keep
+ * working. Fall back to Better Auth local email only when Supabase env is absent.
+ * (4371f0e had flipped /login to Better Auth-first; live E2E users are on Supabase.)
+ */
+export function resolveEmailPasswordBackend(input: {
+  supabaseConfigured: boolean;
+  betterAuthEmailEnabled: boolean;
+}): EmailPasswordBackend {
+  if (input.supabaseConfigured) return "supabase";
+  if (input.betterAuthEmailEnabled) return "better_auth";
+  return "none";
+}
+
 export function emailPasswordGate(supabaseConfigured: boolean): {
   ok: true
 } | { ok: false; message: string } {
@@ -121,4 +137,76 @@ export function isOwnerBrokerConfigured(env: {
   const id = (env.GROK_AUTH_CLIENT_ID ?? "").trim();
   const secret = (env.GROK_AUTH_CLIENT_SECRET ?? "").trim();
   return Boolean(id && secret);
+}
+
+
+/**
+ * Resolve a navigation href from a TanStack serverFn redirect — whether thrown
+ * as a Response, returned as a serialized redirect object, or nested under
+ * `{ error: { isSerializedRedirect, href } }`.
+ */
+export function serverFnRedirectHref(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof Response !== "undefined" && value instanceof Response) {
+    const header = value.headers.get("Location");
+    if (header) return header;
+    const opts = (value as { options?: { href?: string } }).options;
+    if (opts && typeof opts.href === "string" && opts.href) return opts.href;
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (obj.isSerializedRedirect === true && typeof obj.href === "string" && obj.href) {
+      return obj.href;
+    }
+    // createServerFn sometimes surfaces the redirect on `.error`
+    if ("error" in obj) {
+      const nested = serverFnRedirectHref(obj.error);
+      if (nested) return nested;
+    }
+    if ("result" in obj) {
+      const nested = serverFnRedirectHref(obj.result);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+/** Loader catch must never claim Supabase is unconfigured (false banner). */
+export function authUserLoaderFallback(err?: unknown): {
+  configured: true;
+  user: null;
+  brokerConfigured: false;
+  supabaseOAuthProviders: [];
+} {
+  if (typeof console !== "undefined" && typeof console.error === "function") {
+    console.error("[login] getSupabaseAuthUser failed; keeping configured=true", err);
+  }
+  return {
+    configured: true,
+    user: null,
+    brokerConfigured: false,
+    supabaseOAuthProviders: [],
+  };
+}
+
+/** Honest banner text for non-redirect failures (never blank "Something went wrong."). */
+export function formatLoginThrownError(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message;
+  if (typeof err === "string" && err.trim()) return err;
+  if (err && typeof err === "object") {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+    const status = (err as { status?: unknown }).status;
+    if (typeof status === "number") return `Sign-in failed (HTTP ${status}).`;
+  }
+  if (typeof Response !== "undefined" && err instanceof Response) {
+    return `Sign-in failed (HTTP ${err.status}).`;
+  }
+  try {
+    const raw = JSON.stringify(err);
+    if (raw && raw !== "{}" && raw !== "null") return raw.slice(0, 240);
+  } catch {
+    /* ignore */
+  }
+  return "Sign-in failed.";
 }

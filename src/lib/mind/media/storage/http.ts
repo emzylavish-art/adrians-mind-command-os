@@ -35,6 +35,9 @@ function guardSite(request: Request): Response | null {
       mode: request.headers.get("sec-fetch-mode"),
       dest: request.headers.get("sec-fetch-dest"),
       method: request.method,
+      origin: request.headers.get("origin"),
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
     }) === "block"
   ) {
     return json({ ok: false, error: "Forbidden: cross-site request blocked" }, 403);
@@ -51,8 +54,17 @@ async function userIdFrom(request: Request): Promise<string> {
 function stripSecrets(message: string): string {
   return message
     .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
-    .replace(/ya29\.[A-Za-z0-9._\-]+/g, "[REDACTED]")
-    .replace(/sl\.[A-Za-z0-9._\-]+/g, "[REDACTED]");
+    .replace(/ya29\.[A-Za-z0-9._-]+/g, "[REDACTED]")
+    .replace(/sl\.[A-Za-z0-9._-]+/g, "[REDACTED]")
+    .replace(/eyJ[A-Za-z0-9._-]+/g, "[REDACTED]");
+}
+
+function mediaKindFromBody(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const kind = value.trim().toLowerCase();
+  if (kind === "imagine" || kind === "images" || kind === "image") return "image" as const;
+  if (kind === "camera" || kind === "video" || kind === "audio" || kind === "unknown") return kind;
+  return undefined;
 }
 
 /**
@@ -91,6 +103,7 @@ export async function handleStorageUpload(request: Request): Promise<Response> {
     mimeType?: unknown;
     base64?: unknown;
     folderSegments?: unknown;
+    mediaKind?: unknown;
     /** Rejected: never accept remote URLs to fetch (SSRF). */
     url?: unknown;
   };
@@ -128,6 +141,7 @@ export async function handleStorageUpload(request: Request): Promise<Response> {
     fileName: sanitizeStorageFileName(body.fileName),
     mimeType: typeof body.mimeType === "string" ? body.mimeType : undefined,
     folderSegments: sanitizeFolderSegments(body.folderSegments ?? ["media"]),
+    mediaKind: mediaKindFromBody(body.mediaKind),
   });
 
   if (!result.ok) {

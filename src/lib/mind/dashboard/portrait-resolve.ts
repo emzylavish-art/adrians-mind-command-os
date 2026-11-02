@@ -2,8 +2,13 @@
  * Gap #19 / #11 / #40 — resolve portrait URLs with session negative cache + backoff.
  * Never invent art; fall back to portrait-dashboard.webp after a known miss.
  * Failed loads suppress retries until online or backoff elapses.
+ * Prefer Fleet signed URLs (media-brand) via art-urls cache when primed.
  */
-export const PORTRAIT_FALLBACK_URL = "/dashboard-3d/art/portrait-dashboard.webp";
+import { dashboardArtUrl, portraitArtUrl } from "./art-urls.ts";
+
+export const PORTRAIT_FALLBACK_KEY = "dashboard-3d/art/portrait-dashboard.webp";
+/** Sync fallback path (or signed URL once art-urls cache is primed). */
+export const PORTRAIT_FALLBACK_URL = dashboardArtUrl(PORTRAIT_FALLBACK_KEY);
 
 const missing = new Set<string>();
 /** botId → earliest epoch ms when a retry is allowed */
@@ -13,10 +18,10 @@ const failCount = new Map<string, number>();
 
 export function portraitUrlForBot(botId: string, nowMs = Date.now()): string {
   const id = String(botId || "").trim();
-  if (!id || missing.has(id)) return PORTRAIT_FALLBACK_URL;
+  if (!id || missing.has(id)) return dashboardArtUrl(PORTRAIT_FALLBACK_KEY);
   const until = retryAfterMs.get(id);
-  if (until != null && nowMs < until) return PORTRAIT_FALLBACK_URL;
-  return `/dashboard-3d/art/portrait-${id}.webp`;
+  if (until != null && nowMs < until) return dashboardArtUrl(PORTRAIT_FALLBACK_KEY);
+  return portraitArtUrl(id);
 }
 
 export function markPortraitMissing(botId: string, nowMs = Date.now()): void {
@@ -44,4 +49,13 @@ export function clearPortraitMissingCacheForTests(): void {
   missing.clear();
   retryAfterMs.clear();
   failCount.clear();
+}
+
+export function isPortraitFallbackSrc(src: string): boolean {
+  try {
+    const path = src.includes("://") ? new URL(src).pathname : src;
+    return path.endsWith("/portrait-dashboard.webp") || path.endsWith("portrait-dashboard.webp");
+  } catch {
+    return src.includes("portrait-dashboard.webp");
+  }
 }

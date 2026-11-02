@@ -1,0 +1,88 @@
+/* === PERF ASSETS GATE (visual/perf-assets) ===
+   Loads with the critical sheet. Until html.visual-assets-ready:
+   - no brand texture fetches (override background-image away from url(/brand/...))
+   - shell stays solid B/W colors
+   - heavy backdrop-filter / blur gated on chrome that paints on first screen
+   Do not put texture url() here. Deferred re-apply: styles-visual-deferred.css
+*/
+
+:root {
+  --tex-hero-bg: none;
+  --tex-logo-mark: none;
+  --tex-frost: none;
+  --tex-hero-grain: none;
+  --tex-hero-atmosphere: none;
+  --tex-panel-noise: none;
+  --tex-empty-well: none;
+  --tex-chart-grid: none;
+  --tex-empty-illustration: none;
+  --tex-og: none;
+}
+
+/* Solid first paint for body grain (cycle 26) */
+html:not(.visual-assets-ready) body {
+  background-color: var(--color-bg) !important;
+  background-image: none !important;
+  background-attachment: scroll !important;
+}
+html[data-theme="light"]:not(.visual-assets-ready) body,
+html:not(.visual-assets-ready)[data-theme="light"] body {
+  background-color: var(--color-bg) !important;
+  background-image: none !important;
+}
+
+/* Masthead hero image off critical path */
+html:not(.visual-assets-ready) .masthead {
+  background-image:
+    radial-gradient(ellipse 42% 120% at 78% -20%, rgb(124 92 255 / 0.12), transparent 70%),
+    radial-gradient(ellipse 28% 80% at 92% 40%, rgb(40 90 180 / 0.08), transparent 70%) !important;
+  background-color: var(--color-surface) !important;
+}
+
+/* Card / glass texture layers → solid shell */
+html:not(.visual-assets-ready) .glow-card,
+html:not(.visual-assets-ready) .command-card,
+html:not(.visual-assets-ready) .floating-composer,
+html:not(.visual-assets-ready) .glass-panel,
+html:not(.visual-assets-ready) .dense-card,
+html:not(.visual-assets-ready) .settings-card,
+html:not(.visual-assets-ready) .page-hero,
+html:not(.visual-assets-ready) .composer-bar__card,
+html:not(.visual-assets-ready) .tool-card,
+html:not(.visual-assets-ready) .service-card,
+html:not(.visual-assets-ready) .empty-state,
+html:not(.visual-assets-ready) .main-stage .empty-state,
+html:not(.visual-assets-ready) .rounded-panel,
+html:not(.visual-assets-ready) .dash3d-glass,
+html:not(.visual-assets-ready) .dash3d-chart-card,
+html:not(.visual-assets-ready) .dash3d-fallback,
+html:not(.visual-assets-ready) .dash3d-flyhud,
+html:not(.visual-assets-ready) .dash3d-skybar-card,
+html:not(.visual-assets-ready) .dash3d-metric,
+html:not(.visual-assets-ready) .dash3d-kpi,
+html:not(.visual-assets-ready) .dash3d-node-detail {
+  background-image: none !important;
+}
+
+/* Heavy blur / backdrop-filter off first paint (60fps / zero-lag clicks) */
+html:not(.visual-assets-ready) .topbar,
+html:not(.visual-assets-ready) .glow-card,
+html:not(.visual-assets-ready) .command-card,
+html:not(.visual-assets-ready) .floating-composer,
+html:not(.visual-assets-ready) .glass-panel,
+html:not(.visual-assets-ready) .dense-card,
+html:not(.visual-assets-ready) .settings-card,
+html:not(.visual-assets-ready) .page-hero,
+html:not(.visual-assets-ready) aside.rail,
+html:not(.visual-assets-ready) .composer-dock,
+html:not(.visual-assets-ready) .mobile-nav,
+html:not(.visual-assets-ready) [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Clicks must not be blocked during load */
+html:not(.visual-assets-ready) .visual-assets-overlay,
+html:not(.visual-assets-ready) .glass-overlay {
+  pointer-events: none !important;
+}

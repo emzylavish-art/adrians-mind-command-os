@@ -1,3 +1,4 @@
+import { dashboardArtUrl, ensureDashboardArtUrls } from "@/lib/mind/dashboard/art-urls";
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
@@ -130,6 +131,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   const cityBackdropGroup = new THREE.Group();
   cityBackdropGroup.name = "dash3d-city-backdrop";
   group.add(cityBackdropGroup);
+  const artUrlsReady = ensureDashboardArtUrls();
   const texLoader = new THREE.TextureLoader();
   let interiorBackdropMat: THREE.MeshBasicMaterial | null = null;
   let diveArtRequested = false;
@@ -138,44 +140,46 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   function ensureDiveArt() {
     if (diveArtRequested) return;
     diveArtRequested = true;
-    texLoader.load(
-      "/dashboard-3d/art/backdrop-city.webp",
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        const mat = new THREE.MeshBasicMaterial({
-          map: tex,
-          transparent: true,
-          opacity: 0.92,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        });
-        backdropMats.push(mat);
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), mat);
-        backdropGeos.push(plane.geometry);
-        plane.position.set(0, CITY_Y + 7.5, -22);
-        cityBackdropGroup.add(plane);
-      },
-      undefined,
-      () => { /* no source */ },
-    );
-    texLoader.load(
-      "/dashboard-3d/art/backdrop-interior.webp",
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        interiorBackdropMat = new THREE.MeshBasicMaterial({
-          map: tex,
-          transparent: true,
-          opacity: 0.85,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        });
-        backdropMats.push(interiorBackdropMat);
-      },
-      undefined,
-      () => { /* no source */ },
-    );
-    // Facades were skipped while diveArtRequested was false — rebuild once to attach them.
-    if (lastLayout) rebuild(lastLayout);
+    void artUrlsReady.then(() => {
+      texLoader.load(
+        dashboardArtUrl("dashboard-3d/art/backdrop-city.webp"),
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const mat = new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            opacity: 0.92,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
+          backdropMats.push(mat);
+          const plane = new THREE.Mesh(new THREE.PlaneGeometry(48, 18), mat);
+          backdropGeos.push(plane.geometry);
+          plane.position.set(0, CITY_Y + 7.5, -22);
+          cityBackdropGroup.add(plane);
+        },
+        undefined,
+        () => { /* no source */ },
+      );
+      texLoader.load(
+        dashboardArtUrl("dashboard-3d/art/backdrop-interior.webp"),
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          interiorBackdropMat = new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            opacity: 0.85,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
+          backdropMats.push(interiorBackdropMat);
+        },
+        undefined,
+        () => { /* no source */ },
+      );
+      // Facades were skipped while diveArtRequested was false — rebuild once to attach them.
+      if (lastLayout) rebuild(lastLayout);
+    });
   }
 
   function clearDynamic() {
@@ -232,11 +236,11 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       // Painted facade card (Grok Imagine) — fill empty building surfaces
       const facadeUrl =
         b.id === "project-gap-cycle"
-          ? "/dashboard-3d/art/building-gap-cycle.webp"
+          ? dashboardArtUrl("dashboard-3d/art/building-gap-cycle.webp")
           : b.id === "project-orchestrator"
-            ? "/dashboard-3d/art/building-orchestrator.webp"
+            ? dashboardArtUrl("dashboard-3d/art/building-orchestrator.webp")
             : b.id.startsWith("bot-")
-              ? "/dashboard-3d/art/building-guild.webp"
+              ? dashboardArtUrl("dashboard-3d/art/building-guild.webp")
               : null;
       if (facadeUrl && diveArtRequested) {
         texLoader.load(

@@ -11,9 +11,13 @@ import { oauthAuthorizeTarget } from "@/lib/supabase/oauth-redirect";
 import { authEnabled, authClient, signIn } from "@/lib/auth/client";
 import { emailAndPasswordEnabled } from "@/lib/auth/email-password";
 import {
+  authUserLoaderFallback,
   emailPasswordGate,
+  formatLoginThrownError,
   loginErrorBannerFromSearch,
+  resolveEmailPasswordBackend,
   resolveLoginProviderAction,
+  serverFnRedirectHref,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
 
@@ -34,9 +38,10 @@ export const Route = createFileRoute("/login")({
   loader: async () => {
     try {
       return await getSupabaseAuthUser();
-    } catch {
-      // Keep shape aligned with AuthUserResult so broker Google/X stays gated.
-      return { configured: false, user: null, brokerConfigured: false, supabaseOAuthProviders: [] };
+    } catch (err) {
+      // Never claim not-configured on a transient serverFn/hydration failure —
+      // that paints a false banner in the in-app browser while SSR was fine.
+      return authUserLoaderFallback(err);
     }
   },
   component: Login,
@@ -197,14 +202,20 @@ function Login() {
     setBusy(true);
     setBanner(null);
     setInfo(null);
-    const gate = emailPasswordGate(supabaseConfigured || emailAndPasswordEnabled);
+    const backend = resolveEmailPasswordBackend({
+      supabaseConfigured,
+      betterAuthEmailEnabled: emailAndPasswordEnabled,
+    });
+    const gate = emailPasswordGate(backend !== "none");
     if (!gate.ok) {
       setInfo(gate.message);
       setBusy(false);
       return;
     }
     try {
-      if (emailAndPasswordEnabled) {
+      // Prefer Supabase when configured so existing Auth users keep working.
+      // Better Auth email is only used when Supabase env is absent.
+      if (backend === "better_auth") {
         const name = email.split("@")[0] || "Owner";
         const result =
           mode === "sign-up"
@@ -226,6 +237,12 @@ function Login() {
       const result = await action({
         data: { email, password, next },
       });
+      // Success path: serverFn may RETURN the serialized redirect (not throw).
+      const redirectTo = serverFnRedirectHref(result);
+      if (redirectTo) {
+        window.location.assign(redirectTo);
+        return;
+      }
       if (result && "ok" in result && result.ok === false) {
         setBanner(result.error);
         return;
@@ -235,8 +252,14 @@ function Login() {
         setMode("sign-in");
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+      // createServerFn turns `throw redirect(...)` into a thrown Response (or a
+      // serialized redirect object). Follow it; do not paint it as a failure.
+      const redirectTo = serverFnRedirectHref(err);
+      if (redirectTo) {
+        window.location.assign(redirectTo);
+        return;
+      }
+      const message = formatLoginThrownError(err);
       if (!/redirect/i.test(message)) {
         setBanner(message);
       }
@@ -280,8 +303,12 @@ function Login() {
         errorCallbackURL: `/login?next=${encodeURIComponent(next)}`,
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+      const redirectTo = serverFnRedirectHref(err);
+      if (redirectTo) {
+        window.location.assign(redirectTo);
+        return;
+      }
+      const message = formatLoginThrownError(err);
       if (!/redirect/i.test(message)) {
         setBanner(message);
       }

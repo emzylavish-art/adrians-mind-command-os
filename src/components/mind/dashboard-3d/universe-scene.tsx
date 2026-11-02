@@ -28,11 +28,12 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portraitTextureOf, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, formatMeterBadge, statsAtFocus, projectedRadiusUv, parseCssColor } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, createCardEdgePass, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
+import { dashboardArtUrl, ensureDashboardArtUrls } from "@/lib/mind/dashboard/art-urls";
 import {
   rebuildLandingPaths,
   rebuildQueueRoad,
@@ -79,12 +80,13 @@ import {
   stepEdgePulseSync,
   createCometLaunchState,
   createCometLaunchSample,
-  scheduleCometLaunchBurst,
+  reconcileCometLaunch,
+  cometHeadSize,
   stepCometLaunchEase,
-  clearCometLaunch,
   createTravelerEaseState,
   createTravelerEaseSample,
   stepTravelerEase,
+  stepTravelerTrails,
   pauseTraveler,
   resumeTraveler,
   type TravelerEaseState,
@@ -311,6 +313,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       return;
     }
 
+    const artUrlsReady = ensureDashboardArtUrls();
     const width = mount.clientWidth || window.innerWidth;
     const height = mount.clientHeight || window.innerHeight;
 
@@ -331,6 +334,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const maxTexSize = renderer.capabilities.maxTextureSize || 2048;
 
     mount.appendChild(renderer.domElement);
+    mount.setAttribute("data-canvas-skeleton", "true");
+    mount.setAttribute("aria-busy", "true");
     // Gap#53: name the main stage for assistive tech (updated each tick from live bots).
     const canvasEl = renderer.domElement;
     canvasEl.setAttribute("role", "img");
@@ -388,17 +393,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     scene.add(sky);
     // Painted backdrop (Grok Imagine) — honest fallback keeps procedural sky if missing
     const loader = new THREE.TextureLoader();
-    loader.load(
-      "/dashboard-3d/art/backdrop-nebula.webp",
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        const painted = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false });
-        sky.material = painted;
-        skyMat.dispose();
-      },
-      undefined,
-      () => { /* keep procedural sky — no source */ },
-    );
+    void artUrlsReady.then(() => {
+      loader.load(
+        dashboardArtUrl("dashboard-3d/art/backdrop-nebula.webp"),
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const painted = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false });
+          sky.material = painted;
+          skyMat.dispose();
+        },
+        undefined,
+        () => { /* keep procedural sky — no source */ },
+      );
+    });
 
 
 
@@ -434,7 +441,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     scene.add(sunMesh);
 
     const MAX_SCENE_BOTS = 48; // Gap#11: hard cap so a spiked payload cannot kill the tab
-    const PORTRAIT_FALLBACK = "/dashboard-3d/art/portrait-dashboard.webp";
+    const portraitFallbackUrl = () => dashboardArtUrl("dashboard-3d/art/portrait-dashboard.webp");
     let fallbackPortraitTex: THREE.Texture | null = null;
     /** Gap#47 — dispose per-rebuild Imagine maps so focus/open cycles don't retain heap. */
     const ownedPortraitTextures: THREE.Texture[] = [];
@@ -457,7 +464,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       else window.setTimeout(run, 50);
     };
     const enqueuePortraitLoad = (job: PortraitJob) => {
-      portraitLoadQueue.push(job);
+      portraitLoadQueue.push(() => {
+        void artUrlsReady.then(() => job());
+      });
       schedulePortraitPump();
     };
     const focusEase = new Map<string, FocusEaseState>();
@@ -517,7 +526,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
         const glow = new THREE.Sprite(star.glowMaterial);
         // Portrait card + life-size character (ImagineNodeMaterial wash until map loads).
-        const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
+        const portraitUrl = dashboardArtUrl(`dashboard-3d/art/portrait-${bot.id}.webp`);
         const cardMat = kit.createImagineNodeMaterial({ accent: color });
         const card = new THREE.Sprite(cardMat as unknown as THREE.SpriteMaterial);
         // Sprite needs SpriteMaterial — use Mesh plane for Imagine shader instead of Sprite.
@@ -553,7 +562,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
                 applyPortrait(fallbackPortraitTex);
                 return;
               }
-              loader.load(PORTRAIT_FALLBACK, (tex) => {
+              loader.load(portraitFallbackUrl(), (tex) => {
                 fallbackPortraitTex = tex;
                 applyPortrait(tex);
               });
@@ -594,38 +603,40 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     // Gap#43: only a tiny universe set loads immediately; Dive/city art waits for ensureDiveArt;
     // remaining scene plates schedule via idle callback to cut cold-load request storms + long tasks.
     const sceneArtsEager = [
-      { url: "/dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
-      { url: "/dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
+      { key: "dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
+      { key: "dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
     ];
     const sceneArtsDeferred = [
-      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
-      { url: "/dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
-      { url: "/dashboard-3d/art/scene-merge-beacon.webp", pos: new THREE.Vector3(-11.5, 2.8, -2.5), scale: [5.0, 2.8] as const },
-      { url: "/dashboard-3d/art/scene-collab-tower.webp", pos: new THREE.Vector3(10.2, -0.2, 3.8), scale: [4.8, 2.7] as const },
+      { key: "dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
+      { key: "dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
+      { key: "dashboard-3d/art/scene-merge-beacon.webp", pos: new THREE.Vector3(-11.5, 2.8, -2.5), scale: [5.0, 2.8] as const },
+      { key: "dashboard-3d/art/scene-collab-tower.webp", pos: new THREE.Vector3(10.2, -0.2, 3.8), scale: [4.8, 2.7] as const },
     ];
     // backdrop-city / backdrop-interior / scene-city-street: Dive-only (city layer + fly level)
     const sceneArtsDive = [
-      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
-      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
-      { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
+      { key: "dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
+      { key: "dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
+      { key: "dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
     ];
-    const mountSceneArt = (art: { url: string; pos: THREE.Vector3; scale: readonly [number, number] }) => {
+    const mountSceneArt = (art: { key: string; pos: THREE.Vector3; scale: readonly [number, number] }) => {
       const mat = kit.createImagineNodeMaterial({});
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
       plane.position.copy(art.pos);
       plane.userData.kind = "scene";
       botGroup.add(plane);
-      loader.load(
-        art.url,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          const r = setImagineNodeMap(mat, tex, { maxTextureSize: maxTexSize });
-          plane.userData.imagineMapError =
-            (mat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r.ok ? null : r.reason);
-        },
-        undefined,
-        () => { /* missing art — wash fallback stays */ },
-      );
+      void artUrlsReady.then(() => {
+        loader.load(
+          dashboardArtUrl(art.key),
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const r = setImagineNodeMap(mat, tex, { maxTextureSize: maxTexSize });
+            plane.userData.imagineMapError =
+              (mat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r.ok ? null : r.reason);
+          },
+          undefined,
+          () => { /* missing art — wash fallback stays */ },
+        );
+      });
     };
     for (const art of sceneArtsEager) mountSceneArt(art);
     let deferredSceneStarted = false;
@@ -877,15 +888,16 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     }
     rebuildAll();
 
-    // --- Projects city (flyover queue #1) ---
-    const city = createCityLayer(scene);
-    ensureDiveArtFn = () => city.ensureDiveArt();
+    // --- Projects city / particles / postfx (progressive: idle after first sky frame) ---
+    let city: ReturnType<typeof createCityLayer> | null = null;
+    ensureDiveArtFn = () => city?.ensureDiveArt();
     let layout: CityLayout = buildCityLayout(dataRef.current.projects);
     let layoutSig = "";
     let fly: FlyState = { ...FLY_HOME };
     const knownIds = () => new Set(layout.buildings.map((b) => b.id));
     let layoutProgressSig = "";
     const syncCity = () => {
+      if (!city) return;
       const next = buildCityLayout(dataRef.current.projects);
       // Structure vs progress: live setBuildingProgress without full rebuild (Painter c11)
       const structSig = JSON.stringify(next.buildings.map((b) => [b.id, b.health, b.floors, b.x, b.z]));
@@ -909,11 +921,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
     };
 
-    const dust = createDustField(scene, { count: 480, seed: 42 });
-    let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+    let dust: ReturnType<typeof createDustField> | null = null;
+    let comets: ReturnType<typeof createCommitComets> | null = null;
     const cometLaunch = createCometLaunchState(24);
     const cometLaunchSamples = Array.from({ length: 24 }, () => createCometLaunchSample());
-    scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
 
@@ -941,6 +952,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let focusBloomGuardHandle: ReturnType<typeof createFocusBloomGuard> | null = null;
     let detailDimHandle: ReturnType<typeof createDetailBackdropDimPass> | null = null;
     let sceneKeyLiftHandle: ReturnType<typeof createSceneKeyLiftPass> | null = null;
+    let cardEdgeHandle: ReturnType<typeof createCardEdgePass> | null = null;
     // Light lane focus readability: key/rim follow focused star (dispose on unmount / context loss).
     let focusLight = createFocusLight(scene);
     // Light #67 / #60: Imagine portrait colour bounce (neutral when texture unloaded).
@@ -997,6 +1009,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       let nextDetailDim: typeof detailDimHandle = null;
       try {
         nextDetailDim = createDetailBackdropDimPass();
+        nextDetailDim.setCardProbe(true); // Light #84/#92 — meter focused Imagine card rect
+        nextDetailDim.setCardSurround(true); // Light #93 — card-vs-surround for edge separation
         composer.addPass(nextDetailDim.pass);
       } catch {
         nextDetailDim = null;
@@ -1008,6 +1022,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         composer.addPass(nextKeyLift.pass);
       } catch {
         nextKeyLift = null;
+      }
+      // Light #93: card edge AFTER lift.pass, before painterly.
+      let nextCardEdge: typeof cardEdgeHandle = null;
+      try {
+        nextCardEdge = createCardEdgePass();
+        composer.addPass(nextCardEdge.pass);
+      } catch {
+        nextCardEdge = null;
       }
       composer.addPass(kit.painterlyPass);
       let nextGuard: typeof focusBloomGuardHandle = null;
@@ -1028,6 +1050,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         try { sceneKeyLiftHandle.dispose(); } catch { /* */ }
       }
       sceneKeyLiftHandle = nextKeyLift;
+      if (cardEdgeHandle && cardEdgeHandle !== nextCardEdge) {
+        try { cardEdgeHandle.dispose(); } catch { /* */ }
+      }
+      cardEdgeHandle = nextCardEdge;
       exposureRide = createExposureRide({ tone: "idle", reducedMotion });
       exposureRide.apply(renderer);
       return {
@@ -1041,27 +1067,52 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       };
     };
 
-    if (!reducedMotion) {
-      try {
-        const dpr0 = Math.min(window.devicePixelRatio || 1, 1.75);
-        const bw = Math.max(1, Math.round(width * dpr0));
-        const bh = Math.max(1, Math.round(height * dpr0));
-        const depthTex = new THREE.DepthTexture(bw, bh);
-        const rt = new THREE.WebGLRenderTarget(bw, bh, {
-          depthTexture: depthTex,
-        });
-        composer = new EffectComposer(renderer, rt);
-      } catch {
-        composer = new EffectComposer(renderer);
-      }
-      rebuildPostfxBundle();
-    }
-
+    // Progressive: postfx composer mounts on idle after first sky frame.
     const postfxRecovery = createContextLossRecovery({
       canvas: renderer.domElement,
       initial: { bloom: bloomHandle, grade: gradeHandle, godRays: raysHandle, exposure: exposureRide, focusDepth: focusDepthHandle, focusBloomGuard: focusBloomGuardHandle, detailDim: detailDimHandle },
       factory: rebuildPostfxBundle,
     });
+
+    let heavyMounted = false;
+    let cancelledProgressive = false;
+    const mountHeavyLayers = () => {
+      if (heavyMounted || cancelledProgressive) return;
+      heavyMounted = true;
+      try {
+        city = createCityLayer(scene);
+        ensureDiveArtFn = () => city?.ensureDiveArt();
+        layoutSig = "";
+        layoutProgressSig = "";
+        syncCity();
+      } catch { city = null; }
+      try { dust = createDustField(scene, { count: 480, seed: 42 }); } catch { dust = null; }
+      try {
+        comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+        reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
+      } catch { comets = null; }
+      if (!reducedMotion && !composer) {
+        try {
+          const dpr0 = Math.min(window.devicePixelRatio || 1, 1.75);
+          const bw = Math.max(1, Math.round((mount.clientWidth || width) * dpr0));
+          const bh = Math.max(1, Math.round((mount.clientHeight || height) * dpr0));
+          const depthTex = new THREE.DepthTexture(bw, bh);
+          const rt = new THREE.WebGLRenderTarget(bw, bh, { depthTexture: depthTex });
+          composer = new EffectComposer(renderer, rt);
+        } catch {
+          try { composer = new EffectComposer(renderer); } catch { composer = null; }
+        }
+        try {
+          rebuildPostfxBundle();
+          postfxRecovery.notifyRestored();
+        } catch { /* postfx optional */ }
+      }
+    };
+    const scheduleHeavy = () => {
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+      if (typeof ric === "function") ric(() => mountHeavyLayers(), { timeout: 2200 });
+      else window.setTimeout(mountHeavyLayers, 200);
+    };
 
     let rig: CameraRigState = createRig(UNIVERSE_HIGH);
     let lookAt = new THREE.Vector3(...UNIVERSE_HIGH.lookAt);
@@ -1180,8 +1231,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     function setFly(next: FlyState, fly2camera: boolean) {
       fly = next;
-      city.setInterior(fly.level === "interior" ? fly.buildingId : null);
-      city.setLabelsVisible(fly.level === "city");
+      city?.setInterior(fly.level === "interior" ? fly.buildingId : null);
+      city?.setLabelsVisible(fly.level === "city");
       if (fly.level === "city" || fly.level === "interior") mountDiveSceneArts();
       if (fly2camera) {
         rig = flyTo(
@@ -1286,7 +1337,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       raycaster.setFromCamera(pointer, camera);
 
       if (fly.level !== "universe") {
-        const cityHits = raycaster.intersectObjects(city.pickables, false);
+        const cityHits = city ? raycaster.intersectObjects(city.pickables, false) : [];
         const pick = cityHits.find((h) => h.object.visible)?.object.userData.cityPick as
           | { buildingId: string; part: string; floor: number | null }
           | undefined;
@@ -1718,12 +1769,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             mat.uniforms["uPulse"].value = Math.min(1, base + 0.55 * edgePulseSample.highlight);
           }
         }
+        // Motion c21: batch traveler step + honest wrap count (no teleport on resume)
+        const travelerHold = fly.level !== "universe" || Boolean(rig.subjectId);
+        const wraps = stepTravelerTrails(landingTrails, t, dt, reducedMotion, { hold: travelerHold });
+        if (wraps > 0) dust?.impulseGust(0.55, 0.12, -0.35, 0.45);
         for (const tr of landingTrails) {
-          stepTravelerEase(tr.ease, tr.sample, tr.points, t, dt, reducedMotion);
-          // Motion c13: gust dust when a landing traveler wraps a hop loop (real event)
-          if (!reducedMotion && tr.sample.progress + 0.5 < tr.lastProgress) {
-            dust.impulseGust(0.55, 0.12, -0.35, 0.45);
-          }
           tr.lastProgress = tr.sample.progress;
           tr.mesh.position.set(tr.sample.x, tr.sample.y + 0.35, tr.sample.z);
           (tr.mesh.material as THREE.MeshStandardMaterial).opacity = tr.sample.opacity;
@@ -1732,8 +1782,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } else {
         for (const tr of landingTrails) tr.mesh.visible = false;
       }
-      city.tick(wallT, reducedMotion);
-      dust.update(wallT, reducedMotion);
+      city?.tick(wallT, reducedMotion);
+      dust?.update(wallT, reducedMotion);
+      if (comets) {
       comets.update(wallT, reducedMotion);
       stepCometLaunchEase(cometLaunch, cometLaunchSamples, dt, reducedMotion);
       for (let ci = 0; ci < comets.count; ci++) {
@@ -1751,9 +1802,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           const mat = (head as THREE.Points).material as THREE.PointsMaterial;
           if (mat && "opacity" in mat) {
             mat.opacity = (reducedMotion ? 0.35 : 0.95) * Math.max(sample.opacity, reducedMotion ? 1 : 0);
-            mat.size = Math.max(0.12, (mat.size || 0.2) * (0.85 + 0.15 * sample.scale));
+            const base = typeof head.userData.baseSize === "number" ? head.userData.baseSize : (mat.size || 0.2);
+            mat.size = cometHeadSize(base, sample, reducedMotion);
           }
         }
+      }
       }
       feedGlyphs.update(wallT, reducedMotion);
       const botsNow = dataRef.current.bots;
@@ -1828,12 +1881,15 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             { reducedMotion },
           );
           liveDetailDim?.setHole(focusedVis.mesh.position, camera, rad);
+          // Light #93: edge focus with REAL projected radius only (null if unknown).
+          cardEdgeHandle?.setFocus(focusedVis.mesh.position, camera, rad ?? null);
         } else {
           focusLight.setFocus(null, { reducedMotion });
           liveFocusDepth?.setFocus(null, camera, { reducedMotion });
           liveBloomGuard?.setFocus(null, camera, { reducedMotion });
           portraitBounce.setFocus(null, { reducedMotion });
           liveDetailDim?.setHole(null, camera, null);
+          cardEdgeHandle?.setFocus(null, camera, null);
         }
         const fog = scene.fog as THREE.FogExp2 | null;
         if (fog && "color" in fog) {
@@ -1901,15 +1957,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             if (focusedVis) {
               const rad = projectedRadiusUv(focusedVis.mesh.position, cardRadiusWorld, camera);
               lift.setFocus(focusedVis.mesh.position, camera, rad);
-              lift.setBackdrop(
-                statsAtFocus(liveDetailDim?.contrast ?? null, liveDetailDim?.rects ?? null, lift.focusUv),
-                { reducedMotion },
-              );
+              {
+                const b = liftBackdrop(
+                  liveDetailDim?.contrast ?? null,
+                  liveDetailDim?.rects ?? null,
+                  lift.focusUv,
+                );
+                lift.setBackdrop(b?.stats ?? null, { reducedMotion, source: b?.source ?? null });
+              }
             } else {
               lift.setFocus(null, camera, null);
               lift.setBackdrop(null, { reducedMotion });
             }
             lift.tick(dt * 1000);
+            if (cardEdgeHandle) {
+              cardEdgeHandle.setSeparation(liveDetailDim?.contrast.card ?? null, { reducedMotion });
+              cardEdgeHandle.tick(dt * 1000);
+            }
             // Debug badge only when ?dash3dDebug=1 (off by default).
             try {
               const debugOn =
@@ -1924,7 +1988,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
                     "position:absolute;left:0.75rem;bottom:0.75rem;z-index:4;max-width:min(92vw,28rem);padding:0.35rem 0.55rem;border-radius:8px;font:11px/1.35 ui-monospace,monospace;background:rgb(8 12 24 / 0.82);color:#e8eefc;pointer-events:none;";
                   mount.appendChild(badge);
                 }
-                const b = formatMeterBadge(liveDetailDim.contrast, lift.report);
+                const b = formatMeterBadge(liveDetailDim.contrast, lift.report, cardEdgeHandle?.report ?? null);
                 badge.textContent = b.text;
                 badge.dataset.level = b.level;
                 badge.hidden = false;
@@ -1934,6 +1998,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             } catch {
               /* ignore badge */
             }
+          } else if (cardEdgeHandle) {
+            cardEdgeHandle.setSeparation(liveDetailDim?.contrast.card ?? null, { reducedMotion });
+            cardEdgeHandle.tick(dt * 1000);
           }
         }
       }
@@ -1944,6 +2011,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (freezePendingClear) {
         freezePendingClear = false;
         hideLastFrameFreeze(mount);
+        if (mount.getAttribute("data-canvas-skeleton") === "true") {
+          mount.removeAttribute("data-canvas-skeleton");
+          mount.removeAttribute("aria-busy");
+          scheduleHeavy();
+        }
       }
 
       if (Math.floor(now / 500) !== Math.floor((now - dt * 1000) / 500)) {
@@ -1957,10 +2029,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         sync = now;
         rebuildAll();
         syncCity();
-        comets.dispose();
-        comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
-        clearCometLaunch(cometLaunch);
-        scheduleCometLaunchBurst(cometLaunch, comets.count, reducedMotion);
+        if (comets) {
+          comets.dispose();
+          comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+          reconcileCometLaunch(cometLaunch, comets.shas ?? [], reducedMotion);
+        }
         feedGlyphs.dispose();
       inkEdges?.dispose();
       inkEdges = null;
@@ -1969,7 +2042,23 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
       }
     };
-    tick(performance.now());
+    let loopStarted = false;
+    const startLoop = () => {
+      if (loopStarted || cancelledProgressive) return;
+      loopStarted = true;
+      tick(performance.now());
+    };
+    try {
+      const compile = (renderer as unknown as { compileAsync?: (s: typeof scene, c: typeof camera) => Promise<unknown> }).compileAsync;
+      if (typeof compile === "function") {
+        void compile.call(renderer, scene, camera).then(() => startLoop()).catch(() => startLoop());
+        window.setTimeout(startLoop, 900);
+      } else {
+        startLoop();
+      }
+    } catch {
+      startLoop();
+    }
 
     // Gap#52: size from the host's client box (ResizeObserver), never first-load aspect.
     let lastResizeW = 0;
@@ -2057,7 +2146,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const d = (ev as CustomEvent<{ labels?: boolean; healthFilter?: string }>).detail || {};
       if (typeof d.labels === "boolean") {
         labelsOn = d.labels;
-        city.setLabelsVisible(labelsOn && fly.level === "city");
+        city?.setLabelsVisible(labelsOn && fly.level === "city");
       }
       if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
     };
@@ -2123,8 +2212,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         motionPoseBag.focusById[id] ??= createFocusPoseHold();
         captureFocusPose(motionPoseBag.focusById[id]!, st);
       }
+      cancelledProgressive = true;
       detachContext();
-      city.dispose();
+      city?.dispose();
       renderer.domElement.removeEventListener("wheel", onWheel);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
@@ -2133,8 +2223,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       renderer.domElement.removeEventListener("pointermove", onPointerHoverStars);
       tipEl.remove();
       cancelAnimationFrame(raf);
-      dust.dispose();
-      comets.dispose();
+      dust?.dispose();
+      comets?.dispose();
       feedGlyphs.dispose();
       sphereGeo.dispose();
       pageGeo.dispose();
@@ -2155,6 +2245,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       detailDimHandle?.dispose();
       try { sceneKeyLiftHandle?.dispose(); } catch { /* */ }
       sceneKeyLiftHandle = null;
+      try { cardEdgeHandle?.dispose(); } catch { /* */ }
+      cardEdgeHandle = null;
       hideContextLossOverlay(mount);
       focusDepthHandle?.dispose();
       postfxRecovery.dispose(); // light #13: listeners + bloom/grade/rays/exposure/focusDepth/bloomGuard/detailDim

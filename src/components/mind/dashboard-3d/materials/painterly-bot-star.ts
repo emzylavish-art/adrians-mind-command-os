@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { PainterlyKit } from "./use-painterly-kit.ts";
 import { setStarWatercolorColor, setStarHalo, type StarSurfaceOptions } from "./star-surface.ts";
-import { sanitizeFinite } from "./paper-grain.ts";
+import { sanitizeFinite, sanitizePainterColor, PAINTER_IDLE_RGB } from "./paper-grain.ts";
 
 export type PainterlyBotStarOptions = StarSurfaceOptions & {
   /** When idle, lower emissive (mirrors prior MeshStandardMaterial behavior). */
@@ -53,20 +53,31 @@ export function createPainterlyBotStar(
     grain: opts.grain,
     stroke: opts.stroke,
     halo,
+    forceFallback: opts.forceFallback,
   });
+  const glowSafe = sanitizePainterColor(opts.color ?? 0xffffff, PAINTER_IDLE_RGB);
   const glowMaterial = new THREE.SpriteMaterial({
     map: kit.starSpriteTexture,
-    color: opts.color != null ? opts.color : 0xffffff,
+    color: glowSafe.color,
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
+  if (!glowSafe.ok) {
+    (glowMaterial.userData as { starColorError?: string }).starColorError = glowSafe.reason ?? "color-bad";
+  }
   kit.bindSharedTexture(glowMaterial, "starSprite");
   const setColor = (color: THREE.ColorRepresentation, emissiveIntensity?: number) => {
     const em =
       emissiveIntensity != null ? sanitizeFinite(emissiveIntensity, 0.85, 0, 3) : undefined;
     setStarWatercolorColor(meshMaterial, color, em);
-    glowMaterial.color.set(color);
+    const g = sanitizePainterColor(color, PAINTER_IDLE_RGB);
+    glowMaterial.color.copy(g.color);
+    if (!g.ok) {
+      (glowMaterial.userData as { starColorError?: string }).starColorError = g.reason ?? "color-bad";
+    } else {
+      delete (glowMaterial.userData as { starColorError?: string }).starColorError;
+    }
   };
   const setHalo = (h: number) => setStarHalo(meshMaterial, h);
   return { meshMaterial, glowMaterial, setColor, setHalo };

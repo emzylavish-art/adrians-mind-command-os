@@ -23,7 +23,11 @@ export function sessionCookieOptions(isProd: boolean): SessionCookieAttrs {
 export function isProductionRuntime(env: {
   NODE_ENV?: string;
   VERCEL?: string;
+  MIND_ALLOW_INSECURE_COOKIES?: string;
 }): boolean {
+  // Local HTTP proof of a production build: allow non-Secure cookies when
+  // explicitly opted in (never set on Vercel).
+  if ((env.MIND_ALLOW_INSECURE_COOKIES ?? "").trim() === "1") return false;
   return env.NODE_ENV === "production" || env.VERCEL === "1";
 }
 

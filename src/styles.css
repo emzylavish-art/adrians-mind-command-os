@@ -8148,165 +8148,381 @@ aside.glow-card.rounded-panel ul > li.text-muted {
   list-style: none !important;
 }
 
-
-/* —— Pass 6 shortcut sheet + Cmd+K palette —— */
-.shortcut-sheet-shell {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: rgb(4 6 12 / 0.72);
-  backdrop-filter: blur(12px) saturate(1.15);
-  animation: toast-in var(--dur-slow) var(--ease-out);
+/* —— Evolution c136: Thread / provider / status badges → mono chips (B&W rule) —— */
+/* Empty-thread Zap halo + any leftover purple bloom utilities */
+.main-stage span.rounded-full.bg-accent\/20.text-accent,
+.main-stage span[class*="bg-accent/20"][class*="text-accent"],
+.main-stage span[class*="shadow-[0_0_28px_rgb(124_92_255"],
+.main-stage [class*="124_92_255/0.45"] {
+  background: rgb(255 255 255 / 0.1) !important;
+  background-image: none !important;
+  color: #e8ecf5 !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 0 18px rgb(255 255 255 / 0.08) !important;
+  filter: none !important;
 }
-.shortcut-sheet-panel {
-  width: min(52rem, 100%);
-  max-height: min(36rem, 90vh);
-  overflow: auto;
-  border-radius: 1.5rem;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  background: rgb(10 14 24 / 0.92);
-  box-shadow: 0 28px 80px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.06);
-  padding: 1.25rem 1.35rem 1.5rem;
+/* Provider / external mark chips (OB warn, BP info) + ok/warn/info tonal washes */
+.main-stage .bg-info\/15,
+.main-stage .bg-warn\/15,
+.main-stage .bg-ok\/15,
+.main-stage [class*="bg-info/15"],
+.main-stage [class*="bg-warn/15"],
+.main-stage [class*="bg-ok/15"],
+.main-stage span[class*="bg-info"],
+.main-stage span[class*="bg-warn"] {
+  background: rgb(255 255 255 / 0.08) !important;
+  background-image: none !important;
+  color: #e8ecf5 !important;
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
 }
-.shortcut-sheet-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
+.main-stage .text-info,
+.main-stage .text-warn,
+.main-stage .text-ok,
+.main-stage [class*="text-info"],
+.main-stage [class*="text-warn"],
+.main-stage [class*="text-ok"],
+.main-stage .border-ok\/40,
+.main-stage [class*="border-ok"],
+.main-stage [class*="border-info"],
+.main-stage [class*="border-warn"] {
+  color: #d4d4d8 !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
 }
-.shortcut-sheet-kicker {
-  font-size: var(--text-xs);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-}
-.shortcut-sheet-title {
-  font-family: var(--font-display, inherit);
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-.shortcut-sheet-lead {
-  margin-top: 0.25rem;
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-}
-.shortcut-sheet-close {
-  min-height: 2.25rem;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  background: rgb(255 255 255 / 0.06);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-.shortcut-sheet-grid {
-  display: grid;
-  gap: 0.85rem;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-}
-.shortcut-sheet-group {
-  border-radius: 1rem;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  background: rgb(255 255 255 / 0.03);
-  padding: 0.85rem;
-}
-.shortcut-sheet-group h3 {
-  font-size: var(--text-xs);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-  margin-bottom: 0.55rem;
-}
-.shortcut-sheet-group ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 0.45rem;
-}
-.shortcut-sheet-group li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.65rem;
-  align-items: start;
-}
-.shortcut-sheet-group kbd {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.6rem;
-  padding: 0 0.45rem;
-  border-radius: 0.45rem;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  background: rgb(0 0 0 / 0.35);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.7rem;
-  white-space: nowrap;
-}
-.shortcut-sheet-action {
-  display: block;
-  font-size: var(--text-sm);
-}
-.shortcut-sheet-source {
-  display: block;
-  font-size: 0.65rem;
-  color: var(--color-muted);
-  margin-top: 0.1rem;
-}
-.shortcut-sheet-empty {
-  font-size: var(--text-sm);
-  color: var(--color-muted);
+/* Keep semantic error red for real error banners only (Error Banners Bot) */
+.main-stage [role="alert"] .text-danger,
+.main-stage [data-testid*="error"] .text-danger,
+.main-stage .text-danger[role="alert"],
+[data-testid="error-banner"] ,
+[data-testid="error-banner"] * {
+  /* do not override danger inside error banners */
 }
 
-.command-palette-panel {
-  border-radius: 1rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: rgb(10 14 24 / 0.94);
-  box-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
-  backdrop-filter: blur(16px);
+/* —— Evolution c137: stray-color sweep — neutralize residual chroma (logo + error exempt) —— */
+:root {
+  --text-tertiary: #8a8a8a; /* was #7a8499 (cool blue); true gray, AA on #05070d ~5.5 */
+  --color-info: #c8c8c8;
+  --color-ok: #d4d4d8;
+  --color-warn: #d4d4d8;
+  --color-glow: #c8c8c8;
 }
-.command-palette-group + .command-palette-group {
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid rgb(255 255 255 / 0.06);
+html:not([data-theme="light"]) .text-\[10px\],
+html:not([data-theme="light"]) .meta-label,
+html:not([data-theme="light"]) aside .text-\[10px\],
+html:not([data-theme="light"]) .main-stage .text-xs.text-muted,
+html:not([data-theme="light"]) span.rounded-full.border.border-line.text-xs {
+  color: var(--text-tertiary) !important;
 }
-.command-palette-group-label {
-  padding: 0.25rem 0.5rem 0.35rem;
-  font-size: 0.65rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-muted);
+/* dash3d purple inset / cyan wash → mono */
+.dash3d-glass,
+.dash3d-pill,
+.dash3d-skip-link,
+.dash3d-hud-focus-toggle {
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 12px 28px rgb(0 0 0 / 0.4) !important;
 }
-.command-palette-item {
-  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+.dash3d-root.dash3d-universe {
+  /* keep deep stage; strip blue cast without touching canvas */
+  background-color: #07070a !important;
 }
-.command-palette-item:hover,
-.command-palette-item-active {
-  background: rgb(124 92 255 / 0.16);
+.dash3d-skip-link {
+  border-color: rgb(255 255 255 / 0.35) !important;
 }
-.command-palette-item:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px rgb(124 92 255 / 0.55);
+/* Any remaining utility purple blooms outside logo */
+[class*="124_92_255"]:not(.logo-mark):not(.logo-badge),
+[class*="7c5cff"]:not(.logo-mark):not(.logo-badge),
+[class*="49_194_255"] {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 8px 22px rgb(0 0 0 / 0.35) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  outline-color: rgb(232 236 245 / 0.85) !important;
 }
-.command-palette-empty {
-  padding: 1rem 0.75rem;
-  text-align: left;
-}
-#command-palette.floating-menu,
-.floating-menu#command-palette {
-  /* legacy id still gets glass polish before panel swap */
-  border-radius: 1rem;
-  backdrop-filter: blur(16px);
+.logo-mark,
+.logo-badge,
+.logo-mark *,
+.logo-badge * {
+  /* purple allowed — restore intentional bloom if a broad rule hit */
 }
 
-html[data-theme="light"] .shortcut-sheet-panel,
-html[data-theme="light"] .command-palette-panel {
-  background: rgb(255 255 255 / 0.96);
-  border-color: rgb(15 23 42 / 0.08);
+/* —— Evolution c138: phone glass deepen (375/390/430) + CAP dash3d overlay blur —— */
+@media (max-width: 430.98px) {
+  :root {
+    --glass-blur: blur(20px) saturate(1.12); /* single layer target */
+    --glass-bg: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.02) 46%), rgb(8 8 10 / 0.78);
+    --glass-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      inset 0 0 24px rgb(255 255 255 / 0.04),
+      0 18px 48px rgb(0 0 0 / 0.72);
+    --glass-border: 1px solid rgb(255 255 255 / 0.18);
+  }
+  /* Cards / composer / bottom nav — one backdrop-filter each */
+  .main-stage .glow-card,
+  .main-stage .command-card,
+  .main-stage .dense-card,
+  .main-stage article.rounded-panel.border.border-line,
+  .main-stage .rounded-panel.border.border-line.bg-surface {
+    background: var(--glass-bg) !important;
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 48%) !important; /* no new url() */
+    border: var(--glass-border) !important;
+    box-shadow: var(--glass-shadow) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+  }
+  .composer-dock,
+  .floating-composer,
+  section.command-card.composer-dock,
+  [data-composer="floating"],
+  .composer-bar__card {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03) 44%),
+      rgb(6 6 8 / 0.82) !important;
+    background-image:
+      linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 44%) !important;
+    border: 1px solid rgb(255 255 255 / 0.2) !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 0 28px rgb(255 255 255 / 0.05),
+      0 22px 56px rgb(0 0 0 / 0.75) !important;
+    backdrop-filter: blur(20px) saturate(1.12) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.12) !important;
+  }
+  nav.fixed[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 40%),
+      rgb(8 8 10 / 0.82) !important;
+    border-top: 1px solid rgb(255 255 255 / 0.16) !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      0 -12px 36px rgb(0 0 0 / 0.55) !important;
+    backdrop-filter: blur(18px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+  }
 }
-html[data-theme="light"] .shortcut-sheet-group kbd {
-  background: rgb(15 23 42 / 0.05);
+/* Dashboard Bot: do NOT deepen blur on large WebGL overlays — CAP / tonal fill */
+.dash3d-node-detail,
+.dash3d-node-detail.is-open,
+.dash3d-charts-panel,
+.dash3d-charts-panel.dash3d-glass,
+.dash3d-side.dash3d-node-detail {
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 50%),
+    rgb(10 10 12 / 0.88) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 50%) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 14px 36px rgb(0 0 0 / 0.5) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+
+/* —— Evolution c139: motion — animate transform/opacity only (60fps / no layout thrash) —— */
+:where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card) {
+  transition:
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+:where(button, a[href], [role="button"]):active:not(:disabled) {
+  transform: scale(0.98) !important;
+  transition-duration: 80ms !important;
+}
+:where(button, a[href], [role="button"]):hover:not(:disabled) {
+  /* tonal hover without transitioning background */
+}
+.nav-item,
+.dense-card,
+.glow-card,
+.model-chip,
+.suggestion-chip,
+.sidebar-plus,
+aside nav button,
+nav[aria-label="Primary"] button {
+  transition:
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+/* Convert common layout-property transitions */
+.composer-dock,
+.floating-composer,
+.command-card,
+.rounded-panel,
+.dash3d-pill,
+.dash3d-glass {
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+/* Keyframes: keep opacity/transform only where we control them */
+@keyframes mono-motion-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.02); }
+}
+@keyframes skel-mono-shimmer {
+  0% { transform: translateX(-40%); opacity: 0.35; }
+  100% { transform: translateX(140%); opacity: 0.55; }
+}
+@keyframes sheet-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes page-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* will-change only on frequently hovered chrome */
+aside nav button,
+nav[aria-label="Primary"] button,
+.composer-dock button,
+.main-stage button.bg-accent {
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role="button"], [role="menuitem"], .nav-item, .dense-card, .glow-card),
+  .composer-dock,
+  .floating-composer,
+  .command-card,
+  .rounded-panel,
+  aside nav button,
+  nav[aria-label="Primary"] button {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+}
+
+/* —— Evolution c140: guards after badges/color/glass/motion —— */
+@media (max-width: 767.98px) {
+  nav.fixed.inset-x-0.bottom-0.z-30.flex[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    z-index: 48 !important;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  section.floating-composer.composer-dock,
+  .floating-composer.command-card.composer-dock,
+  section.command-card.composer-dock[data-composer="floating"],
+  section.command-card.composer-dock,
+  .composer-bar.is-fixed,
+  .shell > .composer-bar.is-fixed,
+  .composer-bar.is-fixed .composer-bar__card {
+    z-index: 46 !important;
+  }
+}
+[data-testid="alerts-toggle"],
+[data-testid="login-password-submit"] {
+  min-height: 2.75rem !important;
+}
+.logo-mark,
+.logo-badge {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(124 92 255 / 0.55), rgb(255 255 255 / 0.04)) !important;
+  box-shadow: inset 0 0 18px rgb(124 92 255 / 0.35), 0 0 22px rgb(124 92 255 / 0.28) !important;
+  color: #fff !important;
+  filter: none !important;
+}
+
+
+/* —— Evolution c141: dash3d HUD stray chroma leftovers —— */
+.dash3d-hud-focus-toggle,
+.dash3d-pill,
+.dash3d-side-close,
+.dash3d-skip-link {
+  color: #c8c8c8 !important;
+  border-color: rgb(255 255 255 / 0.18) !important;
+  background-image: none !important;
+}
+.dash3d-hud-focus-toggle:hover,
+.dash3d-pill:hover,
+.dash3d-side-close:hover {
+  color: #e8e8e8 !important;
+  border-color: rgb(255 255 255 / 0.28) !important;
+}
+
+/* === PERF ASSETS BLOCK START (visual/perf-assets) ===
+   WebP overrides for brand textures (smaller transfer). CSS vars --tex-* default
+   to local webp; Media Storage Fleet signed URLs swap via resolveVisualAssetUrls
+   once Grok Build mounts VisualAssetsBoot (see /workspace/audit/perf/owner-prompts.md).
+   Gate-until-ready + blur deferral live in unfinished.patch until root boot lands.
+*/
+:root {
+  --tex-hero-bg: url("/brand/hero-bg.webp");
+  --tex-logo-mark: url("/brand/logo-mark.webp");
+  --tex-frost: url("/brand/textures/frost-card-texture.webp");
+  --tex-hero-grain: url("/brand/textures/hero-mono-grain.webp");
+  --tex-hero-atmosphere: url("/brand/textures/hero-atmosphere-mono.webp");
+  --tex-panel-noise: url("/brand/textures/panel-noise-mono.webp");
+  --tex-empty-well: url("/brand/textures/empty-well-mono.webp");
+  --tex-chart-grid: url("/brand/textures/chart-grid-mono.webp");
+  --tex-empty-illustration: url("/brand/textures/empty-state-illustration-mono.webp");
+  --tex-og: url("/og.webp");
+}
+body {
+  background-image:
+    linear-gradient(180deg, rgb(5 5 7 / 0.82), rgb(5 5 7 / 0.92)),
+    var(--tex-hero-grain) !important;
+  background-size: auto, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+}
+html[data-theme="light"] body {
+  background-image:
+    linear-gradient(180deg, rgb(250 250 250 / 0.88), rgb(250 250 250 / 0.94)),
+    var(--tex-hero-grain) !important;
+}
+.masthead {
+  background-image:
+    var(--tex-hero-bg),
+    radial-gradient(ellipse 42% 120% at 78% -20%, rgb(124 92 255 / 0.18), transparent 70%),
+    radial-gradient(ellipse 28% 80% at 92% 40%, rgb(40 90 180 / 0.12), transparent 70%) !important;
+}
+.glow-card,
+.command-card,
+.floating-composer,
+.glass-panel,
+.dense-card,
+.settings-card,
+.page-hero,
+.composer-bar__card,
+.tool-card,
+.service-card {
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 42%),
+    var(--tex-frost) !important;
+  background-size: auto, 420px 420px;
+  background-blend-mode: soft-light, soft-light;
+}
+/* === PERF ASSETS BLOCK END === */
+
+/* PERF ASSETS first-paint gate — until VisualAssetsBoot sets .visual-assets-ready */
+html:not(.visual-assets-ready) body,
+html:not(.visual-assets-ready) .masthead,
+html:not(.visual-assets-ready) .glow-card,
+html:not(.visual-assets-ready) .command-card,
+html:not(.visual-assets-ready) .floating-composer,
+html:not(.visual-assets-ready) .glass-panel,
+html:not(.visual-assets-ready) .dense-card,
+html:not(.visual-assets-ready) .settings-card,
+html:not(.visual-assets-ready) .page-hero {
+  background-image: none !important;
+}
+html:not(.visual-assets-ready) .topbar,
+html:not(.visual-assets-ready) .glow-card,
+html:not(.visual-assets-ready) .command-card,
+html:not(.visual-assets-ready) .floating-composer {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }

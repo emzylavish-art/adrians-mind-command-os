@@ -3,6 +3,7 @@ import {
   getSupabaseAuthUser,
   signOutSupabase,
 } from "@/lib/supabase/actions";
+import { serverFnRedirectHref } from "@/lib/auth/login-providers";
 
 /**
  * Shows the Supabase-signed-in email and a sign-out control in the account menu.
@@ -68,7 +69,19 @@ export function SupabaseAccountControls() {
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-panel border border-line bg-bg px-3 text-sm font-medium text-fg transition-colors hover:border-fg/25 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-55"
           onClick={() => {
             setBusy(true);
-            void signOutSupabase().catch(() => setBusy(false));
+            void signOutSupabase()
+              .then((result) => {
+                const href = serverFnRedirectHref(result) ?? "/login";
+                window.location.assign(href);
+              })
+              .catch((err) => {
+                const href = serverFnRedirectHref(err);
+                if (href) {
+                  window.location.assign(href);
+                  return;
+                }
+                setBusy(false);
+              });
           }}
         >
           {busy ? (

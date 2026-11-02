@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { PORTRAIT_FALLBACK_URL, markPortraitMissing } from "@/lib/mind/dashboard/portrait-resolve";
+import { isPortraitFallbackSrc, markPortraitMissing } from "@/lib/mind/dashboard/portrait-resolve";
+import { dashboardArtUrl } from "@/lib/mind/dashboard/art-urls";
 import { sanitizeNotionPlainText } from "@/lib/mind/dashboard/notion-plain";
 import {
   isSafeFocusRestoreTarget,
@@ -48,8 +49,8 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
             const img = e.currentTarget;
             const botId = String(img.dataset.botId || detail.botId || "");
             if (botId) markPortraitMissing(botId);
-            if (img.src !== PORTRAIT_FALLBACK_URL && !img.src.endsWith("portrait-dashboard.webp")) {
-              img.src = PORTRAIT_FALLBACK_URL;
+            if (!isPortraitFallbackSrc(img.src)) {
+              img.src = dashboardArtUrl("dashboard-3d/art/portrait-dashboard.webp");
             }
           }}
           data-bot-id={detail.botId}
