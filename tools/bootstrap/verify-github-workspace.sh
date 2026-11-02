@@ -33,7 +33,7 @@ check_cmd Frida frida
 check_cmd GDB gdb
 check_cmd n8n-MCP n8n-mcp
 check_cmd UI-UX-Pro-Max ui-ux-pro-max
-for id in l1b3rt4s everything-claude-code superpowers gsd-core ui-ux-pro-max n8n-mcp lightrag claude-mem obsidian-skills awesome-claude-code ghidra jadx frida owasp-zap gdb x64dbg; do
+for id in l1b3rt4s everything-claude-code superpowers gsd-core ui-ux-pro-max n8n-mcp lightrag claude-mem obsidian-skills awesome-claude-code ghidra jadx frida owasp-zap gdb x64dbg comfyui open-higgsfield weknora openwhispr openproject cal-diy chatwoot cap; do
   check_dir "$id source" "$UPSTREAM_ROOT/$id"
 done
 printf '\nDetected %d of %d checks. Presence is not proof of runtime configuration or successful provider connection.\n' "$found" "$total"
