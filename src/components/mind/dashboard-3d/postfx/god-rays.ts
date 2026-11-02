@@ -22,6 +22,8 @@ import { GOD_RAY_MAX_TAPS, createGodRayBudget, godRayTapParams, type GodRayBudge
 /** Max taps (loop bound). The live count is adaptive — see god-ray-budget.ts (#109). */
 export const GOD_RAY_SAMPLES = GOD_RAY_MAX_TAPS;
 
+const ONE2 = new THREE.Vector2(1, 1);
+
 export type GodRayInputs = {
   healthy: number;
   total: number;
@@ -92,6 +94,10 @@ export const GodRayShader = {
     /** #114: half-res prefiltered emission (rgb × bright × far); used when useEmit = 1. */
     tEmit: { value: null as THREE.Texture | null },
     useEmit: { value: 0 },
+    /** #117: full-res UV → mask UV (odd buffer edges); 1 on even edges. */
+    emitScale: { value: new THREE.Vector2(1, 1) },
+    /** #117: 1 = mask holds e/(1+e) (byte mask over HDR); decode per tap. */
+    emitDecode: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -121,6 +127,8 @@ export const GodRayShader = {
     uniform vec3 tint;
     uniform sampler2D tEmit;
     uniform float useEmit;
+    uniform vec2 emitScale;
+    uniform float emitDecode;
     varying vec2 vUv;
 
     float linDepth(vec2 uv) {
@@ -155,7 +163,8 @@ export const GodRayShader = {
         vec2 tuv = clamp(uv, 0.0, 1.0);
         vec3 e;
         if (useEmit > 0.5) {
-          e = texture2D(tEmit, tuv).rgb;
+          e = texture2D(tEmit, tuv * emitScale).rgb;
+          if (emitDecode > 0.5) e = e / max(vec3(1.0) - e, vec3(1.0 / 255.0));
         } else {
           vec3 c;
           float m = emit(tuv, c);
@@ -195,6 +204,8 @@ export type GodRayHandle = {
   readonly tapParams: GodRayTapParams;
   /** #114: emission-mask downsample factor used by the last render (1 = stock per-tap). */
   readonly maskFactor: number;
+  /** #117: live emission-mask VRAM in bytes (0 when freed) — HUD / leak tests. */
+  readonly maskBytes: number;
   /** Manual override hooks (rebind / tests). */
   setBufferSize: (bufW: number, bufH: number) => number;
   sampleFrameMs: (ms: number) => number;
@@ -207,22 +218,37 @@ type GodRayUniforms = {
 
 export function createGodRayPass(
   init: Partial<GodRayInputs> = {},
-  budgetOpts: GodRayBudgetOpts & { adaptive?: boolean } = {},
+  budgetOpts: GodRayBudgetOpts & {
+    adaptive?: boolean;
+    /**
+     * #117 A/B knob (harness / debug): "auto" (default) = #114 half-res mask below
+     * 48 taps; "off" = always the stock per-tap path; "byte" = force an 8-bit mask.
+     */
+    emissionMask?: "auto" | "off" | "byte";
+  } = {},
 ): GodRayHandle {
   const pass = new ShaderPass(GodRayShader);
   const u = pass.uniforms as unknown as GodRayUniforms;
   // ShaderPass clones uniforms; make sure Vector2/Color are per-instance.
   u.sunUv.value = new THREE.Vector2(0.5, 0.5);
   u.tint.value = new THREE.Color(...KEY_RGB.healthy);
+  u.emitScale.value = new THREE.Vector2(1, 1);
   let base = godRayIntensity({ healthy: 0, total: 0, reducedMotion: false, ...init });
   let fade = 1;
   /** Sticky depth from setDepthTexture; rebound per-frame from active readBuffer when possible. */
   let depthTex: THREE.Texture | null = null;
   let depthCam: THREE.PerspectiveCamera | null = null;
+  // Declared before apply(): #117 frees the mask whenever the pass switches off.
+  const maskMode = budgetOpts.emissionMask ?? "auto";
+  const mask = createGodRayMask({ forceByte: maskMode === "byte" });
   const apply = () => {
     const eff = base * fade;
     u.intensity.value = eff;
     pass.enabled = eff > 0.001;
+    // #117 VRAM: a disabled pass is never rendered, so render() can't free the
+    // mask itself — reduced motion / sun behind camera / no data would otherwise
+    // pin the half-res target (up to ~29 MB HalfFloat at 5120×2880) indefinitely.
+    if (!pass.enabled) mask.release();
   };
   apply();
   const adaptive = budgetOpts.adaptive !== false;
@@ -233,7 +259,6 @@ export function createGodRayPass(
     u.tapNorm.value = p.norm;
   };
   applyTaps(godRayTapParams(GOD_RAY_MAX_TAPS));
-  const mask = createGodRayMask();
   let lastBufW = -1;
   let lastBufH = -1;
   let disposed = false;
@@ -268,7 +293,8 @@ export function createGodRayPass(
     // #114: below 48 taps, prefilter emission into a half-res mask first.
     u.tEmit.value = null;
     u.useEmit.value = 0;
-    if (u.intensity.value > 0) {
+    if (maskMode === "off") mask.release();
+    else if (u.intensity.value > 0) {
       const mu = mask.uniforms;
       mu.tDepth.value = liveDepth;
       mu.useDepth.value = liveDepth ? 1 : 0;
@@ -285,6 +311,8 @@ export function createGodRayPass(
       }
       u.tEmit.value = emitTex;
       u.useEmit.value = emitTex ? 1 : 0;
+      u.emitScale.value.copy(emitTex ? mask.readScale : ONE2);
+      u.emitDecode.value = emitTex && mask.encoded ? 1 : 0;
     }
     baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
     if (!pass.renderToScreen) markDepthClobbered(renderer, writeBuffer);
@@ -292,6 +320,7 @@ export function createGodRayPass(
     u.useDepth.value = 0;
     u.tEmit.value = null;
     u.useEmit.value = 0;
+    u.emitDecode.value = 0;
   }) as typeof pass.render;
   return {
     pass,
@@ -303,6 +332,9 @@ export function createGodRayPass(
     },
     get maskFactor() {
       return mask.factor;
+    },
+    get maskBytes() {
+      return mask.bytes;
     },
     get tapParams() {
       return { taps: u.taps.value, decay: u.decay.value, norm: u.tapNorm.value };
