@@ -10,6 +10,11 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+## Painter c29 (2026-11-03T00:02:38+01:00 WAT) — star granulation + pass legibility
+**Pass vs c26:** c28 wash reads; HUD OK → vignette soften only. **Win:** STAR_GRAIN_BY_HEALTH + WatercolorStar granulation amp (createBotStar already wired).
+**Still unwired:** P0 Notion galaxy watercolor instance; P1 landing travelers. c27 fleet beacon WIRED.
+
 ## Painter c28 (2026-11-02T23:58:08+01:00 WAT) — post-pass paper wash (lane-only)
 **Unwired audit:** P0 c27 fleet beacon still MeshStandard; c24/c25/c26/c22 wired. Notion galaxy InstancedMesh P1.
 **Fix:** PainterlyPassShader louder grain/fiber/palette/ink-edge + mediump brush cap (already in composer — no wait).

@@ -69,12 +69,16 @@ export const WatercolorStarShader = {
       float gFine = paintNoise(gUv);
       float gFiber = paintFbm(paintWrap(vUv * vec2(5.5, 16.0) + uTime * 0.018));
       float grain = (gFine - 0.5) * clamp(uGrain, 0.0, 1.0) * (0.5 + gFiber * 0.95);
-      // c26: quieter emissive lift; grain/stroke read as watercolor not LED
+      // c26/c29: quieter emissive; stronger granulation so wired bots read paint on full dash
       float em = clamp(uEmissive, 0.0, 1.0);
-      vec3 pigment = uColor * (0.48 + em * 0.42);
-      pigment += pigment * stroke * 0.42;
-      pigment += uColor * bloom * 0.85;
-      pigment += grain * (0.85 + em * 0.25);
+      float gr = clamp(uGrain, 0.0, 1.0);
+      vec3 pigment = uColor * (0.44 + em * 0.36);
+      pigment += pigment * stroke * 0.48;
+      pigment += uColor * bloom * 0.7;
+      // c29: paper fiber granulation scaled by real uGrain (health-driven)
+      pigment += grain * (1.15 + em * 0.2 + gr * 0.55);
+      // subtle cool paper underlay so neon status can't stay LED-flat
+      pigment = mix(pigment, pigment * vec3(0.92, 0.96, 1.05) + vec3(0.04, 0.05, 0.08), 0.22 + gr * 0.2);
       // c12/c21: corona — matte softens additive lift so bloom reads paint, not fire
       float matte = clamp(uMatte, 0.0, 1.0);
       float haloAmt = clamp(uHalo, 0.0, 1.0) * mix(1.0, 0.72, matte);

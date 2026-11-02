@@ -3305,3 +3305,54 @@ describe("painter c28: louder paper wash on already-wired pass", () => {
     assert.match(PainterlyPassShader.fragmentShader, /c28/);
   });
 });
+
+describe("hacker pass c29: star granulation amp / uGrain extremes", () => {
+  it("STAR_GRAIN_BY_HEALTH healthy is visibly above legacy 0.2", () => {
+    assert.ok(STAR_GRAIN_BY_HEALTH.healthy >= 0.3);
+    assert.ok(STAR_GRAIN_BY_HEALTH.blocked >= STAR_GRAIN_BY_HEALTH.healthy);
+    assert.ok(STAR_GRAIN_BY_HEALTH.idle < STAR_GRAIN_BY_HEALTH.healthy);
+  });
+
+  it("WatercolorStarShader pigment path clamps uGrain and uses c29 granulation amp", () => {
+    assert.match(WatercolorStarShader.fragmentShader, /float gr = clamp\(uGrain/);
+    assert.match(WatercolorStarShader.fragmentShader, /c29/);
+    assert.match(WatercolorStarShader.fragmentShader, /1\.15|granulation/);
+  });
+
+  it("setStarGrain / createBotStar honor health grain without NaN", () => {
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = { addColorStop() {} };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ kitScope: "c29-grain" });
+      const star = createPainterlyBotStar(kit, { color: 0x3dd68c, health: "healthy", idle: false });
+      const g0 = star.meshMaterial.uniforms.uGrain.value as number;
+      assert.ok(g0 >= 0.3, `healthy grain=${g0}`);
+      star.setGrain(Number.NaN as unknown as number);
+      assert.ok(Number.isFinite(star.meshMaterial.uniforms.uGrain.value as number));
+      star.setGrain(99);
+      assert.ok((star.meshMaterial.uniforms.uGrain.value as number) <= 1);
+      disposePainterlyKit(kit);
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
+  });
+});
+
+describe("painter c29: wired bot stars read granulation + pass vignette soften", () => {
+  it("PainterlyPassShader vignette floor softened for HUD corners", () => {
+    assert.match(PainterlyPassShader.fragmentShader, /mix\(0\.76, 1\.0, vig\)/);
+  });
+});
