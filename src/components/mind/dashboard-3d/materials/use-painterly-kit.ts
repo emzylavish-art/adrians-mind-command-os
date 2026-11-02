@@ -54,6 +54,11 @@ import {
   disposeImagineNodeOwnedMaps,
   type ImagineNodeOptions,
 } from "./imagine-node.ts";
+import {
+  createCityGroundMaterial as createCityGroundMaterialImpl,
+  tickCityGroundMaterial,
+  type CityGroundOptions,
+} from "./city-ground.ts";
 import { createNebulaSkyMaterial, createNebulaTexture, type NebulaTextureOptions } from "./nebula-sky.ts";
 import { createPaperGrainTexture, sanitizeShaderTime } from "./paper-grain.ts";
 import {
@@ -88,6 +93,11 @@ import {
 import { markImagineNodeReleased } from "./imagine-node.ts";
 
 export type PainterlyKitOptions = {
+  /**
+   * HACKER (c24): dispose every prior live kit before create — route navigate
+   * away from /dashboard and back without unmount dispose was leaking GPU mats.
+   */
+  disposePriorLive?: boolean;
   pass?: PainterlyPassOptions;
   nebula?: NebulaTextureOptions;
   /** Soft cap for painter-owned texture bytes (default 48MiB). */
@@ -100,6 +110,13 @@ export type PainterlyTickOptions = {
   reducedMotion?: boolean;
   /** devicePixelRatio — Imagine cheap grain path under high DPR (c22). */
   dpr?: number;
+  /**
+   * HACKER (c24): when document.hidden and pauseWhenHidden≠false, skip tick
+   * (rAF often stops; wall-clock catch-up would thrash uniforms).
+   */
+  pauseWhenHidden?: boolean;
+  /** Force tick even while document.hidden (tests). */
+  forceTick?: boolean;
 };
 
 /** Shared kit texture slots that survive context restore via rebind. */
@@ -174,6 +191,8 @@ export type PainterlyKit = {
    * One-line constellation lane nebulae (replaces MeshBasicMaterial tint spheres).
    */
   createLaneNebulae: (lanes?: LaneNebulaInput[]) => PainterlyLaneNebulaeHandle;
+  /** Painterly city plaza (replaces MeshStandardMaterial ground + GridHelper). */
+  createCityGroundMaterial: (opts?: CityGroundOptions) => THREE.ShaderMaterial;
   /** Soft GPU texture budget in bytes (sanitized). */
   textureBudgetBytes: number;
   /** Report estimated texture bytes across kit-owned / tracked maps. */
@@ -379,6 +398,9 @@ export function disposeAllPainterlyKits(): number {
 }
 
 export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit {
+  if (opts.disposePriorLive) {
+    disposeAllPainterlyKits();
+  }
   const tracked: THREE.ShaderMaterial[] = [];
   const trackedSkies: THREE.MeshBasicMaterial[] = [];
   const textureBindings: PainterlyTextureBinding[] = [];
@@ -423,6 +445,15 @@ export function createPainterlyKit(opts: PainterlyKitOptions = {}): PainterlyKit
         return inertShaderMaterial("BuildingBrushMaterialInert");
       }
       const m = createBuildingBrushMaterial(bOpts);
+      tracked.push(m);
+      return m;
+    },
+    createCityGroundMaterial(gOpts) {
+      if (kit.disposed) {
+        notePostDisposeCall(kit);
+        return inertShaderMaterial("CityGroundMaterialInert");
+      }
+      const m = createCityGroundMaterialImpl(gOpts);
       tracked.push(m);
       return m;
     },
@@ -619,6 +650,18 @@ export function tickPainterlyKit(
   kit.lastTickError = null;
   kit.lastTickErrorCount = 0;
   kit.lastTickUniformWrites = 0;
+  // HACKER (c24): background tab — rAF stops; skip rather than catch-up thrash
+  const pauseHidden = opts.pauseWhenHidden !== false;
+  if (
+    !opts.forceTick &&
+    pauseHidden &&
+    typeof document !== "undefined" &&
+    document.hidden
+  ) {
+    (kit as { lastTickSkippedHidden?: boolean }).lastTickSkippedHidden = true;
+    return;
+  }
+  (kit as { lastTickSkippedHidden?: boolean }).lastTickSkippedHidden = false;
   const reduced = !!opts.reducedMotion;
   const t = reduced ? kit.frozenTickTime : timeSeconds;
   if (!reduced) kit.frozenTickTime = timeSeconds;
@@ -635,6 +678,7 @@ export function tickPainterlyKit(
       if (reduced && !m.uniforms?.["uTime"]) continue;
       if (m.name === "StarWatercolorMaterial") tickStarMaterial(m, t);
       else if (m.name === "BuildingBrushMaterial") tickBuildingMaterial(m, t);
+      else if (m.name === "CityGroundMaterial") tickCityGroundMaterial(m, t);
       else if (m.name === "LorePlaqueMaterial") tickLorePlaqueMaterial(m, t);
       else if (m.name === "InkWashEdgeMaterial") tickInkWashEdgeMaterial(m, t);
       else if (m.name === "ImagineNodeMaterial") {

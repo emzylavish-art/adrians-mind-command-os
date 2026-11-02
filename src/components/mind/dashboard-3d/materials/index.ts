@@ -5,6 +5,7 @@ export const PAINTER_MATERIALS = {
   lorePlaque: "LorePlaqueMaterial",
   inkWashEdge: "InkWashEdgeMaterial",
   imagineNode: "ImagineNodeMaterial",
+  cityGround: "CityGroundMaterial",
   botStar: "PainterlyBotStarBundle",
   inkWashEdgesBatched: "PainterlyInkEdgesHandle",
   laneNebula: "LaneNebulaMaterial",
@@ -222,6 +223,11 @@ export {
   type ImagineQualityTier,
   type ImagineTickOptions,
 } from "./imagine-node.ts";
+export {
+  createCityGroundMaterial,
+  tickCityGroundMaterial,
+  type CityGroundOptions,
+} from "./city-ground.ts";
 export {
   createNebulaTexture,
   createNebulaSkyMaterial,

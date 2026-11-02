@@ -398,3 +398,26 @@ setImagineNodeMap(imagineMat, tex, {
 - `imagineAspectFromDims` never NaN; clamps to [1/16, 16] (1×4000 → letterbox).
 - `applyImagineSamplerSafe`: always no mipmaps + ClampToEdge + anisotropy ≤ GPU max (WebGL1 NPOT black guard).
 - Painter owns: `shaders/imagine-node.ts`, `materials/imagine-node.ts`.
+
+
+## c24 — city plaza watercolor ground (biggest visible win)
+
+**REA note:** `/dashboard` on :8110 redirected to `/login` (auth on). Lane harness + code census used. Least painterly large surface: `city/city-layer.ts` MeshStandardMaterial circle + GridHelper while buildings already use brush mats.
+
+```ts
+// city/city-layer.ts (Dashboard lane — do not edit from painter):
+const groundMat = kit.createCityGroundMaterial({
+  base: 0x0a1020,
+  ink: 0x2b3a66,
+  accent: 0x8ea0ff,
+  ring: 0.45,
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+// REMOVE GridHelper — ink rings live in the shader
+// On unmount: disposePainterlyKit(kit) OR createPainterlyKit({ disposePriorLive: true })
+tickPainterlyKit(kit, t, { dpr, pauseWhenHidden: true });
+```
+
+### Hacker (c24)
+- `disposePriorLive: true` on kit create — route leave/reenter without dispose was leaking live kits.
+- `tickPainterlyKit` skips while `document.hidden` (rAF stop / background tab catch-up thrash).
