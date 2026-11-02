@@ -9,6 +9,11 @@ import os
 import urllib.error
 import urllib.request
 
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "policies"))
+from budget import BudgetAction, evaluate_budget
+
 PROVIDERS = {
     "grok": {
         "base_url": "https://api.x.ai/v1/chat/completions",
@@ -59,6 +64,20 @@ def generate(provider, messages, *, model=None, timeout=60):
     key = os.environ.get(config["key_env"]) if config["key_env"] else None
     if config["auth"] and not key:
         raise ProviderError(f"Required environment variable is unset: {config['key_env']}")
+    if provider != "ollama":
+        limit_raw = os.environ.get("MIND_COMMAND_BUDGET_LIMIT_USD")
+        spent_raw = os.environ.get("MIND_COMMAND_BUDGET_SPENT_USD")
+        if not limit_raw or not spent_raw:
+            raise ProviderError("Paid provider blocked: set MIND_COMMAND_BUDGET_LIMIT_USD and MIND_COMMAND_BUDGET_SPENT_USD for budget preflight.")
+        try:
+            decision = evaluate_budget(
+                float(spent_raw), float(limit_raw),
+                owner_override=os.environ.get("MIND_COMMAND_BUDGET_OWNER_OVERRIDE") == "1",
+            )
+        except (TypeError, ValueError):
+            raise ProviderError("Paid provider blocked: budget values must be valid non-negative numbers.") from None
+        if decision.action == BudgetAction.PAUSE:
+            raise ProviderError("Paid provider paused: configured budget is exhausted.")
     selected_model = model or os.environ.get(config["model_env"], config["default_model"])
     if not isinstance(selected_model, str) or not selected_model.strip():
         raise ProviderError("A non-empty model name is required.")
