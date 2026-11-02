@@ -6,7 +6,7 @@ import { sanitizeAttachments, type ImageAttachment } from "./media/index.ts";
 import type { ChatContent } from "./media/types.ts";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
-import { callConfiguredProvider, httpStatusForProviderSelection, selectProvider } from "./provider-call";
+import { callConfiguredProvider, httpStatusForProviderSelection, httpStatusForTurnFailure, selectProvider } from "./provider-call";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
@@ -187,23 +187,25 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (!selected.ok) return json(selected, httpStatusForProviderSelection(selected.error));
   if (selected.id !== "grok") {
     const { haltIsOn } = await import("./halt.server");
-    if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." });
+    if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." }, 409);
     // Same chat rate limit as Grok — non-Grok must not skip the token bucket.
     const limited = consumeMindRateLimit("chat", userId, 12);
     if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
     const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: globalThis.fetch });
-    return json({ ...called, provider: selected.id });
+    // Provider failure is never a 200: upstream rate limit → 429, other upstream failure → 502.
+    const failStatus = /rate limited/i.test(called.error) ? 429 : /not configured/i.test(called.error) ? 503 : 502;
+    return json({ ...called, provider: selected.id }, called.ok ? 200 : failStatus);
   }
   const prepared = await prepareMindTurn(userId, body);
   if (!prepared.ok) {
     if ("rateLimited" in prepared && prepared.rateLimited) {
       return jsonRateLimited(prepared.error, prepared.retryAfterSec);
     }
-    return json(prepared);
+    return json(prepared, httpStatusForTurnFailure(prepared.error));
   }
   if (!allowedModelIds(process.env).has(prepared.model)) {
-    return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
+    return json({ ok: false, error: "That model is not available. Another provider is not substituted." }, 503);
   }
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." }, 503);

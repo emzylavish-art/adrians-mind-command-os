@@ -175,6 +175,12 @@ export function relayModelStream(input: {
           finish();
           return;
         }
+        if (!feed.finished) {
+          // Clean close at a frame boundary without [DONE]/finish_reason = cut-off reply.
+          send("error", { error: "Grok's reply was cut off before it finished. Nothing was saved as a success." });
+          finish();
+          return;
+        }
         const usage: ModelUsage | null = feed.usage;
         send("done", {
           text: feed.text.trim(),

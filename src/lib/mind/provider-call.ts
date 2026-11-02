@@ -62,3 +62,13 @@ export function httpStatusForProviderSelection(error: string): 400 | 503 {
   if (/not configured|No .+ key is configured/i.test(error)) return 503;
   return 400;
 }
+
+/**
+ * Map a Grok-path turn failure message to HTTP status so failures are never 200.
+ * Halt → 409; server misconfig / model unavailable → 503; validation → 400.
+ */
+export function httpStatusForTurnFailure(error: string): 400 | 409 | 503 {
+  if (/emergency stop/i.test(error)) return 409;
+  if (/not configured|not available|forbidden project|project URL and project ref/i.test(error)) return 503;
+  return 400;
+}
