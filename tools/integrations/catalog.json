@@ -181,6 +181,42 @@
       },
       "live": "not-connected",
       "notes": "Source is available as a pinned submodule; research corpus is not automatically executed or used to bypass service safeguards."
+    },
+    {
+      "id": "blackeye",
+      "name": "BlackEye",
+      "kind": "restricted-phishing-tool",
+      "status": "restricted-not-integrated",
+      "entrypoint": null,
+      "live": "blocked",
+      "notes": "Phishing and credential harvesting are excluded; no runnable workflow is included."
+    },
+    {
+      "id": "blackbox",
+      "name": "Blackbox",
+      "kind": "unresolved-security-tool",
+      "status": "identity-unconfirmed",
+      "entrypoint": null,
+      "live": "not-connected",
+      "notes": "No exact repository URL was established in the available project record. Similar names are not treated as interchangeable."
+    },
+    {
+      "id": "gods-eyes",
+      "name": "God's Eyes",
+      "kind": "unresolved",
+      "status": "identity-unconfirmed",
+      "entrypoint": null,
+      "live": "not-connected",
+      "notes": "Exact source identity remains unverified."
+    },
+    {
+      "id": "arrow-ea",
+      "name": "Arrow EA",
+      "kind": "unresolved",
+      "status": "identity-unconfirmed",
+      "entrypoint": null,
+      "live": "not-connected",
+      "notes": "Exact source identity remains unverified."
     }
   ]
 }
