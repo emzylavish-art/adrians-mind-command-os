@@ -447,6 +447,16 @@
       "install": "not-installed",
       "live": "not-connected",
       "guardrail": null
+    },
+    {
+      "id": "mind-command-os-security-review",
+      "name": "Mind Command OS Security Review",
+      "category": "defensive-static-analysis",
+      "agent": "security",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "guardrail": "Offline heuristic scan of owned/authorized source; no execution, exploitation, or network calls; human review required."
     }
   ]
 }
