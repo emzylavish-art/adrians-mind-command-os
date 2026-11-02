@@ -13,7 +13,7 @@ export const PAINTER_AMOUNT_DEFAULT = 0.42;
 /** Coalesce rapid resizePass storms — min ms between actual setSize calls. */
 export const PAINTER_RESIZE_MIN_INTERVAL_MS = 48;
 
-/** Post-process: watercolor wash + paper grain + mild edge soft (no external textures). */
+/** Post-process: watercolor wash + anisotropic paper-fiber grain + mild edge soft (no external textures). */
 export const PainterlyPassShader = {
   name: "PainterlyPassShader",
   uniforms: {
@@ -22,6 +22,8 @@ export const PainterlyPassShader = {
     amount: { value: PAINTER_AMOUNT_DEFAULT },
     grain: { value: 0.09 },
     wash: { value: 0.38 },
+    /** c16: anisotropic paper-fiber strength 0..1 (from real setPassHealth amount). */
+    fiber: { value: 0.35 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -36,15 +38,27 @@ export const PainterlyPassShader = {
     uniform float amount;
     uniform float grain;
     uniform float wash;
+    uniform float fiber;
     varying vec2 vUv;
     ${GLSL_HASH_NOISE}
     void main() {
       vec2 uv = vUv;
-      float n = paintFbm(uv * 64.0 + time * 0.04);
+      // c16: paper-fiber direction from real amount (deterministic tilt — no fabricated weather)
+      float fib = clamp(fiber, 0.0, 1.0);
+      float ang = amount * 1.2;
+      vec2 dir = vec2(cos(ang), sin(ang));
+      vec2 perp = vec2(-dir.y, dir.x);
+      vec2 fUv = vec2(
+        dot(uv * 56.0, dir) * (1.0 + fib * 1.75),
+        dot(uv * 56.0, perp) * mix(1.0, 0.42, fib)
+      );
+      float n = paintFbm(paintWrap(fUv) + time * 0.04);
       vec2 brush = (vec2(
-        paintNoise(uv * 48.0 + vec2(time * 0.02, 0.0)),
-        paintNoise(uv * 48.0 + vec2(0.0, 3.1))
+        paintNoise(paintWrap(uv * 48.0 + vec2(time * 0.02, 0.0))),
+        paintNoise(paintWrap(uv * 48.0 + vec2(0.0, 3.1)))
       ) - 0.5) * amount * 0.014;
+      // Stretch brush slightly along fiber so wash follows paper grain
+      brush += dir * ((n - 0.5) * amount * 0.006 * fib);
       vec4 c = texture2D(tDiffuse, uv + brush);
       vec4 blur = (
         texture2D(tDiffuse, uv + vec2( brush.x, 0.0)) +
@@ -53,8 +67,8 @@ export const PainterlyPassShader = {
         texture2D(tDiffuse, uv + vec2(0.0, -brush.y))
       ) * 0.25;
       c.rgb = mix(c.rgb, blur.rgb, wash);
-      // paper grain
-      float g = (n - 0.5) * grain * amount;
+      // anisotropic paper grain (fiber-stretched)
+      float g = (n - 0.5) * grain * amount * (0.65 + fib * 0.55);
       c.rgb += g;
       // Unified painterly palette (c11): warm paper midtones + cool indigo shadows
       // driven only by real amount (from setPassHealth) — no fabricated scene data.
@@ -84,6 +98,7 @@ export const PainterlyPassFallbackShader = {
     amount: { value: 0 },
     grain: { value: 0 },
     wash: { value: 0 },
+    fiber: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -105,9 +120,28 @@ export type PainterlyPassOptions = {
   amount?: number;
   grain?: number;
   wash?: number;
+  /** Anisotropic paper-fiber strength 0..1 (defaults from amount when omitted). */
+  fiber?: number;
   /** Force identity fallback (tests / known-bad environments). */
   forceFallback?: boolean;
 };
+
+export const PAINTER_FIBER_DEFAULT = 0.35;
+export const PAINTER_FIBER_MIN = 0.08;
+export const PAINTER_FIBER_MAX = 0.85;
+
+/** Map real pass amount → fiber strength (neutral mid when amount unknown/min). */
+export function painterlyFiberFromAmount(amount: number): number {
+  const a = sanitizeFinite(amount, PAINTER_AMOUNT_DEFAULT, PAINTER_AMOUNT_MIN, PAINTER_AMOUNT_MAX);
+  const t = (a - PAINTER_AMOUNT_MIN) / (PAINTER_AMOUNT_MAX - PAINTER_AMOUNT_MIN);
+  return sanitizeFinite(
+    PAINTER_FIBER_MIN + (PAINTER_FIBER_MAX - PAINTER_FIBER_MIN) * t,
+    PAINTER_FIBER_DEFAULT,
+    PAINTER_FIBER_MIN,
+    PAINTER_FIBER_MAX,
+  );
+}
+
 
 export type PainterlyPassSize = {
   width: number;
@@ -134,6 +168,8 @@ type PassMeta = {
   /** Scratch — never reallocated in tick/setHealth hot paths. */
   _healthHealthy: number;
   _healthTotal: number;
+  /** When true, setPainterlyPassAmount does not rewrite fiber. */
+  fiberLocked?: boolean;
 };
 
 function metaOf(pass: ShaderPass): PassMeta {
@@ -297,6 +333,10 @@ export function setPainterlyPassHealth(pass: ShaderPass, input: PainterlyHealthI
   m._healthTotal = Number.isFinite(input.total) ? input.total : 0;
   const amount = painterlyAmountFromHealth(input);
   if (pass.uniforms["amount"]) pass.uniforms["amount"].value = amount;
+  // c16: fiber tracks real health-driven amount (neutral default via painterlyFiberFromAmount)
+  if (pass.uniforms["fiber"]) {
+    pass.uniforms["fiber"].value = painterlyFiberFromAmount(amount);
+  }
   return amount;
 }
 
@@ -305,8 +345,73 @@ export function setPainterlyPassAmount(pass: ShaderPass, amount: number): number
   if (m.disposed) return 0;
   const v = sanitizeFinite(amount, PAINTER_AMOUNT_DEFAULT, 0, PAINTER_AMOUNT_MAX);
   if (pass.uniforms["amount"]) pass.uniforms["amount"].value = v;
+  if (pass.uniforms["fiber"] && !(m as PassMeta & { fiberLocked?: boolean }).fiberLocked) {
+    pass.uniforms["fiber"].value = painterlyFiberFromAmount(v);
+  }
   return v;
 }
+
+export function setPainterlyPassFiber(pass: ShaderPass, fiber: number): number {
+  const m = metaOf(pass);
+  if (m.disposed) return 0;
+  const v = sanitizeFinite(fiber, PAINTER_FIBER_DEFAULT, 0, 1);
+  if (pass.uniforms["fiber"]) pass.uniforms["fiber"].value = v;
+  (m as PassMeta & { fiberLocked?: boolean }).fiberLocked = true;
+  return v;
+}
+
+/**
+ * HACKER (c16): live status feeds / HMR can write NaN into pass uniforms and black
+ * the composer for a frame. Re-sanitize amount/grain/wash/fiber every tick.
+ * Returns how many uniforms were repaired.
+ */
+export function sanitizePainterlyPassUniforms(pass: ShaderPass): number {
+  const m = metaOf(pass);
+  if (m.disposed) return 0;
+  let repaired = 0;
+  const u = pass.uniforms;
+  if (u["amount"]) {
+    const cur = u["amount"].value as number;
+    const v = sanitizeFinite(cur, PAINTER_AMOUNT_DEFAULT, 0, PAINTER_AMOUNT_MAX);
+    if (v !== cur) {
+      u["amount"].value = v;
+      repaired += 1;
+    }
+  }
+  if (u["grain"]) {
+    const cur = u["grain"].value as number;
+    const v = sanitizeFinite(cur, 0.09, 0, 1);
+    if (v !== cur) {
+      u["grain"].value = v;
+      repaired += 1;
+    }
+  }
+  if (u["wash"]) {
+    const cur = u["wash"].value as number;
+    const v = sanitizeFinite(cur, 0.38, 0, 1);
+    if (v !== cur) {
+      u["wash"].value = v;
+      repaired += 1;
+    }
+  }
+  if (u["fiber"]) {
+    const cur = u["fiber"].value as number;
+    const v = sanitizeFinite(cur, PAINTER_FIBER_DEFAULT, 0, 1);
+    if (v !== cur) {
+      u["fiber"].value = v;
+      repaired += 1;
+    }
+  }
+  if (u["time"]) {
+    const cur = u["time"].value as number;
+    if (!Number.isFinite(cur)) {
+      u["time"].value = 0;
+      repaired += 1;
+    }
+  }
+  return repaired;
+}
+
 
 function buildPass(shader: typeof PainterlyPassShader | typeof PainterlyPassFallbackShader): ShaderPass {
   return new ShaderPass(shader);
@@ -325,7 +430,8 @@ export function createPainterlyPass(opts: PainterlyPassOptions = {}): ShaderPass
     // Preflight: required GLSL tokens (catches truncated/corrupt shader modules)
     if (
       !PainterlyPassShader.fragmentShader.includes("paintFbm") ||
-      !PainterlyPassShader.fragmentShader.includes("amount")
+      !PainterlyPassShader.fragmentShader.includes("amount") ||
+      !PainterlyPassShader.fragmentShader.includes("fiber")
     ) {
       throw new Error("painterly-shader-preflight-failed");
     }
@@ -346,6 +452,13 @@ export function createPainterlyPass(opts: PainterlyPassOptions = {}): ShaderPass
   if (opts.wash != null && pass.uniforms["wash"]) {
     pass.uniforms["wash"].value = sanitizeFinite(opts.wash, 0.38, 0, 1);
   }
+  if (opts.fiber != null) {
+    setPainterlyPassFiber(pass, opts.fiber);
+  } else if (pass.uniforms["fiber"] && pass.uniforms["amount"]) {
+    pass.uniforms["fiber"].value = painterlyFiberFromAmount(
+      pass.uniforms["amount"].value as number,
+    );
+  }
   return pass;
 }
 
@@ -358,6 +471,8 @@ export function tickPainterlyPass(pass: ShaderPass, timeSeconds: number): void {
   if (m.disposed) return;
   // HACKER (c11): apply coalesced resize after storm window
   flushPainterlyPassResize(pass);
+  // HACKER (c16): scrub NaN uniforms from live feeds before draw
+  sanitizePainterlyPassUniforms(pass);
   if (pass.uniforms["time"]) pass.uniforms["time"].value = sanitizeShaderTime(timeSeconds);
 }
 

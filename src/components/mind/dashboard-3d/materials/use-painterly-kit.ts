@@ -20,6 +20,7 @@ import {
   disposePainterlyPass,
   resizePainterlyPass,
   setPainterlyPassHealth,
+  sanitizePainterlyPassUniforms,
   type PainterlyPassOptions,
   type PainterlyHealthInputs,
 } from "../shaders/painterly-pass.ts";
@@ -797,6 +798,8 @@ export function attachPainterlyContextHandlers(
   }
   const onLost = (ev: Event) => {
     ev.preventDefault();
+    // HACKER (c16): context loss before/during dispose — never touch dead kit
+    if (kit.disposed) return;
     kit.contextLost = true;
   };
   const onRestored = () => {
@@ -817,6 +820,12 @@ export function attachPainterlyContextHandlers(
     kit.paperGrainTexture = createPaperGrainTexture({ size: 256, seed: 7 });
     // HACKER FIX (c4): re-attach new texture objects to every consumer
     rebindPainterlyKitTextures(kit);
+    // HACKER (c16): scrub NaN pass uniforms that may have been written mid-loss
+    try {
+      sanitizePainterlyPassUniforms(kit.painterlyPass);
+    } catch {
+      /* */
+    }
     try {
       rebuild?.();
     } catch (err) {

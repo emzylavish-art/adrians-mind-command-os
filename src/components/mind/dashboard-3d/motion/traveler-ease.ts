@@ -80,23 +80,36 @@ export function resumeTraveler(state: TravelerEaseState): void {
   state.paused = false;
 }
 
-/** Pure polyline sample (mirrors dashboard sky-flow; kept in-lane). O(1), no alloc. */
+function isPoint(p: unknown): p is Readonly<TravelerXyz> {
+  return p !== null && typeof p === "object";
+}
+
+/**
+ * Pure polyline sample (mirrors dashboard sky-flow; kept in-lane). O(1), no alloc.
+ * Hacker c24: a null / undefined / non-object vertex (sparse array, hole from a missing
+ * node) used to throw `Cannot read properties of null (reading 'x')` inside the rAF tick,
+ * aborting the rest of every frame (render skipped). Non-array `points` (array-likes,
+ * numbers) did the same. Now: non-array → origin; a missing endpoint falls back to the
+ * other endpoint; both missing → `out` holds its previous position (no teleport).
+ */
 export function sampleTravelerPolyline(
   out: TravelerXyz,
   points: ReadonlyArray<Readonly<TravelerXyz>>,
   progress: number,
 ): TravelerXyz {
-  if (!points || points.length === 0) {
+  if (!Array.isArray(points) || points.length === 0) {
     out.x = 0;
     out.y = 0;
     out.z = 0;
     return out;
   }
   if (points.length === 1) {
-    const p = points[0]!;
-    out.x = finiteOr(p.x, 0);
-    out.y = finiteOr(p.y, 0);
-    out.z = finiteOr(p.z, 0);
+    const p = points[0];
+    if (isPoint(p)) {
+      out.x = finiteOr(p.x, 0);
+      out.y = finiteOr(p.y, 0);
+      out.z = finiteOr(p.z, 0);
+    }
     return out;
   }
   let u = finiteOr(progress, 0);
@@ -108,8 +121,13 @@ export function sampleTravelerPolyline(
   if (i >= segCount) i = segCount - 1;
   if (i < 0) i = 0;
   const local = scaled - i;
-  const a = points[i]!;
-  const b = points[i + 1]!;
+  const pa = points[i];
+  const pb = points[i + 1];
+  const aOk = isPoint(pa);
+  const bOk = isPoint(pb);
+  if (!aOk && !bOk) return out;
+  const a = (aOk ? pa : pb) as Readonly<TravelerXyz>;
+  const b = (bOk ? pb : pa) as Readonly<TravelerXyz>;
   const ax = finiteOr(a.x, 0);
   const ay = finiteOr(a.y, 0);
   const az = finiteOr(a.z, 0);
