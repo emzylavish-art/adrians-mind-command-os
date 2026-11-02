@@ -196,6 +196,38 @@ def invoke(tool_id, payload, manifest):
         return envelope("ready", report, ["tools/knowledge/knowledge_search.py"],
                         report.get("limitations", []))
 
+
+    if tool_id == "mcp.remote":
+        action = payload.get("action")
+        server_name = payload.get("server")
+        if action not in {"list", "call"} or not isinstance(server_name, str) or not server_name.strip():
+            return envelope("blocked", limitations=["mcp.remote requires action=list|call and a configured server name."])
+        remote_script = ROOT / "team" / "remote_mcp.py"
+        command = [sys.executable, str(remote_script), action, "--server", server_name,
+                   "--timeout", str(payload.get("timeout_seconds", 30))]
+        if action == "call":
+            tool_name, arguments = payload.get("tool"), payload.get("arguments", {})
+            if not isinstance(tool_name, str) or not tool_name.strip() or not isinstance(arguments, dict):
+                return envelope("blocked", limitations=["mcp.remote call requires a tool name and object arguments."])
+            command.extend(["--tool", tool_name, "--arguments", json.dumps(arguments)])
+        try:
+            completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True,
+                                       timeout=int(payload.get("timeout_seconds", 30)) + 5, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Remote MCP invocation failed: {type(exc).__name__}."])
+        try:
+            report = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope("blocked", result=completed.stdout,
+                            evidence=["team/remote_mcp.py"],
+                            limitations=[completed.stderr.strip() or "Remote MCP returned invalid JSON."])
+        if completed.returncode or report.get("status") != "ready":
+            return envelope("blocked", result=report.get("result"),
+                            evidence=["team/remote_mcp.py"],
+                            limitations=[report.get("error") or completed.stderr.strip() or "Remote MCP call failed."])
+        return envelope("ready", report.get("result"), ["team/remote_mcp.py", "team/remote_mcp.json"],
+                        ["Remote endpoints must be explicitly enabled with HTTPS and tool allowlists. Credentials are read from environment variables."])
+
     adapters = {
         "rea.scan": (ROOT / "tools" / "rea" / "rea.py", "source"),
         "security.scan": (ROOT / "tools" / "security_review" / "security_review.py", "source"),
