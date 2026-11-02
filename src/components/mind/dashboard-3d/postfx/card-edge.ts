@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { sunScreenUv } from "./god-rays.ts";
-import { measureLuminance, type LuminanceStats } from "./backdrop-meter.ts";
+import { METER_MAX_AGE_MS, measureLuminance, type LuminanceStats } from "./backdrop-meter.ts";
 import { contrastRatio } from "./wcag-contrast.ts";
 
 /**
@@ -22,6 +22,11 @@ import { contrastRatio } from "./wcag-contrast.ts";
  *
  * Honesty: no card reading / no surround / junk / no real radius → gain 0,
  * pass disabled (byte-identical frame). Reduced motion snaps.
+ *
+ * #103: edge mode uses ±EDGE_SHADE_HYST hysteresis around EDGE_SHADE_ABOVE
+ * (flip to shade only above 0.40, back to light only below 0.30) so a surround
+ * hovering at 0.35 cannot flash light↔shade between ~500 ms meter reads. Rim
+ * targetGain is also faded by contrast.card.atMs age (0 near METER_MAX_AGE_MS).
  */
 
 /** Below this card-vs-surround contrast ratio the card gets a rim. */
@@ -35,6 +40,8 @@ export const EDGE_INNER = 1.0;
 export const EDGE_WIDTH = 0.14;
 /** Max(card, surround) mean above which a shade halo is used instead of a light rim. */
 export const EDGE_SHADE_ABOVE = 0.35;
+/** ± band around EDGE_SHADE_ABOVE; mode only flips past 0.40 / 0.30 (#103). */
+export const EDGE_SHADE_HYST = 0.05;
 /** Cool, health-neutral rim colour (encoded sRGB). */
 export const EDGE_COLOR: readonly [number, number, number] = [0.62, 0.78, 1.0];
 /** Probe half-extent (in card radii) when the surround split is on. */
@@ -97,6 +104,35 @@ export function edgeSeparationGain(ratio: number | null | undefined): number {
   return EDGE_MAX * smooth01((EDGE_SEP_RATIO - ratio) / (EDGE_SEP_RATIO - EDGE_SEP_FULL));
 }
 
+/**
+ * Pick light/shade from max(card, surround) mean with ±EDGE_SHADE_HYST hysteresis.
+ * First reading (prev null) uses the hard EDGE_SHADE_ABOVE threshold; later
+ * readings only flip past 0.40 (→ shade) / 0.30 (→ light). Junk peak → prev or light.
+ */
+export type EdgeMode = "light" | "shade";
+
+export function edgeModeFromPeak(peak: number, prev: EdgeMode | null): EdgeMode {
+  if (typeof peak !== "number" || !Number.isFinite(peak) || peak < 0) return prev ?? "light";
+  const hi = EDGE_SHADE_ABOVE + EDGE_SHADE_HYST;
+  const lo = EDGE_SHADE_ABOVE - EDGE_SHADE_HYST;
+  if (prev === "shade") return peak < lo ? "light" : "shade";
+  if (prev === "light") return peak > hi ? "shade" : "light";
+  return peak > EDGE_SHADE_ABOVE ? "shade" : "light";
+}
+
+/**
+ * Fade rim strength by measurement age. Fresh / unknown age → 1; at/past
+ * METER_MAX_AGE_MS → 0. Fades across the second half of the age window so a
+ * reading near expiry cannot drive a full-strength rim.
+ */
+export function edgeAgeFade(ageMs: number | null | undefined, maxAge = METER_MAX_AGE_MS): number {
+  if (typeof ageMs !== "number" || !Number.isFinite(ageMs) || ageMs <= 0) return 1;
+  if (!(typeof maxAge === "number" && Number.isFinite(maxAge) && maxAge > 0) || ageMs >= maxAge) return 0;
+  const start = maxAge * 0.5;
+  if (ageMs <= start) return 1;
+  return 1 - smooth01((ageMs - start) / (maxAge - start));
+}
+
 /** JS mirror of the shader rim band at distance d (uv, aspect-corrected) for radius r. */
 export function edgeRimBand(d: number, r: number): number {
   if (!Number.isFinite(d) || !Number.isFinite(r) || r <= 0) return 0;
@@ -106,8 +142,6 @@ export function edgeRimBand(d: number, r: number): number {
   const fall = 1 - smooth01((d - a) / w);
   return Math.max(0, rise * fall);
 }
-
-export type EdgeMode = "light" | "shade";
 
 /** JS mirror of the shader's per-pixel output for one channel set (encoded 0..1). */
 export function edgeApply(rgb: readonly [number, number, number], band: number, gain: number, mode: EdgeMode): [number, number, number] {
@@ -180,26 +214,49 @@ export type CardEdgeHandle = {
   setFocus: (world: THREE.Vector3 | null, camera: THREE.Camera | null, radiusUv?: number | null) => void;
   /** The dim's `contrast.card` (needs setCardProbe(true) + setCardSurround(true)); null → no rim. */
   setSeparation: (
-    card: { stats: LuminanceStats; surround?: LuminanceStats | null } | null | undefined,
-    opts?: { reducedMotion?: boolean },
+    card: { stats: LuminanceStats; surround?: LuminanceStats | null; atMs?: number } | null | undefined,
+    opts?: { reducedMotion?: boolean; nowMs?: number },
   ) => void;
   readonly report: CardEdgeReport;
   tick: (dtMs: number) => void;
   dispose: () => void;
 };
 
-export function createCardEdgePass(): CardEdgeHandle {
+export type CreateCardEdgeOpts = {
+  /** Clock for measurement-age fade (#103). Defaults to performance.now / Date.now. */
+  now?: () => number;
+};
+
+function defaultNow(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+export function createCardEdgePass(opts: CreateCardEdgeOpts = {}): CardEdgeHandle {
+  const nowFn = typeof opts.now === "function" ? opts.now : defaultNow;
   const pass = new ShaderPass(CardEdgeShader);
   const u = pass.uniforms as unknown as EdgeUniforms;
   u.center.value = new THREE.Vector2(0.5, 0.5);
   u.rimColor.value = new THREE.Vector3(EDGE_COLOR[0], EDGE_COLOR[1], EDGE_COLOR[2]);
   let disposed = false;
   let focused = false;
+  let rawTargetGain = 0;
   let targetGain = 0;
   let gain = 0;
   let ratio: number | null = null;
   let mode: EdgeMode | null = null;
   let reduced = false;
+  let readingAtMs: number | null = null;
+
+  const ageNow = (override?: number) =>
+    typeof override === "number" && Number.isFinite(override) ? override : nowFn();
+
+  const fadedTarget = (nowMs?: number) => {
+    if (!(rawTargetGain > 0)) return 0;
+    if (readingAtMs == null) return rawTargetGain;
+    return rawTargetGain * edgeAgeFade(ageNow(nowMs) - readingAtMs);
+  };
 
   const apply = () => {
     u.gain.value = disposed ? 0 : gain;
@@ -234,11 +291,16 @@ export function createCardEdgePass(): CardEdgeHandle {
       reduced = !!opts.reducedMotion;
       const rr = focused && card ? cardSurroundRatio(card.stats, card.surround ?? null) : null;
       ratio = rr;
-      targetGain = edgeSeparationGain(rr);
-      if (targetGain > 0 && card && card.surround) {
+      rawTargetGain = edgeSeparationGain(rr);
+      if (rawTargetGain > 0 && card && card.surround) {
         // Mode only changes on a real reading; while fading out keep the last one.
-        mode = Math.max(card.stats.mean, card.surround.mean) > EDGE_SHADE_ABOVE ? "shade" : "light";
+        // #103: hysteresis band so a peak hovering at 0.35 cannot flash light↔shade.
+        const peak = Math.max(card.stats.mean, card.surround.mean);
+        mode = edgeModeFromPeak(peak, mode);
       }
+      readingAtMs =
+        card && typeof card.atMs === "number" && Number.isFinite(card.atMs) ? card.atMs : null;
+      targetGain = fadedTarget(opts.nowMs);
       if (reduced) {
         gain = targetGain;
         apply();
@@ -256,8 +318,13 @@ export function createCardEdgePass(): CardEdgeHandle {
     tick(dtMs) {
       if (disposed) return;
       if (!focused) {
+        rawTargetGain = 0;
         targetGain = 0;
         ratio = null;
+        readingAtMs = null;
+      } else {
+        // Keep fading as the stored reading ages toward METER_MAX_AGE between meter ticks.
+        targetGain = fadedTarget();
       }
       const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0;
       if (reduced) gain = targetGain;
@@ -269,8 +336,10 @@ export function createCardEdgePass(): CardEdgeHandle {
       if (disposed) return;
       disposed = true;
       gain = 0;
+      rawTargetGain = 0;
       targetGain = 0;
       ratio = null;
+      readingAtMs = null;
       apply();
       pass.dispose();
     },

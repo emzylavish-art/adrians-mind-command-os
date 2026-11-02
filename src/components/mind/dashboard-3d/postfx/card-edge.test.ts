@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
-import { METER_EDGE, type RegionReader } from "./backdrop-meter.ts";
+import { METER_EDGE, METER_MAX_AGE_MS, type RegionReader } from "./backdrop-meter.ts";
 import { createDetailBackdropDimPass, type UvRect } from "./detail-backdrop-dim.ts";
 import {
   CARD_SURROUND_SCALE,
   EDGE_MAX,
   EDGE_SEP_RATIO,
+  EDGE_SHADE_ABOVE,
+  EDGE_SHADE_HYST,
   cardSurroundRatio,
   createCardEdgePass,
+  edgeAgeFade,
   edgeApply,
+  edgeModeFromPeak,
   edgeRimBand,
   edgeSeparationGain,
   splitProbeBlock,
@@ -203,6 +207,90 @@ describe("#93 card edge pass", () => {
     assert.equal(edge.report.gain, 0);
     assert.equal(edge.pass.enabled, false);
     dim.dispose();
+    edge.dispose();
+  });
+});
+
+
+describe("#103 hacker: edge-mode hysteresis + measurement-age fade", () => {
+  it("hard 0.35 threshold would flap; hysteresis holds until past 0.40 / 0.30", () => {
+    // Reproduce the live bug: max(card, surround) hovering around EDGE_SHADE_ABOVE
+    // flipped light↔shade between ~500 ms meter reads (visible flash).
+    const hard = (peak: number) => (peak > EDGE_SHADE_ABOVE ? "shade" : "light");
+    assert.equal(hard(0.349), "light");
+    assert.equal(hard(0.351), "shade"); // one float step → mode flash
+
+    // First reading still uses the hard threshold.
+    assert.equal(edgeModeFromPeak(0.34, null), "light");
+    assert.equal(edgeModeFromPeak(0.36, null), "shade");
+
+    // Once light, stay light through the band; only flip past 0.40.
+    assert.equal(edgeModeFromPeak(EDGE_SHADE_ABOVE, "light"), "light");
+    assert.equal(edgeModeFromPeak(EDGE_SHADE_ABOVE + EDGE_SHADE_HYST, "light"), "light");
+    assert.equal(edgeModeFromPeak(EDGE_SHADE_ABOVE + EDGE_SHADE_HYST + 0.001, "light"), "shade");
+
+    // Once shade, stay shade through the band; only flip below 0.30.
+    assert.equal(edgeModeFromPeak(EDGE_SHADE_ABOVE, "shade"), "shade");
+    assert.equal(edgeModeFromPeak(EDGE_SHADE_ABOVE - EDGE_SHADE_HYST, "shade"), "shade");
+    assert.equal(edgeModeFromPeak(EDGE_SHADE_ABOVE - EDGE_SHADE_HYST - 0.001, "shade"), "light");
+
+    assert.equal(edgeModeFromPeak(NaN, "shade"), "shade");
+    assert.equal(edgeModeFromPeak(-1, null), "light");
+  });
+
+  it("pass keeps light mode across a 0.35-hover sequence that used to flash", () => {
+    let t = 0;
+    const edge = createCardEdgePass({ now: () => t });
+    edge.setFocus(new THREE.Vector3(0, 0, 0), cam(), 0.1);
+    const melt = (mean: number, atMs: number) => ({
+      stats: { mean, p90: mean, max: mean, samples: 4 },
+      surround: { mean, p90: mean, max: mean, samples: 4 },
+      atMs,
+    });
+    // First reading just under the hard threshold → light.
+    edge.setSeparation(melt(0.34, 0), { reducedMotion: true, nowMs: 0 });
+    assert.equal(edge.report.mode, "light");
+    assert.equal(edge.report.gain, EDGE_MAX);
+    // Next read sits just above 0.35 — old code flipped to shade; hysteresis holds light.
+    edge.setSeparation(melt(0.36, 500), { reducedMotion: true, nowMs: 500 });
+    assert.equal(edge.report.mode, "light");
+    // Only past 0.40 does it become shade.
+    edge.setSeparation(melt(0.41, 1000), { reducedMotion: true, nowMs: 1000 });
+    assert.equal(edge.report.mode, "shade");
+    // Drop back to 0.34 — stays shade until below 0.30.
+    edge.setSeparation(melt(0.34, 1500), { reducedMotion: true, nowMs: 1500 });
+    assert.equal(edge.report.mode, "shade");
+    edge.setSeparation(melt(0.29, 2000), { reducedMotion: true, nowMs: 2000 });
+    assert.equal(edge.report.mode, "light");
+    edge.dispose();
+  });
+
+  it("edgeAgeFade is full when fresh, 0 at/past METER_MAX_AGE, and ages the live rim", () => {
+    assert.equal(edgeAgeFade(null), 1);
+    assert.equal(edgeAgeFade(0), 1);
+    assert.equal(edgeAgeFade(METER_MAX_AGE_MS * 0.5), 1);
+    assert.equal(edgeAgeFade(METER_MAX_AGE_MS), 0);
+    assert.equal(edgeAgeFade(METER_MAX_AGE_MS + 50), 0);
+    assert.ok(edgeAgeFade(METER_MAX_AGE_MS * 0.75) < 1 && edgeAgeFade(METER_MAX_AGE_MS * 0.75) > 0);
+
+    let t = 0;
+    const edge = createCardEdgePass({ now: () => t });
+    edge.setFocus(new THREE.Vector3(0, 0, 0), cam(), 0.1);
+    const card = {
+      stats: { mean: 0.2, p90: 0.2, max: 0.2, samples: 4 },
+      surround: { mean: 0.2, p90: 0.2, max: 0.2, samples: 4 },
+      atMs: 0,
+    };
+    edge.setSeparation(card, { reducedMotion: true, nowMs: 0 });
+    assert.equal(edge.report.gain, EDGE_MAX);
+    // Near expiry the rim must be gone (no rim from a reading near METER_MAX_AGE).
+    t = METER_MAX_AGE_MS - 1;
+    edge.tick(16);
+    assert.ok(edge.report.targetGain < 0.02, `near-expiry target ${edge.report.targetGain}`);
+    t = METER_MAX_AGE_MS;
+    edge.tick(16);
+    assert.equal(edge.report.targetGain, 0);
+    assert.equal(edge.pass.enabled, false);
     edge.dispose();
   });
 });
