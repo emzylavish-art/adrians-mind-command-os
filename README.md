@@ -13,3 +13,24 @@ Open chats on a project shows only that project's chats.
 REA is pinned to `rea-agents@6.8.0`. Doctor can run and is not a healthy environment here. `inspect-artifact` rejects TypeScript and plain text without evidence. `analyze-javascript-application` expects an application directory or ASAR, not one source file. Native engines are not installed.
 
 A dedicated database, web research, image generation, video generation, and the HP agent are not connected.
+
+
+## Agent team runtime
+
+The `team/` folder contains the interoperable agent manifest, capability router,
+shared JSON runner, and a minimal MCP stdio server. Currently implemented local
+tool adapters include:
+
+- `rea.scan` — offline source inventory.
+- `security.scan` — defensive heuristic static review of authorized source.
+- `knowledge.search` — offline lexical retrieval from local Markdown/text notes.
+- `team.health` — repository readiness and entrypoint check.
+- `team.queue` — durable SQLite job enqueue/claim/complete/fail/list operations.
+
+Run the team tests with `python -m unittest discover -s team -p 'test_*.py'`.
+Use `python team/runner.py --task '{"operation":"list-tools"}'` to inspect
+the declared tool contract. The MCP server is launched with
+`python team/mcp_server.py`. Queue state is local and ignored by Git; queue
+payloads are not executed by the queue itself. External model providers,
+browser runtimes, remote knowledge stores, and unresolved tools are not
+represented as connected merely because they appear in the manifest.
