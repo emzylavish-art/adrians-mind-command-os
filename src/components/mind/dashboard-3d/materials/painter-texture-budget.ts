@@ -80,15 +80,31 @@ export type PainterlyBudgetDegradeState = {
   warned: boolean;
   degradeCount: number;
   lastBytes: number;
+  /** Consecutive under-budget samples while degraded (hysteresis). */
+  underBudgetStreak: number;
 };
 
+/** Exit degrade only after this many consecutive under-budget samples. */
+export const BUDGET_HYSTERESIS_FRAMES = 8;
+/** Exit degrade only when bytes <= budget * ratio (avoids edge flicker). */
+export const BUDGET_HYSTERESIS_RATIO = 0.92;
+
 export function createBudgetDegradeState(): PainterlyBudgetDegradeState {
-  return { overBudget: false, degraded: false, warned: false, degradeCount: 0, lastBytes: 0 };
+  return {
+    overBudget: false,
+    degraded: false,
+    warned: false,
+    degradeCount: 0,
+    lastBytes: 0,
+    underBudgetStreak: 0,
+  };
 }
 
 /**
  * HACKER (c17): soft cap was report-only (silent). When overBudget, mark degraded and
  * warn once so operators see it — callers should visibly ease pass grain/fiber.
+ * HACKER (c18): toggling overBudget every frame flickered degrade — enter immediately,
+ * exit only after BUDGET_HYSTERESIS_FRAMES under-budget samples AND bytes ≤ budget×ratio.
  */
 export function noteTextureBudgetReport(
   state: PainterlyBudgetDegradeState,
@@ -99,6 +115,7 @@ export function noteTextureBudgetReport(
   if (report.overBudget) {
     state.degraded = true;
     state.degradeCount += 1;
+    state.underBudgetStreak = 0;
     if (!state.warned) {
       state.warned = true;
       try {
@@ -109,6 +126,21 @@ export function noteTextureBudgetReport(
       } catch {
         /* */
       }
+    }
+  } else {
+    state.underBudgetStreak = (state.underBudgetStreak || 0) + 1;
+    const exitBytes =
+      Number.isFinite(report.budget) && report.budget > 0
+        ? report.budget * BUDGET_HYSTERESIS_RATIO
+        : 0;
+    if (
+      state.degraded &&
+      state.underBudgetStreak >= BUDGET_HYSTERESIS_FRAMES &&
+      report.bytes <= exitBytes
+    ) {
+      state.degraded = false;
+      // Allow a fresh warn if budget is exceeded again after recovery.
+      state.warned = false;
     }
   }
   return state;
