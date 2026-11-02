@@ -594,3 +594,46 @@ Wire: replace the scene's per-comet name walk with one call after `stepCometLaun
   `src/components/mind/dashboard-3d/particles/comet-stale-cache.test.ts`. No new deps.
 - Queue row #111 (wire). Hacker c25: applyCometLaunchSamples skips null/hole/missing-material cache slots; dispose null-safe.
 
+## Requests for Dashboard Bot (c26 — reduced-motion freeze audit)
+
+Motion lane freeze-audit tests (`motion/reduced-freeze-audit.test.ts`) prove
+`motion/` + `particles/` outputs are **bit-stable** across 60 frames at
+`reducedMotion=true` (star-batch, dust, comets, launch apply, travelers, character,
+edge, ring, gust, hover, still-target). **No motion/particles fix** — residual REA
+canvas motion is outside this lane.
+
+### Evidence
+- REA reduced uniqueSamples **before**: c24=4, c25=6.
+- REA reduced uniqueSamples **after** (c26 lean, 960×540, 6s settle, 6 canvas JPEG
+  samples @150ms): **4** (lens 37007/37067/37087/37087/37163/37163). Same floor as
+  c24; not improved because source is Dashboard-owned scene churn.
+- Full-page pixel-region diff (5 frames @200ms): 2 hot 8×8 cells near mid/lower
+  canvas (≈360–600×268–402) with small maxd — consistent with late progressive mount
+  / camera projection, not particle twinkle.
+- Progressive mount: `hasCanvas` false at t=6s meta, canvas present by probe — heavy
+  layers still landing under reduced.
+
+### Trace (do not edit from Motion)
+1. **`universe-scene.tsx` 5s sync** (`now - sync > 5000`): `rebuildAll()`, `syncCity()`,
+   disposes `inkEdges` / `laneNebulae` without recreate, recreates `feedGlyphs`.
+   Under reduced (no composer) this still mutates WebGL and explains multi-sample
+   canvas JPEG deltas. **Owner: Dashboard Bot.** Skip rebuild/dispose thrash when
+   `reducedMotion`, or recreate disposed layers; ideally no scene-graph churn while
+   reduced.
+2. **Progressive `mountHeavyLayers` / `scheduleHeavy`** — late dust/comets/city mount
+   changes canvas after first paint. **Owner: Dashboard Bot.** REA wait until
+   `heavyMounted`.
+3. **`stepRigSmooth` while `rig.t < 1`** still runs under reduced (fast-forward dt).
+   Multi-frame camera ease changes every mesh projection. **Owner: Dashboard Bot**
+   (`camera-rig` / universe tick). Prefer snap (`rig.t = 1`) when reduced.
+4. **Billboard `cardGroup` `lookAt(camera)` every frame** — couples to (3).
+   **Owner: Dashboard Bot.**
+
+Painter `tickPainterlyKit` correctly freezes `uTime` under reduced. Light postfx
+bundle is not built when reduced (`composer` null) — not the REA canvas source.
+
+### Requests (c26)
+- Register `src/components/mind/dashboard-3d/motion/reduced-freeze-audit.test.ts`
+  in package.json strip-types test list. No new deps.
+- Queue row #113: Motion c26 freeze-audit **done** (lane-side); Dashboard owns the
+  universe-scene reduced static scene request above.

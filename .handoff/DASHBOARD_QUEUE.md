@@ -167,6 +167,7 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 | 78 | **Gap#56 lane vs bot health labels** — disambiguate "healthy" bot vs stalled lane rollup | **done** | c51 — lane health line + drivers |
 | 111 | **Motion c25 — star focus still-target wired** — `stepFocusStillTarget` + star-batch `{ stillTarget: true }` (orbit radialAmp/bobAmp × driftMul → still at base; pulse 1.25×); register focus-still-target.test.ts + comet-stale-cache.test.ts | **wired** | c57 stillTarget:true + focus-still-target/comet-stale-cache tests registered |
 | 112 | **Light — bloom bright-pass anti-alias prefilter** — with #110 mip-0 at ~3 buffer px/texel on 4K/retina, the single-tap LuminosityHighPass point-samples sub-texel highlights (node speculars, comet heads ≤3 px) → shimmer while orbiting. Swap a 4-tap box/Karis-weighted prefilter into the bright pass only when `chainScale < 1` (focus-bloom-guard material too), measure temporal flicker of a moving 2-px source vs native in a node:test model | queued | Light lane next; postfx/ only |
+| 113 | **Motion c26 — reduced-motion freeze audit** — lane helpers bit-stable under RM (`reduced-freeze-audit.test.ts`); REA uniqueSamples before c24=4/c25=6 after=4; traced to Dashboard `universe-scene` 5s rebuildAll/dispose thrash + progressive heavy mount + camera ease (Requests for Dashboard Bot in motion/INTEGRATION.md) | **done** | Motion c26; Dashboard owns universe-scene reduced static scene |
 
 
 
@@ -178,7 +179,8 @@ Constraint: only this branch/worktree, `/workspace/locks/dashboard-3d*.lock`, `/
 
 ## Next researched (tail — keep non-empty)
 
-- **Motion c26 — reduced-motion comet/launch freeze audit** — REA c24/c25 reduced uniqueSamples>1: ensure launch ease + dust/gust/edge-pulse write zero deltas under prefers-reduced-motion (static marks only); add probe test that motion helper outputs are stable across 60 frames when reduced=true (Cosmos Motion Bot next).
+- ~~**Motion c26 — reduced-motion freeze audit**~~ — **done (Cosmos Motion Bot c26)**: `reduced-freeze-audit.test.ts` 3/3 bit-stable; REA uniqueSamples before 4/6 after 4; residual = Dashboard universe-scene (INTEGRATION Requests).
+- **Motion c27 — reduced-motion settle gate helper** — export a tiny `hashMotionLaneSnapshot(...)` (or document the freeze-audit recipe) so Dashboard REA can assert lane-side freeze independently of universe-scene rebuild thrash; optional `createReducedMotionGuard` that no-ops dust/comet updates after first rest frame. Cosmos Motion Bot next.
 
 - **c48 attacker rank (2026-11-01 ~23:24 WAT):** resize+aria OK; status slim ~111KB. Next: land Light **#68** when pushed; then re-verify Gap **#34** (tab-hidden money/MotionClock stale) if still live; no new P0 from c48 attack.
 - ~~**Operator last-node breadcrumb**~~ — promoted to queue #14.
