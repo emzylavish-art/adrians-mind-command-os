@@ -40,6 +40,66 @@ def invoke(tool_id, payload, manifest):
             limitations=[f"Tool status is {tool.get('status')}; invocation is disabled."],
         )
 
+    if tool_id == "team.queue":
+        operation = payload.get("operation")
+        if operation not in {"enqueue", "claim", "complete", "fail", "list"}:
+            return envelope("blocked", limitations=["Queue operation must be enqueue, claim, complete, fail, or list."])
+        db_path = str(payload.get("db", ROOT / "team" / "queue.sqlite3"))
+        command = [sys.executable, str(ROOT / "team" / "queue.py"), "--db", db_path, operation]
+        if operation == "enqueue":
+            task = payload.get("task")
+            data = payload.get("payload", {})
+            if not isinstance(task, str) or not task.strip() or not isinstance(data, dict):
+                return envelope("blocked", limitations=["enqueue requires a non-empty task and object payload."])
+            command.extend(["--task", task, "--payload", json.dumps(data)])
+            if "max_attempts" in payload:
+                command.extend(["--max-attempts", str(payload["max_attempts"])])
+        elif operation == "claim":
+            worker = payload.get("worker_id")
+            if not isinstance(worker, str) or not worker.strip():
+                return envelope("blocked", limitations=["claim requires worker_id."])
+            command.extend(["--worker", worker])
+            if "lease_seconds" in payload:
+                command.extend(["--lease-seconds", str(payload["lease_seconds"])])
+        elif operation in {"complete", "fail"}:
+            job_id, worker = payload.get("job_id"), payload.get("worker_id")
+            if not all(isinstance(value, str) and value.strip() for value in (job_id, worker)):
+                return envelope("blocked", limitations=[f"{operation} requires job_id and worker_id."])
+            command.extend(["--id", job_id, "--worker", worker])
+            if operation == "complete":
+                result_data = payload.get("result", {})
+                if not isinstance(result_data, dict):
+                    return envelope("blocked", limitations=["complete result must be a JSON object."])
+                command.extend(["--result", json.dumps(result_data)])
+            else:
+                error = payload.get("error")
+                if not isinstance(error, str) or not error.strip():
+                    return envelope("blocked", limitations=["fail requires a non-empty error string."])
+                command.extend(["--error", error])
+        else:
+            if payload.get("status"):
+                command.extend(["--status", str(payload["status"])])
+            command.extend(["--limit", str(payload.get("limit", 100))])
+        try:
+            completed = subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True,
+                timeout=int(payload.get("timeout_seconds", 30)), check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Queue invocation failed: {exc}"])
+        try:
+            response = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope("blocked", result=completed.stdout,
+                            evidence=["team/queue.py"],
+                            limitations=[completed.stderr.strip() or "Queue returned non-JSON output."])
+        if completed.returncode or response.get("status") != "ready":
+            return envelope("blocked", result=response.get("result"),
+                            evidence=["team/queue.py"],
+                            limitations=[response.get("error") or completed.stderr.strip() or "Queue operation failed."])
+        return envelope("ready", response.get("result"), ["team/queue.py"],
+                        ["Queue is persistent, but queued jobs are not executed by this interface."])
+
     if tool_id == "knowledge.search":
         query = payload.get("query")
         if not isinstance(query, str) or not query.strip():
