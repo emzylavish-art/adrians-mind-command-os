@@ -11,6 +11,12 @@ Last release: Dashboard c57 — FF a00fc32/5ab86fe; register #109 tests; wire st
 
 
 
+
+## Painter c30 (2026-11-03T00:10:05+01:00 WAT) — Notion galaxy watercolor adopt
+**Shipped:** `kit.createNotionGalaxyPages` + GalaxyPageShader (instanceColor). Kind→pigment; child edges→ink.
+**WIRING P0:** rebuildPages still MeshBasic — Dashboard snippet in Still-unwired.
+**Hacker:** empty/flood/NaN/dispose. Tests 164/164.
+
 ## Painter c29 (2026-11-03T00:02:38+01:00 WAT) — star granulation + pass legibility
 **Pass vs c26:** c28 wash reads; HUD OK → vignette soften only. **Win:** STAR_GRAIN_BY_HEALTH + WatercolorStar granulation amp (createBotStar already wired).
 **Still unwired:** P0 Notion galaxy watercolor instance; P1 landing travelers. c27 fleet beacon WIRED.

@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -65,6 +66,13 @@ import {
   type PainterlyKit,
 } from "./use-painterly-kit.ts";
 import { createPainterlyBotStar } from "./painterly-bot-star.ts";
+import {
+  createGalaxyPageMaterial,
+  createNotionGalaxyPages,
+  galaxyPigmentFromPageKind,
+  GALAXY_PAGES_MAX,
+} from "./galaxy-page.ts";
+import { GalaxyPageShader } from "../shaders/galaxy-page.ts";
 import {
   createFleetBeacon,
   sanitizeFleetBeaconRadius,
@@ -3354,5 +3362,113 @@ describe("hacker pass c29: star granulation amp / uGrain extremes", () => {
 describe("painter c29: wired bot stars read granulation + pass vignette soften", () => {
   it("PainterlyPassShader vignette floor softened for HUD corners", () => {
     assert.match(PainterlyPassShader.fragmentShader, /mix\(0\.76, 1\.0, vig\)/);
+  });
+});
+
+describe("hacker pass c30: galaxy page instancing / empty / flood / NaN color", () => {
+  it("GalaxyPageShader declares instanceMatrix + instanceColor paths", () => {
+    assert.match(GalaxyPageShader.vertexShader, /USE_INSTANCING/);
+    assert.match(GalaxyPageShader.vertexShader, /instanceColor/);
+    assert.match(GalaxyPageShader.fragmentShader, /vInstanceColor/);
+    assert.match(GalaxyPageShader.fragmentShader, /bloomSafeClamp|c30/);
+  });
+
+  it("galaxyPigmentFromPageKind maps real snapshot kinds (not one flat hex)", () => {
+    assert.notEqual(galaxyPigmentFromPageKind("database"), galaxyPigmentFromPageKind("page"));
+    assert.equal(galaxyPigmentFromPageKind("page"), 0x9bb7ff);
+  });
+
+  it("createNotionGalaxyPages: empty ok; flood truncates; NaN position skipped; dispose idempotent", () => {
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = { addColorStop() {} };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ kitScope: "c30-galaxy" });
+      const empty = createNotionGalaxyPages(kit, [], []);
+      assert.equal(empty.pageCount, 0);
+      empty.dispose();
+      const flood: import("./galaxy-page.ts").GalaxyPageInput[] = Array.from(
+        { length: GALAXY_PAGES_MAX + 80 },
+        (_, i) => ({
+          id: `p${i}`,
+          kind: i % 5 === 0 ? "database" : "page",
+        }),
+      );
+      flood.push({ id: "bad", kind: "page", position: [Number.NaN, 0, 0] });
+      const g = createNotionGalaxyPages(kit, flood, [
+        { from: "p0", to: "p1", kind: "child" },
+        { from: "p1", to: "p2", kind: "child" },
+        { from: "missing", to: "p0", kind: "child" },
+      ]);
+      assert.ok(g.truncated);
+      assert.ok(g.pageCount <= GALAXY_PAGES_MAX);
+      assert.ok(g.pageMesh);
+      assert.equal(g.pageMesh!.count, g.pageCount);
+      assert.ok(g.pageMesh!.instanceColor);
+      assert.match((g.pageMesh!.material as THREE.ShaderMaterial).name, /GalaxyPage|Fallback/);
+      assert.equal((g.pageMesh!.material as THREE.ShaderMaterial).toneMapped, false);
+      g.update(
+        [{ id: "a", kind: "page" }, { id: "b", kind: "database" }],
+        [{ from: "a", to: "b", kind: "child" }],
+      );
+      assert.equal(g.pageCount, 2);
+      g.dispose();
+      g.dispose();
+      disposePainterlyKit(kit);
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
+  });
+
+  it("kit.createGalaxyPageMaterial post-dispose is inert", () => {
+    const docPrev = (globalThis as { document?: unknown }).document;
+    const grad = { addColorStop() {} };
+    (globalThis as { document: unknown }).document = {
+      createElement(tag: string) {
+        if (tag !== "canvas") return { width: 0, height: 0, getContext: () => null };
+        const c: Record<string, unknown> = { width: 64, height: 64 };
+        c.getContext = () =>
+          new Proxy(
+            { canvas: c, fillStyle: "#000", createRadialGradient: () => grad, createLinearGradient: () => grad, getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+            { get(t, p, r) { return p in (t as object) ? Reflect.get(t as object, p, r) : () => grad; } },
+          );
+        return c;
+      },
+    };
+    try {
+      disposeAllPainterlyKits();
+      const kit = createPainterlyKit({ kitScope: "c30-inert" });
+      disposePainterlyKit(kit);
+      const m = kit.createGalaxyPageMaterial({ color: 0x9bb7ff });
+      assert.ok(m);
+      const g = kit.createNotionGalaxyPages([{ id: "x", kind: "page" }], []);
+      assert.doesNotThrow(() => g.update([]));
+      assert.doesNotThrow(() => g.dispose());
+    } finally {
+      (globalThis as { document?: unknown }).document = docPrev;
+    }
+  });
+});
+
+describe("painter c30: Notion galaxy watercolor adopt (MeshBasic replacement)", () => {
+  it("createGalaxyPageMaterial is watercolor + instanceColor define", () => {
+    const m = createGalaxyPageMaterial({ color: 0x9bb7ff });
+    assert.match(m.name, /GalaxyPage/);
+    assert.equal(m.toneMapped, false);
+    assert.ok(m.defines && "USE_INSTANCING_COLOR" in m.defines);
+    assert.ok(m.uniforms.uMatte.value >= 0.85);
+    m.dispose();
   });
 });
