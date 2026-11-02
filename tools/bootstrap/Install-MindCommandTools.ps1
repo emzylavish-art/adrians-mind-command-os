@@ -108,6 +108,7 @@ if (-not $git) {
 if (-not $SkipSourceClones) {
     Write-Step "Official upstream source checkouts"
     $repos = @(
+        @("l1b3rt4s", "https://github.com/elder-plinius/L1B3RT4S.git"),
         @("everything-claude-code", "https://github.com/affaan-m/ECC.git"),
         @("superpowers", "https://github.com/obra/superpowers.git"),
         @("gsd-core", "https://github.com/gsd-build/get-shit-done.git"),
