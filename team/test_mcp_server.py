@@ -32,6 +32,7 @@ class MCPServerTests(unittest.TestCase):
         self.assertIn("rea.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("security.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("knowledge.search", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
 
@@ -60,6 +61,20 @@ class MCPServerTests(unittest.TestCase):
         result = json.loads(responses[0]["result"]["content"][0]["text"])
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["result"]["status"], "ok")
+
+    def test_call_queue_enqueue(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            db = str(Path(tmp) / "queue.sqlite3")
+            responses = rpc([{
+                "jsonrpc": "2.0", "id": 11, "method": "tools/call",
+                "params": {"name": "team.queue", "arguments": {
+                    "action": "enqueue", "task": "MCP queued job", "payload": {"a": 1}, "db": db
+                }},
+            }])
+            result = json.loads(responses[0]["result"]["content"][0]["text"])
+            self.assertEqual(result["status"], "ready")
+            self.assertEqual(result["result"]["status"], "queued")
 
     def test_call_team_health(self):
         responses = rpc([{
