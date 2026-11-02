@@ -9,6 +9,11 @@ import {
   GPU_SAFE_TEXTURE_DEFAULT,
 } from "./paper-grain.ts";
 import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
+import {
+  applyLorePlaqueStackLayer,
+  applyPainterLogDepthSupport,
+  LORE_PLAQUE_STACK_MAX,
+} from "./painter-depth.ts";
 
 export type LorePlaqueOptions = {
   base?: THREE.ColorRepresentation;
@@ -27,6 +32,10 @@ export type LorePlaqueOptions = {
   nowMs?: number;
   /** Explicit ink density 0..1 (locks auto age sync when set). */
   inkDensity?: number;
+  /** c20: index in a star's overlapping plaque stack (0 = bottom). */
+  stackIndex?: number;
+  /** Skip auto stack/logDepth harden (tests). */
+  skipStackHarden?: boolean;
 };
 
 function cloneUniforms(src: typeof LorePlaqueShader.uniforms) {
@@ -39,6 +48,9 @@ function cloneUniforms(src: typeof LorePlaqueShader.uniforms) {
     uWash: { value: src.uWash.value as number },
     uInkDensity: {
       value: (src as { uInkDensity?: { value: number } }).uInkDensity?.value ?? 0.85,
+    },
+    uStackLift: {
+      value: (src as { uStackLift?: { value: number } }).uStackLift?.value ?? 0,
     },
     uTextMap: { value: null as THREE.Texture | null },
     uHasText: { value: 0 },
@@ -203,6 +215,24 @@ export function setLorePlaqueInkDensity(mat: THREE.ShaderMaterial, density: numb
   (mat.userData as Record<string, unknown>).loreInkDensityLocked = true;
 }
 
+/** Update stack layer on an existing plaque (+ optional mesh renderOrder). */
+export function setLorePlaqueStackIndex(
+  mat: THREE.ShaderMaterial,
+  stackIndex: number,
+  mesh?: THREE.Object3D | null,
+): ReturnType<typeof applyLorePlaqueStackLayer> {
+  const stack = applyLorePlaqueStackLayer(mat, { stackIndex, mesh });
+  if (stack && mat.uniforms?.["uStackLift"]) {
+    mat.uniforms["uStackLift"].value = sanitizeFinite(
+      stack.stackIndex / Math.max(1, LORE_PLAQUE_STACK_MAX - 1),
+      0,
+      0,
+      1,
+    );
+  }
+  return stack;
+}
+
 /** Watercolor parchment plaque ShaderMaterial (constellation lore). */
 export function createLorePlaqueMaterial(opts: LorePlaqueOptions = {}): THREE.ShaderMaterial {
   const uniforms = cloneUniforms(LorePlaqueShader.uniforms);
@@ -235,6 +265,18 @@ export function createLorePlaqueMaterial(opts: LorePlaqueOptions = {}): THREE.Sh
     uniforms.uInkDensity.value = LORE_INK_DENSITY_NEUTRAL;
   }
   if (opts.textAtlas) setLorePlaqueTextAtlas(mat, opts.textAtlas, { owned: false });
+  if (!opts.skipStackHarden) {
+    const stack = applyLorePlaqueStackLayer(mat, { stackIndex: opts.stackIndex ?? 0 });
+    if (stack && mat.uniforms["uStackLift"]) {
+      mat.uniforms["uStackLift"].value = sanitizeFinite(
+        stack.stackIndex / Math.max(1, LORE_PLAQUE_STACK_MAX - 1),
+        0,
+        0,
+        1,
+      );
+    }
+    applyPainterLogDepthSupport(mat);
+  }
   return mat;
 }
 

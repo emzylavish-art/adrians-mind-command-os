@@ -22,8 +22,10 @@ import {
   disposePainterlyKit,
   attachPainterlyContextHandlers,
   setImagineNodeMap,
-  createLoreTextAtlas,
-  setLorePlaqueTextAtlas,
+  beginImagineNodeMapBind,
+  setImagineNodeMapIfGeneration,
+  setImagineNodeMapFailed,
+  setLorePlaqueNotesCached,
   releasePainterlyMaterial,
   type PainterlyKit,
 } from "./materials";
@@ -31,7 +33,7 @@ import { createHealthAtmosphere, createFocusLight, createPortraitBounce, portrai
 import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, createFocusDepthPass, createFocusBloomGuard, createDetailBackdropDimPass, createSceneKeyLiftPass, createCardEdgePass, createChartsDepthPlatePass, createPostfxViewportRebind, watchDevicePixelRatio, formatMeterBadge, liftBackdrop, projectedRadiusUv, parseCssColor } from "./postfx";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
-import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
+import { botWorldPosition, LANE_DEFS } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
@@ -512,7 +514,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           continue;
         }
         const color = HEALTH_COLOR[bot.health];
-        // Painter c7: watercolor core + glow (keeps botId pick target on mesh).
+        // Painter c7/c15: watercolor core + glow; health already on createBotStar.
         const star = kit.createBotStar({ color, idle: bot.health === "idle", health: bot.health });
         const mesh = new THREE.Mesh(sphereGeo, star.meshMaterial);
         mesh.position.copy(pos);
@@ -521,32 +523,46 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botMeshes.push(mesh);
 
         const glow = new THREE.Sprite(star.glowMaterial);
-        // Portrait card + life-size character (ImagineNodeMaterial wash until map loads).
+        // Painter c18: lane/health wash + loading pulse; bind generation for TextureLoader races.
         const portraitUrl = `/dashboard-3d/art/portrait-${bot.id}.webp`;
-        const cardMat = kit.createImagineNodeMaterial({ accent: color });
-        const card = new THREE.Sprite(cardMat as unknown as THREE.SpriteMaterial);
-        // Sprite needs SpriteMaterial — use Mesh plane for Imagine shader instead of Sprite.
+        const botLane = LANE_DEFS.find((l) => l.botIds.includes(bot.id))?.id ?? null;
+        const cardMat = kit.createImagineNodeMaterial({
+          accent: color,
+          lane: botLane,
+          health: bot.health,
+          loading: true,
+          maxTextureSize: maxTexSize,
+        });
         const cardPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), cardMat);
         cardPlane.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
         cardPlane.userData.botId = bot.id;
         cardPlane.userData.kind = "portrait";
         botGroup.add(cardPlane);
-        const personMat = kit.createImagineNodeMaterial({ accent: color });
+        const personMat = kit.createImagineNodeMaterial({
+          accent: color,
+          lane: botLane,
+          health: bot.health,
+          loading: true,
+          maxTextureSize: maxTexSize,
+        });
         const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
         person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
         person.userData.botId = bot.id;
         person.userData.kind = "character";
         botGroup.add(person);
+        const cardGen = beginImagineNodeMapBind(cardMat);
+        const personGen = beginImagineNodeMapBind(personMat);
         const applyPortrait = (tex: THREE.Texture) => {
           tex.colorSpace = THREE.SRGBColorSpace;
           if (tex !== fallbackPortraitTex && !ownedPortraitTextures.includes(tex)) {
             ownedPortraitTextures.push(tex);
           }
-          const r1 = setImagineNodeMap(cardMat, tex, { maxTextureSize: maxTexSize });
-          const r2 = setImagineNodeMap(personMat, tex, { maxTextureSize: maxTexSize });
-          // Painter c5: surface sanitize failures honestly (wash stays; never silent).
-          cardPlane.userData.imagineMapError = (cardMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r1.ok ? null : r1.reason);
-          person.userData.imagineMapError = (personMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r2.ok ? null : r2.reason);
+          const r1 = setImagineNodeMapIfGeneration(cardMat, tex, cardGen, { maxTextureSize: maxTexSize });
+          const r2 = setImagineNodeMapIfGeneration(personMat, tex, personGen, { maxTextureSize: maxTexSize });
+          cardPlane.userData.imagineMapError =
+            (cardMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r1.ok ? null : r1.reason);
+          person.userData.imagineMapError =
+            (personMat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r2.ok ? null : r2.reason);
         };
         enqueuePortraitLoad(() => {
           loader.load(
@@ -554,33 +570,53 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             applyPortrait,
             undefined,
             () => {
+              // 404/CORS/network — honest wash failure (optional fallback portrait if present).
               if (fallbackPortraitTex) {
                 applyPortrait(fallbackPortraitTex);
                 return;
               }
-              loader.load(PORTRAIT_FALLBACK, (tex) => {
-                fallbackPortraitTex = tex;
-                applyPortrait(tex);
-              });
+              setImagineNodeMapFailed(cardMat, "load-failed");
+              setImagineNodeMapFailed(personMat, "load-failed");
+              cardPlane.userData.imagineMapError = "load-failed";
+              person.userData.imagineMapError = "load-failed";
+              loader.load(
+                PORTRAIT_FALLBACK,
+                (tex) => {
+                  fallbackPortraitTex = tex;
+                  // New generation so fallback can still bind after failed mark.
+                  const g1 = beginImagineNodeMapBind(cardMat);
+                  const g2 = beginImagineNodeMapBind(personMat);
+                  tex.colorSpace = THREE.SRGBColorSpace;
+                  setImagineNodeMapIfGeneration(cardMat, tex, g1, { maxTextureSize: maxTexSize });
+                  setImagineNodeMapIfGeneration(personMat, tex, g2, { maxTextureSize: maxTexSize });
+                },
+                undefined,
+                () => { /* keep failed wash */ },
+              );
             },
           );
         });
-        void card; // keep lint calm if Sprite unused
         glow.scale.set(2.2, 2.2, 2.2);
         glow.position.copy(pos);
         botGroup.add(glow);
 
-        // Painter c5: lore plaque text atlas from real lock notes (honest empty if none).
+        // Painter c19: lore plaque from real lock claimed_at + cached notes atlas.
         {
           const notesRaw = bot.lock?.notes || bot.notes || "";
-          const loreMat = kit.createLorePlaqueMaterial({ accent: color });
-          const atlas = createLoreTextAtlas(notesRaw, { maxTextureSize: maxTexSize, seed: hashStr(bot.id) });
-          setLorePlaqueTextAtlas(loreMat, atlas, { owned: true });
+          const loreMat = kit.createLorePlaqueMaterial({
+            accent: color,
+            claimedAt: bot.lock?.claimed_at ?? null,
+          });
+          const atlasRes = setLorePlaqueNotesCached(loreMat, notesRaw, {
+            maxTextureSize: maxTexSize,
+            seed: hashStr(bot.id),
+            owned: true,
+          });
           const lore = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), loreMat);
           lore.position.copy(pos).add(new THREE.Vector3(-1.2, 0.85, 0.15));
           lore.userData.botId = bot.id;
           lore.userData.kind = "lore";
-          lore.userData.loreEmpty = atlas.empty;
+          lore.userData.loreEmpty = atlasRes.empty;
           botGroup.add(lore);
         }
 
@@ -616,21 +652,25 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     ];
     const mountSceneArt = (art: { url: string; pos: THREE.Vector3; scale: readonly [number, number] }) => {
       if (!sceneAlive || kit.disposed) return;
-      const mat = kit.createImagineNodeMaterial({});
+      const mat = kit.createImagineNodeMaterial({ loading: true, maxTextureSize: maxTexSize });
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
       plane.position.copy(art.pos);
       plane.userData.kind = "scene";
       botGroup.add(plane);
+      const gen = beginImagineNodeMapBind(mat);
       loader.load(
         art.url,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
-          const r = setImagineNodeMap(mat, tex, { maxTextureSize: maxTexSize });
+          const r = setImagineNodeMapIfGeneration(mat, tex, gen, { maxTextureSize: maxTexSize });
           plane.userData.imagineMapError =
             (mat.userData as { imagineMapError?: string | null }).imagineMapError ?? (r.ok ? null : r.reason);
         },
         undefined,
-        () => { /* missing art — wash fallback stays */ },
+        () => {
+          setImagineNodeMapFailed(mat, "load-failed");
+          plane.userData.imagineMapError = "load-failed";
+        },
       );
     };
     for (const art of sceneArtsEager) mountSceneArt(art);
@@ -1720,6 +1760,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           clock: sharedMotionClock,
           xfade: starBatchXfade,
           neighbors: neighborSet,
+          stillTarget: true, // Motion c25: keep focused star orbit still for camera land
         },
       );
 
@@ -1856,6 +1897,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
       // Painter c11: always tick (freezes uTime under RM; also flushes throttled resizePass)
       tickPainterlyKit(kit, t, { reducedMotion });
+      try {
+        const deg = !!kit.budgetMeta?.degraded;
+        const prev = (mount as HTMLElement & { __painterDegraded?: boolean }).__painterDegraded;
+        if (prev !== deg) {
+          (mount as HTMLElement & { __painterDegraded?: boolean }).__painterDegraded = deg;
+          document.dispatchEvent(new CustomEvent("dash3d-painter-budget", { detail: { degraded: deg } }));
+        }
+      } catch { /* ignore */ }
       kit.setPassHealth({ healthy, total, reducedMotion });
       if (!reducedMotion) {
         sun.intensity = 80 + Math.sin(t * 1.5) * 12;

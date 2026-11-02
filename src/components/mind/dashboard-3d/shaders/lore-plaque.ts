@@ -12,19 +12,24 @@ export const LorePlaqueShader = {
     uWash: { value: 0.45 },
     /** 1 = fresh lock ink; fades toward ~0.25 as claimed_at ages (never raw age). */
     uInkDensity: { value: 0.85 },
+    /** c20: stack lift 0..1 — soft paper shade so overlapping cards read layered. */
+    uStackLift: { value: 0 },
     uTextMap: { value: null as unknown },
     uHasText: { value: 0 },
   },
   vertexShader: /* glsl */ `
+    #include <logdepthbuf_pars_vertex>
     varying vec2 vUv;
     varying vec3 vNormalW;
     void main() {
       vUv = uv;
       vNormalW = normalize(mat3(modelMatrix) * normal);
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      #include <logdepthbuf_vertex>
     }
   `,
   fragmentShader: /* glsl */ `
+    #include <logdepthbuf_pars_fragment>
     uniform vec3 uBase;
     uniform vec3 uInk;
     uniform vec3 uAccent;
@@ -32,12 +37,14 @@ export const LorePlaqueShader = {
     uniform float uPaper;
     uniform float uWash;
     uniform float uInkDensity;
+    uniform float uStackLift;
     uniform sampler2D uTextMap;
     uniform float uHasText;
     varying vec2 vUv;
     varying vec3 vNormalW;
     ${GLSL_HASH_NOISE}
     void main() {
+      #include <logdepthbuf_fragment>
       // parchment field
       float fiber = paintFbm(vUv * vec2(14.0, 22.0) + uTime * 0.02);
       float dens = clamp(uInkDensity, 0.0, 1.0);
@@ -60,6 +67,9 @@ export const LorePlaqueShader = {
         vec3 inkCol = mix(uInk * 0.35 + uAccent * 0.15, inkSample.rgb, 0.85);
         parchment = mix(parchment, inkCol, inkA * 0.92);
       }
+      // Layered-paper shade: higher stack cards lift slightly warmer (no fabricated content)
+      float lift = clamp(uStackLift, 0.0, 1.0);
+      parchment = mix(parchment, parchment * vec3(1.04, 1.02, 0.98) + uAccent * 0.04, lift * 0.35);
       float alpha = 0.94;
       gl_FragColor = vec4(parchment, alpha);
     }

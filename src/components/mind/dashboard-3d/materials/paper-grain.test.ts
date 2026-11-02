@@ -25,6 +25,15 @@ import {
   LORE_ATLAS_DEFAULT,
 } from "./lore-plaque.ts";
 import {
+  applyLorePlaqueStackLayer,
+  applyPainterLogDepthSupport,
+  applyPainterTransparentLayer,
+  resolvePainterlyRenderTargetType,
+  probeHalfFloatRenderTargetSupport,
+  PAINTER_RENDER_ORDER,
+  LORE_PLAQUE_OFFSET_UNITS,
+} from "./painter-depth.ts";
+import {
   createPainterlyKit,
   disposePainterlyKit,
   disposeAllPainterlyKits,
@@ -105,6 +114,7 @@ import {
   setLorePlaqueInkDensity,
   loreNotesFingerprint,
   setLorePlaqueNotesCached,
+  setLorePlaqueStackIndex,
   LORE_CLOCK_SKEW_S,
   LORE_INK_AGE_STALE_S,
   LORE_INK_AGE_MAX_S,
@@ -2291,5 +2301,84 @@ describe("painter c19: lore plaque ink density from real lock age", () => {
     fresh.dispose();
     stale.dispose();
     none.dispose();
+  });
+});
+
+
+describe("hacker pass c20: plaque z-fight / blend order / logDepth / half-float RT", () => {
+  it("overlapping plaques get distinct polygonOffset+renderOrder (no coplanar fight)", () => {
+    const mats = [0, 1, 2, 5].map((i) => createLorePlaqueMaterial({ stackIndex: i, skipStackHarden: true }));
+    const results = mats.map((m, i) => applyLorePlaqueStackLayer(m, { stackIndex: [0, 1, 2, 5][i] }));
+    const units = new Set(results.map((r) => r!.polygonOffsetUnits));
+    assert.equal(units.size, 4, "each stack index needs unique polygonOffsetUnits");
+    const orders = new Set(results.map((r) => r!.renderOrder));
+    assert.equal(orders.size, 4);
+    for (const r of results) {
+      assert.equal(r!.depthWrite, false, "transparent plaques must not write depth");
+      assert.equal(r!.polygonOffset, true);
+    }
+    // depthWrite:true would punch holes — explicit opt-in only
+    const opaque = applyLorePlaqueStackLayer(mats[0]!, { stackIndex: 0, depthWrite: true });
+    assert.equal(opaque!.depthWrite, true);
+    // null/disposed → honest null
+    assert.equal(applyLorePlaqueStackLayer(null), null);
+    mats.forEach((m) => m.dispose());
+  });
+
+  it("nebula/ink/lore renderOrder band prevents transparent blend flicker", () => {
+    assert.ok(PAINTER_RENDER_ORDER.nebula < PAINTER_RENDER_ORDER.inkEdge);
+    assert.ok(PAINTER_RENDER_ORDER.inkEdge < PAINTER_RENDER_ORDER.loreBase);
+    assert.ok(PAINTER_RENDER_ORDER.loreBase < PAINTER_RENDER_ORDER.imagine);
+    const mat = createLorePlaqueMaterial({ skipStackHarden: true });
+    const mesh = { renderOrder: 0, userData: {} } as unknown as import("three").Object3D;
+    applyPainterTransparentLayer(mat, "loreBase", mesh);
+    assert.equal((mesh as { renderOrder: number }).renderOrder, PAINTER_RENDER_ORDER.loreBase);
+    mat.dispose();
+  });
+
+  it("log-depth patch marks ShaderMaterial; lore shader includes logdepthbuf chunks", () => {
+    assert.match(LorePlaqueShader.vertexShader, /logdepthbuf/);
+    assert.match(LorePlaqueShader.fragmentShader, /logdepthbuf/);
+    const mat = createLorePlaqueMaterial({ skipStackHarden: true });
+    assert.equal(applyPainterLogDepthSupport(mat), true);
+    assert.equal((mat.userData as { painterLogDepthPatched?: boolean }).painterLogDepthPatched, true);
+    assert.equal(typeof mat.onBeforeCompile, "function");
+    // Idempotent
+    assert.equal(applyPainterLogDepthSupport(mat), true);
+    mat.dispose();
+  });
+
+  it("half-float RT resolves to UnsignedByte when unsupported or forced (MSAA mismatch)", () => {
+    const ok = resolvePainterlyRenderTargetType({ halfFloatSupported: true });
+    assert.equal(ok.halfFloat, true);
+    const bad = resolvePainterlyRenderTargetType({ halfFloatSupported: false });
+    assert.equal(bad.halfFloat, false);
+    assert.equal(bad.reason, "half-float-unsupported");
+    const forced = resolvePainterlyRenderTargetType({ forceUnsignedByte: true });
+    assert.equal(forced.reason, "forceUnsignedByte");
+    const pass = createPainterlyPass({ forceUnsignedByte: true });
+    const meta = (pass as unknown as { userData: { painterPassMeta: { halfFloat: boolean; renderTargetReason: string | null } } }).userData.painterPassMeta;
+    assert.equal(meta.halfFloat, false);
+    assert.equal(meta.renderTargetReason, "forceUnsignedByte");
+    // probe with null gl → false (honest)
+    assert.equal(probeHalfFloatRenderTargetSupport(null), false);
+    disposePainterlyPass(pass);
+  });
+});
+
+describe("painter c20: constellation plaque stack layered paper", () => {
+  it("createLorePlaqueMaterial applies stack harden; uStackLift rises with index", () => {
+    const bottom = createLorePlaqueMaterial({ stackIndex: 0 });
+    const top = createLorePlaqueMaterial({ stackIndex: 8 });
+    assert.equal(bottom.polygonOffset, true);
+    assert.equal(bottom.depthWrite, false);
+    assert.ok((bottom.uniforms["uStackLift"]!.value as number) < (top.uniforms["uStackLift"]!.value as number));
+    assert.ok(Math.abs((bottom.polygonOffsetUnits as number) - (-LORE_PLAQUE_OFFSET_UNITS)) < 1e-6);
+    const mesh = { renderOrder: 0, userData: {} } as unknown as import("three").Object3D;
+    setLorePlaqueStackIndex(bottom, 3, mesh);
+    assert.equal((mesh as { renderOrder: number }).renderOrder, PAINTER_RENDER_ORDER.loreBase + 3);
+    assert.match(LorePlaqueShader.fragmentShader, /uStackLift/);
+    bottom.dispose();
+    top.dispose();
   });
 });

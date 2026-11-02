@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { LaneNebulaShader } from "../shaders/lane-nebula.ts";
 import { sanitizeFinite, sanitizeShaderTime } from "./paper-grain.ts";
 import { PAINTER_SHADER_PRECISION } from "../shaders/glsl-noise.ts";
+import { PAINTER_RENDER_ORDER, applyPainterTransparentLayer, applyPainterLogDepthSupport } from "./painter-depth.ts";
 import type { HealthTone } from "./ink-wash-edge.ts";
 import { HEALTH_RGB } from "./ink-wash-edge.ts";
 import type { PainterlyKit } from "./use-painterly-kit.ts";
@@ -68,7 +69,7 @@ export function createLaneNebulaMaterial(opts: LaneNebulaOptions = {}): THREE.Sh
     if (opts.wash == null) uniforms.uWash.value = LANE_WASH_BY_HEALTH[tone];
     if (opts.pool == null) uniforms.uPool.value = LANE_POOL_BY_HEALTH[tone];
   }
-  return new THREE.ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     name: "LaneNebulaMaterial",
     precision: PAINTER_SHADER_PRECISION,
     uniforms,
@@ -79,6 +80,8 @@ export function createLaneNebulaMaterial(opts: LaneNebulaOptions = {}): THREE.Sh
     side: THREE.FrontSide,
     blending: THREE.NormalBlending,
   });
+  applyPainterLogDepthSupport(mat);
+  return mat;
 }
 
 export function tickLaneNebulaMaterial(mat: THREE.ShaderMaterial, timeSeconds: number): void {
@@ -207,7 +210,8 @@ export function createPainterlyLaneNebulae(
     while (meshPool.length < n) {
       const mesh = new THREE.Mesh(sharedGeo, matsByTone.get("idle")!);
       mesh.visible = false;
-      mesh.renderOrder = -1;
+      mesh.renderOrder = PAINTER_RENDER_ORDER.nebula;
+      applyPainterTransparentLayer(mesh.material as THREE.Material, "nebula", mesh);
       mesh.frustumCulled = true;
       group.add(mesh);
       meshPool.push(mesh);

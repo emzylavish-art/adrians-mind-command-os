@@ -77,6 +77,7 @@ export function DashboardApp() {
   const [soundMuted, setSoundMuted] = useState(true);
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
+  const [painterBudgetDegraded, setPainterBudgetDegraded] = useState(false);
   const [hudFocus, setHudFocus] = useState(false);
   const urlBootstrapped = useRef(false);
 
@@ -190,6 +191,14 @@ export function DashboardApp() {
   }, [operatorPrefs]);
 
   useOperatorHotkey(() => setOperatorOpen((o) => !o));
+  useEffect(() => {
+    const onBudget = (ev: Event) => {
+      const d = (ev as CustomEvent<{ degraded?: boolean }>).detail;
+      setPainterBudgetDegraded(!!d?.degraded);
+    };
+    document.addEventListener("dash3d-painter-budget", onBudget);
+    return () => document.removeEventListener("dash3d-painter-budget", onBudget);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "f" || e.key === "F") {
@@ -689,6 +698,7 @@ export function DashboardApp() {
           onSelectBot={(bot) => {
             setSelected(bot);
           }}
+          painterBudgetDegraded={painterBudgetDegraded}
         />
       ) : null}
 

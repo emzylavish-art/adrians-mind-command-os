@@ -1,9 +1,8 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  createBuildingBrushMaterial,
+  createBuildingBrushPool,
   tickBuildingMaterial,
-  setBuildingProgress,
 } from "../materials";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { Health } from "@/lib/mind/dashboard/types";
@@ -115,7 +114,15 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
   group.add(dyn);
   const pickables: THREE.Object3D[] = [];
   const brushMats: THREE.ShaderMaterial[] = [];
-  const brushById = new Map<string, THREE.ShaderMaterial>();
+  /** Mesh bodies that share the progress-quantized brush pool (≤8 mats). */
+  const brushBodies = new Map<string, THREE.Mesh>();
+  const brushPool = createBuildingBrushPool({
+    base: 0x121a30,
+    accent: 0x7c5cff,
+    floors: 8,
+    paper: 0.16,
+    buckets: 8,
+  });
   const ownedMats: THREE.Material[] = [];
   const ownedGeos: THREE.BufferGeometry[] = [];
   const backdropMats: THREE.Material[] = [];
@@ -184,8 +191,8 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     }
     labels.length = 0;
     while (dyn.children.length) dyn.remove(dyn.children[0]!);
-    for (const m of brushMats) m.dispose();
-    brushById.clear();
+    brushMats.length = 0; // pool-owned; disposed with brushPool
+    brushBodies.clear();
     for (const m of ownedMats) m.dispose();
     for (const g of ownedGeos) g.dispose();
     brushMats.length = 0;
@@ -203,7 +210,6 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     clearDynamic();
     for (const b of layout.buildings) {
       const color = CITY_HEALTH_COLOR[b.health];
-      const accent = new THREE.Color(color);
       const shell = new THREE.Group();
       shell.position.set(b.x, CITY_Y, b.z);
       dyn.add(shell);
@@ -212,17 +218,10 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       ownedGeos.push(bodyGeo);
       // Painter c10: real progress only — unknown → 0 so window wash stays dark
       const progress = b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0;
-      const mat = createBuildingBrushMaterial({
-        base: 0x121a30,
-        accent,
-        floors: b.floors,
-        progress,
-        paper: 0.16,
-      });
-      setBuildingProgress(mat, progress);
-      brushMats.push(mat);
-      brushById.set(b.id, mat);
+      // Painter c17/c18: ≤8 shared brush mats quantized by real progress (no per-building ShaderMaterial).
+      const mat = brushPool.materialForProgress(progress);
       const body = new THREE.Mesh(bodyGeo, mat);
+      brushBodies.set(b.id, body);
       body.position.y = b.height / 2;
       body.userData.cityPick = { buildingId: b.id, part: "facade", floor: null } satisfies CityPick;
       shell.add(body);
@@ -397,17 +396,26 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
 
   /** Painter c11: live window wash from real lit/floors only — no source → 0. */
   function applyBuildingProgress(layout: CityLayout) {
-    for (const b of layout.buildings) {
-      const mat = brushById.get(b.id);
-      if (!mat) continue;
-      const progress = b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0;
-      setBuildingProgress(mat, progress);
+    const progresses = layout.buildings.map((b) =>
+      b.progressKnown ? b.litFloors / Math.max(1, b.floors) : 0,
+    );
+    brushPool.syncFromProgresses(progresses);
+    for (let i = 0; i < layout.buildings.length; i++) {
+      const b = layout.buildings[i]!;
+      const body = brushBodies.get(b.id);
+      if (!body) continue;
+      const progress = progresses[i] ?? 0;
+      body.material = brushPool.materialForProgress(progress);
     }
   }
 
   function tick(t: number, reducedMotion: boolean) {
     if (reducedMotion) return;
-    for (const m of brushMats) tickBuildingMaterial(m, t);
+    // Tick the shared pool buckets (≤8).
+    for (let i = 0; i < 8; i++) {
+      const p = i / 7;
+      tickBuildingMaterial(brushPool.materialForProgress(p), t);
+    }
     for (const c of clouds.children) {
       const base = (c.userData.baseX as number) ?? 0;
       c.position.x = base + Math.sin(t * 0.05 + base) * 1.5;
@@ -416,6 +424,7 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
 
   function dispose() {
     clearDynamic();
+    try { brushPool.dispose(); } catch { /* */ }
     scene.remove(group);
     scene.remove(clouds);
     // cityBackdropGroup is inside group — cleared with group; mats/geos already in owned*
@@ -446,6 +455,6 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
     setLabelsVisible,
     tick,
     dispose,
-    counts: () => ({ buildings: buildingCount, materials: brushMats.length + ownedMats.length, geometries: ownedGeos.length }),
+    counts: () => ({ buildings: buildingCount, materials: brushPool.materialCount + ownedMats.length, geometries: ownedGeos.length }),
   };
 }
