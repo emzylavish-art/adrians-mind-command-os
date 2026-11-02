@@ -2,7 +2,7 @@
 set -u
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TOOLS_ROOT="${MIND_COMMAND_TOOLS_ROOT:-$ROOT/.tools}"
-UPSTREAM_ROOT="$TOOLS_ROOT/upstream"
+UPSTREAM_ROOT="$ROOT/upstream"
 found=0
 total=0
 check_cmd() {
