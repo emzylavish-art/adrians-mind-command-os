@@ -71,7 +71,7 @@ def process_one(db, worker_id, lease_seconds):
     if job is None:
         return {"status": "idle"}
     try:
-        payload = json.loads(job.get("payload_json", "{}"))
+        payload = job.get("payload", {})\n        if isinstance(payload, str):\n            payload = json.loads(payload)
         request = normalize_request(payload)
         result = execute(request)
         done = queue_call(db, "complete", [
