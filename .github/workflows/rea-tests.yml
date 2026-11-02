@@ -42,6 +42,8 @@ jobs:
           python -m json.tool .mcp.json > /dev/null
           python -m json.tool tools/registry.json > /dev/null
           python -m json.tool tools/bootstrap/upstream-sources.json > /dev/null
+      - name: Validate Windows bootstrap metadata
+        run: python tools/bootstrap/validate_bootstrap.py
       - name: Run REA unit tests
         run: python -m unittest discover -s tools/rea -p 'test_*.py'
       - name: Run security review unit tests
