@@ -1,0 +1,59 @@
+[submodule "upstream/everything-claude-code"]
+	path = upstream/everything-claude-code
+	url = https://github.com/affaan-m/ECC.git
+
+[submodule "upstream/superpowers"]
+	path = upstream/superpowers
+	url = https://github.com/obra/superpowers.git
+
+[submodule "upstream/gsd-core"]
+	path = upstream/gsd-core
+	url = https://github.com/gsd-build/get-shit-done.git
+
+[submodule "upstream/ui-ux-pro-max"]
+	path = upstream/ui-ux-pro-max
+	url = https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git
+
+[submodule "upstream/n8n-mcp"]
+	path = upstream/n8n-mcp
+	url = https://github.com/czlonkowski/n8n-mcp.git
+
+[submodule "upstream/lightrag"]
+	path = upstream/lightrag
+	url = https://github.com/HKUDS/LightRAG.git
+
+[submodule "upstream/claude-mem"]
+	path = upstream/claude-mem
+	url = https://github.com/thedotmack/claude-mem.git
+
+[submodule "upstream/obsidian-skills"]
+	path = upstream/obsidian-skills
+	url = https://github.com/kepano/obsidian-skills.git
+
+[submodule "upstream/awesome-claude-code"]
+	path = upstream/awesome-claude-code
+	url = https://github.com/subinium/awesome-claude-code.git
+
+[submodule "upstream/ghidra"]
+	path = upstream/ghidra
+	url = https://github.com/NationalSecurityAgency/ghidra.git
+
+[submodule "upstream/jadx"]
+	path = upstream/jadx
+	url = https://github.com/skylot/jadx.git
+
+[submodule "upstream/frida"]
+	path = upstream/frida
+	url = https://github.com/frida/frida.git
+
+[submodule "upstream/owasp-zap"]
+	path = upstream/owasp-zap
+	url = https://github.com/zaproxy/zaproxy.git
+
+[submodule "upstream/gdb"]
+	path = upstream/gdb
+	url = https://github.com/gnutools/binutils-gdb.git
+
+[submodule "upstream/x64dbg"]
+	path = upstream/x64dbg
+	url = https://github.com/x64dbg/x64dbg.git
