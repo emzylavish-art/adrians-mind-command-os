@@ -2,7 +2,7 @@
 
 Lane isolation: Cosmos Painter Bot ships modules only under `shaders/` + `materials/`.
 
-## Status vs origin/dashboard-3d (verified cycle 15)
+## Status vs origin/dashboard-3d (verified cycle 16)
 
 | API | Status | Evidence |
 |-----|--------|----------|
@@ -211,3 +211,10 @@ const star = kit.createBotStar({
 ```
 
 - No required Dashboard Bot change — idle boolean path already drives grain; health tone is additive.
+
+
+## c16 — paper-grain fiber post-pass + NaN uniform scrub + empty lore atlas
+
+- **Hacker:** live feeds / HMR can write NaN into pass `amount`/`grain`/`wash`/`fiber` and black the composer. `tickPainterlyPass` → `sanitizePainterlyPassUniforms` every frame. Empty lore plaques use `LORE_ATLAS_MIN` (not 512²) to stop fleet atlas growth. Context-loss handlers ignore disposed kits and scrub pass uniforms on restore.
+- **Visual:** anisotropic paper-fiber direction on `PainterlyPassShader` (`fiber` uniform). Strength from real `setPassHealth` amount via `painterlyFiberFromAmount`. Neutral default `PAINTER_FIBER_DEFAULT`. Optional lock: `setPainterlyPassFiber`.
+- **Wiring:** **none required** — `kit.setPassHealth` already drives amount → fiber. Light/Motion do not own paper grain (postfx README).
