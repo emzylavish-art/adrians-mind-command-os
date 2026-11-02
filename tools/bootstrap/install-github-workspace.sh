@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TOOLS_ROOT="${MIND_COMMAND_TOOLS_ROOT:-$ROOT/.tools}"
-UPSTREAM_ROOT="$TOOLS_ROOT/upstream"
+UPSTREAM_ROOT="$ROOT/upstream"
 LOG_ROOT="$TOOLS_ROOT/logs"
 mkdir -p "$UPSTREAM_ROOT" "$LOG_ROOT"
 
@@ -29,28 +29,8 @@ python -m pip install --user --upgrade frida-tools 'lightrag-hku[api]' || warn "
 log "Installing declared Node integration packages"
 npm install --prefix "$TOOLS_ROOT/npm" --global n8n-mcp ui-ux-pro-max-cli || warn "One or more npm packages did not finish installing."
 
-log "Checking out the approved upstream source catalog"
-while IFS=$'\t' read -r id url; do
-  [[ -z "$id" || "$id" == "id" ]] && continue
-  clone_or_update "$id" "$url"
-done <<'CATALOG'
-id	url
-everything-claude-code	https://github.com/affaan-m/ECC.git
-superpowers	https://github.com/obra/superpowers.git
-gsd-core	https://github.com/gsd-build/get-shit-done.git
-ui-ux-pro-max	https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git
-n8n-mcp	https://github.com/czlonkowski/n8n-mcp.git
-lightrag	https://github.com/HKUDS/LightRAG.git
-claude-mem	https://github.com/thedotmack/claude-mem.git
-obsidian-skills	https://github.com/kepano/obsidian-skills.git
-awesome-claude-code	https://github.com/subinium/awesome-claude-code.git
-ghidra	https://github.com/NationalSecurityAgency/ghidra.git
-jadx	https://github.com/skylot/jadx.git
-frida	https://github.com/frida/frida.git
-owasp-zap	https://github.com/zaproxy/zaproxy.git
-gdb	https://github.com/bminor/binutils-gdb.git
-x64dbg	https://github.com/x64dbg/x64dbg.git
-CATALOG
+log "Initializing pinned upstream Git submodules in this GitHub repository"
+git -C "$ROOT" submodule update --init --recursive || warn "One or more submodules did not initialize; inspect Git output and rerun."
 
 log "Workspace source and package setup finished (per-tool status is reported by verifier)."
 log "Security/reverse-engineering tools are for owned or explicitly authorized targets."
