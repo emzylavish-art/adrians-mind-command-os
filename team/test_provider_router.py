@@ -1,7 +1,7 @@
 import json
 import os
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
 
 import provider_router
 
