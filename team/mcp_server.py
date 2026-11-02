@@ -51,6 +51,22 @@ def tool_specs(manifest):
                     "additionalProperties": False,
                 },
             })
+        elif tool_id == "knowledge.search":
+            specs.append({
+                "name": tool_id,
+                "description": "Search local Markdown and text knowledge files using offline lexical retrieval. Requires a query; no remote store is contacted.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Local knowledge directory or file."},
+                        "query": {"type": "string", "minLength": 1},
+                        "top_k": {"type": "integer", "minimum": 1, "maximum": 50},
+                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+            })
         elif tool_id == "team.health":
             specs.append({
                 "name": tool_id,
