@@ -192,6 +192,21 @@
       "requires": [
         "approval_channel"
       ]
+    },
+    {
+      "id": "worker-runtime",
+      "role": "Durable Worker Runtime",
+      "capabilities": [
+        "queue_management",
+        "durable_worker_jobs"
+      ],
+      "status": "partial",
+      "entrypoint": "team/queue.py",
+      "requires": [
+        "python3",
+        "local_sqlite_database",
+        "worker_process_for_execution"
+      ]
     }
   ],
   "tools": [
@@ -298,6 +313,27 @@
         "error": "string"
       },
       "safety": "SQLite local queue; stores payloads only and never executes queued task data; worker must apply policy and approvals."
+    },
+    {
+      "id": "team.queue",
+      "agent": "worker-runtime",
+      "capabilities": [
+        "queue_management",
+        "durable_worker_jobs"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/queue.py",
+      "input_schema": {
+        "operation": "enqueue|claim|complete|fail|list",
+        "db": "string",
+        "task": "string",
+        "payload": "object",
+        "worker_id": "string",
+        "job_id": "string",
+        "result": "object",
+        "error": "string"
+      },
+      "safety": "Queue stores task payloads but never executes them; worker identity required for lease completion/failure."
     }
   ],
   "catalog": [
@@ -530,6 +566,16 @@
       "install": "repo-code-present",
       "live": "callable-cli-and-runner",
       "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval."
+    },
+    {
+      "id": "mind-command-os-durable-queue",
+      "name": "Mind Command OS Durable Worker Queue",
+      "category": "local-worker-runtime",
+      "agent": "worker-runtime",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-runner",
+      "guardrail": "SQLite local persistence; queue does not execute payloads or establish that workers are running."
     }
   ]
 }
