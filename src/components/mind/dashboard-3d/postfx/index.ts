@@ -285,3 +285,12 @@ export {
   type VramSourceName,
   type VramSourceSnapshot,
 } from "./vram-ledger.ts";
+export {
+  CHAIN_ENCODE_GLSL,
+  chainDecode,
+  chainEncode,
+  createChainEncoder,
+  patchChainFragment,
+  patchChainMaterial,
+  type ChainEncoder,
+} from "./bloom-hdr-chain.ts";

@@ -6,6 +6,7 @@ import { createGodRayBudget, type GodRayBudgetOpts } from "./god-ray-budget.ts";
 import { applyPrefilter, prefilterUniformDefaults, PREFILTER_HIGHPASS_FRAGMENT, type PrefilterState } from "./bloom-prefilter.ts";
 import { boundFramebufferComplete, godRayMaskType } from "./god-ray-mask.ts";
 import { registerVramSource, type VramRendererLike } from "./vram-ledger.ts";
+import { createChainEncoder } from "./bloom-hdr-chain.ts";
 
 export type BloomTuning = {
   strength: number;
@@ -58,6 +59,14 @@ export type TunedBloomHandle = {
   readonly chainType: THREE.TextureDataType;
   /** c114: true once a HalfFloat chain FBO came back incomplete (sticky byte chain). */
   readonly halfFloatRejected: boolean;
+  /**
+   * #125: true while the byte chain is gamma-2 Reinhard encoded (every chain
+   * write e = sqrt(c/(1+c)), every read decoded before filtering) so > 1
+   * survives and dim deep-mip tails don't underflow.
+   */
+  readonly chainEncoded: boolean;
+  /** #125: true once a chain shader hook couldn't be patched (stock byte chain). */
+  readonly chainEncodeBroken: boolean;
   /** #120: the chain render targets (VRAM ledger / leak tests). */
   readonly chainTargets: readonly THREE.WebGLRenderTarget[];
 };
@@ -69,8 +78,13 @@ export type TunedBloomOpts = {
   frameOpts?: GodRayBudgetOpts;
   /** #112 bright-pass anti-alias prefilter (default on with the budget). */
   prefilter?: boolean;
-  /** c114: "auto" (default) = chain follows renderable HDR + composer source type; "stock" = always HalfFloat. */
-  chainFormat?: "auto" | "stock";
+  /**
+   * c114: "auto" (default) = chain follows renderable HDR + composer source type;
+   * "stock" = always HalfFloat; "byte" (#125 A/B / harness) = always 8-bit.
+   */
+  chainFormat?: "auto" | "stock" | "byte";
+  /** #125: encode a byte chain (default on). false = stock clipping/underflowing A/B. */
+  hdrEncode?: boolean;
 };
 
 type ChainCaps = {
@@ -238,7 +252,7 @@ export function createTunedBloomPass(
     if (opts.chainFormat === "stock") return;
     const src = readBuffer?.texture?.type;
     if (probed && src === probedSource) return;
-    let want = bloomChainType(renderer, src);
+    let want = opts.chainFormat === "byte" ? THREE.UnsignedByteType : bloomChainType(renderer, src);
     if (want === null) return;
     probed = true;
     probedSource = src;
@@ -256,6 +270,9 @@ export function createTunedBloomPass(
       }
     }
   };
+  // #125: HDR-safe byte chain (lazy patch; HalfFloat chains never recompile).
+  const encoder = createChainEncoder(pass);
+  const hdrEncodeOn = opts.hdrEncode !== false;
   // #120 ledger: chain + the composer buffers this pass actually reads/writes.
   let lastRenderer: VramRendererLike = null;
   let lastRead: THREE.WebGLRenderTarget | null = null;
@@ -276,6 +293,13 @@ export function createTunedBloomPass(
       syncChainType(renderer as unknown as ChainCaps, readBuffer as THREE.WebGLRenderTarget | undefined);
     } catch {
       /* caps probe must never break the frame; stock chain stays */
+    }
+    try {
+      // Any byte chain: HDR source clips at 1.0, and (CPU model) even an LDR
+      // painter star loses ~62% of its halo to 8-bit underflow in the deep mips.
+      encoder.sync(hdrEncodeOn && chainType === THREE.UnsignedByteType && !!readBuffer);
+    } catch {
+      encoder.sync(false);
     }
     // EffectComposer passes seconds; junk / huge deltas are ignored by the budget.
     sampleFrame(Number(deltaTime) * 1000);
@@ -340,6 +364,12 @@ export function createTunedBloomPass(
     },
     get halfFloatRejected() {
       return halfRejected;
+    },
+    get chainEncoded() {
+      return encoder.encoded;
+    },
+    get chainEncodeBroken() {
+      return encoder.broken;
     },
     get chainTargets() {
       return chainTargets();
