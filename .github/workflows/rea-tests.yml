@@ -11,6 +11,7 @@ on:
       - "Dockerfile.mcp"
       - ".dockerignore"
       - ".github/workflows/rea-tests.yml"
+      - ".github/workflows/publish-mcp-image.yml"
   pull_request:
     paths:
       - "tools/rea/**"
