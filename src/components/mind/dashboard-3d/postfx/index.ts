@@ -210,3 +210,19 @@ export {
   type ChartsDepthPlateHandle,
   type ChartsDepthPlateReport,
 } from "./charts-depth-plate.ts";
+export {
+  POSTFX_MAX_DPR,
+  POSTFX_MIN_DPR,
+  createPostfxViewportRebind,
+  postfxViewport,
+  rebindPostfxViewport,
+  viewportChange,
+  watchDevicePixelRatio,
+  type MatchMediaLike,
+  type PostfxViewport,
+  type PostfxViewportRebind,
+  type RebindReport,
+  type RebindStage,
+  type RebindTargets,
+  type ViewportChange,
+} from "./viewport-rebind.ts";

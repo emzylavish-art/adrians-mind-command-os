@@ -253,14 +253,19 @@ export function createChartsDepthPlatePass(): ChartsDepthPlateHandle {
       spread = s;
       mean = s !== null && hit ? hit.stats.mean : null;
       target = plateStrengthFromSpread(s);
-      if (hit && target > 0) {
-        // Only move the plate onto a real reading; while fading out keep the last rect.
-        const r = hit.rect;
-        u.rect.value.set(r[0], r[1], r[2], r[3]);
+      if (vpOk) {
+        // Light #107: CSS-px feather/blur/shadow follow the live viewport every
+        // call — not only on a fresh reading — so a resize / zoom during the
+        // fade-out cannot leave the plate edge mis-scaled.
         u.feather.value.set(PLATE_FEATHER_PX / vw!, PLATE_FEATHER_PX / vh!);
         u.blurStep.value.set(PLATE_BLUR_PX / vw!, PLATE_BLUR_PX / vh!);
         u.shadowOffset.value = PLATE_SHADOW_OFFSET_PX / vh!;
         u.shadowFall.value = PLATE_SHADOW_PX / vh!;
+      }
+      if (hit && target > 0) {
+        // Only move the plate onto a real reading; while fading out keep the last rect.
+        const r = hit.rect;
+        u.rect.value.set(r[0], r[1], r[2], r[3]);
         u.meanEnc.value = linearToSrgb(hit.stats.mean);
         hasRect = true;
       }

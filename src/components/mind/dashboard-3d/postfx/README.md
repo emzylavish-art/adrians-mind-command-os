@@ -281,3 +281,33 @@ Hacker pass (same cycle): a resolve whose `nowMs` is before the sampled frame (m
 
 - **Hacker (live, no wiring):** `#93` picked light vs shade from `max(card, surround) mean > EDGE_SHADE_ABOVE` (0.35) with a hard cut. A surround hovering near 0.35 could flip a cool light rim to a shade halo between ~500 ms meter reads — a visible flash. Fixed in `card-edge.ts` (already wired via `createCardEdgePass` / `setSeparation`): mode now uses ±`EDGE_SHADE_HYST` 0.05 hysteresis (`edgeModeFromPeak`) — flip to shade only past 0.40, back to light only below 0.30. First reading still uses the hard threshold. Rim `targetGain` is also faded by `contrast.card.atMs` age (`edgeAgeFade`): full through the first half of `METER_MAX_AGE_MS`, then smooth to 0 so a reading near expiry cannot drive a full-strength rim. `createCardEdgePass({ now })` injects the clock (defaults to `performance.now`); `setSeparation` accepts optional `nowMs`. No universe-scene change required.
 - Test: `postfx/card-edge.test.ts` `#103 hacker` suite (failed the hard-threshold flap assertion before the fix).
+
+## #107 DPR resize rebind — wire-up for Dashboard Bot (universe-scene.tsx)
+
+Hacker finding: `EffectComposer` caches the pixel ratio at construction; `onResize` only calls
+`composer.setSize(cssW, cssH)` and dedupes on CSS size, so browser zoom / monitor drag keeps the
+composer RTs + scene DepthTexture (god-rays / focus-depth / bloom-guard) at the first-frame DPR
+while bloom is re-sized at the new one. The composer is also built on a device-px RT, so `addPass`
+sizes every pass at css×dpr² until the first CSS resize.
+
+```ts
+import { createPostfxViewportRebind, watchDevicePixelRatio } from "./postfx";
+const postfxRebind = createPostfxViewportRebind(() => ({
+  renderer, composer, camera, updateStyle: false,
+  bloom: postfxRecovery.bundle.bloom ?? bloomHandle,
+  godRays: postfxRecovery.bundle.godRays ?? raysHandle,
+  focusDepth: postfxRecovery.bundle.focusDepth ?? focusDepthHandle,
+  bloomGuard: postfxRecovery.bundle.focusBloomGuard ?? focusBloomGuardHandle,
+}));
+// right after `composer = new EffectComposer(renderer, rt)` (before addPass):
+postfxRebind.resize(mount.clientWidth, mount.clientHeight, window.devicePixelRatio);
+// onResize: replace renderer/composer/bloom setSize + setDepthTexture lines and the w/h dedupe with
+postfxRebind.resize(w, h, window.devicePixelRatio); // labelRenderer.setSize + kit.resizePass stay
+const stopDprWatch = watchDevicePixelRatio(window, () => { lastResizeW = 0; onResize(); });
+// after rebuildPostfxBundle (context restore): postfxRebind.force();
+// unmount: stopDprWatch(); postfxRebind.dispose();
+```
+
+Charts depth plate: feather / blur / shadow CSS-px uniforms now follow the live viewport on every
+`setPlate` call (previously only on a fresh reading, so a resize during fade-out mis-scaled the edge).
+Test: `src/components/mind/dashboard-3d/postfx/viewport-rebind.test.ts` (register in `package.json` test script).
