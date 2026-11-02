@@ -321,3 +321,13 @@ brightness pop when the budget changes). `createGodRayPass` reads the live
 `readBuffer` size + composer delta every render, so no extra wiring is needed;
 pass `{ adaptive: false }` to pin 48 taps. `postfxViewport(..., maxEdge)` clamps
 the buffer to the GPU max texture size (hacker c108).
+
+## Light #110 — bloom chain resolution budget (`bloom-budget.ts`)
+
+`createTunedBloomPass` now budgets the UnrealBloomPass chain by drawing-buffer
+size: above 2.5 MP (#109 reference) mip-0 is capped at 1.25 MP (lower on the
+#109 frame-time backoff tier, fed from `pass.render` deltaTime). Each mip's
+Gaussian is re-based in texel units so its screen-space variance matches the
+native chain (energy renormalised) → halo footprint on Imagine nodes / chart
+plates is unchanged (measured in `bloom-budget.test.ts`). No wiring needed;
+`createTunedBloomPass(size, tone, { budget: false })` restores the stock chain.

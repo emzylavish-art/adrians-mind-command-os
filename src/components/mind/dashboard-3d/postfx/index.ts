@@ -8,10 +8,26 @@ export {
   bloomParamsForTone,
   inferPixelRatio,
   safeBloomSize,
+  bloomMipSizes,
   createTunedBloomPass,
   type BloomTuning,
   type TunedBloomHandle,
+  type TunedBloomOpts,
 } from "./bloom-tuning.ts";
+export {
+  BLOOM_BUDGET_TRIGGER_PIXELS,
+  BLOOM_MIP0_CAP_PIXELS,
+  BLOOM_MIP0_TIER_CAPS,
+  BLOOM_MIN_SCALE,
+  bloomScaleFor,
+  blurKernel,
+  rebasedBlurKernel,
+  kernelVarianceTexels,
+  bloomChainModel,
+  discGlow,
+  edgeGlow,
+  glowReach,
+} from "./bloom-budget.ts";
 export {
   ColorGradeShader,
   GRADE_BY_TONE,
