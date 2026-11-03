@@ -19,6 +19,10 @@ function toSql(pg) {
     return result.rows;
   };
   sql.query = async (text, params = []) => (await pg.query(text, params)).rows;
+  // The local worker must not partially rewrite an owner's workspace.
+  if (typeof pg.transaction === "function") {
+    sql.transaction = async (fn) => pg.transaction(async (tx) => fn(toSql(tx)));
+  }
   return sql;
 }
 
