@@ -1,28 +1,31 @@
-# VERIFY_REPORT — Adrian's Mind, logic-wiring @ 1fe80fe
+# VERIFY_REPORT — logic-wiring-next @ 499257d
 
-- **Tip verified:** `1fe80fe` fix(model-tier): command-app chip records Orchestrator turns; no stale Auto→tier residue (base 5dc8ca4)
-- **Verifier:** Logic Bot (independent adversarial re-read of diff + re-run of tests)
-- **When:** 2026-11-02T20:37:48-06:00 (America/Chicago)
-- **Lock precondition:** whisper-flow.lock status released (2026-11-02T20:20:00-06:00); command-app.tsx edit limited to chip-tier state + done handler (media-integration-evolve claims chips/quality/download slice only — not touched).
+Verifier: Logic Bot independent adversarial pass, 2026-11-02 20:43 CST
+Project: Adrian's Mind Command OS
+
+## Lineage
+- Merge 8763ceb: absorbs origin/logic-wiring 176e44f (1fe80fe ChipTierRun chip fix). Conflicts in command-app.tsx (took the 1fe80fe ChipTierRun approach, which supersedes a4e9944's isConcreteModelTier setter) and package.json (union of test lists)
+- Merge 55a8c8e: absorbs origin/preview/candidate c5fd883 (nav/Notion c1ee830 + voice). Conflict only in package.json test list (union). drawer-nav.ts and oauth status routes are byte-identical to preview/candidate
+- Fix 499257d: Research single-flight
 
 ## PASS / FAIL
+| Check | Result |
+|---|---|
+| origin/logic-wiring (176e44f) ancestor of HEAD | PASS |
+| origin/preview/candidate (c5fd883) ancestor of HEAD | PASS |
+| Nav/Notion-status files identical to preview/candidate | PASS |
+| No commits to origin/logic-wiring (FROZEN) | PASS |
+| No secrets/keys in diff a4e9944..HEAD | PASS |
+| tsc --noEmit | PASS |
+| npm run test:mind | PASS (1785/1785) |
+| npm run test:scripts | PASS (205 pass, 0 fail, 4 skipped) |
+| npm run build | PASS |
+| research-flight.test.ts failed before the fix (module missing) and passes after | PASS (5/5) |
+| Double-click on Check research results in one provider call | PASS (gate refuses 2nd begin; button disabled) |
+| Stale older reply cannot overwrite newer citations | PASS (only one in flight) |
+| Gate released on throw | PASS (finally) |
+| Stale token cannot unlock a newer run | PASS (test) |
 
-| # | Check | Result | Notes |
-|---|-------|--------|-------|
-| 1 | Orchestrator turn updates chip (was ignored by setLastResolvedTier) | **PASS** | `Orchestrator · grok-4.7`; failing test written first, failed on 5dc8ca4 (missing logic), passes on 1fe80fe |
-| 2 | Auto→Fast then Orchestrator turn then switch to Auto: no stale `Auto→Fast · grok-4.7` lie | **PASS** | chip shows `Auto` |
-| 3 | Auto→Fast then select Heavy: Fast model not glued onto Heavy | **PASS** | `Heavy` |
-| 4 | done event with missing / "" / "Auto" / `__proto__` / `constructor` / "grok-evil" / number / null / object resolvedTier | **PASS** | resolved=null, chip `Auto`; remembered localStorage outcome forgotten so chip cannot fall back to older turn |
-| 5 | Forged modelTier echo (`__proto__`) / missing modelTier | **PASS** | falls back to tier actually sent |
-| 6 | Model id non-string / blank / >120 chars | **PASS** | dropped (null) |
-| 7 | localStorage removeItem throws (private mode) | **PASS** | no throw |
-| 8 | Race: user switches tier while turn in flight | **PASS (by design)** | run keyed to server-echoed modelTier, shown only while that tier is selected |
-| 9 | Diff hostile re-read: no other lane's region changed; no remaining setLastResolvedTier/setLastModelUsed refs; key grep of diff | **PASS** | 4 files, +116/−8; key grep 0 hits |
-| CI | tsc / test:mind / test:scripts / build @ 1fe80fe | **PASS** | tsc 0; mind 1767/1767; scripts 205/209 (4 skipped); build 0; model-tier suites 40/40 on re-run |
-| Flake | test:mind re-runs under box load avg ~121 | **NOTE** | 2 of 5 runs had unrelated timeouts (e.g. src/lib/mind/mcp/stdio.test.ts:135 10 s timeout, MCP lane); 3 runs 1767/1767. Not caused by this diff |
-
-**Overall tip verdict:** **PASS**
-
-## Open (carried)
-- Grok failover mid-request honesty; Research citations http/https scheme filter (next logic items).
-- Server `buildAuthorizeUrl` *_AUTHORIZE_URL allowlist (MCP lane).
+## Residual (not bugs, noted)
+- Chat-intent runWebResearch uses the chat `busy` guard, not this gate. It shares researchCitations, so a Research-page check and a chat research turn can still interleave. Low impact
+Verdict: PASS
