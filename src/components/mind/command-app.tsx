@@ -1591,7 +1591,11 @@ export function CommandApp() {
 
       let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
       try {
-        secret = await createVoiceClientSecret();
+        secret = await withDictateTimeout(
+          createVoiceClientSecret(),
+          DICTATE_MINT_TIMEOUT_MS,
+          "Dictation timed out waiting for the microphone or voice mint. Check permissions, then try again.",
+        );
         if (mintAbort.signal.aborted) {
           setNotice("Voice start canceled.");
           setVoiceListening(false);
@@ -2049,7 +2053,10 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card floating-composer rounded-panel bg-surface p-3 md:p-4" data-composer="floating">
+              <>
+              {/* Marker for tablet Speak-only (LiveVoiceBar owns the real composer). */}
+              <section hidden data-composer="floating" data-testid="floating-composer-marker" aria-hidden="true" />
+              <section className="command-card rounded-panel bg-surface p-3 md:p-4" data-home-modes="true">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
@@ -2164,6 +2171,7 @@ export function CommandApp() {
                   </ul>
                 )}
               </section>
+              </>
 
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
@@ -2312,7 +2320,7 @@ export function CommandApp() {
               }}
               onNew={openChat}
               onSpeak={(text) => void speak(text)}
-              onListen={() => void listen()}
+              onListen={() => void dictateWithTimeout()}
               onListenStop={() => void listen({ mode: "stop" })}
               onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
               onLiveAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}

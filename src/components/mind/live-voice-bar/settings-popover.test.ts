@@ -51,3 +51,26 @@ describe("live-voice settings popover", () => {
       true,
     );
   });
+
+  it("connecting counts as callActive for Esc cancel", () => {
+    assert.equal(
+      shouldEndCallOnEscape({
+        key: "Escape",
+        settingsOpen: false,
+        callActive: true, // connecting / speakArm mapped in by LiveVoiceBar
+        modalOpenInDom: false,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldEndCallOnEscape({
+        key: "Escape",
+        settingsOpen: true,
+        callActive: true,
+        modalOpenInDom: false,
+      }),
+      false,
+      "settings owns Esc over call end",
+    );
+  });
+

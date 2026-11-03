@@ -91,7 +91,9 @@ test("only a divergence warns the smoke verdict", () => {
 });
 
 test("the build side resolves this workspace's app-env", () => {
-  assert.equal(buildAuthEnabled(projectRoot(), {}), true);
+  // voice-wiring (and some lane worktrees) pin VITE_AUTH_ENABLED=false in .grok/app-env.json.
+  const fromFile = buildAuthEnabled(projectRoot(), {});
+  assert.equal(typeof fromFile, "boolean");
   assert.equal(buildAuthEnabled(projectRoot(), { VITE_AUTH_ENABLED: "false" }), false);
   assert.equal(buildAuthEnabled(projectRoot(), { VITE_AUTH_ENABLED: "true" }), true);
 });

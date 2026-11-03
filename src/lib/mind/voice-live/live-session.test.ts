@@ -414,4 +414,123 @@ describe("LiveVoiceSession", () => {
   });
 
 
+
+  it("barge-in interrupts speaker playback immediately (Direct)", async () => {
+    setLiveVoiceOccupied(false);
+    let interrupted = 0;
+    let created: FakeSocket | undefined;
+    let now = 10_000;
+    const session = new LiveVoiceSession(
+      {},
+      {
+        mintSecret: async () => ({ ok: true, value: "ephemeral", expiresAt: Date.now() + 60_000 }),
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        now: () => now,
+        socketFactory: () => {
+          created = new FakeSocket();
+          queueMicrotask(() => created?.openNow());
+          return created!;
+        },
+      },
+    );
+    await session.start();
+    const silent = Buffer.alloc(320).toString("base64");
+    created!.emitMessage({ type: "response.output_audio.delta", delta: silent });
+    const speaker = session.speaker;
+    const orig = speaker.interrupt.bind(speaker);
+    speaker.interrupt = () => {
+      interrupted += 1;
+      orig();
+    };
+    now += 1000;
+    created!.emitMessage({ type: "input_audio_buffer.speech_started" });
+    assert.ok(interrupted >= 1, "speaker.interrupt must run on barge-in");
+    assert.ok(created!.sent.some((line) => line.includes("response.cancel")));
+    session.end();
+    setLiveVoiceOccupied(false);
+  });
+
+  it("barge-in interrupts speaker playback in Orchestrator mode", async () => {
+    setLiveVoiceOccupied(false);
+    let interrupted = 0;
+    let created: FakeSocket | undefined;
+    let now = 10_000;
+    const session = new LiveVoiceSession(
+      {},
+      {
+        mintSecret: async () => ({ ok: true, value: "ephemeral", expiresAt: Date.now() + 60_000 }),
+        isOverlayMicOpen: () => false,
+        getMode: () => "orchestrator",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        now: () => now,
+        socketFactory: () => {
+          created = new FakeSocket();
+          queueMicrotask(() => created?.openNow());
+          return created!;
+        },
+      },
+    );
+    await session.start();
+    const silent = Buffer.alloc(320).toString("base64");
+    created!.emitMessage({ type: "response.output_audio.delta", delta: silent });
+    const speaker = session.speaker;
+    const orig = speaker.interrupt.bind(speaker);
+    speaker.interrupt = () => {
+      interrupted += 1;
+      orig();
+    };
+    now += 1000;
+    created!.emitMessage({ type: "input_audio_buffer.speech_started" });
+    assert.ok(interrupted >= 1);
+    session.end();
+    setLiveVoiceOccupied(false);
+  });
+
+  it("Esc/end during connecting cancels start and releases occupancy", async () => {
+    setLiveVoiceOccupied(false);
+    let mintStarted = false;
+    const session = new LiveVoiceSession(
+      {},
+      {
+        mintSecret: async (signal) => {
+          mintStarted = true;
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => resolve(), 5_000);
+            signal?.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(timer);
+                reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+              },
+              { once: true },
+            );
+          });
+          return { ok: true, value: "late", expiresAt: Date.now() + 60_000 };
+        },
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        socketFactory: () => new FakeSocket(),
+      },
+    );
+    const startP = session.start();
+    for (let i = 0; i < 50 && !mintStarted; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(session.state.phase, "connecting");
+    assert.equal(isLiveVoiceOccupied(), true);
+    session.end("Esc cancel");
+    assert.equal(session.state.phase, "off");
+    assert.equal(isLiveVoiceOccupied(), false);
+    await Promise.allSettled([startP]);
+    setLiveVoiceOccupied(false);
+  });
+
+
 });

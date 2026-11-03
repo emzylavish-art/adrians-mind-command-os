@@ -45,6 +45,8 @@ import {
   type FrameStreamHandle,
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape, shouldEndCallOnEscape } from "./settings-popover";
+import { ensureLiveVoiceBaselineStyles } from "./baseline-styles";
+import { describeScreenAudio, screenShareUnavailableMessage } from "./screen-audio";
 import { LIVE_SCREEN_FRAME_PROMPT } from "@/lib/mind/voice-live/session-context";
 
 export type LiveVoiceBarProps = {
@@ -106,6 +108,10 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   useEffect(() => {
     if (uiAttr !== "off" || !live.active) setSpeakArm(false);
   }, [uiAttr, live.active]);
+
+  useEffect(() => {
+    ensureLiveVoiceBaselineStyles();
+  }, []);
 
   const onSessionStatusChange = props.onSessionStatusChange;
   useEffect(() => {
@@ -174,7 +180,12 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           return;
         }
         const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
-        const callActive = live.active || isLiveVoiceOccupied();
+        // Include connecting / speakArm so Speak→Esc cancels before "active" paints.
+        const connecting =
+          speakArm ||
+          live.state.phase === "connecting" ||
+          live.state.phase === "reconnecting";
+        const callActive = live.active || isLiveVoiceOccupied() || connecting;
         if (
           !shouldEndCallOnEscape({
             key: event.key,
@@ -187,6 +198,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
         }
         event.preventDefault();
         event.stopPropagation();
+        setSpeakArm(false);
         endEverything();
         return;
       }
@@ -198,7 +210,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [endEverything, live.active, settingsOpen]);
+  }, [endEverything, live.active, live.state.phase, settingsOpen, speakArm]);
 
   useEffect(() => {
     if (!live.active) stopScreen();
@@ -326,7 +338,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       return;
     }
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      const msg = "Screen share was cancelled or isn't available.";
+      const msg = screenShareUnavailableMessage();
       setAttachMsg(msg);
       props.onError?.(msg);
       props.onNotice?.(msg);
@@ -334,18 +346,50 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     }
     let streamPromise: Promise<MediaStream>;
     try {
-      streamPromise = navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      // Prefer tab/system audio when the browser supports it; fall back to video-only.
+      streamPromise = navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      } as MediaStreamConstraints);
     } catch (caught) {
-      const msg = "Screen share was cancelled or isn't available.";
-      setAttachMsg(msg);
-      props.onError?.(msg);
-      void caught;
-      return;
+      try {
+        streamPromise = navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      } catch (caught2) {
+        const msg = screenShareUnavailableMessage();
+        setAttachMsg(msg);
+        props.onError?.(msg);
+        void caught;
+        void caught2;
+        return;
+      }
     }
     void (async () => {
       try {
-        const stream = await streamPromise;
+        let stream: MediaStream;
+        try {
+          stream = await streamPromise;
+        } catch {
+          // Some browsers reject audio:true — retry video-only with an honest note.
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+          const note = "Screen audio is not available in this browser — sharing video only.";
+          setAttachMsg(note);
+          props.onNotice?.(note);
+        }
         pendingScreenStream.current = stream;
+        const audioStatus = describeScreenAudio(stream);
+        if (audioStatus.ok && audioStatus.notice) {
+          setAttachMsg(audioStatus.notice);
+          props.onNotice?.(audioStatus.notice);
+        }
+        // Display-audio tracks are not mixed into the realtime mic path yet — stop them so
+        // the OS indicator matches what the call actually sends (mic only).
+        for (const track of stream.getAudioTracks()) {
+          try {
+            track.stop();
+          } catch {
+            /* ignore */
+          }
+        }
         // Allowed while connecting — attach frames once live is up.
         if (!live.active) {
           props.onNotice?.("Starting live voice for screen share…");
@@ -367,7 +411,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
         setScreenOn(true);
         stream.getVideoTracks()[0]?.addEventListener("ended", () => stopScreen());
       } catch {
-        const msg = "Screen share was cancelled or isn't available.";
+        const msg = screenShareUnavailableMessage();
         setAttachMsg(msg);
         props.onError?.(msg);
         props.onNotice?.(msg);

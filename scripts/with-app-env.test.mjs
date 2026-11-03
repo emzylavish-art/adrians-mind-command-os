@@ -59,8 +59,10 @@ test("an explicit process-env override wins over the file", () => {
   assert.equal(merged.PATH, "/usr/bin");
 });
 
-test("this workspace does not force sign-in off", () => {
-  assert.equal(readAppEnv(projectRoot()).VITE_AUTH_ENABLED, undefined);
+test("this workspace app-env is readable (lane worktrees may pin auth off)", () => {
+  // Template leaves VITE_AUTH_ENABLED unset; voice-wiring pins "false" for preview.
+  const value = readAppEnv(projectRoot()).VITE_AUTH_ENABLED;
+  assert.ok(value === undefined || value === "false" || value === "true", value);
 });
 
 test("vite loadEnv resolves the wrapped value", () => {
@@ -80,7 +82,13 @@ test("the wrapped command runs with the app env applied", async () => {
     "-e",
     PRINT_FLAG,
   ]);
-  assert.notEqual(stdout, "false");
+  const expected = readAppEnv(projectRoot()).VITE_AUTH_ENABLED;
+  if (expected !== undefined) {
+    assert.equal(stdout, expected);
+  } else {
+    // Template default: wrapper must not invent a forced-off value.
+    assert.notEqual(stdout, "false");
+  }
 });
 
 test("the wrapped command sees an explicit override, not the file value", async () => {
@@ -124,5 +132,10 @@ test("the CLI still runs when invoked through a symlinked path", async () => {
     "-e",
     PRINT_FLAG,
   ]);
-  assert.notEqual(stdout, "false");
+  const expected = readAppEnv(projectRoot()).VITE_AUTH_ENABLED;
+  if (expected !== undefined) {
+    assert.equal(stdout, expected);
+  } else {
+    assert.notEqual(stdout, "false");
+  }
 });

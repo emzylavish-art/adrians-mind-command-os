@@ -155,12 +155,17 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (!sessionRef.current?.isActive && !isLiveVoiceOccupied()) return;
-      // Settings / any modal open → do not end the call (popover owns Esc).
+      const session = sessionRef.current;
+      const phase = session?.state.phase;
+      const connecting = phase === "connecting" || phase === "reconnecting";
+      if (!session?.isActive && !isLiveVoiceOccupied() && !connecting) return;
+      // Topmost modal / settings owns Esc — never end the call underneath.
       if (document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest?.('[role="dialog"], [aria-modal="true"], dialog')) return;
       event.preventDefault();
+      event.stopPropagation();
+      // Esc during connecting must cancel mint/mic immediately.
       end();
     };
     document.addEventListener("keydown", onKey, true);
