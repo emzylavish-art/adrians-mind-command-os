@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -13,7 +13,9 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, bloomTier } from "./postfx";
+import { filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
+import { cullLabelIds } from "@/lib/mind/dashboard/label-cull";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -44,6 +46,9 @@ import {
   sampleStarPulse,
   sanitizeDt,
   sharedMotionClock,
+  shouldScheduleUniverseFrame,
+  shouldSoftSyncScene,
+  universeMotionSignature,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
@@ -232,12 +237,49 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   return tex;
 }
 
+function cullDomLabels(root: HTMLElement, zoomedOut: boolean) {
+  const nodes = [...root.querySelectorAll<HTMLElement>(".dash3d-label")];
+  const rects = nodes.map((el, index) => {
+    const box = el.getBoundingClientRect();
+    const priority = Number(el.dataset.priority ?? "5");
+    return {
+      id: String(index),
+      priority: Number.isFinite(priority) ? priority : 5,
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+    };
+  });
+  const hide = new Set(cullLabelIds(rects, { zoomedOut, viewportHeight: root.clientHeight || window.innerHeight }));
+  nodes.forEach((el, index) => {
+    el.style.opacity = hide.has(String(index)) ? "0" : "1";
+  });
+}
+
+function signatureFromStatus(data: DashboardStatus): string {
+  const projects = data.projects?.projects ?? [];
+  return universeMotionSignature({
+    bots: data.bots.map((b) => ({ id: b.id, health: b.health, reason: b.reason })),
+    commitShas: data.commits.map((c) => c.sha),
+    feedIds: (data.skyFeed?.list ?? data.skyFeed?.events ?? []).map((event) => event.id),
+    pageCount: data.notionGraph?.stats?.pages ?? 0,
+    edgeCount: data.notionGraph?.stats?.edges ?? 0,
+    projectKey: projects.map((project) => `${project.id}:${project.health}:${project.progressKnown ? project.progress : "u"}`).join(","),
+  });
+}
+
 export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const dataRef = useRef(data);
   const cbs = useRef({ onSelectBot, onSelectNotion, onSkyView, onFlyoverChange });
+  const wakeDataRef = useRef<(() => void) | null>(null);
   dataRef.current = data;
   cbs.current = { onSelectBot, onSelectNotion, onSkyView, onFlyoverChange };
+  const motionSig = useMemo(() => signatureFromStatus(data), [data]);
+  useEffect(() => {
+    wakeDataRef.current?.();
+  }, [motionSig]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -429,7 +471,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botGroup.add(glow);
 
         const el = document.createElement("div");
+        const fullName = sanitizeLabelText(bot.name);
         el.className = "dash3d-label";
+        el.title = fullName;
+        el.dataset.priority = bot.health === "blocked" ? "0" : bot.health === "stalled" ? "1" : bot.health === "healthy" ? "2" : "3";
         el.textContent = sanitizeLabelText(bot.name.replace(/ Bot$/, "").replace(" / Orchestrator", ""));
         const label = new CSS2DObject(el);
         label.position.set(pos.x, pos.y + 0.75, pos.z);
@@ -544,7 +589,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       mk(
         `Weather · ${status.weather.label}`,
         status.weather.summary,
-        status.weather.tone === "blocked" ? "#ff6b8a" : status.weather.tone === "stalled" ? "#fbbf24" : "#3dd68c",
+        status.weather.tone === "blocked" ? "#f3f5ff" : status.weather.tone === "stalled" ? "#c4b5fd" : "#f3f5ff",
         [-7.5, 5.5, -2],
       );
       mk(
@@ -718,6 +763,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
+    let graphAllow: Set<string> | null = null;
     let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
@@ -752,10 +798,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         nextRays = null;
       }
       try {
-        nextBloom = createTunedBloomPass(new THREE.Vector2(w, h), "idle");
-        composer.addPass(nextBloom.pass);
+        const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+        const tier = bloomTier({
+          reducedMotion,
+          narrow: typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches,
+          saveData: nav.connection?.saveData === true,
+          hardwareConcurrency: nav.hardwareConcurrency,
+          deviceMemoryGb: nav.deviceMemory,
+        });
+        if (tier !== "off") {
+          nextBloom = createTunedBloomPass(new THREE.Vector2(w, h), "idle", { tier });
+          composer.addPass(nextBloom.pass);
+        }
       } catch {
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.62, 0.75, 0.22));
+        nextBloom = null;
       }
       try {
         nextGrade = createColorGradePass("idle");
@@ -839,6 +895,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
 
 
+    let interacting = false;
+    let renderDirty = true;
+    let dataDirty = true;
+    let raf = 0;
+    let lastMotionSig = "";
+    let tick: (now: number) => void = () => {};
+    const arm = (kind: "render" | "data" = "render") => {
+      if (kind === "data") dataDirty = true;
+      else renderDirty = true;
+      if (raf === 0) raf = requestAnimationFrame(tick);
+    };
+    wakeDataRef.current = () => arm("data");
+
     function setFly(next: FlyState, fly2camera: boolean) {
       fly = next;
       city.setInterior(fly.level === "interior" ? fly.buildingId : null);
@@ -850,6 +919,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           [camera.position.x, camera.position.y, camera.position.z],
           [lookAt.x, lookAt.y, lookAt.z],
         );
+        arm("render");
       }
       cbs.current.onFlyoverChange?.(fly, layout);
     }
@@ -897,6 +967,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       camera.position.copy(freePos);
       spherical.setFromVector3(freePos.clone().sub(lookAt));
       rig = { ...rig, t: 1, to: { position: next, lookAt: [lookAt.x, lookAt.y, lookAt.z] }, from: { position: next, lookAt: [lookAt.x, lookAt.y, lookAt.z] } };
+      arm("render");
     };
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
@@ -914,7 +985,16 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       spherical.setFromVector3(freePos.clone().sub(lookAt));
       rig = { ...rig, t: 1, to: { position: next, lookAt: look }, from: { position: next, lookAt: look } };
     };
+    const sceneInteractOn = () => {
+      const root = mount.closest("[data-testid='dash3d-root']") ?? document.querySelector("[data-testid='dash3d-root']");
+      if (!root || typeof window.matchMedia !== "function") return true;
+      if (window.matchMedia("(max-width: 720px)").matches) {
+        return root.getAttribute("data-scene-interact") === "1";
+      }
+      return true;
+    };
     const onPointerDown = (ev: PointerEvent) => {
+      if (!sceneInteractOn() && ev.isPrimary && pinchPointers.size < 1) return;
       try { renderer.domElement.setPointerCapture(ev.pointerId); } catch { /* optional */ }
       pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
       if (pinchPointers.size === 2) {
@@ -922,6 +1002,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         pinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
       }
       dragging = true;
+      interacting = true;
+      arm("render");
       lastX = ev.clientX;
       lastY = ev.clientY;
       dragStartX = ev.clientX;
@@ -936,6 +1018,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const dy = Math.abs(ev.clientY - dragStartY);
       const wasDrag = dx > 4 || dy > 4;
       dragging = false;
+      interacting = pinchPointers.size > 0;
+      arm("render");
       if (wasDrag) return;
       // Hacker: ignore star/city picks while a camera glide is in flight
       if (!acceptPointerPick(rig)) return;
@@ -1067,7 +1151,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointermove", onPointerHoverNotion);
-    renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
+    renderer.domElement.addEventListener("pointerleave", () => {
+      dragging = false;
+      interacting = false;
+      arm("render");
+    });
 
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
       layoutSig = ""; // force GPU resources to re-upload after restore
@@ -1075,18 +1163,39 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     });
 
     let last = performance.now();
-    let raf = 0;
     let sync = 0;
     const travelOut = { x: 0, y: 0, z: 0 };
+    const refreshSceneData = () => {
+      rebuildAll();
+      syncCity();
+      comets.dispose();
+      comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+      feedGlyphs.dispose();
+      feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+    };
     const onVisibility = () => {
       // Animation #3: pause the loop while hidden; MotionClock absorbs the resume gap.
-      if (!isDocumentHidden()) last = performance.now();
+      if (!isDocumentHidden()) {
+        last = performance.now();
+        arm("render");
+      }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
-      if (kit.contextLost || postfxRecovery.lost) return; // WebGL context lost: pause (painter kit + light #13)
-      if (isDocumentHidden()) {
+    tick = (now: number) => {
+      const hidden = isDocumentHidden();
+      const lost = kit.contextLost || postfxRecovery.lost;
+      const schedule = shouldScheduleUniverseFrame({
+        reducedMotion,
+        rigSettled: rig.t >= 1,
+        interacting,
+        dirty: renderDirty || dataDirty,
+        documentHidden: hidden,
+        contextLost: lost,
+      });
+      raf = schedule ? requestAnimationFrame(tick) : 0;
+      mount.dataset.frameParked = schedule ? "0" : "1";
+      mount.dataset.reducedMotion = reducedMotion ? "1" : "0";
+      if (lost || hidden) {
         last = now;
         return;
       }
@@ -1107,7 +1216,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const wallT = now * 0.001;
       const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
-        const show = starHealthFilter === "all" || n.health === starHealthFilter;
+        const show =
+          (starHealthFilter === "all" || n.health === starHealthFilter) &&
+          (graphAllow == null || graphAllow.has(n.id));
         n.mesh.visible = show;
         n.glow.visible = show;
         n.label.visible = show && labelsOn && fly.level === "universe";
@@ -1170,16 +1281,21 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (composer) composer.render();
       else renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
+      cullDomLabels(labelRenderer.domElement, camera.position.distanceTo(lookAt) > 16);
 
-      if (now - sync > 5000) {
-        sync = now;
-        rebuildAll();
-        syncCity();
-        comets.dispose();
-        comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
-        feedGlyphs.dispose();
-        feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+      const sig = signatureFromStatus(dataRef.current);
+      if (sig !== lastMotionSig) {
+        lastMotionSig = sig;
+        dataDirty = true;
       }
+      if (shouldSoftSyncScene(reducedMotion, now - sync)) {
+        sync = now;
+        refreshSceneData();
+      } else if (reducedMotion && dataDirty) {
+        refreshSceneData();
+      }
+      dataDirty = false;
+      renderDirty = false;
     };
     tick(performance.now());
 
@@ -1195,6 +1311,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (raysHandle && composer?.readBuffer?.depthTexture) {
         raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
       }
+      arm("render");
     };
     
     const onSkyEvent = () => {
@@ -1209,6 +1326,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         [lookAt.x, lookAt.y, lookAt.z],
       );
       cbs.current.onSkyView();
+      arm("render");
     };
 
     const onFocusBot = (ev: Event) => {
@@ -1229,6 +1347,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         [lookAt.x, lookAt.y, lookAt.z],
       );
       cbs.current.onSelectBot(bot);
+      arm("render");
     };
     document.addEventListener("dash3d-focus-bot", onFocusBot);
     const onLayers = (ev: Event) => {
@@ -1238,8 +1357,17 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         city.setLabelsVisible(labelsOn && fly.level === "city");
       }
       if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
+      arm("render");
     };
     document.addEventListener("dash3d-layers", onLayers);
+    const onGraphFilter = (ev: Event) => {
+      const detail = (ev as CustomEvent<GraphFilterState>).detail;
+      if (!detail || typeof detail !== "object") return;
+      const status = dataRef.current;
+      graphAllow = filterBotIds(status.bots, status.constellationEdges ?? [], detail);
+      arm("render");
+    };
+    document.addEventListener("dash3d-graph-filter", onGraphFilter);
 
 
     document.addEventListener("dash3d-sky", onSkyEvent);
@@ -1247,9 +1375,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     window.addEventListener("resize", onResize);
 
     return () => {
+      wakeDataRef.current = null;
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
+      document.removeEventListener("dash3d-graph-filter", onGraphFilter);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);

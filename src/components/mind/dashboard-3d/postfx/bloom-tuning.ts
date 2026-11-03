@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { normalizeHealthTone, type HealthTone } from "../atmosphere/health-tone.ts";
+import { createChainEncoder } from "./bloom-hdr-chain.ts";
+import { bloomStrengthMultiplier, type BloomTier } from "./bloom-policy.ts";
 
 export type BloomTuning = {
   strength: number;
@@ -42,15 +44,31 @@ export function safeBloomSize(width: number, height: number): [number, number] {
 export function createTunedBloomPass(
   size: THREE.Vector2,
   tone: HealthTone = "idle",
+  opts: { tier?: BloomTier } = {},
 ): TunedBloomHandle {
+  const tier = opts.tier ?? "full";
+  const scale = bloomStrengthMultiplier(tier);
   const p = BLOOM_BY_TONE[normalizeHealthTone(tone)];
   const [w0, h0] = safeBloomSize(size.x, size.y);
-  const pass = new UnrealBloomPass(new THREE.Vector2(w0, h0), p.strength, p.radius, p.threshold);
+  const pass = new UnrealBloomPass(new THREE.Vector2(w0, h0), p.strength * scale, p.radius, p.threshold);
   let disposed = false;
+  const encoder = createChainEncoder(pass);
+  const baseRender = pass.render.bind(pass);
+  pass.render = function encodedRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+    if (disposed || tier === "off") return;
+    const bright = (pass as unknown as { renderTargetBright?: { texture?: { type?: number } } }).renderTargetBright;
+    const type = bright?.texture?.type;
+    try {
+      encoder.sync(type === THREE.UnsignedByteType);
+    } catch {
+      encoder.sync(false);
+    }
+    return baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+  };
   const update = (next: HealthTone) => {
     if (disposed) return;
     const t = BLOOM_BY_TONE[normalizeHealthTone(next)];
-    pass.strength = t.strength;
+    pass.strength = t.strength * scale;
     pass.radius = t.radius;
     pass.threshold = t.threshold;
   };

@@ -1,23 +1,13 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { DashboardApp } from "@/components/mind/dashboard-3d/dashboard-app";
-import { dashboardLoginSearch } from "@/lib/auth/login-providers";
-import { getSessionUser } from "@/lib/auth/verify.server";
+import { requireDashboardUser } from "@/lib/mind/dashboard/require-dashboard-user";
 
 /**
  * Universe dashboard. A Better Auth or Supabase session may enter.
- * No session goes to sign-in.
+ * No session goes to sign-in. The check runs in a server function.
  */
 export const Route = createFileRoute("/dashboard")({
-  beforeLoad: async () => {
-    const user = await getSessionUser();
-    if (!user) {
-      throw redirect({
-        to: "/login",
-        search: dashboardLoginSearch(),
-      });
-    }
-    return { sessionUser: user };
-  },
+  beforeLoad: async () => requireDashboardUser(),
   component: DashboardPage,
   head: () => ({
     meta: [
