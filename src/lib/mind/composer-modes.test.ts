@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import {
   COMPOSER_MODES,
   composerModeToModelTier,
@@ -182,3 +183,55 @@ describe("stored Mode/Effort hydration and cross-tab drift", () => {
     assert.deepEqual(crossTabSelection(MODEL_TIER_KEY, null, mem({ [COMPOSER_EFFORT_KEY]: "fast" })), { tier: "Fast", mode: "fast" });
   });
 });
+
+describe("adversarial: Mode/Effort wiring in command-app", () => {
+  const src = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url), "utf8");
+  const body = (name: string) => {
+    const start = src.indexOf(`function ${name}(`);
+    assert.ok(start > 0, name);
+    return src.slice(start, src.indexOf("\n  }\n", start));
+  };
+  it("both Effort row and Mode picker route through the single applyTierSelection path", () => {
+    assert.match(body("chooseComposerEffort"), /applyTierSelection\(picked\)/);
+    assert.match(body("chooseModelTier"), /applyTierSelection\(picked\)/);
+    assert.doesNotMatch(body("chooseComposerEffort"), /setView\(/);
+    assert.doesNotMatch(body("chooseModelTier"), /setView\(/);
+    assert.match(body("applyTierSelection"), /selectionEffects\(picked\)/);
+  });
+  it("cross-tab listener validates via crossTabSelection and ignores non-localStorage areas", () => {
+    assert.match(src, /crossTabSelection\(event\.key, event\.newValue/);
+    assert.match(src, /event\.storageArea !== localStorage/);
+  });
+  it("hydration reads a reconciled pair (no raw tier cast from storage)", () => {
+    assert.match(src, /readStoredSelection\(localStorage\)/);
+    assert.doesNotMatch(src, /localStorage\.getItem\("amcos\.modelTier\.v1"\)/);
+  });
+});
+
+describe("adversarial: cross-tab event sequences never leave picker and Effort row disagreeing", () => {
+  it("interleaved, hostile, and clear events always end consistent", () => {
+    const events: [string | null, string | null][] = [
+      [COMPOSER_EFFORT_KEY, "build"], [MODEL_TIER_KEY, "Build"], [MODEL_TIER_KEY, "__proto__"],
+      [COMPOSER_EFFORT_KEY, "Heavy"], [null, null], [MODEL_TIER_KEY, "Orchestrator"], [COMPOSER_EFFORT_KEY, "\u0000fast"],
+      ["amcos.failover.v1", "grok"], [MODEL_TIER_KEY, null], [COMPOSER_EFFORT_KEY, "expert"],
+    ];
+    let state: TierSel = { tier: "Auto", mode: "auto" };
+    for (let i = 0; i < 300; i++) {
+      const [k, v] = events[i % events.length];
+      state = crossTabSelection(k, v, mem({ [COMPOSER_EFFORT_KEY]: "heavy" })) ?? state;
+      assert.equal(composerModeToModelTier(state.mode), state.tier);
+      assert.ok((MODEL_TIERS as readonly string[]).includes(state.tier));
+    }
+  });
+  it("a storage whose getItem returns non-strings cannot inject a tier", () => {
+    const weird = { getItem: (() => ({ toString: () => "Build" })) as unknown as (k: string) => string | null };
+    assert.deepEqual(readStoredSelection(weird), { tier: "Auto", mode: "auto" });
+  });
+  it("Build effects carry no notice; only Orchestrator carries one", () => {
+    for (const tier of MODEL_TIERS) {
+      const fx = selectionEffects(tierSelection(tier)!);
+      assert.equal(fx.notice !== null, tier === "Orchestrator", tier);
+    }
+  });
+});
+type TierSel = { tier: ModelTier; mode: ComposerModeId };

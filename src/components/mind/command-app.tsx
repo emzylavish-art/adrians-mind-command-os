@@ -802,6 +802,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   useEffect(() => {
     // Another tab changed Mode/Effort: adopt the same validated pair here (no navigation, no notice).
     const onStorage = (event: StorageEvent) => {
+      // sessionStorage events (same-tab iframes) must not drive this chat's Mode.
+      if (typeof localStorage === "undefined" || (event.storageArea && event.storageArea !== localStorage)) return;
       const picked = crossTabSelection(event.key, event.newValue, typeof localStorage === "undefined" ? null : localStorage);
       if (!picked) return;
       setModelTier(picked.tier);
