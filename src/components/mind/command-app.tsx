@@ -157,7 +157,6 @@ import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
 import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
-import { AgentsPageHeader } from "@/components/mind/agents-page-header";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
@@ -4966,30 +4965,9 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           )}
 
           {view === "agents" && (
-            <div className="agents-page" data-testid="agents-page">
-            <AgentsPageHeader
-              onSettings={() => {
-                setView("settings");
-                setNavOpen(false);
-              }}
-              onSearch={() => {
-                setPaletteOpen(true);
-                const node = searchRef.current;
-                if (node) node.focus();
-              }}
-              onNewBot={() => {
-                const el = document.getElementById("agents-custom-form");
-                el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                const input = el?.querySelector("input");
-                if (input instanceof HTMLInputElement) input.focus();
-              }}
-              onCompose={() => {
-                openChat();
-                setNavOpen(false);
-              }}
-            />
+            <>
             <ReaPanel
-              title="Bots & Agents"
+              title="Agents"
               lead="REA checks a file. Workspace lookup lists projects and chats, then searches notes. It does not call a model, browse the web, or mark itself running."
               report={reaReport}
               busy={reaBusy}
@@ -5062,7 +5040,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               )}
             </form>
             <FleetPanel mode="agents" ws={ws} setWs={setWs} />
-            </div>
+            </>
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
           {view === "connected" && (
