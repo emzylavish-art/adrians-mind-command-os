@@ -259,7 +259,9 @@ async function runAppUiIfUp() {
     const page = await context.newPage();
     page.on("pageerror", (e) => report.errors.push(String(e)));
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForTimeout(1500);
+    // Integration drawer/nav can delay hydration on narrow viewports.
+    await page.waitForSelector('[data-testid="whisper-flow-bar"], [data-testid="mic-button"]', { timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(500);
     const bar = page.locator('[data-testid="whisper-flow-bar"]');
     ok("whisper_flow_bar_present", await bar.count().then((c) => c > 0), null);
     await shot(page, "app-whisper-flow-bar-390.png");
