@@ -8,6 +8,8 @@ on:
       - ".github/workflows/chatgpt-functionality-worker.yml"
       - "src/lib/mind/worker-pass.ts"
       - "src/lib/mind/worker-pass.test.ts"
+      - "src/lib/supabase/oauth-redirect.ts"
+      - "src/lib/supabase/first-party-oauth.ts"
   workflow_dispatch:
 
 permissions:
