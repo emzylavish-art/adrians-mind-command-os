@@ -197,7 +197,7 @@ import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { composerChipModelForTier, modelTierForComposerChip } from "@/lib/mind/composer-chip-sync";
-import { COMPOSER_MODES, composerModeToModelTier, loadComposerEffort, modelTierToComposerMode, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { COMPOSER_MODES, composerModeToModelTier, effortSelection, loadComposerEffort, tierSelection, modelTierToComposerMode, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import {
@@ -778,19 +778,24 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     voiceSession.current?.setVoice(committed);
   }
 
-  function chooseComposerEffort(mode: ComposerModeId) {
+  function chooseComposerEffort(input: ComposerModeId) {
+    const picked = effortSelection(input);
+    if (!picked) return;
+    const { mode, tier } = picked;
     const storage = typeof localStorage === "undefined" ? null : localStorage;
     saveComposerEffort(storage, mode);
     setComposerEffort(mode);
-    setModelTier(composerModeToModelTier(mode));
+    setModelTier(tier);
     const resolved = resolveSendPath(mode);
     if (resolved.notice) setNotice(resolved.notice);
     if (mode === "build") setView("build");
   }
 
-  function chooseModelTier(tier: ModelTier) {
+  function chooseModelTier(input: ModelTier | string) {
+    const picked = tierSelection(input);
+    if (!picked) return;
+    const { tier, mode } = picked;
     setModelTier(tier);
-    const mode = modelTierToComposerMode(tier);
     setComposerEffort(mode);
     const storage = typeof localStorage === "undefined" ? null : localStorage;
     saveComposerEffort(storage, mode);
@@ -4375,7 +4380,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                       navigate: (href) => {
                         window.location.assign(href);
                       },
-                      setModelTier: (tier) => chooseModelTier(tier as ModelTier),
+                      setModelTier: (tier) => chooseModelTier(tier),
                       openModelPicker: () => setPaletteOpen(true),
                       startVoice: () => {
                         void openVoiceOverlay();

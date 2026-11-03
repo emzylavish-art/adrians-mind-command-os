@@ -3,6 +3,9 @@ import { describe, it } from "node:test";
 import {
   COMPOSER_MODES,
   composerModeToModelTier,
+  effortSelection,
+  isComposerModeId,
+  tierSelection,
   loadComposerEffort,
   modelTierToComposerMode,
   resolveSendPath,
@@ -81,6 +84,39 @@ describe("composer modes", () => {
       const detail = COMPOSER_MODES.find((mode) => mode.id === id)?.detail ?? "";
       assert.equal(/Same Direct path|No separate .+ model is configured/i.test(detail), false);
       assert.match(detail, /Uses the .+ tier model/i);
+    }
+  });
+});
+
+describe("Mode/Effort selection sync (hostile input)", () => {
+  it("every tier selection yields a matching Effort and round-trips", () => {
+    for (const tier of MODEL_TIERS) {
+      const picked = tierSelection(tier);
+      assert.ok(picked);
+      assert.equal(picked.tier, tier);
+      assert.equal(composerModeToModelTier(picked.mode), tier);
+      assert.deepEqual(effortSelection(picked.mode), picked);
+    }
+  });
+  it("refuses unknown, mis-cased, and prototype tier names from the intent predictor", () => {
+    for (const bad of ["heavy", "HEAVY", "Grok", "", " Auto", "__proto__", "constructor", "toString", null, undefined, 3, {}, ["Fast"]]) {
+      assert.equal(tierSelection(bad), null, String(bad));
+    }
+  });
+  it("refuses unknown effort ids instead of desyncing Mode to undefined", () => {
+    for (const bad of ["Auto", "turbo", "", "__proto__", "hasOwnProperty", null, undefined, 1]) {
+      assert.equal(isComposerModeId(bad), false, String(bad));
+      assert.equal(effortSelection(bad), null, String(bad));
+    }
+  });
+  it("rapid alternating selections always end on a consistent pair", () => {
+    let state = { tier: "Auto" as ModelTier, mode: "auto" as ComposerModeId };
+    const inputs: unknown[] = ["Heavy", "fast", "bogus", "Build", "orchestrator", "__proto__", "Expert", "auto", "Fast"];
+    for (let i = 0; i < 200; i++) {
+      const raw = inputs[i % inputs.length];
+      const next = (typeof raw === "string" && /^[A-Z]/.test(raw) ? tierSelection(raw) : effortSelection(raw)) ?? state;
+      state = next;
+      assert.equal(composerModeToModelTier(state.mode), state.tier);
     }
   });
 });

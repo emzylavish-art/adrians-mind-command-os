@@ -1,6 +1,6 @@
 /** Composer effort/mode picker — maps 1:1 onto MODEL_TIERS for the next send. */
 
-import type { ModelTier } from "./model-tiers.ts";
+import { isModelTier, type ModelTier } from "./model-tiers.ts";
 
 export type ComposerModeId = "auto" | "fast" | "expert" | "heavy" | "build" | "orchestrator";
 
@@ -107,4 +107,26 @@ export function saveComposerEffort(storage: Pick<Storage, "setItem"> | null | un
   } catch {
     /* private mode may refuse */
   }
+}
+
+/** True only for a real composer effort id (own key, not a prototype name). */
+export function isComposerModeId(value: unknown): value is ComposerModeId {
+  return typeof value === "string" && COMPOSER_MODES.some((mode) => mode.id === value);
+}
+
+export type TierSelection = { tier: ModelTier; mode: ComposerModeId };
+
+/**
+ * Validated Mode/Effort pair for a Mode-picker, header chip, or intent-predictor selection.
+ * Unknown or hostile input is refused (null) so Mode and Effort can never desync or persist garbage.
+ */
+export function tierSelection(input: unknown): TierSelection | null {
+  if (!isModelTier(input)) return null;
+  return { tier: input, mode: modelTierToComposerMode(input) };
+}
+
+/** Validated Mode/Effort pair for an Effort-row selection. */
+export function effortSelection(input: unknown): TierSelection | null {
+  if (!isComposerModeId(input)) return null;
+  return { tier: composerModeToModelTier(input), mode: input };
 }
