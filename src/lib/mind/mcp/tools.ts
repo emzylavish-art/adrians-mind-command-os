@@ -998,6 +998,7 @@ export async function storageListStatus(input: {
       remainingBytes: number;
     }[]
   >;
+  env?: NodeJS.ProcessEnv;
 }): Promise<ToolResult> {
   if (!input.ownerId?.trim()) {
     return {
@@ -1007,11 +1008,14 @@ export async function storageListStatus(input: {
     };
   }
   try {
+    const { connectorTokenSecretStatus } = await import("../connectors/crypto.ts");
+    const env = input.env ?? process.env;
+    const secretStatus = connectorTokenSecretStatus(env.CONNECTOR_TOKEN_SECRET);
     const statusFn =
       input.statusFn ??
       (async (ownerId: string) => {
         const { storageStatusForOwner } = await import("../media/storage/rotation.ts");
-        const rows = await storageStatusForOwner(ownerId);
+        const rows = await storageStatusForOwner(ownerId, { env });
         return rows.map((row) => ({
           service: row.service,
           enabled: row.enabled,
@@ -1028,8 +1032,8 @@ export async function storageListStatus(input: {
       return {
         ok: false,
         status: "needs-config",
-        text: "No media storage accounts are configured. Add accounts in the storage config. Nothing was listed.",
-        data: { accounts: [] },
+        text: "No media storage accounts are configured. Add accounts in .data/media-storage-accounts.json (see media-storage-accounts.example.json). Nothing was listed.",
+        data: { accounts: [], diagnostics: { connectorTokenSecret: secretStatus.ok ? "ok" : "missing" } },
       };
     }
     const accounts = rows.map((row) => ({
@@ -1044,11 +1048,25 @@ export async function storageListStatus(input: {
       health: row.connected ? "ok" : "needs-config",
     }));
     const connected = accounts.filter((a) => a.connected).length;
+    if (!secretStatus.ok && connected === 0) {
+      return {
+        ok: false,
+        status: "needs-config",
+        text: "CONNECTOR_TOKEN_SECRET is not set (or too short), so encrypted storage tokens cannot be decrypted. Set it from the vault file and keep .data/mind-connectors on the server cwd. Nothing was invented.",
+        data: { accounts, diagnostics: { connectorTokenSecret: "missing", connected } },
+      };
+    }
     return {
       ok: true,
       status: "ok",
       text: `${accounts.length} storage account(s); ${connected} connected.`,
-      data: { accounts },
+      data: {
+        accounts,
+        diagnostics: {
+          connectorTokenSecret: secretStatus.ok ? "ok" : "missing",
+          connected,
+        },
+      },
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Storage status failed.";

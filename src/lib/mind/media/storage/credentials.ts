@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setConnectorDirectory } from "../../connectors/store.ts";
+import { connectorTokenSecretStatus } from "../../connectors/crypto.ts";
 import {
   decryptStoredAccessToken,
   hasStorageRefreshCapability,
@@ -184,6 +185,14 @@ export function resolveStorageAccessToken(
     };
   }
   if (record.accessTokenEnc) {
+    const secretStatus = connectorTokenSecretStatus(env.CONNECTOR_TOKEN_SECRET ?? process.env.CONNECTOR_TOKEN_SECRET);
+    if (!secretStatus.ok) {
+      return {
+        ok: false,
+        reason: "encrypted_only",
+        detail: `${service} has an encrypted connection record, but CONNECTOR_TOKEN_SECRET is missing or too short so the token cannot be decrypted.`,
+      };
+    }
     const decrypted = decryptStoredAccessToken(ownerId, service as import("../../connectors/store.ts").ConnectorId);
     if (decrypted) {
       return {

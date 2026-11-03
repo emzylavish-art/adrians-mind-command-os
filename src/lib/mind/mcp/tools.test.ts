@@ -233,3 +233,25 @@ describe("storage_list_status", () => {
     assert.match(result.text, /2 storage account/);
   });
 });
+
+describe("storage_list_status secret diagnostic", () => {
+  it("reports needs-config when secret missing and nothing connected", async () => {
+    const result = await storageListStatus({
+      ownerId: "owner-1",
+      env: {},
+      statusFn: async () => [
+        {
+          service: "box",
+          enabled: true,
+          connected: false,
+          detail: "encrypted",
+          usedBytes: 0,
+          capBytes: 1,
+          remainingBytes: 1,
+        },
+      ],
+    });
+    assert.equal(result.status, "needs-config");
+    assert.match(result.text, /CONNECTOR_TOKEN_SECRET/i);
+  });
+});
