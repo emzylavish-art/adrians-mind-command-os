@@ -43,6 +43,12 @@ export type TextMessage = { role: "system" | "user" | "assistant"; content: stri
 export const FALLBACK_CONTEXT_MAX_CHARS = 200_000;
 /** Max provider response body read (JSON). Large enough that long replies are not cut mid-JSON. */
 const MAX_RESPONSE_CHARS = 2_000_000;
+/**
+ * One output-token limit for every non-Grok provider (OpenAI/OpenRouter max_tokens, Anthropic
+ * max_tokens, Gemini maxOutputTokens). Anthropic used to be capped at 400 and silently cut
+ * replies; a reply that still hits this limit is flagged truncated (see providerFinish).
+ */
+export const PROVIDER_MAX_OUTPUT_TOKENS = 8192;
 export const IMAGE_STUB = "[An image was attached here. This provider was sent text only and cannot see it.]";
 
 /**
@@ -111,15 +117,20 @@ function alternate(list: TextMessage[]): { role: "user" | "assistant"; content: 
 export function buildProviderRequestBody(id: Exclude<ProviderName, "grok">, messages: TextMessage[]): Record<string, unknown> {
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
   if (id === "openai" || id === "openrouter") {
-    return { model: id === "openai" ? "gpt-4.1-mini" : "openrouter/auto", messages: messages.map((m) => ({ role: m.role, content: m.content })) };
+    return {
+      model: id === "openai" ? "gpt-4.1-mini" : "openrouter/auto",
+      max_tokens: PROVIDER_MAX_OUTPUT_TOKENS,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    };
   }
   const turns = alternate(messages);
   if (id === "anthropic") {
-    return { model: "claude-sonnet-4-5", max_tokens: 400, ...(system ? { system } : {}), messages: turns };
+    return { model: "claude-sonnet-4-5", max_tokens: PROVIDER_MAX_OUTPUT_TOKENS, ...(system ? { system } : {}), messages: turns };
   }
   return {
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents: turns.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.content }] })),
+    generationConfig: { maxOutputTokens: PROVIDER_MAX_OUTPUT_TOKENS },
   };
 }
 

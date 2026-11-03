@@ -7,7 +7,7 @@ export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
-  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; failedOverFrom?: string; failoverReason?: string }
+  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; failedOverFrom?: string; failoverReason?: string; truncated?: true }
   | { ok: false; error: string };
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
@@ -139,6 +139,7 @@ export async function consumeMindTurn(input: {
           provider: event.provider,
           failedOverFrom: event.failedOverFrom,
           failoverReason: event.failoverReason,
+          ...(event.truncated === true ? { truncated: true as const } : {}),
         };
         const outcome = outcomeFromDoneEvent(event);
         if (outcome) rememberTierOutcome(outcome);

@@ -109,8 +109,43 @@ export function extractProviderText(id: FallbackId, raw: string): string {
   return (Array.isArray(parts) ? parts : []).map((p) => str((p as { text?: unknown } | null)?.text)).join("").trim();
 }
 
+/**
+ * Did the provider stop because it hit its output-token limit? Reads each provider's own
+ * signal: OpenAI/OpenRouter finish_reason "length", Anthropic stop_reason "max_tokens",
+ * Gemini finishReason "MAX_TOKENS". Unparseable/odd bodies → not truncated (no invention).
+ */
+export function providerFinish(id: FallbackId, raw: string): { truncated: boolean; reason: string | null } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { truncated: false, reason: null };
+  }
+  if (!parsed || typeof parsed !== "object") return { truncated: false, reason: null };
+  const body = parsed as Record<string, unknown>;
+  let reason: unknown = null;
+  if (id === "openai" || id === "openrouter") {
+    const first = Array.isArray(body.choices) ? (body.choices[0] as { finish_reason?: unknown } | undefined) : undefined;
+    reason = first?.finish_reason;
+  } else if (id === "anthropic") {
+    reason = body.stop_reason;
+  } else {
+    const first = Array.isArray(body.candidates) ? (body.candidates[0] as { finishReason?: unknown } | undefined) : undefined;
+    reason = first?.finishReason;
+  }
+  if (typeof reason !== "string" || !reason) return { truncated: false, reason: null };
+  const truncated = id === "anthropic" ? reason === "max_tokens" : id === "gemini" ? reason === "MAX_TOKENS" : reason === "length";
+  return { truncated, reason: reason.slice(0, 40) };
+}
+
+/** Memory-note ids that actually reached the provider (notes live in the system message). */
+export function noteIdsSent(usedIds: readonly string[], sent: readonly { role: string; content: string }[]): string[] {
+  const system = sent.filter((m) => m.role === "system").map((m) => m.content).join("\n");
+  return usedIds.filter((id) => typeof id === "string" && id && system.includes(`[${id}]`));
+}
+
 export type FallbackOutcome =
-  | { ok: true; text: string; provider: FallbackId; model: string; failedOverFrom: ProviderName; failoverReason: string }
+  | { ok: true; text: string; provider: FallbackId; model: string; failedOverFrom: ProviderName; failoverReason: string; truncated?: true; usedIds?: string[] }
   | { ok: false; error: string };
 
 type FetchLike = Parameters<typeof callConfiguredProvider>[0]["fetch"];
@@ -135,6 +170,8 @@ export async function runFallback(input: {
   exclude?: readonly string[];
   /** Extra secrets (e.g. the primary key) to scrub from any message. */
   secrets?: readonly (string | undefined)[];
+  /** Memory-note ids the primary used; the outcome reports only those actually sent. */
+  usedIds?: readonly string[];
 }): Promise<FallbackOutcome> {
   const secrets = Object.values(KEY_ENV)
     .map((name) => input.env[name])
@@ -175,16 +212,29 @@ export async function runFallback(input: {
       error: `${reason} Failover to ${PROVIDER_LABEL[pick.id]} also failed: ${why} Nothing was saved as a success.`,
     };
   }
-  return { ok: true, text, provider: pick.id, model: pick.model, failedOverFrom: input.primary, failoverReason: `${primaryLabel} failed: ${reason}` };
+  const finish = providerFinish(pick.id, called.text);
+  return {
+    ok: true,
+    text,
+    provider: pick.id,
+    model: pick.model,
+    failedOverFrom: input.primary,
+    failoverReason: `${primaryLabel} failed: ${reason}`,
+    ...(finish.truncated ? { truncated: true as const } : {}),
+    ...(Array.isArray(input.usedIds) ? { usedIds: noteIdsSent(input.usedIds, flat) } : {}),
+  };
 }
 
 /** Client: one-line notice naming who ACTUALLY answered (from the server's done event). */
-export function describeAnswer(result: { model?: unknown; provider?: unknown; failedOverFrom?: unknown; failoverReason?: unknown }): string {
+export const TRUNCATED_NOTICE = "The reply hit the model's length limit and was cut off, so it is incomplete.";
+
+export function describeAnswer(result: { model?: unknown; provider?: unknown; failedOverFrom?: unknown; failoverReason?: unknown; truncated?: unknown }): string {
   const model = typeof result.model === "string" && result.model.trim() ? result.model.trim().slice(0, 120) : "an unreported model";
   const provider = isProviderId(result.provider) ? PROVIDER_LABEL[result.provider] : null;
   const who = provider ? `${provider} ${model}` : model;
+  const cut = result.truncated === true ? ` ${TRUNCATED_NOTICE}` : "";
   if (isProviderId(result.failedOverFrom) && result.failedOverFrom !== result.provider) {
-    return `Failover: ${PROVIDER_LABEL[result.failedOverFrom]} failed, so ${who} answered.`;
+    return `Failover: ${PROVIDER_LABEL[result.failedOverFrom]} failed, so ${who} answered.${cut}`;
   }
-  return `Answered by ${who}.`;
+  return `Answered by ${who}.${cut}`;
 }

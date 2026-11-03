@@ -30,10 +30,10 @@ export function readModelPayload(raw: string): { text: string; streamed: boolean
  * `finished` flips only on a provider terminator ([DONE] or a non-null finish_reason).
  * A stream that closes without one was cut off and must not be reported as done.
  */
-export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; bad: boolean; finished: boolean };
+export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; bad: boolean; finished: boolean; finishReason: string | null };
 
 export function createSseFeed(): SseFeed {
-  return { buffer: "", text: "", usage: null, bad: false, finished: false };
+  return { buffer: "", text: "", usage: null, bad: false, finished: false, finishReason: null };
 }
 
 export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: string[] } {
@@ -57,7 +57,10 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
         usage?: ModelUsage | null;
       };
       const reason = parsed.choices?.[0]?.finish_reason;
-      if (typeof reason === "string" && reason) feed.finished = true;
+      if (typeof reason === "string" && reason) {
+        feed.finished = true;
+        feed.finishReason = reason.slice(0, 40);
+      }
       const text = parsed.choices?.[0]?.delta?.content ?? parsed.choices?.[0]?.message?.content ?? "";
       if (text) {
         feed.text += text;
@@ -74,7 +77,7 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; failedOverFrom?: string; failoverReason?: string }
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; failedOverFrom?: string; failoverReason?: string; truncated?: true }
   | { event: "error"; error: string }
   | { event: "canceled"; error: string };
 
@@ -127,6 +130,8 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         provider: answeringProvider(record.provider),
         failedOverFrom: answeringProvider(record.failedOverFrom),
         failoverReason: typeof record.failoverReason === "string" ? record.failoverReason.slice(0, 300) : undefined,
+        // Only a literal true: the reply hit the provider's output limit and is incomplete.
+        ...(record.truncated === true ? { truncated: true as const } : {}),
       });
     }
   }

@@ -51,9 +51,13 @@ describe("non-Grok provider path rate limit", () => {
     const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
     const idx = source.indexOf('selected.id !== "grok"');
     assert.ok(idx > 0);
-    const slice = source.slice(idx, idx + 900);
-    assert.match(slice, /consumeMindRateLimit\(/);
+    const slice = source.slice(idx, idx + 1200);
+    // The non-Grok primary now goes through prepareMindTurn (which spends the chat token via
+    // consumeMindRateLimit) and surfaces a limit as an honest 429.
+    assert.match(slice, /prepareMindTurn\(userId, body, \{ textProvider: selected\.id \}\)/);
     assert.match(slice, /jsonRateLimited\(/);
+    const prep = source.slice(source.indexOf("export async function prepareMindTurn"), source.indexOf("export async function completeModelReply"));
+    assert.match(prep, /consumeMindRateLimit\("chat", userId, 12\)/);
   });
 
   it("shared chat bucket blocks a non-Grok attempt after a burst", () => {

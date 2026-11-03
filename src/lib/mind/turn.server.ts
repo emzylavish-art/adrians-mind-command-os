@@ -8,13 +8,14 @@ import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import type { HistoryInputMessage } from "./media/history";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
-import { callConfiguredProvider, httpStatusForProviderSelection, httpStatusForTurnFailure, selectProvider } from "./provider-call";
+import { httpStatusForProviderSelection, httpStatusForTurnFailure, selectProvider, type ProviderName } from "./provider-call";
+import { runProviderPrimary } from "./provider-primary";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { readModelPayload } from "./stream";
-import { extractProviderText, parseFailoverField, runFallback, sanitizeProviderError } from "./failover";
+import { parseFailoverField, runFallback, sanitizeProviderError } from "./failover";
 import { resolveDatabaseUrl } from "../env.server.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
@@ -63,7 +64,13 @@ function envCheck() {
   });
 }
 
-export async function prepareMindTurn(userId: string, data: TurnBody) {
+/**
+ * Validate + assemble one turn (assembleTurn: system/persona prompt, memory notes, history,
+ * current turn) and spend one chat rate-limit token. `textProvider` = a server-selected
+ * non-Grok primary (already key-checked by selectProvider); it runs on the SAME assembled
+ * messages as the Grok primary.
+ */
+export async function prepareMindTurn(userId: string, data: TurnBody, opts: { textProvider?: Exclude<ProviderName, "grok"> } = {}) {
   const { haltIsOn } = await import("./halt.server");
   if ((await haltIsOn(userId)) || data.halted === true) {
     return { ok: false as const, error: "Emergency stop is on. No new action can run." };
@@ -86,7 +93,7 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
   if (!memory) return { ok: false as const, error: "Memory setting is invalid." };
-  const routed = assertLiveProvider(data.provider);
+  const routed = opts.textProvider ? { ok: true as const, id: opts.textProvider } : assertLiveProvider(data.provider);
   if (!routed.ok) return routed;
   const gate = envCheck();
   if (!gate.ok) return { ok: false as const, error: gate.error };
@@ -123,6 +130,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     userId,
   };
 }
+
+type PreparedTurn = Awaited<ReturnType<typeof prepareMindTurn>>;
 
 export async function completeModelReply(prepared: {
   assembled: { messages: { role: "system" | "user" | "assistant"; content: ChatContent }[]; usedIds: string[] };
@@ -220,6 +229,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const failoverOn = parseFailoverField(body.failover);
   let failedOverFrom: { id: string; reason: string } | null = null;
+  let primaryPrepared: Extract<PreparedTurn, { ok: true }> | null = null;
   const selected = selectProvider(body.provider, process.env);
   if (!selected.ok) {
     // If images somehow accompany a failed non-Grok selection, still prefer cannot-see copy.
@@ -246,25 +256,43 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     }
     const { haltIsOn } = await import("./halt.server");
     if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." }, 409);
-    // Same chat rate limit as Grok — non-Grok must not skip the token bucket.
-    const limited = consumeMindRateLimit("chat", userId, 12);
-    if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
-    const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
-    const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: signalledFetch(request.signal) });
-    const answer = called.ok ? extractProviderText(selected.id, called.text) : "";
-    if (answer) {
-      return sseReply({ text: answer, model: selected.model, provider: selected.id, usage: null, usedIds: [], requestId: null });
+    // Same validation, assembly and chat rate limit as Grok (prepareMindTurn → consumeMindRateLimit,
+    // surfaced as jsonRateLimited) — non-Grok must not skip the token bucket or the context.
+    const pre = await prepareMindTurn(userId, body, { textProvider: selected.id });
+    if (!pre.ok) {
+      if ("rateLimited" in pre && pre.rateLimited) return jsonRateLimited(pre.error, pre.retryAfterSec);
+      return json(pre, httpStatusForTurnFailure(pre.error));
     }
-    const primaryError = sanitizeProviderError(called.ok ? `${selected.id} returned an empty reply.` : called.error, [key]);
-    if (!failoverOn || request.signal.aborted) {
+    primaryPrepared = pre;
+    const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
+    // The picked model runs the SAME assembled context the Grok primary would (system/persona,
+    // memory notes, history, current turn); usedIds reports only notes actually sent.
+    const primary = await runProviderPrimary({
+      id: selected.id,
+      model: selected.model,
+      key,
+      messages: primaryPrepared.assembled.messages,
+      usedIds: primaryPrepared.assembled.usedIds,
+      fetch: signalledFetch(request.signal),
+      signal: request.signal,
+    });
+    if (primary.ok) {
+      const answer = primary.done.text;
+      return sseReply({ text: answer, model: selected.model, provider: selected.id, usage: null, usedIds: primary.done.usedIds, requestId: null, ...(primary.done.truncated ? { truncated: true } : {}) });
+    }
+    const primaryError = sanitizeProviderError(primary.error, [key]);
+    if (!failoverOn || request.signal.aborted || ("aborted" in primary && primary.aborted)) {
       // Provider failure is never a 200: upstream rate limit → 429, other upstream failure → 502.
-      const failStatus = /rate limited/i.test(primaryError) ? 429 : /not configured/i.test(primaryError) ? 503 : 502;
+      const failStatus = /rate limited/i.test(primaryError) ? 429 : /not configured/i.test(primaryError) ? 503 : /cannot see images|no message to send/i.test(primaryError) ? 400 : 502;
       return json({ ok: false, text: "", error: primaryError, provider: selected.id }, failStatus);
     }
     // Failover on: retry once on Grok through the real streaming path; the done event names who answered.
+    // The same prepared turn is reused (one assembly, one rate-limit token).
     failedOverFrom = { id: selected.id, reason: `${selected.id} failed: ${primaryError}` };
   }
-  const prepared = await prepareMindTurn(userId, failedOverFrom ? { ...body, provider: "grok" } : body);
+  // Non-Grok → Grok failover reuses the primary's prepared turn (no second assembly or token).
+  // Promise<PreparedTurn> on both sides keeps the rate-limited variant (no union subtype reduction).
+  const prepared = await (primaryPrepared ? Promise.resolve<PreparedTurn>(primaryPrepared) : prepareMindTurn(userId, failedOverFrom ? { ...body, provider: "grok" } : body));
   if (!prepared.ok && failedOverFrom && !("rateLimited" in prepared && prepared.rateLimited) && !/emergency stop/i.test(prepared.error)) {
     return json({ ok: false, error: `${failedOverFrom.reason} Failover to Grok also failed: ${prepared.error}` }, 502);
   }
@@ -336,6 +364,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
               fetch: signalledFetch(signal),
               signal,
               secrets: [apiKey],
+              usedIds: prepared.assembled.usedIds,
             })
         : undefined,
   });

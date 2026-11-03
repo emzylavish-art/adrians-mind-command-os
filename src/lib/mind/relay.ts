@@ -157,8 +157,10 @@ export function relayModelStream(input: {
           failedOverFrom: outcome.failedOverFrom,
           failoverReason: outcome.failoverReason,
           usage: null,
-          usedIds: input.usedIds,
+          // Only the notes the fallback was actually sent.
+          usedIds: Array.isArray(outcome.usedIds) ? outcome.usedIds : input.usedIds,
           requestId: null,
+          ...(outcome.truncated === true ? { truncated: true } : {}),
           // The selected tier is echoed, but no tier "resolved": the fallback model answered.
           ...(typeof meta.modelTier === "string" ? { modelTier: meta.modelTier } : {}),
           ...(meta.memorySaved === true ? { memorySaved: true, savedMemoryId: meta.savedMemoryId ?? null } : {}),
@@ -238,6 +240,8 @@ export function relayModelStream(input: {
           usedIds: input.usedIds,
           requestId: res.headers.get("x-request-id"),
           ...(input.meta ?? {}),
+          // finish_reason "length": the reply hit max_tokens and is incomplete — say so.
+          ...(feed.finishReason === "length" ? { truncated: true } : {}),
         });
         finish();
       } catch (caught) {
