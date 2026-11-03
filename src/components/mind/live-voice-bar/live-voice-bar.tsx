@@ -54,6 +54,13 @@ import {
   writeScreenAudioMixEnabled,
 } from "./screen-audio";
 import { LIVE_SCREEN_FRAME_PROMPT } from "@/lib/mind/voice-live/session-context";
+import {
+  decideResearchEscape,
+  getActiveResearchSnapshot,
+  setResearchReportOverlayOpen,
+  requestResearchAbort,
+} from "@/lib/mind/voice-live/active-research-run";
+import { onVoiceEndConfirmed } from "@/lib/mind/voice-live/research-voice-end";
 
 export type LiveVoiceBarProps = {
   isOverlayMicOpen: () => boolean;
@@ -178,6 +185,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   }, [live]);
 
   const endEverything = useCallback(() => {
+    onVoiceEndConfirmed();
     stopScreen();
     live.end();
     setAttachOpen(false);
@@ -194,6 +202,35 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           event.stopPropagation();
           setSettingsOpen(false);
           return;
+        }
+        // Research report overlay: Esc closes overlay; keep deep Running unless halt.
+        {
+          const research = getActiveResearchSnapshot();
+          const topModal = Boolean(
+            document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'),
+          );
+          const haltOn = document.documentElement.dataset.mindHalt === "on";
+          const decision = decideResearchEscape({
+            key: event.key,
+            reportOverlayOpen: research.reportOverlayOpen,
+            researchState: research.state,
+            haltOn,
+            topmostModalOpen: topModal && !settingsOpen,
+          });
+          if (decision.action === "yield_modal") return;
+          if (decision.action === "close_overlay") {
+            event.preventDefault();
+            event.stopPropagation();
+            setResearchReportOverlayOpen(false);
+            return;
+          }
+          if (decision.action === "abort_and_close") {
+            event.preventDefault();
+            event.stopPropagation();
+            requestResearchAbort("halt");
+            setResearchReportOverlayOpen(false);
+            return;
+          }
         }
         const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
         // Include connecting / speakArm so Speak→Esc cancels before "active" paints.

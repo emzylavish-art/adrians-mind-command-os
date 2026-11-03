@@ -5,11 +5,17 @@
  * so a post-merge swap is a one-line import change. Do not import styles.css here.
  */
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useLiveVoiceSession } from "@/lib/mind/voice-live/use-live-voice-session";
 import type { LiveVoiceUiAttr } from "@/lib/mind/voice-live/types";
 import { isLiveVoiceOccupied } from "@/lib/mind/voice-live/occupancy";
 import { matchesVoiceToggleShortcut } from "@/lib/mind/voice/shortcut";
+import {
+  getActiveResearchSnapshot,
+  subscribeActiveResearch,
+  type ResearchVoiceState,
+} from "@/lib/mind/voice-live/active-research-run";
+import { onVoiceEndConfirmed, onVoiceMuteOrBargeIn } from "@/lib/mind/voice-live/research-voice-end";
 
 /** Same union as Visual Polish LiveSpeakControl (pass-10). */
 export type LiveSpeakState =
@@ -52,6 +58,8 @@ export function LiveSpeakControl(props: {
   onEnd?: () => void;
   className?: string;
   disabled?: boolean;
+  /** research-layer: Search | Deep | Running | Done */
+  researchState?: ResearchVoiceState | null;
 }) {
   const state = props.state;
   const level = clampLevel(props.level);
@@ -64,6 +72,7 @@ export function LiveSpeakControl(props: {
       className={`live-voice-control inline-flex max-w-full flex-wrap items-center gap-2 ${props.className ?? ""}`.trim()}
       data-live-voice={state}
       data-state={state}
+      data-research-state={props.researchState || undefined}
       data-testid="composer-voice-live"
       style={style}
     >
@@ -142,6 +151,11 @@ export function ComposerLiveVoice(props: ComposerLiveVoiceProps) {
     onError: props.onError,
     onNotice: props.onNotice,
   });
+  const researchSnap = useSyncExternalStore(
+    subscribeActiveResearch,
+    getActiveResearchSnapshot,
+    getActiveResearchSnapshot,
+  );
 
   // Ctrl+Shift+V while live: end live first so two mics never open (no new shortcut).
   useEffect(() => {
@@ -178,9 +192,17 @@ export function ComposerLiveVoice(props: ComposerLiveVoiceProps) {
         state={state}
         level={live.level}
         label={label}
+        researchState={researchSnap.state}
         onToggle={onToggle}
-        onMute={live.toggleMute}
-        onEnd={live.end}
+        onMute={() => {
+          onVoiceMuteOrBargeIn();
+          live.toggleMute();
+        }}
+        onEnd={() => {
+          // End confirms abort of in-flight deep research (barge-in/mute do not).
+          onVoiceEndConfirmed();
+          live.end();
+        }}
         disabled={props.disabled}
       />
       {live.error ? (

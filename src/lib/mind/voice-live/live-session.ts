@@ -48,6 +48,11 @@ import {
 } from "./active-build-session.ts";
 import { BUILD_STEER_LABEL, steerActiveBuildOrFallback } from "./build-steer-client.ts";
 import { createDebouncedSteer, type DebouncedSteerController } from "./build-steer-debounce.ts";
+import {
+  getActiveResearchSnapshot,
+  isResearchInFlight,
+  queueResearchSteer,
+} from "./active-research-run.ts";
 import { createLivePlayback, type LivePlayback } from "./playback.ts";
 import {
   isLiveVoiceOccupied,
@@ -834,6 +839,25 @@ export class LiveVoiceSession {
       }
     } else {
       this.steeringBuild = false;
+    }
+
+    // N5: finals steer an active deep/search research run (not partials).
+    const research = getActiveResearchSnapshot();
+    if (research.id && isResearchInFlight(research.state)) {
+      this.handlers.onNotice?.("Steering research");
+      this.setPhase(this.muted ? "muted" : "thinking");
+      const flushedResearch = await this.steerDebounce.push(clean);
+      if (this.intentionalClose || !this.isActive) return;
+      if (flushedResearch == null) return;
+      const queued = queueResearchSteer(flushedResearch);
+      if (!queued.ok) {
+        this.handlers.onNotice?.(queued.error);
+        this.setPhase(this.muted ? "muted" : "listening");
+        return;
+      }
+      this.handlers.onNotice?.("Steering research — sent.");
+      this.setPhase(this.muted ? "muted" : "listening");
+      return;
     }
 
     const mode = this.deps.getMode?.() ?? getVoiceMode();
