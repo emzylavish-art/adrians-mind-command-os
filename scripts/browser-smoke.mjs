@@ -115,7 +115,11 @@ try {
     // networkidle never settles and would burn the whole timeout.
     const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
     const status = resp?.status() ?? 0;
-    await page.waitForTimeout(1000);
+    // The command page fills asynchronously after hydration. Compare two
+    // settled browser states rather than an SSR shell against a hydrated app.
+    // This wait is intentionally identical for baseline and candidate captures.
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(5500);
 
     const title = await page.title();
     const hasCanvas = (await page.locator("canvas").count()) > 0;
