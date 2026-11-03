@@ -42,6 +42,8 @@ export type LiveVoicePublicState = {
   error: string | null;
   active: boolean;
   modeBadge: "Direct" | "Orchestrator";
+  /** True while finals are routing into an active BuildSession. */
+  steeringBuild: boolean;
 };
 
 export function phaseToUiAttr(phase: LiveVoicePhase, muted: boolean): LiveVoiceUiAttr {

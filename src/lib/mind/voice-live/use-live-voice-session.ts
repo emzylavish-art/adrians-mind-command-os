@@ -24,6 +24,7 @@ const OFF_STATE: LiveVoicePublicState = {
   error: null,
   active: false,
   modeBadge: "Direct",
+  steeringBuild: false,
 };
 
 export type UseLiveVoiceSessionOptions = {
@@ -109,7 +110,7 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
   const end = useCallback(() => {
     sessionRef.current?.end("Live voice ended.");
     setSpeakerMuted(false);
-    setState((prev) => ({ ...OFF_STATE, modeBadge: prev.modeBadge, error: null }));
+    setState((prev) => ({ ...OFF_STATE, modeBadge: prev.modeBadge, error: null, steeringBuild: false }));
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -220,6 +221,7 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     active: state.active || isLiveVoiceOccupied(),
     error: state.error,
     modeBadge: state.modeBadge,
+    steeringBuild: state.steeringBuild,
     pressMic,
     toggle,
     start,

@@ -42,6 +42,12 @@ import {
 } from "./spam-guard.ts";
 import { decideBargeInCutoff } from "./barge-in.ts";
 import { bufferToBase64, LiveMicStream } from "./mic-stream.ts";
+import {
+  getActiveBuildSessionId,
+  setActiveBuildSessionId,
+} from "./active-build-session.ts";
+import { BUILD_STEER_LABEL, steerActiveBuildOrFallback } from "./build-steer-client.ts";
+import { createDebouncedSteer, type DebouncedSteerController } from "./build-steer-debounce.ts";
 import { createLivePlayback, type LivePlayback } from "./playback.ts";
 import {
   isLiveVoiceOccupied,
@@ -82,6 +88,10 @@ export type LiveSessionDeps = {
   speaker?: LiveSpeakerGain;
   socketFactory?: (url: string, protocols: string[]) => WsLike;
   runConductor?: typeof runOllamaConductor;
+  /** Injected build-steer HTTP (tests). */
+  steerBuild?: typeof steerActiveBuildOrFallback;
+  /** Override active BuildSession id resolution (tests). */
+  getActiveBuildId?: () => string | null;
   now?: () => number;
   /** Injected mic preflight (tests / headless). */
   probeMic?: () => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -134,6 +144,8 @@ export class LiveVoiceSession {
   private speakingStartedAtMs: number | null = null;
   private pendingAssistantText = "";
   private lastUserTranscript = "";
+  private steeringBuild = false;
+  private steerDebounce: DebouncedSteerController = createDebouncedSteer();
   private open = false;
   private generation = 0;
 
@@ -167,6 +179,7 @@ export class LiveVoiceSession {
       error: this.error,
       active: this.phase !== "off",
       modeBadge: voiceModeLabel(mode),
+      steeringBuild: this.steeringBuild,
     };
   }
 
@@ -355,6 +368,8 @@ export class LiveVoiceSession {
 
   end(notice?: string) {
     this.intentionalClose = true;
+    this.steerDebounce.clear();
+    this.steeringBuild = false;
     this.generation += 1;
     this.clearReconnect();
     this.connectAbort?.abort();
@@ -779,6 +794,47 @@ export class LiveVoiceSession {
     const clean = sanitized.text;
     this.lastUserTranscript = clean;
     this.handlers.onUserTranscript?.(clean);
+
+    // N4: finals → active BuildSession steer (debounced). Partials never reach here.
+    const buildId = this.deps.getActiveBuildId?.() ?? getActiveBuildSessionId();
+    if (buildId) {
+      this.steeringBuild = true;
+      this.emit();
+      this.handlers.onNotice?.(BUILD_STEER_LABEL);
+      this.setPhase(this.muted ? "muted" : "thinking");
+      const flushed = await this.steerDebounce.push(clean);
+      if (this.intentionalClose || !this.isActive) return;
+      if (flushed == null) return; // superseded by a newer final
+      const steer = this.deps.steerBuild ?? steerActiveBuildOrFallback;
+      const steered = await steer({ id: buildId, text: flushed });
+      if (this.intentionalClose || !this.isActive) return;
+      if (steered.ok) {
+        this.steeringBuild = true;
+        if (steered.session?.status) {
+          setActiveBuildSessionId(buildId, steered.session.status);
+        }
+        this.handlers.onNotice?.(`${BUILD_STEER_LABEL} — sent.`);
+        // Do not speak Direct/Orchestrator replies while steering a live build.
+        this.setPhase(this.muted ? "muted" : "listening");
+        this.emit();
+        return;
+      }
+      this.handlers.onNotice?.(steered.error);
+      if ("clearActive" in steered && steered.clearActive) {
+        setActiveBuildSessionId(null);
+        this.steeringBuild = false;
+        this.emit();
+        // Fall through to Direct / Orchestrator when no build is active anymore.
+      } else {
+        // 4xx/5xx with session still active — keep barge-in/speaker intact, no cloud reply.
+        this.steeringBuild = true;
+        this.setPhase(this.muted ? "muted" : "listening");
+        this.emit();
+        return;
+      }
+    } else {
+      this.steeringBuild = false;
+    }
 
     const mode = this.deps.getMode?.() ?? getVoiceMode();
     if (mode !== "orchestrator") {

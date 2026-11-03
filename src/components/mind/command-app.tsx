@@ -290,6 +290,7 @@ export function CommandApp() {
   const [orchestratorDetail, setOrchestratorDetail] = useState<string | null>(null);
   const [liveSessionActive, setLiveSessionActive] = useState(false);
   const [liveSessionUiAttr, setLiveSessionUiAttr] = useState<LiveVoiceUiAttr | "off">("off");
+  const [liveSteeringBuild, setLiveSteeringBuild] = useState(false);
   const [orchestratorDetailTone, setOrchestratorDetailTone] = useState<"muted" | "warn" | "danger">("muted");
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
   const [voiceListening, setVoiceListening] = useState(false);
@@ -1899,8 +1900,15 @@ export function CommandApp() {
               listening={voiceListening}
               sessionActive={liveSessionActive}
               sessionUiAttr={liveSessionUiAttr}
-              detail={voiceMode === "orchestrator" ? orchestratorDetail : null}
-              detailTone={orchestratorDetailTone}
+              steeringBuild={liveSteeringBuild}
+              detail={
+                liveSteeringBuild
+                  ? "Steering build"
+                  : voiceMode === "orchestrator"
+                    ? orchestratorDetail
+                    : null
+              }
+              detailTone={liveSteeringBuild ? "warn" : orchestratorDetailTone}
               onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
             />
           </div>
@@ -3177,6 +3185,7 @@ export function CommandApp() {
         onSessionStatusChange={(status) => {
           setLiveSessionActive(status.active);
           setLiveSessionUiAttr(status.uiAttr || "off");
+          setLiveSteeringBuild(Boolean(status.steeringBuild));
         }}
         onAttachFileClick={() => fileRef.current?.click()}
         modelPickerSlot={

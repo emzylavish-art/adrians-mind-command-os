@@ -42,9 +42,13 @@ export function VoiceModeBadge(props: {
   /** Extra status (e.g. Ollama unreachable) shown next to Idle/Listening. */
   detail?: string | null;
   detailTone?: "muted" | "warn" | "danger";
+  /** Live finals are POSTed to an active BuildSession. */
+  steeringBuild?: boolean;
 }) {
   const label = voiceModeLabel(props.mode);
-  const status = sessionStatusLabel(Boolean(props.sessionActive), props.sessionUiAttr, props.listening);
+  const status = props.steeringBuild
+    ? "Steering build"
+    : sessionStatusLabel(Boolean(props.sessionActive), props.sessionUiAttr, props.listening);
   const liveTone =
     props.sessionActive && props.sessionUiAttr && props.sessionUiAttr !== "off"
       ? "text-accent"
@@ -64,6 +68,7 @@ export function VoiceModeBadge(props: {
       data-mode={props.mode}
       data-session={props.sessionUiAttr || (props.sessionActive ? "live" : "off")}
       data-detail={props.detail ? "true" : "false"}
+      data-steering-build={props.steeringBuild ? "true" : "false"}
       role="status"
       aria-live="polite"
     >

@@ -71,7 +71,12 @@ export type LiveVoiceBarProps = {
   modelPickerSlot?: ReactNode;
   onAttachFileClick?: () => void;
   /** Mirror live session attr into the header badge (connecting / listening / …). */
-  onSessionStatusChange?: (status: { active: boolean; uiAttr: LiveVoiceUiAttr; label: string }) => void;
+  onSessionStatusChange?: (status: {
+    active: boolean;
+    uiAttr: LiveVoiceUiAttr;
+    label: string;
+    steeringBuild?: boolean;
+  }) => void;
 };
 
 const PILL =
@@ -125,8 +130,9 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       active: Boolean(live.active),
       uiAttr,
       label: live.label,
+      steeringBuild: Boolean(live.steeringBuild),
     });
-  }, [live.active, live.label, uiAttr, onSessionStatusChange]);
+  }, [live.active, live.label, live.steeringBuild, uiAttr, onSessionStatusChange]);
 
   const [localAsk, setLocalAsk] = useState("");
   const ask = props.askValue !== undefined ? props.askValue : localAsk;
@@ -762,18 +768,19 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     <div
       className="live-voice-bar live-voice-control fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 md:px-5"
       data-live-voice={uiAttr}
+      data-steering-build={live.steeringBuild ? "true" : "false"}
       data-state={uiAttr}
       data-testid="live-voice-bar"
       data-bottom-zone="owner"
       role="region"
-      aria-label={`Live voice bar — ${live.label}`}
+      aria-label={`Live voice bar — ${live.steeringBuild ? "Steering build" : live.label}`}
       style={style}
     >
       <div className="live-voice-bar__glass pointer-events-none absolute inset-0" aria-hidden="true" />
       <div className="relative mx-auto w-full max-w-3xl rounded-[1.75rem] border border-white/10 bg-[#0a0a0a]/95 p-3 text-zinc-100 shadow-2xl backdrop-blur">
         {/* Single status line — header VoiceModeBadge owns mode; avoid a second header here. */}
         <p className="mb-2 px-1 text-[10px] font-semibold tracking-wide text-emerald-300" role="status" data-testid="live-voice-bar-status">
-          LIVE · {live.label}
+          LIVE · {live.steeringBuild ? "Steering build" : live.label}
         </p>
         <div className="live-voice-bar__controls live-call-grid mb-3 grid grid-cols-4 items-center gap-2" role="group" aria-label="Live voice tools">
           <button type="button" className={PILL} data-testid="live-voice-bar-screen" aria-label="Screen share" aria-pressed={screenOn} onClick={onScreenClick}>
