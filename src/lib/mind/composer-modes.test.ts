@@ -11,6 +11,11 @@ import {
   resolveSendPath,
   saveComposerEffort,
   type ComposerModeId,
+  selectionEffects,
+  readStoredSelection,
+  crossTabSelection,
+  MODEL_TIER_KEY,
+  COMPOSER_EFFORT_KEY,
 } from "./composer-modes.ts";
 import { MODEL_TIERS, resolveModelTier, type ModelTier } from "./model-tiers.ts";
 
@@ -118,5 +123,62 @@ describe("Mode/Effort selection sync (hostile input)", () => {
       state = next;
       assert.equal(composerModeToModelTier(state.mode), state.tier);
     }
+  });
+});
+
+function mem(init: Record<string, string> = {}) {
+  const data = new Map(Object.entries(init));
+  return { getItem: (k: string) => (data.has(k) ? data.get(k)! : null) };
+}
+
+describe("Build parity: Mode picker vs Effort row", () => {
+  it("Build from either surface yields identical state and identical Build-surface effect", () => {
+    const fromPicker = tierSelection("Build");
+    const fromEffort = effortSelection("build");
+    assert.deepEqual(fromPicker, fromEffort);
+    assert.deepEqual(selectionEffects(fromPicker!), selectionEffects(fromEffort!));
+    assert.equal(selectionEffects(fromPicker!).openBuild, true);
+  });
+  it("every tier has identical effects whether picked as tier or as effort", () => {
+    for (const tier of MODEL_TIERS) {
+      const a = tierSelection(tier)!;
+      const b = effortSelection(modelTierToComposerMode(tier))!;
+      assert.deepEqual(selectionEffects(a), selectionEffects(b), tier);
+      assert.equal(selectionEffects(a).openBuild, tier === "Build");
+    }
+  });
+  it("Orchestrator notice is shown from the Mode picker too, not only the Effort row", () => {
+    assert.match(selectionEffects(tierSelection("Orchestrator")!).notice ?? "", /fan-out/i);
+    assert.equal(selectionEffects(tierSelection("Fast")!).notice, null);
+  });
+});
+
+describe("stored Mode/Effort hydration and cross-tab drift", () => {
+  it("tier key wins; effort key used only when tier key is missing or hostile", () => {
+    assert.deepEqual(readStoredSelection(mem({ [MODEL_TIER_KEY]: "Heavy", [COMPOSER_EFFORT_KEY]: "fast" })), { tier: "Heavy", mode: "heavy" });
+    assert.deepEqual(readStoredSelection(mem({ [MODEL_TIER_KEY]: "__proto__", [COMPOSER_EFFORT_KEY]: "build" })), { tier: "Build", mode: "build" });
+    assert.deepEqual(readStoredSelection(mem({ [MODEL_TIER_KEY]: "constructor", [COMPOSER_EFFORT_KEY]: "toString" })), { tier: "Auto", mode: "auto" });
+    assert.deepEqual(readStoredSelection(mem()), { tier: "Auto", mode: "auto" });
+    assert.deepEqual(readStoredSelection(null), { tier: "Auto", mode: "auto" });
+    const throwing = { getItem: () => { throw new Error("SecurityError"); } };
+    assert.deepEqual(readStoredSelection(throwing), { tier: "Auto", mode: "auto" });
+  });
+  it("another tab writing the effort key moves both picker and Effort row together", () => {
+    assert.deepEqual(crossTabSelection(COMPOSER_EFFORT_KEY, "build", mem()), { tier: "Build", mode: "build" });
+    assert.deepEqual(crossTabSelection(MODEL_TIER_KEY, "Expert", mem()), { tier: "Expert", mode: "expert" });
+  });
+  it("hostile cross-tab values are ignored (no desync, no garbage tier)", () => {
+    for (const bad of ["__proto__", "Build ", "BUILD", "", "constructor", "{}"]) {
+      assert.equal(crossTabSelection(COMPOSER_EFFORT_KEY, bad, mem()), null, bad);
+      assert.equal(crossTabSelection(MODEL_TIER_KEY, bad, mem()), null, bad);
+    }
+  });
+  it("unrelated keys are ignored; storage.clear() (key null) re-reads a consistent pair", () => {
+    assert.equal(crossTabSelection("amcos.voice.choice.v1", "build", mem()), null);
+    assert.deepEqual(crossTabSelection(null, null, mem({ [COMPOSER_EFFORT_KEY]: "heavy" })), { tier: "Heavy", mode: "heavy" });
+    assert.deepEqual(crossTabSelection(null, null, mem()), { tier: "Auto", mode: "auto" });
+  });
+  it("removing a key in another tab re-reads the surviving key instead of desyncing", () => {
+    assert.deepEqual(crossTabSelection(MODEL_TIER_KEY, null, mem({ [COMPOSER_EFFORT_KEY]: "fast" })), { tier: "Fast", mode: "fast" });
   });
 });

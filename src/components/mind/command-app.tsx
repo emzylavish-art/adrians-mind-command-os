@@ -197,7 +197,7 @@ import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { composerChipModelForTier, modelTierForComposerChip } from "@/lib/mind/composer-chip-sync";
-import { COMPOSER_MODES, composerModeToModelTier, effortSelection, loadComposerEffort, tierSelection, modelTierToComposerMode, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { COMPOSER_MODES, MODEL_TIER_KEY, crossTabSelection, effortSelection, loadComposerEffort, readStoredSelection, selectionEffects, tierSelection, resolveSendPath, saveComposerEffort, type ComposerModeId, type TierSelection } from "@/lib/mind/composer-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import {
@@ -778,28 +778,38 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     voiceSession.current?.setVoice(committed);
   }
 
+  /** One path for every Mode/Effort surface so Build (and Orchestrator) behave identically everywhere. */
+  function applyTierSelection(picked: TierSelection) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    saveComposerEffort(storage, picked.mode);
+    setComposerEffort(picked.mode);
+    setModelTier(picked.tier);
+    const effects = selectionEffects(picked);
+    if (effects.notice) setNotice(effects.notice);
+    if (effects.openBuild) setView("build");
+  }
+
   function chooseComposerEffort(input: ComposerModeId) {
     const picked = effortSelection(input);
-    if (!picked) return;
-    const { mode, tier } = picked;
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
-    saveComposerEffort(storage, mode);
-    setComposerEffort(mode);
-    setModelTier(tier);
-    const resolved = resolveSendPath(mode);
-    if (resolved.notice) setNotice(resolved.notice);
-    if (mode === "build") setView("build");
+    if (picked) applyTierSelection(picked);
   }
 
   function chooseModelTier(input: ModelTier | string) {
     const picked = tierSelection(input);
-    if (!picked) return;
-    const { tier, mode } = picked;
-    setModelTier(tier);
-    setComposerEffort(mode);
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
-    saveComposerEffort(storage, mode);
+    if (picked) applyTierSelection(picked);
   }
+
+  useEffect(() => {
+    // Another tab changed Mode/Effort: adopt the same validated pair here (no navigation, no notice).
+    const onStorage = (event: StorageEvent) => {
+      const picked = crossTabSelection(event.key, event.newValue, typeof localStorage === "undefined" ? null : localStorage);
+      if (!picked) return;
+      setModelTier(picked.tier);
+      setComposerEffort(picked.mode);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   function interruptSpeakPlayback() {
     interruptMessageSpeak({
@@ -988,16 +998,11 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   useEffect(() => {
     try {
       if (localStorage.getItem("amcos.provider.v1") === "grok") setProviderChoice("grok");
-      const tier = localStorage.getItem("amcos.modelTier.v1");
-      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) {
-        const next = tier as ModelTier;
-        setModelTier(next);
-        setComposerEffort(modelTierToComposerMode(next));
-      } else {
-        const effort = loadComposerEffort(localStorage);
-        setComposerEffort(effort);
-        setModelTier(composerModeToModelTier(effort));
-      }
+      const stored = readStoredSelection(localStorage);
+      setModelTier(stored.tier);
+      setComposerEffort(stored.mode);
+      // Repair a drifted Effort key so the next reload / other tabs agree with the Mode.
+      if (loadComposerEffort(localStorage) !== stored.mode) saveComposerEffort(localStorage, stored.mode);
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
     } catch {
@@ -1016,7 +1021,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
 
   useEffect(() => {
     try {
-      localStorage.setItem("amcos.modelTier.v1", modelTier);
+      localStorage.setItem(MODEL_TIER_KEY, modelTier);
       localStorage.setItem("amcos.failover.v1", failoverPolicy);
     } catch {
       /* a private browser can refuse storage */

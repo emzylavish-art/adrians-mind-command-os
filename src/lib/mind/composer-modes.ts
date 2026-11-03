@@ -130,3 +130,42 @@ export function effortSelection(input: unknown): TierSelection | null {
   if (!isComposerModeId(input)) return null;
   return { tier: composerModeToModelTier(input), mode: input };
 }
+
+/** localStorage key for the chat's Mode (tier). Effort lives at COMPOSER_EFFORT_KEY. */
+export const MODEL_TIER_KEY = "amcos.modelTier.v1";
+
+export type SelectionEffects = { notice: string | null; openBuild: boolean };
+
+/**
+ * Side effects of a Mode/Effort choice. Shared by the Mode picker, header chip, composer model
+ * chip, intent chip, and Effort row so picking Build (or Orchestrator) behaves the same everywhere.
+ */
+export function selectionEffects(picked: TierSelection): SelectionEffects {
+  return { notice: resolveSendPath(picked.mode).notice, openBuild: picked.mode === "build" };
+}
+
+/** Reconciled Mode/Effort pair from storage: tier key wins, else effort key, else Auto. Never throws. */
+export function readStoredSelection(storage: Pick<Storage, "getItem"> | null | undefined): TierSelection {
+  let tierRaw: string | null = null;
+  try {
+    tierRaw = storage?.getItem(MODEL_TIER_KEY) ?? null;
+  } catch {
+    /* private mode */
+  }
+  return tierSelection(tierRaw) ?? effortSelection(loadComposerEffort(storage)) ?? { tier: "Auto", mode: "auto" };
+}
+
+/**
+ * Pair to adopt when another tab changes storage. null = ignore (unrelated key or hostile value).
+ * key === null (storage.clear()) or a removed key re-reads a reconciled pair.
+ */
+export function crossTabSelection(
+  key: string | null,
+  newValue: string | null,
+  storage: Pick<Storage, "getItem"> | null | undefined,
+): TierSelection | null {
+  if (key === null) return readStoredSelection(storage);
+  if (key !== MODEL_TIER_KEY && key !== COMPOSER_EFFORT_KEY) return null;
+  if (newValue === null) return readStoredSelection(storage);
+  return key === MODEL_TIER_KEY ? tierSelection(newValue) : effortSelection(newValue);
+}
