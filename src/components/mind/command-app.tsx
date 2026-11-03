@@ -215,6 +215,12 @@ import {
   type VoiceSpeed,
 } from "@/lib/mind/voice/settings";
 import {
+  decideResearchAnnouncement,
+  isDeepResearchQuery,
+  readResearchAnnounceEnabled,
+  writeResearchAnnounceEnabled,
+} from "@/lib/mind/voice/research-announce";
+import {
   classifyHonestFailure,
   honestFailureAuditAction,
   HONEST_FAILURE_MESSAGES,
@@ -1337,13 +1343,33 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     return true;
   }
 
+
+  function announceResearchStatus(
+    event: Parameters<typeof decideResearchAnnouncement>[0],
+  ) {
+    const enabled = readResearchAnnounceEnabled(
+      typeof localStorage === "undefined" ? null : localStorage,
+    );
+    const decision = decideResearchAnnouncement(event, { announcementsEnabled: enabled });
+    if (!decision.speak) return;
+    void speak(decision.text);
+  }
+
   async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
     setBusy(true);
     setError(null);
+    const deep = isDeepResearchQuery(query);
     try {
       const result = await searchWeb({ data: { query } });
       setBusy(false);
       setResearchCitations(result.citations);
+      // Only after the server confirms search is configured: plan → running → outcome.
+      // When not configured, stay fully silent (no fake status). Not live duplex.
+      if (result.configured && deep) {
+        announceResearchStatus({ type: "plan_ready", query });
+        announceResearchStatus({ type: "running", query });
+      }
+      announceResearchStatus({ type: "result", query, result });
       if (!result.ok) {
         recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
         setResearchNote(result.error);
@@ -1361,6 +1387,13 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       const message = "The search provider could not be reached. No citations were created.";
       recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
       setResearchNote(message);
+      if (deep) {
+        announceResearchStatus({
+          type: "result",
+          query,
+          result: { ok: false, configured: true, citations: [], error: message },
+        });
+      }
     }
   }
 
@@ -1940,12 +1973,18 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     }
     setResearchCitations([]);
     const query = researchText;
+    const deep = isDeepResearchQuery(query);
     try {
       const result = await searchWeb({ data: { query } });
       setError(null);
       setResearchCitations(result.citations);
       setResearchNote(result.ok ? (result.summary || "") : result.error);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
+      if (result.configured && deep) {
+        announceResearchStatus({ type: "plan_ready", query });
+        announceResearchStatus({ type: "running", query });
+      }
+      announceResearchStatus({ type: "result", query, result });
       if (!result.ok) {
         reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
           setResearchText(query);
@@ -1958,6 +1997,13 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       setResearchCitations([]);
       const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
       setResearchNote(message);
+      if (deep) {
+        announceResearchStatus({
+          type: "result",
+          query,
+          result: { ok: false, configured: true, citations: [], error: message },
+        });
+      }
       reportFailure(message, "research_failed", "search", () => {
         setResearchText(query);
         void startResearch();
@@ -5262,9 +5308,12 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                   </div>
                 </div>
                 <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
-                  Check research
-                </button>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
+                    Check research
+                  </button>
+                  <ResearchAnnounceToggle />
+                </div>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
                 {researchCitations.length === 0 && !researchNote ? (
                   <div className="empty-state mt-4">
@@ -6748,6 +6797,29 @@ const VOICE_SPEEDS: { id: VoiceSpeed; label: string }[] = [
   { id: "fast", label: "Fast" },
 ];
 
+
+function ResearchAnnounceToggle() {
+  const storage = typeof localStorage === "undefined" ? null : localStorage;
+  const [on, setOn] = useState(() => readResearchAnnounceEnabled(storage));
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      data-testid="research-announce-toggle"
+      className={`min-h-11 rounded-panel border px-3 text-sm ${on ? "border-accent bg-accent text-accent-ink" : "border-line"}`}
+      onClick={() => {
+        const next = !on;
+        writeResearchAnnounceEnabled(storage, next);
+        setOn(next);
+      }}
+      title="Speak deep research status with one-shot TTS. Not a live duplex research session."
+    >
+      {on ? "Status speech on" : "Status speech off"}
+    </button>
+  );
+}
+
 function VoiceSettingsBlock() {
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   useEffect(() => {
@@ -6823,6 +6895,22 @@ function VoiceSettingsBlock() {
           onClick={() => update({ openInVoiceMode: !settings.openInVoiceMode })}
         >
           {settings.openInVoiceMode ? "On" : "Off"}
+        </button>
+      </div>
+      <div className="settings-row">
+        <div>
+          <p className="font-semibold">Research status speech</p>
+          <p className="text-muted">One-shot TTS for deep research plan/running/complete. Not live duplex. Silent when search is not configured.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.announceResearch !== false}
+          data-testid="voice-settings-announce-research"
+          className={`min-h-11 rounded-panel border px-3 ${settings.announceResearch !== false ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`}
+          onClick={() => update({ announceResearch: settings.announceResearch === false })}
+        >
+          {settings.announceResearch === false ? "Off" : "On"}
         </button>
       </div>
     </div>

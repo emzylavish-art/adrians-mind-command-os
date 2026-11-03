@@ -11,6 +11,8 @@ export type VoiceSettings = {
   openInVoiceMode: boolean;
   /** Documented xAI voice id when provider path is available. */
   voiceId: "eve" | "ara" | "default";
+  /** Speak deep-research lifecycle status via one-shot TTS (not live duplex). */
+  announceResearch: boolean;
 };
 
 export const VOICE_SETTINGS_KEY = "amcos.voice.settings.v1";
@@ -23,6 +25,7 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   microphoneId: "",
   openInVoiceMode: false,
   voiceId: "eve",
+  announceResearch: true,
 };
 
 export function loadVoiceSettings(storage: Pick<Storage, "getItem"> | null | undefined): VoiceSettings {
@@ -63,6 +66,7 @@ export const VOICE_SETTINGS_ACTIVE = [
   "personality",
   "openInVoiceMode",
   "voiceId",
+  "announceResearch",
 ] as const;
 
 export function unusedUntilLiveNotice(): string {
