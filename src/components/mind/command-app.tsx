@@ -248,6 +248,7 @@ import {
   unpackWorkspace,
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
+import { isPrimaryPointerActivate, selectDrawerView } from "@/lib/mind/drawer-nav";
 
 type View =
   | "command"
@@ -3819,6 +3820,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               {group.items.map((item, itemIndex) => {
                 const Icon = item.icon;
                 const on = view === item.id;
+                const activate = () => {
+                  selectDrawerView({
+                    viewId: item.id,
+                    setView: (id) => setView(id as View),
+                    closeDrawer: () => setNavOpen(false),
+                    closeMenus,
+                  });
+                };
                 const button = (
                   <button
                     key={item.id}
@@ -3826,10 +3835,29 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                     title={item.label}
                     aria-label={item.label}
                     aria-current={on ? "page" : undefined}
-                    onClick={() => {
-                      setView(item.id);
-                      setNavOpen(false);
-                      closeMenus();
+                    data-testid={`nav-view-${item.id}`}
+                    onPointerDown={(event) => {
+                      if (!isPrimaryPointerActivate(event)) return;
+                      event.currentTarget.dataset.navPtr = `${event.clientX},${event.clientY}`;
+                    }}
+                    onPointerUp={(event) => {
+                      if (!isPrimaryPointerActivate(event)) return;
+                      const raw = event.currentTarget.dataset.navPtr;
+                      delete event.currentTarget.dataset.navPtr;
+                      if (!raw) return;
+                      const [sx, sy] = raw.split(",").map(Number);
+                      // Ignore scroll/drag gestures inside the drawer list.
+                      if (Math.hypot(event.clientX - sx, event.clientY - sy) > 12) return;
+                      event.currentTarget.dataset.navPtrHandled = "1";
+                      activate();
+                    }}
+                    onClick={(event) => {
+                      // Pointer path marks handled; keyboard still uses click (detail === 0).
+                      if (event.currentTarget.dataset.navPtrHandled === "1") {
+                        delete event.currentTarget.dataset.navPtrHandled;
+                        return;
+                      }
+                      activate();
                     }}
                     className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                   >
@@ -3959,7 +3987,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
           </button>
-          <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
+          <p className="min-w-0 truncate text-sm font-semibold" data-testid="view-title">{TITLES[view]}</p>
           <div className="shrink-0">
             <VoiceModeBadge
               mode={voiceMode}
