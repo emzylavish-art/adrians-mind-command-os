@@ -227,16 +227,17 @@ describe("LiveVoiceSession", () => {
     setLiveVoiceOccupied(false);
   });
 
-  it("pressMic while connecting cancels instead of stacking starts", async () => {
+  it("pressMic while connecting dedupes instead of stacking or canceling", async () => {
     setLiveVoiceOccupied(false);
     let mintCount = 0;
+    const notices: string[] = [];
     const session = new LiveVoiceSession(
-      {},
+      { onNotice: (m) => notices.push(m) },
       {
         mintSecret: async (signal) => {
           mintCount += 1;
           await new Promise<void>((resolve, reject) => {
-            const t = setTimeout(resolve, 2_000);
+            const t = setTimeout(resolve, 80);
             signal?.addEventListener(
               "abort",
               () => {
@@ -253,7 +254,11 @@ describe("LiveVoiceSession", () => {
         getVoiceId: () => "eve",
         probeMic: okProbe,
         skipMic: true,
-        socketFactory: () => new FakeSocket(),
+        socketFactory: () => {
+          const sock = new FakeSocket();
+          queueMicrotask(() => sock.openNow());
+          return sock;
+        },
       },
     );
     const p = session.pressMic();
@@ -261,12 +266,14 @@ describe("LiveVoiceSession", () => {
       await new Promise((r) => setTimeout(r, 10));
     }
     assert.equal(session.state.phase, "connecting");
-    // Wait until mint begins (connecting is set before mint).
     for (let i = 0; i < 50 && mintCount < 1; i++) await new Promise((r) => setTimeout(r, 10));
-    await session.pressMic(); // cancel
+    await session.pressMic(); // dedupe — stay connecting
+    assert.equal(session.state.phase, "connecting");
+    assert.ok(notices.some((n) => /already starting/i.test(n)));
+    assert.ok(mintCount <= 1);
+    session.end();
     await Promise.allSettled([p]);
     assert.equal(session.state.phase, "off");
-    assert.ok(mintCount <= 1);
     setLiveVoiceOccupied(false);
   });
 
@@ -299,4 +306,112 @@ describe("LiveVoiceSession", () => {
     session.end();
     setLiveVoiceOccupied(false);
   });
+
+  it("sign-in is checked before mic (no probe when signed out)", async () => {
+    setLiveVoiceOccupied(false);
+    const errors: string[] = [];
+    let probed = 0;
+    let minted = 0;
+    const session = new LiveVoiceSession(
+      { onError: (m) => errors.push(m) },
+      {
+        mintSecret: async () => {
+          minted += 1;
+          return { ok: true, value: "x", expiresAt: Date.now() + 60_000 };
+        },
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: async () => {
+          probed += 1;
+          return { ok: true as const };
+        },
+        skipMic: true,
+        getAuthCache: () => ({
+          authEnabled: true,
+          signedIn: false,
+          pending: false,
+          updatedAt: Date.now(),
+        }),
+      },
+    );
+    await session.start();
+    assert.equal(probed, 0);
+    assert.equal(minted, 0);
+    assert.ok(errors.some((e) => /Sign in is required/i.test(e)));
+    assert.equal(session.state.phase === "off" || session.state.phase === "error", true);
+    setLiveVoiceOccupied(false);
+  });
+
+  it("dedupes repeated Speak taps while connecting (does not cancel)", async () => {
+    setLiveVoiceOccupied(false);
+    const notices: string[] = [];
+    let mintStarted = false;
+    const session = new LiveVoiceSession(
+      { onNotice: (m) => notices.push(m) },
+      {
+        mintSecret: async (signal) => {
+          mintStarted = true;
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => resolve(), 200);
+            signal?.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(timer);
+                reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+              },
+              { once: true },
+            );
+          });
+          return { ok: true, value: "tok", expiresAt: Date.now() + 60_000 };
+        },
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        socketFactory: () => {
+          const sock = new FakeSocket();
+          queueMicrotask(() => sock.openNow());
+          return sock;
+        },
+      },
+    );
+    const startP = session.start();
+    for (let i = 0; i < 50 && !mintStarted; i++) await new Promise((r) => setTimeout(r, 5));
+    assert.equal(session.state.phase, "connecting");
+    await session.pressMic(); // second tap — must NOT cancel
+    assert.equal(session.state.phase, "connecting");
+    assert.ok(notices.some((n) => /already starting/i.test(n)));
+    session.end();
+    await Promise.allSettled([startP]);
+    setLiveVoiceOccupied(false);
+  });
+
+  it("mint timeout surfaces a clear error", async () => {
+    setLiveVoiceOccupied(false);
+    const errors: string[] = [];
+    const { ConnectTimeoutError } = await import("./connect-timeout.ts");
+    const session = new LiveVoiceSession(
+      { onError: (m) => errors.push(m) },
+      {
+        mintSecret: async () => {
+          throw new ConnectTimeoutError(
+            "mint",
+            "Voice secret mint timed out. Check the network, then try again.",
+          );
+        },
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+      },
+    );
+    await session.start();
+    assert.ok(errors.some((e) => /mint timed out/i.test(e)));
+    setLiveVoiceOccupied(false);
+  });
+
+
 });

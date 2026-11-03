@@ -34,7 +34,6 @@ import {
   type XaiBuiltinVoice,
 } from "@/lib/mind/voice/voices";
 import { VoicePicker } from "@/components/mind/voice-picker";
-import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
 import { matchesVoiceToggleShortcut } from "@/lib/mind/voice/shortcut";
 import type { LiveVoiceUiAttr } from "@/lib/mind/voice-live/types";
 import {
@@ -82,6 +81,31 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const inCall = live.active;
   const uiAttr: LiveVoiceUiAttr = live.uiAttr || "off";
   const dictationState = props.dictating ? "recording" : "idle";
+  /** Instant pressed feedback before React state from the session catches up. */
+  const [speakArm, setSpeakArm] = useState(false);
+  /** ≤1024px + floating composer → Speak-only chrome (no Ask sibling overlap). */
+  const [speakOnly, setSpeakOnly] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 1024px)");
+    const update = () => {
+      const floating = Boolean(document.querySelector('section[data-composer="floating"]'));
+      setSpeakOnly(mq.matches && floating);
+    };
+    update();
+    mq.addEventListener("change", update);
+    const mo = new MutationObserver(update);
+    mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-composer"] });
+    return () => {
+      mq.removeEventListener("change", update);
+      mo.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (uiAttr !== "off" || !live.active) setSpeakArm(false);
+  }, [uiAttr, live.active]);
 
   const onSessionStatusChange = props.onSessionStatusChange;
   useEffect(() => {
@@ -267,17 +291,21 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     setAsk("");
   };
 
-  /** Speak: stop dictation first, then start the call (never refuse). */
+  /** Speak: instant pressed/connecting feedback, then start (dedupe while connecting). */
   const startSpeak = () => {
     if (props.dictating || props.isOverlayMicOpen()) {
       props.stopOverlayMic();
       props.onNotice?.("Stopped dictation — starting live call.");
     }
     if (live.state.phase === "connecting" || live.state.phase === "reconnecting") {
-      live.pressMic(); // cancel
+      // Dedupe — do not cancel on repeat taps (End cancels).
+      live.pressMic();
       return;
     }
-    if (!live.active) live.pressMic();
+    if (!live.active) {
+      setSpeakArm(true); // <100ms pressed/connecting hook for Visual CSS
+      live.pressMic();
+    }
   };
 
   const onDictate = () => {
@@ -481,11 +509,17 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
         }
       }}
     >
-      <VoiceModeBadge
-        mode={voiceMode}
-        listening={uiAttr === "listening" || uiAttr === "user-speaking" || uiAttr === "assistant-speaking"}
-        onToggle={() => setVoiceModeStore(toggleVoiceMode(voiceMode))}
-      />
+      <div className="flex items-center justify-between gap-2 text-xs" data-testid="live-voice-settings-mode">
+        <span className="font-semibold">Mode: {voiceMode === "orchestrator" ? "Orchestrator" : "Direct"}</span>
+        <button
+          type="button"
+          className="min-h-9 rounded-panel border border-white/10 px-2"
+          onClick={() => setVoiceModeStore(toggleVoiceMode(voiceMode))}
+          aria-label={`Switch to ${voiceMode === "direct" ? "Orchestrator" : "Direct"}`}
+        >
+          Switch
+        </button>
+      </div>
       <div className="mt-3">
         <VoicePicker
           value={voiceChoice}
@@ -523,12 +557,16 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       </p>
     ) : null;
 
+  const connectingVisual = speakArm || uiAttr === "connecting" || live.state.phase === "connecting";
+
   if (!inCall) {
     return (
       <div
         className="composer-bar is-fixed fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 md:px-5"
         data-testid="composer-bar"
         data-model-menu="closed"
+        data-speak-only={speakOnly ? "true" : "false"}
+        data-bottom-zone="owner"
         role="region"
         aria-label="Message composer"
         style={style}
@@ -536,6 +574,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
         <div className="composer-bar__safe mx-auto w-full max-w-3xl">
           <div className="composer-bar__card rounded-[1.75rem] border border-white/10 bg-[#111111] p-3 text-zinc-100 shadow-2xl">
             <form onSubmit={onAskSubmit}>
+              {!speakOnly ? (
               <div className="composer-bar__ask mb-3" data-testid="composer-bar-ask">
                 <input
                   data-testid="live-voice-bar-input"
@@ -546,7 +585,9 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                   className="composer-bar__ask-input h-10 w-full bg-transparent px-2 text-base text-zinc-100 outline-none placeholder:text-zinc-500"
                 />
               </div>
-              <div className="composer-bar__row flex items-center gap-2">
+              ) : null}
+              <div className="composer-bar__row composer-voice-row flex items-center gap-2">
+                {!speakOnly ? (
                 <div className="composer-bar__left flex min-w-0 items-center gap-2">
                   <div className="relative">
                     <button
@@ -573,6 +614,9 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                     </div>
                   </div>
                 </div>
+                ) : (
+                  <div className="composer-bar__left" aria-hidden="true" />
+                )}
                 <div className="flex-1" />
                 <div
                   className="composer-voice-btns flex items-center gap-2"
@@ -605,16 +649,22 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                   </button>
                   <button
                     type="button"
-                    className="composer-speak-live composer-speak-pill inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-black shadow-md"
+                    className={`composer-speak-live composer-speak-pill inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-md ${
+                      connectingVisual
+                        ? "bg-zinc-200 text-black opacity-90"
+                        : "bg-white text-black"
+                    }`}
                     data-testid="composer-speak"
-                    data-live-voice={uiAttr}
-                    data-state={uiAttr}
-                    aria-label="Start voice conversation"
-                    aria-pressed={false}
+                    data-live-voice={connectingVisual ? "connecting" : uiAttr}
+                    data-state={connectingVisual ? "connecting" : uiAttr}
+                    data-pressed={speakArm || connectingVisual ? "true" : "false"}
+                    aria-label={connectingVisual ? "Starting voice conversation" : "Start voice conversation"}
+                    aria-pressed={connectingVisual}
+                    aria-busy={connectingVisual}
                     onClick={startSpeak}
                   >
                     <AudioLines className="composer-speak-live__bars size-4" strokeWidth={2.25} aria-hidden="true" />
-                    <span className="composer-speak-live__label">Speak</span>
+                    <span className="composer-speak-live__label">{connectingVisual ? "Starting…" : "Speak"}</span>
                   </button>
                 </div>
               </div>
@@ -633,16 +683,18 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       data-live-voice={uiAttr}
       data-state={uiAttr}
       data-testid="live-voice-bar"
+      data-bottom-zone="owner"
       role="region"
       aria-label={`Live voice bar — ${live.label}`}
       style={style}
     >
       <div className="live-voice-bar__glass pointer-events-none absolute inset-0" aria-hidden="true" />
       <div className="relative mx-auto w-full max-w-3xl rounded-[1.75rem] border border-white/10 bg-[#0a0a0a]/95 p-3 text-zinc-100 shadow-2xl backdrop-blur">
-        <p className="mb-2 px-1 text-[10px] font-semibold tracking-wide text-emerald-300" role="status">
+        {/* Single status line — header VoiceModeBadge owns mode; avoid a second header here. */}
+        <p className="mb-2 px-1 text-[10px] font-semibold tracking-wide text-emerald-300" role="status" data-testid="live-voice-bar-status">
           LIVE · {live.label}
         </p>
-        <div className="live-voice-bar__controls live-call-grid mb-3 grid grid-cols-4 gap-2" role="group" aria-label="Live voice tools">
+        <div className="live-voice-bar__controls live-call-grid mb-3 grid grid-cols-4 items-center gap-2" role="group" aria-label="Live voice tools">
           <button type="button" className={PILL} data-testid="live-voice-bar-screen" aria-label="Screen share" aria-pressed={screenOn} onClick={onScreenClick}>
             <ScreenShare className="lvb-ico lvb-ico--screen size-6" strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -731,6 +783,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           <button
             type="button"
             className="live-voice-bar__end live-call-end grid h-12 w-24 shrink-0 place-items-center rounded-full bg-[#f26b6b] text-white shadow-[0_0_18px_rgb(242_107_107/0.45)]"
+            data-bottom-zone-end="true"
             data-testid="live-voice-bar-end"
             aria-label="End call"
             onClick={endEverything}

@@ -47,6 +47,8 @@ import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
+import { ModelTierChip } from "@/components/mind/model-tier-chip";
+import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { DICTATE_MINT_TIMEOUT_MS, withDictateTimeout } from "@/components/mind/live-voice-bar/dictate-timeout";
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
@@ -308,6 +310,22 @@ export function CommandApp() {
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
+  const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
+  const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const tier = localStorage.getItem("amcos.modelTier.v1");
+      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) {
+        setModelTier(tier as ModelTier);
+      }
+    } catch {
+      /* ignore */
+    }
+    setLastResolvedTier(null);
+    setLastModelUsed(null);
+  }, []);
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [agentGoal, setAgentGoal] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
@@ -2031,7 +2049,7 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+              <section className="command-card floating-composer rounded-panel bg-surface p-3 md:p-4" data-composer="floating">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
@@ -3118,6 +3136,7 @@ export function CommandApp() {
         </button>
       </nav>
 
+      {/* Bottom-zone owner: composer-bar.is-fixed is position:fixed (not in-flow flex grow). */}
       <LiveVoiceBar
         isOverlayMicOpen={() =>
           Boolean(
@@ -3153,12 +3172,20 @@ export function CommandApp() {
         }}
         onAttachFileClick={() => fileRef.current?.click()}
         modelPickerSlot={
-          <>
-            <span className="composer-bar__model-ico" aria-hidden="true" />
-            <span className="composer-bar__model-label">
-              {providerChoices(grokConfigured).find((item) => item.id === providerChoice)?.label ?? "Model"}
-            </span>
-          </>
+          <ModelTierChip
+            tier={modelTier}
+            onChoose={(tier) => {
+              setModelTier(tier);
+              try {
+                localStorage.setItem("amcos.modelTier.v1", tier);
+              } catch {
+                /* ignore */
+              }
+            }}
+            lastResolved={lastResolvedTier}
+            lastModel={lastModelUsed}
+            className="composer-bar__model-chip"
+          />
         }
         onChatSend={(text) => {
           const clipped = text.trim().slice(0, 8000);

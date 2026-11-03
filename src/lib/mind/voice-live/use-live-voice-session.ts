@@ -11,6 +11,9 @@ import { LiveVoiceSession, type LiveSessionDeps, type MintSecretResult } from ".
 import { phaseToLabel, phaseToUiAttr, type LiveVoicePublicState } from "./types.ts";
 import { isLiveVoiceOccupied } from "./occupancy.ts";
 import { readStoredVolume } from "./speaker-gain.ts";
+import { setVoiceAuthCache, readVoiceAuthCache } from "./auth-gate.ts";
+import { authEnabled } from "@/lib/auth/client";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 const OFF_STATE: LiveVoicePublicState = {
   phase: "off",
@@ -33,6 +36,16 @@ export type UseLiveVoiceSessionOptions = {
 };
 
 export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
+  const { user, isPending } = useCurrentUserState();
+  // Keep a sync cache so Speak can refuse signed-out users before getUserMedia.
+  useEffect(() => {
+    setVoiceAuthCache({
+      authEnabled,
+      signedIn: Boolean(user),
+      pending: isPending,
+    });
+  }, [user, isPending]);
+
   const [state, setState] = useState<LiveVoicePublicState>(OFF_STATE);
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const [volume, setVolume] = useState(() =>
@@ -75,6 +88,7 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
         getMode: () => getVoiceMode(),
         getVoiceId: () =>
           readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage),
+        getAuthCache: () => readVoiceAuthCache(),
       },
     );
     sessionRef.current = session;

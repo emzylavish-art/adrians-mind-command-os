@@ -49,6 +49,7 @@ import {
   setLiveVoiceOccupied,
 } from "./occupancy.ts";
 import { probeMicrophone } from "./mic-probe.ts";
+import { assertVoiceSignedInForMic, type VoiceAuthCache } from "./auth-gate.ts";
 import {
   ConnectTimeoutError,
   isAbortError,
@@ -86,6 +87,11 @@ export type LiveSessionDeps = {
   probeMic?: () => Promise<{ ok: true } | { ok: false; error: string }>;
   /** Skip opening getUserMedia (tests driving WS only). */
   skipMic?: boolean;
+  /**
+   * Sync/cached sign-in snapshot. Checked BEFORE mic so signed-out users
+   * never see a permission prompt. Prefer a React-fed cache (auth-gate).
+   */
+  getAuthCache?: () => VoiceAuthCache | null;
 };
 
 type WsLike = {
@@ -216,6 +222,12 @@ export class LiveVoiceSession {
       const connectAbort = new AbortController();
       this.connectAbort = connectAbort;
       this.setPhase("connecting");
+      // Sign-in BEFORE mic — never prompt for the mic when we already know the user is signed out.
+      const auth = assertVoiceSignedInForMic(this.deps.getAuthCache?.() ?? null);
+      if (!auth.ok) {
+        this.fail(auth.error);
+        return;
+      }
       let probe;
       try {
         probe = await withTimeout(
@@ -252,10 +264,13 @@ export class LiveVoiceSession {
     }
   }
 
-  /** Mic button: first tap starts; while connecting cancels; later taps toggle mute. */
+  /**
+   * Mic / Speak: first tap starts; taps while connecting are deduped (ignored);
+   * use end() to cancel a stuck connect. Later taps toggle mute.
+   */
   async pressMic() {
     if (this.phase === "connecting" || this.phase === "reconnecting") {
-      this.end("Live voice start canceled.");
+      this.handlers.onNotice?.("Live voice is already starting.");
       return;
     }
     if (this.phase === "off" || this.phase === "error") {
