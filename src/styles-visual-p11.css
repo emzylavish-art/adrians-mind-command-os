@@ -651,8 +651,26 @@
     padding: var(--p11-gap-md) !important;
     border-radius: 0.875rem !important;
   }
+  .bsp-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bsp-timer {
+    align-self: flex-start;
+    max-width: 100%;
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .bsp-empty {
+    border-radius: 0.75rem !important;
+  }
   .bsp-steer {
     bottom: calc(var(--am-dock-clearance, 8.5rem) + 0.25rem);
+  }
+  /* Keep start row usable under composer dock */
+  .bsp-start {
+    padding-bottom: 0.25rem;
   }
 }
 
