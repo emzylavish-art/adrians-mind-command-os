@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Health } from "@/lib/mind/dashboard/types";
 import {
   DEFAULT_GRAPH_FILTER,
@@ -12,94 +12,176 @@ export function dispatchGraphFilter(filter: GraphFilterState) {
   document.dispatchEvent(new CustomEvent("dash3d-graph-filter", { detail: filter }));
 }
 
-export function GraphFiltersPanel() {
+type Props = {
+  /** When true, render only the trigger (for mobile chrome). Body is portaled as sheet. */
+  triggerOnly?: boolean;
+};
+
+export function GraphFiltersPanel({ triggerOnly = false }: Props = {}) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<GraphFilterState>(DEFAULT_GRAPH_FILTER);
   const lanes = useMemo(() => laneOptions(), []);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     dispatchGraphFilter(filter);
   }, [filter]);
 
-  return (
-    <aside className="dash3d-graph-filters dash3d-glass" data-testid="graph-filters" aria-label="Constellation filters">
-      <div className="dash3d-feed-head">
-        <h2>Filters</h2>
-        <button
-          type="button"
-          className="dash3d-pill"
-          data-testid="graph-filters-toggle"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          {open ? "Hide" : "Groups"}
-        </button>
-      </div>
-      {open ? (
-        <div className="dash3d-graph-filters-body" data-testid="graph-filters-body">
-          <label className="dash3d-muted" style={{ fontSize: "0.68rem", display: "block" }}>
-            Search
-            <input
-              className="dash3d-input"
-              data-testid="graph-filter-search"
-              value={filter.query}
-              placeholder="name / id / branch"
-              onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
-            />
-          </label>
-          <div className="dash3d-flyhud-row" style={{ flexWrap: "wrap", gap: "0.35rem", marginTop: "0.45rem" }}>
-            {HEALTHS.map((h) => (
-              <button
-                key={h}
-                type="button"
-                className={`dash3d-pill${filter.health === h ? " is-on" : ""}`}
-                data-testid={`graph-filter-health-${h}`}
-                aria-pressed={filter.health === h}
-                onClick={() => setFilter((f) => ({ ...f, health: h }))}
-              >
-                {h}
-              </button>
-            ))}
-          </div>
-          <label className="dash3d-muted" style={{ fontSize: "0.68rem", display: "block", marginTop: "0.45rem" }}>
-            Lane group
-            <select
-              className="dash3d-input"
-              data-testid="graph-filter-lane"
-              value={filter.lane}
-              onChange={(e) => setFilter((f) => ({ ...f, lane: e.target.value as GraphFilterState["lane"] }))}
-            >
-              {lanes.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginTop: "0.5rem", fontSize: "0.72rem" }}>
-            <input
-              type="checkbox"
-              data-testid="graph-filter-orphans"
-              checked={filter.orphansOnly}
-              onChange={(e) => setFilter((f) => ({ ...f, orphansOnly: e.target.checked }))}
-            />
-            Orphans only (no constellation edge)
-          </label>
+  // Closed by default; Esc + outside tap close the sheet.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onPointer = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (sheetRef.current?.contains(t)) return;
+      if (triggerRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    // capture so we beat panel handlers; slight defer avoids closing on the opening click
+    const id = window.setTimeout(() => {
+      window.addEventListener("pointerdown", onPointer, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, [open]);
+
+  const body = (
+    <div
+      className="dash3d-graph-filters-body"
+      data-testid="graph-filters-body"
+      id="dash3d-graph-filters-body"
+    >
+      <label className="dash3d-muted" style={{ fontSize: "0.68rem", display: "block" }}>
+        Search
+        <input
+          className="dash3d-input"
+          data-testid="graph-filter-search"
+          value={filter.query}
+          placeholder="name / id / branch"
+          onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
+        />
+      </label>
+      <div className="dash3d-flyhud-row" style={{ flexWrap: "wrap", gap: "0.35rem", marginTop: "0.45rem" }}>
+        {HEALTHS.map((h) => (
           <button
+            key={h}
             type="button"
-            className="dash3d-pill"
-            data-testid="graph-filter-reset"
-            style={{ marginTop: "0.45rem" }}
-            onClick={() => setFilter(DEFAULT_GRAPH_FILTER)}
+            className={`dash3d-pill${filter.health === h ? " is-on" : ""}`}
+            data-testid={`graph-filter-health-${h}`}
+            aria-pressed={filter.health === h}
+            onClick={() => setFilter((f) => ({ ...f, health: h }))}
           >
-            Reset filters
+            {h}
           </button>
-        </div>
+        ))}
+      </div>
+      <label className="dash3d-muted" style={{ fontSize: "0.68rem", display: "block", marginTop: "0.45rem" }}>
+        Lane group
+        <select
+          className="dash3d-input"
+          data-testid="graph-filter-lane"
+          value={filter.lane}
+          onChange={(e) => setFilter((f) => ({ ...f, lane: e.target.value as GraphFilterState["lane"] }))}
+        >
+          {lanes.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginTop: "0.5rem", fontSize: "0.72rem" }}>
+        <input
+          type="checkbox"
+          data-testid="graph-filter-orphans"
+          checked={filter.orphansOnly}
+          onChange={(e) => setFilter((f) => ({ ...f, orphansOnly: e.target.checked }))}
+        />
+        Orphans only (no constellation edge)
+      </label>
+      <button
+        type="button"
+        className="dash3d-pill"
+        data-testid="graph-filter-reset"
+        style={{ marginTop: "0.45rem" }}
+        onClick={() => setFilter(DEFAULT_GRAPH_FILTER)}
+      >
+        Reset filters
+      </button>
+    </div>
+  );
+
+  const trigger = (
+    <button
+      ref={triggerRef}
+      type="button"
+      className="dash3d-pill"
+      data-testid="graph-filters-toggle"
+      aria-expanded={open}
+      aria-controls="dash3d-graph-filters-body"
+      onClick={() => setOpen((o) => !o)}
+    >
+      {open ? "Close filters" : "Filters"}
+    </button>
+  );
+
+  // Desktop aside + sheet overlay when open. Mobile chrome can pass triggerOnly.
+  return (
+    <>
+      {!triggerOnly ? (
+        <aside
+          className="dash3d-graph-filters dash3d-glass dash3d-graph-filters-dock"
+          data-testid="graph-filters"
+          aria-label="Constellation filters"
+        >
+          <div className="dash3d-feed-head">
+            <h2>Filters</h2>
+            {trigger}
+          </div>
+          {!open ? (
+            <p className="dash3d-muted dash3d-graph-filters-hint" style={{ fontSize: "0.68rem", margin: 0 }}>
+              Search · health · lane · orphans
+            </p>
+          ) : null}
+        </aside>
       ) : (
-        <p className="dash3d-muted" style={{ fontSize: "0.68rem", margin: 0 }}>
-          Search · health · lane · orphans
-        </p>
+        <span className="dash3d-graph-filters-trigger-slot" data-testid="graph-filters-trigger-slot">
+          {trigger}
+        </span>
       )}
-    </aside>
+      {open ? (
+        <div
+          className="dash3d-filter-sheet-root"
+          data-testid="graph-filters-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Constellation filters"
+        >
+          <div className="dash3d-filter-sheet-backdrop" data-testid="graph-filters-backdrop" />
+          <div ref={sheetRef} className="dash3d-filter-sheet dash3d-glass">
+            <div className="dash3d-feed-head">
+              <h2>Filters</h2>
+              <button
+                type="button"
+                className="dash3d-pill"
+                data-testid="graph-filters-sheet-close"
+                onClick={() => setOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            {body}
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

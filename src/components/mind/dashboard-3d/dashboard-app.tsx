@@ -32,6 +32,12 @@ import { NotionMirrorPanel } from "./notion-mirror-panel";
 import { ForeverContractPanel } from "./forever-contract-panel";
 import { GraphFiltersPanel } from "./graph-filters-panel";
 import { MinimapPanel } from "./minimap-panel";
+import {
+  MobileChrome,
+  MobilePanelCard,
+  useMobilePanelFocus,
+  type MobilePanelId,
+} from "./mobile-structure";
 import { portraitUrlForBot, clearPortraitBackoffOnOnline } from "@/lib/mind/dashboard/portrait-resolve";
 import { buildViewUrlSearch, parseViewUrlSearch, type ViewLevel } from "@/lib/mind/dashboard/view-url";
 import { resolveLastNodeBreadcrumb, type OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
@@ -79,6 +85,8 @@ export function DashboardApp() {
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [painterBudgetDegraded, setPainterBudgetDegraded] = useState(false);
   const [hudFocus, setHudFocus] = useState(false);
+  const [sceneInteract, setSceneInteract] = useState(false);
+  const { focused: panelFocus, setFocused: setPanelFocus, clear: clearPanelFocus } = useMobilePanelFocus();
   const urlBootstrapped = useRef(false);
 
   // Gap#16 / #39 — hydrate focus+level from URL once bots exist.
@@ -377,11 +385,25 @@ export function DashboardApp() {
       data-labels={operatorPrefs.layers.labels ? "1" : "0"}
       data-health-filter={operatorPrefs.healthFilter}
       data-hud-focus={hudFocus ? "1" : "0"}
+      data-scene-interact={sceneInteract ? "1" : "0"}
+      data-panel-focus={panelFocus ?? ""}
       onPointerDownCapture={unlockSound}
     >
       <a className="dash3d-skip-link" href="#dash3d-skybar" data-testid="dash3d-skip-skybar">
         Skip to skybar
       </a>
+      <MobileChrome
+        sceneInteract={sceneInteract}
+        onSceneInteract={setSceneInteract}
+        focused={panelFocus}
+        onBack={clearPanelFocus}
+        onJump={(id: MobilePanelId) => {
+          setPanelFocus(null);
+          const el = document.getElementById(`panel-${id}`);
+          el?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+        filtersSlot={<GraphFiltersPanel triggerOnly />}
+      />
       <button
         type="button"
         className="dash3d-hud-focus-toggle dash3d-pill"
@@ -394,6 +416,15 @@ export function DashboardApp() {
       {!viewData ? (
         <div id="dash3d-skybar" className="dash3d-skybar" hidden aria-hidden="true" data-testid="dash3d-skybar-fallback" />
       ) : null}
+      <MobilePanelCard
+        id="scene"
+        title="3D graph"
+        defaultOpen
+        focused={panelFocus}
+        onFocus={setPanelFocus}
+        summary={sceneInteract ? "interact on" : "scroll page · tap Interact to pan"}
+      >
+      <div className="dash3d-scene-mobile-slot" id="panel-scene-slot" data-testid="scene-mobile-slot">
       {sceneData && !webglError ? (
         <Suspense fallback={<div className="dash3d-canvas-wrap" data-testid="dash3d-scene-fallback" aria-busy="true" />}>
         <UniverseScene
@@ -428,7 +459,15 @@ export function DashboardApp() {
           onFlyoverChange={onFlyoverChange}
         />
         </Suspense>
-      ) : null}
+      ) : (
+        <div className="dash3d-canvas-wrap" data-testid="dash3d-scene-placeholder" aria-hidden={!sceneData}>
+          <p className="dash3d-muted" style={{ padding: "1rem", fontSize: "0.75rem" }}>
+            {webglError ? "Universe unavailable" : "Painting the universe…"}
+          </p>
+        </div>
+      )}
+      </div>
+      </MobilePanelCard>
 
       {webglError ? (
         <div className="dash3d-fallback">
@@ -480,6 +519,7 @@ export function DashboardApp() {
 
       {viewData ? (
         <>
+        <div className="dash3d-panel-stack" data-testid="dash3d-panel-stack">
         <div className="dash3d-skybar" id="dash3d-skybar" role="region" aria-label="Dashboard skybar">
           {state.status === "ready" && state.stale ? (
             <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
@@ -501,6 +541,14 @@ export function DashboardApp() {
               <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>{perfHint}</p>
             </div>
           ) : null}
+          <MobilePanelCard
+            id="notion"
+            title="Notion galaxy"
+            defaultOpen
+            focused={panelFocus}
+            onFocus={setPanelFocus}
+            summary={viewData.notionGraph?.available ? `${viewData.notionGraph?.stats?.pages ?? 0} pages` : "Unavailable"}
+          >
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Notion galaxy</h2>
             <p className="dash3d-title">
@@ -513,7 +561,16 @@ export function DashboardApp() {
               {viewData.notionGraph?.reason ? ` — ${viewData.notionGraph?.reason.slice(0, 90)}` : ""}
             </p>
           </div>
+          </MobilePanelCard>
+          <MobilePanelCard
+            id="money"
+            title="Money"
+            focused={panelFocus}
+            onFocus={setPanelFocus}
+            summary="spend"
+          >
           <MoneyPanel money={adjustBurnForHiddenGap(viewData.money, hiddenGapMs ?? 0)} scrubNote={scrubPanelNote} />
+          </MobilePanelCard>
           <div className="dash3d-glass dash3d-skybar-card">
             <h2>Fleet plan</h2>
             <p className="dash3d-title">
@@ -588,10 +645,9 @@ export function DashboardApp() {
             Zoom to sky
           </button>
         </div>
-        </>
-      ) : null}
 
       {viewData && !webglError ? (
+        <MobilePanelCard id="flyhud" title="Flyover" focused={panelFocus} onFocus={setPanelFocus} summary={fly.level}>
         <FlyoverHud
           focusBot={selected}
           fly={fly}
@@ -633,6 +689,7 @@ export function DashboardApp() {
             }
           }}
         />
+        </MobilePanelCard>
       ) : null}
       {viewData && fly.level === "interior" ? (
         <BuildingInteriorPanel
@@ -643,14 +700,21 @@ export function DashboardApp() {
         />
       ) : null}
 
-      {viewData ? <MinimapPanel bots={viewData.bots} focusId={selected?.id} /> : null}
+      {viewData ? (
+        <MobilePanelCard id="compass" title="Compass" focused={panelFocus} onFocus={setPanelFocus}>
+          <MinimapPanel bots={viewData.bots} focusId={selected?.id} />
+        </MobilePanelCard>
+      ) : null}
       {viewData && sceneData && operatorPrefs.layers.feed ? (
         <>
           <GraphFiltersPanel />
-          <FeedPanel feed={sceneData.skyFeed ?? viewData.skyFeed} />
+          <MobilePanelCard id="feed" title="Feed" defaultOpen focused={panelFocus} onFocus={setPanelFocus}>
+            <FeedPanel feed={sceneData.skyFeed ?? viewData.skyFeed} />
+          </MobilePanelCard>
         </>
       ) : null}
       {viewData && chartsForScrub && operatorPrefs.layers.charts ? (
+        <MobilePanelCard id="charts" title="Charts" defaultOpen focused={panelFocus} onFocus={setPanelFocus}>
         <Suspense fallback={<aside className="dash3d-charts-panel dash3d-glass" data-testid="charts-fallback" aria-busy="true"><h2>Charts</h2><p className="dash3d-muted">Loading…</p></aside>}>
         <ChartsPanel
           charts={chartsForScrub}
@@ -673,14 +737,21 @@ export function DashboardApp() {
           }}
         />
         </Suspense>
+        </MobilePanelCard>
       ) : null}
       {viewData ? (
+        <MobilePanelCard id="mirror" title="Mirror" focused={panelFocus} onFocus={setPanelFocus}>
         <NotionMirrorPanel
           mirror={viewData.notionMirror}
           onOpenPage={(pageId) => {
             openNotion(pageId);
           }}
         />
+        </MobilePanelCard>
+      ) : null}
+      {/* close mobile panel stack after mirror when viewData present */}
+        </div>{/* dash3d-panel-stack */}
+        </>
       ) : null}
       {viewData ? (
         <OperatorConsole

@@ -1242,3 +1242,338 @@ button.dash3d-zoomout.dash3d-glass,
 .dash3d-operator-panel label {
   pointer-events: auto;
 }
+
+
+/* ===== Zack mobile-structure fix: single scroll column, sheet filters, interact toggle ===== */
+
+/* Filter sheet: closed by default; actions stay in viewport with dvh + safe-area */
+.dash3d-filter-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.dash3d-filter-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(4 8 20 / 0.55);
+  pointer-events: auto;
+}
+.dash3d-filter-sheet {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  width: min(420px, 100%);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1.25rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding: 0.75rem 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+}
+@media (min-width: 721px) {
+  .dash3d-filter-sheet-root {
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 3.5rem 0.75rem 1rem;
+  }
+  .dash3d-filter-sheet {
+    border-radius: 1rem;
+    max-height: min(70dvh, 520px);
+    margin-right: 0;
+  }
+  /* Desktop dock keeps the trigger; body lives in the sheet only */
+  .dash3d-graph-filters-dock .dash3d-graph-filters-hint { display: block; }
+}
+
+/* Desktop: wrappers dissolve so absolute panel layout is unchanged */
+@media (min-width: 721px) {
+  .dash3d-mobile-chrome,
+  .dash3d-mobile-card-head {
+    display: none !important;
+  }
+  .dash3d-mobile-card {
+    display: contents;
+  }
+  .dash3d-mobile-card-body {
+    display: contents;
+  }
+  .dash3d-panel-stack {
+    display: contents;
+  }
+  .dash3d-graph-filters-trigger-slot {
+    display: none;
+  }
+  /* Keep the 3D stage fullscreen on desktop — wrappers dissolve */
+  .dash3d-scene-mobile-slot {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    height: auto;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    display: block;
+  }
+}
+
+/* Mobile: single scrollable column, no absolute overlap */
+@media (max-width: 720px) {
+  .dash3d-root.dash3d-universe {
+    height: auto;
+    min-height: 100dvh;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .dash3d-mobile-chrome {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0.55rem calc(0.45rem + env(safe-area-inset-top, 0px) * 0);
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+    background: rgb(7 11 22 / 0.92);
+    border-bottom: 1px solid var(--dash3d-line);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .dash3d-mobile-nav {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .dash3d-mobile-nav::-webkit-scrollbar { display: none; }
+  .dash3d-mobile-nav-link {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid var(--dash3d-line);
+    color: var(--dash3d-fg);
+    text-decoration: none;
+    background: rgb(16 22 40 / 0.85);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .dash3d-mobile-nav-link.is-active {
+    outline: 1px solid rgba(124, 92, 255, 0.85);
+    background: rgba(124, 92, 255, 0.22);
+  }
+  .dash3d-mobile-chrome-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+  }
+
+  .dash3d-panel-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.55rem;
+    position: relative;
+    z-index: 2;
+  }
+
+  .dash3d-mobile-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--dash3d-line);
+    border-radius: 1rem;
+    background: var(--dash3d-panel);
+    box-shadow: 0 8px 24px rgb(4 8 20 / 0.35);
+    overflow: hidden;
+  }
+  .dash3d-mobile-card-head {
+    display: flex;
+    align-items: stretch;
+    gap: 0.35rem;
+    padding: 0.35rem 0.45rem;
+    border-bottom: 1px solid rgb(42 51 84 / 0.55);
+  }
+  .dash3d-mobile-card-toggle {
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    min-height: 44px;
+    padding: 0.25rem 0.35rem;
+  }
+  .dash3d-mobile-card-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--dash3d-muted);
+  }
+  .dash3d-mobile-card-summary {
+    flex: 1 1 100%;
+    font-size: 0.72rem;
+  }
+  .dash3d-mobile-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .dash3d-mobile-card.is-collapsed .dash3d-mobile-card-body {
+    display: none;
+  }
+  .dash3d-mobile-card.is-open .dash3d-mobile-card-body {
+    display: block;
+    padding: 0.45rem 0.55rem 0.65rem;
+  }
+
+  /* Focused / fullscreen panel */
+  .dash3d-mobile-card.is-focused {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    border-radius: 0;
+    max-height: none;
+    height: 100dvh;
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow: auto;
+    background: rgb(7 11 22 / 0.98);
+  }
+  .dash3d-root[data-panel-focus]:not([data-panel-focus=""]) .dash3d-mobile-chrome {
+    /* keep chrome reachable under focused panel via its own Back */
+  }
+  .dash3d-root[data-panel-focus]:not([data-panel-focus=""]) .dash3d-mobile-card:not(.is-focused) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* Kill absolute overlap — every panel in document flow */
+  .dash3d-skybar,
+  .dash3d-charts-panel,
+  .dash3d-feed-panel,
+  .dash3d-graph-filters,
+  .dash3d-mirror-panel,
+  .dash3d-flyhud,
+  .dash3d-minimap,
+  .dash3d-hud-focus-toggle {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0;
+    z-index: auto;
+  }
+  .dash3d-skybar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0 !important;
+    min-height: 0 !important;
+    pointer-events: auto;
+  }
+  .dash3d-skybar-card,
+  .dash3d-money,
+  .dash3d-skybar-card.dash3d-money,
+  .dash3d-skybar-card.dash3d-forever,
+  [data-testid="money-panel"],
+  [data-testid="forever-contract"] {
+    max-width: none !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100%;
+    flex: none;
+  }
+  button.dash3d-zoomout.dash3d-glass,
+  .dash3d-skybar > button.dash3d-zoomout {
+    width: 100%;
+    max-height: none;
+  }
+
+  /* Hide desktop filter dock on mobile — chrome owns the Filters button */
+  .dash3d-graph-filters-dock {
+    display: none !important;
+  }
+
+  /* Scene: fixed-height slot in the scroll column; not a trapping overlay */
+  .dash3d-scene-mobile-slot {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: min(52dvh, 420px);
+    min-height: 240px;
+    border-radius: 1rem;
+    overflow: hidden;
+    border: 1px solid var(--dash3d-line);
+  }
+  .dash3d-root .dash3d-canvas-wrap {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    min-height: 0;
+  }
+  /* When scene card is focused, fill the viewport */
+  .dash3d-mobile-card.is-focused .dash3d-scene-mobile-slot {
+    height: calc(100dvh - 5.5rem);
+    min-height: 280px;
+  }
+
+  /* Default: one-finger vertical swipe scrolls the page over the canvas */
+  .dash3d-universe canvas,
+  .dash3d-universe .dash3d-canvas,
+  [data-testid="universe-canvas"],
+  .dash3d-root canvas {
+    touch-action: pan-y pinch-zoom;
+  }
+  /* Explicit interact mode: graph owns gestures */
+  .dash3d-root[data-scene-interact="1"] canvas,
+  .dash3d-root[data-scene-interact="1"] .dash3d-canvas,
+  .dash3d-root[data-scene-interact="1"] [data-testid="universe-canvas"] {
+    touch-action: none;
+  }
+
+  .dash3d-hud-focus-toggle {
+    align-self: flex-start;
+    margin: 0.35rem 0.55rem;
+  }
+}
+
+/* Scene interact attribute also respected on taller short-phone CSS path */
+.dash3d-root[data-scene-interact="0"] canvas,
+.dash3d-root[data-scene-interact="0"] .dash3d-canvas {
+  touch-action: pan-y pinch-zoom;
+}
+.dash3d-root[data-scene-interact="1"] canvas,
+.dash3d-root[data-scene-interact="1"] .dash3d-canvas {
+  touch-action: none;
+}
+
+.dash3d-pill.is-on {
+  background: rgba(124, 92, 255, 0.28);
+  border-color: rgba(124, 92, 255, 0.7);
+}

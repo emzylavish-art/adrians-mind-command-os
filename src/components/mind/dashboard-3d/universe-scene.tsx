@@ -1377,7 +1377,29 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       spherical.setFromVector3(freePos.clone().sub(lookAt));
       rig = { ...rig, t: 1, to: { position: next, lookAt: look }, from: { position: next, lookAt: look } };
     };
+    const sceneInteractOn = () => {
+      const root = document.querySelector('[data-testid="dash3d-root"]');
+      // Desktop (no mobile chrome / wide): always interact. Mobile: respect toggle (default off = page scroll).
+      if (!root) return true;
+      if (window.matchMedia && window.matchMedia("(max-width: 720px)").matches) {
+        return root.getAttribute("data-scene-interact") === "1";
+      }
+      return true;
+    };
     const onPointerDown = (ev: PointerEvent) => {
+      // Mobile scroll mode: let one-finger vertical swipe scroll the page (no capture).
+      if (!sceneInteractOn() && ev.isPrimary && pinchPointers.size < 1) {
+        // Still track for two-finger pinch start, but don't capture / drag.
+        pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (pinchPointers.size === 2) {
+          const pts = [...pinchPointers.values()];
+          pinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        } else {
+          // one finger — do not trap page scroll
+          pinchPointers.delete(ev.pointerId);
+        }
+        return;
+      }
       try { renderer.domElement.setPointerCapture(ev.pointerId); } catch { /* optional */ }
       pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
       if (pinchPointers.size === 2) {
