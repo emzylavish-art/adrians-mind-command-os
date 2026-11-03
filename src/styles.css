@@ -13268,12 +13268,22 @@ body:has(.account-panel) nav.fixed[aria-label="Primary"] {
  * dock CSS vars drive scroll clearance (composer + tab + safe-area).
  * ============================================================================ */
 
-/* Dock measured chrome → clearance token (consumed by scrollports + chip rows) */
+/* Dock measured chrome → clearance token on ancestors so scrollports inherit */
+:root,
+.shell,
+body {
+  --am-composer-h: 5.25rem; /* card+pad+buffer so last chip row clears */
+  --am-tabbar-h: 3.375rem; /* ~54px Primary */
+  --am-dock-clearance: calc(
+    var(--am-composer-h) + var(--am-tabbar-h) + env(safe-area-inset-bottom, 0px)
+  );
+}
 .composer-bar.is-fixed,
 .composer-bar.is-fixed.fixed,
 div.shell > div.composer-bar.is-fixed {
-  --am-composer-h: 5.25rem; /* card+pad+buffer so last chip row clears */
-  --am-tabbar-h: 3.375rem; /* ~54px Primary */
+  /* re-assert on dock for tooling that reads computed style here */
+  --am-composer-h: 5.25rem;
+  --am-tabbar-h: 3.375rem;
   --am-dock-clearance: calc(
     var(--am-composer-h) + var(--am-tabbar-h) + env(safe-area-inset-bottom, 0px)
   );
