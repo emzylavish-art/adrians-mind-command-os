@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const NOTION_SETUP =
-  "Notion is not connected. Set NOTION_TOKEN on the server to an internal integration secret, then share the pages with that integration. Nothing was searched or updated. The secret is not shown here.";
+  "Notion is not connected. Set NOTION_TOKEN (or NOTION_API_KEY) on the server, or configure Notion OAuth (NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, NOTION_OAUTH_REDIRECT_URI), then share pages with the integration. Nothing was searched or updated. The secret is not shown here.";
 
 export type NotionPage = { id: string; title: string; url: string; kind: "page" | "database" };
 
@@ -149,6 +149,28 @@ async function callNotion(fetchImpl: FetchLike, token: string, path: string, ini
     return { ok: false, error: `${message} Nothing was invented.` };
   }
   return { ok: true, body };
+}
+
+
+/** Live probe — never report connected from token presence alone. */
+export async function probeNotionConnection(input: {
+  token: string | undefined;
+  disabled: boolean;
+  fetch: FetchLike;
+}): Promise<{ state: NotionTurn["state"]; detail: string }> {
+  const base = notionConnection(input.token, input.disabled);
+  if (base.state !== "connected" || !input.token?.trim()) return base;
+  const result = await callNotion(input.fetch, input.token.trim(), "/users/me", { method: "GET" });
+  if (!result.ok) {
+    return {
+      state: "unconfigured",
+      detail: `Notion credentials are present but the API rejected them. ${result.error} Fix NOTION_TOKEN / OAuth and share pages. Nothing was searched.`,
+    };
+  }
+  return {
+    state: "connected",
+    detail: "Notion answered users/me. The secret is not shown. Search reads the live API. A page change waits for confirmation.",
+  };
 }
 
 export async function runNotionTurn(input: {

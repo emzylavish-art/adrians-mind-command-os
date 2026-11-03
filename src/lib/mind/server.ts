@@ -157,17 +157,21 @@ export const recordAgentExecution = createServerFn({ method: "POST" })
 export const notionStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { notionConnection, readNotionPref } = await import("./notion");
+    const { probeNotionConnection, readNotionPref } = await import("./notion");
+    const { resolveNotionToken } = await import("./connectors/notion-oauth");
     const pref = readNotionPref(context.userId);
-    return notionConnection(process.env.NOTION_TOKEN, pref.disabled);
+    const token = resolveNotionToken(context.userId);
+    return probeNotionConnection({ token, disabled: pref.disabled, fetch: globalThis.fetch });
   });
 
 export const notionDisconnect = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { notionConnection, writeNotionPref } = await import("./notion");
+    const { probeNotionConnection, writeNotionPref } = await import("./notion");
+    const { resolveNotionToken } = await import("./connectors/notion-oauth");
     writeNotionPref(context.userId, true);
-    return notionConnection(process.env.NOTION_TOKEN, true);
+    const token = resolveNotionToken(context.userId);
+    return probeNotionConnection({ token, disabled: true, fetch: globalThis.fetch });
   });
 
 export const notionCommand = createServerFn({ method: "POST" })
@@ -208,9 +212,10 @@ export const notionCommand = createServerFn({ method: "POST" })
       };
     }
     const { readNotionPref, runNotionTurn } = await import("./notion");
+    const { resolveNotionToken } = await import("./connectors/notion-oauth");
     const pref = readNotionPref(context.userId);
     const result = await runNotionTurn({
-      token: process.env.NOTION_TOKEN,
+      token: resolveNotionToken(context.userId),
       disabled: pref.disabled,
       text: data.text,
       confirmed: data.confirmed,

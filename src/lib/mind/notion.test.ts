@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
 import { readToolRuns, writeToolRun } from "./notion-record.ts";
-import { NOTION_SETUP, notionConnection, pagesFromSearch, parseNotionIntent, readNotionPref, runNotionTurn, setNotionPrefDirectory, textFromBlocks, writeNotionPref } from "./notion.ts";
+import { NOTION_SETUP, notionConnection, pagesFromSearch, parseNotionIntent, probeNotionConnection, readNotionPref, runNotionTurn, setNotionPrefDirectory, textFromBlocks, writeNotionPref } from "./notion.ts";
 
 const page = (id: string, title: string) => ({
   object: "page",
@@ -169,5 +169,40 @@ describe("notion", () => {
     const b = await readToolRuns(sql, "owner-b");
     assert.deepEqual(a.map((row) => row.id), ["r1"]);
     assert.deepEqual(b.map((row) => row.id), ["r2"]);
+  });
+});
+
+
+describe("probeNotionConnection", () => {
+  it("stays unconfigured when token missing", async () => {
+    const status = await probeNotionConnection({
+      token: undefined,
+      disabled: false,
+      fetch: async () => {
+        throw new Error("should not call");
+      },
+    });
+    assert.equal(status.state, "unconfigured");
+    assert.match(status.detail, /NOTION_TOKEN/);
+  });
+
+  it("does not report connected when users\/me fails", async () => {
+    const status = await probeNotionConnection({
+      token: "secret",
+      disabled: false,
+      fetch: async () => ({ ok: false, status: 401, json: async () => ({ message: "unauthorized" }) }),
+    });
+    assert.equal(status.state, "unconfigured");
+    assert.match(status.detail, /rejected|unauthorized|API/i);
+  });
+
+  it("reports connected only after users\/me succeeds", async () => {
+    const status = await probeNotionConnection({
+      token: "secret",
+      disabled: false,
+      fetch: async () => ({ ok: true, status: 200, json: async () => ({ id: "user", object: "user" }) }),
+    });
+    assert.equal(status.state, "connected");
+    assert.match(status.detail, /users\/me|answered/i);
   });
 });
