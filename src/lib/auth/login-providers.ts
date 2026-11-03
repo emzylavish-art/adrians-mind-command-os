@@ -171,12 +171,22 @@ export function serverFnRedirectHref(value: unknown): string | null {
   return null;
 }
 
-/** Loader catch must never claim Supabase is unconfigured (false banner). */
+/**
+ * Loader catch must never claim Supabase is unconfigured (false email banner),
+ * and must not blank OAuth providers to [] — that painted three false
+ * "Not enabled yet" notes for Google/GitHub/Apple on a transient serverFn miss.
+ * Matches production SUPABASE_OAUTH_PROVIDERS=google,github (Apple stays off).
+ */
+export const FALLBACK_SUPABASE_OAUTH_PROVIDERS: readonly SupabaseOAuthProviderId[] = [
+  "google",
+  "github",
+];
+
 export function authUserLoaderFallback(err?: unknown): {
   configured: true;
   user: null;
   brokerConfigured: false;
-  supabaseOAuthProviders: [];
+  supabaseOAuthProviders: SupabaseOAuthProviderId[];
 } {
   if (typeof console !== "undefined" && typeof console.error === "function") {
     console.error("[login] getSupabaseAuthUser failed; keeping configured=true", err);
@@ -185,7 +195,7 @@ export function authUserLoaderFallback(err?: unknown): {
     configured: true,
     user: null,
     brokerConfigured: false,
-    supabaseOAuthProviders: [],
+    supabaseOAuthProviders: [...FALLBACK_SUPABASE_OAUTH_PROVIDERS],
   };
 }
 

@@ -2,6 +2,9 @@
  * OAuth PKCE callback — exchange code server-side, set HttpOnly cookies, redirect.
  */
 import { safeRedirectPath } from "./safe-redirect";
+import { oauthCallbackRedirect } from "./oauth-callback-response";
+
+export { oauthCallbackRedirect } from "./oauth-callback-response";
 
 export async function handleAuthCallback(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -16,28 +19,36 @@ export async function handleAuthCallback(request: Request): Promise<Response> {
     const target = new URL("/login", url.origin);
     target.searchParams.set("next", next);
     target.searchParams.set("error", message.slice(0, 240));
-    return Response.redirect(target.toString(), 302);
+    return oauthCallbackRedirect(target.toString());
   };
 
-  if (errDescription) {
-    return loginError(errDescription);
-  }
+  try {
+    if (errDescription) {
+      return loginError(errDescription);
+    }
 
-  const { readSupabaseEnv, createSupabaseServerClient } = await import(
-    "./server"
-  );
-  if (!readSupabaseEnv()) {
-    return loginError("Sign-in isn't configured yet.");
-  }
-  if (!code) {
-    return loginError("Missing authorization code.");
-  }
+    const { readSupabaseEnv, createSupabaseServerClient } = await import(
+      "./server"
+    );
+    if (!readSupabaseEnv()) {
+      return loginError("Sign-in isn't configured yet.");
+    }
+    if (!code) {
+      return loginError("Missing authorization code.");
+    }
 
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) {
-    return loginError(error.message || "Could not complete sign-in.");
-  }
+    const supabase = createSupabaseServerClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      return loginError(error.message || "Could not complete sign-in.");
+    }
 
-  return Response.redirect(new URL(next, url.origin).toString(), 302);
+    return oauthCallbackRedirect(new URL(next, url.origin).toString());
+  } catch (err) {
+    const message =
+      err instanceof Error && err.message.trim()
+        ? err.message
+        : "Could not complete sign-in.";
+    return loginError(message);
+  }
 }

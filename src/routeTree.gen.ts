@@ -20,6 +20,8 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiIntentOutcomesRouteImport } from './routes/api/intent/outcomes'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
+import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
 import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/builtin'
 import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
@@ -108,6 +110,16 @@ const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   id: '/api/mind/turn',
   path: '/api/mind/turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthGithubCallbackRoute = AuthGithubCallbackRouteImport.update({
+  id: '/auth/github/callback',
+  path: '/auth/github/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
+  id: '/auth/google/callback',
+  path: '/auth/google/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindDashboardStatusRoute = ApiMindDashboardStatusRouteImport.update({
@@ -302,6 +314,8 @@ export interface FileRoutesByFullPath {
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -349,6 +363,8 @@ export interface FileRoutesByTo {
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -397,6 +413,8 @@ export interface FileRoutesById {
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/auth/github/callback': typeof AuthGithubCallbackRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -446,6 +464,8 @@ export interface FileRouteTypes {
     | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/auth/github/callback'
+    | '/auth/google/callback'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -493,6 +513,8 @@ export interface FileRouteTypes {
     | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/auth/github/callback'
+    | '/auth/google/callback'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -540,6 +562,8 @@ export interface FileRouteTypes {
     | '/api/intent/outcomes'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/auth/github/callback'
+    | '/auth/google/callback'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -588,6 +612,8 @@ export interface RootRouteChildren {
   ApiIntentOutcomesRoute: typeof ApiIntentOutcomesRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  AuthGithubCallbackRoute: typeof AuthGithubCallbackRoute
+  AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
   ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
   ApiMindMcpBuiltinRoute: typeof ApiMindMcpBuiltinRoute
   ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
@@ -701,6 +727,20 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/turn'
       fullPath: '/api/mind/turn'
       preLoaderRoute: typeof ApiMindTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/github/callback': {
+      id: '/auth/github/callback'
+      path: '/auth/github/callback'
+      fullPath: '/auth/github/callback'
+      preLoaderRoute: typeof AuthGithubCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/google/callback': {
+      id: '/auth/google/callback'
+      path: '/auth/google/callback'
+      fullPath: '/auth/google/callback'
+      preLoaderRoute: typeof AuthGoogleCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/dashboard/status': {
@@ -956,6 +996,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiIntentOutcomesRoute: ApiIntentOutcomesRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  AuthGithubCallbackRoute: AuthGithubCallbackRoute,
+  AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
   ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,
   ApiMindMcpBuiltinRoute: ApiMindMcpBuiltinRoute,
   ApiMindMcpCallRoute: ApiMindMcpCallRoute,
@@ -994,12 +1036,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

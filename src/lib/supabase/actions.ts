@@ -206,10 +206,25 @@ export const startOAuth = createServerFn({ method: "POST" })
     if (!data.provider) {
       return { ok: false as const, error: "Unknown sign-in provider." };
     }
-    const supabase = createSupabaseServerClient();
     const origin = await requestOrigin();
-    const redirectTo = buildAuthCallbackUrl(origin, data.next);
     const provider = data.provider as "google" | "github" | "apple";
+
+    // Google/GitHub: first-party OAuth so the browser never hits *.supabase.co
+    // (some mobile carriers' DNS cannot resolve project.supabase.co).
+    if (provider === "google" || provider === "github") {
+      const { startFirstPartyOAuth } = await import(
+        "./first-party-oauth.server"
+      );
+      return startFirstPartyOAuth({
+        provider,
+        next: data.next,
+        origin,
+      });
+    }
+
+    // Apple (and any remaining Supabase-hosted providers) keep the old hop.
+    const supabase = createSupabaseServerClient();
+    const redirectTo = buildAuthCallbackUrl(origin, data.next);
     const { data: oauth, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
