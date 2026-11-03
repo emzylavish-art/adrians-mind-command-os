@@ -1,9 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  classifyLoginCallbackError,
   dashboardLoginSearch,
   emailPasswordGate,
   isOwnerBrokerConfigured,
+  loginCallbackFailureKind,
   loginErrorBannerFromSearch,
   parseSupabaseOAuthProviders,
   resolveLoginProviderAction,
@@ -74,11 +76,35 @@ describe("emailPasswordGate", () => {
   });
 });
 
-describe("loginErrorBannerFromSearch", () => {
-  it("never seeds a red banner from an error query param alone", () => {
+describe("loginErrorBannerFromSearch / classifyLoginCallbackError", () => {
+  it("ignores empty and bare broker noise so stale restore stays quiet", () => {
     assert.equal(loginErrorBannerFromSearch(undefined), null);
-    assert.equal(loginErrorBannerFromSearch("Sign-in failed"), null);
-    assert.equal(loginErrorBannerFromSearch("anything"), null);
+    assert.equal(loginErrorBannerFromSearch(""), null);
+    assert.equal(loginErrorBannerFromSearch("1"), null);
+    assert.equal(classifyLoginCallbackError("1"), null);
+  });
+
+  it("surfaces auth callback errors as a red auth_error banner line", () => {
+    assert.equal(loginErrorBannerFromSearch("Missing authorization code."), "Missing authorization code.");
+    assert.equal(loginCallbackFailureKind("Missing authorization code."), "auth_error");
+    assert.equal(loginCallbackFailureKind("access_denied"), "auth_error");
+    assert.equal(
+      loginErrorBannerFromSearch("Could not complete sign-in."),
+      "Could not complete sign-in.",
+    );
+    assert.deepEqual(classifyLoginCallbackError("Sign-in isn't configured yet."), {
+      kind: "auth_error",
+      message: "Sign-in isn't configured yet.",
+    });
+  });
+
+  it("classifies immutable/500-style callback failures as server_error", () => {
+    const msg = "TypeError: immutable";
+    assert.equal(loginErrorBannerFromSearch(msg), msg);
+    assert.equal(loginCallbackFailureKind(msg), "server_error");
+    assert.equal(loginCallbackFailureKind("Internal Server Error"), "server_error");
+    assert.equal(loginCallbackFailureKind("HTTP 500 from callback"), "server_error");
+    assert.equal(loginCallbackFailureKind("mergeEventResponseHeaders failed"), "server_error");
   });
 });
 

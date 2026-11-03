@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   getSupabaseAuthUser,
@@ -11,8 +11,11 @@ import { oauthAuthorizeTarget } from "@/lib/supabase/oauth-redirect";
 import { authEnabled, signIn } from "@/lib/auth/client";
 import {
   emailPasswordGate,
+  LOGIN_LAST_OAUTH_PROVIDER_KEY,
+  loginCallbackFailureKind,
   loginErrorBannerFromSearch,
   resolveLoginProviderAction,
+  type LoginCallbackFailureKind,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
 
@@ -185,16 +188,30 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  // Never seed the red banner from ?error= (stale restore / bounce). Only in-page failures.
+  // Seed red banner from real /auth/callback ?error= (auth vs server); ignore bare noise.
   const [banner, setBanner] = useState<string | null>(
     () => loginErrorBannerFromSearch(search.error),
   );
+  const [bannerKind, setBannerKind] = useState<LoginCallbackFailureKind | null>(
+    () => loginCallbackFailureKind(search.error),
+  );
   const [info, setInfo] = useState<string | null>(null);
+
+  // Drop ?error= after mount so a refresh/stale restore does not re-paint the banner.
+  useEffect(() => {
+    if (typeof window === "undefined" || !search.error) return;
+    if (!loginErrorBannerFromSearch(search.error)) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("error")) return;
+    url.searchParams.delete("error");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [search.error]);
 
   async function onPasswordSubmit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setBanner(null);
+    setBannerKind(null);
     setInfo(null);
     const gate = emailPasswordGate(supabaseConfigured);
     if (!gate.ok) {
@@ -209,6 +226,7 @@ function Login() {
       });
       if (result && "ok" in result && result.ok === false) {
         setBanner(result.error);
+        setBannerKind("auth_error");
         return;
       }
       if (result && "needsConfirm" in result && result.needsConfirm) {
@@ -220,6 +238,7 @@ function Login() {
         err instanceof Error ? err.message : "Something went wrong.";
       if (!/redirect/i.test(message)) {
         setBanner(message);
+        setBannerKind("auth_error");
       }
     } finally {
       setBusy(false);
@@ -229,7 +248,15 @@ function Login() {
   async function onProvider(provider: LoginProviderId) {
     setBusy(true);
     setBanner(null);
+    setBannerKind(null);
     setInfo(null);
+    try {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(LOGIN_LAST_OAUTH_PROVIDER_KEY, provider);
+      }
+    } catch {
+      /* ignore quota / private mode */
+    }
     const action = resolveLoginProviderAction(provider, {
       supabaseConfigured,
       betterAuthEnabled: brokerConfigured && authEnabled,
@@ -251,8 +278,10 @@ function Login() {
         }
         if (result && "ok" in result && result.ok === false) {
           setBanner(result.error);
+          setBannerKind("auth_error");
         } else {
           setBanner("Could not start provider sign-in.");
+          setBannerKind("auth_error");
         }
         return;
       }
@@ -265,10 +294,29 @@ function Login() {
         err instanceof Error ? err.message : "Something went wrong.";
       if (!/redirect/i.test(message)) {
         setBanner(message);
+        setBannerKind("auth_error");
       }
     } finally {
       setBusy(false);
     }
+  }
+
+  function retryLastOauth() {
+    let last: string | null = null;
+    try {
+      last = typeof window !== "undefined"
+        ? window.sessionStorage.getItem(LOGIN_LAST_OAUTH_PROVIDER_KEY)
+        : null;
+    } catch {
+      last = null;
+    }
+    const allowed: LoginProviderId[] = ["google", "github", "apple", "x"];
+    if (last && (allowed as string[]).includes(last)) {
+      void onProvider(last as LoginProviderId);
+      return;
+    }
+    setBanner(null);
+    setBannerKind(null);
   }
 
   return (
@@ -320,6 +368,7 @@ function Login() {
                 onClick={() => {
                   setMode(value);
                   setBanner(null);
+                  setBannerKind(null);
                   setInfo(null);
                 }}
               >
@@ -334,15 +383,30 @@ function Login() {
             className="mt-4 flex flex-wrap items-start justify-between gap-3 rounded-panel border border-danger/45 bg-danger/10 px-4 py-3"
             role="alert"
             data-testid="login-error-banner"
+            data-failure-kind={bannerKind ?? "auth_error"}
           >
             <p className="text-sm leading-relaxed text-danger">{banner}</p>
-            <button
-              type="button"
-              className="inline-flex min-h-9 shrink-0 items-center rounded-panel border border-line bg-surface px-3 text-xs font-medium text-fg transition-colors hover:bg-surface-2"
-              onClick={() => setBanner(null)}
-            >
-              Dismiss
-            </button>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-9 items-center rounded-panel border border-line bg-surface px-3 text-xs font-medium text-fg transition-colors hover:bg-surface-2 disabled:opacity-60"
+                data-testid="login-error-retry"
+                disabled={busy}
+                onClick={() => retryLastOauth()}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                className="inline-flex min-h-9 items-center rounded-panel border border-line bg-surface px-3 text-xs font-medium text-fg transition-colors hover:bg-surface-2"
+                onClick={() => {
+                  setBanner(null);
+                  setBannerKind(null);
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 

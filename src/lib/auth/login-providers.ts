@@ -95,15 +95,49 @@ export function emailPasswordGate(supabaseConfigured: boolean): {
   };
 }
 
+/** Last OAuth provider attempted on /login (sessionStorage; Retry fidelity). */
+export const LOGIN_LAST_OAUTH_PROVIDER_KEY = "adrian.login.lastOauthProvider";
+
+export type LoginCallbackFailureKind = "auth_error" | "server_error";
+
+export type LoginCallbackFailure = {
+  kind: LoginCallbackFailureKind;
+  /** One-line description for the red login banner. */
+  message: string;
+};
+
 /**
- * Red danger banner must never appear from a URL query alone (stale links,
- * session restore, or a bounce that left ?error=). Only in-page failed attempts
- * set the danger banner.
+ * Classify /auth/callback → /login?error= (and Better Auth errorCallback) copy.
+ * Bare noise ("", "1") stays silent so stale restore / broker flags do not paint red.
+ * Real auth vs server failures become a red retryable banner.
  */
+export function classifyLoginCallbackError(
+  error: string | undefined,
+): LoginCallbackFailure | null {
+  const raw = String(error ?? "").trim();
+  if (!raw || raw === "1") return null;
+  const message = raw.slice(0, 240);
+  if (
+    /immutable|TypeError|Internal Server Error|HTTP\s*5\d\d|ECONNRESET|ENOTFOUND|mergeEventResponseHeaders|Unexpected token|server error/i.test(
+      raw,
+    )
+  ) {
+    return { kind: "server_error", message };
+  }
+  return { kind: "auth_error", message };
+}
+
+/** Seed the red login banner from a real callback/auth error query (not noise). */
 export function loginErrorBannerFromSearch(
-  _error: string | undefined,
+  error: string | undefined,
 ): string | null {
-  return null;
+  return classifyLoginCallbackError(error)?.message ?? null;
+}
+
+export function loginCallbackFailureKind(
+  error: string | undefined,
+): LoginCallbackFailureKind | null {
+  return classifyLoginCallbackError(error)?.kind ?? null;
 }
 
 /** /dashboard → /login search params. Never append error. */

@@ -578,3 +578,15 @@ command on Zack's PC.
 - Notion children: H28 https://app.notion.com/p/40db95f33e428137afbac78794dff0fe · H29 https://app.notion.com/p/40db95f33e4281889b4ecead023e69bb · cycle https://app.notion.com/p/40db95f33e428113a797c5011e1eccce
 - Workspace handoffs: /workspace/handoffs/error-banners-to-merge-gate.md · /workspace/handoffs/error-banners-to-gap-dispatcher.md
 - Lock releasing.
+
+## 2026-11-02T21:51:24-06:00 (America/Chicago) — Error Banners Bot — H30 login callback ?error= banner + gap verify
+- Gap id: H30 + ERR-01 gap-lock reverify + AUTH-01 client check
+- What:
+  - **Gap locks**: All `error-banners-gap-*.lock` (+ imagine/verifier/top5) re-verified on tip `0c02656` — ancestry of H16–H29 SHAs OK; focused banner/list/retry/service-board tests 104/104. Appended `verified fixed on 0c02656…, released` to each lock.
+  - **AUTH-01**: Callback **500** (immutable `Response.redirect`) cannot be fixed in this lane — needs Grok Build promote of `23860f7` (`oauthCallbackRedirect` mutable 302 + try/catch → `/login?error=`). Recorded for owner.
+  - **H30**: Client `/login` previously suppressed all `?error=` via `loginErrorBannerFromSearch → null` (silent after successful callback redirect). Now classifies auth_error vs server_error, seeds red banner + Retry (re-runs last OAuth provider from sessionStorage), strips `?error=` after mount to avoid stale restore. Bare `1`/empty still quiet.
+- Files: `src/lib/auth/login-providers.ts(+test)`, `src/routes/login.tsx`, `src/routeTree.gen.ts` (build Register), `.handoff/NOTION_HANDOFF.md`
+- Forbidden respected: no callback route / media / mcp / command-app / styles.css / server.ts edits.
+- Gates (pre-push): typecheck pass; npm test **1069/1069**; eslint touched **0 errors**; build pass.
+- Next: Merge Gate still needs PI∪error-banners (prior abort); Grok Build AUTH-01 callback promote; command-app onFailure mounts still blocked.
+
