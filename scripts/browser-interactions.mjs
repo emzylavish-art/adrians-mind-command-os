@@ -37,6 +37,10 @@ try {
     const response = await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
     assert.equal(response?.status(), 200, `${viewport.name}: login returned non-200`);
     await page.getByRole("heading", { name: "Sign in", exact: true }).waitFor({ timeout: 15000 });
+    // SSR headings can appear before React has installed client event handlers.
+    // Wait for the login bundle to hydrate before exercising interactive controls.
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1500);
     const password = page.getByTestId("login-password-input");
     const toggle = page.getByTestId("login-password-toggle");
     await password.waitFor();
