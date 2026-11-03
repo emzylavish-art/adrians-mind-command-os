@@ -160,7 +160,7 @@ describe("mind store", () => {
       sql.transaction = async (fn) => pg.transaction(async (tx) => {
         const transactional = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
           let text = strings[0] ?? "";
-          for (let i = 0; i < values.length; i += 1) text += `${i + 1}${strings[i + 1] ?? ""}`;
+          for (let i = 0; i < values.length; i += 1) text += `$${i + 1}${strings[i + 1] ?? ""}`;
           return (await tx.query(text, values)).rows;
         }) as Sql;
         transactional.query = async (text, params = []) => (await tx.query(text, params)).rows as never;
