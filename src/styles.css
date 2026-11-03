@@ -11589,8 +11589,8 @@ button.composer-speak-live:active,
 
   /* —— Kill vertical letter-strip status pills (BROWSER SPEECH / LOCAL FILE etc.) ——
    * Earlier overflow-wrap:anywhere on .rounded-full made 30×300 letter columns. */
-  .main-stage span.rounded-full,
-  .main-stage .rounded-full.border.border-line,
+  /* Status / tone pills only — never topbar or composer control buttons */
+  .main-stage span.rounded-full:not(.size-8):not(.grid),
   .main-stage span.rounded-full.border,
   .main-stage span.px-2.py-1.text-xs {
     writing-mode: horizontal-tb !important;
@@ -11609,10 +11609,9 @@ button.composer-speak-live:active,
   }
 
   /* Undo global break-anywhere on rounded pills / chips */
-  .main-stage .rounded-full,
-  .main-stage button.rounded-full,
   .main-stage .suggestion-chip,
-  .main-stage .model-chip {
+  .main-stage .model-chip,
+  .main-stage span.rounded-full {
     overflow-wrap: normal !important;
     word-break: normal !important;
     white-space: nowrap !important;
@@ -11966,5 +11965,1299 @@ body:has(.account-panel) nav.fixed[aria-label="Primary"] {
   .main-stage .mt-3.flex.items-center.gap-3 > .min-w-0.flex-1 {
     min-width: 0 !important;
     flex: 1 1 0% !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u h — round-2 topbar + dock (parent reject of final crops)
+ * America/Chicago (CST) 2026-11-02. CSS only (+ prior label TSX). No handlers/voice logic.
+ * Fixes: Dictate clip/taller, voice-zone ghost ring, bell wide pill, blank avatar A,
+ * composer overlapping chips, Auto ghost, missing text field, max-height crush.
+ * ============================================================================ */
+
+@media (max-width: 767.98px) {
+  /* —— Topbar: one 40px-centred row, 8px gaps, no clip —— */
+  .main-stage .topbar,
+  .main-stage.page-enter .topbar,
+  .shell .topbar,
+  header.topbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 0.5rem !important; /* 8px */
+    height: 3.5rem !important; /* 56 */
+    min-height: 3.5rem !important;
+    max-height: 3.5rem !important;
+    padding: 0.5rem 0.75rem !important;
+    overflow: visible !important;
+    overflow-x: clip !important;
+    overflow-y: visible !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Menu button = 40 circle */
+  .topbar > button[aria-label="Open menu"],
+  .main-stage .topbar > button[aria-label="Open menu"] {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-width: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    flex: 0 0 2.5rem !important;
+    align-self: center !important;
+  }
+
+  /* Title */
+  .topbar > p.hidden.text-sm.font-semibold.md\:block,
+  .main-stage .topbar > p.text-sm.font-semibold {
+    display: block !important;
+    flex: 1 1 auto !important;
+    min-width: 2.5rem !important;
+    max-width: 5.5rem !important;
+    margin: 0 !important;
+    line-height: 1.2 !important;
+    align-self: center !important;
+  }
+
+  /* —— (b) Kill ghost ring / waveform container behind Dictate|Talk —— */
+  .topbar .voice-zone,
+  .main-stage .topbar .voice-zone {
+    order: 3 !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    align-self: center !important;
+    justify-content: flex-end !important;
+    gap: 0.5rem !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    top: auto !important;
+    inset: auto !important;
+  }
+  .topbar .voice-zone > .waveform,
+  .topbar .voice-zone > button[aria-label="Speak last reply"],
+  .topbar .voice-zone::before,
+  .topbar .voice-zone::after {
+    display: none !important;
+    content: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    border: 0 !important;
+  }
+  .topbar .voice-zone [data-testid="browser-dictation"] {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    align-self: center !important;
+    gap: 0.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  .topbar .voice-zone [data-testid="browser-dictation"]::after {
+    display: none !important; /* drop divider that inflated the zone */
+    content: none !important;
+  }
+  /* Idle dictation root: no extra wrap chrome */
+  .topbar .voice-zone [data-dictation-root],
+  .topbar .voice-zone [data-dictation-root="idle"] {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0 !important;
+    height: 2.5rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  /* —— (a) Dictate + Talk identical 40px pills (icon + label row) —— */
+  .topbar .voice-zone .voice-action-dictate,
+  .topbar .voice-zone .voice-action-talk,
+  .topbar .voice-zone [data-testid="mic-button"],
+  .topbar .voice-zone [data-testid="open-voice-mode"],
+  .main-stage .topbar [data-testid="mic-button"],
+  .main-stage .topbar [data-testid="open-voice-mode"] {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    align-self: center !important;
+    gap: 0.35rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 0.7rem !important;
+    border-radius: 999px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    transform: none !important;
+    writing-mode: horizontal-tb !important;
+    white-space: nowrap !important;
+    line-height: 1 !important;
+    font-size: 0.62rem !important;
+    grid-template-columns: none !important;
+    grid-template-rows: none !important;
+    grid: none !important;
+    place-items: unset !important;
+  }
+  .topbar .voice-zone .voice-action-dictate svg,
+  .topbar .voice-zone .voice-action-talk svg,
+  .topbar .voice-zone [data-testid="mic-button"] svg,
+  .topbar .voice-zone [data-testid="open-voice-mode"] svg {
+    width: 0.95rem !important;
+    height: 0.95rem !important;
+    flex-shrink: 0 !important;
+    display: block !important;
+  }
+  .topbar .voice-zone .voice-action-dictate__label,
+  .topbar .voice-zone .voice-action-talk__label,
+  .topbar .voice-zone [data-testid="mic-button"] .voice-action-dictate__label,
+  .topbar .voice-zone [data-testid="open-voice-mode"] .voice-action-talk__label {
+    display: inline !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    clip: auto !important;
+    overflow: visible !important;
+    font-size: 0.62rem !important;
+    font-weight: 650 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  /* —— (c) Bell = 40px circle like menu —— */
+  .topbar [data-testid="alerts-toggle"],
+  .main-stage .topbar [data-testid="alerts-toggle"] {
+    order: 4 !important;
+    display: grid !important;
+    place-items: center !important;
+    align-self: center !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-width: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 999px !important;
+    flex: 0 0 2.5rem !important;
+    aspect-ratio: 1 / 1 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  /* —— (d) Avatar: 40 circle showing A (undo span.rounded-full hide) —— */
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full,
+  .main-stage .topbar > button.flex.h-11.items-center.gap-2.rounded-full {
+    order: 5 !important;
+    display: grid !important;
+    place-items: center !important;
+    align-self: center !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-width: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 999px !important;
+    flex: 0 0 2.5rem !important;
+    overflow: hidden !important;
+  }
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.hidden,
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.md\:inline {
+    display: none !important;
+  }
+  .main-stage .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.grid.size-8.rounded-full,
+  .main-stage .topbar > button.flex.h-11.items-center > span.rounded-full.bg-accent,
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.grid.size-8,
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.rounded-full.bg-accent,
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.rounded-full {
+    display: grid !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    place-items: center !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    min-height: 2rem !important;
+    max-width: 2rem !important;
+    max-height: 2rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    font-size: 0.8rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    overflow: visible !important;
+    pointer-events: none !important;
+  }
+
+  /* —— Dock / composer: one bottom bar with text field; chips clear it —— */
+  :root {
+    --chrome-nav-h: 3.75rem;
+    --chrome-composer-h: 7.25rem; /* ask + row */
+  }
+
+  /* Undo earlier slim-strip clamps that hid Ask + crushed Auto into a ghost */
+  body:has(nav.fixed[aria-label="Primary"]) .shell > .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > [data-testid="composer-bar"].composer-bar,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed[data-testid="composer-bar"],
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .shell > .composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed[data-testid="composer-bar"],
+  body:has([data-composer="floating"]) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(var(--chrome-nav-h) + 0.35rem + env(safe-area-inset-bottom, 0px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    width: auto !important;
+    padding: 0 !important;
+    pointer-events: none !important; /* card re-enables */
+  }
+  .composer-bar.is-fixed .composer-bar__safe,
+  [data-testid="composer-bar"] .composer-bar__safe {
+    pointer-events: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .composer-bar.is-fixed .composer-bar__card,
+  [data-testid="composer-bar"] .composer-bar__card,
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__card,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__card {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.45rem !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0.55rem 0.65rem !important;
+    border-radius: 1.25rem !important;
+    /* Opaque so chips never show through */
+    background: rgb(12 12 14 / 0.98) !important;
+    background-image: none !important;
+    backdrop-filter: blur(8px) saturate(1.05) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+    box-shadow: 0 10px 28px rgb(0 0 0 / 0.55) !important;
+    pointer-events: auto !important;
+  }
+
+  /* (g) Show Ask text field on the docked composer-bar */
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__ask,
+  .composer-bar.is-fixed .composer-bar__ask,
+  [data-testid="composer-bar"] .composer-bar__ask,
+  [data-testid="composer-bar-ask"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .composer-bar.is-fixed .composer-bar__ask-input,
+  [data-testid="composer-bar"] .composer-bar__ask-input,
+  .composer-bar.is-fixed .composer-bar__ask input,
+  .composer-bar.is-fixed .composer-bar__ask textarea {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    min-height: 2.25rem !important;
+    height: 2.25rem !important;
+    opacity: 1 !important;
+    font-size: 1rem !important;
+    color: #f4f4f5 !important;
+  }
+
+  /* Row: + / Auto / mic / Speak — no clipped ghosts */
+  .composer-bar.is-fixed .composer-bar__row,
+  [data-testid="composer-bar"] .composer-bar__row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    min-height: 2.5rem !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .composer-bar.is-fixed .composer-bar__model,
+  .composer-bar.is-fixed .composer-bar__model-wrap,
+  [data-testid="composer-bar-model"],
+  .composer-bar.is-fixed .model-chip {
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    align-self: center !important;
+    position: relative !important;
+    transform: none !important;
+    top: auto !important;
+    bottom: auto !important;
+  }
+  /* (f) Kill ghost layers behind Auto (pseudo / duplicate plate) */
+  .composer-bar.is-fixed .composer-bar__model::before,
+  .composer-bar.is-fixed .composer-bar__model::after,
+  .composer-bar.is-fixed .composer-bar__model-wrap::before,
+  .composer-bar.is-fixed .composer-bar__model-wrap::after,
+  .composer-bar.is-fixed .model-chip::before,
+  .composer-bar.is-fixed .model-chip::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  /* Hide in-page floating dock form when bottom composer owns the lane —
+   * chips/actions stay in the scrollport; Ask lives in composer-bar. */
+  body:has(.composer-bar.is-fixed) section.command-card.composer-dock,
+  body:has(.composer-bar.is-fixed) .floating-composer.composer-dock,
+  body:has([data-testid="composer-bar"]) section.command-card.composer-dock,
+  body:has([data-testid="composer-bar"]) .floating-composer.command-card.composer-dock {
+    display: none !important;
+  }
+
+  /* (e) Content clears composer + tab so chips never sit under/through the bar */
+  .main-stage > .min-h-0.flex-1.overflow-auto,
+  .main-stage .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(
+      var(--chrome-nav-h) + var(--chrome-composer-h) + 1.25rem + env(safe-area-inset-bottom, 0px)
+    ) !important;
+    scroll-padding-bottom: calc(
+      var(--chrome-nav-h) + var(--chrome-composer-h) + 1.25rem + env(safe-area-inset-bottom, 0px)
+    ) !important;
+  }
+
+  /* Quick-action / tool chips: stay in normal flow, never under the fixed bar */
+  .main-stage .flex.gap-2.overflow-x-auto,
+  .main-stage .mt-4.flex.gap-2.overflow-x-auto,
+  .main-stage .grid.gap-2,
+  .main-stage button.rounded-panel {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+}
+
+/* Keep blur budget ≤ 8px on phone chrome (design rule) — reassert after glass cycles */
+@media (max-width: 767.98px) {
+  .topbar,
+  .composer-bar.is-fixed .composer-bar__card,
+  nav.fixed[aria-label="Primary"] {
+    backdrop-filter: blur(8px) saturate(1.05) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u i — specificity wins over letter-strip + chrome-speak-h clamps
+ * America/Chicago (CST) 2026-11-02.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  :root {
+    --chrome-speak-h: 10.5rem;
+    --chrome-composer-h: 10.5rem;
+    --chrome-nav-h: 3.75rem;
+  }
+
+  /* Narrow the letter-strip undo so it NEVER flattens topbar voice/bell/avatar buttons */
+  .main-stage .topbar .rounded-full,
+  .main-stage .topbar button.rounded-full,
+  .main-stage .topbar .voice-zone .rounded-full,
+  .main-stage .topbar .voice-zone button {
+    min-height: 2.5rem !important;
+    height: 2.5rem !important;
+    max-height: 2.5rem !important;
+  }
+
+  /* Beat .main-stage .rounded-full.border.border-line { height:auto; min-height:0 } */
+  .main-stage .topbar .voice-zone button.voice-action-dictate.rounded-panel,
+  .main-stage .topbar .voice-zone button.voice-action-dictate,
+  .main-stage .topbar .voice-zone button.voice-action-talk.rounded-full.border.border-line,
+  .main-stage .topbar .voice-zone button.voice-action-talk.rounded-full,
+  .main-stage .topbar .voice-zone button[data-testid="mic-button"],
+  .main-stage .topbar .voice-zone button[data-testid="open-voice-mode"].rounded-full,
+  .main-stage .topbar .voice-zone button[data-testid="open-voice-mode"],
+  .main-stage header.topbar .voice-zone button[data-testid="open-voice-mode"],
+  .main-stage header.topbar .voice-zone button[data-testid="mic-button"] {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 0.7rem !important;
+    margin: 0 !important;
+    border-radius: 999px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    line-height: 1 !important;
+    flex: 0 0 auto !important;
+  }
+  .main-stage .topbar .voice-zone button[data-testid="open-voice-mode"] .voice-action-talk__label,
+  .main-stage .topbar .voice-zone button[data-testid="mic-button"] .voice-action-dictate__label {
+    display: inline !important;
+    font-size: 0.62rem !important;
+    line-height: 1 !important;
+    text-transform: uppercase !important;
+  }
+
+  /* Beat body:has(nav) .composer-bar.is-fixed { max-height: var(--chrome-speak-h) } */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell [data-testid="composer-bar"].composer-bar,
+  body:has(nav.fixed[aria-label="Primary"]) [data-testid="composer-bar"].composer-bar.is-fixed,
+  body:has(section.composer-dock) .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed,
+  body:has(section.composer-dock) [data-testid="composer-bar"].composer-bar.is-fixed,
+  body:has([data-composer="floating"]) [data-testid="composer-bar"].composer-bar.is-fixed {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    bottom: calc(var(--chrome-nav-h) + 0.4rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Beat body:has(nav) … .composer-bar__card { max-height: calc(var(--chrome-speak-h) - 0.3rem) } */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__card,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__card.rounded-\[1\.75rem\],
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__card,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__card,
+  body:has(nav.fixed[aria-label="Primary"]) [data-testid="composer-bar"] .composer-bar__card {
+    max-height: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.45rem !important;
+    padding: 0.55rem 0.65rem !important;
+    background: rgb(12 12 14 / 0.98) !important;
+    background-image: none !important;
+  }
+
+  /* Re-show Ask even against pass-10 stacking hide */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__ask,
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__ask,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__ask-input,
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask-input,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__ask-input {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    max-height: none !important;
+    height: auto !important;
+    min-height: 2.25rem !important;
+  }
+
+  /* Row must stay inside the opaque card, not paint as a clipped ghost below */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__row,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__left,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__model,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__model-wrap,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed [data-testid="composer-bar-model"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .model-chip {
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    max-height: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    overflow: hidden !important;
+    align-self: center !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__row {
+    max-height: none !important;
+    height: auto !important;
+    min-height: 2.5rem !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+  }
+
+  /* Extra scroll clearance: composer can be ~10rem + nav */
+  .main-stage > .min-h-0.flex-1.overflow-auto,
+  .main-stage .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(
+      var(--chrome-nav-h) + var(--chrome-composer-h) + 1.5rem + env(safe-area-inset-bottom, 0px)
+    ) !important;
+    scroll-padding-bottom: calc(
+      var(--chrome-nav-h) + var(--chrome-composer-h) + 1.5rem + env(safe-area-inset-bottom, 0px)
+    ) !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u j — force composer-bar to content height; opaque plate; pad chips clear
+ * America/Chicago (CST) 2026-11-02.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  :root {
+    --chrome-speak-h: 12rem !important;
+    --chrome-composer-h: 12rem !important;
+  }
+
+  /* Ultra-specific: include Tailwind utility classes on the live node */
+  body:has(nav.fixed[aria-label="Primary"]) div.shell > div.composer-bar.is-fixed.fixed.inset-x-0.bottom-0.z-40,
+  body:has(nav.fixed[aria-label="Primary"]) div.shell > div.composer-bar.is-fixed.fixed,
+  body:has(nav.fixed[aria-label="Primary"]) div.composer-bar.is-fixed.fixed.inset-x-0,
+  body:has(nav.fixed[aria-label="Primary"]) div[data-testid="composer-bar"].composer-bar.is-fixed.fixed,
+  html body div.shell > div.composer-bar.is-fixed.fixed.z-40,
+  html body div.shell > div[data-testid="composer-bar"].composer-bar.is-fixed {
+    max-height: 14rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    background: transparent !important;
+  }
+
+  html body div.shell > div.composer-bar.is-fixed.fixed .composer-bar__card,
+  html body div.shell > div[data-testid="composer-bar"] .composer-bar__card,
+  body:has(nav.fixed[aria-label="Primary"]) div.composer-bar.is-fixed .composer-bar__card {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    background-color: #0c0c0e !important;
+    background-image: none !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+  }
+
+  /* Solid under-plate so page chips/Grok never show through the dock */
+  html body div.shell > div.composer-bar.is-fixed.fixed::before,
+  body:has(nav.fixed[aria-label="Primary"]) div.composer-bar.is-fixed.fixed::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 0 -0.25rem 0 !important;
+    border-radius: 1.35rem !important;
+    background: #08080a !important;
+    z-index: -1 !important;
+    pointer-events: none !important;
+  }
+
+  /* Mic ghost ring: kill extra ::before/::after on dictation control in the bar */
+  .composer-bar.is-fixed .composer-mic-dictation::before,
+  .composer-bar.is-fixed .composer-mic-dictation::after,
+  .composer-bar.is-fixed [data-testid="composer-mic-dictate"]::before,
+  .composer-bar.is-fixed [data-testid="composer-mic-dictate"]::after,
+  .composer-bar.is-fixed .composer-mic-dictation__glyph::after {
+    display: none !important;
+    content: none !important;
+    box-shadow: none !important;
+  }
+  .composer-bar.is-fixed .composer-mic-dictation,
+  .composer-bar.is-fixed [data-testid="composer-mic-dictate"] {
+    box-shadow: none !important;
+    outline: none !important;
+    overflow: hidden !important;
+  }
+
+  /* Keep + / Auto / mic / Speak on one row inside the card */
+  html body .composer-bar.is-fixed .composer-bar__row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  html body .composer-bar.is-fixed .composer-bar__plus,
+  html body .composer-bar.is-fixed .composer-mic-dictation,
+  html body .composer-bar.is-fixed [data-testid="composer-mic-dictate"],
+  html body .composer-bar.is-fixed .composer-speak-pill,
+  html body .composer-bar.is-fixed .composer-speak-live {
+    flex: 0 0 auto !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    align-self: center !important;
+  }
+  html body .composer-bar.is-fixed .composer-bar__model-wrap,
+  html body .composer-bar.is-fixed .composer-bar__model,
+  html body .composer-bar.is-fixed [data-testid="composer-bar-model"] {
+    flex: 0 1 auto !important;
+    max-width: 7.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    overflow: hidden !important;
+  }
+
+  /* Push scroll content clear of the taller composer */
+  html body .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(3.75rem + 12rem + 1.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-padding-bottom: calc(3.75rem + 12rem + 1.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u k — single-row composer so chips stay above the dock
+ * Target: + / Ask Anything / Auto / mic / Speak on one 52px row.
+ * America/Chicago (CST) 2026-11-02.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  :root {
+    --chrome-composer-h: 4.25rem;
+    --chrome-speak-h: 4.25rem;
+  }
+
+  html body div.shell > div.composer-bar.is-fixed.fixed.z-40,
+  html body div.shell > div[data-testid="composer-bar"].composer-bar.is-fixed.fixed,
+  body:has(nav.fixed[aria-label="Primary"]) div.composer-bar.is-fixed.fixed {
+    max-height: 5.5rem !important;
+    height: auto !important;
+    bottom: calc(3.75rem + 0.25rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 0.25rem 0.45rem !important;
+  }
+
+  html body div.shell > div.composer-bar.is-fixed .composer-bar__card,
+  body:has(nav.fixed[aria-label="Primary"]) div.composer-bar.is-fixed .composer-bar__card {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    padding: 0.4rem 0.5rem !important;
+    min-height: 3.25rem !important;
+    max-height: 3.6rem !important;
+    height: 3.4rem !important;
+    overflow: hidden !important; /* tidy clip, no ghosts */
+    background-color: #0c0c0e !important;
+    background-image: none !important;
+  }
+
+  /* Flatten ask + row into one flex line */
+  html body .composer-bar.is-fixed .composer-bar__ask,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__ask {
+    display: block !important;
+    order: 2 !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 2.5rem !important;
+    max-height: 2.5rem !important;
+  }
+  html body .composer-bar.is-fixed .composer-bar__ask-input,
+  html body .composer-bar.is-fixed .composer-bar__ask input,
+  html body .composer-bar.is-fixed .composer-bar__ask textarea {
+    display: block !important;
+    width: 100% !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 0.35rem !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    font-size: 0.95rem !important;
+    line-height: 2.5rem !important;
+    color: #f4f4f5 !important;
+  }
+
+  html body .composer-bar.is-fixed .composer-bar__row {
+    display: contents !important; /* children participate in card flex */
+  }
+  html body .composer-bar.is-fixed .composer-bar__left {
+    display: contents !important;
+  }
+
+  html body .composer-bar.is-fixed .composer-bar__plus,
+  html body .composer-bar.is-fixed [data-testid="composer-bar-plus"] {
+    order: 1 !important;
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+  html body .composer-bar.is-fixed .composer-bar__model-wrap,
+  html body .composer-bar.is-fixed .composer-bar__model,
+  html body .composer-bar.is-fixed [data-testid="composer-bar-model"] {
+    order: 3 !important;
+    flex: 0 1 auto !important;
+    max-width: 5.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+  }
+  html body .composer-bar.is-fixed .composer-mic-dictation,
+  html body .composer-bar.is-fixed [data-testid="composer-mic-dictate"] {
+    order: 4 !important;
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    box-shadow: none !important;
+  }
+  html body .composer-bar.is-fixed .composer-speak-pill,
+  html body .composer-bar.is-fixed .composer-speak-live,
+  html body .composer-bar.is-fixed [data-testid="composer-speak"] {
+    order: 5 !important;
+    flex: 0 0 auto !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+  }
+
+  /* Content clearance for ~3.4rem composer + nav */
+  html body .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(3.75rem + 4.5rem + 1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-padding-bottom: calc(3.75rem + 4.5rem + 1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Give the quick-action / generate blocks an end margin so they clear the dock at rest */
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col,
+  .main-stage .mx-auto.w-full.max-w-6xl {
+    padding-bottom: 1rem !important;
+  }
+  .main-stage .flex.gap-2.overflow-x-auto,
+  .main-stage .mt-4.flex.gap-2.overflow-x-auto,
+  .main-stage .grid.grid-cols-2.gap-2,
+  .main-stage .grid.gap-2:has(button) {
+    margin-bottom: calc(3.75rem + 4.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u l — card wraps a <form>; that form is the single flex row
+ * America/Chicago (CST) 2026-11-02.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  :root {
+    --chrome-speak-h: 5.5rem !important;
+    --chrome-composer-h: 5.5rem !important;
+  }
+
+  html body div.shell > div.composer-bar.is-fixed.fixed.inset-x-0.bottom-0.z-40,
+  html body div.shell > div.composer-bar.is-fixed.fixed.z-40,
+  html body div.shell > div[data-testid="composer-bar"].composer-bar.is-fixed.fixed {
+    max-height: 5.75rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    bottom: calc(3.75rem + 0.2rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 0.2rem 0.4rem !important;
+    background: transparent !important;
+  }
+
+  html body div.shell > div.composer-bar.is-fixed.fixed .composer-bar__card,
+  html body div.shell > div.composer-bar.is-fixed.fixed.z-40 .composer-bar__card {
+    display: block !important; /* form inside does the flex */
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    padding: 0.4rem 0.5rem !important;
+    overflow: hidden !important;
+    background-color: #0c0c0e !important;
+    background-image: none !important;
+    border-radius: 1.25rem !important;
+  }
+
+  /* THE actual row */
+  html body .composer-bar.is-fixed.fixed .composer-bar__card > form,
+  html body div.composer-bar.is-fixed .composer-bar__card > form {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 2.5rem !important;
+    height: 2.5rem !important;
+    max-height: 2.5rem !important;
+  }
+
+  html body .composer-bar.is-fixed.fixed .composer-bar__ask,
+  html body .composer-bar.is-fixed.fixed .composer-bar__ask.mb-3,
+  html body .composer-bar.is-fixed .composer-bar__card > form > .composer-bar__ask {
+    display: block !important;
+    order: 2 !important;
+    flex: 1 1 auto !important;
+    min-width: 3rem !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    height: 2.5rem !important;
+    max-height: 2.5rem !important;
+  }
+  html body .composer-bar.is-fixed.fixed .composer-bar__ask-input,
+  html body .composer-bar.is-fixed.fixed [data-testid="live-voice-bar-input"] {
+    display: block !important;
+    width: 100% !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    padding: 0 0.25rem !important;
+    font-size: 0.92rem !important;
+    line-height: 2.5rem !important;
+  }
+
+  html body .composer-bar.is-fixed.fixed .composer-bar__row,
+  html body .composer-bar.is-fixed.fixed .composer-bar__left,
+  html body .composer-bar.is-fixed.fixed .composer-bar__row .relative {
+    display: contents !important;
+  }
+
+  html body .composer-bar.is-fixed.fixed [data-testid="composer-bar-plus"],
+  html body .composer-bar.is-fixed.fixed .composer-bar__plus {
+    order: 1 !important;
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+  }
+  html body .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"],
+  html body .composer-bar.is-fixed.fixed .composer-bar__model,
+  html body .composer-bar.is-fixed.fixed .composer-bar__model-wrap {
+    order: 3 !important;
+    flex: 0 1 auto !important;
+    max-width: 4.75rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    overflow: hidden !important;
+  }
+  html body .composer-bar.is-fixed.fixed .composer-mic-dictation,
+  html body .composer-bar.is-fixed.fixed [data-testid="composer-mic-dictate"] {
+    order: 4 !important;
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    box-shadow: none !important;
+  }
+  html body .composer-bar.is-fixed.fixed .composer-mic-dictation::before,
+  html body .composer-bar.is-fixed.fixed .composer-mic-dictation::after,
+  html body .composer-bar.is-fixed.fixed .composer-mic-dictation__glyph::after {
+    content: none !important;
+    display: none !important;
+  }
+  html body .composer-bar.is-fixed.fixed .composer-speak-pill,
+  html body .composer-bar.is-fixed.fixed .composer-speak-live {
+    order: 5 !important;
+    flex: 0 0 auto !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+  }
+
+  html body .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(3.75rem + 5.75rem + 1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .main-stage .flex.gap-2.overflow-x-auto,
+  .main-stage .mt-4.flex.gap-2.overflow-x-auto,
+  .main-stage .grid.gap-2:has(> button) {
+    margin-bottom: calc(3.75rem + 6rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u m — beat body:has(…) .composer-bar__row { display:flex }
+ * and push chip rows clear of the fixed dock.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__left,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row.flex,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__left.flex,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row .relative,
+  body:has(section.composer-dock) .composer-bar.is-fixed.fixed .composer-bar__row,
+  body:has(section.composer-dock) .composer-bar.is-fixed.fixed .composer-bar__left {
+    display: contents !important;
+  }
+
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card > form {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask.mb-3,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask {
+    order: 2 !important;
+    flex: 1 1 auto !important;
+    min-width: 4rem !important;
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    height: 2.5rem !important;
+  }
+
+  body:has(nav.fixed[aria-label="Primary"]) div.shell > div.composer-bar.is-fixed.fixed.inset-x-0.bottom-0.z-40,
+  body:has(nav.fixed[aria-label="Primary"]) div.shell > div.composer-bar.is-fixed.fixed.z-40 {
+    max-height: 5.5rem !important;
+    height: auto !important;
+  }
+
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card {
+    background-color: #0c0c0e !important;
+    background-image: none !important;
+    opacity: 1 !important;
+    padding: 0.4rem 0.5rem !important;
+    overflow: hidden !important;
+  }
+
+  /* Chip / generate rows: large end margin so at rest they sit above the dock */
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto.pb-1,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .mt-4.flex.gap-2.overflow-x-auto,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage div.flex.gap-2.overflow-x-auto {
+    margin-bottom: 7.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: 9.5rem !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u n — don't contents the mic (it has class "relative");
+ * force + Ask Auto mic Speak order; opaque dock; chips scroll-clear.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  /* Only the plus wrapper — never .composer-mic-dictation.relative */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__left > div.relative:has([data-testid="composer-bar-plus"]),
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__left > .relative:not(.composer-mic-dictation) {
+    display: contents !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row .composer-mic-dictation.relative,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-mic-dictate"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed button.composer-mic-dictation {
+    display: grid !important;
+    place-items: center !important;
+    order: 4 !important;
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-width: 2.5rem !important;
+    max-height: 2.5rem !important;
+    box-shadow: none !important;
+    position: relative !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-pill {
+    order: 5 !important;
+    flex: 0 0 auto !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    margin-left: 0 !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap {
+    order: 3 !important;
+    flex: 0 1 auto !important;
+    max-width: 4.5rem !important;
+    height: 2.5rem !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-plus"] {
+    order: 1 !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask {
+    order: 2 !important;
+    flex: 1 1 auto !important;
+    min-width: 5rem !important;
+  }
+
+  /* Fully opaque card — no chips showing through */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card {
+    background: #0c0c0e !important;
+    background-color: #0c0c0e !important;
+    background-image: none !important;
+    opacity: 1 !important;
+    box-shadow: 0 8px 24px #000 !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed::before {
+    content: "" !important;
+    position: absolute !important;
+    left: 0.15rem !important;
+    right: 0.15rem !important;
+    top: 0.1rem !important;
+    bottom: 0.1rem !important;
+    background: #08080a !important;
+    border-radius: 1.35rem !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__safe,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  /* Topbar: kill any residual ghost ring (waveform / voice-zone / dictation root) */
+  .main-stage .topbar .voice-zone,
+  .main-stage .topbar .voice-zone *,
+  .main-stage .topbar [data-dictation-root],
+  .main-stage .topbar [data-testid="browser-dictation"] {
+    border-color: transparent !important;
+    box-shadow: none !important;
+    background-image: none !important;
+  }
+  .main-stage .topbar .voice-zone,
+  .main-stage .topbar [data-testid="browser-dictation"],
+  .main-stage .topbar [data-dictation-root] {
+    background: transparent !important;
+    border: 0 !important;
+    outline: 0 !important;
+  }
+  .main-stage .topbar .waveform,
+  .main-stage .topbar .voice-zone::before,
+  .main-stage .topbar .voice-zone::after {
+    display: none !important;
+    content: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  /* Equal Dictate/Talk — beat any leftover min-h-11 on dictate only */
+  .main-stage .topbar .voice-zone button[data-testid="mic-button"],
+  .main-stage .topbar .voice-zone button[data-testid="open-voice-mode"] {
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 0.65rem !important;
+    border-radius: 999px !important;
+    align-items: center !important;
+  }
+  .main-stage .topbar [data-testid="alerts-toggle"] {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-width: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    background: rgb(255 255 255 / 0.05) !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u o — mic/Speak live in .composer-voice-btns; flatten it
+ * so order 1..5 yields + / Ask / Auto / mic / Speak.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-voice-btns,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-voice-buttons"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row > .flex-1 {
+    display: contents !important;
+  }
+  /* If flex-1 is a spacer sibling, remove it from layout entirely when not contents-safe */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row > div.flex-1:empty,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row > .flex-1:not(:has(button)) {
+    display: none !important;
+    width: 0 !important;
+    flex: 0 0 0 !important;
+  }
+
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-plus"] { order: 1 !important; }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask { order: 2 !important; flex: 1 1 auto !important; min-width: 5.5rem !important; }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip { order: 3 !important; }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-mic-dictate"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-mic-dictation { order: 4 !important; }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-pill { order: 5 !important; }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u p — collapse nested Auto chrome; widen Ask; unify Dictate/Talk
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  /* Nested model chrome: only the inner model-chip keeps a border */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-chip {
+    border: 0 !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 5.75rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    overflow: hidden !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap::before,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model::before,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-chip::before,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip::before,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap::after,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model::after,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip::after {
+    content: none !important;
+    display: none !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    max-width: 5.5rem !important;
+    padding: 0 0.55rem !important;
+    border: 1px solid rgb(255 255 255 / 0.12) !important;
+    border-radius: 999px !important;
+    background: #1c1c1e !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    box-shadow: none !important;
+  }
+
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask {
+    flex: 1 1 40% !important;
+    min-width: 6.5rem !important;
+    max-width: none !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"] {
+    flex: 0 0 auto !important;
+    max-width: 5.75rem !important;
+    padding-left: 0.65rem !important;
+    padding-right: 0.65rem !important;
+  }
+
+  /* Dictate + Talk identical chrome (Talk uses rounded-full, Dictate rounded-panel) */
+  .main-stage .topbar .voice-zone button[data-testid="mic-button"],
+  .main-stage .topbar .voice-zone button[data-testid="open-voice-mode"],
+  .main-stage .topbar .voice-zone button.voice-action-dictate,
+  .main-stage .topbar .voice-zone button.voice-action-talk {
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 0.7rem !important;
+    border-radius: 999px !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    background: rgb(255 255 255 / 0.04) !important;
+    box-shadow: none !important;
+    align-self: center !important;
+    margin: 0 !important;
+  }
+  .main-stage .topbar [data-testid="alerts-toggle"] {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    border-radius: 999px !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    background: rgb(255 255 255 / 0.04) !important;
+    padding: 0 !important;
+  }
+  .main-stage .topbar > button.flex.h-11.items-center.gap-2.rounded-full {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    border-radius: 999px !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    padding: 0 !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u q — push wrapped chip rows above the fixed composer at rest
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto.pb-1,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto {
+    margin-bottom: 8.5rem !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r — model-wrap must fit Auto chip; model-chip is never contents
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap {
+    display: block !important;
+    width: auto !important;
+    min-width: 4.25rem !important;
+    max-width: 5.75rem !important;
+    overflow: visible !important;
+    flex: 0 1 auto !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-chip.relative,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-chip,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .relative.composer-bar__model-chip {
+    display: block !important;
+    width: auto !important;
+    height: 2.5rem !important;
+    overflow: visible !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip {
+    display: inline-flex !important;
+    width: auto !important;
+    min-width: 3.5rem !important;
   }
 }
