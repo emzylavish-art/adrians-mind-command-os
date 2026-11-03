@@ -351,3 +351,9 @@ Minimal hooks only (clear-on-chat-switch effect, gallery mount, owner-scope bind
 
 ### Cross-lane
 - None required. Multi-host needs a shared backend (infra/integration).
+
+## Research uploads (Logic queue) — 2026-11-02T22:50:00-06:00 (America/Chicago)
+
+- `src/lib/mind/media/research-uploads.ts`: `buildResearchUploads(files)` → Logic shape `{ name, mime, bytes, excerpts[] }`. Caps, PDF bomb page guard (reuse `extractPdfText`), CSV row/col caps, strip controls, skip image OCR. No fake URLs.
+- Research UI staging hooks + `searchWeb` body `researchUploads`. Minimal `server.ts` pass-through only; **did not edit research.ts**.
+- Handoff: `/workspace/handoffs/media-to-logic-research-uploads.md`

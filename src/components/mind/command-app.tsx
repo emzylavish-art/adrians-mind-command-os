@@ -69,7 +69,7 @@ import {
   type DownscaleQuality,
 } from "@/components/mind/media/downscale-quality";
 import { safeImageDownloadName } from "@/components/mind/media/media-ui-helpers";
-import { BATCH_EDIT_MAX, GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, clampBatchEditCount, collectClipboardImageFiles, createImagineTabLock, estimateImagineBatchCostUsd, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, decodeJwtSub, legacyOwnerScopeFromBearerToken, migrateMediaBlobDatabase, ownerScopeFromUserId, parseImagineCommand, readMediaOwnerScope, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, writeMediaOwnerScope, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
+import { BATCH_EDIT_MAX, GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, clampBatchEditCount, collectClipboardImageFiles, createImagineTabLock, estimateImagineBatchCostUsd, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, decodeJwtSub, legacyOwnerScopeFromBearerToken, migrateMediaBlobDatabase, ownerScopeFromUserId, parseImagineCommand, readMediaOwnerScope, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, writeMediaOwnerScope, buildResearchUploads, type GrokImagineModel, type ImageAttachment, type ResearchUpload } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -299,6 +299,8 @@ export function CommandApp() {
   const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
   const [researchText, setResearchText] = useState("");
   const [researchNote, setResearchNote] = useState<string | null>(null);
+  const [researchUploads, setResearchUploads] = useState<ResearchUpload[]>([]);
+  const researchFileRef = useRef<HTMLInputElement>(null);
   const [lookupQuery, setLookupQuery] = useState("");
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [activityQuery, setActivityQuery] = useState("");
@@ -1127,15 +1129,32 @@ export function CommandApp() {
     }
     setResearchCitations([]);
     try {
-      const result = await searchWeb({ data: { query: researchText } });
+      const result = await searchWeb({
+        data: {
+          query: researchText,
+          ...(researchUploads.length ? { researchUploads } : {}),
+        },
+      });
       setError(null);
       setResearchCitations(result.citations);
-      setResearchNote(result.ok ? "" : result.error);
+      const uploadBit = researchUploads.length ? ` · ${researchUploads.length} file excerpt(s) labeled “from your file”` : "";
+      setResearchNote((result.ok ? "" : result.error) + (result.ok && uploadBit ? `Staged uploads sent as research context${uploadBit}.` : uploadBit && !result.ok ? uploadBit : ""));
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
     } catch (caught) {
       setResearchCitations([]);
       setResearchNote(caught instanceof Error ? caught.message : "The search did not run. No citations were created.");
     }
+  }
+
+  async function stageResearchFiles(fileList: FileList | File[] | null) {
+    if (!fileList || (Array.isArray(fileList) ? fileList.length === 0 : fileList.length === 0)) return;
+    const files = Array.from(fileList as ArrayLike<File>);
+    const { uploads, rejects } = await buildResearchUploads(files);
+    if (uploads.length) {
+      setResearchUploads((prev) => [...prev, ...uploads].slice(0, 8));
+      setNotice(`Staged ${uploads.length} research file(s) for search context (excerpts labeled “from your file”). REA inspect stays separate.`);
+    }
+    if (rejects.length) setError(rejects.slice(0, 3).join(" "));
   }
 
   async function runPlanner() {
@@ -3165,9 +3184,51 @@ export function CommandApp() {
             <section className="p-4 md:p-6">
               <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
                 <h2 className="font-display text-3xl font-bold">Research</h2>
-                <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
+                <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them. Optional PDF/.txt/.md/.csv uploads add “from your file” excerpts (not fake web URLs). REA inspect-artifact stays separate.</p>
                 <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
+                <div className="mt-3 flex flex-wrap items-center gap-2" data-media="research-uploads">
+                  <input
+                    ref={researchFileRef}
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.txt,.md,.csv,application/pdf,text/plain,text/markdown,text/csv"
+                    multiple
+                    data-media="research-upload-input"
+                    onChange={(event) => {
+                      void stageResearchFiles(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                    data-media="research-upload"
+                    disabled={ws.halted}
+                    onClick={() => researchFileRef.current?.click()}
+                  >
+                    Stage files for research
+                  </button>
+                  {researchUploads.length > 0 && (
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                      data-media="research-uploads-clear"
+                      onClick={() => setResearchUploads([])}
+                    >
+                      Clear uploads ({researchUploads.length})
+                    </button>
+                  )}
+                </div>
+                {researchUploads.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs text-muted" data-media="research-uploads-list">
+                    {researchUploads.map((file) => (
+                      <li key={`${file.name}-${file.bytes}`}>
+                        {file.name} · {file.excerpts.length} excerpt(s) · {file.mime}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch} data-media="research-run">
                   Check research
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}

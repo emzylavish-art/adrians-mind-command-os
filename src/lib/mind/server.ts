@@ -5,6 +5,7 @@ import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
 import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
+import { clampResearchUploadsWire } from "./media/research-uploads";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
 
@@ -83,7 +84,11 @@ export const workerHealth = createServerFn({ method: "GET" }).handler(async () =
 
 export const searchWeb = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { query: string }) => ({ query: typeof input.query === "string" ? input.query.slice(0, 300) : "" }))
+  .validator((input: { query: string; researchUploads?: unknown }) => ({
+    query: typeof input.query === "string" ? input.query.slice(0, 300) : "",
+    // Media clamp; Logic research.ts will consume uploads after merge.
+    researchUploads: clampResearchUploadsWire(input.researchUploads),
+  }))
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
@@ -96,7 +101,8 @@ export const searchWeb = createServerFn({ method: "POST" })
       query: data.query,
       endpoint: process.env.MIND_SEARCH_ENDPOINT,
       key: process.env.MIND_SEARCH_KEY,
-    });
+      ...(data.researchUploads?.length ? { uploads: data.researchUploads } : {}),
+    } as Parameters<typeof performSearch>[0]);
   });
 
 export const recordAgentExecution = createServerFn({ method: "POST" })

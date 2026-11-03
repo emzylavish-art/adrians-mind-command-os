@@ -14,3 +14,4 @@ export * from "./imagine-tab-lock.ts";
 export * from "./clipboard-guard.ts";
 export * from "./clear-media.ts";
 export * from "./chat-gallery.ts";
+export * from "./research-uploads.ts";
