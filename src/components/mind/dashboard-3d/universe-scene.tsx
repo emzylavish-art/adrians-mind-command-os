@@ -13,7 +13,8 @@ import {
   type PainterlyKit,
 } from "./materials";
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
-import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery } from "./postfx";
+import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, bloomTier } from "./postfx";
+import { filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -738,6 +739,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
+    let graphAllow: Set<string> | null = null;
     let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
@@ -772,10 +774,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         nextRays = null;
       }
       try {
-        nextBloom = createTunedBloomPass(new THREE.Vector2(w, h), "idle");
-        composer.addPass(nextBloom.pass);
+        const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+        const tier = bloomTier({
+          reducedMotion,
+          narrow: typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches,
+          saveData: nav.connection?.saveData === true,
+          hardwareConcurrency: nav.hardwareConcurrency,
+          deviceMemoryGb: nav.deviceMemory,
+        });
+        if (tier !== "off") {
+          nextBloom = createTunedBloomPass(new THREE.Vector2(w, h), "idle", { tier });
+          composer.addPass(nextBloom.pass);
+        }
       } catch {
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.62, 0.75, 0.22));
+        nextBloom = null;
       }
       try {
         nextGrade = createColorGradePass("idle");
@@ -949,7 +961,16 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       spherical.setFromVector3(freePos.clone().sub(lookAt));
       rig = { ...rig, t: 1, to: { position: next, lookAt: look }, from: { position: next, lookAt: look } };
     };
+    const sceneInteractOn = () => {
+      const root = mount.closest("[data-testid='dash3d-root']") ?? document.querySelector("[data-testid='dash3d-root']");
+      if (!root || typeof window.matchMedia !== "function") return true;
+      if (window.matchMedia("(max-width: 720px)").matches) {
+        return root.getAttribute("data-scene-interact") === "1";
+      }
+      return true;
+    };
     const onPointerDown = (ev: PointerEvent) => {
+      if (!sceneInteractOn() && ev.isPrimary && pinchPointers.size < 1) return;
       try { renderer.domElement.setPointerCapture(ev.pointerId); } catch { /* optional */ }
       pinchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
       if (pinchPointers.size === 2) {
@@ -1171,7 +1192,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const wallT = now * 0.001;
       const t = sharedMotionClock.map(wallT);
       for (const n of botVis) {
-        const show = starHealthFilter === "all" || n.health === starHealthFilter;
+        const show =
+          (starHealthFilter === "all" || n.health === starHealthFilter) &&
+          (graphAllow == null || graphAllow.has(n.id));
         n.mesh.visible = show;
         n.glow.visible = show;
         n.label.visible = show && labelsOn && fly.level === "universe";
@@ -1312,6 +1335,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       arm("render");
     };
     document.addEventListener("dash3d-layers", onLayers);
+    const onGraphFilter = (ev: Event) => {
+      const detail = (ev as CustomEvent<GraphFilterState>).detail;
+      if (!detail || typeof detail !== "object") return;
+      const status = dataRef.current;
+      graphAllow = filterBotIds(status.bots, status.constellationEdges ?? [], detail);
+      arm("render");
+    };
+    document.addEventListener("dash3d-graph-filter", onGraphFilter);
 
 
     document.addEventListener("dash3d-sky", onSkyEvent);
@@ -1323,6 +1354,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
+      document.removeEventListener("dash3d-graph-filter", onGraphFilter);
       document.removeEventListener("dash3d-sky", onSkyEvent);
       document.removeEventListener("dash3d-fly", onFlyEvent);
       document.removeEventListener("visibilitychange", onVisibility);

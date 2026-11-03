@@ -11,6 +11,15 @@ export {
   type BloomTuning,
   type TunedBloomHandle,
 } from "./bloom-tuning.ts";
+export { bloomStrengthMultiplier, bloomTier, type BloomTier, type BloomTierInput } from "./bloom-policy.ts";
+export {
+  CHAIN_ENCODE_MARK,
+  chainDecode,
+  chainEncode,
+  createChainEncoder,
+  patchChainFragment,
+  type ChainEncoder,
+} from "./bloom-hdr-chain.ts";
 export {
   ColorGradeShader,
   GRADE_BY_TONE,

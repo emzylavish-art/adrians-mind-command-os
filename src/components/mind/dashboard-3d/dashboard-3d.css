@@ -742,10 +742,139 @@
     pointer-events: auto;
     touch-action: none;
   }
-  .dash3d-orbit-toggle[aria-pressed="true"] {
+  .dash3d-orbit-toggle[aria-pressed="true"],
+  .dash3d-mobile-chrome .dash3d-pill.is-on,
+  .dash3d-filter-sheet .dash3d-pill.is-on,
+  .dash3d-graph-filters .dash3d-pill.is-on {
     background: rgb(124 92 255 / 0.22);
     border-color: var(--dash3d-accent);
   }
+  .dash3d-panel-stack {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem calc(1rem + env(safe-area-inset-bottom));
+  }
+  .dash3d-mobile-chrome {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    background: #070b16;
+  }
+  .dash3d-mobile-nav {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+  }
+  .dash3d-mobile-nav::-webkit-scrollbar { display: none; }
+  .dash3d-mobile-nav-link {
+    color: #f3f5ff;
+    text-decoration: none;
+    border: 1px solid rgb(124 92 255 / 0.45);
+    border-radius: 999px;
+    padding: 0.35rem 0.6rem;
+    min-height: 2.25rem;
+    white-space: nowrap;
+  }
+  .dash3d-mobile-nav-link.is-active {
+    background: rgb(124 92 255 / 0.28);
+  }
+  .dash3d-mobile-chrome-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .dash3d-mobile-card {
+    border: 1px solid rgb(124 92 255 / 0.35);
+    border-radius: 0.8rem;
+    background: #070b16;
+  }
+  .dash3d-mobile-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .dash3d-mobile-card-toggle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.75rem;
+    border: 0;
+    background: transparent;
+    color: #f3f5ff;
+    text-align: left;
+  }
+  .dash3d-mobile-card.is-collapsed .dash3d-mobile-card-body { display: none; }
+  .dash3d-mobile-card.is-open .dash3d-mobile-card-body { display: block; }
+  .dash3d-universe[data-scene-interact="0"] .dash3d-canvas-wrap canvas {
+    touch-action: pan-y pinch-zoom;
+  }
+  .dash3d-universe[data-scene-interact="1"] .dash3d-canvas-wrap canvas {
+    touch-action: none;
+  }
+  .dash3d-universe {
+    min-height: 100dvh;
+  }
+}
+
+@media (min-width: 721px) {
+  .dash3d-mobile-chrome { display: none; }
+  .dash3d-panel-stack,
+  .dash3d-mobile-card,
+  .dash3d-mobile-card-body { display: contents; }
+  .dash3d-mobile-card-head { display: none; }
+  .dash3d-mobile-card[data-panel-id="compass"] { display: none; }
+}
+
+.dash3d-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  box-sizing: border-box;
+  min-height: 2.25rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--dash3d-accent);
+  background: #070b16;
+  color: #f3f5ff;
+  padding: 0.35rem 0.5rem;
+}
+.dash3d-graph-filters-dock {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 7;
+  width: min(280px, 34vw);
+}
+.dash3d-filter-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  align-items: end;
+  justify-content: center;
+}
+.dash3d-filter-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.72);
+}
+.dash3d-filter-sheet {
+  position: relative;
+  z-index: 1;
+  width: min(440px, 100vw);
+  max-height: min(70dvh, 560px);
+  overflow: auto;
+  background: #070b16;
+  color: #f3f5ff;
+  border-color: var(--dash3d-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { subscribePrefersReducedMotion } from "./motion";
+import { GraphFiltersPanel } from "./graph-filters-panel";
+import { MobileChrome, MobilePanelCard, useMobilePanelFocus } from "./mobile-structure";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
@@ -48,6 +50,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const [sceneInteract, setSceneInteract] = useState(false);
+  const { focused: panelFocus, setFocused: setPanelFocus, clear: clearPanelFocus } = useMobilePanelFocus();
   useEffect(() => subscribePrefersReducedMotion(setReducedMotion), []);
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -185,6 +188,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       data-reduced-motion={reducedMotion ? "1" : "0"}
       data-narrow={narrow ? "1" : "0"}
       data-scene-interact={!narrow || sceneInteract ? "1" : "0"}
+      data-panel-focus={panelFocus ?? ""}
       data-fly-level={fly.level}
       data-labels={operatorPrefs.layers.labels ? "1" : "0"}
       data-health-filter={operatorPrefs.healthFilter}
@@ -254,19 +258,29 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         </div>
       ) : null}
 
+      {state.status === "ready" && narrow ? (
+        <MobileChrome
+          sceneInteract={sceneInteract}
+          onSceneInteract={setSceneInteract}
+          filtersSlot={<GraphFiltersPanel triggerOnly />}
+          focused={panelFocus}
+          onJump={setPanelFocus}
+          onBack={clearPanelFocus}
+        />
+      ) : null}
+      {state.status === "ready" && !narrow ? <GraphFiltersPanel /> : null}
+
       {state.status === "ready" ? (
+        <div className="dash3d-panel-stack" data-testid="dash3d-panel-stack">
+        <MobilePanelCard
+          id="weather"
+          title="Status"
+          defaultOpen
+          focused={panelFocus}
+          onFocus={setPanelFocus}
+          summary={state.data.weather.label}
+        >
         <div className="dash3d-skybar" aria-live="polite">
-          {narrow ? (
-            <button
-              type="button"
-              className="dash3d-glass dash3d-zoomout dash3d-orbit-toggle"
-              data-testid="scene-interact"
-              aria-pressed={sceneInteract}
-              onClick={() => setSceneInteract((value) => !value)}
-            >
-              {sceneInteract ? "Orbit on" : "Orbit off"}
-            </button>
-          ) : null}
           {state.stale ? (
             <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
               <h2>Status stale</h2>
@@ -359,51 +373,62 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             Zoom to sky
           </button>
         </div>
-      ) : null}
-
-      {state.status === "ready" && narrow ? (
-        <section className="dash3d-glass dash3d-plain-fallback" data-testid="dash3d-plain-fallback" aria-label="Universe list">
-          <h2>Universe list</h2>
-          <p className="dash3d-muted" style={{ fontSize: "0.75rem" }}>
-            Narrow-screen list of the same status payload as the scene. {state.data.weather.label}: {state.data.weather.summary}
-          </p>
-          <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
-            {state.data.bots.map((b) => (
-              <li key={b.id}>
-                <button type="button" className="dash3d-pill" onClick={() => setSelected(b)}>
-                  <span className={`dash3d-dot ${b.health}`} />
-                  {b.name}
-                  <span className="dash3d-muted"> — {b.health}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {state.status === "ready" && !webglError ? <FlyoverHud fly={fly} layout={layoutForHud} /> : null}
-      {state.status === "ready" ? (
+        </MobilePanelCard>
+        <MobilePanelCard
+          id="compass"
+          title="Universe list"
+          defaultOpen
+          focused={panelFocus}
+          onFocus={setPanelFocus}
+          summary={`${state.data.bots.length} from status`}
+        >
+          <section className="dash3d-plain-fallback" data-testid="dash3d-plain-fallback" aria-label="Universe list">
+            <p className="dash3d-muted" style={{ fontSize: "0.75rem" }}>
+              Same status payload as the scene. {state.data.weather.label}: {state.data.weather.summary}
+            </p>
+            <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
+              {state.data.bots.map((b) => (
+                <li key={b.id}>
+                  <button type="button" className="dash3d-pill" onClick={() => setSelected(b)}>
+                    <span className={`dash3d-dot ${b.health}`} />
+                    {b.name}
+                    <span className="dash3d-muted"> — {b.health}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </MobilePanelCard>
+        {!webglError ? (
+          <MobilePanelCard id="flyhud" title="Flyover" focused={panelFocus} onFocus={setPanelFocus} summary={fly.level}>
+            <FlyoverHud fly={fly} layout={layoutForHud} />
+          </MobilePanelCard>
+        ) : null}
         <BuildingInteriorPanel
           fly={fly}
           projects={state.data.projects}
           bots={state.data.bots}
           onClose={() => sendFly({ type: "ZOOM_OUT" })}
         />
-      ) : null}
-
-      {state.status === "ready" && sceneData && operatorPrefs.layers.feed ? (
-        <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
-      ) : null}
-      {state.status === "ready" && sceneData?.charts && operatorPrefs.layers.charts ? (
-        <ChartsPanel charts={sceneData.charts} />
-      ) : null}
-      {state.status === "ready" ? (
-        <NotionMirrorPanel
-          mirror={state.data.notionMirror}
-          onOpenPage={(pageId) => {
-            openNotion(pageId);
-          }}
-        />
+        {sceneData && operatorPrefs.layers.feed ? (
+          <MobilePanelCard id="feed" title="Feed" focused={panelFocus} onFocus={setPanelFocus}>
+            <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
+          </MobilePanelCard>
+        ) : null}
+        {sceneData?.charts && operatorPrefs.layers.charts ? (
+          <MobilePanelCard id="charts" title="Charts" focused={panelFocus} onFocus={setPanelFocus}>
+            <ChartsPanel charts={sceneData.charts} />
+          </MobilePanelCard>
+        ) : null}
+        <MobilePanelCard id="mirror" title="Notion mirror" focused={panelFocus} onFocus={setPanelFocus}>
+          <NotionMirrorPanel
+            mirror={state.data.notionMirror}
+            onOpenPage={(pageId) => {
+              openNotion(pageId);
+            }}
+          />
+        </MobilePanelCard>
+        </div>
       ) : null}
       {state.status === "ready" ? (
         <OperatorConsole
