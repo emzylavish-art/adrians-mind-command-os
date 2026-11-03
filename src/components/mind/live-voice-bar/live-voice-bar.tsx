@@ -3,7 +3,7 @@
  * DOM mirrors Visual Polish voice-ui (pass 10c/d) so styles.css skins apply after merge.
  * Do not edit styles.css. Tailwind kept to layout/safety only where VP CSS is absent.
  */
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { analyzeImageFile } from "@/lib/mind/server";
 import { useLiveVoiceSession } from "@/lib/mind/voice-live/use-live-voice-session";
 import { isLiveVoiceOccupied } from "@/lib/mind/voice-live/occupancy";
@@ -36,6 +36,7 @@ import {
   type FrameStreamHandle,
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape } from "./settings-popover";
+import "./mobile-nav-clearance.css";
 
 export type LiveVoiceBarProps = {
   isOverlayMicOpen: () => boolean;
@@ -354,6 +355,39 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     }
   };
 
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const mq = window.matchMedia("(max-width: 767.98px)");
+    const apply = () => {
+      if (!mq.matches) {
+        root.style.removeProperty("--spv-f1-clearance");
+        return;
+      }
+      const nav = document.querySelector('nav[aria-label="Primary"]');
+      if (!nav) return;
+      const plus = nav.querySelector('button[aria-label="New chat"]');
+      const navTop = nav.getBoundingClientRect().top;
+      const plusTop = plus?.getBoundingClientRect().top ?? navTop;
+      const obstruct = Math.min(navTop, plusTop);
+      const px = Math.max(0, Math.ceil(window.innerHeight - obstruct + 8));
+      root.style.setProperty("--spv-f1-clearance", `${px}px`);
+    };
+    apply();
+    const nav = document.querySelector('nav[aria-label="Primary"]');
+    const ro = new ResizeObserver(apply);
+    if (nav) ro.observe(nav);
+    const plus = nav?.querySelector('button[aria-label="New chat"]');
+    if (plus) ro.observe(plus);
+    window.addEventListener("resize", apply);
+    mq.addEventListener("change", apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", apply);
+      mq.removeEventListener("change", apply);
+      root.style.removeProperty("--spv-f1-clearance");
+    };
+  }, []);
+
   const style = barRootStyle(live.level) as CSSProperties;
   const muted = live.muted || uiAttr === "muted";
 
@@ -412,7 +446,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   if (!inCall) {
     return (
       <div
-        className="composer-bar is-fixed"
+        className="composer-bar is-fixed composer-bar--clear-nav"
         data-testid="composer-bar"
         data-model-menu="closed"
         role="region"

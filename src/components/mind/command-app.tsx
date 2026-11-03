@@ -1,5 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
+import "./command-drawer-nav.css";
+import "./command-search.css";
+import "./command-voice-mode.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -3314,7 +3317,7 @@ export function CommandApp() {
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside className={`rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
           <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
             <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
@@ -3383,11 +3386,12 @@ export function CommandApp() {
                           to={routeItem.href}
                           title={routeItem.label}
                           aria-label={routeItem.label}
+                          data-testid={`nav-route-${routeItem.id}`}
                           onClick={() => {
                             setNavOpen(false);
                             closeMenus();
                           }}
-                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
+                          className={`nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
                         >
                           <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
                           {!railCollapsed && routeItem.label}
@@ -3493,11 +3497,6 @@ export function CommandApp() {
           <div className="hidden shrink-0 md:block">
             <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
               <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-              <VoiceModeBadge
-                mode={voiceMode}
-                listening={voiceListening}
-                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-              />
               <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
               <button
                 type="button"
@@ -3515,7 +3514,20 @@ export function CommandApp() {
             </div>
 
           </div>
-          <div className="relative min-w-0 flex-1">
+          <div className="command-voice-mode">
+            <VoiceModeBadge
+              placement="header"
+              mode={voiceMode}
+              listening={voiceListening}
+              hint={
+                voiceMode === "orchestrator"
+                  ? "Orchestrator needs Ollama on this computer. Switch to Direct if it is not running."
+                  : null
+              }
+              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+            />
+          </div>
+          <div className="command-search relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
               ref={searchRef}
@@ -3537,7 +3549,7 @@ export function CommandApp() {
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
+              <div id="command-palette" className="command-palette floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
                 {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
                 {hits.map((hit) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
@@ -3994,11 +4006,6 @@ export function CommandApp() {
               </div>
               <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
                 <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-                <VoiceModeBadge
-                  mode={voiceMode}
-                  listening={voiceListening}
-                  onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-                />
                 <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
                 <button
                   type="button"
@@ -4023,8 +4030,8 @@ export function CommandApp() {
                 <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
               </div>
 
-              {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
-              {error && <p className="banner-error px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
+              {notice && <p className="banner-notice voice-copy px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
+              {error && <p className="banner-error voice-copy px-3 py-2 text-sm text-danger" role="alert">{presentVoiceCopy(error)}</p>}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -4151,12 +4158,10 @@ export function CommandApp() {
               onLiveVoiceError={(message) => setError(message)}
               onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
-              voiceMode={voiceMode}
               voiceListening={voiceListening}
               voiceMuted={voiceMuted}
               voiceLevel={voiceLevel}
               onToggleMute={toggleVoiceMute}
-              onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               dictationState={dictation.phase}
               dictationLevel={dictationLevel}
               dictationElapsed={dictationElapsed}
@@ -4665,7 +4670,7 @@ export function CommandApp() {
                   />
                 </ul>
               </form>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+              {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <FleetPanel mode="connected" ws={ws} setWs={setWs} />
             </section>
           )}
@@ -4814,7 +4819,7 @@ export function CommandApp() {
                   );
                 })}
               </div>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+              {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
             </section>
           )}
           {view === "files" && (
@@ -5233,7 +5238,7 @@ export function CommandApp() {
         mode={voiceMode}
         transcript={voiceLiveTranscript}
         notice={overlayNotice}
-        error={overlayError}
+        error={overlayError ? presentVoiceCopy(overlayError) : overlayError}
         onMute={toggleVoiceMute}
         onClose={closeVoiceOverlay}
         onInterrupt={interruptVoiceOverlay}
@@ -5303,6 +5308,13 @@ function BrowserDictationControl(props: {
       )}
     </div>
   );
+}
+
+function presentVoiceCopy(text: string): string {
+  if (/127\.0\.0\.1|localhost:\d+|0\.0\.0\.0:\d+|not reachable at https?:\/\//i.test(text)) {
+    return "Orchestrator needs Ollama running on this computer. Switch to Direct, or start Ollama and try again.";
+  }
+  return text;
 }
 
 function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compact?: boolean }) {
@@ -5464,12 +5476,10 @@ function ChatPane({
   onLiveVoiceError,
   onLiveVoiceNotice,
   speaking,
-  voiceMode,
   voiceListening,
   voiceMuted,
   voiceLevel,
   onToggleMute,
-  onToggleVoiceMode,
   dictationState,
   dictationLevel,
   dictationElapsed,
@@ -5542,12 +5552,10 @@ function ChatPane({
   onLiveVoiceError?: (message: string) => void;
   onLiveVoiceNotice?: (message: string) => void;
   speaking: boolean;
-  voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
   voiceMuted: boolean;
   voiceLevel: number;
   onToggleMute: () => void;
-  onToggleVoiceMode: () => void;
   dictationState: DictationMachineState["phase"];
   dictationLevel: number;
   dictationElapsed: number;
@@ -5821,12 +5829,12 @@ function ChatPane({
           {busy && (
             <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
           )}
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="voice-copy text-sm text-danger">{presentVoiceCopy(error)}</p>}
           {error && active?.messages.at(-1)?.role === "user" && (
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
-          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
+          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div>
         </div>
         <form
           className="floating-composer command-card composer-dock m-3 p-3" data-composer="floating"
