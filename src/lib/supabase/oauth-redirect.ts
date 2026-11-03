@@ -3,7 +3,7 @@
  * Preview deployments must not hard-code production hostnames.
  */
 import { safeRedirectPath } from "./safe-redirect.ts";
-import { isFirstPartyAuthorizeUrl } from "./first-party-oauth.ts";
+import { isFirstPartyAuthorizeUrl } from "./first-party-authorize-url";
 
 export function buildAuthCallbackUrl(
   origin: string,
