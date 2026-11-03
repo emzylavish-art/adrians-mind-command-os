@@ -1,5 +1,5 @@
 import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
-import { assertImagineSpendAllowed, getImagineSpendLedger } from "./spend-ledger.ts";
+import { getImagineSpendLedger, reserveImagineSpend } from "./spend-ledger.ts";
 import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
 import { resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
@@ -116,6 +116,153 @@ async function downloadUrlToDataUrl(
 }
 
 /**
+ * Whether a failed upstream attempt definitely did NOT bill. Only these refund a
+ * reservation; anything ambiguous (timeouts after send, 5xx, bad 2xx bodies,
+ * download/SSRF failures after a 200) keeps the charge.
+ */
+type Billing = "none" | "maybe";
+type Attempt = { result: ImagineResult; billing: Billing; model?: string };
+
+const NOT_SENT_CODES = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "ERR_INVALID_URL",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
+function errorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const direct = (error as { code?: unknown }).code;
+  if (typeof direct === "string") return direct;
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string") {
+    return (cause as { code: string }).code;
+  }
+  return undefined;
+}
+
+export function fetchErrorDefinitelyNotSent(error: unknown): boolean {
+  const code = errorCode(error);
+  return code ? NOT_SENT_CODES.has(code) : false;
+}
+
+/** 4xx (incl. 429) = refused before generation. 408 is a timeout and stays ambiguous. */
+export function upstreamStatusDefinitelyNotBilled(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408;
+}
+
+/** Run an attempt under a held reservation: settle on success/ambiguous, refund only when definitely unbilled. */
+async function withReservation(reservationId: string | null, attempt: () => Promise<Attempt>): Promise<ImagineResult> {
+  if (!reservationId) return (await attempt()).result;
+  const ledger = getImagineSpendLedger();
+  let outcome: Attempt;
+  try {
+    outcome = await attempt();
+  } catch (error) {
+    ledger.settle(reservationId); // unknown failure — keep the charge
+    throw error;
+  }
+  if (!outcome.result.ok && outcome.billing === "none") ledger.refund(reservationId);
+  else ledger.settle(reservationId, { model: outcome.model });
+  return outcome.result;
+}
+
+/** Shared xAI POST + parse for generations/edits. */
+async function callImagesEndpoint(
+  label: { noun: string; endpointName: string },
+  endpoint: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+  fallbackModel: string,
+  fetchImpl: FetchLike,
+  lookup: LookupFn | undefined,
+): Promise<Attempt> {
+  let response: Response;
+  try {
+    response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    return {
+      result: { ok: false, error: `Could not reach the xAI ${label.endpointName} endpoint.`, status: 502 },
+      billing: fetchErrorDefinitelyNotSent(error) ? "none" : "maybe",
+    };
+  }
+  const billingOnFail: Billing = upstreamStatusDefinitelyNotBilled(response.status) ? "none" : "maybe";
+
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch {
+    return {
+      result: {
+        ok: false,
+        error: `${label.noun} returned a non-JSON response (HTTP ${response.status}).`,
+        status: response.status,
+      },
+      billing: billingOnFail,
+    };
+  }
+
+  const record = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  if (!response.ok) {
+    const err = record.error;
+    const raw =
+      typeof err === "string"
+        ? err
+        : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
+          ? String((err as { message: string }).message)
+          : `${label.noun} failed (HTTP ${response.status}).`;
+    return { result: { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status }, billing: billingOnFail };
+  }
+
+  // From here the upstream accepted (2xx) — any failure keeps the charge.
+  const rawData = Array.isArray(record.data) ? record.data : [];
+  if (rawData.length === 0) {
+    return { result: { ok: false, error: `${label.noun} returned no images.`, status: response.status }, billing: "maybe" };
+  }
+
+  const images: ImagineImage[] = [];
+  for (const item of rawData) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.b64_json === "string" && row.b64_json) {
+      const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
+      if (!built.ok) return { result: { ok: false, error: built.error, status: response.status }, billing: "maybe" };
+      images.push({ dataUrl: built.dataUrl, mime: built.mime });
+      continue;
+    }
+    if (typeof row.url === "string" && row.url) {
+      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, lookup);
+      if (!downloaded.ok) return { result: { ok: false, error: downloaded.error, status: response.status }, billing: "maybe" };
+      images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
+    }
+  }
+
+  if (images.length === 0) {
+    return {
+      result: { ok: false, error: `${label.noun} returned no usable image payloads.`, status: response.status },
+      billing: "maybe",
+    };
+  }
+
+  const resolvedModel = typeof record.model === "string" && record.model ? record.model : fallbackModel;
+  return {
+    result: { ok: true, model: resolvedModel, images, usage: record.usage },
+    billing: "maybe",
+    model: resolvedModel,
+  };
+}
+
+/**
  * Call xAI Grok Imagine (`POST /v1/images/generations`).
  * Prefers b64_json; when only a URL is returned, downloads it server-side into a data URL.
  */
@@ -138,114 +285,45 @@ export async function generateImagineImages(
   const model = resolveImagineModel(input.model);
   const n = clampCount(input.n);
 
+  let reservationId: string | null = null;
   if (!options.skipSpendControls) {
     const ownerId = options.meter?.ownerId?.trim() ?? "";
     if (!ownerId) {
       return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
     }
-    const allowed = assertImagineSpendAllowed({
+    // Synchronous check + reserve — no await between the cap check and holding the slot.
+    const reserved = reserveImagineSpend({
       ownerId,
       sessionId: options.meter?.sessionId,
       n,
+      model,
       checkRateLimit: checkImagineRateLimit,
       rateLimitKey: imagineRateLimitKey,
     });
-    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
+    if (!reserved.ok) return { ok: false, error: reserved.error, status: reserved.status };
+    reservationId = reserved.reservationId;
   }
 
-  const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
-  if (!apiKey) {
-    return {
-      ok: false,
-      error: "Image generation is not configured on the server.",
-      status: 503,
-    };
-  }
-  const responseFormat = input.responseFormat ?? "b64_json";
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const endpoint = options.endpoint ?? XAI_IMAGES_GENERATIONS_URL;
-
-  let response: Response;
-  try {
-    response = await fetchImpl(endpoint, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        prompt: normalized.prompt,
-        n,
-        response_format: responseFormat,
-      }),
-    });
-  } catch {
-    return { ok: false, error: "Could not reach the xAI image generation endpoint.", status: 502 };
-  }
-
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    return {
-      ok: false,
-      error: `Image generation returned a non-JSON response (HTTP ${response.status}).`,
-      status: response.status,
-    };
-  }
-
-  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-  if (!response.ok) {
-    const err = record.error;
-    const raw =
-      typeof err === "string"
-        ? err
-        : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
-          ? String((err as { message: string }).message)
-          : `Image generation failed (HTTP ${response.status}).`;
-    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
-  }
-
-  const rawData = Array.isArray(record.data) ? record.data : [];
-  if (rawData.length === 0) {
-    return { ok: false, error: "Image generation returned no images.", status: response.status };
-  }
-
-  const images: ImagineImage[] = [];
-  for (const item of rawData) {
-    if (!item || typeof item !== "object") continue;
-    const row = item as Record<string, unknown>;
-    if (typeof row.b64_json === "string" && row.b64_json) {
-      const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
-      if (!built.ok) return { ok: false, error: built.error, status: response.status };
-      images.push({ dataUrl: built.dataUrl, mime: built.mime });
-      continue;
+  return withReservation(reservationId, async () => {
+    const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
+    if (!apiKey) {
+      return {
+        result: { ok: false, error: "Image generation is not configured on the server.", status: 503 },
+        billing: "none",
+      };
     }
-    if (typeof row.url === "string" && row.url) {
-      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
-      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
-      images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
-    }
-  }
-
-  if (images.length === 0) {
-    return { ok: false, error: "Image generation returned no usable image payloads.", status: response.status };
-  }
-
-  const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
-  if (!options.skipSpendControls && options.meter?.ownerId) {
-    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || n });
-  }
-  return {
-    ok: true,
-    model: resolvedModel,
-    images,
-    usage: record.usage,
-  };
+    const responseFormat = input.responseFormat ?? "b64_json";
+    return callImagesEndpoint(
+      { noun: "Image generation", endpointName: "image generation" },
+      options.endpoint ?? XAI_IMAGES_GENERATIONS_URL,
+      apiKey,
+      { model, prompt: normalized.prompt, n, response_format: responseFormat },
+      model,
+      options.fetchImpl ?? fetch,
+      options.lookup,
+    );
+  });
 }
-
-
 
 export type ImagineEditRequest = {
   prompt: string;
@@ -297,115 +375,49 @@ export async function editImagineImage(
     }
   }
 
+  const model = resolveImagineModel(input.model);
+  let reservationId: string | null = null;
   if (!options.skipSpendControls) {
     const ownerId = options.meter?.ownerId?.trim() ?? "";
     if (!ownerId) {
       return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
     }
-    const allowed = assertImagineSpendAllowed({
+    const reserved = reserveImagineSpend({
       ownerId,
       sessionId: options.meter?.sessionId,
       n: 1,
+      model,
       checkRateLimit: checkImagineRateLimit,
       rateLimitKey: imagineRateLimitKey,
     });
-    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
+    if (!reserved.ok) return { ok: false, error: reserved.error, status: reserved.status };
+    reservationId = reserved.reservationId;
   }
 
-  const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
-  if (!apiKey) {
-    return {
-      ok: false,
-      error: "Image editing is not configured on the server.",
-      status: 503,
-    };
-  }
-
-  const model = resolveImagineModel(input.model);
-  const responseFormat = input.responseFormat ?? "b64_json";
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const endpoint = options.endpoint ?? XAI_IMAGES_EDITS_URL;
-
-  const requestBody: Record<string, unknown> = {
-    model,
-    prompt: normalized.prompt,
-    response_format: responseFormat,
-  };
-  if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
-  else requestBody.image_urls = imageUrls;
-
-  let response: Response;
-  try {
-    response = await fetchImpl(endpoint, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-  } catch {
-    return { ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 };
-  }
-
-  let responseJson: unknown;
-  try {
-    responseJson = await response.json();
-  } catch {
-    return {
-      ok: false,
-      error: `Image editing returned a non-JSON response (HTTP ${response.status}).`,
-      status: response.status,
-    };
-  }
-
-  const record = responseJson && typeof responseJson === "object" ? (responseJson as Record<string, unknown>) : {};
-  if (!response.ok) {
-    const err = record.error;
-    const raw =
-      typeof err === "string"
-        ? err
-        : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
-          ? String((err as { message: string }).message)
-          : `Image editing failed (HTTP ${response.status}).`;
-    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
-  }
-
-  const rawData = Array.isArray(record.data) ? record.data : [];
-  if (rawData.length === 0) {
-    return { ok: false, error: "Image editing returned no images.", status: response.status };
-  }
-
-  const images: ImagineImage[] = [];
-  for (const item of rawData) {
-    if (!item || typeof item !== "object") continue;
-    const row = item as Record<string, unknown>;
-    if (typeof row.b64_json === "string" && row.b64_json) {
-      const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
-      if (!built.ok) return { ok: false, error: built.error, status: response.status };
-      images.push({ dataUrl: built.dataUrl, mime: built.mime });
-      continue;
+  return withReservation(reservationId, async () => {
+    const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
+    if (!apiKey) {
+      return {
+        result: { ok: false, error: "Image editing is not configured on the server.", status: 503 },
+        billing: "none",
+      };
     }
-    if (typeof row.url === "string" && row.url) {
-      const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
-      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
-      images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
-    }
-  }
-
-  if (images.length === 0) {
-    return { ok: false, error: "Image editing returned no usable image payloads.", status: response.status };
-  }
-
-  const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
-  if (!options.skipSpendControls && options.meter?.ownerId) {
-    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || 1 });
-  }
-  return {
-    ok: true,
-    model: resolvedModel,
-    images,
-    usage: record.usage,
-  };
+    const responseFormat = input.responseFormat ?? "b64_json";
+    const requestBody: Record<string, unknown> = {
+      model,
+      prompt: normalized.prompt,
+      response_format: responseFormat,
+    };
+    if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
+    else requestBody.image_urls = imageUrls;
+    return callImagesEndpoint(
+      { noun: "Image editing", endpointName: "image edits" },
+      options.endpoint ?? XAI_IMAGES_EDITS_URL,
+      apiKey,
+      requestBody,
+      model,
+      options.fetchImpl ?? fetch,
+      options.lookup,
+    );
+  });
 }
-

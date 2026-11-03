@@ -137,6 +137,12 @@ export const IMAGINE_MAX_N = 2;
 export type ImagineRateLimitStore = {
   get(key: string): number[];
   set(key: string, hits: number[]): void;
+  /**
+   * Optional atomic read-modify-write. Cross-process stores (file, Redis, …) should
+   * implement it so two processes cannot both read the same window and both pass.
+   * Must throw (not return []) when stored state is unreadable.
+   */
+  update?<T>(key: string, fn: (hits: number[]) => { hits?: number[]; result: T }): T;
 };
 
 export function createMemoryRateLimitStore(seed: Record<string, number[]> = {}): ImagineRateLimitStore {
@@ -176,14 +182,31 @@ export function checkImagineRateLimit(
     ? userIdOrKey
     : imagineRateLimitKey({ userId: userIdOrKey, sessionId });
   const cutoff = now - IMAGINE_WINDOW_MS;
-  const prior = imagineRateStore.get(key).filter((t) => t > cutoff);
-  if (prior.length >= IMAGINE_MAX_PER_WINDOW) {
-    const retryAfterSec = Math.max(1, Math.ceil((prior[0]! + IMAGINE_WINDOW_MS - now) / 1000));
-    return { ok: false, error: "Imagine is rate-limited. Wait a minute before generating more images.", retryAfterSec };
+  type Decision = { ok: true } | { ok: false; error: string; retryAfterSec: number };
+  const decide = (hits: number[]): { hits?: number[]; result: Decision } => {
+    const prior = hits.filter((t) => t > cutoff);
+    if (prior.length >= IMAGINE_MAX_PER_WINDOW) {
+      const retryAfterSec = Math.max(1, Math.ceil((prior[0]! + IMAGINE_WINDOW_MS - now) / 1000));
+      return {
+        result: { ok: false, error: "Imagine is rate-limited. Wait a minute before generating more images.", retryAfterSec },
+      };
+    }
+    prior.push(now);
+    return { hits: prior, result: { ok: true } };
+  };
+  try {
+    if (imagineRateStore.update) return imagineRateStore.update(key, decide);
+    const out = decide(imagineRateStore.get(key));
+    if (out.hits) imagineRateStore.set(key, out.hits);
+    return out.result;
+  } catch {
+    // Unreadable/locked state: fail closed rather than resetting the window.
+    return {
+      ok: false,
+      error: "Imagine rate-limit state is unavailable. Wait a minute and try again.",
+      retryAfterSec: Math.ceil(IMAGINE_WINDOW_MS / 1000),
+    };
   }
-  prior.push(now);
-  imagineRateStore.set(key, prior);
-  return { ok: true };
 }
 
 /** Test helper — reset to a fresh memory store. */
