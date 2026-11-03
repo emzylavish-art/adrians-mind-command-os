@@ -216,6 +216,37 @@ describe("toggle + request contract", () => {
   });
 });
 
+describe("adversarial review additions", () => {
+  it("image-only turn (no text) cannot fail over to a text-only provider", async () => {
+    let outbound = 0;
+    const out = await runFallback({ primary: "grok", primaryError: "Grok returned 503.", prompt: "   ", env: ENV_WITH_OPENAI, fetch: async () => { outbound++; return { ok: true, status: 200, text: async () => "" }; } });
+    assert.equal(out.ok, false);
+    assert.equal(outbound, 0);
+  });
+  it("a throwing hook still yields one honest error event, not a hung stream", async () => {
+    const res = relayModelStream({ ...base, requestSignal: new AbortController().signal, fetchImpl: grokFail(503) as unknown as typeof fetch, onUpstreamFailure: async () => { throw new Error(OPENAI_KEY); } });
+    const ev = await events(res);
+    assert.equal(ev.length, 1);
+    assert.equal(ev[0].event, "error");
+    assert.doesNotMatch((ev[0] as { error: string }).error, /FALLBACKSECRET/);
+  });
+  it("primary error leaking its own key + endpoint is scrubbed in the both-failed message", async () => {
+    const out = await runFallback({ primary: "grok", primaryError: `401 from https://api.x.ai/v1 with ${XAI_KEY}`, prompt: "hi", env: ENV_WITH_OPENAI, fetch: openaiFail(429), secrets: [XAI_KEY] });
+    assert.equal(out.ok, false);
+    if (out.ok) return;
+    assert.doesNotMatch(out.error, /PRIMARYSECRET|api\.x\.ai|https?:/);
+    assert.match(out.error, /rate limited/);
+  });
+  it("200 empty-body primary (no text) fails over; failover off keeps the empty-reply error", async () => {
+    const empty = (async () => new Response("data: [DONE]\n\n", { status: 200 })) as unknown as typeof fetch;
+    const off = await events(relayModelStream({ ...base, requestSignal: new AbortController().signal, fetchImpl: empty }));
+    assert.equal(off[0].event, "error");
+    const h = hook(ENV_WITH_OPENAI, openaiOk("rescued"));
+    const on = await events(relayModelStream({ ...base, requestSignal: new AbortController().signal, fetchImpl: empty, onUpstreamFailure: h.fn }));
+    assert.equal((on.find((e) => e.event === "done") as { provider?: string } | undefined)?.provider, "openai");
+  });
+});
+
 describe("UI wiring (source contract)", () => {
   const src = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url), "utf8");
   const server = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
@@ -236,6 +267,6 @@ describe("UI wiring (source contract)", () => {
   });
   it("server: failover opt-in parsed strictly and hook only attached once (no chains)", () => {
     assert.match(server, /parseFailoverField\(body\.failover\)/);
-    assert.match(server, /failoverOn && !failedOverFrom/);
+    assert.match(server, /failoverOn && !failedOverFrom && prepared\.images\.length === 0/);
   });
 });

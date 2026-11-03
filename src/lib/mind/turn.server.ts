@@ -322,8 +322,10 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       ...(failedOverFrom ? { failedOverFrom: failedOverFrom.id, failoverReason: failedOverFrom.reason } : {}),
     },
     // Failover on (and not already a failover turn): a pre-stream Grok failure retries once elsewhere.
+    // Fallback providers here receive text only — never fail over a turn with images
+    // (the fallback could not see them and would answer as if it had).
     onUpstreamFailure:
-      failoverOn && !failedOverFrom
+      failoverOn && !failedOverFrom && prepared.images.length === 0
         ? (error, signal) =>
             runFallback({
               primary: "grok",
