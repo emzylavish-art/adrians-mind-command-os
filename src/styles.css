@@ -9375,3 +9375,125 @@ html[data-theme="light"] [data-testid="voice-cloning-studio"] [data-testid="vcs-
     transform: none !important;
   }
 }
+
+
+/* ============================================================================
+ * VCS visual — polished empty/error cards for engine-down + op-not-permitted
+ * CSS only; hooks: data-vcs-state, .vcs-badge[data-tone], [data-testid=vcs-error]
+ * ============================================================================ */
+
+/* Engine-down: provider banner becomes a calm empty card */
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] [data-testid="vcs-provider-banner"],
+[data-testid="voice-cloning-studio"] [data-testid="vcs-provider-banner"][data-can-clone="false"] {
+  position: relative;
+  isolation: isolate;
+  padding: calc(var(--vcs-gap, 8px) * 2.5) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-panel, 1rem) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 48%),
+    linear-gradient(180deg, rgb(14 16 22 / 0.88), rgb(8 10 14 / 0.94)),
+    linear-gradient(145deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0.05) 45%, rgb(255 255 255 / 0.14)) !important;
+  background-color: transparent !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+}
+
+[data-testid="voice-cloning-studio"] .vcs-badge[data-tone="warn"] {
+  color: #f4f4f5 !important;
+  border-color: rgb(255 255 255 / 0.22) !important;
+  background: rgb(255 255 255 / 0.06) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 0 0 1px rgb(255 180 120 / 0.12) !important;
+}
+
+/* Soft lead-in icon plate for engine-down badge */
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] .vcs-badge[data-tone="warn"]::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.45rem;
+  border-radius: 999px;
+  background: rgb(255 200 140 / 0.85);
+  box-shadow: 0 0 10px rgb(255 200 140 / 0.35);
+}
+
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] [data-testid="vcs-provider-reason"] {
+  color: #9aa3b5 !important; /* ~7.9:1 secondary */
+  max-width: 42rem;
+  line-height: 1.45;
+}
+
+/* Dim create/generate when engine is down — empty-state affordance */
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] [data-testid="vcs-create"],
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] [data-testid="vcs-generate"],
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] [data-testid="vcs-profiles"] {
+  opacity: 0.55;
+  filter: grayscale(0.15);
+}
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] [data-testid="vcs-create"]::after,
+[data-testid="voice-cloning-studio"][data-vcs-state="engine-down"] [data-testid="vcs-generate"]::after {
+  content: "Requires local engine";
+  display: block;
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  border: 1px dashed rgb(255 255 255 / 0.18);
+  color: #7a8499;
+  font-size: 0.6875rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Error card: operation not permitted / mic denied / attestation — polished */
+[data-testid="voice-cloning-studio"] [data-testid="vcs-error"],
+[data-testid="voice-cloning-studio"] [role="alert"][data-testid="vcs-error"] {
+  position: relative;
+  isolation: isolate;
+  margin-top: calc(var(--vcs-gap, 8px) * 2) !important;
+  padding: 0.9rem 1rem 0.9rem 1.1rem !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-panel, 1rem) !important;
+  color: #fecaca !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 120 120 / 0.12), transparent 55%),
+    linear-gradient(180deg, rgb(28 12 14 / 0.92), rgb(18 8 10 / 0.96)),
+    linear-gradient(145deg, rgb(255 140 140 / 0.35), rgb(255 255 255 / 0.05) 45%, rgb(255 120 120 / 0.2)) !important;
+  background-color: transparent !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.08) !important;
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+[data-testid="voice-cloning-studio"] [data-testid="vcs-error"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 999px;
+  background: #f87171;
+  box-shadow: 0 0 12px rgb(248 113 113 / 0.45);
+  pointer-events: none;
+}
+
+/* Loading state: soft pulse via opacity only */
+[data-testid="voice-cloning-studio"][data-vcs-state="loading"] [data-testid="vcs-provider-banner"] {
+  opacity: 0.85;
+}
