@@ -158,7 +158,6 @@ import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { AgentsPageHeader } from "@/components/mind/agents-page-header";
-import { BuildSessionLayout } from "@/components/mind/build-session-layout";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
@@ -5185,7 +5184,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry) => reportFailure(message, "open_page_failed", "browser", retry)} />}
-          {view === "build" && (
+                    {view === "build" && (
             <section className="page-shell space-y-4" data-testid="build-page">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
@@ -5196,63 +5195,46 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                   </div>
                 </div>
               </div>
-              <BuildSessionLayout
-                title={buildPick}
-                elapsedLabel={null}
-                live={false}
-                envLabel={pcAgentOnline ? "PC agent online" : "Not paired"}
-                envDetail={pcAgentDetail}
-                steps={null}
-                logs={null}
-                diffs={null}
-                summary={null}
-                summaryBullets={null}
-                testPlan={null}
-                selectedSuggestion={buildPick}
-                noticeSlot={(
-                  <>
-                    <div className="empty-state" data-testid="build-empty">
-                      <img src="/empty/empty-folder.svg" alt="" />
-                      <p className="font-semibold">Let&apos;s build</p>
-                      <p className="text-sm text-muted">No build is running. Suggestion cards do not run anything just by appearing.</p>
-                      <p className="text-xs text-muted">Build effort selects the Build model tier for the next send.</p>
-                    </div>
-                    <div className="promo-banner text-sm">
-                      <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold">{pcAgentOnline ? "Local Companion paired" : "Local Companion not paired"}</p>
-                        <p className="text-muted">{pcAgentOnline ? "File edits, tests, and git stay gated by approvals." : "Pair a computer to unlock file edits, tests, and git. Nothing runs until then."}</p>
-                      </div>
-                    </div>
-                    <ul className="dense-grid space-y-0 text-sm">
-                      <li className="dense-card dense-row">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
-                      <li className="dense-card dense-row">Edit files, run tests, and use git. Not available. No files were changed.</li>
-                      <li className="dense-card dense-row">HP EliteBook and iPhone control. Not paired.</li>
-                    </ul>
-                  </>
-                )}
-                suggestionsSlot={(
-                  <>
-                    {BUILD_SUGGESTIONS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className="suggestion-chip"
-                        onClick={() => {
-                          setBuildPick(item.label);
-                          if (!pcAgentOnline) {
-                            setNotice(`${item.label} was not run. Not paired. Nothing was executed.`);
-                            return;
-                          }
-                          setNotice(`${item.label} is selected. Nothing was executed.`);
-                        }}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </>
-                )}
-              />
+              <div className="empty-state" data-testid="build-empty">
+                <img src="/empty/empty-folder.svg" alt="" />
+                <p className="font-semibold">Let&apos;s build</p>
+                <p className="text-sm text-muted">No build is running on this tip. Live BuildSessionPanel styling ships on visual/build-session-style (from logic-build-session). Suggestion cards do not run anything just by appearing.</p>
+                <p className="text-sm font-semibold">{pcAgentOnline ? "PC agent online" : "Not paired"}</p>
+                <p className="text-sm text-muted">{pcAgentDetail}</p>
+                <p className="text-xs text-muted">Build effort selects the Build model tier for the next send.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {BUILD_SUGGESTIONS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="suggestion-chip"
+                    onClick={() => {
+                      setBuildPick(item.label);
+                      if (!pcAgentOnline) {
+                        setNotice(`${item.label} was not run. Not paired. Nothing was executed.`);
+                        return;
+                      }
+                      setNotice(`${item.label} is selected. Nothing was executed.`);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {buildPick ? <p className="text-sm text-muted">Selected {buildPick}. Nothing was executed.</p> : null}
+              <div className="promo-banner text-sm">
+                <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{pcAgentOnline ? "Local Companion paired" : "Local Companion not paired"}</p>
+                  <p className="text-muted">{pcAgentOnline ? "File edits, tests, and git stay gated by approvals." : "Pair a computer to unlock file edits, tests, and git. Nothing runs until then."}</p>
+                </div>
+              </div>
+              <ul className="dense-grid space-y-0 text-sm">
+                <li className="dense-card dense-row">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
+                <li className="dense-card dense-row">Edit files, run tests, and use git. Not available. No files were changed.</li>
+                <li className="dense-card dense-row">HP EliteBook and iPhone control. Not paired.</li>
+              </ul>
             </section>
           )}
           {view === "research" && (
