@@ -190,6 +190,7 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
+import { createSingleFlight } from "@/lib/mind/research-flight";
 import { MODEL_TIERS, type ModelTier } from "@/lib/mind/model-tiers";
 import { chipPropsForSelection, forgetTierOutcome, tierRunFromResult, type ChipTierRun } from "@/lib/mind/model-tier-memory";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
@@ -598,6 +599,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   const { lastResolved: lastResolvedTier, lastModel: lastModelUsed } = chipPropsForSelection(lastTierRun, modelTier);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
+  const researchFlight = useRef(createSingleFlight());
+  const [researchBusy, setResearchBusy] = useState(false);
   const [agentGoal, setAgentGoal] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
@@ -1937,6 +1940,12 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       });
       return;
     }
+    const token = researchFlight.current.begin();
+    if (token === null) {
+      setNotice("Research is already running. Wait for it to finish.");
+      return;
+    }
+    setResearchBusy(true);
     setResearchCitations([]);
     const query = researchText;
     try {
@@ -1961,8 +1970,12 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
         setResearchText(query);
         void startResearch();
       });
+    } finally {
+      researchFlight.current.end(token);
+      setResearchBusy(false);
     }
   }
+
 
   async function runPlanner() {
     if (ws.halted || agentBusy) return;
@@ -5336,8 +5349,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                   </div>
                 </div>
                 <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
-                  Check research
+                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted || researchBusy} aria-busy={researchBusy} onClick={() => void startResearch()}>
+                  {researchBusy ? "Checking…" : "Check research"}
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
                 {researchCitations.length === 0 && !researchNote ? (
