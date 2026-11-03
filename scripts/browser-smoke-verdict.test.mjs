@@ -457,5 +457,5 @@ test("baseline failure never hides a more urgent navigation or script error", ()
 
 test("browser screenshots do not mutate caret styles during React hydration", () => {
   const src = readFileSync(join(TEMPLATE_ROOT, "scripts/browser-smoke.mjs"), "utf8");
-  assert.match(src, /page\\.screenshot\\(\\{[^}]*caret: "initial"/);
+  assert.ok(src.includes('page.screenshot({ path: vp.screenshot, fullPage: false, caret: "initial" })'));
 });
