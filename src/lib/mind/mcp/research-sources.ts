@@ -16,7 +16,7 @@ import {
   resolveAndPinMcpHostname,
   type DnsLookupFn,
 } from "./http-dns-pin.ts";
-import { resolveStorageLaneAccessToken } from "../media/storage/lanes.ts";
+import { findStorageAccountByLaneId, resolveStorageLaneAccessToken } from "../media/storage/lanes.ts";
 import { loadStorageAccountsConfig } from "../media/storage/config.ts";
 
 const MAX_ALLOWLIST = 64;
@@ -24,6 +24,55 @@ const MAX_FETCH_BYTES = 200_000;
 const MAX_GDRIVE_READ_BYTES = 200_000;
 const DEFAULT_GDRIVE_LANE = "gdrive-emzylavish";
 const GDRIVE_FILE_ID_RE = /^[a-zA-Z0-9_-]{10,128}$/;
+/** Per-request timeout for Drive files.get / export / download (research must never hang). */
+export const GDRIVE_FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Read at most `max + 1` bytes from a response body (streaming), then cancel.
+ * Prevents a huge export/download from being fully buffered before the cap check.
+ */
+async function readBodyCapped(res: Response, max: number): Promise<{ buf: Uint8Array; overflow: boolean }> {
+  if (!res.body) {
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return buf.byteLength > max ? { buf: buf.subarray(0, max), overflow: true } : { buf, overflow: false };
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let overflow = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      if (total + value.byteLength > max) {
+        overflow = true;
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } finally {
+    if (overflow) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    buf.set(c, off);
+    off += c.byteLength;
+  }
+  return { buf, overflow };
+}
+
+function isAbortLike(error: unknown): boolean {
+  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+}
 
 const GDRIVE_EXPORT_MIME: Record<string, string> = {
   "application/vnd.google-apps.document": "text/plain",
@@ -197,6 +246,7 @@ export async function researchConnectorRead(input: {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   configPath?: string;
+  timeoutMs?: number;
 }): Promise<ToolResult> {
   const source = (input.source || "").trim().toLowerCase();
   if (source === "notion") {
@@ -240,6 +290,7 @@ export async function researchGdriveRead(input: {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   configPath?: string;
+  timeoutMs?: number;
 }): Promise<ToolResult> {
   const fileId = (input.file_id || "").trim();
   if (!fileId) {
@@ -252,6 +303,25 @@ export async function researchGdriveRead(input: {
   const laneId = (input.lane_id || "").trim() || DEFAULT_GDRIVE_LANE;
   const env = input.env ?? process.env;
   const fetchImpl = input.fetchImpl ?? fetch;
+  const timeoutMs = input.timeoutMs ?? GDRIVE_FETCH_TIMEOUT_MS;
+
+  // Security: the lane must be a Google Drive lane. Otherwise a caller could pass
+  // lane_id=dropbox-* / onedrive-* / box-* and we would send that provider's bearer
+  // token to googleapis.com (cross-provider credential leak) and misreport "needs-reconnect".
+  let laneAccount: ReturnType<typeof findStorageAccountByLaneId> = null;
+  try {
+    laneAccount = findStorageAccountByLaneId(laneId, loadStorageAccountsConfig(input.configPath));
+  } catch {
+    laneAccount = null;
+  }
+  if (laneAccount && laneAccount.service !== "google_drive") {
+    return {
+      ok: false,
+      status: "error",
+      text: `Lane “${laneId}” is a ${laneAccount.service} lane, not Google Drive. gdrive research reads only use google_drive lanes. Nothing was read and no token was sent.`,
+      data: { source: "gdrive", laneId, statusKind: "wrong-lane-service" },
+    };
+  }
 
   const tokenResult = await resolveStorageLaneAccessToken(laneId, {
     env,
@@ -314,10 +384,13 @@ export async function researchGdriveRead(input: {
     metaRes = await fetchImpl(metaUrl.toString(), {
       method: "GET",
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Drive metadata request failed";
-    return { ok: false, status: "error", text: `${message}. Nothing was read.` };
+    if (isAbortLike(error)) {
+      return { ok: false, status: "error", text: `Google Drive files.get timed out after ${timeoutMs}ms. Nothing was read.` };
+    }
+    return { ok: false, status: "error", text: "Google Drive metadata request failed (network error). Nothing was read." };
   }
 
   if (metaRes.status === 401 || metaRes.status === 403) {
@@ -335,7 +408,13 @@ export async function researchGdriveRead(input: {
     return { ok: false, status: "error", text: `Google Drive files.get returned ${metaRes.status}. Nothing was read.` };
   }
 
-  const meta = (await metaRes.json()) as {
+  let metaJson: unknown;
+  try {
+    metaJson = await metaRes.json();
+  } catch {
+    return { ok: false, status: "error", text: "Google Drive files.get returned an unreadable response. Nothing was read." };
+  }
+  const meta = (metaJson ?? {}) as {
     id?: string;
     name?: string;
     mimeType?: string;
@@ -385,10 +464,13 @@ export async function researchGdriveRead(input: {
     bodyRes = await fetchImpl(bodyUrl, {
       method: "GET",
       headers: { authorization: `Bearer ${token}`, accept: "text/plain,text/*,*/*" },
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Drive content request failed";
-    return { ok: false, status: "error", text: `${message}. Nothing was read.` };
+    if (isAbortLike(error)) {
+      return { ok: false, status: "error", text: `Google Drive ${via} timed out after ${timeoutMs}ms. Nothing was read.` };
+    }
+    return { ok: false, status: "error", text: `Google Drive ${via} request failed (network error). Nothing was read.` };
   }
 
   if (bodyRes.status === 401 || bodyRes.status === 403) {
@@ -403,15 +485,24 @@ export async function researchGdriveRead(input: {
     return { ok: false, status: "error", text: `Google Drive ${via} returned ${bodyRes.status}. Nothing was read.` };
   }
 
-  // Cap by reading at most MAX+1 bytes
-  const buf = new Uint8Array(await bodyRes.arrayBuffer());
-  if (buf.byteLength > MAX_GDRIVE_READ_BYTES) {
-    return {
-      ok: false,
-      status: "error",
-      text: `Drive ${via} for “${name}” exceeded the ${MAX_GDRIVE_READ_BYTES}-byte research cap (${buf.byteLength} bytes). Nothing was kept.`,
-      data: { source: "gdrive", fileId, name, mimeType: mime, bytes: buf.byteLength },
-    };
+  // Stream at most MAX bytes; cancel the body as soon as the cap is exceeded.
+  let buf: Uint8Array;
+  try {
+    const capped = await readBodyCapped(bodyRes, MAX_GDRIVE_READ_BYTES);
+    if (capped.overflow) {
+      return {
+        ok: false,
+        status: "error",
+        text: `Drive ${via} for “${name}” exceeded the ${MAX_GDRIVE_READ_BYTES}-byte research cap. Nothing was kept.`,
+        data: { source: "gdrive", fileId, name, mimeType: mime, capBytes: MAX_GDRIVE_READ_BYTES },
+      };
+    }
+    buf = capped.buf;
+  } catch (error) {
+    if (isAbortLike(error)) {
+      return { ok: false, status: "error", text: `Google Drive ${via} timed out after ${timeoutMs}ms while reading. Nothing was read.` };
+    }
+    return { ok: false, status: "error", text: `Google Drive ${via} body could not be read. Nothing was read.` };
   }
   const text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
   const preview = text.slice(0, 8000);

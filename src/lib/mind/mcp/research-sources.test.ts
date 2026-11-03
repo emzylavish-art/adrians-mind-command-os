@@ -174,6 +174,107 @@ describe("research_connector_read", () => {
   });
 });
 
+describe("research_connector_read gdrive attacker pass (2026-11-02)", () => {
+  const configPath = new URL("../media/storage/media-storage-accounts.example.json", import.meta.url).pathname;
+  const fileId = "1AbCdefghijkLMNOPqrstuvwxYZ012345";
+
+  it("refuses non-Drive lane_id and never sends that provider's token to googleapis.com", async () => {
+    for (const laneId of ["dropbox-emzylavish", "onedrive-emzylavish", "box-emzylavish", "pcloud-emzylavish"]) {
+      const calls: string[] = [];
+      const fetchImpl = async (url: string | URL, init?: RequestInit) => {
+        calls.push(String(url) + " " + JSON.stringify(init?.headers ?? {}));
+        return new Response("{}", { status: 401 });
+      };
+      const envKey = "MIND_STORAGE_LANE_" + laneId.toUpperCase().replace(/-/g, "_") + "_TOKEN";
+      const result = await researchConnectorRead({
+        source: "gdrive",
+        file_id: fileId,
+        lane_id: laneId,
+        env: { [envKey]: "OTHER-PROVIDER-SECRET" },
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        configPath,
+      });
+      assert.equal(result.ok, false, laneId);
+      assert.equal(result.status, "error", laneId);
+      assert.match(result.text, /not Google Drive/);
+      assert.equal(calls.length, 0, `${laneId}: no network call expected, got ${calls.join(" | ")}`);
+      assert.ok(!result.text.includes("OTHER-PROVIDER-SECRET"));
+    }
+  });
+
+  it("times out a hanging Drive files.get instead of hanging the tool", async () => {
+    const fetchImpl = (_url: string | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+      });
+    const started = Date.now();
+    const result = await researchConnectorRead({
+      source: "gdrive",
+      file_id: fileId,
+      env: { MIND_STORAGE_LANE_GDRIVE_EMZYLAVISH_TOKEN: "secret-tok" },
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      configPath,
+      timeoutMs: 50,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.text, /timed out/);
+    assert.ok(Date.now() - started < 5000);
+    assert.ok(!result.text.includes("secret-tok"));
+  });
+
+  it("stops streaming an oversized export at the cap (no full buffering, no success)", async () => {
+    let pulled = 0;
+    let cancelled = false;
+    const chunk = new Uint8Array(64 * 1024).fill(97);
+    const fetchImpl = async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes("/export")) {
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            pulled += 1;
+            if (pulled > 1000) controller.close();
+            else controller.enqueue(chunk);
+          },
+          cancel() {
+            cancelled = true;
+          },
+        });
+        return new Response(body, { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({ id: fileId, name: "huge doc", mimeType: "application/vnd.google-apps.document", trashed: false }),
+        { status: 200 },
+      );
+    };
+    const result = await researchConnectorRead({
+      source: "gdrive",
+      file_id: fileId,
+      env: { MIND_STORAGE_LANE_GDRIVE_EMZYLAVISH_TOKEN: "t" },
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      configPath,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.text, /exceeded the 200000-byte research cap/);
+    assert.ok(pulled < 20, `pulled ${pulled} chunks; expected early stop`);
+    assert.equal(cancelled, true);
+  });
+
+  it("network errors do not echo raw error text (which may carry URLs/tokens)", async () => {
+    const fetchImpl = async () => {
+      throw new Error("connect failed Bearer leaked-token-xyz");
+    };
+    const result = await researchConnectorRead({
+      source: "gdrive",
+      file_id: fileId,
+      env: { MIND_STORAGE_LANE_GDRIVE_EMZYLAVISH_TOKEN: "leaked-token-xyz" },
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      configPath,
+    });
+    assert.equal(result.ok, false);
+    assert.ok(!result.text.includes("leaked-token-xyz"));
+  });
+});
+
 describe("research_fetch_url SSRF / allowlist", () => {
   it("refuses private hosts and requires allowlist", async () => {
     const priv = await researchFetchAllowlistedUrl({
