@@ -5,3 +5,4 @@ export * from "./stdio.ts";
 export * from "./connector-verify-shared.ts";
 export * from "./connector-verify.ts";
 export * from "./tool-catalog.ts";
+export * from "./build-workspace-tools.ts";

@@ -11,6 +11,14 @@ import {
   type SqlLike,
   type ToolResult,
 } from "./tools.ts";
+import {
+  buildGitCommit,
+  buildGitDiff,
+  buildGitStatus,
+  buildRepoList,
+  buildRepoRead,
+  buildTerminalRun,
+} from "./build-workspace-tools.ts";
 
 function asContent(result: ToolResult) {
   return {
@@ -113,6 +121,68 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
       }
       return asContent(await storageListStatus({ ownerId }));
     },
+  );
+
+
+  server.registerTool(
+    "build_repo_list",
+    {
+      description: "List files under the BuildSession workspace root (MIND_BUILD_WORKSPACE_ROOT).",
+      inputSchema: { path: z.string().optional().describe("Relative directory under the workspace root") },
+    },
+    async ({ path }) => asContent(await buildRepoList({ path })),
+  );
+  server.registerTool(
+    "build_repo_read",
+    {
+      description: "Read a text file under the BuildSession workspace root.",
+      inputSchema: {
+        path: z.string().describe("Relative file path"),
+        maxBytes: z.number().optional().describe("Optional max bytes"),
+      },
+    },
+    async ({ path, maxBytes }) => asContent(await buildRepoRead({ path, maxBytes })),
+  );
+  server.registerTool(
+    "build_terminal_run",
+    {
+      description: "Run an allowlisted BuildSession terminal command (not pc_run_shell).",
+      inputSchema: {
+        command: z.string().describe("Allowlisted command"),
+        cwd: z.string().optional().describe("Optional relative cwd"),
+      },
+    },
+    async ({ command, cwd }) => asContent(await buildTerminalRun({ command, cwd })),
+  );
+  server.registerTool(
+    "build_git_status",
+    {
+      description: "git status --porcelain in the BuildSession workspace.",
+      inputSchema: {},
+    },
+    async () => asContent(await buildGitStatus({})),
+  );
+  server.registerTool(
+    "build_git_diff",
+    {
+      description: "git diff in the BuildSession workspace.",
+      inputSchema: {
+        path: z.string().optional(),
+        staged: z.boolean().optional(),
+      },
+    },
+    async ({ path, staged }) => asContent(await buildGitDiff({ path, staged })),
+  );
+  server.registerTool(
+    "build_git_commit",
+    {
+      description: "git add (optional paths) + commit. Never push/force/reset --hard.",
+      inputSchema: {
+        message: z.string().describe("Commit message"),
+        paths: z.array(z.string()).optional().describe("Optional paths to add"),
+      },
+    },
+    async ({ message, paths }) => asContent(await buildGitCommit({ message, paths })),
   );
 
   return server;

@@ -18,6 +18,14 @@ import {
   type JsonSchema,
   type ToolHealth,
 } from "./tool-catalog.ts";
+import {
+  buildGitCommit,
+  buildGitDiff,
+  buildGitStatus,
+  buildRepoList,
+  buildRepoRead,
+  buildTerminalRun,
+} from "./build-workspace-tools.ts";
 import { callStdioTool, isBlockedChildEnvKey, listStdioTools, type StdioOptions } from "./stdio.ts";
 import {
   defaultDnsLookup,
@@ -614,6 +622,35 @@ async function callBuiltin(
         return { ok: false, status: "error", text: "Sign in is required to list storage connectors. Nothing was listed." };
       }
       return storageListStatus({ ownerId: deps.ownerId });
+    }
+    case "build_repo_list":
+      return buildRepoList({ path: typeof args.path === "string" ? args.path : undefined });
+    case "build_repo_read":
+      return buildRepoRead({
+        path: String(args.path ?? ""),
+        maxBytes: typeof args.maxBytes === "number" ? args.maxBytes : undefined,
+      });
+    case "build_terminal_run":
+      return buildTerminalRun({
+        command: String(args.command ?? ""),
+        cwd: typeof args.cwd === "string" ? args.cwd : undefined,
+      });
+    case "build_git_status":
+      return buildGitStatus({});
+    case "build_git_diff":
+      return buildGitDiff({
+        path: typeof args.path === "string" ? args.path : undefined,
+        staged: args.staged === true,
+      });
+    case "build_git_commit": {
+      const pathsRaw = args.paths;
+      const paths =
+        Array.isArray(pathsRaw)
+          ? pathsRaw.map((p) => String(p))
+          : typeof pathsRaw === "string" && pathsRaw.trim()
+            ? pathsRaw.split(",").map((p) => p.trim()).filter(Boolean)
+            : undefined;
+      return buildGitCommit({ message: String(args.message ?? ""), paths });
     }
     default:
       return { ok: false, status: "error", text: `Unknown built-in tool “${name}”. Nothing was called.` };

@@ -131,6 +131,89 @@ export const BUILTIN_TOOL_CATALOG: readonly BuiltinToolCatalogEntry[] = [
       additionalProperties: false,
     },
   },
+  {
+    id: "build_repo_list",
+    name: "build_repo_list",
+    description: "List files under the BuildSession workspace root (MIND_BUILD_WORKSPACE_ROOT). Path-safe; allowlisted roots only.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Relative directory under the workspace root (default .)" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "build_repo_read",
+    name: "build_repo_read",
+    description: "Read a text file under the BuildSession workspace root. Path-safe; size-capped.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Relative file path under the workspace root" },
+        maxBytes: { type: "number", description: "Optional max bytes (capped)" },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "build_terminal_run",
+    name: "build_terminal_run",
+    description: "Run an allowlisted BuildSession terminal command in the workspace (timeouts enforced; no shell metacharacters). Not pc_run_shell.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        command: { type: "string", description: "Allowlisted command" },
+        cwd: { type: "string", description: "Optional relative cwd under the workspace root" },
+      },
+      required: ["command"],
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "build_git_status",
+    name: "build_git_status",
+    description: "git status --porcelain in the BuildSession workspace. Read-only.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "build_git_diff",
+    name: "build_git_diff",
+    description: "git diff in the BuildSession workspace (optional path / staged). No push/force.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Optional relative path" },
+        staged: { type: "boolean", description: "If true, diff --cached" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "build_git_commit",
+    name: "build_git_commit",
+    description: "git add (optional paths) + git commit -m in the workspace. Never push, force, or reset --hard.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "Commit message" },
+        paths: { type: "string", description: "Optional comma-separated relative paths to git add before commit" },
+      },
+      required: ["message"],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 export type BuiltinCatalogToolName = (typeof BUILTIN_TOOL_CATALOG)[number]["name"];
@@ -204,6 +287,17 @@ export function computeBuiltinToolHealth(input: HealthComputeInput): ToolHealth 
   }
   if (name === "storage_list_status") {
     return storageConfigured(input) ? "ok" : "needs-config";
+  }
+  if (
+    name === "build_repo_list" ||
+    name === "build_repo_read" ||
+    name === "build_terminal_run" ||
+    name === "build_git_status" ||
+    name === "build_git_diff" ||
+    name === "build_git_commit"
+  ) {
+    const root = (input.env ?? process.env).MIND_BUILD_WORKSPACE_ROOT?.trim();
+    return root ? "ok" : "needs-config";
   }
   return "error";
 }
