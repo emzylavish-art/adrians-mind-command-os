@@ -460,6 +460,17 @@ function Login() {
               </button>
             </div>
           </label>
+          {mode === "sign-in" ? (
+            <div className="flex justify-end">
+              <Link
+                to="/auth/forgot"
+                data-testid="login-forgot-password"
+                className="text-sm font-medium text-muted underline-offset-4 transition-colors hover:text-fg hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+          ) : null}
           <button
             type="submit"
             disabled={busy}

@@ -56,6 +56,7 @@ import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
 import { BuildSessionPanel } from "@/components/mind/build/build-session-panel";
+import { AgentsPageHeader } from "@/components/mind/agents-page-header";
 import { IntentPredictionChip } from "@/components/mind/intent-prediction-chip";
 import { pushComposerText, pushVoiceChunk } from "@/lib/intent";
 import {
@@ -251,6 +252,7 @@ import {
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 import { isPrimaryPointerActivate, selectDrawerView } from "@/lib/mind/drawer-nav";
+import { viewFromBotsPath } from "@/lib/mind/bots-shell";
 
 type View =
   | "command"
@@ -504,7 +506,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   const serverWorkspace = props.serverWorkspace ?? null;
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, cloudHydrating } = useMindWorkspace(serverWorkspace);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const [view, setView] = useState<View>("command");
+  const [view, setView] = useState<View>(() => viewFromBotsPath(pathname) ?? "command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
@@ -5114,9 +5116,33 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           )}
 
           {view === "agents" && (
-            <>
+            <div className="agents-page bots-shell-page" data-testid="agents-page">
+            <AgentsPageHeader
+              onSettings={() => {
+                setView("settings");
+                setNavOpen(false);
+              }}
+              onSearch={() => {
+                setPaletteOpen(true);
+                const node = searchRef.current;
+                if (node) node.focus();
+              }}
+              onNewBot={() => {
+                const el = document.getElementById("agents-custom-form");
+                el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                const input = el?.querySelector("input");
+                if (input instanceof HTMLInputElement) input.focus();
+              }}
+              onCompose={() => {
+                openChat();
+                setNavOpen(false);
+              }}
+            />
+            <div className="mx-4 mb-4 md:mx-6" data-testid="bots-build-session">
+              <BuildSessionPanel botId={buildBotId} initialGoal={buildPick || ""} />
+            </div>
             <ReaPanel
-              title="Agents"
+              title="Bots & Agents"
               lead="REA checks a file. Workspace lookup lists projects and chats, then searches notes. It does not call a model, browse the web, or mark itself running."
               report={reaReport}
               busy={reaBusy}
@@ -5206,7 +5232,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 setNotice(`Build session ready for ${agentName}.`);
               }}
             />
-            </>
+            </div>
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
           {view === "connected" && (

@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AgentsRouteImport } from './routes/agents'
+import { Route as BotsRouteImport } from './routes/bots'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
@@ -17,6 +19,8 @@ import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as VoiceCloningStudioRouteImport } from './routes/voice-cloning-studio'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as AuthForgotRouteImport } from './routes/auth/forgot'
+import { Route as AuthResetRouteImport } from './routes/auth/reset'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiIntentOutcomesRouteImport } from './routes/api/intent/outcomes'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
@@ -69,6 +73,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentsRoute = AgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BotsRoute = BotsRouteImport.update({
+  id: '/bots',
+  path: '/bots',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -102,6 +116,16 @@ const VoiceCloningStudioRoute = VoiceCloningStudioRouteImport.update({
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthForgotRoute = AuthForgotRouteImport.update({
+  id: '/auth/forgot',
+  path: '/auth/forgot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthResetRoute = AuthResetRouteImport.update({
+  id: '/auth/reset',
+  path: '/auth/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -351,6 +375,8 @@ const ApiMindOauthNotionStatusRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/bots': typeof BotsRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
@@ -358,6 +384,8 @@ export interface FileRoutesByFullPath {
   '/personas': typeof PersonasRoute
   '/voice-cloning-studio': typeof VoiceCloningStudioRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot': typeof AuthForgotRoute
+  '/auth/reset': typeof AuthResetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
@@ -407,6 +435,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/bots': typeof BotsRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
@@ -414,6 +444,8 @@ export interface FileRoutesByTo {
   '/personas': typeof PersonasRoute
   '/voice-cloning-studio': typeof VoiceCloningStudioRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot': typeof AuthForgotRoute
+  '/auth/reset': typeof AuthResetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
@@ -464,6 +496,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/bots': typeof BotsRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
@@ -471,6 +505,8 @@ export interface FileRoutesById {
   '/personas': typeof PersonasRoute
   '/voice-cloning-studio': typeof VoiceCloningStudioRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot': typeof AuthForgotRoute
+  '/auth/reset': typeof AuthResetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
@@ -522,6 +558,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agents'
+    | '/bots'
     | '/dashboard'
     | '/explore'
     | '/login'
@@ -529,6 +567,8 @@ export interface FileRouteTypes {
     | '/personas'
     | '/voice-cloning-studio'
     | '/auth/callback'
+    | '/auth/forgot'
+    | '/auth/reset'
     | '/api/auth/$'
     | '/api/intent/outcomes'
     | '/api/mind/agent'
@@ -578,6 +618,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agents'
+    | '/bots'
     | '/dashboard'
     | '/explore'
     | '/login'
@@ -585,6 +627,8 @@ export interface FileRouteTypes {
     | '/personas'
     | '/voice-cloning-studio'
     | '/auth/callback'
+    | '/auth/forgot'
+    | '/auth/reset'
     | '/api/auth/$'
     | '/api/intent/outcomes'
     | '/api/mind/agent'
@@ -634,6 +678,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/agents'
+    | '/bots'
     | '/dashboard'
     | '/explore'
     | '/login'
@@ -641,6 +687,8 @@ export interface FileRouteTypes {
     | '/personas'
     | '/voice-cloning-studio'
     | '/auth/callback'
+    | '/auth/forgot'
+    | '/auth/reset'
     | '/api/auth/$'
     | '/api/intent/outcomes'
     | '/api/mind/agent'
@@ -691,6 +739,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentsRoute: typeof AgentsRoute
+  BotsRoute: typeof BotsRoute
   DashboardRoute: typeof DashboardRoute
   ExploreRoute: typeof ExploreRoute
   LoginRoute: typeof LoginRoute
@@ -698,6 +748,8 @@ export interface RootRouteChildren {
   PersonasRoute: typeof PersonasRoute
   VoiceCloningStudioRoute: typeof VoiceCloningStudioRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthForgotRoute: typeof AuthForgotRoute
+  AuthResetRoute: typeof AuthResetRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiIntentOutcomesRoute: typeof ApiIntentOutcomesRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
@@ -755,6 +807,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agents': {
+      id: '/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bots': {
+      id: '/bots'
+      path: '/bots'
+      fullPath: '/bots'
+      preLoaderRoute: typeof BotsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -802,6 +868,20 @@ declare module '@tanstack/react-router' {
       path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/forgot': {
+      id: '/auth/forgot'
+      path: '/auth/forgot'
+      fullPath: '/auth/forgot'
+      preLoaderRoute: typeof AuthForgotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/reset': {
+      id: '/auth/reset'
+      path: '/auth/reset'
+      fullPath: '/auth/reset'
+      preLoaderRoute: typeof AuthResetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -1131,6 +1211,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentsRoute: AgentsRoute,
+  BotsRoute: BotsRoute,
   DashboardRoute: DashboardRoute,
   ExploreRoute: ExploreRoute,
   LoginRoute: LoginRoute,
@@ -1138,6 +1220,8 @@ const rootRouteChildren: RootRouteChildren = {
   PersonasRoute: PersonasRoute,
   VoiceCloningStudioRoute: VoiceCloningStudioRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthForgotRoute: AuthForgotRoute,
+  AuthResetRoute: AuthResetRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiIntentOutcomesRoute: ApiIntentOutcomesRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,

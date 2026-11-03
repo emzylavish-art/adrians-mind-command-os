@@ -228,3 +228,24 @@ describe("mocked auth flow", () => {
     assert.ok(!redirectTo.includes("adrians-mind.vercel.app/auth"));
   });
 });
+
+describe("password reset first-party contract", () => {
+  it("reset redirect targets Adrian's Mind, never supabase.co", async () => {
+    const { PASSWORD_RESET_REDIRECT, buildFirstPartyResetUrl, firstPartyUrlFromGenerateLink } =
+      await import("./password-reset.ts");
+    assert.equal(
+      PASSWORD_RESET_REDIRECT,
+      "https://adrians-mind.vercel.app/auth/reset",
+    );
+    assert.ok(!PASSWORD_RESET_REDIRECT.includes("supabase.co"));
+    const fromLink = firstPartyUrlFromGenerateLink({
+      hashedToken: "recovery_hash",
+      redirectTo: PASSWORD_RESET_REDIRECT,
+    });
+    assert.equal(
+      fromLink,
+      buildFirstPartyResetUrl({ tokenHash: "recovery_hash" }),
+    );
+    assert.ok(fromLink && !fromLink.includes("supabase.co"));
+  });
+});

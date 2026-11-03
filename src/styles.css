@@ -9375,3 +9375,78 @@ html[data-theme="light"] [data-testid="voice-cloning-studio"] [data-testid="vcs-
     transform: none !important;
   }
 }
+
+/* Bots shell header — structural only; Visual Polish owns polish-pass-11 styling. */
+.agents-grok-header,
+.bots-shell-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 1rem 1rem;
+  padding: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+@media (min-width: 768px) {
+  .agents-grok-header,
+  .bots-shell-header {
+    margin-left: 1.5rem;
+    margin-right: 1.5rem;
+  }
+}
+.agents-grok-header__btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  color: var(--color-fg);
+  cursor: pointer;
+}
+.agents-grok-header__btn:disabled,
+.agents-grok-header__btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.agents-grok-header__search {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.agents-grok-header__search:disabled,
+.agents-grok-header__search[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.agents-grok-header__compose {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-color: transparent;
+}
+.agents-grok-header__soon {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

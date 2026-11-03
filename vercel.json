@@ -32,8 +32,10 @@
   "git": {
     "deploymentEnabled": {
       "intent-predictor": false,
-      "preview/integration": false
+      "preview/integration": false,
+      "feat/bots-shell-auth": false,
+      "fix/rea-hardening": false
     }
   },
-  "ignoreCommand": "bash -c '[[ \"$VERCEL_GIT_COMMIT_REF\" == \"main\" || \"$VERCEL_GIT_COMMIT_REF\" == \"preview/integration\" ]] && exit 1 || exit 0'"
+  "ignoreCommand": "bash -c '[[ \"$VERCEL_GIT_COMMIT_REF\" == \"main\" || \"$VERCEL_GIT_COMMIT_REF\" == \"preview/integration\" || \"$VERCEL_GIT_COMMIT_REF\" == \"feat/bots-shell-auth\" || \"$VERCEL_GIT_COMMIT_REF\" == \"fix/rea-hardening\" ]] && exit 1 || exit 0'"
 }

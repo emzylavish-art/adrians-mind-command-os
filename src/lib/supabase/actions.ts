@@ -255,3 +255,135 @@ export const signOutSupabase = createServerFn({ method: "POST" }).handler(
     throw redirect({ to: "/login" });
   },
 );
+
+
+/**
+ * Request a recovery email. Always returns a neutral success when configured
+ * so we never leak whether the address has an account. Runs only on the server
+ * (browser never calls *.supabase.co). Prefers admin generateLink recovery so
+ * we can exercise the recovery token path; still triggers Supabase's mailer via
+ * resetPasswordForEmail for delivery.
+ */
+export const requestPasswordReset = createServerFn({ method: "POST" })
+  .validator((input: { email?: string }) => ({
+    email: asString(input.email, 320).toLowerCase(),
+  }))
+  .handler(async ({ data }) => {
+    const {
+      PASSWORD_RESET_REDIRECT,
+      PASSWORD_RESET_REQUEST_NEUTRAL,
+    } = await import("./password-reset");
+    const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
+    if (!readSupabaseEnv()) {
+      return {
+        ok: false as const,
+        error: "Sign-in isn't configured yet.",
+      };
+    }
+    if (!data.email || !data.email.includes("@")) {
+      return {
+        ok: false as const,
+        error: "Enter a valid email address.",
+      };
+    }
+
+    try {
+      const { createSupabaseAdminClient } = await import("./admin.server");
+      const admin = createSupabaseAdminClient();
+      await admin.auth.admin.generateLink({
+        type: "recovery",
+        email: data.email,
+        options: { redirectTo: PASSWORD_RESET_REDIRECT },
+      });
+    } catch {
+      /* service role optional for request path */
+    }
+
+    try {
+      const supabase = createSupabaseServerClient();
+      await supabase.auth.resetPasswordForEmail(data.email, {
+        redirectTo: PASSWORD_RESET_REDIRECT,
+      });
+    } catch {
+      /* still neutral */
+    }
+
+    return {
+      ok: true as const,
+      message: PASSWORD_RESET_REQUEST_NEUTRAL,
+    };
+  });
+
+/**
+ * Complete recovery: verifyOtp(recovery) with token_hash (or exchange PKCE code),
+ * then update the password. Entirely server-side.
+ */
+export const completePasswordReset = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      tokenHash?: string;
+      code?: string;
+      password?: string;
+      type?: string;
+    }) => ({
+      tokenHash: asString(input.tokenHash, 512),
+      code: asString(input.code, 512),
+      password: asString(input.password, 200),
+      type: asString(input.type, 32) || "recovery",
+    }),
+  )
+  .handler(async ({ data }) => {
+    const {
+      PASSWORD_RESET_INVALID_LINK,
+      validateNewPassword,
+    } = await import("./password-reset");
+    const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
+    if (!readSupabaseEnv()) {
+      return {
+        ok: false as const,
+        error: "Sign-in isn't configured yet.",
+      };
+    }
+    const passwordCheck = validateNewPassword(data.password);
+    if (!passwordCheck.ok) {
+      return { ok: false as const, error: passwordCheck.error };
+    }
+    if (!data.tokenHash && !data.code) {
+      return { ok: false as const, error: PASSWORD_RESET_INVALID_LINK };
+    }
+
+    const supabase = createSupabaseServerClient();
+
+    if (data.code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(data.code);
+      if (error) {
+        return { ok: false as const, error: PASSWORD_RESET_INVALID_LINK };
+      }
+    } else {
+      const type =
+        data.type === "recovery" ||
+        data.type === "email" ||
+        data.type === "magiclink"
+          ? (data.type as "recovery" | "email" | "magiclink")
+          : "recovery";
+      const { error } = await supabase.auth.verifyOtp({
+        type,
+        token_hash: data.tokenHash,
+      });
+      if (error) {
+        return { ok: false as const, error: PASSWORD_RESET_INVALID_LINK };
+      }
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: data.password,
+    });
+    if (updateError) {
+      return {
+        ok: false as const,
+        error: updateError.message || "Could not update password.",
+      };
+    }
+
+    throw redirect({ href: "/dashboard" });
+  });
