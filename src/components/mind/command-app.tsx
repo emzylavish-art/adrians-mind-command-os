@@ -1259,6 +1259,12 @@ export function CommandApp() {
     await deliver(active, full, ws, false, images);
   }
 
+  /** Honest no-op for chrome "Add video" — never fake success. Video gen/attach is not wired. */
+  function explainVideoNotAvailable(source = "Add video") {
+    setError(null);
+    setNotice(`${source}: not available yet. Video attach/generation is not wired. Use Image, Camera, or Imagine instead.`);
+  }
+
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active) {
     if (busy || imagineBusy || ws.halted) return;
     const prompt = (promptRaw ?? draft).trim();
@@ -2512,6 +2518,11 @@ export function CommandApp() {
                   title="Runs Grok Imagine with the composer prompt (or /imagine <prompt>)"
                   dataMedia="generate-image"
                   onClick={() => {
+                    if (grokConfigured === false) {
+                      setError("Imagine needs a configured xAI image key on the server. Nothing was generated.");
+                      setNotice("Generate Image is wired to Grok Imagine, but the paid image API is not configured on this host.");
+                      return;
+                    }
                     const viaCmd = parseImagineCommand(draft);
                     const prompt = viaCmd !== null ? viaCmd : draft.trim();
                     if (!(prompt || "").trim()) {
@@ -2527,7 +2538,7 @@ export function CommandApp() {
                   icon={Video}
                   tone="text-accent"
                   disabled
-                  title="Coming soon: xAI video generation is not wired in this app yet"
+                  title="Not available yet — xAI video generation is not wired. No video API call is made."
                   dataMedia="generate-video"
                   onClick={() => undefined}
                 />

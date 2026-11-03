@@ -357,3 +357,9 @@ Minimal hooks only (clear-on-chat-switch effect, gallery mount, owner-scope bind
 - `src/lib/mind/media/research-uploads.ts`: `buildResearchUploads(files)` → Logic shape `{ name, mime, bytes, excerpts[] }`. Caps, PDF bomb page guard (reuse `extractPdfText`), CSV row/col caps, strip controls, skip image OCR. No fake URLs.
 - Research UI staging hooks + `searchWeb` body `researchUploads`. Minimal `server.ts` pass-through only; **did not edit research.ts**.
 - Handoff: `/workspace/handoffs/media-to-logic-research-uploads.md`
+
+## Logic controls + VP CSS r3 + live audit — 2026-11-02T23:40:00-06:00 (America/Chicago)
+
+- Cherry-picked Visual Polish `8eb91bf` → local `1325e6c` (CSS-only `styles-media-visual.css`, unchanged).
+- Controls: Generate Image → real `runImagine`; Generate Video honestly disabled; Add video helper for chrome (preview still markNeedsConfig).
+- Live https://adrians-mind.vercel.app/ serves older preview/integration (`bba4e849`); media tip not fully merged — Merge Gate ask below in report.
