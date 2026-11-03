@@ -371,16 +371,28 @@ test("exitCodeFor: no viewport data is a failure", () => {
   assert.equal(exitCodeFor(undefined), 1);
 });
 
+test("browser-smoke limits runner artifacts to the dedicated temp folder", () => {
+  const src = readFileSync(join(TEMPLATE_ROOT, "scripts/browser-smoke.mjs"), "utf8");
+  assert.match(src, /process\.env\.GITHUB_ACTIONS === "true" && process\.env\.RUNNER_TEMP/);
+  assert.match(src, /resolve\(process\.env\.RUNNER_TEMP, "am-002-browser-smoke"\)/);
+  assert.match(src, /const allowedOutputDirs/);
+  assert.match(src, /: \["\/workspace"\]/);
+  assert.doesNotMatch(src, /checkedOutputPath\([^\n]+, \[process\.env\.RUNNER_TEMP\]/);
+});
+
 test("browser-smoke wires the guard and verdict helpers", () => {
   const src = readFileSync(join(TEMPLATE_ROOT, "scripts/browser-smoke.mjs"), "utf8");
   assert.match(src, /from "\.\/browser-guard\.mjs"/);
   assert.match(src, /from "\.\/browser-smoke-verdict\.mjs"/);
   assert.match(src, /const args = parseSmokeArgs\(process\.argv\.slice\(2\), process\.env\)/);
   assert.match(src, /const url = checkedUrl\(args\.url\)/);
-  assert.match(src, /const outPng = checkedOutputPath\(args\.outPng, \["\/workspace"\]\)/);
-  assert.match(src, /const mobilePng = checkedOutputPath\(derived\.mobilePng, \["\/workspace"\]\)/);
-  assert.match(src, /const outJson = checkedOutputPath\(derived\.verdictJson, \["\/workspace"\]/);
-  assert.match(src, /checkedOutputPath\(realpathSync\(args\.baseline\), \["\/workspace"\]/);
+  assert.match(src, /const outPng = checkedOutputPath\(args\.outPng, allowedOutputDirs\)/);
+  assert.match(src, /const mobilePng = checkedOutputPath\(derived\.mobilePng, allowedOutputDirs\)/);
+  assert.match(src, /const outJson = checkedOutputPath\(derived\.verdictJson, allowedOutputDirs/);
+  assert.match(src, /checkedOutputPath\(realpathSync\(args\.baseline\), allowedOutputDirs/);
+  assert.match(src, /process\.env\.GITHUB_ACTIONS === "true" && process\.env\.RUNNER_TEMP/);
+  assert.match(src, /resolve\(process\.env\.RUNNER_TEMP, "am-002-browser-smoke"\)/);
+  assert.match(src, /: \["\/workspace"\]/);
   assert.match(src, /baselinePath === outJson/);
   assert.match(src, /normalizedBodyTextHash\(/);
   assert.match(src, /bodyTextPrefix\(/);
