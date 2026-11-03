@@ -5,6 +5,7 @@ import {
   DEFAULT_SEARCH_TIMEOUT_MS,
   deepSearchTimeoutMs,
   normalizeCitations,
+  dedupeCitations,
   performDeepResearch,
   performSearch,
   planDeepQueries,
@@ -278,5 +279,21 @@ describe("deep research partial timeout honesty", () => {
     } finally {
       mock.timers.reset();
     }
+  });
+});
+
+describe("dedupeCitations scheme filter", () => {
+  it("drops javascript/data and other non-http(s) schemes", () => {
+    const out = dedupeCitations([
+      { title: "Good", url: "https://example.com/a" },
+      { title: "Bad js", url: "javascript:alert(1)" },
+      { title: "Bad data", url: "data:text/html,hi" },
+      { title: "Dup", url: "https://example.com/a/" },
+      { title: "Also good", url: "http://example.com/b" },
+    ]);
+    assert.deepEqual(
+      out.map((c) => c.url),
+      ["https://example.com/a", "http://example.com/b"],
+    );
   });
 });

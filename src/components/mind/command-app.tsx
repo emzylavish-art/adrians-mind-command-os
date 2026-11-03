@@ -190,7 +190,7 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
-import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
+import { MODEL_TIERS, isConcreteModelTier, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
@@ -1591,7 +1591,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
         const tierLabel = result.model
           ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
           : result.model;
-        if (result.resolvedTier === "Fast" || result.resolvedTier === "Expert" || result.resolvedTier === "Heavy" || result.resolvedTier === "Build") {
+        if (isConcreteModelTier(result.resolvedTier)) {
           setLastResolvedTier(result.resolvedTier);
         }
         if (result.model) setLastModelUsed(result.model);
@@ -5573,8 +5573,17 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                   type="button"
                   role="switch"
                   aria-checked={failoverPolicy === "grok"}
-                  className={`mt-3 flex min-h-11 w-full items-center justify-between rounded-panel border border-line px-3 ${failoverPolicy === "grok" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
-                  onClick={() => setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"))}
+                  disabled={busy}
+                  aria-disabled={busy}
+                  title={busy ? "Applies to the next send. The in-flight reply keeps its provider." : undefined}
+                  className={`mt-3 flex min-h-11 w-full items-center justify-between rounded-panel border border-line px-3 disabled:opacity-50 ${failoverPolicy === "grok" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
+                  onClick={() => {
+                    if (busy || turnInFlight.current) {
+                      setNotice("Failover change applies to the next send. The in-flight reply keeps its provider.");
+                      return;
+                    }
+                    setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"));
+                  }}
                 >
                   Allow switch to Grok
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />

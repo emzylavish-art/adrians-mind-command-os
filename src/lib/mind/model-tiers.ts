@@ -57,6 +57,10 @@ export function isModelTier(value: unknown): value is ModelTier {
   return typeof value === "string" && (MODEL_TIERS as readonly string[]).includes(value);
 }
 
+export function isConcreteModelTier(value: unknown): value is ConcreteModelTier {
+  return isModelTier(value) && value !== "Auto";
+}
+
 /** Max accepted length for a MIND_MODEL_* override (never echo the raw value in issues). */
 export const MAX_MODEL_ID_LENGTH = 128;
 

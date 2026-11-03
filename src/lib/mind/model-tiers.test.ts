@@ -8,6 +8,7 @@ import {
   modelTierEnvIssues,
   parseModelTierEnv,
   chipLabelForTier,
+  isConcreteModelTier,
   resolveModelTier,
   routeAutoTier,
 } from "./model-tiers.ts";
@@ -241,5 +242,15 @@ describe("chipLabelForTier after leaving Auto", () => {
       lastModel: "grok-fast-from-auto",
     });
     assert.equal(label, "Auto→Fast · grok-fast-from-auto");
+  });
+});
+
+describe("isConcreteModelTier", () => {
+  it("accepts Orchestrator and other concrete tiers, rejects Auto and junk", () => {
+    assert.equal(isConcreteModelTier("Orchestrator"), true);
+    assert.equal(isConcreteModelTier("Fast"), true);
+    assert.equal(isConcreteModelTier("Auto"), false);
+    assert.equal(isConcreteModelTier("Nope"), false);
+    assert.equal(isConcreteModelTier(null), false);
   });
 });

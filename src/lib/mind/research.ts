@@ -84,15 +84,16 @@ export function normalizeCitations(hits: unknown): ResearchCitation[] {
   return citations;
 }
 
-function dedupeCitations(items: ResearchCitation[], limit = 8): ResearchCitation[] {
+export function dedupeCitations(items: ResearchCitation[], limit = 8): ResearchCitation[] {
   const seen = new Set<string>();
   const out: ResearchCitation[] = [];
   for (const item of items) {
     const safe = parseSafeHttpUrl(item.url);
-    const key = safe?.key ?? item.url.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(safe ? { title: item.title, url: safe.href } : item);
+    // Drop non-http(s) schemes even if a caller already passed a citation through.
+    if (!safe) continue;
+    if (seen.has(safe.key)) continue;
+    seen.add(safe.key);
+    out.push({ title: item.title, url: safe.href });
     if (out.length === limit) break;
   }
   return out;
