@@ -590,3 +590,9 @@ command on Zack's PC.
 - Gates (pre-push): typecheck pass; npm test **1069/1069**; eslint touched **0 errors**; build pass.
 - Next: Merge Gate still needs PI∪error-banners (prior abort); Grok Build AUTH-01 callback promote; command-app onFailure mounts still blocked.
 
+- Notion child: https://app.notion.com/p/40db95f33e42817282e8d238dec39a84
+- STATE: /workspace/fleet/error-banners/STATE.json
+- Results for Logic Bot: /workspace/audit/full-function/from-error-banners.md
+- Pushed origin/error-banners → ef20284882c21a19b57f2eacdb5cafdf2ad31aea
+- Lock releasing.
+
