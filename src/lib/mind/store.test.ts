@@ -130,6 +130,18 @@ describe("mind store", () => {
     assert.equal(snapshotTooLarge(ws), true);
   });
 
+  it("rejects oversized snapshots before touching previously saved records", async () => {
+    const { sql, tables } = memorySql();
+    const original = emptyWorkspace();
+    original.projects.push({ id: "p1", name: "Lake", description: "", createdAt: "2026-01-01T00:00:00.000Z" });
+    await writeSnapshot(sql, "owner", original);
+    const oversized = emptyWorkspace();
+    oversized.files.push({ id: "big", name: "big.txt", text: "x".repeat(1_500_000), bytes: 1_500_000, projectId: null, createdAt: "2026-01-01T00:00:00.000Z" });
+    await assert.rejects(writeSnapshot(sql, "owner", oversized), /maximum supported size/);
+    assert.equal(tables.get("mind_project")?.has("owner:p1"), true);
+    assert.equal(normalizeWorkspace(await readSnapshot(sql, "owner"))?.projects[0]?.name, "Lake");
+  });
+
   it("reloads a project after the file database is closed and opened again", async () => {
     const { PGlite } = await import("@electric-sql/pglite");
     const { mkdtempSync, readdirSync, readFileSync } = await import("node:fs");
@@ -145,6 +157,15 @@ describe("mind store", () => {
         return result.rows;
       }) as Sql;
       sql.query = async (text, params = []) => (await pg.query(text, params)).rows as never;
+      sql.transaction = async (fn) => pg.transaction(async (tx) => {
+        const transactional = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+          let text = strings[0] ?? "";
+          for (let i = 0; i < values.length; i += 1) text += `${i + 1}${strings[i + 1] ?? ""}`;
+          return (await tx.query(text, values)).rows;
+        }) as Sql;
+        transactional.query = async (text, params = []) => (await tx.query(text, params)).rows as never;
+        return fn(transactional);
+      });
       return sql;
     };
     const first = new PGlite(dir);
@@ -153,6 +174,18 @@ describe("mind store", () => {
     const saved = emptyWorkspace();
     saved.projects.push({ id: "p1", name: "Lake", description: "", createdAt: "2026-01-01T00:00:00.000Z" });
     await writeSnapshot(asSql(first), "owner", saved);
+    const broken = emptyWorkspace();
+    const duplicateAt = "2026-01-01T00:00:00.000Z";
+    broken.projects.push(
+      { id: "dup", name: "First", description: "", createdAt: duplicateAt },
+      { id: "dup", name: "Second", description: "", createdAt: duplicateAt },
+    );
+    await assert.rejects(writeSnapshot(asSql(first), "owner", broken));
+    const originalRows = await first.query<{ id: string; name: string }>(
+      "select id, name from mind_project where user_id = $1", ["owner"],
+    );
+    assert.deepEqual(originalRows.rows, [{ id: "p1", name: "Lake" }]);
+    assert.equal(normalizeWorkspace(await readSnapshot(asSql(first), "owner"))?.projects[0]?.name, "Lake");
     await first.close();
     const second = new PGlite(dir);
     await second.waitReady;
