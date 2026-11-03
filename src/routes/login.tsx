@@ -190,6 +190,7 @@ function Login() {
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   // Never seed the red banner from ?error= (stale restore / bounce). Only in-page failures.
   const [banner, setBanner] = useState<string | null>(
@@ -418,21 +419,46 @@ function Login() {
           </label>
           <label className="block text-sm">
             <span className="text-[13px] font-medium text-muted">Password</span>
-            <input
-              type="password"
-              autoComplete={
-                mode === "sign-in" ? "current-password" : "new-password"
-              }
-              required
-              minLength={mode === "sign-up" ? 8 : 1}
-              value={password}
-              disabled={busy}
-              onChange={(event) => setPassword(event.target.value)}
-              className={inputClassName}
-              placeholder={
-                mode === "sign-up" ? "At least 8 characters" : "Your password"
-              }
-            />
+            <div className="relative mt-1.5">
+              <input
+                type={showPassword ? "text" : "password"}
+                autoComplete={
+                  mode === "sign-in" ? "current-password" : "new-password"
+                }
+                required
+                minLength={mode === "sign-up" ? 8 : 1}
+                value={password}
+                disabled={busy}
+                onChange={(event) => setPassword(event.target.value)}
+                className={inputClassName.replace("mt-1.5 ", "") + " pr-12"}
+                placeholder={
+                  mode === "sign-up" ? "At least 8 characters" : "Your password"
+                }
+                data-testid="login-password-input"
+              />
+              <button
+                type="button"
+                data-testid="login-password-toggle"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                disabled={busy}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 inline-flex min-w-11 items-center justify-center rounded-r-panel px-3 text-muted transition-colors hover:text-fg disabled:opacity-55"
+              >
+                {showPassword ? (
+                  <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M3 3l18 18" strokeLinecap="round" />
+                    <path d="M10.6 10.6a2 2 0 002.8 2.8" strokeLinecap="round" />
+                    <path d="M9.9 5.1A10.4 10.4 0 0112 5c5 0 9.3 3.1 10.7 7.5a11.2 11.2 0 01-1.7 3.1M6.1 6.1A11.3 11.3 0 001.3 12.5C2.7 16.9 7 20 12 20c1.4 0 2.7-.3 3.9-.7" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </label>
           <button
             type="submit"

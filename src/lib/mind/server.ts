@@ -424,15 +424,42 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
         return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
       })
       .server(async ({ next, context }) => {
-        const { assertSameSiteRequest } = await import("../auth/isolation.server");
-        assertSameSiteRequest();
-        return next({ context: { bearerToken: context.bearerToken as string | undefined } });
+        const { getRequest } = await import("@tanstack/react-start/server");
+        const { CrossSiteRequestError } = await import("../auth/isolation.server");
+        const { softAuthMcpListDecision } = await import("./mcp-list-auth");
+        const request = getRequest();
+        let forceUnauthenticated = false;
+        if (request) {
+          const h = request.headers;
+          const decision = softAuthMcpListDecision({
+            site: h.get("sec-fetch-site"),
+            mode: h.get("sec-fetch-mode"),
+            dest: h.get("sec-fetch-dest"),
+            method: request.method,
+            origin: h.get("origin"),
+            host: h.get("host"),
+            forwardedHost: h.get("x-forwarded-host"),
+          });
+          if (decision === "block") throw new CrossSiteRequestError();
+          if (decision === "soft_unauth") forceUnauthenticated = true;
+        }
+        return next({
+          context: {
+            bearerToken: forceUnauthenticated ? undefined : (context.bearerToken as string | undefined),
+            forceUnauthenticated,
+          },
+        });
       }),
   ])
   .handler(async ({ context }) => {
+    const { buildMcpRegistryListPayload } = await import("./mcp-list-auth");
+    if ((context as { forceUnauthenticated?: boolean }).forceUnauthenticated) {
+      // Same-site / missing Origin: quiet 200 unauthenticated (do not ride cookies).
+      return buildMcpRegistryListPayload(null, []);
+    }
     const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
     const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
-    const { resolveMcpListUserId, buildMcpRegistryListPayload } = await import("./mcp-list-auth");
+    const { resolveMcpListUserId } = await import("./mcp-list-auth");
     // Always reuse getSessionUser (Supabase cookies first, then Better Auth) so a
     // signed-in Supabase user is never short-circuited when Better Auth is off.
     const sessionUser = await getSessionUser(context.bearerToken);

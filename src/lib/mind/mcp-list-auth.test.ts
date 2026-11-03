@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   buildMcpRegistryListPayload,
   resolveMcpListUserId,
+  softAuthMcpListDecision,
 } from "./mcp-list-auth.ts";
 import { loadMcpList } from "./mcp-list-state.ts";
 import { pickSessionUser } from "../auth/session-user.ts";
@@ -106,7 +107,10 @@ describe("mcpRegistryList wiring uses shared session helper", () => {
     const server = readFileSync(join(root, "mind/server.ts"), "utf8");
     const start = server.indexOf("export const mcpRegistryList");
     assert.ok(start >= 0);
-    const chunk = server.slice(start, start + 1800);
+    const end = server.indexOf("export const mcpRegistryToggle", start);
+    const chunk = server.slice(start, end > start ? end : start + 4500);
+    assert.match(chunk, /softAuthMcpListDecision/);
+    assert.match(chunk, /forceUnauthenticated/);
     assert.match(chunk, /getSessionUser\(context\.bearerToken\)/);
     assert.match(chunk, /resolveMcpListUserId/);
     assert.match(chunk, /buildMcpRegistryListPayload/);
@@ -132,5 +136,61 @@ describe("mcpRegistryList wiring uses shared session helper", () => {
     const getSessionIdx = verify.indexOf("export async function getSessionUser");
     const body = verify.slice(getSessionIdx, getSessionIdx + 900);
     assert.ok(body.indexOf("readSupabaseSessionUser") < body.indexOf("readBetterAuthSessionUser"));
+  });
+});
+
+
+describe("softAuthMcpListDecision", () => {
+  it("allows same-origin and missing Sec-Fetch-Site", () => {
+    assert.equal(
+      softAuthMcpListDecision({ site: "same-origin", mode: "cors", dest: "empty", method: "GET" }),
+      "allow",
+    );
+    assert.equal(
+      softAuthMcpListDecision({ site: null, mode: null, dest: null, method: "GET" }),
+      "allow",
+    );
+  });
+
+  it("soft-unauths same-site without our Origin (quiet 200, not 403)", () => {
+    assert.equal(
+      softAuthMcpListDecision({
+        site: "same-site",
+        mode: "cors",
+        dest: "empty",
+        method: "GET",
+        origin: null,
+        host: "adrians-mind.vercel.app",
+      }),
+      "soft_unauth",
+    );
+  });
+
+  it("soft-unauths blocked requests that have no Origin", () => {
+    assert.equal(
+      softAuthMcpListDecision({
+        site: "cross-site",
+        mode: "cors",
+        dest: "empty",
+        method: "GET",
+        origin: "",
+        host: "adrians-mind.vercel.app",
+      }),
+      "soft_unauth",
+    );
+  });
+
+  it("blocks real cross-site foreign Origin", () => {
+    assert.equal(
+      softAuthMcpListDecision({
+        site: "cross-site",
+        mode: "cors",
+        dest: "empty",
+        method: "GET",
+        origin: "https://evil.example",
+        host: "adrians-mind.vercel.app",
+      }),
+      "block",
+    );
   });
 });

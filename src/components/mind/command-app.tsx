@@ -214,8 +214,11 @@ import {
   HONEST_FAILURE_MESSAGES,
   imageGenerationFailure,
   imagineRetryParams,
+  isAuthRequiredNotice,
   mcpToolFailure,
+  MCP_AUTH_REQUIRED_NOTICE,
   normalizeClientFailureMessage,
+  shouldShowFailureBanner,
   type HonestFailureKind,
 } from "@/lib/mind/failure-states";
 import {
@@ -911,6 +914,10 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           if (next.status !== "error") return;
           const retry = onceListRetry(loadRegistry);
           mcpRegistryRetryRef.current = retry;
+          if (!shouldShowFailureBanner(next.message)) {
+            setNotice(isAuthRequiredNotice(next.message) ? MCP_AUTH_REQUIRED_NOTICE : next.message);
+            return;
+          }
           reportFailureRef.current(next.message, next.kind, "mcp:registry", retry);
         });
       };
@@ -933,6 +940,10 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
             setMcpServers([]);
             const retry = onceListRetry(loadSaved);
             mcpSavedRetryRef.current = retry;
+            if (!shouldShowFailureBanner(failed.message)) {
+              setNotice(isAuthRequiredNotice(failed.message) ? MCP_AUTH_REQUIRED_NOTICE : failed.message);
+              return;
+            }
             reportFailureRef.current(failed.message, failed.kind, "mcp:list", retry);
             return;
           }
@@ -941,6 +952,10 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           if (next.status !== "error") return;
           const retry = onceListRetry(loadSaved);
           mcpSavedRetryRef.current = retry;
+          if (!shouldShowFailureBanner(next.message)) {
+            setNotice(isAuthRequiredNotice(next.message) ? MCP_AUTH_REQUIRED_NOTICE : next.message);
+            return;
+          }
           reportFailureRef.current(next.message, next.kind, "mcp:list", retry);
         });
       };
