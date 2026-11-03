@@ -43,7 +43,21 @@ try {
     await page.waitForTimeout(1500);
     const password = page.getByTestId("login-password-input");
     const toggle = page.getByTestId("login-password-toggle");
-    await password.waitFor();
+    await password.waitFor({ timeout: 10000 }).catch(async (error) => {
+      report.diagnostic = {
+        viewport: viewport.name,
+        requestedUrl: loginUrl,
+        finalUrl: page.url(),
+        bodyText: (await page.locator("body").innerText().catch(() => "")).slice(0, 1600),
+        pageErrors,
+      };
+      await page.screenshot({
+        path: evidence(`login-failure-${viewport.name}.png`),
+        fullPage: false,
+        caret: "initial",
+      }).catch(() => {});
+      throw error;
+    });
     await page.screenshot({
       path: evidence(`login-${viewport.name}.png`),
       fullPage: false,
