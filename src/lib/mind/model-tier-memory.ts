@@ -43,10 +43,23 @@ export function outcomeFromDoneEvent(event: {
 }): TierOutcome | null {
   const selected = event.modelTier;
   const resolved = event.resolvedTier;
-  if (selected !== "Auto" && selected !== "Fast" && selected !== "Expert" && selected !== "Heavy" && selected !== "Build") {
+  if (
+    selected !== "Auto" &&
+    selected !== "Fast" &&
+    selected !== "Expert" &&
+    selected !== "Heavy" &&
+    selected !== "Build" &&
+    selected !== "Orchestrator"
+  ) {
     return null;
   }
-  if (resolved !== "Fast" && resolved !== "Expert" && resolved !== "Heavy" && resolved !== "Build") {
+  if (
+    resolved !== "Fast" &&
+    resolved !== "Expert" &&
+    resolved !== "Heavy" &&
+    resolved !== "Build" &&
+    resolved !== "Orchestrator"
+  ) {
     return null;
   }
   return {

@@ -223,3 +223,23 @@ describe("Orchestrator tier", () => {
     assert.ok(label.includes(resolved.model));
   });
 });
+
+describe("chipLabelForTier after leaving Auto", () => {
+  it("does not keep Auto-turn model on Orchestrator when lastResolved is still Fast", () => {
+    const label = chipLabelForTier({
+      selected: "Orchestrator",
+      lastResolved: "Fast",
+      lastModel: "grok-fast-from-auto",
+    });
+    assert.equal(label, "Orchestrator");
+  });
+
+  it("still shows Auto→resolved while selected is Auto", () => {
+    const label = chipLabelForTier({
+      selected: "Auto",
+      lastResolved: "Fast",
+      lastModel: "grok-fast-from-auto",
+    });
+    assert.equal(label, "Auto→Fast · grok-fast-from-auto");
+  });
+});

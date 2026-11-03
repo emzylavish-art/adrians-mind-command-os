@@ -29,12 +29,14 @@ export function ModelTierChip({ tier, onChoose, lastResolved = null, lastModel =
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
   const remembered = typeof window === "undefined" ? null : readTierOutcome();
-  const effectiveResolved = lastResolved ?? remembered?.resolved ?? null;
-  const effectiveModel = lastModel ?? remembered?.model ?? null;
+  // Do not bleed a prior Auto→resolved outcome onto Orchestrator/Fast/… selections.
+  const memoryMatches = Boolean(remembered && remembered.selected === tier);
+  const effectiveResolved = lastResolved ?? (memoryMatches ? remembered?.resolved ?? null : null);
+  const effectiveModel = lastModel ?? (memoryMatches ? remembered?.model ?? null : null);
   const label = chipLabelForTier({ selected: tier, lastResolved: effectiveResolved, lastModel: effectiveModel });
   const reasonText =
     (tierReason && tierReason.trim()) ||
-    (remembered?.reason && remembered.reason.trim()) ||
+    (memoryMatches && remembered?.reason?.trim()) ||
     (tier === "Auto"
       ? "Auto picks Fast, Expert, Heavy, or Build from the prompt. After a turn, the chip shows which model answered."
       : `Mode ${tier} selects a fixed Grok model for the next send.`);

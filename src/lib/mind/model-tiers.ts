@@ -238,7 +238,13 @@ export function chipLabelForTier(input: {
     const modelBit = input.lastModel ? ` · ${input.lastModel}` : "";
     return `Auto→${input.lastResolved}${modelBit}`;
   }
-  if (input.lastModel && input.selected !== "Auto") {
+  // After leaving Auto, ignore a prior turn's model unless it matches this concrete tier.
+  // Stops "Auto→Fast" residue from looking glued on when Effort/Mode picks Orchestrator etc.
+  if (
+    input.selected !== "Auto" &&
+    input.lastModel &&
+    (!input.lastResolved || input.lastResolved === input.selected)
+  ) {
     return `${input.selected} · ${input.lastModel}`;
   }
   return input.selected;
