@@ -454,3 +454,8 @@ test("baseline failure never hides a more urgent navigation or script error", ()
   assert.equal(exitCodeFor(verdict({}, { pageErrors: ["boom"] }).viewports, regression), 2);
   assert.equal(exitCodeFor(verdict().viewports, regression), 3);
 });
+
+test("browser screenshots do not mutate caret styles during React hydration", () => {
+  const src = readFileSync(join(TEMPLATE_ROOT, "scripts/browser-smoke.mjs"), "utf8");
+  assert.match(src, /page\\.screenshot\\(\\{[^}]*caret: "initial"/);
+});

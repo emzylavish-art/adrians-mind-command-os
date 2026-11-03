@@ -127,7 +127,10 @@ try {
       const el = document.documentElement;
       return el.scrollWidth > el.clientWidth + 1;
     });
-    await page.screenshot({ path: vp.screenshot, fullPage: false });
+    // Playwright's default caret=hide injects inline caret-color styles during
+    // screenshot capture. That can race React hydration and create a false
+    // hydration-mismatch console error. Keep the app DOM untouched.
+    await page.screenshot({ path: vp.screenshot, fullPage: false, caret: "initial" });
     await page.close();
 
     viewports[vp.name] = {
