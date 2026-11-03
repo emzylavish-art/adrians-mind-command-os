@@ -1,30 +1,35 @@
-# VERIFY_REPORT — Adrian's Mind Command OS, logic-wiring-queue @ e130667
+# VERIFY_REPORT — Adrian's Mind Command OS, logic-wiring-queue @ 1a10c22
 
-Date: 2026-11-02T22:39:11-06:00 (America/Chicago)
+Date: 2026-11-02T22:47:58-06:00 (America/Chicago)
 
 ## Scope
-be7ba86: provider failover made truthful end to end. Before: Settings showed a static "Off" badge (real toggle was in a hidden card); the only "failover" was a client pre-check that swapped an unconfigured picker choice to Grok and never retried a failed request; the server ignored failover entirely. Now: visible Settings switch (amcos.failover.v2, only exact "on"), send snapshots it into the body (`failover: true` only), server retries once on another server-configured provider when the primary fails before any text streams, done event carries provider/failedOverFrom, notice names who actually answered. Non-default provider replies are parsed (no raw JSON as a reply) and use the SSE contract; provider-selection failures now carry non-200.
-e130667: adversarial review fix — image turns never fail over (fallback is text-only and would answer as if it saw the image); 4 extra tests.
+298efed: provider failover fallback now receives the SAME assembled context the primary got. Before: when the primary (xAI) failed before any text streamed, runFallback sent the fallback provider only the latest user message — no system/persona prompt, no memory notes, no history — while the done event still echoed usedIds as if notes were used. Now: turn.server passes `prepared.assembled.messages` (assembleTurn output, the primary's own builder) to runFallback; provider-call flattens it for text-only providers (`toTextOnlyMessages`) and builds provider-specific bodies (`buildProviderRequestBody`: OpenAI/OpenRouter messages; Anthropic top-level system + alternating turns; Gemini systemInstruction + user/model contents). Prior-turn image parts become a text stub (no data-URL/base64 forwarded); current-turn images still never fail over (server gate + runFallback defense in depth). Provider response read cap raised from 4000 chars so long replies are not cut mid-JSON into an "empty reply" failure.
+1a10c22: adversarial review — 5 extra tests, no code defects found.
 
 ## PASS / FAIL
-- PASS: OFF → primary 503 surfaces as one error event; fallback never called.
-- PASS: ON → primary 503/502/network-drop/empty-200 retried on the configured fallback; done reports provider=openai, model=gpt-4.1-mini, failedOverFrom=grok; tier not claimed as resolved.
-- PASS: client consumeMindTurn exposes provider/failedOverFrom; describeAnswer → "Failover: xAI failed, so OpenAI gpt-4.1-mini answered."
-- PASS: both providers fail → single error naming both; no keys, bearer tokens or provider URLs (incl. Gemini ?key=) leak; throwing hook → one honest error.
-- PASS: no other provider configured → "no other provider is configured… Nothing was substituted", zero outbound calls.
-- PASS: aborted before primary answers / during fallback → STOPPED, no delta/done from fallback; already-aborted signal → no outbound call.
-- PASS: text already streamed then drop → no failover (no spliced replies).
-- PASS: forged provider ids in done events dropped; junk 200 fallback body is not a success.
-- PASS: toggle disabled while busy, send guarded by turnInFlight (double click), toggle snapshotted per send (mid-request change cannot affect the in-flight turn); only literal true / exact "on" enable.
-- PASS: model-agnostic copy (no Grok model names added to tiers/UI); no nav/drawer, Notion status card, voice/attachment/media files touched; no real key material in diff.
+- PASS: OpenAI fallback body = primary messages exactly (system with Adrian's Mind prompt + [note-1] memory note, user/assistant history, current turn, same order).
+- PASS: Anthropic: system in top-level `system`, no system role in messages, starts with user, roles alternate, leading assistant history kept.
+- PASS: Gemini: systemInstruction carries notes; contents user/model/user; leading assistant handled; key only in query string, never in JSON body.
+- PASS: Memory OFF → fallback gets the same "Memory is OFF" line and no notes.
+- PASS: history with image parts → no data:image/base64/image_url in any provider payload; "cannot see" stub present; text kept.
+- PASS: current turn with image parts → refused, zero outbound calls (even if a caller bypasses the server gate).
+- PASS: no primary/provider key and no primary error text/URL in the fallback request body.
+- PASS: max-size history (12 × 8000) sent intact = primary truncation; over-budget context drops OLDEST history first, system + current turn always kept.
+- PASS: 12k-char fallback reply returned whole (old 4000-char body cut made it fail).
+- PASS: malformed messages (unknown role, object content, blank) → honest refusal, no outbound call; history cannot forge a system role.
+- PASS: relay e2e — Grok 503 → fallback sees notes + history; done names openai; resolvedTier not claimed; usedIds truthful; double failure → one scrubbed error, no done.
+- PASS: legacy non-Grok primary prompt path unchanged (4000-char cap); all prior failover guarantees (abort, no failover after streaming, scrubbed errors, OFF surfaces error) still green.
+- PASS: model-agnostic (no Grok model names added to tiers/UI); no nav/drawer, Notion status card, voice/attachment/media/visual files touched; no key material in diff.
 
 ## Known limits (not failures)
-- Fallback call is text-only (latest user message; no history/memory context) — logged as next task.
+- Failover sends memory notes and history to the fallback provider (a different vendor) — by design, only when the user turned failover on.
+- Non-Grok primary still sends only the latest user text (its Grok failover gets full context); giving the non-Grok primary the shared builder is a separate task.
+- Anthropic fallback keeps max_tokens 400 and does not report max_tokens truncation.
 - Non-Grok primary failing over to Grok spends two chat rate-limit tokens.
-- No live production verification (no secondary provider key configured on server; no deploy per rules).
+- No live production verification (no secondary provider key on server; no deploy per rules).
 
 ## Gates
-tsc clean; test:mind 1839/1839; test:scripts 205 pass 0 fail 4 skipped; build green.
+tsc clean; test:mind 1859/1859; test:scripts 205 pass 0 fail 4 skipped; build green.
 
 ## Verdict
 PASS
