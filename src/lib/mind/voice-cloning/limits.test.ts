@@ -46,10 +46,16 @@ describe("voice-cloning limits", () => {
   });
 
   it("WAV export refuses mp3 bytes; MP3 passes", () => {
-    const mp3 = prepareExportAudio({ audioBase64: "aaaa", sourceMime: "audio/mpeg", format: "mp3" });
+    const mp3Bytes = Buffer.alloc(64, 0);
+    mp3Bytes[0] = 0xff;
+    mp3Bytes[1] = 0xfb;
+    const mp3B64 = mp3Bytes.toString("base64");
+    const mp3 = prepareExportAudio({ audioBase64: mp3B64, sourceMime: "audio/mpeg", format: "mp3" });
     assert.equal(mp3.ok, true);
-    const wav = prepareExportAudio({ audioBase64: "aaaa", sourceMime: "audio/mpeg", format: "wav" });
+    const wav = prepareExportAudio({ audioBase64: mp3B64, sourceMime: "audio/mpeg", format: "wav" });
     assert.equal(wav.ok, false);
+    const junk = prepareExportAudio({ audioBase64: "aaaa", sourceMime: "audio/mpeg", format: "mp3" });
+    assert.equal(junk.ok, false);
     assert.ok(VCS_MAX_PROFILES_PER_USER >= 1);
   });
 });

@@ -24,6 +24,9 @@ function decodeBase64Len(b64: string): number {
 }
 
 export function validateProfileName(raw: unknown): VcsResult<{ name: string }> {
+  if (typeof raw === "string" && raw.trim().length > VCS_MAX_NAME_CHARS) {
+    return { ok: false, error: `Name is too long (max ${VCS_MAX_NAME_CHARS} characters).`, code: "bad_name" };
+  }
   const name = normalizeProfileName(raw);
   if (!name) return { ok: false, error: "Enter a short name for this voice profile.", code: "bad_name" };
   if (name.length > VCS_MAX_NAME_CHARS) {

@@ -4,7 +4,7 @@
  */
 import { join } from "node:path";
 import { createVoiceHub, type VoiceHub } from "../../../../tools/voice-mcp-hub/src/hub.ts";
-import { issueConsentToken } from "../../../../tools/voice-mcp-hub/src/consent-token.ts";
+import { issueConsentToken, verifyConsentToken } from "../../../../tools/voice-mcp-hub/src/consent-token.ts";
 
 let cached: VoiceHub | null = null;
 
@@ -29,4 +29,4 @@ export function resetStudioVoiceHubForTests(): void {
   cached = null;
 }
 
-export { issueConsentToken };
+export { issueConsentToken, verifyConsentToken };

@@ -60,3 +60,11 @@ The Voice Connection Hub **is** the MCP server for cloning. A future optional MC
 ## Notion
 
 Standing rule: append progress **only** to handoff page `40b1aa27632381768d58cde0731f142a`. If it 404s, report — do not use the mirror.
+
+
+## Attacker pass + Playwright (MOCK-VERIFIED)
+
+- Unit attacker suite: `src/lib/mind/voice-cloning/attacker-pass.test.ts` (profile/consent/generate/export through hub mock).
+- Playwright: `scripts/voice/vcs-e2e-mock-hub.mjs` on a free port (not 8080/8095); screenshots under `/workspace/voice-test/vcs-e2e-*.png`.
+- Hardening: magic-byte audio sniff, homoglyph public-figure fold, WAV/MP3 export header checks, consent JSON omits `consentCode`, preview objectURL revoke on stop/unmount/profile switch.
+- Still pending Zack’s PC: real Chatterbox/CosyVoice3 weights + Qwen. Vercel tip may show Ignored Build Step.
