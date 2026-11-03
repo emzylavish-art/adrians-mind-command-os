@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
+import "./command-search.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -3517,7 +3518,7 @@ export function CommandApp() {
             </div>
 
           </div>
-          <div className="relative min-w-0 flex-1">
+          <div className="command-search relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
               ref={searchRef}
@@ -3539,7 +3540,7 @@ export function CommandApp() {
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
+              <div id="command-palette" className="command-palette floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
                 {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
                 {hits.map((hit) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
