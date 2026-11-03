@@ -13731,3 +13731,119 @@ div.shell > div.composer-bar.is-fixed {
     box-sizing: border-box !important;
   }
 }
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r4c — reclaim Ask≥140 without hiding Dictate (≠ topbar).
+ * Tighter Auto (~52) + 4px gaps + leaner card pad.
+ * ============================================================================ */
+@media (max-width: 429.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card {
+    padding: 0.3rem 0.3rem !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card > form {
+    gap: 4px !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-chip,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"] {
+    max-width: 3.25rem !important; /* 52px */
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip {
+    min-width: 3rem !important;
+    max-width: 3.25rem !important;
+    padding: 0 0.4rem !important;
+    font-size: 0.6875rem !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip > span {
+    font-size: 0.6875rem !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-ask"] {
+    flex: 1 1 140px !important;
+    min-width: 140px !important;
+    overflow: hidden !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r4d — Ask flex-shrink:0 at 140; mic/Speak 36 on ≤375.
+ * ============================================================================ */
+@media (max-width: 429.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-ask"] {
+    flex: 1 0 140px !important;
+    min-width: 140px !important;
+    flex-shrink: 0 !important;
+  }
+}
+@media (max-width: 379.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-mic-dictate"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-mic-dictation,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-pill {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r4e — beat html body .composer-bar specificity so Ask
+ * actually keeps min-width 140 / flex-shrink 0.
+ * ============================================================================ */
+@media (max-width: 429.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask.mb-3,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-ask"] {
+    flex: 1 0 140px !important;
+    flex-grow: 1 !important;
+    flex-shrink: 0 !important;
+    flex-basis: 140px !important;
+    min-width: 140px !important;
+    max-width: none !important;
+    overflow: hidden !important;
+  }
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask-input,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="live-voice-bar-input"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed input[placeholder="Ask Anything"] {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* Keep Auto compact labeled pill under the higher-spec ceiling */
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip {
+    flex: 0 0 auto !important;
+    min-width: 3rem !important;
+    max-width: 3.25rem !important;
+    width: auto !important;
+    padding: 0 0.4rem !important;
+    font-size: 0.6875rem !important;
+    color: #f4f4f5 !important;
+  }
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip > span {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    clip: auto !important;
+    opacity: 1 !important;
+    color: #f4f4f5 !important;
+    font-size: 0.6875rem !important;
+    overflow: visible !important;
+  }
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip::after {
+    content: none !important;
+    display: none !important;
+  }
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip > svg {
+    display: none !important;
+  }
+}
