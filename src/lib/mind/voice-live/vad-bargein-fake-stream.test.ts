@@ -156,8 +156,10 @@ describe("N3 server-VAD + second-utterance barge-in (fake audio stream)", () => 
       created!.sent.some((l) => l.includes("response.cancel")),
       "second barge-in must send response.cancel",
     );
+    const phaseAfterSecond = session.state.phase as string;
     assert.ok(
-      phases.includes("interrupted") || session.state.phase === "interrupted" || session.state.phase === "user_speaking",
+      phases.includes("interrupted") || phaseAfterSecond === "interrupted" || phaseAfterSecond === "user_speaking",
+      `expected interrupted/user_speaking after second barge, got ${phaseAfterSecond}`,
     );
 
     session.end();
