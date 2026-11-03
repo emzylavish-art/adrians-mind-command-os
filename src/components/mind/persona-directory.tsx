@@ -143,16 +143,20 @@ export function PersonaDirectoryView({
       ) : (
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="persona-grid">
           {visible.map((card) => (
-            <li key={card.id} className="glow-card rounded-panel border border-line/80 p-4">
+            <li
+              key={card.id}
+              className="persona-card glow-card rounded-panel border border-line/80 p-4"
+              data-persona-card="true"
+            >
               <div className="flex items-start gap-3">
                 <img src={botAvatarSrc(card.name)} alt="" className="bot-avatar-img size-10" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold">{card.name}</p>
-                    <span className="rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+                <div className="persona-card__body min-w-0 flex-1">
+                  <p className="persona-card__title font-semibold">{card.name}</p>
+                  <div className="persona-card__badges" aria-label="Persona status">
+                    <span className="persona-card__badge rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
                       {card.badge}
                     </span>
-                    <span className="rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+                    <span className="persona-card__badge persona-card__badge--not-live rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
                       Not live
                     </span>
                   </div>
@@ -164,9 +168,10 @@ export function PersonaDirectoryView({
               </div>
               <button
                 type="button"
-                className="mt-3 min-h-11 w-full rounded-panel border border-line bg-accent px-3 text-sm font-semibold text-accent-ink"
+                className="persona-open-btn mt-3 min-h-11 w-full rounded-panel border border-line bg-accent px-3 text-sm font-semibold text-accent-ink"
                 onClick={() => openCard(card)}
                 data-testid={`persona-open-${card.id}`}
+                data-persona-open="true"
               >
                 Open in Chat (agent mode)
               </button>
