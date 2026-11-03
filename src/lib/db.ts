@@ -48,6 +48,8 @@ export interface Sql {
   withExclusiveClient?: <T>(
     fn: (client: { query: Sql["query"]; exec?: (text: string) => Promise<void> }) => Promise<T>,
   ) => Promise<T>;
+  /** Execute related writes atomically using one backend transaction. */
+  transaction?: <T>(fn: (tx: Sql) => Promise<T>) => Promise<T>;
 }
 
 /**
@@ -129,6 +131,22 @@ function createNeonSql(): Promise<Sql> {
         client.release();
       }
     };
+    sql.transaction = async (fn) => sql.withExclusiveClient!(async (client) => {
+      await client.query("BEGIN");
+      const txSql = toSql(async <T>(text: string, params: unknown[]) => client.query<T>(text, params));
+      try {
+        const result = await fn(txSql);
+        await client.query("COMMIT");
+        return result;
+      } catch (error) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          // Preserve the original error if the connection is already unusable.
+        }
+        throw error;
+      }
+    });
     return sql;
   })().catch((err) => {
     globalRef.__pgSqlPromise__ = undefined;
@@ -203,6 +221,12 @@ async function createPgliteSql(): Promise<Sql> {
   sql.exec = async (text: string) => {
     await pg.exec(text);
   };
+  sql.transaction = async (fn) => pg.transaction(async (tx) => {
+    const txSql = toSql(async <T>(text: string, params: unknown[]) =>
+      (await tx.query<T>(text, params)).rows,
+    );
+    return fn(txSql);
+  });
   return sql;
 }
 
