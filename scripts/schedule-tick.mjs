@@ -19,6 +19,10 @@ function toSql(pg) {
     return result.rows;
   };
   sql.query = async (text, params = []) => (await pg.query(text, params)).rows;
+  // The local worker must not partially rewrite an owner's workspace.
+  if (typeof pg.transaction === "function") {
+    sql.transaction = async (fn) => pg.transaction(async (tx) => fn(toSql(tx)));
+  }
   return sql;
 }
 
@@ -44,7 +48,7 @@ try {
   const report = { at: now, heartbeatAt: now, running: false, mode: "one-shot", ...result, hosted: false, localOnly: true, note: "One pass against the file database on this machine. This process then exits. It is not a hosted always-on worker." };
   mkdirSync(join(root, ".data"), { recursive: true });
   writeFileSync(join(root, ".data", "worker-status.json"), JSON.stringify(report));
-  console.log(`Worker pass finished. Owners ${result.owners}. Ran ${result.ran}. Skipped ${result.skipped}. Failed ${result.failed}. This process exits after one pass. It is not a hosted always-on worker.`);
+  console.log(`Worker pass finished. Owners ${result.owners}. Schedule triggers ${result.ran}. Agent passes ${result.agentPasses}. Skipped ${result.skipped}. Failed ${result.failed}. This process exits after one pass. It is not a hosted always-on worker.`);
 } catch (error) {
   const message = error instanceof Error ? error.message : "The database could not be opened.";
   console.log(`Worker pass did not run. ${message} No job was executed.`);

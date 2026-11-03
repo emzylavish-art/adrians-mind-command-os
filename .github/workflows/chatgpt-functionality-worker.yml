@@ -1,0 +1,77 @@
+name: ChatGPT functionality - isolated worker verification
+
+on:
+  push:
+    branches:
+      - chatgpt/functionality-worker-2026-11-03
+      - chatgpt/functionality-agent-execution-2026-11-03
+      - chatgpt/functionality-persistence-2026-11-03
+    paths:
+      - ".github/workflows/chatgpt-functionality-worker.yml"
+      - "src/lib/mind/worker-pass.ts"
+      - "src/lib/mind/worker-pass.test.ts"
+      - "scripts/schedule-worker.mjs"
+      - "scripts/schedule-tick.mjs"
+      - "src/lib/db.ts"
+      - "src/lib/mind/store.ts"
+      - "src/lib/mind/store.test.ts"
+      - "src/lib/supabase/oauth-redirect.ts"
+      - "src/lib/supabase/first-party-oauth.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-functionality-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  functionality-regression:
+    if: contains(fromJSON('["refs/heads/chatgpt/functionality-worker-2026-11-03","refs/heads/chatgpt/functionality-agent-execution-2026-11-03","refs/heads/chatgpt/functionality-persistence-2026-11-03"]'), github.ref)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      DATABASE_URL: ""
+      POSTGRES_URL: ""
+      XAI_API_KEY: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      MIND_LIVE_GROK: "0"
+      VITE_AUTH_ENABLED: "true"
+    steps:
+      - name: Check out the isolated functionality branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install locked dependencies without auditing remote registries
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Chromium required by the existing local browser unit test
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify schedule dispatch regressions
+        run: node --experimental-strip-types --test src/lib/mind/worker-pass.test.ts
+
+      - name: Verify rollback with literal numbered SQL bind parameters
+        run: node --experimental-strip-types --test src/lib/mind/store.test.ts
+
+      - name: Verify complete local unit test suite (no paid provider calls)
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint changed backend modules
+        run: npx eslint src/lib/db.ts src/lib/mind/store.ts src/lib/mind/store.test.ts src/lib/mind/worker-pass.ts src/lib/mind/worker-pass.test.ts
+
+      - name: Verify isolated production build without a database connection
+        run: npm run build
