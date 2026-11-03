@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, u
 import { Link } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
+import "./command-voice-mode.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -3496,11 +3497,6 @@ export function CommandApp() {
           <div className="hidden shrink-0 md:block">
             <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
               <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-              <VoiceModeBadge
-                mode={voiceMode}
-                listening={voiceListening}
-                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-              />
               <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
               <button
                 type="button"
@@ -3517,6 +3513,19 @@ export function CommandApp() {
               <VoicePicker value={voiceChoice} onChange={applyVoiceChoice} disabled={voiceListening} />
             </div>
 
+          </div>
+          <div className="command-voice-mode">
+            <VoiceModeBadge
+              placement="header"
+              mode={voiceMode}
+              listening={voiceListening}
+              hint={
+                voiceMode === "orchestrator"
+                  ? "Orchestrator needs Ollama on this computer. Switch to Direct if it is not running."
+                  : null
+              }
+              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+            />
           </div>
           <div className="command-search relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
@@ -3997,11 +4006,6 @@ export function CommandApp() {
               </div>
               <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
                 <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-                <VoiceModeBadge
-                  mode={voiceMode}
-                  listening={voiceListening}
-                  onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-                />
                 <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
                 <button
                   type="button"
@@ -4026,8 +4030,8 @@ export function CommandApp() {
                 <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
               </div>
 
-              {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
-              {error && <p className="banner-error px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
+              {notice && <p className="banner-notice voice-copy px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
+              {error && <p className="banner-error voice-copy px-3 py-2 text-sm text-danger" role="alert">{presentVoiceCopy(error)}</p>}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
@@ -4154,12 +4158,10 @@ export function CommandApp() {
               onLiveVoiceError={(message) => setError(message)}
               onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
-              voiceMode={voiceMode}
               voiceListening={voiceListening}
               voiceMuted={voiceMuted}
               voiceLevel={voiceLevel}
               onToggleMute={toggleVoiceMute}
-              onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
               dictationState={dictation.phase}
               dictationLevel={dictationLevel}
               dictationElapsed={dictationElapsed}
@@ -4668,7 +4670,7 @@ export function CommandApp() {
                   />
                 </ul>
               </form>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+              {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <FleetPanel mode="connected" ws={ws} setWs={setWs} />
             </section>
           )}
@@ -4817,7 +4819,7 @@ export function CommandApp() {
                   );
                 })}
               </div>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
+              {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
             </section>
           )}
           {view === "files" && (
@@ -5236,7 +5238,7 @@ export function CommandApp() {
         mode={voiceMode}
         transcript={voiceLiveTranscript}
         notice={overlayNotice}
-        error={overlayError}
+        error={overlayError ? presentVoiceCopy(overlayError) : overlayError}
         onMute={toggleVoiceMute}
         onClose={closeVoiceOverlay}
         onInterrupt={interruptVoiceOverlay}
@@ -5306,6 +5308,13 @@ function BrowserDictationControl(props: {
       )}
     </div>
   );
+}
+
+function presentVoiceCopy(text: string): string {
+  if (/127\.0\.0\.1|localhost:\d+|0\.0\.0\.0:\d+|not reachable at https?:\/\//i.test(text)) {
+    return "Orchestrator needs Ollama running on this computer. Switch to Direct, or start Ollama and try again.";
+  }
+  return text;
 }
 
 function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compact?: boolean }) {
@@ -5467,12 +5476,10 @@ function ChatPane({
   onLiveVoiceError,
   onLiveVoiceNotice,
   speaking,
-  voiceMode,
   voiceListening,
   voiceMuted,
   voiceLevel,
   onToggleMute,
-  onToggleVoiceMode,
   dictationState,
   dictationLevel,
   dictationElapsed,
@@ -5545,12 +5552,10 @@ function ChatPane({
   onLiveVoiceError?: (message: string) => void;
   onLiveVoiceNotice?: (message: string) => void;
   speaking: boolean;
-  voiceMode: VoiceRoutingMode;
   voiceListening: boolean;
   voiceMuted: boolean;
   voiceLevel: number;
   onToggleMute: () => void;
-  onToggleVoiceMode: () => void;
   dictationState: DictationMachineState["phase"];
   dictationLevel: number;
   dictationElapsed: number;
@@ -5824,12 +5829,12 @@ function ChatPane({
           {busy && (
             <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
           )}
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <p className="voice-copy text-sm text-danger">{presentVoiceCopy(error)}</p>}
           {error && active?.messages.at(-1)?.role === "user" && (
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
-          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /><VoiceModeBadge mode={voiceMode} listening={voiceListening} onToggle={onToggleVoiceMode} /></div>
+          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div>
         </div>
         <form
           className="floating-composer command-card composer-dock m-3 p-3" data-composer="floating"
