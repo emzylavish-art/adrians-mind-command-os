@@ -10,6 +10,7 @@ import { formatVoiceClientError } from "../voice/errors.ts";
 import { LiveVoiceSession, type LiveSessionDeps, type MintSecretResult } from "./live-session.ts";
 import { phaseToLabel, phaseToUiAttr, type LiveVoicePublicState } from "./types.ts";
 import { isLiveVoiceOccupied } from "./occupancy.ts";
+import { LIVE_VOICE_NOT_CONNECTED_NOTICE } from "./presentational-bar-actions.ts";
 import { readStoredVolume } from "./speaker-gain.ts";
 import { setVoiceAuthCache, readVoiceAuthCache } from "./auth-gate.ts";
 import { authEnabled } from "@/lib/auth/client";
@@ -114,11 +115,30 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
   }, []);
 
   const toggleMute = useCallback(() => {
-    ensureSession().toggleMute();
+    const session = ensureSession();
+    const phase = session.state.phase;
+    const live =
+      session.isActive ||
+      phase === "connecting" ||
+      phase === "reconnecting";
+    if (!live) {
+      optionsRef.current.onNotice?.(LIVE_VOICE_NOT_CONNECTED_NOTICE);
+      return;
+    }
+    session.toggleMute();
   }, [ensureSession]);
 
   const toggleSpeaker = useCallback(() => {
     const session = ensureSession();
+    const phase = session.state.phase;
+    const live =
+      session.isActive ||
+      phase === "connecting" ||
+      phase === "reconnecting";
+    if (!live) {
+      optionsRef.current.onNotice?.(LIVE_VOICE_NOT_CONNECTED_NOTICE);
+      return;
+    }
     const next = session.speaker.toggleMute();
     setSpeakerMuted(next);
   }, [ensureSession]);

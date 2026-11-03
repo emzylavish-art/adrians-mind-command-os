@@ -6,11 +6,18 @@
  *
  * Compatible with origin/voice-integration f342bea useLiveVoiceSession return shape,
  * plus N1 attachDisplayAudio / setScreenAudioMixEnabled when present.
+ *
+ * When the session is not connected, mute/end/speaker/screen/mode controls surface an
+ * honest notice instead of toast-only markPreview stubs or silent no-ops.
  */
 
 import type { LiveVoiceUiAttr } from "./types.ts";
 
 export type PresentationalBarPlusId = "camera" | "photo" | "video" | "files";
+
+/** Honest copy when a live-bar control fires without an active realtime session. */
+export const LIVE_VOICE_NOT_CONNECTED_NOTICE =
+  "Live voice is not connected. Tap Speak to start a realtime session first.";
 
 /** Subset of useLiveVoiceSession() used by the presentational bar. */
 export type LiveVoiceSessionBarApi = {
@@ -21,6 +28,8 @@ export type LiveVoiceSessionBarApi = {
   level?: number;
   muted?: boolean;
   active?: boolean;
+  /** Optional phase for connecting-state honesty. */
+  phase?: string;
   /** N1 — mix getDisplayMedia audio into the realtime mic graph. */
   attachDisplayAudio?: (stream: MediaStream) => void;
   detachDisplayAudio?: (opts?: { stopTracks?: boolean }) => void;
@@ -38,6 +47,8 @@ export type PresentationalLiveVoiceBarBound = {
   onPlus: () => void;
   onPlusItem: (id: PresentationalBarPlusId) => void;
   onAskFocus: () => void;
+  /** Optional mode switch (Direct ↔ Orchestrator) with disconnect honesty. */
+  onModeSwitch: () => void;
 };
 
 export type BindPresentationalLiveVoiceBarInput = {
@@ -54,6 +65,10 @@ export type BindPresentationalLiveVoiceBarInput = {
   onPlusItem?: (id: PresentationalBarPlusId) => void;
   /** Focus Ask Anything / composer draft. */
   onAskFocus?: () => void;
+  /** Toggle Direct ↔ Orchestrator when live (or notice when not). */
+  onModeSwitch?: () => void;
+  /** Honest notice path — never toast-only markPreview. */
+  onNotice?: (message: string) => void;
 };
 
 function resolveState(session: LiveVoiceSessionBarApi): string {
@@ -62,28 +77,64 @@ function resolveState(session: LiveVoiceSessionBarApi): string {
   return String(attr);
 }
 
+function isSessionLive(session: LiveVoiceSessionBarApi): boolean {
+  if (session.active) return true;
+  const phase = session.phase || "";
+  return (
+    phase === "connecting" ||
+    phase === "reconnecting" ||
+    phase === "listening" ||
+    phase === "user_speaking" ||
+    phase === "assistant_speaking" ||
+    phase === "thinking" ||
+    phase === "interrupted" ||
+    phase === "muted"
+  );
+}
+
 /**
  * Map one live session + composer actions → props for voice-ui LiveVoiceBar.
- * Never returns markPreview toast stubs.
+ * Never returns markPreview toast stubs. Disconnected controls notice honestly.
  */
 export function bindPresentationalLiveVoiceBar(
   input: BindPresentationalLiveVoiceBarInput,
 ): PresentationalLiveVoiceBarBound {
   const { session } = input;
+  const notice = (msg: string) => {
+    input.onNotice?.(msg);
+  };
+  const requireLive = (action: () => void): void => {
+    if (!isSessionLive(session)) {
+      notice(LIVE_VOICE_NOT_CONNECTED_NOTICE);
+      return;
+    }
+    action();
+  };
+
   return {
     state: resolveState(session),
     level: typeof session.level === "number" ? session.level : 0,
     onMute: () => {
-      session.toggleMute();
+      requireLive(() => {
+        session.toggleMute();
+      });
     },
     onEnd: () => {
+      if (!isSessionLive(session)) {
+        notice(LIVE_VOICE_NOT_CONNECTED_NOTICE);
+        return;
+      }
       session.end("Live voice ended.");
     },
     onSpeaker: () => {
-      session.toggleSpeaker();
+      requireLive(() => {
+        session.toggleSpeaker();
+      });
     },
     onScreenShare: () => {
-      input.onScreenShare();
+      requireLive(() => {
+        input.onScreenShare();
+      });
     },
     onSettings: () => {
       input.onSettings();
@@ -96,6 +147,15 @@ export function bindPresentationalLiveVoiceBar(
     },
     onAskFocus: () => {
       input.onAskFocus?.();
+    },
+    onModeSwitch: () => {
+      requireLive(() => {
+        if (input.onModeSwitch) {
+          input.onModeSwitch();
+          return;
+        }
+        notice(LIVE_VOICE_NOT_CONNECTED_NOTICE);
+      });
     },
   };
 }
