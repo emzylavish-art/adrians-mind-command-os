@@ -484,3 +484,12 @@ command on Zack's PC.
 - Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child: https://app.notion.com/p/40bb95f33e42812b841ece22e9e38f99
 - Pushed origin/error-banners → 413595890690100e7b5d710ba40da8a8aa4a4aee
 - Lock releasing.
+
+
+## Stop-point: DNS-rebinding + connector guards (2026-11-02 America/Chicago)
+
+- Commit `0c444bd` on `mcp-integration` (Host allowlist inbound; OAuth token/revoke URL allowlists + redirect/timeout; encoded IPv4 private rejection; exact pCloud hosts).
+- typecheck pass; tests **1157** pass; build pass.
+- Notion: https://app.notion.com/p/40db95f33e4281dd98beed60a1b0ac09
+- Merge to main/prod held until Grok Build baseline is live.
+- External handoff page 40b1aa27… not writable from this connector (404).
