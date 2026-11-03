@@ -179,6 +179,22 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     });
   }, []);
 
+
+  const attachDisplayAudio = useCallback((stream: MediaStream) => {
+    ensureSession().attachDisplayAudio(stream);
+  }, [ensureSession]);
+
+  const detachDisplayAudio = useCallback((opts?: { stopTracks?: boolean }) => {
+    sessionRef.current?.detachDisplayAudio(opts);
+  }, []);
+
+  const setScreenAudioMixEnabled = useCallback(
+    (enabled: boolean) => {
+      ensureSession().setScreenAudioMixEnabled(enabled);
+    },
+    [ensureSession],
+  );
+
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "hidden" && isLiveVoiceOccupied()) {
@@ -213,6 +229,10 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     setOutputVolume,
     sendText,
     sendSessionContext,
+    attachDisplayAudio,
+    detachDisplayAudio,
+    setScreenAudioMixEnabled,
+    isMixingScreenAudio: () => sessionRef.current?.isMixingScreenAudio ?? false,
     sessionRef,
     lastTranscript: () => sessionRef.current?.lastTranscript ?? "",
   };

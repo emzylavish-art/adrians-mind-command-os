@@ -1,4 +1,4 @@
-/** Always-on mic capture → pcm16 @ session rate, with mute (stop appending, keep tracks). */
+/** Always-on mic capture → pcm16 @ session rate, with mute + optional screen-audio mix. */
 
 import { rmsFromFloatSamples } from "../voice/level.ts";
 
@@ -40,6 +40,11 @@ export class LiveMicStream {
   private audioCtx: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
+  private silent: GainNode | null = null;
+  private displayMedia: MediaStream | null = null;
+  private displaySource: MediaStreamAudioSourceNode | null = null;
+  private displayGain: GainNode | null = null;
+  private screenMixEnabled = true;
   private muted = false;
   private running = false;
   private handlers: MicStreamHandlers;
@@ -61,6 +66,19 @@ export class LiveMicStream {
 
   get isMuted() {
     return this.muted;
+  }
+
+  get hasDisplayAudio() {
+    return Boolean(this.displayMedia?.getAudioTracks().some((t) => t.readyState === "live"));
+  }
+
+  get isScreenMixEnabled() {
+    return this.screenMixEnabled;
+  }
+
+  /** True when a live display track is connected into the mic graph. */
+  get isMixingScreenAudio() {
+    return this.running && this.screenMixEnabled && this.hasDisplayAudio && Boolean(this.displaySource);
   }
 
   setMuted(next: boolean) {
@@ -115,11 +133,77 @@ export class LiveMicStream {
     };
     this.source.connect(this.processor);
     // Keep processor alive without audible feedback loop.
-    const silent = this.audioCtx.createGain();
-    silent.gain.value = 0;
-    this.processor.connect(silent);
-    silent.connect(this.audioCtx.destination);
+    this.silent = this.audioCtx.createGain();
+    this.silent.gain.value = 0;
+    this.processor.connect(this.silent);
+    this.silent.connect(this.audioCtx.destination);
     this.running = true;
+    // Re-attach any pending display stream now that the graph exists.
+    if (this.displayMedia) this.wireDisplaySource();
+  }
+
+  /**
+   * Attach tab/system audio from getDisplayMedia into the same WebAudio graph
+   * that feeds realtime PCM. Tracks are not stopped here — caller owns lifecycle.
+   */
+  attachDisplayAudio(stream: MediaStream) {
+    this.detachDisplayAudio({ stopTracks: false });
+    this.displayMedia = stream;
+    if (this.running && this.audioCtx && this.processor) {
+      this.wireDisplaySource();
+    }
+  }
+
+  /** Enable/disable mixing display audio without releasing the display stream. */
+  setScreenMixEnabled(enabled: boolean) {
+    this.screenMixEnabled = enabled;
+    if (!this.displayGain) {
+      if (enabled && this.displayMedia && this.running) this.wireDisplaySource();
+      return;
+    }
+    this.displayGain.gain.value = enabled ? 1 : 0;
+  }
+
+  detachDisplayAudio(opts: { stopTracks?: boolean } = {}) {
+    const stopTracks = opts.stopTracks ?? false;
+    try {
+      this.displaySource?.disconnect();
+      this.displayGain?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    this.displaySource = null;
+    this.displayGain = null;
+    if (stopTracks && this.displayMedia) {
+      for (const t of this.displayMedia.getAudioTracks()) {
+        try {
+          t.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    this.displayMedia = null;
+  }
+
+  private wireDisplaySource() {
+    if (!this.audioCtx || !this.processor || !this.displayMedia) return;
+    const live = this.displayMedia.getAudioTracks().filter((t) => t.readyState !== "ended");
+    if (live.length === 0) return;
+    try {
+      this.displaySource?.disconnect();
+      this.displayGain?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    // Use only audio tracks so video does not confuse createMediaStreamSource.
+    const audioOnly = new MediaStream(live);
+    this.displaySource = this.audioCtx.createMediaStreamSource(audioOnly);
+    this.displayGain = this.audioCtx.createGain();
+    this.displayGain.gain.value = this.screenMixEnabled ? 1 : 0;
+    // Sum into the same ScriptProcessor input as the mic (WebAudio mixes connections).
+    this.displaySource.connect(this.displayGain);
+    this.displayGain.connect(this.processor);
   }
 
   stop() {
@@ -127,14 +211,17 @@ export class LiveMicStream {
     this.muted = false;
     this.appendedBytes = 0;
     this.handlers.onLevel?.(0);
+    this.detachDisplayAudio({ stopTracks: false });
     try {
       this.processor?.disconnect();
       this.source?.disconnect();
+      this.silent?.disconnect();
     } catch {
       /* ignore */
     }
     this.processor = null;
     this.source = null;
+    this.silent = null;
     this.media?.getTracks().forEach((t) => t.stop());
     this.media = null;
     void this.audioCtx?.close().catch(() => undefined);

@@ -726,6 +726,27 @@ export class LiveVoiceSession {
 
 
   /**
+   * Mix tab/system audio from an active getDisplayMedia stream into the
+   * realtime mic graph. No-op when skipMic / mic not running yet — the mix
+   * attaches once the mic starts if called earlier via pending stream.
+   */
+  attachDisplayAudio(stream: MediaStream) {
+    this.mic?.attachDisplayAudio(stream);
+  }
+
+  detachDisplayAudio(opts: { stopTracks?: boolean } = {}) {
+    this.mic?.detachDisplayAudio(opts);
+  }
+
+  setScreenAudioMixEnabled(enabled: boolean) {
+    this.mic?.setScreenMixEnabled(enabled);
+  }
+
+  get isMixingScreenAudio() {
+    return this.mic?.isMixingScreenAudio ?? false;
+  }
+
+  /**
    * Mode badge toggle mid-call / mid-connect: cut audio, refresh instructions,
    * and re-emit modeBadge so UI matches getMode() for the next transcript.
    */

@@ -46,7 +46,13 @@ import {
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape, shouldEndCallOnEscape } from "./settings-popover";
 import { ensureLiveVoiceBaselineStyles } from "./baseline-styles";
-import { describeScreenAudio, screenShareUnavailableMessage } from "./screen-audio";
+import {
+  describeScreenAudio,
+  readScreenAudioMixEnabled,
+  screenAudioFallbackVideoOnlyMessage,
+  screenShareUnavailableMessage,
+  writeScreenAudioMixEnabled,
+} from "./screen-audio";
 import { LIVE_SCREEN_FRAME_PROMPT } from "@/lib/mind/voice-live/session-context";
 
 export type LiveVoiceBarProps = {
@@ -133,6 +139,9 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [attachMsg, setAttachMsg] = useState<string | null>(null);
   const [screenOn, setScreenOn] = useState(false);
+  const [screenMixEnabled, setScreenMixEnabled] = useState(() =>
+    readScreenAudioMixEnabled(typeof localStorage === "undefined" ? null : localStorage),
+  );
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
   const [voiceChoice, setVoiceChoice] = useState<XaiBuiltinVoice>(() =>
     readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage),
@@ -148,6 +157,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const stopScreen = useCallback(() => {
     screenRef.current?.stop();
     screenRef.current = null;
+    live.detachDisplayAudio?.({ stopTracks: true });
     if (pendingScreenStream.current) {
       for (const t of pendingScreenStream.current.getTracks()) {
         try {
@@ -159,7 +169,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       pendingScreenStream.current = null;
     }
     setScreenOn(false);
-  }, []);
+  }, [live]);
 
   const endEverything = useCallback(() => {
     stopScreen();
@@ -371,29 +381,29 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
         } catch {
           // Some browsers reject audio:true — retry video-only with an honest note.
           stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-          const note = "Screen audio is not available in this browser — sharing video only.";
+          const note = screenAudioFallbackVideoOnlyMessage();
           setAttachMsg(note);
           props.onNotice?.(note);
         }
         pendingScreenStream.current = stream;
-        const audioStatus = describeScreenAudio(stream);
+        const mixOn = readScreenAudioMixEnabled(
+          typeof localStorage === "undefined" ? null : localStorage,
+        );
+        setScreenMixEnabled(mixOn);
+        const audioStatus = describeScreenAudio(stream, { mixEnabled: mixOn });
         if (audioStatus.ok && audioStatus.notice) {
           setAttachMsg(audioStatus.notice);
           props.onNotice?.(audioStatus.notice);
         }
-        // Display-audio tracks are not mixed into the realtime mic path yet — stop them so
-        // the OS indicator matches what the call actually sends (mic only).
-        for (const track of stream.getAudioTracks()) {
-          try {
-            track.stop();
-          } catch {
-            /* ignore */
-          }
-        }
-        // Allowed while connecting — attach frames once live is up.
+        // Allowed while connecting — attach frames + audio once live is up.
         if (!live.active) {
           props.onNotice?.("Starting live voice for screen share…");
           await ensureLive();
+        }
+        // Mix display audio into the realtime mic graph when tracks exist.
+        if (stream.getAudioTracks().length > 0) {
+          live.setScreenAudioMixEnabled?.(mixOn);
+          live.attachDisplayAudio?.(stream);
         }
         const handle = await startMediaFrameStream(
           stream,
@@ -573,6 +583,33 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           }}
         />
       </div>
+      <label
+        className="mt-3 flex items-center justify-between gap-2 text-xs"
+        data-testid="live-voice-settings-screen-audio-mix"
+      >
+        <span>Mix screen audio</span>
+        <input
+          type="checkbox"
+          checked={screenMixEnabled}
+          aria-label="Mix screen audio into the call"
+          onChange={(e) => {
+            const next = e.target.checked;
+            setScreenMixEnabled(next);
+            writeScreenAudioMixEnabled(
+              next,
+              typeof localStorage === "undefined" ? null : localStorage,
+            );
+            live.setScreenAudioMixEnabled?.(next);
+            if (screenOn) {
+              const notice = next
+                ? "Screen audio mix on — tab/system sound joins your mic in the call."
+                : "Screen audio mix off — only your mic goes into the call.";
+              setAttachMsg(notice);
+              props.onNotice?.(notice);
+            }
+          }}
+        />
+      </label>
       <div className="mt-3 flex items-center justify-between gap-2">
         <button type="button" className="text-xs" onClick={live.toggleSpeaker} aria-pressed={live.speakerMuted}>
           Output {live.speakerMuted ? "muted" : "on"}
