@@ -9375,3 +9375,270 @@ html[data-theme="light"] [data-testid="voice-cloning-studio"] [data-testid="vcs-
     transform: none !important;
   }
 }
+
+
+/* —— logic-layout-fix: sheets / safe-area / no-overlap —— */
+:root {
+  --mobile-primary-nav-height: 3.5rem;
+  --touch-min: 44px;
+}
+
+/* Sheets sit above the mobile primary nav (nav is forced to z-index 40). */
+.overlay-backdrop,
+.shortcut-sheet-shell,
+[data-sheet="open"].overlay-backdrop,
+[data-sheet="open"].shortcut-sheet-shell {
+  z-index: 60 !important;
+}
+
+.overlay-panel,
+.shortcut-sheet-panel {
+  max-height: min(85dvh, 100%) !important;
+  max-height: min(85vh, 100%); /* fallback */
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.overlay-panel__body,
+.shortcut-sheet-grid.overlay-panel__body,
+.shortcut-sheet-panel .shortcut-sheet-grid {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overlay-panel__actions {
+  flex-shrink: 0 !important;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* Hide / lower the mobile primary nav while any sheet is open so actions stay tappable. */
+@media (max-width: 767.98px) {
+  body:has([data-sheet="open"]) .mobile-primary-nav,
+  body:has(.overlay-backdrop) .mobile-primary-nav,
+  body:has(.shortcut-sheet-shell) .mobile-primary-nav,
+  body:has([data-sheet="open"]) nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  body:has(.overlay-backdrop) nav.fixed.inset-x-0.bottom-0[aria-label="Primary"],
+  body:has(.shortcut-sheet-shell) nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    transform: translateY(110%) !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    z-index: 10 !important;
+  }
+
+  /* Content clearance = nav height + safe area (and a little breathing room). */
+  .main-stage {
+    padding-bottom: calc(var(--mobile-primary-nav-height) + 1.25rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Do not stick the home composer over siblings on short phones — keep it in flow. */
+  .main-stage > section.command-card.composer-dock,
+  .main-stage section.command-card.composer-dock,
+  .main-stage [data-composer="floating"] {
+    position: relative !important;
+    bottom: auto !important;
+    z-index: auto !important;
+  }
+
+  /* Focused composer still docks, but above the nav and never under a sheet. */
+  .composer-dock:focus-within,
+  .floating-composer:focus-within,
+  [data-composer="floating"]:focus-within {
+    z-index: 35 !important;
+    max-height: min(52dvh, 24rem) !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  body:has([data-sheet="open"]) .composer-dock:focus-within,
+  body:has(.overlay-backdrop) .composer-dock:focus-within {
+    pointer-events: none !important;
+    opacity: 0.35 !important;
+  }
+}
+
+/* Autonomy / memory control row: wrap with gaps; memory width reserved. */
+[data-testid="autonomy-memory-row"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+  align-items: stretch !important;
+}
+[data-testid="autonomy-memory-row"] > button {
+  min-height: var(--touch-min) !important;
+}
+.memory-toggle,
+[data-testid="composer-memory-toggle"] {
+  width: 13.5rem !important;
+  min-width: 13.5rem !important;
+  max-width: 100% !important;
+  flex: 0 0 13.5rem !important;
+}
+
+/* Header control cluster: wrap, 44px targets, no sibling crush. */
+.topbar {
+  flex-wrap: wrap !important;
+  row-gap: 0.5rem !important;
+  column-gap: 0.5rem !important;
+}
+.topbar button,
+.topbar [data-testid="voice-mode-toggle"],
+.topbar .voice-zone button {
+  min-height: var(--touch-min) !important;
+  min-width: var(--touch-min) !important;
+}
+.voice-mode-switch,
+[data-testid="voice-mode-toggle"] {
+  min-width: 9.5rem !important;
+}
+.voice-zone {
+  display: inline-flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+}
+
+/* Shortcut sheet: same dvh + safe-area rules. */
+.shortcut-sheet-shell {
+  align-items: end !important;
+  padding: 0 !important;
+}
+@media (min-width: 768px) {
+  .shortcut-sheet-shell {
+    align-items: center !important;
+    padding: 1rem !important;
+  }
+}
+.shortcut-sheet-panel {
+  width: min(100%, 36rem) !important;
+  margin: 0 auto !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  padding-bottom: 0 !important;
+}
+@media (min-width: 768px) {
+  .shortcut-sheet-panel {
+    border-radius: var(--glass-radius, 1.25rem) !important;
+  }
+}
+.shortcut-sheet-header {
+  flex-shrink: 0 !important;
+  padding: 1rem 1rem 0.75rem !important;
+}
+.shortcut-sheet-grid {
+  padding: 0 1rem calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+.shortcut-sheet-close {
+  min-height: var(--touch-min) !important;
+  min-width: var(--touch-min) !important;
+}
+
+/* Mobile primary nav: keep safe-area, never cover sheet actions (handled above). */
+.mobile-primary-nav,
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* Voice mode overlay actions stay in viewport. */
+[data-testid="voice-overlay-status"] {
+  scroll-margin-bottom: 1rem;
+}
+div.fixed.inset-0.z-50.grid.place-items-center[aria-modal="true"] {
+  z-index: 60 !important;
+  align-items: end !important;
+  padding: 0 !important;
+}
+@media (min-width: 768px) {
+  div.fixed.inset-0.z-50.grid.place-items-center[aria-modal="true"] {
+    align-items: center !important;
+    padding: 1rem !important;
+  }
+}
+div.fixed.inset-0.z-50.grid.place-items-center[aria-modal="true"] > div {
+  max-height: min(85dvh, 100%) !important;
+  overflow-y: auto !important;
+  width: 100% !important;
+  max-width: 32rem !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+@media (min-width: 768px) {
+  div.fixed.inset-0.z-50.grid.place-items-center[aria-modal="true"] > div {
+    border-radius: var(--radius-panel, 1.25rem) !important;
+  }
+}
+
+
+/* —— logic-layout-fix: crush-overrides —— */
+@media (max-width: 767.98px) {
+  /* Undo Cycle 32/34 idle crush that forced nowrap + 2.05–3rem caps on autonomy row. */
+  .main-stage section.command-card.composer-dock:not(:focus-within),
+  section.command-card.composer-dock:not(:focus-within),
+  section.floating-composer.composer-dock:not(:focus-within),
+  .floating-composer.command-card.composer-dock:not(:focus-within) {
+    max-height: none !important;
+  }
+
+  [data-testid="autonomy-memory-row"],
+  .main-stage section.command-card.composer-dock > [data-testid="autonomy-memory-row"],
+  section.command-card.composer-dock > [data-testid="autonomy-memory-row"],
+  section.floating-composer.composer-dock > [data-testid="autonomy-memory-row"] {
+    display: flex !important;
+    flex-flow: row wrap !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    overflow: visible !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+  }
+
+  [data-testid="autonomy-memory-row"] > button {
+    flex: 1 1 9rem !important;
+    min-height: 44px !important;
+    height: auto !important;
+    min-width: 7.5rem !important;
+    padding: 0.55rem 0.85rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    white-space: normal !important;
+  }
+
+  [data-testid="autonomy-memory-row"] > button .text-xs {
+    display: block !important;
+  }
+  [data-testid="autonomy-memory-row"] > button .text-sm {
+    font-size: 0.875rem !important;
+    line-height: 1.25 !important;
+    white-space: normal !important;
+  }
+
+  [data-testid="composer-memory-toggle"],
+  [data-testid="autonomy-memory-row"] > .memory-toggle,
+  [data-testid="autonomy-memory-row"] > [data-testid="composer-memory-toggle"] {
+    flex: 0 0 13.5rem !important;
+    width: 13.5rem !important;
+    min-width: 13.5rem !important;
+    max-width: 100% !important;
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+}
+
+
+/* —— logic-layout-fix: hide fixed chrome under sheets —— */
+body:has([data-sheet="open"]) .live-voice-bar,
+body:has([data-sheet="open"]) .composer-bar,
+body:has(.overlay-backdrop) .live-voice-bar,
+body:has(.overlay-backdrop) .composer-bar,
+body:has(.shortcut-sheet-shell) .live-voice-bar,
+body:has(.shortcut-sheet-shell) .composer-bar,
+body:has([data-testid="voice-overlay"]) .mobile-primary-nav {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(110%) !important;
+}

@@ -67,8 +67,8 @@ export function VoiceModeBadge(props: {
       role="status"
       aria-live="polite"
     >
-      <span className="font-semibold text-fg">Voice: {label}</span>
-      <span className={liveTone} data-testid="voice-mode-badge-status">
+      <span className="font-semibold text-fg whitespace-nowrap">Voice: {label}</span>
+      <span className={`${liveTone} min-w-[4.5rem]`} data-testid="voice-mode-badge-status">
         {status}
       </span>
       {props.detail ? (
@@ -78,7 +78,7 @@ export function VoiceModeBadge(props: {
       ) : null}
       <button
         type="button"
-        className="min-h-9 rounded-panel border border-line px-2 text-xs"
+        className="voice-mode-switch min-h-11 min-w-[9.5rem] rounded-panel border border-line px-3 text-xs"
         onClick={props.onToggle}
         aria-label={`Switch voice mode (currently ${label})`}
         data-testid="voice-mode-toggle"

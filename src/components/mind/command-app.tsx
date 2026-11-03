@@ -4035,7 +4035,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       </aside>
 
       <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36">
-        <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
+        <header className="topbar flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
           </button>
@@ -4338,12 +4338,12 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               </div>
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
-                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
+                <div className="flex flex-wrap gap-2" data-testid="autonomy-memory-row">
+                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-11 min-w-[7.5rem] flex-1 basis-[9rem] rounded-panel px-4 py-2 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
                     <span className="block text-xs">Review and approve before action</span>
                   </button>
-                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-11 min-w-[7.5rem] flex-1 basis-[9rem] rounded-panel px-4 py-2 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">AUTOMATIC</span>
                     <span className="block text-xs">Deletes and replacements still ask you</span>
                   </button>
@@ -4351,6 +4351,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                     type="button"
                     role="switch"
                     aria-checked={memoryChoice === "on"}
+                    data-testid="composer-memory-toggle"
                     onClick={() => {
                       if (memoryChoice === "on") {
                         setMemoryChoice("off");
@@ -4358,13 +4359,13 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                       }
                       setArmMemory("composer");
                     }}
-                    className="flex min-h-16 items-center justify-between gap-4 rounded-panel bg-surface-2 px-4 text-left"
+                    className="memory-toggle flex min-h-11 w-[13.5rem] shrink-0 items-center justify-between gap-3 rounded-panel bg-surface-2 px-4 py-2 text-left"
                   >
-                    <span>
-                      <span className="block text-sm font-semibold">Memory: {memoryChoice === "on" ? "ON" : "OFF"}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold tabular-nums">Memory: {memoryChoice === "on" ? "ON" : "OFF"}</span>
                       <span className="block text-xs text-muted">Opt in before this command can read notes.</span>
                     </span>
-                    <span className={`relative h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`}>
+                    <span className={`relative h-6 w-11 shrink-0 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`}>
                       <span className={`absolute top-0.5 size-5 rounded-full bg-fg ${memoryChoice === "on" ? "right-0.5" : "left-0.5"}`} />
                     </span>
                   </button>
@@ -5848,38 +5849,50 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       </Suspense>
 
       {projectOpen && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Create project</h3>
+        <Overlay
+          labelledBy="create-project-title"
+          actions={
+            <>
+              <button type="button" className="min-h-11 min-w-[44px] flex-1 rounded-panel border border-line" onClick={() => setProjectOpen(false)}>Cancel</button>
+              <button type="button" className="min-h-11 min-w-[44px] flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={saveProject}>Create</button>
+            </>
+          }
+        >
+          <h3 id="create-project-title" className="font-display text-2xl font-bold">Create project</h3>
           <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Name" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-          <textarea value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="Description" rows={3} className="mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-          <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setProjectOpen(false)}>Cancel</button>
-            <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={saveProject}>Create</button>
-          </div>
+          <textarea value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="Description" rows={3} className="mt-2 mb-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
         </Overlay>
       )}
       {armMemory && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Enable saved memory?</h3>
-          <p className="mt-2 text-sm text-muted">Retrieval starts for this command or chat. Earlier messages are not copied into global memory. Other projects stay out. You can turn it off again.</p>
-          <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setArmMemory(null)}>Cancel</button>
-            <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={enableMemory}>Enable</button>
-          </div>
+        <Overlay
+          labelledBy="enable-memory-title"
+          actions={
+            <>
+              <button type="button" data-testid="memory-sheet-cancel" className="min-h-11 min-w-[44px] flex-1 rounded-panel border border-line" onClick={() => setArmMemory(null)}>Cancel</button>
+              <button type="button" data-testid="memory-sheet-enable" className="min-h-11 min-w-[44px] flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={enableMemory}>Enable</button>
+            </>
+          }
+        >
+          <h3 id="enable-memory-title" className="font-display text-2xl font-bold">Enable saved memory?</h3>
+          <p className="mt-2 mb-3 text-sm text-muted">Retrieval starts for this command or chat. Earlier messages are not copied into global memory. Other projects stay out. You can turn it off again.</p>
         </Overlay>
       )}
       {pending && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Approval required</h3>
+        <Overlay
+          labelledBy="approval-title"
+          actions={
+            <>
+              <button type="button" data-testid="approval-sheet-deny" className="min-h-11 min-w-[44px] flex-1 rounded-panel border border-line" onClick={() => setPending(null)}>Deny</button>
+              <button type="button" data-testid="approval-sheet-confirm" className="min-h-11 min-w-[44px] flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
+            </>
+          }
+        >
+          <h3 id="approval-title" className="font-display text-2xl font-bold">Approval required</h3>
           <p className="mt-2 text-sm font-semibold">{pending.label}</p>
-          <p className="mt-1 text-sm text-muted">{pending.detail} Automatic mode does not approve this.</p>
-          <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setPending(null)}>Deny</button>
-            <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
-          </div>
+          <p className="mt-1 mb-3 text-sm text-muted">{pending.detail} Automatic mode does not approve this.</p>
         </Overlay>
       )}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
+      <nav className="mobile-primary-nav fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[max(0.35rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:hidden" aria-label="Primary" data-testid="mobile-primary-nav">
         {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
@@ -6115,10 +6128,35 @@ function StatusRow({
   );
 }
 
-function Overlay({ children }: { children: ReactNode }) {
+function Overlay({
+  children,
+  actions,
+  labelledBy,
+}: {
+  children: ReactNode;
+  actions?: ReactNode;
+  labelledBy?: string;
+}) {
   return (
-    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center">
-      <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
+    <div
+      className="overlay-backdrop fixed inset-0 z-[60] grid place-items-end p-0 md:place-items-center md:p-4"
+      data-sheet="open"
+      role="presentation"
+    >
+      <div
+        className="overlay-panel flex w-full max-w-md flex-col rounded-t-[1.25rem] md:rounded-[1.25rem]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        data-testid="action-sheet"
+      >
+        <div className="overlay-panel__body min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4">{children}</div>
+        {actions ? (
+          <div className="overlay-panel__actions sticky bottom-0 z-[1] flex gap-2 border-t border-line/60 bg-surface/95 px-4 pt-3 backdrop-blur-md">
+            {actions}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

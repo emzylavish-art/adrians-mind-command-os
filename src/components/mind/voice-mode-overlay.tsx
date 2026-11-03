@@ -61,8 +61,9 @@ export function VoiceModeOverlay(props: {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-bg/90 p-4"
+      className="fixed inset-0 z-[60] grid place-items-center bg-bg/90 p-4"
       data-testid="voice-overlay"
+      data-sheet="open"
       data-voice-phase={props.phase}
       role="dialog"
       aria-modal="true"

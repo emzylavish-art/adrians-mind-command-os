@@ -12,7 +12,7 @@ export function ShortcutSheet(props: {
 
   return (
     <div
-      className="shortcut-sheet-shell"
+      className="shortcut-sheet-shell" data-sheet="open"
       data-testid="shortcut-sheet"
       role="dialog"
       aria-modal="true"
@@ -21,18 +21,18 @@ export function ShortcutSheet(props: {
         if (event.target === event.currentTarget) props.onClose();
       }}
     >
-      <div className="shortcut-sheet-panel">
+      <div className="shortcut-sheet-panel" data-testid="shortcut-sheet-panel">
         <header className="shortcut-sheet-header">
           <div>
             <p className="shortcut-sheet-kicker">Keyboard</p>
             <h2 className="shortcut-sheet-title">Shortcuts</h2>
             <p className="shortcut-sheet-lead">Only bindings that exist in this build. No decorative fakes.</p>
           </div>
-          <button type="button" className="shortcut-sheet-close focus-ring" onClick={props.onClose} aria-label="Close shortcuts" data-testid="shortcut-sheet-close">
+          <button type="button" className="shortcut-sheet-close focus-ring min-h-11 min-w-11" onClick={props.onClose} aria-label="Close shortcuts" data-testid="shortcut-sheet-close">
             Esc
           </button>
         </header>
-        <div className="shortcut-sheet-grid">
+        <div className="shortcut-sheet-grid overlay-panel__body">
           {groups.map((group) => (
             <section key={group.id} className="shortcut-sheet-group" data-group={group.id}>
               <h3>{group.label}</h3>
