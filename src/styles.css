@@ -14405,3 +14405,19 @@ aside.rail .px-3.pb-2 > button,
 aside.rail .px-3.pb-2 > a {
   margin-bottom: 0 !important;
 }
+
+
+/* r5f: last 3px on 375 — Auto 40 + gap 1 */
+@media (max-width: 379.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card form .model-chip,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card button.model-chip {
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed form {
+    gap: 1px !important;
+    column-gap: 1px !important;
+  }
+}
