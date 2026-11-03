@@ -12,6 +12,8 @@ export const HOLD_TO_TALK_KEY = " ";
 export const HOLD_TO_TALK_BLOCKED_ROLES = [
   "tab",
   "option",
+  "menu",
+  "menubar",
   "menuitem",
   "menuitemcheckbox",
   "menuitemradio",
@@ -35,7 +37,7 @@ const BLOCKED_ROLE_SET = new Set<string>(HOLD_TO_TALK_BLOCKED_ROLES);
 
 /** Selector for closest() — interactive hosts + open modal ancestors. */
 export const HOLD_TO_TALK_BLOCKED_CLOSEST =
-  "button, a, summary, input, textarea, select, [contenteditable='true'], [role='button'], [role='link'], [role='tab'], [role='option'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider'], [role='spinbutton'], [role='listbox'], [role='combobox'], [role='treeitem'], [role='gridcell'], [role='summary'], [role='searchbox'], [role='textbox'], [aria-modal='true'], [role='dialog'], [role='alertdialog']";
+  "button, a, summary, input, textarea, select, [contenteditable='true'], [role='button'], [role='link'], [role='tab'], [role='option'], [role='menu'], [role='menubar'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider'], [role='spinbutton'], [role='listbox'], [role='combobox'], [role='treeitem'], [role='gridcell'], [role='summary'], [role='searchbox'], [role='textbox'], [aria-modal='true'], [role='dialog'], [role='alertdialog']";
 
 function tagNameOf(target: EventTarget | null): string {
   if (!target || typeof target !== "object") return "";

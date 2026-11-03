@@ -159,3 +159,32 @@ describe("hold-to-talk Space", () => {
     assert.deepEqual(log, ["start", "stop"]);
   });
 });
+
+  it("H14: does not preventDefault / hijack Space on ARIA widgets", () => {
+    let prevented = 0;
+    const ctl = createHoldToTalkController({
+      start: () => {
+        throw new Error("must not start");
+      },
+      stop: () => {},
+      isListening: () => false,
+      thresholdMs: 10,
+      getDocument: () => ({ querySelector: () => null }),
+    });
+    for (const role of ["button", "tab", "slider", "listbox", "combobox", "textbox", "menuitem"] as const) {
+      prevented = 0;
+      ctl.onKeyDown({
+        key: " ",
+        repeat: false,
+        target: el({
+          tagName: "DIV",
+          getAttribute: (name: string) => (name === "role" ? role : null),
+        }),
+        preventDefault() {
+          prevented += 1;
+        },
+      } as unknown as KeyboardEvent);
+      assert.equal(prevented, 0, `role=${role} must keep native Space`);
+    }
+  });
+
