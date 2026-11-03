@@ -10801,3 +10801,1170 @@ body:has(#command-palette) .topbar > .relative.min-w-0.flex-1 * {
     pointer-events: none !important;
   }
 }
+
+/* ============================================================================
+ * Pass-10 phone-t85u — iPhone Safari CSS polish (visual/polish-pass-10-stacking)
+ * America/Chicago (CST) 2026-11-02. CSS only. No TSX / drawer handlers / voice logic.
+ * Items: 11 overflow, 12 drawer jitter, 1 tabbar under modal/drawer, 2 active pill,
+ *        3 mic vs model pill padding, 4 scroll safe padding, 5 voice-live owns bottom,
+ *        6 error lift, 7 Speak pressed. Blur cap blur(8px) saturate(1.05).
+ * ============================================================================ */
+
+/* —— 11 TOP: kill horizontal page sway on vertical scroll (iPhone) —— */
+html, body {
+  overflow-x: clip !important;
+  overscroll-behavior-x: none !important;
+  max-width: 100% !important;
+}
+html {
+  width: 100%;
+}
+body, #root, .shell {
+  max-width: 100% !important;
+  overflow-x: clip !important;
+  overscroll-behavior-x: none !important;
+}
+.main-stage,
+.main-stage > .min-h-0.flex-1.overflow-auto,
+.min-h-0.flex-1.overflow-auto {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: clip !important;
+  overscroll-behavior-x: none !important;
+  touch-action: pan-y !important;
+}
+/* Horizontal chip / quick-action rows: clip at source, never widen the document */
+.main-stage .flex.gap-2.overflow-x-auto,
+.main-stage .flex.gap-2.overflow-x-auto.pb-1,
+.main-stage .mt-4.flex.gap-2.overflow-x-auto,
+.main-stage .flex.flex-wrap.gap-2.overflow-x-auto,
+div.flex.gap-2.overflow-x-auto {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  overscroll-behavior-x: contain !important;
+  touch-action: pan-x pan-y !important;
+  -webkit-overflow-scrolling: touch;
+}
+.main-stage .flex.gap-2.overflow-x-auto > *,
+.main-stage .mt-4.flex.gap-2.overflow-x-auto > *,
+div.flex.gap-2.overflow-x-auto > * {
+  flex-shrink: 0;
+  max-width: min(100%, 18rem);
+}
+/* No 100vw + horizontal padding traps */
+.shell,
+.main-stage,
+.topbar,
+.composer-bar.is-fixed,
+.composer-bar__card,
+section.command-card.composer-dock,
+.floating-composer,
+aside.rail {
+  box-sizing: border-box !important;
+}
+@media (max-width: 767.98px) {
+  .topbar,
+  .topbar > *,
+  .main-stage .glow-card,
+  .main-stage .dense-card,
+  .main-stage article,
+  .main-stage .rounded-panel {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  .topbar {
+    overflow-x: clip !important;
+  }
+  /* Long labels wrap instead of forcing width */
+  .topbar [data-testid="voice-mode-toggle"],
+  .topbar button.flex.h-11.items-center.gap-2.rounded-full,
+  .model-chip,
+  button.model-chip {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+}
+
+/* —— 12 Drawer scroll: no sideways jitter —— */
+@media (max-width: 767.98px) {
+  aside.rail.flex.fixed.inset-0,
+  aside.rail.fixed.inset-0.z-40,
+  body:has(aside.rail.flex.fixed.inset-0) aside.rail.flex.fixed.inset-0 {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+    max-width: 100vw !important;
+  }
+  aside.rail.flex.fixed.inset-0 > *,
+  aside.rail.flex.fixed.inset-0 nav,
+  aside.rail.flex.fixed.inset-0 .nav-item,
+  aside.rail.flex.fixed.inset-0 button,
+  aside.rail.flex.fixed.inset-0 a,
+  aside.rail.flex.fixed.inset-0 span {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* —— 1 Tab bar under drawer / aria-modal / memory sheet ——
+ * Overlay TSX uses z-40; raise backdrop above nav(48). Hide/inert Primary. */
+.overlay-backdrop {
+  z-index: var(--z-modal) !important;
+  isolation: isolate;
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+}
+.overlay-backdrop .overlay-panel,
+.overlay-panel {
+  z-index: 1;
+  position: relative;
+  max-width: min(28rem, calc(100% - 1.5rem)) !important;
+}
+aside.rail.flex.fixed.inset-0,
+aside.rail.fixed.inset-0 {
+  z-index: var(--z-modal) !important;
+}
+[role="dialog"][aria-modal="true"],
+[aria-modal="true"] {
+  z-index: var(--z-modal) !important;
+}
+/* Hide + inert Primary when drawer, overlay sheet, or any aria-modal is open */
+body:has(aside.rail.flex.fixed.inset-0) nav.fixed[aria-label="Primary"],
+body:has(aside.rail.fixed.inset-0) nav.fixed[aria-label="Primary"],
+body:has(.overlay-backdrop) nav.fixed[aria-label="Primary"],
+body:has([aria-modal="true"]) nav.fixed[aria-label="Primary"],
+body:has([role="dialog"][aria-modal="true"]) nav.fixed[aria-label="Primary"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* —— 2 Active tab = fitted low-alpha mono pill (not solid white square) —— */
+@media (max-width: 767.98px) {
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus),
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus) {
+    position: relative;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 999px !important;
+    padding: 0.35rem 0.2rem !important;
+    gap: 0.15rem !important;
+    color: #a1a1aa !important;
+  }
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus).text-fg,
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus).text-accent,
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus)[aria-current="page"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus).text-fg,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus).text-accent,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus)[aria-current="page"] {
+    color: #fafafa !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  /* Fitted pill behind icon+label via ::before */
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus).text-fg::before,
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus).text-accent::before,
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus)[aria-current="page"]::before,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus).text-fg::before,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus).text-accent::before,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus)[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    inset: 0.2rem 0.15rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.1) !important;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14) !important;
+    z-index: 0;
+    pointer-events: none;
+  }
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus) > *,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus) > * {
+    position: relative;
+    z-index: 1;
+  }
+  /* Kill old top-tick accent bar */
+  nav.fixed.inset-x-0.bottom-0.z-30.flex.border-t.border-line.bg-surface > button.text-accent::before {
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    left: auto !important;
+    transform: none !important;
+  }
+  /* New-chat FAB stays a circle — not an oversized white square */
+  nav.fixed[aria-label="Primary"] > button.sidebar-plus,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button.sidebar-plus {
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    max-width: 2.75rem !important;
+    max-height: 2.75rem !important;
+    margin-top: -0.55rem !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    background: #f4f4f5 !important;
+    color: #09090b !important;
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.55),
+      0 8px 20px rgb(0 0 0 / 0.4) !important;
+    overflow: hidden !important;
+    flex: 0 0 auto !important;
+  }
+  nav.fixed[aria-label="Primary"] > button.sidebar-plus::before {
+    content: none !important;
+    display: none !important;
+  }
+}
+
+/* —— 3 Mic must not cover model / “LLM POLISH” (or any) pill text —— */
+.composer-bar__row,
+.composer-bar.is-fixed .composer-bar__row,
+.composer-voice-chrome__row,
+.composer-voice-btns {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  min-width: 0 !important;
+}
+.composer-bar__model,
+.composer-bar__model-wrap,
+.composer-bar__model-chip,
+button.model-chip,
+.model-chip {
+  position: relative !important;
+  padding-right: 0.75rem !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+/* Mic / dictate / speak are flex siblings — never absolute over the label */
+.composer-bar__row .composer-mic-dictation,
+.composer-bar__row [data-testid="composer-mic-dictate"],
+.composer-bar__row .composer-speak-pill,
+.composer-voice-btns .composer-mic-dictation,
+.composer-voice-btns [data-testid="composer-mic-dictate"],
+.topbar .voice-zone,
+.topbar [data-testid="mic-button"],
+.topbar [data-testid="open-voice-mode"] {
+  position: relative !important;
+  flex-shrink: 0 !important;
+  margin-left: 0.25rem !important;
+}
+.composer-bar__left {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  padding-right: 0.35rem !important;
+}
+.composer-bar__model .model-chip,
+.composer-bar__model-wrap .model-chip,
+.composer-bar__model [class*="truncate"] {
+  max-width: 100% !important;
+  padding-right: 0.5rem !important;
+}
+
+/* —— 4 Sticky ASK / AUTOMATIC / Memory bar: content clears bar + tab + safe-area —— */
+@media (max-width: 767.98px) {
+  .main-stage > .min-h-0.flex-1.overflow-auto,
+  .main-stage .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(
+      var(--chrome-stack-h, 8.1rem) + 7.5rem + env(safe-area-inset-bottom, 0px)
+    ) !important;
+    scroll-padding-bottom: calc(
+      var(--chrome-stack-h, 8.1rem) + 7.5rem + env(safe-area-inset-bottom, 0px)
+    ) !important;
+  }
+  /* Notion / service cards stay above the sticky dock */
+  .main-stage .glow-card,
+  .main-stage [data-testid="service-card"],
+  .main-stage article.rounded-panel {
+    margin-bottom: 0.75rem;
+    position: relative;
+    z-index: var(--z-content);
+  }
+}
+
+/* —— 5 Voice LIVE owns the bottom zone ——
+ * Hide composer + Primary tab bar while live; mic/gear row mono. */
+body:has(.live-voice-bar[data-live-voice]:not([data-live-voice="off"])) nav.fixed[aria-label="Primary"],
+body:has(.live-voice-bar[data-state]:not([data-state="off"])) nav.fixed[aria-label="Primary"],
+body:has([data-testid="live-voice-bar"][data-live-voice]:not([data-live-voice="off"])) nav.fixed[aria-label="Primary"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+body:has(.live-voice-bar[data-live-voice]:not([data-live-voice="off"])) .composer-bar.is-fixed,
+body:has(.live-voice-bar[data-live-voice]:not([data-live-voice="off"])) section.command-card.composer-dock,
+body:has(.live-voice-bar[data-live-voice]:not([data-live-voice="off"])) .floating-composer.composer-dock,
+body:has([data-testid="live-voice-bar"][data-live-voice]:not([data-live-voice="off"])) .composer-bar.is-fixed,
+body:has([data-testid="live-voice-bar"][data-live-voice]:not([data-live-voice="off"])) section.composer-dock {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+.live-voice-bar,
+[data-testid="live-voice-bar"] {
+  z-index: calc(var(--z-nav) + 2) !important;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)) !important;
+}
+/* Mic + gear in one row; mic mono (no purple) */
+.live-voice-bar__controls.live-call-grid,
+.live-voice-bar .live-call-grid {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.65rem !important;
+  grid-template-columns: none !important;
+}
+.live-voice-bar__mic,
+[data-testid="live-voice-bar-mute"],
+.live-voice-bar__mic.border-violet-400\/40,
+.live-voice-bar__mic.bg-violet-500\/15 {
+  border-color: rgb(255 255 255 / 0.18) !important;
+  background: rgb(28 28 30 / 0.95) !important;
+  color: #f4f4f5 !important;
+  box-shadow: none !important;
+}
+.live-voice-bar__mic-ring,
+.live-voice-bar[data-live-voice] .live-voice-bar__mic-ring {
+  border-color: rgb(255 255 255 / 0.35) !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.live-voice-bar[data-live-voice="connecting"] .live-voice-bar__mic,
+.live-voice-bar[data-live-voice="listening"] .live-voice-bar__mic,
+.live-voice-bar[data-live-voice="user-speaking"] .live-voice-bar__mic,
+.live-voice-bar[data-live-voice="assistant-speaking"] .live-voice-bar__mic {
+  border-color: rgb(255 255 255 / 0.28) !important;
+  color: #fafafa !important;
+  background: rgb(28 28 30 / 0.95) !important;
+}
+
+/* —— 6 Red sign-in / voice error: above dock, wrap, safe-area —— */
+.live-voice-bar [role="alert"],
+.live-voice-bar [data-testid="live-voice-bar-error"],
+.live-voice-bar [data-testid="live-voice-bar-attach-msg"],
+[data-testid="composer-voice-live-error"],
+.composer-bar.is-fixed [role="alert"],
+.composer-bar.is-fixed .text-danger[role="alert"] {
+  position: relative !important;
+  z-index: calc(var(--z-toast) - 1) !important;
+  display: block !important;
+  max-width: min(100%, 22rem) !important;
+  width: 100% !important;
+  margin: 0.35rem auto 0.5rem !important;
+  padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px)) !important;
+  box-sizing: border-box !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  line-height: 1.35 !important;
+  border-radius: 0.75rem !important;
+  background: rgb(40 12 12 / 0.92) !important;
+  border: 1px solid rgb(248 113 113 / 0.35) !important;
+  color: #fecaca !important;
+}
+/* When live bar is up, keep alert inside the bar above the controls */
+.live-voice-bar[data-live-voice]:not([data-live-voice="off"]) [role="alert"],
+.live-voice-bar[data-live-voice]:not([data-live-voice="off"]) [data-testid="live-voice-bar-error"] {
+  margin-bottom: 0.65rem !important;
+  padding-bottom: 0.55rem !important;
+}
+
+/* —— 7 Speak: immediate pressed/active visual on tap —— */
+.composer-speak-pill,
+.composer-speak-live,
+button.composer-speak-pill,
+button.composer-speak-live,
+[data-testid="composer-speak"] {
+  transition: transform 80ms ease, opacity 80ms ease, filter 80ms ease !important;
+  -webkit-tap-highlight-color: rgb(255 255 255 / 0.18);
+  touch-action: manipulation;
+}
+.composer-speak-pill:active,
+.composer-speak-live:active,
+button.composer-speak-pill:active,
+button.composer-speak-live:active,
+[data-testid="composer-speak"]:active,
+.composer-speak-pill[aria-pressed="true"],
+.composer-speak-live[aria-pressed="true"],
+[data-testid="composer-speak"][aria-pressed="true"],
+.composer-speak-live[data-live-voice="connecting"],
+[data-testid="composer-speak"][data-state="connecting"] {
+  transform: scale(0.94) !important;
+  filter: brightness(0.88) !important;
+  opacity: 0.92 !important;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.35) !important;
+}
+
+/* Logo purple only — reassert after mono phone rules */
+.logo-mark,
+.logo-badge {
+  color: #fff !important;
+  background: #7c5cff !important;
+}
+
+/* ============================================================================
+ * Pass-10 phone-t85u b — mobile structure (items 13–21) from Zack t89u prod shot
+ * America/Chicago (CST) 2026-11-02. CSS + label-only TSX (Dictate/Talk). No handlers.
+ * Target: tidy top row, one composer, fitted tabs, dropdowns above dock.
+ * ============================================================================ */
+
+@media (max-width: 767.98px) {
+  /* —— 13 / 16 Compact topbar: menu · title · voice · bell · avatar —— */
+  .topbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important; /* 8px rhythm */
+    padding: 0.5rem 0.75rem !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    overflow-x: clip !important;
+    min-height: 3.25rem;
+    row-gap: 0 !important;
+  }
+  .topbar > button[aria-label="Open menu"] {
+    order: 1;
+    flex: 0 0 auto !important;
+  }
+  /* Show short title on mobile */
+  .topbar > p.hidden.text-sm.font-semibold.md\:block {
+    display: block !important;
+    order: 2;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 42% !important;
+    margin: 0 !important;
+    font-size: 0.8rem !important;
+    font-weight: 650 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  /* Voice badge → compact chip (no SWITCH TO ORCHESTRATOR overflow) */
+  .topbar > .shrink-0:has([data-testid="voice-mode-badge"]),
+  .topbar > div.shrink-0:has([data-testid="voice-mode-badge"]) {
+    order: 3;
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    max-width: 38% !important;
+  }
+  .topbar [data-testid="voice-mode-badge"],
+  .topbar [data-testid="voice-mode-badge-header"] {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    padding: 0.25rem 0.5rem !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    writing-mode: horizontal-tb !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+  }
+  .topbar [data-testid="voice-mode-badge"] > span.font-semibold {
+    font-size: 0.65rem !important;
+    letter-spacing: 0.02em;
+    max-width: 5.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar [data-testid="voice-mode-badge"] > [data-testid="voice-mode-badge-status"] {
+    font-size: 0.6rem !important;
+    opacity: 0.75;
+  }
+  .topbar [data-testid="voice-mode-badge"] > [data-testid="voice-mode-badge-detail"] {
+    display: none !important;
+  }
+  /* Hide long Switch-to-Orchestrator on phone — mode stays reachable in voice sheet */
+  .topbar [data-testid="voice-mode-toggle"],
+  .topbar [data-testid="voice-mode-badge"] > button {
+    display: none !important;
+  }
+  /* Hide desktop-only voice-controls cluster duplicate in topbar */
+  .topbar > .hidden.shrink-0.md\:block,
+  .topbar [data-testid="voice-controls"] {
+    display: none !important;
+  }
+  /* —— 15 Hide ⌘K chip on phone —— */
+  .topbar span.pointer-events-none.absolute.top-1\/2.right-3,
+  .topbar .relative.min-w-0.flex-1 > span.text-xs.text-muted {
+    display: none !important;
+  }
+  /* Search becomes icon-only / secondary row — tuck under title row as full width OR hide in top flex */
+  .topbar > .relative.min-w-0.flex-1 {
+    order: 20;
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    display: none !important; /* declutter top; Search lives in drawer + Cmd-K still via keyboard when docked */
+  }
+  /* Voice zone: Dictate | Talk with divider; hide waveform + speak-last on phone top */
+  .topbar .voice-zone {
+    order: 4;
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    flex: 0 0 auto !important;
+    max-width: none !important;
+    padding: 0.15rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.03);
+    writing-mode: horizontal-tb !important;
+  }
+  .topbar .voice-zone > .waveform,
+  .topbar .voice-zone > button[aria-label="Speak last reply"] {
+    display: none !important;
+  }
+  .topbar .voice-zone > [data-testid="browser-dictation"]::after {
+    content: "";
+    display: inline-block;
+    width: 1px;
+    height: 1.1rem;
+    margin: 0 0.15rem;
+    background: rgb(255 255 255 / 0.18);
+    flex-shrink: 0;
+  }
+  .topbar .voice-action-dictate,
+  .topbar .voice-action-talk,
+  .topbar [data-testid="mic-button"],
+  .topbar [data-testid="open-voice-mode"] {
+    writing-mode: horizontal-tb !important;
+    white-space: nowrap !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+  .topbar [data-testid="alerts-toggle"] {
+    order: 5;
+    flex: 0 0 auto !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    min-height: 2.5rem !important;
+  }
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full {
+    order: 6;
+    flex: 0 0 auto !important;
+    padding: 0.15rem !important;
+    min-width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.grid.size-8 {
+    width: 1.85rem !important;
+    height: 1.85rem !important;
+  }
+
+  /* —— 17 Kill vertical letter strip (crushed badge / picker / rail ghost) —— */
+  .topbar *,
+  .account-panel *,
+  [data-testid="account-panel"] *,
+  [data-testid="voice-mode-badge"],
+  [data-testid="voice-mode-badge"] *,
+  [data-testid="voice-mode-toggle"],
+  button.model-chip ~ [role="menu"],
+  button.model-chip ~ [role="menu"] * {
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+  /* Ghost collapsed rail must never paint over account sheet on phone */
+  aside.rail.hidden {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+  /* Any leftover ultra-narrow fixed chrome that stacks glyphs */
+  body:has([data-testid="account-panel"]) aside.rail:not(.flex),
+  body:has(.account-panel) .topbar [data-testid="voice-mode-badge"] button {
+    display: none !important;
+  }
+
+  /* —— 18 Account dropdown above composer/dock —— */
+  .account-panel,
+  [data-testid="account-panel"] {
+    position: relative !important;
+    z-index: var(--z-dropdown) !important;
+    isolation: isolate;
+    background: rgb(10 10 12 / 0.96) !important;
+    backdrop-filter: blur(8px) saturate(1.05) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.45) !important;
+    margin-bottom: 0.5rem;
+    padding-bottom: 1rem !important;
+  }
+  body:has([data-testid="account-panel"]) .composer-bar.is-fixed,
+  body:has([data-testid="account-panel"]) section.composer-dock,
+  body:has(.account-panel) .composer-bar.is-fixed,
+  body:has(.account-panel) section.command-card.composer-dock {
+    z-index: calc(var(--z-composer) - 4) !important;
+  }
+  body:has([data-testid="account-panel"]) .composer-bar.is-fixed,
+  body:has(.account-panel) .composer-bar.is-fixed {
+    /* keep dock below account sheet visually */
+    opacity: 0.35;
+    pointer-events: none !important;
+  }
+
+  /* —— 19 One composer on mobile: LiveVoiceBar owns the dock ——
+   * Floating ASK/AUTOMATIC card stays in-flow (not a second sticky dock). */
+  body:has(.composer-bar.is-fixed) section.command-card.composer-dock,
+  body:has(.composer-bar.is-fixed) .floating-composer.composer-dock,
+  body:has([data-testid="composer-bar"]) section.command-card.composer-dock {
+    position: relative !important;
+    bottom: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    z-index: var(--z-content) !important;
+    margin: 0.75rem 0.75rem 1rem !important;
+    max-height: none !important;
+    transform: none !important;
+  }
+  /* Hide duplicate Ask Anything inside page dock form when bottom composer-bar exists */
+  body:has(.composer-bar.is-fixed) section.command-card.composer-dock form textarea,
+  body:has(.composer-bar.is-fixed) section.command-card.composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2,
+  body:has(.composer-bar.is-fixed) .floating-composer.composer-dock form textarea,
+  body:has(.composer-bar.is-fixed) .floating-composer.composer-dock form .mt-2.flex {
+    display: none !important;
+  }
+
+  /* —— 20 / 21 Tab bar: hide FAB, fit 5 labeled tabs, safe-area —— */
+  nav.fixed[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: space-between !important;
+    gap: 0 !important;
+    padding: 0.25rem 0.2rem calc(0.25rem + env(safe-area-inset-bottom, 0px)) !important;
+    min-height: calc(3.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  nav.fixed[aria-label="Primary"] > button.sidebar-plus,
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button.sidebar-plus {
+    display: none !important; /* New chat lives in drawer; frees tab width */
+  }
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus),
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button:not(.sidebar-plus) {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0.3rem 0.1rem !important;
+    gap: 0.1rem !important;
+    font-size: 0.58rem !important;
+    line-height: 1.15 !important;
+    white-space: normal !important;
+    text-align: center !important;
+    overflow: visible !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: manual;
+  }
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus) svg {
+    width: 1rem !important;
+    height: 1rem !important;
+    flex-shrink: 0;
+  }
+  /* Fitted active pill (reassert after structure) */
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus).text-fg::before,
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus).text-accent::before,
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus)[aria-current="page"]::before {
+    inset: 0.15rem 0.1rem !important;
+    border-radius: 0.75rem !important;
+    background: rgb(255 255 255 / 0.1) !important;
+  }
+
+  /* Composer-bar sits above tab bar cleanly */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > [data-testid="composer-bar"].composer-bar {
+    bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: var(--z-composer) !important;
+  }
+
+  /* 8/12/16 spacing rhythm for main mobile chrome */
+  .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-left: 0.75rem !important;  /* 12 */
+    padding-right: 0.75rem !important;
+  }
+  .main-stage .glow-card,
+  .main-stage .dense-card,
+  .main-stage article.rounded-panel {
+    margin-bottom: 0.75rem !important; /* 12 */
+  }
+}
+
+/* Dictate / Talk labels always readable (desktop too) */
+.voice-action-dictate__label,
+.voice-action-talk__label {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+}
+.voice-zone [data-testid="browser-dictation"],
+.voice-zone [data-testid="open-voice-mode"] {
+  position: relative;
+}
+
+/* ============================================================================
+ * Pass-10 phone-t85u c — cascade fixes (specificity + letter-strip pills)
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  /* Beat .main-stage .topbar { flex-wrap:wrap } (higher specificity) */
+  .main-stage .topbar,
+  .main-stage.page-enter .topbar,
+  .shell .topbar,
+  header.topbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    overflow-x: clip !important;
+    overflow-y: hidden !important;
+    max-width: 100% !important;
+    min-height: 3rem !important;
+    height: auto !important;
+    max-height: 3.5rem !important;
+    padding: 0.45rem 0.65rem !important;
+  }
+
+  /* Voice badge: single-line compact — never 2-line clip */
+  .main-stage .topbar [data-testid="voice-mode-badge"],
+  .topbar [data-testid="voice-mode-badge"] {
+    max-width: 7.5rem !important;
+    padding: 0.2rem 0.45rem !important;
+    gap: 0.25rem !important;
+    flex-wrap: nowrap !important;
+  }
+  .topbar [data-testid="voice-mode-badge"] > span.font-semibold {
+    font-size: 0.58rem !important;
+    max-width: 4.8rem !important;
+  }
+  .topbar [data-testid="voice-mode-badge"] > [data-testid="voice-mode-badge-status"] {
+    font-size: 0.55rem !important;
+  }
+  /* Hide voice badge status detail crowding; keep Direct/Idle on one line via smaller type */
+  .topbar > .shrink-0:has([data-testid="voice-mode-badge"]) {
+    max-width: 7.75rem !important;
+  }
+
+  /* On phone topbar: keep menu, title, Dictate|Talk, bell, avatar — hide bulky voice badge */
+  .topbar > .shrink-0:has([data-testid="voice-mode-badge"]) {
+    display: none !important;
+  }
+  .topbar > p.hidden.text-sm.font-semibold.md\:block,
+  .main-stage .topbar > p.text-sm.font-semibold {
+    max-width: 30% !important;
+    flex: 1 1 auto !important;
+  }
+  .topbar .voice-zone {
+    order: 3 !important;
+    flex: 0 1 auto !important;
+    max-width: 55% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+  .topbar [data-testid="alerts-toggle"] { order: 4 !important; }
+  .topbar > button.flex.h-11.items-center { order: 5 !important; }
+
+  /* —— Kill vertical letter-strip status pills (BROWSER SPEECH / LOCAL FILE etc.) ——
+   * Earlier overflow-wrap:anywhere on .rounded-full made 30×300 letter columns. */
+  .main-stage span.rounded-full,
+  .main-stage .rounded-full.border.border-line,
+  .main-stage span.rounded-full.border,
+  .main-stage span.px-2.py-1.text-xs {
+    writing-mode: horizontal-tb !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    width: auto !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Undo global break-anywhere on rounded pills / chips */
+  .main-stage .rounded-full,
+  .main-stage button.rounded-full,
+  .main-stage .suggestion-chip,
+  .main-stage .model-chip {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    white-space: nowrap !important;
+  }
+
+  /* Tab labels must paint (text nodes) */
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus) {
+    color: #a1a1aa !important;
+    font-size: 0.62rem !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0 !important;
+  }
+  nav.fixed[aria-label="Primary"] > button:not(.sidebar-plus).text-fg {
+    color: #fafafa !important;
+  }
+
+  /* Composer-bar: opaque enough to not show letter strips / cards through glass */
+  .composer-bar.is-fixed .composer-bar__card,
+  [data-testid="composer-bar"] .composer-bar__card {
+    background: rgb(12 12 14 / 0.96) !important;
+    backdrop-filter: blur(8px) saturate(1.05) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  }
+
+  /* Ensure Primary tab bar visible above page content */
+  nav.fixed[aria-label="Primary"] {
+    background: rgb(8 8 10 / 0.96) !important;
+    backdrop-filter: blur(8px) saturate(1.05) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  }
+}
+@media (max-width: 767.98px) {
+  .topbar .voice-zone [data-testid="browser-dictation"] > span:not(.voice-action-dictate__label):not(.sr-only),
+  .topbar .voice-zone .text-\[10px\] {
+    display: none !important;
+  }
+  /* Ensure Talk compact label shows */
+  .topbar .voice-action-talk__label,
+  .topbar [data-testid="open-voice-mode"] .voice-action-talk__label {
+    display: inline !important;
+  }
+}
+
+/* ============================================================================
+ * Pass-10 phone-t85u d — topbar order/width + hide desktop-only chrome
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  /* Never show desktop-only header tone / model chip on phone */
+  .topbar > span.hidden,
+  .topbar > span.glass-panel,
+  .topbar > span.md\:inline-flex,
+  .topbar > .hidden.md\:block,
+  .topbar > div.hidden.md\:block,
+  .topbar > .hidden.shrink-0.md\:block {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .main-stage .topbar,
+  header.topbar {
+    gap: 0.4rem !important;
+  }
+
+  /* Title needs real width so "Chat" isn't clipped to "C" */
+  .topbar > p.hidden.text-sm.font-semibold.md\:block,
+  .main-stage .topbar > p.text-sm.font-semibold {
+    display: block !important;
+    order: 2 !important;
+    flex: 0 1 auto !important;
+    min-width: 2.75rem !important;
+    max-width: 6.5rem !important;
+    width: auto !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+  }
+
+  .topbar > button[aria-label="Open menu"] { order: 1 !important; }
+
+  .topbar .voice-zone {
+    order: 3 !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    justify-content: flex-end !important;
+  }
+  .topbar .voice-zone .voice-action-dictate,
+  .topbar .voice-zone .voice-action-talk,
+  .topbar .voice-zone [data-testid="mic-button"],
+  .topbar .voice-zone [data-testid="open-voice-mode"] {
+    min-height: 2.25rem !important;
+    padding: 0.25rem 0.45rem !important;
+    font-size: 0.58rem !important;
+  }
+  .topbar .voice-zone .voice-action-dictate__label,
+  .topbar .voice-zone .voice-action-talk__label {
+    display: inline !important;
+    font-size: 0.58rem !important;
+    opacity: 1 !important;
+    color: inherit !important;
+  }
+
+  .topbar [data-testid="alerts-toggle"] {
+    order: 4 !important;
+    flex: 0 0 auto !important;
+  }
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full {
+    order: 5 !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* Dock crop: keep Primary above fold with solid bg */
+  nav.fixed[aria-label="Primary"] {
+    z-index: var(--z-nav) !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed {
+    bottom: calc(3.6rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* ============================================================================
+ * Pass-10 phone-t85u e — don't un-hide topbar desktop tone via rounded-full rule
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  .main-stage .topbar > span.hidden,
+  .main-stage .topbar > span.hidden.rounded-full,
+  .main-stage .topbar > span.glass-panel,
+  .main-stage .topbar > span.hidden.h-11.items-center,
+  .main-stage header.topbar > span.hidden,
+  .main-stage .topbar > span.md\:inline-flex {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    min-width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+  /* Status pills in page content only — never topbar chrome */
+  .main-stage .topbar span.rounded-full {
+    display: none !important;
+  }
+}
+
+/* ============================================================================
+ * Pass-10 phone-t85u f — Talk label + composer clears tab bar
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  /* Avatar: icon only */
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.hidden,
+  .topbar > button.flex.h-11.items-center.gap-2.rounded-full > span.md\:inline {
+    display: none !important;
+  }
+
+  /* Dictate | Talk row — ensure Talk control is visible with label */
+  .topbar .voice-zone {
+    overflow: visible !important;
+    gap: 0.3rem !important;
+  }
+  .topbar .voice-zone [data-testid="browser-dictation"] > span.text-\[10px\],
+  .topbar .voice-zone [data-testid="browser-dictation"] > span:not([class*="voice-action"]):not(.sr-only) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+  }
+  .topbar .voice-zone [data-testid="open-voice-mode"],
+  .topbar .voice-zone .voice-action-talk {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    min-width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .topbar .voice-zone .voice-action-talk__label::before {
+    content: none;
+  }
+  /* If Talk label node missing visually, ensure button has readable name via aria already set */
+
+  /* Composer sits fully above Primary (no overlap) */
+  :root {
+    --chrome-nav-h: 3.75rem;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > [data-testid="composer-bar"].composer-bar,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > .composer-bar.is-fixed {
+    bottom: calc(var(--chrome-nav-h) + 0.35rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  nav.fixed[aria-label="Primary"] {
+    min-height: var(--chrome-nav-h) !important;
+  }
+  /* Extra scroll padding so cards clear composer + tabs */
+  .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(var(--chrome-nav-h) + 9rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+@media (max-width: 767.98px) {
+  .topbar .voice-action-talk__label,
+  .topbar [data-testid="open-voice-mode"] .voice-action-talk__label {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    clip: auto !important;
+    overflow: visible !important;
+    display: inline !important;
+    font-size: 0.55rem !important;
+    line-height: 1 !important;
+    text-transform: uppercase !important;
+  }
+}
+@media (max-width: 767.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .shell > .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > [data-testid="composer-bar"].composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px)) !important;
+    max-height: 4.5rem !important;
+  }
+}
+
+/* ============================================================================
+ * Pass-10 phone-t85u g — recon ghosts (#11) + memory/ask sheet vs tab (#1)
+ * + Voice Wiring bottom-zone hooks (harmless if absent)
+ * America/Chicago (CST) 2026-11-02. CSS only.
+ * ============================================================================ */
+
+/* —— #11 Chat action ghosts: wrap on phone instead of painting past viewport ——
+ * Recon: buttons in .flex.gap-2.overflow-x-auto sit at right≈1254 on 390-wide.
+ * Doc scrollWidth stays clean; iOS still sways. Fix at source: wrap + clip. */
+@media (max-width: 767.98px) {
+  .main-stage .flex.gap-2.overflow-x-auto,
+  .main-stage .flex.gap-2.overflow-x-auto.pb-1,
+  .main-stage .mt-4.flex.gap-2.overflow-x-auto,
+  .main-stage div.flex.gap-2.overflow-x-auto,
+  .min-h-0.flex-1.overflow-auto .flex.gap-2.overflow-x-auto,
+  .min-h-0.flex-1.overflow-auto .mt-4.flex.gap-2.overflow-x-auto {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+    overscroll-behavior-x: none !important;
+    touch-action: pan-y !important;
+    contain: inline-size !important;
+  }
+  .main-stage .flex.gap-2.overflow-x-auto > *,
+  .main-stage .mt-4.flex.gap-2.overflow-x-auto > *,
+  .min-h-0.flex-1.overflow-auto .flex.gap-2.overflow-x-auto > button,
+  .min-h-0.flex-1.overflow-auto .mt-4.flex.gap-2.overflow-x-auto > button {
+    flex: 0 1 auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+  }
+  /* Ancestors must clip any residual past-edge paint */
+  .main-stage > .min-h-0.flex-1.overflow-auto,
+  .main-stage .mx-auto.flex,
+  .main-stage .mx-auto.flex.max-w-6xl,
+  .main-stage .mx-auto.w-full {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: clip !important;
+    overscroll-behavior-x: none !important;
+  }
+}
+
+/* —— #1 Memory / Ask Overlay sheets: hide Primary (Overlay has no aria-modal) ——
+ * Don't retouch drawer z (candidate c5fd883 / tip already ≥50). */
+body:has(.overlay-backdrop) nav.fixed[aria-label="Primary"],
+body:has(.overlay-panel) nav.fixed[aria-label="Primary"],
+body:has([data-testid="account-panel"]) nav.fixed[aria-label="Primary"],
+body:has(.account-panel) nav.fixed[aria-label="Primary"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+.overlay-backdrop {
+  z-index: var(--z-modal) !important;
+}
+/* Ask / approval sheets sit above dock */
+.overlay-backdrop .overlay-panel {
+  margin-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* —— Voice Wiring hooks (6b4958e): harmless if absent ——
+ * ≤1024: floating composer is Speak-oriented; bottom-zone owns the dock lane. */
+@media (max-width: 1024px) {
+  [data-composer="floating"][data-bottom-zone="owner"],
+  [data-bottom-zone="owner"][data-composer="floating"] {
+    z-index: var(--z-composer) !important;
+  }
+  /* When a bottom-zone owner is live, demote Primary under it */
+  body:has([data-bottom-zone="owner"][data-live-voice]:not([data-live-voice="off"])) nav.fixed[aria-label="Primary"],
+  body:has([data-bottom-zone="owner"][data-state]:not([data-state="off"])) nav.fixed[aria-label="Primary"] {
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+  }
+  [data-bottom-zone-end] {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Composer clearance above Primary — force gap */
+@media (max-width: 767.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .shell > .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > [data-testid="composer-bar"].composer-bar,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(4.35rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* StatusRow pills must not paint past the card edge on phone */
+@media (max-width: 767.98px) {
+  .main-stage .mt-3.flex.items-center.gap-3 {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .main-stage .mt-3.flex.items-center.gap-3 > span.rounded-full {
+    flex: 0 1 auto !important;
+    max-width: min(9rem, 42%) !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    height: auto !important;
+    writing-mode: horizontal-tb !important;
+  }
+  .main-stage .mt-3.flex.items-center.gap-3 > .min-w-0.flex-1 {
+    min-width: 0 !important;
+    flex: 1 1 0% !important;
+  }
+}

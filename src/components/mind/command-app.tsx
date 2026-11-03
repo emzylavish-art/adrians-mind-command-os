@@ -4064,7 +4064,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           </div>
         )}
         {accountOpen && (
-          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+          <div className="account-panel border-b border-line bg-surface px-4 py-3 text-sm" data-testid="account-panel" role="region" aria-label="Account menu">
             <p className="font-semibold">Adrian (Personal)</p>
             <UserButton />
             <SupabaseAccountControls />
@@ -5852,17 +5852,22 @@ function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compac
       type="button"
       className={
         props.compact
-          ? `focus-ring grid size-9 place-items-center rounded-full ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
-          : `inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+          ? `voice-action-talk focus-ring inline-flex min-h-9 items-center gap-1 rounded-full border border-line px-2 ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+          : `voice-action-talk inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
       }
       onClick={props.onClick}
-      aria-label="Open voice mode"
+      aria-label="Talk — open realtime voice mode"
       aria-pressed={props.pressed ?? false}
       data-testid="open-voice-mode"
+      data-voice-action="talk"
       title="Realtime voice session. Not browser dictation."
     >
-      <Mic className="size-4" />
-      {props.compact ? <span className="sr-only">Voice mode</span> : "Voice mode"}
+      <Mic className="size-4 shrink-0" aria-hidden="true" />
+      {props.compact ? (
+        <span className="voice-action-talk__label text-[10px] font-semibold uppercase tracking-wide">Talk</span>
+      ) : (
+        "Voice mode"
+      )}
     </button>
   );
 }
