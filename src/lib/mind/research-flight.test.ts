@@ -44,13 +44,16 @@ test("double end and end before begin do not throw or unlock a newer run", () =>
   assert.equal(flight.busy(), true);
 });
 
-test("command-app Research button is single-flight and disabled while checking", () => {
+test("command-app chat research path stays single-flight; Research page uses ResearchPanel with busy disable + Cancel", () => {
   const src = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url), "utf8");
-  const start = src.indexOf("async function startResearch()");
+  const panel = readFileSync(new URL("../../components/mind/research/research-panel.tsx", import.meta.url), "utf8");
+  assert.match(src, /ResearchPanel/);
+  const start = src.indexOf("async function runWebResearch");
   assert.ok(start > 0);
   const body = src.slice(start, src.indexOf("\n  }\n", start));
   assert.match(body, /researchFlight\.current\.begin\(\)/);
   assert.match(body, /researchFlight\.current\.end\(/);
-  assert.match(body, /finally/);
-  assert.match(src, /disabled=\{ws\.halted \|\| researchBusy\}/);
+  assert.ok(panel.includes("disabled={halted || busy}"));
+  assert.ok(panel.includes("Cancel"));
+  assert.ok(panel.includes("/api/mind/research/cancel"));
 });

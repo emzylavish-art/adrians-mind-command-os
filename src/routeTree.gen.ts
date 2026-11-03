@@ -49,6 +49,10 @@ import { Route as ApiMindPcJobsRouteImport } from './routes/api/mind/pc/jobs'
 import { Route as ApiMindPcRegisterRouteImport } from './routes/api/mind/pc/register'
 import { Route as ApiMindPcResultRouteImport } from './routes/api/mind/pc/result'
 import { Route as ApiMindPcStatusRouteImport } from './routes/api/mind/pc/status'
+import { Route as ApiMindResearchCancelRouteImport } from './routes/api/mind/research/cancel'
+import { Route as ApiMindResearchPlanRouteImport } from './routes/api/mind/research/plan'
+import { Route as ApiMindResearchStartRouteImport } from './routes/api/mind/research/start'
+import { Route as ApiMindResearchStreamRouteImport } from './routes/api/mind/research/stream'
 import { Route as ApiMindVoiceCloningStatusRouteImport } from './routes/api/mind/voice-cloning/status'
 import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
 import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
@@ -268,6 +272,26 @@ const ApiMindPcStatusRoute = ApiMindPcStatusRouteImport.update({
   path: '/api/mind/pc/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindResearchCancelRoute = ApiMindResearchCancelRouteImport.update({
+  id: '/api/mind/research/cancel',
+  path: '/api/mind/research/cancel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindResearchPlanRoute = ApiMindResearchPlanRouteImport.update({
+  id: '/api/mind/research/plan',
+  path: '/api/mind/research/plan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindResearchStartRoute = ApiMindResearchStartRouteImport.update({
+  id: '/api/mind/research/start',
+  path: '/api/mind/research/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindResearchStreamRoute = ApiMindResearchStreamRouteImport.update({
+  id: '/api/mind/research/stream',
+  path: '/api/mind/research/stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindVoiceCloningStatusRoute =
   ApiMindVoiceCloningStatusRouteImport.update({
     id: '/api/mind/voice-cloning/status',
@@ -390,6 +414,10 @@ export interface FileRoutesByFullPath {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/research/cancel': typeof ApiMindResearchCancelRoute
+  '/api/mind/research/plan': typeof ApiMindResearchPlanRoute
+  '/api/mind/research/start': typeof ApiMindResearchStartRoute
+  '/api/mind/research/stream': typeof ApiMindResearchStreamRoute
   '/api/mind/voice-cloning/status': typeof ApiMindVoiceCloningStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
@@ -446,6 +474,10 @@ export interface FileRoutesByTo {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/research/cancel': typeof ApiMindResearchCancelRoute
+  '/api/mind/research/plan': typeof ApiMindResearchPlanRoute
+  '/api/mind/research/start': typeof ApiMindResearchStartRoute
+  '/api/mind/research/stream': typeof ApiMindResearchStreamRoute
   '/api/mind/voice-cloning/status': typeof ApiMindVoiceCloningStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
@@ -503,6 +535,10 @@ export interface FileRoutesById {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/research/cancel': typeof ApiMindResearchCancelRoute
+  '/api/mind/research/plan': typeof ApiMindResearchPlanRoute
+  '/api/mind/research/start': typeof ApiMindResearchStartRoute
+  '/api/mind/research/stream': typeof ApiMindResearchStreamRoute
   '/api/mind/voice-cloning/status': typeof ApiMindVoiceCloningStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
@@ -561,6 +597,10 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/research/cancel'
+    | '/api/mind/research/plan'
+    | '/api/mind/research/start'
+    | '/api/mind/research/stream'
     | '/api/mind/voice-cloning/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
@@ -617,6 +657,10 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/research/cancel'
+    | '/api/mind/research/plan'
+    | '/api/mind/research/start'
+    | '/api/mind/research/stream'
     | '/api/mind/voice-cloning/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
@@ -673,6 +717,10 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/research/cancel'
+    | '/api/mind/research/plan'
+    | '/api/mind/research/start'
+    | '/api/mind/research/stream'
     | '/api/mind/voice-cloning/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
@@ -730,6 +778,10 @@ export interface RootRouteChildren {
   ApiMindPcRegisterRoute: typeof ApiMindPcRegisterRoute
   ApiMindPcResultRoute: typeof ApiMindPcResultRoute
   ApiMindPcStatusRoute: typeof ApiMindPcStatusRoute
+  ApiMindResearchCancelRoute: typeof ApiMindResearchCancelRoute
+  ApiMindResearchPlanRoute: typeof ApiMindResearchPlanRoute
+  ApiMindResearchStartRoute: typeof ApiMindResearchStartRoute
+  ApiMindResearchStreamRoute: typeof ApiMindResearchStreamRoute
   ApiMindVoiceCloningStatusRoute: typeof ApiMindVoiceCloningStatusRoute
   ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
   ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
@@ -1028,6 +1080,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindPcStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/research/cancel': {
+      id: '/api/mind/research/cancel'
+      path: '/api/mind/research/cancel'
+      fullPath: '/api/mind/research/cancel'
+      preLoaderRoute: typeof ApiMindResearchCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/research/plan': {
+      id: '/api/mind/research/plan'
+      path: '/api/mind/research/plan'
+      fullPath: '/api/mind/research/plan'
+      preLoaderRoute: typeof ApiMindResearchPlanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/research/start': {
+      id: '/api/mind/research/start'
+      path: '/api/mind/research/start'
+      fullPath: '/api/mind/research/start'
+      preLoaderRoute: typeof ApiMindResearchStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/research/stream': {
+      id: '/api/mind/research/stream'
+      path: '/api/mind/research/stream'
+      fullPath: '/api/mind/research/stream'
+      preLoaderRoute: typeof ApiMindResearchStreamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/voice-cloning/status': {
       id: '/api/mind/voice-cloning/status'
       path: '/api/mind/voice-cloning/status'
@@ -1170,6 +1250,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindPcRegisterRoute: ApiMindPcRegisterRoute,
   ApiMindPcResultRoute: ApiMindPcResultRoute,
   ApiMindPcStatusRoute: ApiMindPcStatusRoute,
+  ApiMindResearchCancelRoute: ApiMindResearchCancelRoute,
+  ApiMindResearchPlanRoute: ApiMindResearchPlanRoute,
+  ApiMindResearchStartRoute: ApiMindResearchStartRoute,
+  ApiMindResearchStreamRoute: ApiMindResearchStreamRoute,
   ApiMindVoiceCloningStatusRoute: ApiMindVoiceCloningStatusRoute,
   ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
   ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,

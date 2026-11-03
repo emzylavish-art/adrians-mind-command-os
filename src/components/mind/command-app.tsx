@@ -191,6 +191,8 @@ import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { createSingleFlight } from "@/lib/mind/research-flight";
+import { ResearchPanel } from "@/components/mind/research/research-panel";
+import { loadResearchDepth, saveResearchDepth, type ResearchDepthMode } from "@/lib/mind/research-mode";
 import { MODEL_TIERS, type ModelTier } from "@/lib/mind/model-tiers";
 import { chipPropsForSelection, forgetTierOutcome, tierRunFromResult, type ChipTierRun } from "@/lib/mind/model-tier-memory";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
@@ -622,6 +624,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
   const [researchText, setResearchText] = useState("");
   const [researchNote, setResearchNote] = useState<string | null>(null);
+  const [researchDepth, setResearchDepth] = useState<ResearchDepthMode>("search");
   const [lookupQuery, setLookupQuery] = useState("");
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [activityQuery, setActivityQuery] = useState("");
@@ -992,6 +995,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     };
     loadMcpLists();
     try {
+      setResearchDepth(loadResearchDepth(localStorage));
       const saved = localStorage.getItem("amcos.skills.v1");
       if (saved) setEnabledSkills(JSON.parse(saved) as Record<string, boolean>);
     } catch {
@@ -1346,14 +1350,15 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       return true;
     }
     if (intent.kind === "web_research") {
-      void runWebResearch(chat, intent.query, action);
+      const forceDeep = /^\/deep\b/i.test(text.trim()) || researchDepth === "deep";
+      void runWebResearch(chat, intent.query, action, forceDeep);
       return true;
     }
     recordToolTurn(chat, text, intent.reply);
     return true;
   }
 
-  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
+  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat", deepOverride?: boolean) {
     // Same single-flight gate as the Research page: both write researchCitations, so a chat
     // research turn must not interleave with (or be overwritten by) a Check research run.
     const token = researchFlight.current.begin();
@@ -1365,7 +1370,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     setBusy(true);
     setError(null);
     try {
-      const result = await searchWeb({ data: { query } });
+      const deep = deepOverride ?? researchDepth === "deep";
+      const result = await searchWeb({ data: { query, deep } });
       setBusy(false);
       setResearchCitations(result.citations);
       if (!result.ok) {
@@ -1373,8 +1379,15 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
         setResearchNote(result.error);
         return;
       }
+      const stepLines =
+        result.steps && result.steps.length
+          ? ["Steps:", ...result.steps.map((s, i) => `  ${i + 1}. ${s.ok ? "ok" : "miss"} · ${s.count} · ${s.query}`)]
+          : [];
       const lines = [
         result.summary || `Research returned ${result.citations.length} source${result.citations.length === 1 ? "" : "s"}:`,
+        ...(result.partial ? ["Note: partial results — some steps timed out."] : []),
+        ...(result.cancelled ? ["Note: cancelled — confirmed sources kept."] : []),
+        ...stepLines,
         ...result.citations.map((item) => `- ${item.title} — ${item.url}`),
       ];
       recordToolTurn(chat, query, lines.join("\n"), undefined, { tool: "web_search", ok: true, action });
@@ -1975,7 +1988,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     setResearchCitations([]);
     const query = researchText;
     try {
-      const result = await searchWeb({ data: { query } });
+      const result = await searchWeb({ data: { query, deep: researchDepth === "deep" } });
       setError(null);
       setResearchCitations(result.citations);
       setResearchNote(result.ok ? (result.summary || "") : result.error);
@@ -4381,6 +4394,31 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                     ))}
                   </div>
                   <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
+                  <div className="mb-2 flex flex-wrap items-center gap-2" data-testid="composer-research-depth">
+                    <button
+                      type="button"
+                      className={`min-h-11 rounded-full px-3 text-sm ${researchDepth === "search" ? "bg-accent text-accent-ink" : "border border-line/80 bg-white/5 text-muted"}`}
+                      aria-pressed={researchDepth === "search"}
+                      onClick={() => {
+                        setResearchDepth("search");
+                        saveResearchDepth(localStorage, "search");
+                      }}
+                    >
+                      Search
+                    </button>
+                    <button
+                      type="button"
+                      className={`min-h-11 rounded-full px-3 text-sm ${researchDepth === "deep" ? "bg-accent text-accent-ink" : "border border-line/80 bg-white/5 text-muted"}`}
+                      aria-pressed={researchDepth === "deep"}
+                      onClick={() => {
+                        setResearchDepth("deep");
+                        saveResearchDepth(localStorage, "deep");
+                        setNotice("Deep research will be used for the next Research / web search turn. Heuristic length/phrase is only a suggestion.");
+                      }}
+                    >
+                      Deep research
+                    </button>
+                  </div>
                   <IntentPredictionChip
                     text={draft}
                     source="keystroke"
@@ -5379,38 +5417,23 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
             </section>
           )}
           {view === "research" && (
-            <section className="page-shell">
-              <div className="page-hero card-texture">
-                <div className="flex items-center gap-3">
-                  <img src="/icons/research.svg" alt="" className="size-8" />
-                  <div>
-                    <h2 className="font-display text-3xl font-bold">Research</h2>
-                    <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
-                  </div>
-                </div>
-                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted || researchBusy} aria-busy={researchBusy} onClick={() => void startResearch()}>
-                  {researchBusy ? "Checking…" : "Check research"}
-                </button>
-                {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
-                {researchCitations.length === 0 && !researchNote ? (
-                  <div className="empty-state mt-4">
-                    <img src="/empty/empty-search.svg" alt="" />
-                    <p className="font-semibold">No citations yet</p>
-                    <p className="text-sm text-muted">Run a check when a search provider is configured.</p>
-                  </div>
-                ) : null}
-                {researchCitations.length > 0 && (
-                  <ul className="mt-3 space-y-2 text-sm">
-                    {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
-                      <li key={item.url} className="dense-row">
-                        <a className="text-accent underline" href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="mt-4">
+            <ResearchPanel
+              halted={ws.halted}
+              researchText={researchText}
+              setResearchText={setResearchText}
+              researchCitations={researchCitations}
+              setResearchCitations={setResearchCitations}
+              researchNote={researchNote}
+              setResearchNote={setResearchNote}
+              onAudit={(ok, detail) =>
+                setWs((prev) =>
+                  pushAudit(prev, ok ? "research_result" : "research_refused", "search", detail),
+                )
+              }
+              onFailure={(message, retry) => reportFailure(message, "research_failed", "search", retry)}
+              onClearFailure={() => clearFailure()}
+              reportEmergencyStop={(area, retry) => reportEmergencyStop(area, retry)}
+              reaSlot={
                 <ReaPanel
                   title="File inspection"
                   lead="REA inspect-artifact runs on text you stage. Web pages are not fetched."
@@ -5419,8 +5442,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                   onCheck={() => void checkRea()}
                   onInspect={staged ? () => void inspectWithRea(staged, "research") : null}
                 />
-              </div>
-            </section>
+              }
+            />
           )}
           {view === "skills" && (
             <section className="page-shell space-y-4">

@@ -1,0 +1,14 @@
+PASS: inference key loaded server-side (len=84; value not printed)
+INFO: backend.kind=xai-adapter
+INFO: ok=true configured=true citations=8
+CITE: en.wikipedia.org/wiki/Toledo_Bend_Reservoir — https://en.wikipedia.org/wiki/Toledo_Bend_Reservoir
+CITE: en.wikipedia.org/wiki/Lake_Livingston — https://en.wikipedia.org/wiki/Lake_Livingston
+CITE: en.wikipedia.org/wiki/Sam_Rayburn_Reservoir — https://en.wikipedia.org/wiki/Sam_Rayburn_Reservoir
+CITE: en.wikipedia.org/wiki/Big_Bend_Dam — https://en.wikipedia.org/wiki/Big_Bend_Dam
+CITE: en.wikipedia.org/api/rest_v1/page/mobile-html/Brazos_River — https://en.wikipedia.org/api/rest_v1/page/mobile-html/Brazos_River
+CITE: tpwd.texas.gov/publications/pwdpubs/lake_survey/pwd_rp_t3200_1384 — https://tpwd.texas.gov/publications/pwdpubs/lake_survey/pwd_rp_t3200_1384
+CITE: waterdatafortexas.org/reservoirs/individual/toledo-bend — https://waterdatafortexas.org/reservoirs/individual/toledo-bend
+CITE: www.twdb.texas.gov/surfacewater/rivers/reservoirs/toledo_bend/ — https://www.twdb.texas.gov/surfacewater/rivers/reservoirs/toledo_bend
+INFO: deep ok=true steps=2 partial=false cites=8
+INFO: report_md_len=3724
+PASS: live MIND_SEARCH adapter returned real source URLs

@@ -39,10 +39,10 @@ export function interpretCommand(
   }
   if (mode === "build") return { kind: "blocked", area: "build", reply: REPLIES.build };
   if (mode === "research" && !/\bnotes\b/.test(lower)) {
-    return { kind: "web_research", query: raw.slice(0, 300) };
+    return { kind: "web_research", query: raw.replace(/^\/deep\s+/i, "").slice(0, 300) };
   }
-  if (/\b(search the web|web search|look (this|it) up online)\b/.test(lower)) {
-    return { kind: "web_research", query: raw.slice(0, 300) };
+  if (/^\/deep\b/i.test(raw) || /\b(search the web|web search|look (this|it) up online|deep research)\b/.test(lower)) {
+    return { kind: "web_research", query: raw.replace(/^\/deep\s+/i, "").slice(0, 300) };
   }
 
   const askBot = lower.match(/\b(?:ask|tell|have)\s+(?:my\s+|the\s+)?(.+?)\s+(?:bot|agent)\b/);

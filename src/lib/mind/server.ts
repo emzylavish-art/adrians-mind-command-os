@@ -5,7 +5,8 @@ import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
 import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
-import { performSearch } from "./research";
+import { performSearch, type ResearchUpload } from "./research";
+import { createXaiMindSearchFetch, resolveMindSearchBackend, XAI_MIND_SEARCH_ADAPTER_ENDPOINT } from "./xai-search-adapter";
 import { interpretWorkerHealth } from "./worker-health";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import { resolveDatabaseUrl } from "../env.server.ts";
@@ -85,7 +86,14 @@ export const workerHealth = createServerFn({ method: "GET" }).handler(async () =
 
 export const searchWeb = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { query: string }) => ({ query: typeof input.query === "string" ? input.query.slice(0, 300) : "" }))
+  .validator((input: { query: string; deep?: boolean; plan?: string[]; researchUploads?: ResearchUpload[] }) => ({
+    query: typeof input.query === "string" ? input.query.slice(0, 300) : "",
+    deep: input.deep === true ? true : input.deep === false ? false : undefined,
+    plan: Array.isArray(input.plan)
+      ? input.plan.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 300)).filter(Boolean).slice(0, 5)
+      : undefined,
+    researchUploads: Array.isArray(input.researchUploads) ? input.researchUploads.slice(0, 8) : undefined,
+  }))
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
@@ -94,10 +102,28 @@ export const searchWeb = createServerFn({ method: "POST" })
     if (!allowMindRequest("search", context.userId, 6)) {
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Too many searches. Wait a minute and try again." };
     }
+    const backend = resolveMindSearchBackend(process.env);
+    if (backend.kind === "none") {
+      return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: backend.error };
+    }
+    if (backend.kind === "dedicated") {
+      return performSearch({
+        query: data.query,
+        deep: data.deep,
+        plan: data.plan,
+        uploads: data.researchUploads,
+        endpoint: backend.endpoint,
+        key: backend.key,
+      });
+    }
     return performSearch({
       query: data.query,
-      endpoint: process.env.MIND_SEARCH_ENDPOINT,
-      key: process.env.MIND_SEARCH_KEY,
+      deep: data.deep,
+      plan: data.plan,
+      uploads: data.researchUploads,
+      endpoint: XAI_MIND_SEARCH_ADAPTER_ENDPOINT,
+      key: backend.key,
+      fetchImpl: createXaiMindSearchFetch({ apiKey: backend.apiKey, model: backend.model }),
     });
   });
 

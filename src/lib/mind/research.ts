@@ -1,6 +1,33 @@
 import { boundAbortSignal, isTimeoutAbort } from "./turn-timeouts.ts";
 
-export type ResearchCitation = { title: string; url: string };
+export type ResearchCitation = { title: string; url: string; source?: "web" | "upload" };
+
+export type ResearchStep = { query: string; ok: boolean; count: number };
+
+export type ResearchReportSection = {
+  id: string;
+  title: string;
+  body: string;
+};
+
+export type ResearchReport = {
+  title: string;
+  mode: "search" | "deep";
+  query: string;
+  sections: ResearchReportSection[];
+  citations: ResearchCitation[];
+  gaps: string[];
+  partial?: boolean;
+  cancelled?: boolean;
+};
+
+export type ResearchUpload = {
+  name: string;
+  mime: string;
+  bytes: number;
+  /** Short excerpts labeled for citation as "from your file". */
+  excerpts: string[];
+};
 
 export type ResearchResult = {
   ok: boolean;
@@ -8,10 +35,13 @@ export type ResearchResult = {
   citations: ResearchCitation[];
   error: string;
   /** Present when deep research ran multiple searches. */
-  steps?: { query: string; ok: boolean; count: number }[];
+  steps?: ResearchStep[];
   summary?: string;
   /** True when some deep-research queries timed out but real citations were kept. */
   partial?: boolean;
+  /** True when the caller aborted via AbortSignal (Cancel). */
+  cancelled?: boolean;
+  report?: ResearchReport;
 };
 
 /** Per-query search fetch budget (ms). Override with MIND_SEARCH_TIMEOUT_MS (≥1000). */
@@ -20,6 +50,9 @@ export const DEFAULT_SEARCH_TIMEOUT_MS = 15_000;
 export const DEFAULT_DEEP_SEARCH_TIMEOUT_MS = 45_000;
 export const MAX_SEARCH_RESPONSE_BYTES = 500_000;
 export const SEARCH_TIMEOUT_REPLY = "Search timed out. No citations were created.";
+export const SEARCH_CANCELLED_REPLY = "Research was cancelled. Partial citations that were already confirmed are kept when present.";
+/** Literal citation URL for upload excerpts — never invents a web URL. */
+export const FROM_YOUR_FILE = "from your file";
 
 function readBudgetMs(raw: string | undefined, fallback: number): number {
   if (!raw?.trim()) return fallback;
@@ -38,7 +71,7 @@ export function deepSearchTimeoutMs(env: Record<string, string | undefined> = pr
 
 function sanitizeTitle(raw: string): string {
   return raw
-    .replace(/\p{Cc}/gu, " ")  // C0/C1 controls + DEL; unicode property avoids no-control-regex
+    .replace(/\p{Cc}/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 200);
@@ -88,8 +121,15 @@ export function dedupeCitations(items: ResearchCitation[], limit = 8): ResearchC
   const seen = new Set<string>();
   const out: ResearchCitation[] = [];
   for (const item of items) {
+    if (item.source === "upload" || item.url === FROM_YOUR_FILE) {
+      const key = `upload:${item.title.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ title: item.title, url: FROM_YOUR_FILE, source: "upload" });
+      if (out.length === limit) break;
+      continue;
+    }
     const safe = parseSafeHttpUrl(item.url);
-    // Drop non-http(s) schemes even if a caller already passed a citation through.
     if (!safe) continue;
     if (seen.has(safe.key)) continue;
     seen.add(safe.key);
@@ -97,6 +137,48 @@ export function dedupeCitations(items: ResearchCitation[], limit = 8): ResearchC
     if (out.length === limit) break;
   }
   return out;
+}
+
+/** Turn Media-supplied uploads into "from your file" citations (no invented URLs). */
+export function citationsFromUploads(uploads: ResearchUpload[] | undefined, limit = 8): ResearchCitation[] {
+  if (!Array.isArray(uploads) || uploads.length === 0) return [];
+  const out: ResearchCitation[] = [];
+  for (const file of uploads) {
+    if (!file || typeof file !== "object") continue;
+    const name = typeof file.name === "string" ? sanitizeTitle(file.name) : "upload";
+    const excerpts = Array.isArray(file.excerpts) ? file.excerpts : [];
+    for (const excerpt of excerpts) {
+      if (typeof excerpt !== "string") continue;
+      const body = sanitizeTitle(excerpt);
+      if (!body) continue;
+      out.push({
+        title: `${name}: ${body}`.slice(0, 200),
+        url: FROM_YOUR_FILE,
+        source: "upload",
+      });
+      if (out.length === limit) return out;
+    }
+    if (excerpts.length === 0 && name) {
+      out.push({ title: name, url: FROM_YOUR_FILE, source: "upload" });
+      if (out.length === limit) return out;
+    }
+  }
+  return out;
+}
+
+/** Sanitize an editable deep plan; empty → fall back to planDeepQueries(query). */
+export function resolveDeepPlan(query: string, plan?: string[] | null): string[] {
+  const fallback = planDeepQueries(query);
+  if (!Array.isArray(plan)) return fallback;
+  const cleaned = [
+    ...new Set(
+      plan
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim().slice(0, 300))
+        .filter(Boolean),
+    ),
+  ].slice(0, 5);
+  return cleaned.length > 0 ? cleaned : fallback;
 }
 
 /** No search provider is configured. This never fetches a page or invents a citation. */
@@ -136,6 +218,10 @@ export function planDeepQueries(query: string): string[] {
   return [...new Set(plans.map((item) => item.slice(0, 300)))].slice(0, 3);
 }
 
+/**
+ * Explicit deep flag wins. Heuristic (phrase / length) only applies when deep is undefined —
+ * clients should pass deep from the Search|Deep toggle; heuristic is a suggestion only.
+ */
 export function shouldRunDeepResearch(query: string, deepFlag?: boolean): boolean {
   if (deepFlag === true) return true;
   if (deepFlag === false) return false;
@@ -148,6 +234,120 @@ function queryText(query: unknown): string {
   return typeof query === "string" ? query.trim() : "";
 }
 
+function isUserCancel(signal: AbortSignal | undefined, caught?: unknown): boolean {
+  if (!signal?.aborted) return false;
+  if (isTimeoutAbort(signal, signal.reason) || isTimeoutAbort(signal, caught)) return false;
+  return true;
+}
+
+export function buildResearchReport(input: {
+  query: string;
+  mode: "search" | "deep";
+  citations: ResearchCitation[];
+  steps?: ResearchStep[];
+  partial?: boolean;
+  cancelled?: boolean;
+  summary?: string;
+}): ResearchReport {
+  const citations = dedupeCitations(input.citations, 16);
+  const web = citations.filter((c) => c.source !== "upload" && c.url !== FROM_YOUR_FILE);
+  const uploads = citations.filter((c) => c.source === "upload" || c.url === FROM_YOUR_FILE);
+  const gaps: string[] = [];
+  if (web.length === 0) gaps.push("No http(s) web sources were returned by the search provider.");
+  if (input.partial) gaps.push("Some deep searches timed out; only confirmed sources are listed.");
+  if (input.cancelled) gaps.push("The run was cancelled before every planned step finished.");
+  if ((input.steps?.length ?? 0) > 0) {
+    const failed = input.steps!.filter((s) => !s.ok);
+    if (failed.length) gaps.push(`${failed.length} planned search step(s) returned no usable sources.`);
+  }
+
+  const sections: ResearchReportSection[] = [
+    {
+      id: "goal",
+      title: "Goal",
+      body: input.query.trim().slice(0, 500) || "(empty)",
+    },
+    {
+      id: "activity",
+      title: "Activity",
+      body:
+        input.mode === "deep"
+          ? (input.steps ?? [])
+              .map((s, i) => `${i + 1}. ${s.ok ? "ok" : "miss"} · ${s.count} cite(s) · ${s.query}`)
+              .join("\n") || "No deep steps ran."
+          : "Single search.",
+    },
+    {
+      id: "sources",
+      title: "Sources",
+      body:
+        citations.length === 0
+          ? "None."
+          : citations
+              .map((c, i) =>
+                c.source === "upload" || c.url === FROM_YOUR_FILE
+                  ? `${i + 1}. ${c.title} — ${FROM_YOUR_FILE}`
+                  : `${i + 1}. ${c.title} — ${c.url}`,
+              )
+              .join("\n"),
+    },
+  ];
+  if (uploads.length) {
+    sections.push({
+      id: "uploads",
+      title: "From your files",
+      body: uploads.map((c) => `- ${c.title}`).join("\n"),
+    });
+  }
+  if (input.summary?.trim()) {
+    sections.push({ id: "summary", title: "Summary", body: input.summary.trim().slice(0, 4000) });
+  }
+
+  return {
+    title: input.mode === "deep" ? "Deep research report" : "Search report",
+    mode: input.mode,
+    query: input.query.trim().slice(0, 500),
+    sections,
+    citations,
+    gaps,
+    ...(input.partial ? { partial: true as const } : {}),
+    ...(input.cancelled ? { cancelled: true as const } : {}),
+  };
+}
+
+export function researchReportToMarkdown(report: ResearchReport): string {
+  const lines: string[] = [`# ${report.title}`, "", `Query: ${report.query}`, ""];
+  for (const section of report.sections) {
+    lines.push(`## ${section.title}`, "", section.body, "");
+  }
+  if (report.gaps.length) {
+    lines.push("## Gaps", "", ...report.gaps.map((g) => `- ${g}`), "");
+  }
+  lines.push("## Citations", "");
+  if (!report.citations.length) {
+    lines.push("None.", "");
+  } else {
+    for (const c of report.citations) {
+      if (c.source === "upload" || c.url === FROM_YOUR_FILE) {
+        lines.push(`- ${c.title} — ${FROM_YOUR_FILE}`);
+      } else {
+        lines.push(`- [${c.title}](${c.url})`);
+      }
+    }
+    lines.push("");
+  }
+  lines.push("_Adrian's Mind research export. URLs are only those the search provider returned._", "");
+  return lines.join("\n");
+}
+
+export type ResearchStepEvent = {
+  kind: "step_start" | "step_done" | "partial" | "cancelled" | "done";
+  step?: ResearchStep;
+  index?: number;
+  total?: number;
+  result?: ResearchResult;
+};
+
 export async function performSearch(input: {
   query: string;
   endpoint?: string;
@@ -157,6 +357,9 @@ export async function performSearch(input: {
   deep?: boolean;
   timeoutMs?: number;
   deepTimeoutMs?: number;
+  plan?: string[] | null;
+  uploads?: ResearchUpload[];
+  onStep?: (event: ResearchStepEvent) => void;
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
@@ -185,8 +388,10 @@ async function performSingleSearch(input: {
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
   timeoutMs?: number;
+  uploads?: ResearchUpload[];
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
+  const uploadCites = citationsFromUploads(input.uploads);
   const budget = input.timeoutMs ?? searchTimeoutMs();
   const bound = combineSignals(input.signal, budget);
   let response: Response;
@@ -198,6 +403,24 @@ async function performSingleSearch(input: {
       body: JSON.stringify({ query: text.slice(0, 300) }),
     });
   } catch (caught) {
+    if (isUserCancel(input.signal, caught) || isUserCancel(bound.signal, caught)) {
+      bound.cleanup();
+      const citations = dedupeCitations(uploadCites, 8);
+      const report = buildResearchReport({
+        query: text,
+        mode: "search",
+        citations,
+        cancelled: true,
+      });
+      return {
+        ok: citations.length > 0,
+        configured: true,
+        citations,
+        error: citations.length ? "" : SEARCH_CANCELLED_REPLY,
+        cancelled: true,
+        report,
+      };
+    }
     if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {
       bound.cleanup();
       return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY };
@@ -213,6 +436,9 @@ async function performSingleSearch(input: {
     try {
       raw = await response.text();
     } catch (caught) {
+      if (isUserCancel(input.signal, caught) || isUserCancel(bound.signal, caught)) {
+        return { ok: false, configured: true, citations: [], error: SEARCH_CANCELLED_REPLY, cancelled: true };
+      }
       if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {
         return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY };
       }
@@ -231,11 +457,12 @@ async function performSingleSearch(input: {
       payload && typeof payload === "object" && Array.isArray((payload as { results?: unknown }).results)
         ? (payload as { results: unknown }).results
         : [];
-    const citations = normalizeCitations(hits);
+    const citations = dedupeCitations([...normalizeCitations(hits), ...uploadCites], 8);
     if (!citations.length) {
       return { ok: false, configured: true, citations: [], error: "The search returned no usable sources. No citations were created." };
     }
-    return { ok: true, configured: true, citations, error: "" };
+    const report = buildResearchReport({ query: text, mode: "search", citations });
+    return { ok: true, configured: true, citations, error: "", report };
   } finally {
     bound.cleanup();
   }
@@ -250,6 +477,9 @@ export async function performDeepResearch(input: {
   signal?: AbortSignal;
   timeoutMs?: number;
   deepTimeoutMs?: number;
+  plan?: string[] | null;
+  uploads?: ResearchUpload[];
+  onStep?: (event: ResearchStepEvent) => void;
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
@@ -258,27 +488,42 @@ export async function performDeepResearch(input: {
 
   const overall = combineSignals(input.signal, input.deepTimeoutMs ?? deepSearchTimeoutMs());
   const perQuery = input.timeoutMs ?? searchTimeoutMs();
-  const queries = planDeepQueries(text);
-  const steps: { query: string; ok: boolean; count: number }[] = [];
-  const collected: ResearchCitation[] = [];
+  const queries = resolveDeepPlan(text, input.plan);
+  const steps: ResearchStep[] = [];
+  const collected: ResearchCitation[] = [...citationsFromUploads(input.uploads)];
   let sawTimeout = false;
+  let cancelled = false;
   try {
-    for (const q of queries) {
+    for (let i = 0; i < queries.length; i += 1) {
+      const q = queries[i]!;
       if (overall.signal.aborted) {
-        sawTimeout = sawTimeout || isTimeoutAbort(overall.signal, overall.signal.reason);
+        if (isUserCancel(input.signal) || isUserCancel(overall.signal)) {
+          cancelled = true;
+          input.onStep?.({ kind: "cancelled" });
+        } else {
+          sawTimeout = true;
+        }
         break;
       }
+      input.onStep?.({ kind: "step_start", index: i, total: queries.length, step: { query: q, ok: false, count: 0 } });
       const one = await performSingleSearch({
         ...input,
         query: q,
         signal: overall.signal,
         timeoutMs: perQuery,
+        uploads: undefined, // already merged once at the start
       });
-      steps.push({ query: q, ok: one.ok, count: one.citations.length });
+      const step: ResearchStep = { query: q, ok: one.ok, count: one.citations.length };
+      steps.push(step);
+      input.onStep?.({ kind: "step_done", index: i, total: queries.length, step });
+      if (one.cancelled) {
+        cancelled = true;
+        break;
+      }
       if (one.error === SEARCH_TIMEOUT_REPLY) {
         sawTimeout = true;
         if (isTimeoutAbort(overall.signal, overall.signal.reason)) {
-          break; // keep any citations already collected; finalize below
+          break;
         }
       }
       if (one.ok) collected.push(...one.citations);
@@ -289,25 +534,46 @@ export async function performDeepResearch(input: {
 
   const citations = dedupeCitations(collected, 8);
   if (!citations.length) {
-    return {
+    const error = cancelled
+      ? SEARCH_CANCELLED_REPLY
+      : sawTimeout
+        ? SEARCH_TIMEOUT_REPLY
+        : "Deep research ran but returned no usable sources. No citations were created.";
+    const result: ResearchResult = {
       ok: false,
       configured: true,
       citations: [],
-      error: sawTimeout
-        ? SEARCH_TIMEOUT_REPLY
-        : "Deep research ran but returned no usable sources. No citations were created.",
+      error,
       steps,
+      ...(cancelled ? { cancelled: true as const } : {}),
+      report: buildResearchReport({
+        query: text,
+        mode: "deep",
+        citations: [],
+        steps,
+        cancelled,
+        partial: sawTimeout,
+      }),
     };
+    input.onStep?.({ kind: "done", result });
+    return result;
   }
   const summaryLines = [
-    `Deep research used ${steps.length} searches and kept ${citations.length} http(s) sources the provider returned:`,
-    ...citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`),
+    `Deep research used ${steps.length} searches and kept ${citations.length} source${citations.length === 1 ? "" : "s"}:`,
+    ...citations.map((item, index) =>
+      item.source === "upload" || item.url === FROM_YOUR_FILE
+        ? `${index + 1}. ${item.title} — ${FROM_YOUR_FILE}`
+        : `${index + 1}. ${item.title} — ${item.url}`,
+    ),
   ];
   if (sawTimeout) {
     summaryLines.push("Note: some searches timed out; only confirmed sources are listed.");
   }
+  if (cancelled) {
+    summaryLines.push("Note: the run was cancelled; only confirmed sources are listed.");
+  }
   const summary = summaryLines.join("\n");
-  return {
+  const result: ResearchResult = {
     ok: true,
     configured: true,
     citations,
@@ -315,5 +581,18 @@ export async function performDeepResearch(input: {
     steps,
     summary,
     ...(sawTimeout ? { partial: true as const } : {}),
+    ...(cancelled ? { cancelled: true as const } : {}),
+    report: buildResearchReport({
+      query: text,
+      mode: "deep",
+      citations,
+      steps,
+      partial: sawTimeout,
+      cancelled,
+      summary,
+    }),
   };
+  if (sawTimeout) input.onStep?.({ kind: "partial", result });
+  input.onStep?.({ kind: "done", result });
+  return result;
 }
