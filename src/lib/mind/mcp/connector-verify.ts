@@ -433,10 +433,12 @@ const OAUTH_PROBE: Record<
   ConnectorId,
   {
     url: string;
-    method: "GET" | "POST";
+    method: "GET" | "POST" | "PROPFIND";
     headers?: Record<string, string>;
     /** Dropbox-style POST with literal JSON null body (Bearer auth only). */
     emptyJsonBody?: boolean;
+    /** Default bearer. Koofr WebDAV uses HTTP Basic (token is already base64 user:pass). */
+    auth?: "bearer" | "basic";
   }
 > = {
   notion: {
@@ -450,6 +452,8 @@ const OAUTH_PROBE: Record<
   dropbox: { url: "https://api.dropboxapi.com/2/users/get_current_account", method: "POST", emptyJsonBody: true },
   onedrive: { url: "https://graph.microsoft.com/v1.0/me", method: "GET" },
   pcloud: { url: "https://api.pcloud.com/userinfo", method: "GET" },
+  box: { url: "https://api.box.com/2.0/users/me", method: "GET" },
+  koofr: { url: "https://app.koofr.net/dav/Koofr/", method: "PROPFIND", auth: "basic", headers: { Depth: "0" } },
   slack: { url: "https://slack.com/api/auth.test", method: "POST" },
   github: {
     url: "https://api.github.com/user",
@@ -511,12 +515,14 @@ export async function verifyOauthConnector(
   const probe = OAUTH_PROBE[connector];
   const fetchImpl = deps.oauthFetch ?? defaultOauthFetch;
   try {
+    const authHeader =
+      probe.auth === "basic" ? `Basic ${token}` : `Bearer ${token}`;
     const response = await withTimeout(
       fetchImpl(probe.url, {
         method: probe.method,
         redirect: "manual",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: authHeader,
           ...(probe.headers ?? {}),
           ...(probe.method === "POST"
             ? {
@@ -578,6 +584,18 @@ export async function verifyOauthConnector(
         state: expired ? "auth_expired" : "error",
         latencyMs,
         detail: sanitizeVerifyError(`Slack auth.test: ${errCode}`),
+      };
+    }
+
+    // WebDAV PROPFIND success is 207 Multi-Status (not response.ok).
+    if (probe.method === "PROPFIND" && response.status === 207) {
+      return {
+        id: connector,
+        kind: "oauth",
+        label,
+        state: "ok",
+        latencyMs,
+        detail: `${label} WebDAV responded (207).`,
       };
     }
 

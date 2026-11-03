@@ -14,9 +14,13 @@ import {
   createDropboxProvider,
   createOneDriveProvider,
   createPcloudProvider,
+  createBoxProvider,
+  createKoofrProvider,
   GOOGLE_DRIVE_FORBIDDEN_OPS,
   DROPBOX_FORBIDDEN_OPS,
   ONEDRIVE_FORBIDDEN_OPS,
+  BOX_FORBIDDEN_OPS,
+  KOOFR_FORBIDDEN_OPS,
 } from "./providers/index.ts";
 import type { StorageProvider, StorageService } from "./types.ts";
 import { dirname, join as pathJoin } from "node:path";
@@ -79,6 +83,8 @@ function mockProviders(opts: {
     dropbox: make("dropbox"),
     onedrive: make("onedrive"),
     pcloud: make("pcloud"),
+    box: make("box"),
+    koofr: make("koofr"),
   };
 }
 
@@ -213,6 +219,8 @@ describe("storage rotation policy", () => {
       pathJoin(here, "providers/dropbox.ts"),
       pathJoin(here, "providers/onedrive.ts"),
       pathJoin(here, "providers/pcloud.ts"),
+      pathJoin(here, "providers/box.ts"),
+      pathJoin(here, "providers/koofr.ts"),
     ];
     for (const file of files) {
       const src = readFileSync(file, "utf8");
@@ -233,6 +241,8 @@ describe("storage rotation policy", () => {
     assert.ok(GOOGLE_DRIVE_FORBIDDEN_OPS.length > 0);
     assert.ok(DROPBOX_FORBIDDEN_OPS.length > 0);
     assert.ok(ONEDRIVE_FORBIDDEN_OPS.length > 0);
+    assert.ok(BOX_FORBIDDEN_OPS.length > 0);
+    assert.ok(KOOFR_FORBIDDEN_OPS.length > 0);
   });
 
   it("ledger concurrency: parallel bumps do not lose updates", async () => {
@@ -295,6 +305,8 @@ describe("storage rotation policy", () => {
     assert.equal(createDropboxProvider().service, "dropbox");
     assert.equal(createOneDriveProvider().service, "onedrive");
     assert.equal(createPcloudProvider().service, "pcloud");
+    assert.equal(createBoxProvider().service, "box");
+    assert.equal(createKoofrProvider().service, "koofr");
   });
 
   it("path traversal in filenames is sanitized before upload", async () => {

@@ -26,6 +26,8 @@ const GENERIC_ACCESS_ENV: Record<StorageService, string> = {
   dropbox: "MIND_DROPBOX_TOKEN",
   onedrive: "MIND_ONEDRIVE_TOKEN",
   pcloud: "MIND_PCLOUD_TOKEN",
+  box: "MIND_BOX_TOKEN",
+  koofr: "MIND_KOOFR_APP_PASSWORD",
 };
 
 export class InvalidStorageLaneIdError extends Error {

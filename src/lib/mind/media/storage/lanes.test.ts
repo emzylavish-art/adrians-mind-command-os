@@ -29,6 +29,9 @@ describe("storage lane id validation", () => {
     assert.equal(assertValidLaneId("gdrive-emmanuelohilebo4"), "gdrive-emmanuelohilebo4");
     assert.equal(assertValidLaneId("onedrive-emmanuelohilebo4"), "onedrive-emmanuelohilebo4");
     assert.equal(assertValidLaneId("gdrive-emzylavish"), "gdrive-emzylavish");
+    assert.equal(assertValidLaneId("box-emzylavish"), "box-emzylavish");
+    assert.equal(assertValidLaneId("koofr-zackosment1"), "koofr-zackosment1");
+    assert.equal(assertValidLaneId("pcloud-zackosment1"), "pcloud-zackosment1");
   });
 
   it("rejects path traversal and separators", () => {
@@ -216,5 +219,68 @@ describe("storage lane credential isolation", () => {
     const hashA = createHash("sha256").update("owner-a@example.com").digest("hex");
     const hashB = createHash("sha256").update("owner-b@example.com").digest("hex");
     assert.notEqual(hashA, hashB);
+  });
+});
+
+describe("pcloud-zackosment1 lane", () => {
+  it("pcloud-zackosment1 resolves its own credential owner without touching another pcloud lane", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mind-pcloud-lane-"));
+    process.env.CONNECTOR_TOKEN_SECRET = process.env.CONNECTOR_TOKEN_SECRET || "unit-test-lane-pcloud-secret";
+    const connectors = join(dir, "connectors");
+    mkdirSync(connectors, { recursive: true });
+    setConnectorDirectory(connectors);
+    setStorageConnectorDirectory(connectors);
+
+    storeAccessToken({
+      ownerId: "emzylavish@gmail.com",
+      connector: "pcloud",
+      accessToken: "emzy-pcloud-token-SHOULD-NOT-LEAK",
+      accountLabel: "emzylavish@gmail.com",
+    });
+    storeAccessToken({
+      ownerId: "zackosment1@gmail.com",
+      connector: "pcloud",
+      accessToken: "zack-pcloud-token-OK",
+      accountLabel: "zackosment1@gmail.com",
+    });
+
+    writeAccounts(dir, [
+      {
+        service: "pcloud",
+        accountEmail: "emzylavish@gmail.com",
+        capBytes: 1000,
+        order: 1,
+        enabled: true,
+        laneId: "pcloud-emzylavish",
+        credentialOwnerId: "emzylavish@gmail.com",
+      },
+      {
+        service: "pcloud",
+        accountEmail: "zackosment1@gmail.com",
+        capBytes: 1000,
+        order: 2,
+        enabled: true,
+        laneId: "pcloud-zackosment1",
+        credentialOwnerId: "zackosment1@gmail.com",
+      },
+    ]);
+
+    const zack = await resolveStorageLaneAccessToken("pcloud-zackosment1", {
+      fallbackOwnerId: "signed-in@example.com",
+      env: {},
+      configPath: join(dir, "accounts.json"),
+    });
+    const emzy = await resolveStorageLaneAccessToken("pcloud-emzylavish", {
+      fallbackOwnerId: "signed-in@example.com",
+      env: {},
+      configPath: join(dir, "accounts.json"),
+    });
+    assert.equal(zack.ok, true);
+    assert.equal(emzy.ok, true);
+    if (zack.ok && emzy.ok) {
+      assert.equal(zack.token, "zack-pcloud-token-OK");
+      assert.equal(emzy.token, "emzy-pcloud-token-SHOULD-NOT-LEAK");
+      assert.notEqual(zack.token, emzy.token);
+    }
   });
 });

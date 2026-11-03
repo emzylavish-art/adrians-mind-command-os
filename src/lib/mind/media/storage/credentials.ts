@@ -12,6 +12,11 @@ import {
 } from "../../connectors/storage-token-refresh.ts";
 import type { StorageService } from "./types.ts";
 
+/** Base64(user:password) for Koofr WebDAV Basic auth. Never log the result. */
+export function packKoofrBasicToken(user: string, password: string): string {
+  return Buffer.from(`${user}:${password}`, "utf8").toString("base64");
+}
+
 /**
  * Credential resolver for storage rotation.
  * Prefers plain env access tokens, then decryptable StoredConnection access tokens,
@@ -46,6 +51,9 @@ const ENV_KEYS: Record<StorageService, string> = {
   dropbox: "MIND_DROPBOX_TOKEN",
   onedrive: "MIND_ONEDRIVE_TOKEN",
   pcloud: "MIND_PCLOUD_TOKEN",
+  box: "MIND_BOX_TOKEN",
+  /** App password; pair with MIND_KOOFR_USER (see resolveStorageAccessToken). */
+  koofr: "MIND_KOOFR_APP_PASSWORD",
 };
 
 /** Map storage service → on-disk connection record filename stem. */
@@ -86,11 +94,63 @@ export type ResolveTokenResult =
  * Synchronous resolver: plain env access tokens, plaintext test records,
  * or already-decryptable accessTokenEnc. Does not network-refresh.
  */
+function resolveKoofrAccessToken(
+  ownerId: string,
+  env: Record<string, string | undefined>,
+): ResolveTokenResult {
+  const userEnv = env.MIND_KOOFR_USER?.trim();
+  const passEnv = env.MIND_KOOFR_APP_PASSWORD?.trim();
+  if (userEnv && passEnv) {
+    return {
+      ok: true,
+      token: packKoofrBasicToken(userEnv, passEnv),
+      accountLabel: userEnv,
+      source: "env",
+    };
+  }
+
+  const record = readStorageConnectionRecord(ownerId, "koofr");
+  if (!record) {
+    return {
+      ok: false,
+      reason: "not_connected",
+      detail:
+        "koofr is not connected. Set MIND_KOOFR_USER and MIND_KOOFR_APP_PASSWORD, or seed an encrypted StoredConnection.",
+    };
+  }
+
+  // Stored accessTokenEnc is packKoofrBasicToken(user, appPassword) (Base64 of user:pass).
+  let packed: string | null = null;
+  if (typeof record.accessToken === "string" && record.accessToken.trim()) {
+    packed = record.accessToken.trim();
+  } else if (record.accessTokenEnc) {
+    packed = decryptStoredAccessToken(ownerId, "koofr");
+  }
+  const user = (typeof record.accountLabel === "string" && record.accountLabel.trim()) || userEnv || "";
+  if (!packed) {
+    return {
+      ok: false,
+      reason: "incomplete",
+      detail: "koofr connection needs an encrypted app-password record (or MIND_KOOFR_USER + MIND_KOOFR_APP_PASSWORD).",
+    };
+  }
+  return {
+    ok: true,
+    token: packed,
+    accountLabel: user || "koofr",
+    source: "record",
+  };
+}
+
 export function resolveStorageAccessToken(
   ownerId: string,
   service: StorageService,
   env: Record<string, string | undefined> = process.env,
 ): ResolveTokenResult {
+  if (service === "koofr") {
+    return resolveKoofrAccessToken(ownerId, env);
+  }
+
   const envKey = ENV_KEYS[service];
   const fromEnv = env[envKey]?.trim();
   if (fromEnv) {
@@ -172,6 +232,10 @@ export async function resolveStorageAccessTokenAsync(
   deps: ResolveTokenAsyncDeps = {},
 ): Promise<ResolveTokenResult> {
   const env = deps.env ?? process.env;
+
+  if (service === "koofr") {
+    return resolveKoofrAccessToken(ownerId, env);
+  }
 
   // Break-glass / short-lived plain access token still wins when explicitly set.
   const envKey = ENV_KEYS[service];

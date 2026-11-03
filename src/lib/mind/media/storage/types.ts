@@ -1,6 +1,6 @@
 /** Multi-account cloud storage rotation types (server-only). */
 
-export const STORAGE_SERVICES = ["google_drive", "dropbox", "onedrive", "pcloud"] as const;
+export const STORAGE_SERVICES = ["google_drive", "dropbox", "onedrive", "pcloud", "box", "koofr"] as const;
 export type StorageService = (typeof STORAGE_SERVICES)[number];
 
 export type StorageAccountConfig = {
@@ -116,6 +116,8 @@ export const DEFAULT_CAPS = {
   dropbox: 2 * 1024 * 1024 * 1024, // 2 GiB
   onedrive: 5 * 1024 * 1024 * 1024, // 5 GiB
   pcloud: 10 * 1024 * 1024 * 1024, // 10 GiB free-tier default
+  box: 10 * 1024 * 1024 * 1024, // 10 GiB free-tier default
+  koofr: 10 * 1024 * 1024 * 1024, // 10 GiB free-tier default
 } as const;
 
 export const DEFAULT_SWITCH_THRESHOLD = 0.9;

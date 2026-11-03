@@ -47,10 +47,39 @@
     },
     {
       "service": "pcloud",
-      "accountEmail": "pcloud-placeholder@example.com",
+      "accountEmail": "emzylavish@gmail.com",
       "capBytes": 10737418240,
       "order": 6,
-      "enabled": true
+      "enabled": true,
+      "laneId": "pcloud-emzylavish",
+      "credentialOwnerId": "emzylavish@gmail.com"
+    },
+    {
+      "service": "pcloud",
+      "accountEmail": "zackosment1@gmail.com",
+      "capBytes": 10737418240,
+      "order": 9,
+      "enabled": true,
+      "laneId": "pcloud-zackosment1",
+      "credentialOwnerId": "zackosment1@gmail.com"
+    },
+    {
+      "service": "box",
+      "accountEmail": "emzylavish@gmail.com",
+      "capBytes": 10737418240,
+      "order": 7,
+      "enabled": true,
+      "laneId": "box-emzylavish",
+      "credentialOwnerId": "emzylavish@gmail.com"
+    },
+    {
+      "service": "koofr",
+      "accountEmail": "zackosment1@gmail.com",
+      "capBytes": 10737418240,
+      "order": 8,
+      "enabled": true,
+      "laneId": "koofr-zackosment1",
+      "credentialOwnerId": "zackosment1@gmail.com"
     }
   ]
 }

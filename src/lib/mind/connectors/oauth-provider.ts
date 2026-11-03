@@ -102,6 +102,8 @@ export const OAUTH_AUTHORIZE_HOSTS: Record<ConnectorId, readonly string[]> = {
   dropbox: ["www.dropbox.com"],
   onedrive: ["login.microsoftonline.com"],
   pcloud: ["my.pcloud.com"],
+  box: ["account.box.com", "app.box.com"],
+  koofr: ["app.koofr.net"],
   slack: ["slack.com"],
   github: ["github.com"],
 };
@@ -208,6 +210,8 @@ export const OAUTH_TOKEN_HOSTS: Record<ConnectorId, readonly string[]> = {
   dropbox: ["api.dropboxapi.com"],
   onedrive: ["login.microsoftonline.com"],
   pcloud: ["api.pcloud.com", "eapi.pcloud.com"],
+  box: ["api.box.com", "app.box.com"],
+  koofr: ["app.koofr.net"],
   slack: ["slack.com"],
   github: ["github.com"],
 };
@@ -221,6 +225,8 @@ export const OAUTH_REVOKE_HOSTS: Record<ConnectorId, readonly string[]> = {
   dropbox: ["api.dropboxapi.com"],
   onedrive: ["login.microsoftonline.com"],
   pcloud: ["api.pcloud.com", "eapi.pcloud.com"],
+  box: ["api.box.com", "app.box.com"],
+  koofr: ["app.koofr.net"],
   slack: ["slack.com"],
   github: ["api.github.com", "github.com"],
 };

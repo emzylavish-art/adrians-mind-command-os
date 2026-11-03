@@ -364,6 +364,69 @@ const pcloudProvider: OAuthProvider = {
     "pCloud OAuth is not configured. Set PCLOUD_OAUTH_CLIENT_ID, PCLOUD_OAUTH_CLIENT_SECRET, and PCLOUD_OAUTH_REDIRECT_URI. Nothing was started.",
 };
 
+
+const boxProvider: OAuthProvider = {
+  id: "box",
+  displayName: "Box",
+  envKeys: {
+    clientId: "BOX_OAUTH_CLIENT_ID",
+    clientSecret: "BOX_OAUTH_CLIENT_SECRET",
+    redirectUri: "BOX_OAUTH_REDIRECT_URI",
+    authorizeUrl: "BOX_OAUTH_AUTHORIZE_URL",
+    tokenUrl: "BOX_OAUTH_TOKEN_URL",
+  },
+  defaults: {
+    authorizeUrl: "https://account.box.com/api/oauth2/authorize",
+    tokenUrl: "https://api.box.com/oauth2/token",
+  },
+  scopes: ["root_readwrite"],
+  pkce: true,
+  tokenAuth: "body",
+  revokeStyle: "none",
+  readEnv: (env = process.env) => ({
+    clientId: trim(env, "BOX_OAUTH_CLIENT_ID"),
+    clientSecret: trim(env, "BOX_OAUTH_CLIENT_SECRET"),
+    redirectUri: trim(env, "BOX_OAUTH_REDIRECT_URI"),
+    authorizeUrl: trim(env, "BOX_OAUTH_AUTHORIZE_URL") || "https://account.box.com/api/oauth2/authorize",
+    tokenUrl: trim(env, "BOX_OAUTH_TOKEN_URL") || "https://api.box.com/oauth2/token",
+  }),
+  parseAccount: () => ({ accountLabel: "Box account" }),
+  notConfiguredDetail:
+    "Box OAuth is not configured. Set BOX_OAUTH_CLIENT_ID, BOX_OAUTH_CLIENT_SECRET, and BOX_OAUTH_REDIRECT_URI. Nothing was started.",
+};
+
+const koofrProvider: OAuthProvider = {
+  id: "koofr",
+  displayName: "Koofr",
+  envKeys: {
+    clientId: "KOOFR_OAUTH_CLIENT_ID",
+    clientSecret: "KOOFR_OAUTH_CLIENT_SECRET",
+    redirectUri: "KOOFR_OAUTH_REDIRECT_URI",
+    authorizeUrl: "KOOFR_OAUTH_AUTHORIZE_URL",
+    tokenUrl: "KOOFR_OAUTH_TOKEN_URL",
+  },
+  defaults: {
+    // Koofr storage uses WebDAV app passwords (MIND_KOOFR_USER / MIND_KOOFR_APP_PASSWORD),
+    // not interactive OAuth. Stub URLs stay on the allowlisted host for fail-closed checks.
+    authorizeUrl: "https://app.koofr.net/",
+    tokenUrl: "https://app.koofr.net/",
+  },
+  scopes: [],
+  pkce: false,
+  tokenAuth: "body",
+  revokeStyle: "none",
+  readEnv: (env = process.env) => ({
+    clientId: trim(env, "KOOFR_OAUTH_CLIENT_ID"),
+    clientSecret: trim(env, "KOOFR_OAUTH_CLIENT_SECRET"),
+    redirectUri: trim(env, "KOOFR_OAUTH_REDIRECT_URI"),
+    authorizeUrl: trim(env, "KOOFR_OAUTH_AUTHORIZE_URL") || "https://app.koofr.net/",
+    tokenUrl: trim(env, "KOOFR_OAUTH_TOKEN_URL") || "https://app.koofr.net/",
+  }),
+  parseAccount: () => ({ accountLabel: "Koofr account" }),
+  notConfiguredDetail:
+    "Koofr uses a WebDAV app password. Set MIND_KOOFR_USER and MIND_KOOFR_APP_PASSWORD (OAuth is not used).",
+};
+
 export const OAUTH_PROVIDERS: Record<ConnectorId, OAuthProvider> = {
   notion: notionProvider,
   gmail: gmailProvider,
@@ -372,6 +435,8 @@ export const OAUTH_PROVIDERS: Record<ConnectorId, OAuthProvider> = {
   dropbox: dropboxProvider,
   onedrive: onedriveProvider,
   pcloud: pcloudProvider,
+  box: boxProvider,
+  koofr: koofrProvider,
   slack: slackProvider,
   github: githubProvider,
 };

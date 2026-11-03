@@ -1,5 +1,5 @@
 /**
- * Server-side OAuth refresh for storage accounts (Google Drive, Dropbox, OneDrive).
+ * Server-side OAuth refresh for storage accounts (Google Drive, Dropbox, OneDrive, Box).
  * Mints short-lived access tokens from encrypted StoredConnection.refreshTokenEnc
  * or MIND_*_REFRESH_TOKEN env vars + client credentials. Caches in memory until
  * shortly before expiry. Never logs token values.
@@ -16,7 +16,7 @@ import {
   type ConnectorId,
 } from "./store.ts";
 
-export const STORAGE_OAUTH_SERVICES = ["google_drive", "dropbox", "onedrive"] as const;
+export const STORAGE_OAUTH_SERVICES = ["google_drive", "dropbox", "onedrive", "box"] as const;
 export type StorageOAuthService = (typeof STORAGE_OAUTH_SERVICES)[number];
 
 export function isStorageOAuthService(value: string): value is StorageOAuthService {
@@ -66,6 +66,14 @@ const PROVIDERS: Record<StorageOAuthService, RefreshProviderConfig> = {
     clientSecretEnv: "MICROSOFT_OAUTH_CLIENT_SECRET",
     refreshTokenEnv: "MIND_ONEDRIVE_REFRESH_TOKEN",
     refreshScope: "Files.ReadWrite offline_access",
+  },
+  box: {
+    connector: "box",
+    tokenUrl: "https://api.box.com/oauth2/token",
+    tokenUrlEnv: "BOX_OAUTH_TOKEN_URL",
+    clientIdEnv: "BOX_OAUTH_CLIENT_ID",
+    clientSecretEnv: "BOX_OAUTH_CLIENT_SECRET",
+    refreshTokenEnv: "MIND_BOX_REFRESH_TOKEN",
   },
 };
 

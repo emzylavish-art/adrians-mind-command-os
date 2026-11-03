@@ -38,6 +38,20 @@ const DEFAULT_ACCOUNTS: StorageAccountConfig[] = [
     order: 4,
     enabled: true,
   },
+  {
+    service: "box",
+    accountEmail: "box-placeholder@example.com",
+    capBytes: DEFAULT_CAPS.box,
+    order: 5,
+    enabled: true,
+  },
+  {
+    service: "koofr",
+    accountEmail: "koofr-placeholder@example.com",
+    capBytes: DEFAULT_CAPS.koofr,
+    order: 6,
+    enabled: true,
+  },
 ];
 
 let configPath = join(process.cwd(), ".data", "media-storage-accounts.json");

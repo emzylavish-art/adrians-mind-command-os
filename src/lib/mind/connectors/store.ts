@@ -11,6 +11,8 @@ export const CONNECTOR_IDS = [
   "dropbox",
   "onedrive",
   "pcloud",
+  "box",
+  "koofr",
   "slack",
   "github",
 ] as const;
@@ -29,6 +31,8 @@ export const CONNECTOR_DISPLAY_NAMES: Record<ConnectorId, string> = {
   dropbox: "Dropbox",
   onedrive: "OneDrive",
   pcloud: "pCloud",
+  box: "Box",
+  koofr: "Koofr",
   slack: "Slack",
   github: "GitHub",
 };
@@ -87,7 +91,11 @@ function ensureOwnerDir(ownerId: string) {
 
 export function saveConnection(conn: StoredConnection) {
   ensureOwnerDir(conn.ownerId);
-  writeFileSync(ownerFile(conn.ownerId, `${conn.connector}.json`), JSON.stringify(conn));
+  const path = ownerFile(conn.ownerId, `${conn.connector}.json`);
+  // Atomic replace so Box-style refresh-token rotation cannot leave a truncated record.
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, JSON.stringify(conn), { mode: 0o600 });
+  renameSync(tmp, path);
 }
 
 export function readConnection(ownerId: string, connector: ConnectorId): StoredConnection | null {
