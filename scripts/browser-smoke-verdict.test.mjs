@@ -397,7 +397,7 @@ test("browser-smoke wires the guard and verdict helpers", () => {
   assert.match(src, /normalizedBodyTextHash\(/);
   assert.match(src, /bodyTextPrefix\(/);
   assert.match(src, /baselineComparison\(/);
-  assert.match(src, /process\.exitCode = exitCodeFor\(viewports\)/);
+  assert.match(src, /process\.exitCode = exitCodeFor\(viewports, verdict\)/);
   assert.match(src, /waitUntil: "domcontentloaded"/);
   assert.doesNotMatch(
     src,
@@ -425,4 +425,32 @@ test("browser-smoke file I/O only touches guarded paths", () => {
   assert.deepEqual(reads, ["baselinePath"]);
   const stats = [...src.matchAll(/statSync\(\s*([A-Za-z_$][\w$.]*)/g)].map((m) => m[1]);
   assert.deepEqual(stats, ["baselinePath"]);
+});
+
+test("missing current mobile viewport is a baseline regression", () => {
+  const { divergesFromBaseline, reasons } = compareToBaseline(
+    { viewports: { desktop: viewport() } },
+    verdict(),
+  );
+  assert.equal(divergesFromBaseline, true);
+  assert.match(reasons.join(";"), /mobile: current viewport missing/);
+});
+
+test("exitCodeFor fails closed when desktop or mobile evidence is missing", () => {
+  assert.equal(exitCodeFor({ desktop: viewport() }), 1);
+  assert.equal(exitCodeFor({ mobile: viewport() }), 1);
+});
+
+test("baseline divergence fails the browser process, stable evidence passes", () => {
+  const stable = compareToBaseline(verdict(), verdict());
+  const changed = compareToBaseline(verdict({ status: 301 }), verdict());
+  assert.equal(exitCodeFor(verdict().viewports, stable), 0);
+  assert.equal(exitCodeFor(verdict({ status: 301 }).viewports, changed), 3);
+});
+
+test("baseline failure never hides a more urgent navigation or script error", () => {
+  const regression = { divergesFromBaseline: true, baselineReasons: ["bad baseline"] };
+  assert.equal(exitCodeFor(verdict({ status: 500 }).viewports, regression), 1);
+  assert.equal(exitCodeFor(verdict({}, { pageErrors: ["boom"] }).viewports, regression), 2);
+  assert.equal(exitCodeFor(verdict().viewports, regression), 3);
 });

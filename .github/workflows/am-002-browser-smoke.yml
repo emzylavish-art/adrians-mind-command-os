@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - audit/am-002-playwright
+      - audit/am-003-regression
     paths:
       - ".github/workflows/am-002-browser-smoke.yml"
       - "scripts/browser-smoke.mjs"
       - "scripts/browser-smoke-verdict.test.mjs"
+      - "scripts/browser-smoke-verdict.mjs"
   workflow_dispatch:
 
 permissions:
@@ -19,7 +21,7 @@ concurrency:
 
 jobs:
   local-browser-smoke:
-    if: github.ref == 'refs/heads/audit/am-002-playwright'
+    if: github.ref == 'refs/heads/audit/am-002-playwright' || github.ref == 'refs/heads/audit/am-003-regression'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -74,6 +76,13 @@ jobs:
           node scripts/browser-smoke.mjs \
             http://127.0.0.1:8080/ \
             "$RUNNER_TEMP/am-002-browser-smoke/localhost.png"
+
+          # A second independent capture compares with the first. Any material
+          # difference or unreadable baseline now exits nonzero and fails CI.
+          node scripts/browser-smoke.mjs \
+            http://127.0.0.1:8080/ \
+            "$RUNNER_TEMP/am-002-browser-smoke/repeat.png" \
+            --baseline "$RUNNER_TEMP/am-002-browser-smoke/localhost.json"
 
       - name: Check TypeScript without modifying app
         run: npm run typecheck

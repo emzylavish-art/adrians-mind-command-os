@@ -57,7 +57,14 @@ export function compareToBaseline(current, baseline) {
   }
   const reasons = [];
   const baseViewports = baseline?.viewports ?? {};
-  for (const [name, cur] of entries) {
+  // Both sides must account for every viewport. A missing mobile capture must
+  // not silently turn an incomplete run into a passing comparison.
+  for (const name of new Set([...Object.keys(baseViewports), ...entries.map(([key]) => key)])) {
+    const cur = current.viewports[name];
+    if (!cur || typeof cur !== "object") {
+      reasons.push(`${name}: current viewport missing`);
+      continue;
+    }
     const base = baseViewports[name];
     if (!base) {
       reasons.push(`${name}: no baseline data for this viewport`);
@@ -117,12 +124,16 @@ export function baselineComparison(current, rawText) {
   }
   return compareToBaseline(current, baseline);
 }
-export function exitCodeFor(viewports) {
-  const list = Object.values(viewports ?? {});
-  if (list.length === 0) return 1;
+export function exitCodeFor(viewports, baselineVerdict = null) {
+  // Missing evidence must never count as a successful desktop/mobile smoke.
+  if (!viewports || !["desktop", "mobile"].every((name) => viewports[name])) return 1;
+  const list = Object.values(viewports);
   if (list.some((v) => (v.status ?? 0) >= 400 || (v.status ?? 0) === 0)) return 1;
   if (list.some((v) => (v.consoleErrors?.length ?? 0) > 0 || (v.pageErrors?.length ?? 0) > 0)) {
     return 2;
   }
+  // Baseline comparison was previously informational only. Fail CI when the
+  // explicit baseline gate detects a material change or unreadable reference.
+  if (baselineVerdict?.divergesFromBaseline) return 3;
   return 0;
 }
