@@ -95,6 +95,17 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     images,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
+  // H14: consume chat rate limit after validation so bad bodies do not spend a token,
+  // and surface rateLimited + retryAfterSec for honest 429s in handleMindTurn.
+  const limited = consumeMindRateLimit("chat", userId, 12);
+  if (!limited.ok) {
+    return {
+      ok: false as const,
+      error: CHAT_RATE_LIMIT_REPLY,
+      rateLimited: true as const,
+      retryAfterSec: limited.retryAfterSec,
+    };
+  }
   const tier = resolveModelTier(tierField.tier, text || "image", process.env);
   const saveMemoryText = typeof data.saveMemory === "string" ? data.saveMemory : "";
   return {
