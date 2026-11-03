@@ -4975,7 +4975,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               }}
               onSearch={() => {
                 setPaletteOpen(true);
-                queue searchRef.current?.focus();
+                const node = searchRef.current;
+                if (node) node.focus();
               }}
               onNewBot={() => {
                 const el = document.getElementById("agents-custom-form");
