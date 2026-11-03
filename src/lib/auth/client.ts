@@ -2,7 +2,14 @@ import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
 import { clearLocalMediaOnSignOut } from "@/lib/mind/media/clear-media";
-import { ownerScopeFromBearer, writeMediaOwnerScope } from "@/lib/mind/media/blob-store";
+import {
+  decodeJwtSub,
+  legacyOwnerScopeFromBearerToken,
+  migrateMediaBlobDatabase,
+  ownerScopeFromUserId,
+  readMediaOwnerScope,
+  writeMediaOwnerScope,
+} from "@/lib/mind/media/blob-store";
 import { GROK_PROVIDERS } from "./providers";
 
 /**
@@ -64,12 +71,38 @@ function setBearerToken(token: string | null): void {
   try {
     if (token) {
       window.sessionStorage.setItem(BEARER_KEY, token);
-      writeMediaOwnerScope(ownerScopeFromBearer(token));
+      void bindMediaOwnerScopeFromToken(token);
     } else {
       window.sessionStorage.removeItem(BEARER_KEY);
     }
   } catch {
     /* storage unavailable — ignore */
+  }
+}
+
+/** Partition local media by stable JWT `sub` (SHA-256), migrating legacy token-hash DBs. */
+async function bindMediaOwnerScopeFromToken(token: string): Promise<void> {
+  const sub = decodeJwtSub(token);
+  const next = await ownerScopeFromUserId(sub);
+  const prev = readMediaOwnerScope();
+  const legacy = legacyOwnerScopeFromBearerToken(token);
+  writeMediaOwnerScope(next);
+  const sources = new Set<string>();
+  if (prev && prev !== next) sources.add(prev);
+  if (legacy && legacy !== next) sources.add(legacy);
+  for (const fromScope of sources) {
+    try {
+      const result = await migrateMediaBlobDatabase({
+        fromScope,
+        toScope: next,
+        deleteSourceAfterVerify: true,
+      });
+      if (!result.verified) {
+        /* keep source DB if verify failed — never delete unverified */
+      }
+    } catch {
+      /* best effort — never block sign-in */
+    }
   }
 }
 

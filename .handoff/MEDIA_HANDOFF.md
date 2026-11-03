@@ -313,3 +313,20 @@ See `/workspace/locks/media-integration.lock`.
 
 ### command-app note
 Minimal hooks only (clear-on-chat-switch effect, gallery mount, owner-scope bind). Respect whisper-flow claim: no whisper merge surface touched.
+
+## Urgent fix: V5-B4 / B1–B3 — 2026-11-02T21:40:00-06:00 (America/Chicago)
+
+**Base tip:** `76046b3` · **Branch:** `media-integration`
+
+### V5-B4 HIGH (local media loss) — fixed
+- `normalizeChat` in `workspace.ts` now preserves validated `images[]` (`dataUrl` and/or `blobId`) with the same caps/shape as media save (safe data-URL regex, max 4/msg, max chars, blobId `img_*` pattern). Logic lock was released; edit is images-preservation only.
+- Orphan GC is gated: skipped on the load/normalize cycle; skipped for the session if normalize dropped chats/messages/images or hydrate failed; deletions require **two consecutive persists** seeing the id unreferenced **and** `createdAt` older than **7 days**. Never deletes cloud media.
+- Regression: refresh → gallery still populated → GC leaves live blobs (`blob-store.test.ts` + `workspace.test.ts`).
+
+### V5-B1/B2/B3 — fixed
+- Owner scope is SHA-256(user id / JWT `sub`) truncated to 16 hex (`u_<hex16>`), not FNV of the bearer token. Signed out → `local`.
+- Misleading “stable token” comment removed; JWT decode is explicitly for naming only (no verify).
+- Migrates legacy token-hash (and prior scope) DBs into the new user-scoped DB on bind; deletes source only after verify.
+
+### Verify
+- tsc green · full src suite **363/363** · build green

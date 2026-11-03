@@ -114,3 +114,60 @@ describe("workspace memory", () => {
     assert.ok(elapsed < 200, `normalize and canonical took ${elapsed.toFixed(1)}ms`);
   });
 });
+
+describe("normalizeChat media images (V5-B4)", () => {
+  it("preserves validated images[] (dataUrl + blobId) across normalizeWorkspace", () => {
+    const ws = normalizeWorkspace({
+      version: 1,
+      chats: [
+        {
+          id: "c1",
+          title: "Media",
+          memory: "off",
+          messages: [
+            {
+              id: "m1",
+              role: "user",
+              content: "hi",
+              at: "2020-01-01T00:00:00.000Z",
+              images: [
+                { dataUrl: "data:image/png;base64,aaa", name: "shot.png", blobId: "img_c1_abc" },
+                { dataUrl: "javascript:alert(1)", name: "evil" },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const images = ws.chats[0]?.messages[0]?.images;
+    assert.equal(images?.length, 1);
+    assert.equal(images?.[0]?.blobId, "img_c1_abc");
+    assert.equal(images?.[0]?.dataUrl, "data:image/png;base64,aaa");
+    assert.equal(images?.[0]?.name, "shot.png");
+  });
+
+  it("keeps blobId-only compact refs without inventing pixels", () => {
+    const ws = normalizeWorkspace({
+      version: 1,
+      chats: [
+        {
+          id: "c2",
+          title: "Compact",
+          messages: [
+            {
+              id: "m2",
+              role: "assistant",
+              content: "done",
+              at: "2020-01-01T00:00:00.000Z",
+              images: [{ blobId: "img_c2_xyz", name: "generated-1.png", mime: "image/png" }],
+            },
+          ],
+        },
+      ],
+    });
+    const images = ws.chats[0]?.messages[0]?.images;
+    assert.equal(images?.length, 1);
+    assert.equal(images?.[0]?.blobId, "img_c2_xyz");
+    assert.equal(images?.[0]?.dataUrl, undefined);
+  });
+});

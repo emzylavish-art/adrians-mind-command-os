@@ -6,11 +6,13 @@ import {
   gcOrphanMediaBlobs,
   hydrateWorkspaceImages,
   readMediaOwnerScope,
+  readPendingGcOrphans,
+  writePendingGcOrphans,
 } from "./media/blob-store";
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
-import { emptyWorkspace, loadWorkspace, WORKSPACE_KEY } from "./workspace";
+import { emptyWorkspace, loadWorkspaceDetailed, WORKSPACE_KEY } from "./workspace";
 
 function hasContent(ws: Workspace) {
   return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + ws.audit.length > 0;
@@ -27,17 +29,24 @@ export function useMindWorkspace() {
   const latest = useRef(ws);
   const ownerScope = useRef(readMediaOwnerScope());
   const blobStore = useRef(createIndexedDbBlobStore(ownerScope.current));
+  /** Skip GC on the load/normalize cycle; arm only after the first persist finishes. */
+  const gcLoadCycle = useRef(true);
+  const skipGcForSession = useRef(false);
   latest.current = ws;
 
   useEffect(() => {
     let cancel = false;
     void (async () => {
-      const localRaw = loadWorkspace(localStorage);
-      let local = localRaw;
+      const loaded = loadWorkspaceDetailed(localStorage);
+      if (loaded.report.unsafeForBlobGc) {
+        skipGcForSession.current = true;
+      }
+      let local = loaded.workspace;
       try {
-        local = (await hydrateWorkspaceImages(localRaw, blobStore.current)) as Workspace;
+        local = (await hydrateWorkspaceImages(local, blobStore.current)) as Workspace;
       } catch {
-        local = localRaw;
+        local = loaded.workspace;
+        skipGcForSession.current = true;
       }
       if (cancel) return;
       setWs(local);
@@ -56,7 +65,7 @@ export function useMindWorkspace() {
           try {
             serverWs = (await hydrateWorkspaceImages(serverWs, blobStore.current)) as Workspace;
           } catch {
-            /* keep raw */
+            skipGcForSession.current = true;
           }
           if (cancel) return;
           savedJson.current = JSON.stringify(result.workspace);
@@ -103,9 +112,17 @@ export function useMindWorkspace() {
             setMediaWarning(compacted.warning ?? null);
           }
           const live = collectWorkspaceBlobIds(persisted);
-          await gcOrphanMediaBlobs(blobStore.current, live);
+          const previous = readPendingGcOrphans();
+          const skip = skipGcForSession.current || gcLoadCycle.current;
+          const gc = await gcOrphanMediaBlobs(blobStore.current, live, {
+            previouslyUnreferenced: previous,
+            skip,
+          });
+          writePendingGcOrphans(gc.candidates);
+          if (gcLoadCycle.current) gcLoadCycle.current = false;
         } catch {
           persisted = ws;
+          skipGcForSession.current = true;
         }
         if (cancelled) return;
         localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));

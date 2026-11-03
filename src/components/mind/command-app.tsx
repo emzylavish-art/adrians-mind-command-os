@@ -63,7 +63,7 @@ import {
   type DownscaleQuality,
 } from "@/components/mind/media/downscale-quality";
 import { safeImageDownloadName } from "@/components/mind/media/media-ui-helpers";
-import { BATCH_EDIT_MAX, GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, clampBatchEditCount, collectClipboardImageFiles, createImagineTabLock, estimateImagineBatchCostUsd, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, ownerScopeFromBearer, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, writeMediaOwnerScope, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
+import { BATCH_EDIT_MAX, GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, clampBatchEditCount, collectClipboardImageFiles, createImagineTabLock, estimateImagineBatchCostUsd, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, decodeJwtSub, legacyOwnerScopeFromBearerToken, migrateMediaBlobDatabase, ownerScopeFromUserId, parseImagineCommand, readMediaOwnerScope, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, writeMediaOwnerScope, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -360,9 +360,24 @@ export function CommandApp() {
     setCloudPickerOpen(false);
   }, [activeId]);
 
-  // Bind IndexedDB blob scope to the current bearer (or local) on mount / token change.
+  // Bind IndexedDB blob scope to stable JWT sub / local on mount (not the rotating token hash).
   useEffect(() => {
-    writeMediaOwnerScope(ownerScopeFromBearer(getBearerToken()));
+    void (async () => {
+      const token = getBearerToken();
+      const sub = decodeJwtSub(token);
+      const next = await ownerScopeFromUserId(sub);
+      const prev = readMediaOwnerScope();
+      const legacy = legacyOwnerScopeFromBearerToken(token);
+      writeMediaOwnerScope(next);
+      for (const fromScope of [prev, legacy]) {
+        if (!fromScope || fromScope === next) continue;
+        try {
+          await migrateMediaBlobDatabase({ fromScope, toScope: next, deleteSourceAfterVerify: true });
+        } catch {
+          /* best effort */
+        }
+      }
+    })();
   }, []);
 
   useEffect(() => {

@@ -5,20 +5,24 @@ import {
   compactImageRefs,
   compactWorkspaceImages,
   createMemoryBlobStore,
+  decodeJwtSub,
   gcOrphanMediaBlobs,
   hydrateImageRefs,
   hydrateWorkspaceImages,
   INLINE_OFFLOAD_CHARS,
+  MEDIA_BLOB_GC_MIN_AGE_MS,
   mediaBlobDbName,
   mediaQuotaWarning,
   MEDIA_QUOTA_SOFT_CHARS,
   newMediaBlobId,
   ownerScopeFromBearer,
+  ownerScopeFromUserId,
   shouldOffloadDataUrl,
   type MediaBlobStore,
 } from "./blob-store.ts";
 import { clearLocalMediaOnSignOut, stripLocalWorkspaceImagePixels } from "./clear-media.ts";
 import { classifyGalleryName, listChatGalleryImages } from "./chat-gallery.ts";
+import { normalizeWorkspace } from "../workspace.ts";
 
 const big = `data:image/png;base64,${"a".repeat(INLINE_OFFLOAD_CHARS)}`;
 const small = "data:image/png;base64,aaa";
@@ -125,8 +129,24 @@ describe("isolation: owner scope + DB names", () => {
   it("keeps legacy DB name for local scope and scopes others", () => {
     assert.equal(mediaBlobDbName("local"), "amcos.media.blobs.v1");
     assert.equal(mediaBlobDbName("u_abc"), "amcos.media.blobs.v1.u_abc");
-    assert.notEqual(ownerScopeFromBearer("token-a"), ownerScopeFromBearer("token-b"));
-    assert.equal(ownerScopeFromBearer(null), "local");
+  });
+
+  it("scopes from stable user id via SHA-256, not the raw bearer string", async () => {
+    const a = await ownerScopeFromUserId("user-aaa");
+    const b = await ownerScopeFromUserId("user-bbb");
+    assert.match(a, /^u_[a-f0-9]{16}$/);
+    assert.notEqual(a, b);
+    assert.equal(await ownerScopeFromUserId(null), "local");
+    // Same sub in two JWTs → same scope (token rotation safe)
+    const sub = "supabase-user-123";
+    const mk = (extra: string) => {
+      const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
+      const payload = Buffer.from(JSON.stringify({ sub, nonce: extra })).toString("base64url");
+      return `${header}.${payload}.sig`;
+    };
+    assert.equal(decodeJwtSub(mk("one")), sub);
+    assert.equal(await ownerScopeFromBearer(mk("one")), await ownerScopeFromBearer(mk("two")));
+    assert.equal(await ownerScopeFromBearer(null), "local");
   });
 
   it("newMediaBlobId embeds chat id when safe", () => {
@@ -136,20 +156,116 @@ describe("isolation: owner scope + DB names", () => {
 });
 
 describe("blob GC + quota warning", () => {
-  it("deletes orphans not referenced by workspace messages", async () => {
-    const store = createMemoryBlobStore({ keep_me: big, orphan_me: small });
+  it("does not delete on first observation; deletes only after 2 persists + age", async () => {
+    const old = Date.now() - MEDIA_BLOB_GC_MIN_AGE_MS - 1000;
+    const store = createMemoryBlobStore();
+    await store.put("keep_me", big, old);
+    await store.put("orphan_me", small, old);
     const live = collectWorkspaceBlobIds({
       chats: [{ messages: [{ images: [{ blobId: "keep_me" }] }] }],
     });
-    const result = await gcOrphanMediaBlobs(store, live);
-    assert.equal(result.deleted, 1);
+    const first = await gcOrphanMediaBlobs(store, live, { previouslyUnreferenced: [] });
+    assert.equal(first.deleted, 0);
+    assert.deepEqual(first.candidates, ["orphan_me"]);
+    assert.equal(store.dump().orphan_me, small);
+
+    const second = await gcOrphanMediaBlobs(store, live, {
+      previouslyUnreferenced: first.candidates,
+      now: Date.now(),
+    });
+    assert.equal(second.deleted, 1);
     assert.equal(store.dump().keep_me, big);
     assert.equal(store.dump().orphan_me, undefined);
+  });
+
+  it("skips GC entirely when skip=true (normalize/load unsafe)", async () => {
+    const store = createMemoryBlobStore({ orphan_me: small });
+    const result = await gcOrphanMediaBlobs(store, new Set(), {
+      previouslyUnreferenced: ["orphan_me"],
+      skip: true,
+      now: Date.now() + MEDIA_BLOB_GC_MIN_AGE_MS * 2,
+    });
+    assert.equal(result.deleted, 0);
+    assert.equal(store.dump().orphan_me, small);
+  });
+
+  it("does not delete young orphans even if seen twice", async () => {
+    const store = createMemoryBlobStore();
+    await store.put("orphan_me", small, Date.now());
+    const live = new Set<string>();
+    const first = await gcOrphanMediaBlobs(store, live);
+    const second = await gcOrphanMediaBlobs(store, live, {
+      previouslyUnreferenced: first.candidates,
+      now: Date.now() + 60_000,
+    });
+    assert.equal(second.deleted, 0);
+    assert.equal(store.dump().orphan_me, small);
   });
 
   it("warns before soft quota is exceeded", () => {
     assert.equal(mediaQuotaWarning(0, 100), undefined);
     assert.ok(mediaQuotaWarning(MEDIA_QUOTA_SOFT_CHARS, 1));
+  });
+});
+
+describe("refresh → gallery → GC regression (V5-B4)", () => {
+  it("normalizeWorkspace keeps images so gallery stays populated and GC does not delete live blobs", async () => {
+    const blobId = "img_chat1_liveblob";
+    const dataUrl = "data:image/png;base64,aaa";
+    const persisted = {
+      version: 1,
+      chats: [
+        {
+          id: "chat1",
+          title: "Pics",
+          memory: "off",
+          temporary: false,
+          autonomy: "ask",
+          projectId: null,
+          messages: [
+            {
+              id: "m1",
+              role: "user",
+              content: "see this",
+              at: new Date(0).toISOString(),
+              images: [{ blobId, dataUrl, name: "camera-1.png" }],
+            },
+          ],
+          retrievalLog: [],
+        },
+      ],
+    };
+    const normalized = normalizeWorkspace(persisted);
+    const images = normalized.chats[0]?.messages[0]?.images;
+    assert.ok(images?.length);
+    assert.equal(images![0]?.blobId, blobId);
+    assert.equal(images![0]?.dataUrl, dataUrl);
+
+    const gallery = listChatGalleryImages(
+      normalized.chats[0]!.messages.map((msg) => ({
+        id: msg.id,
+        role: msg.role,
+        images: msg.images,
+      })),
+    );
+    assert.equal(gallery.length, 1);
+    assert.equal(gallery[0]?.kind, "camera");
+
+    const store = createMemoryBlobStore();
+    const old = Date.now() - MEDIA_BLOB_GC_MIN_AGE_MS - 1;
+    await store.put(blobId, dataUrl, old);
+    await store.put("true_orphan", small, old);
+    const live = collectWorkspaceBlobIds(normalized);
+    assert.ok(live.has(blobId));
+    const first = await gcOrphanMediaBlobs(store, live);
+    assert.equal(first.deleted, 0);
+    const second = await gcOrphanMediaBlobs(store, live, {
+      previouslyUnreferenced: first.candidates,
+      now: Date.now(),
+    });
+    assert.equal(store.dump()[blobId], dataUrl, "live blob must survive GC after refresh");
+    assert.equal(store.dump().true_orphan, undefined);
+    assert.equal(second.deleted, 1);
   });
 });
 

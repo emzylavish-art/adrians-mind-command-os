@@ -7,6 +7,7 @@ import type {
   MemoryItem,
   MemoryScope,
   Msg,
+  MsgImage,
   Project,
   UsageEntry,
   Workspace,
@@ -57,8 +58,19 @@ export async function sha256(text: string): Promise<string> {
 }
 
 export function normalizeWorkspace(input: unknown): Workspace {
+  return normalizeWorkspaceDetailed(input).workspace;
+}
+
+export function normalizeWorkspaceDetailed(input: unknown): {
+  workspace: Workspace;
+  report: WorkspaceNormalizeReport;
+} {
+  const report = emptyNormalizeReport();
   const base = emptyWorkspace();
-  if (!isRecord(input)) return base;
+  if (!isRecord(input)) {
+    report.unsafeForBlobGc = true;
+    return { workspace: base, report };
+  }
   base.halted = input.halted === true;
   if (Array.isArray(input.projects)) {
     for (const row of input.projects) {
@@ -73,9 +85,17 @@ export function normalizeWorkspace(input: unknown): Workspace {
   }
   if (Array.isArray(input.chats)) {
     for (const row of input.chats) {
-      const chat = normalizeChat(row);
-      if (chat) base.chats.push(chat);
+      const normalized = normalizeChat(row);
+      if (!normalized) {
+        report.chatsDropped += 1;
+        continue;
+      }
+      report.messagesDropped += normalized.messagesDropped;
+      report.imagesDropped += normalized.imagesDropped;
+      base.chats.push(normalized.chat);
     }
+  } else if (input.chats !== undefined) {
+    report.chatsDropped += 1;
   }
   if (Array.isArray(input.memories)) {
     for (const row of input.memories) {
@@ -116,27 +136,103 @@ export function normalizeWorkspace(input: unknown): Workspace {
       });
     }
   }
-  return { ...base, ...readFleet(input) };
+  report.unsafeForBlobGc =
+    report.chatsDropped > 0 || report.messagesDropped > 0 || report.imagesDropped > 0;
+  return { workspace: { ...base, ...readFleet(input) }, report };
 }
 
-function normalizeChat(row: unknown): Chat | null {
+
+/** Same caps/shape as media save path (pack/harden): data-URL or blobId refs only. */
+const MAX_MSG_IMAGES = 4;
+const MAX_INLINE_DATA_URL_CHARS = 1_800_000;
+const SAFE_MSG_DATA_URL =
+  /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=\s]+$/i;
+
+export type WorkspaceNormalizeReport = {
+  chatsDropped: number;
+  messagesDropped: number;
+  imagesDropped: number;
+  /** True when any chat/message/image was rejected during normalize — GC must skip. */
+  unsafeForBlobGc: boolean;
+};
+
+export function emptyNormalizeReport(): WorkspaceNormalizeReport {
+  return { chatsDropped: 0, messagesDropped: 0, imagesDropped: 0, unsafeForBlobGc: false };
+}
+
+function normalizeMsgImage(raw: unknown): { image: MsgImage | null; dropped: boolean } {
+  if (!isRecord(raw)) return { image: null, dropped: true };
+  const name = typeof raw.name === "string" ? raw.name.slice(0, 160) : undefined;
+  const mime = typeof raw.mime === "string" ? raw.mime.slice(0, 64) : undefined;
+  const blobId =
+    typeof raw.blobId === "string" && /^img_[A-Za-z0-9_-]{1,180}$/.test(raw.blobId) ? raw.blobId : undefined;
+  let dataUrl: string | undefined;
+  if (typeof raw.dataUrl === "string") {
+    const trimmed = raw.dataUrl.trim();
+    if (
+      trimmed.length > 0 &&
+      trimmed.length <= MAX_INLINE_DATA_URL_CHARS &&
+      SAFE_MSG_DATA_URL.test(trimmed)
+    ) {
+      dataUrl = trimmed;
+    }
+  }
+  if (!dataUrl && !blobId) return { image: null, dropped: true };
+  const image: MsgImage = {};
+  if (dataUrl) image.dataUrl = dataUrl;
+  if (blobId) image.blobId = blobId;
+  if (name) image.name = name;
+  if (mime) image.mime = mime;
+  return { image, dropped: false };
+}
+
+function normalizeMsgImages(raw: unknown): { images?: MsgImage[]; dropped: number } {
+  if (raw === undefined) return { images: undefined, dropped: 0 };
+  if (!Array.isArray(raw)) return { images: undefined, dropped: 1 };
+  const images: MsgImage[] = [];
+  let dropped = 0;
+  for (const item of raw) {
+    const result = normalizeMsgImage(item);
+    if (!result.image) {
+      dropped += 1;
+      continue;
+    }
+    if (images.length >= MAX_MSG_IMAGES) {
+      dropped += 1;
+      continue;
+    }
+    images.push(result.image);
+  }
+  return { images: images.length ? images : undefined, dropped };
+}
+
+function normalizeChat(row: unknown): { chat: Chat; messagesDropped: number; imagesDropped: number } | null {
   if (!isRecord(row) || !str(row.id)) return null;
   const memory = row.memory === "on" ? "on" : "off";
   const autonomy: Autonomy = row.autonomy === "automatic" ? "automatic" : "ask";
   const messages: Msg[] = [];
+  let messagesDropped = 0;
+  let imagesDropped = 0;
   if (Array.isArray(row.messages)) {
     for (const msg of row.messages) {
       if (!isRecord(msg) || (msg.role !== "user" && msg.role !== "assistant") || typeof msg.content !== "string") {
+        messagesDropped += 1;
         continue;
       }
-      messages.push({
+      const normalizedImages = normalizeMsgImages(msg.images);
+      imagesDropped += normalizedImages.dropped;
+      const next: Msg = {
         id: str(msg.id, crypto.randomUUID()),
         role: msg.role,
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
-      });
+      };
+      if (normalizedImages.images?.length) next.images = normalizedImages.images;
+      messages.push(next);
     }
+  } else if (row.messages !== undefined) {
+    messagesDropped += 1;
   }
   const retrievalLog = Array.isArray(row.retrievalLog)
     ? row.retrievalLog.flatMap((entry) => {
@@ -145,14 +241,18 @@ function normalizeChat(row: unknown): Chat | null {
       })
     : [];
   return {
-    id: str(row.id),
-    title: str(row.title, "New session").slice(0, 80),
-    memory,
-    temporary: row.temporary === true,
-    autonomy,
-    projectId: typeof row.projectId === "string" ? row.projectId : null,
-    messages,
-    retrievalLog,
+    chat: {
+      id: str(row.id),
+      title: str(row.title, "New session").slice(0, 80),
+      memory,
+      temporary: row.temporary === true,
+      autonomy,
+      projectId: typeof row.projectId === "string" ? row.projectId : null,
+      messages,
+      retrievalLog,
+    },
+    messagesDropped,
+    imagesDropped,
   };
 }
 
@@ -193,21 +293,32 @@ function normalizeMemory(row: unknown): MemoryItem | null {
 }
 
 export function loadWorkspace(storage: Pick<Storage, "getItem">): Workspace {
+  return loadWorkspaceDetailed(storage).workspace;
+}
+
+export function loadWorkspaceDetailed(storage: Pick<Storage, "getItem">): {
+  workspace: Workspace;
+  report: WorkspaceNormalizeReport;
+} {
   const current = storage.getItem(WORKSPACE_KEY);
   if (current) {
     try {
-      return normalizeWorkspace(JSON.parse(current));
+      return normalizeWorkspaceDetailed(JSON.parse(current));
     } catch {
-      return emptyWorkspace();
+      const report = emptyNormalizeReport();
+      report.unsafeForBlobGc = true;
+      return { workspace: emptyWorkspace(), report };
     }
   }
   const legacy = storage.getItem(LEGACY_KEY);
-  if (!legacy) return emptyWorkspace();
+  if (!legacy) return { workspace: emptyWorkspace(), report: emptyNormalizeReport() };
   try {
     const chats = JSON.parse(legacy) as unknown;
-    return normalizeWorkspace({ version: 1, chats });
+    return normalizeWorkspaceDetailed({ version: 1, chats });
   } catch {
-    return emptyWorkspace();
+    const report = emptyNormalizeReport();
+    report.unsafeForBlobGc = true;
+    return { workspace: emptyWorkspace(), report };
   }
 }
 
