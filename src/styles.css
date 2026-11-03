@@ -13847,3 +13847,24 @@ div.shell > div.composer-bar.is-fixed {
     display: none !important;
   }
 }
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r4f — mic/Speak 36px under 430 so Ask≥140 doesn't
+ * overflow the card on 375.
+ * ============================================================================ */
+@media (max-width: 429.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-mic-dictate"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-mic-dictation,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-pill {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+  }
+}
