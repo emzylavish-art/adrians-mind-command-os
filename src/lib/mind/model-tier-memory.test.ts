@@ -24,3 +24,29 @@ describe("model tier memory", () => {
     assert.match(read?.reason ?? "", /Expert/);
   });
 });
+
+describe("model tier memory Orchestrator", () => {
+  it("accepts Orchestrator selected and resolved from a done event", () => {
+    const outcome = outcomeFromDoneEvent({
+      model: "grok-4.7",
+      modelTier: "Orchestrator",
+      resolvedTier: "Orchestrator",
+      tierReason: "Owner selected Orchestrator.",
+    });
+    assert.ok(outcome);
+    assert.equal(outcome!.selected, "Orchestrator");
+    assert.equal(outcome!.resolved, "Orchestrator");
+    assert.equal(outcome!.model, "grok-4.7");
+  });
+
+  it("rejects unknown tiers", () => {
+    assert.equal(
+      outcomeFromDoneEvent({
+        model: "x",
+        modelTier: "Nope",
+        resolvedTier: "Fast",
+      }),
+      null,
+    );
+  });
+});

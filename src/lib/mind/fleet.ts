@@ -515,6 +515,49 @@ export function gmailConnectAttempt(): { ok: false; error: string } {
   return { ok: false, error: "Google OAuth is not configured. No mailbox was connected and no message was read or sent." };
 }
 
+/** Path the Connected-apps "Connect Google" button starts (same as ServiceBoard Gmail). */
+export function gmailOauthStartPath(): string {
+  return "/api/mind/oauth/gmail/start?format=json";
+}
+
+/** Only origin the Connect Google button may navigate to (Gmail OAuth authorize endpoint). */
+export const GMAIL_OAUTH_ALLOWED_ORIGIN = "https://accounts.google.com";
+
+/**
+ * Validate a server-supplied OAuth start URL before `window.location.assign`.
+ * Blocks javascript:/data:/file:/http:, protocol-relative, relative, userinfo and look-alike hosts.
+ */
+export function safeGmailOauthRedirect(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed || !/^https:\/\//i.test(trimmed)) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
+  if (parsed.origin !== GMAIL_OAUTH_ALLOWED_ORIGIN) return null;
+  return parsed.toString();
+}
+
+/** Interpret a Gmail OAuth start JSON response so the fleet button can redirect or show an honest error. */
+export function interpretGmailOauthStart(input: {
+  httpOk: boolean;
+  body: { ok?: boolean; url?: string; error?: string } | null;
+}): { ok: true; url: string } | { ok: false; error: string } {
+  const body = input.body && typeof input.body === "object" ? input.body : null;
+  if (input.httpOk && body?.ok === true && body.url !== undefined) {
+    const url = safeGmailOauthRedirect(body.url);
+    if (url) return { ok: true, url };
+    return { ok: false, error: "Google OAuth returned an unexpected sign-in address. Nothing was started." };
+  }
+  const fromBody = typeof body?.error === "string" ? body.error.trim() : "";
+  if (fromBody) return { ok: false, error: fromBody.slice(0, 300) };
+  return gmailConnectAttempt();
+}
+
 export function addSchedule(ws: Workspace, name: string, agentId: string | null, intervalMinutes: number, now?: string, timeZone = "UTC", clockHour: number | null = null, clockMinute = 0): { ok: true; ws: Workspace } | { ok: false; error: string } {
   const title = name.trim().slice(0, 80);
   if (!title) return { ok: false, error: "Name the schedule." };

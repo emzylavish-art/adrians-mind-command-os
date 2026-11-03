@@ -21,14 +21,19 @@ export function readModelPayload(raw: string): { text: string; streamed: boolean
     }
   }
   const fed = pushSse(createSseFeed(), body.endsWith("\n") ? body : `${body}\n`);
-  if (fed.bad) return { text: "", streamed: true, usage: null };
+  // Unterminated (no [DONE] / finish_reason) = cut off; never surface partial text as a reply.
+  if (fed.bad || !fed.finished) return { text: "", streamed: true, usage: null };
   return { text: fed.text.trim(), streamed: true, usage: fed.usage };
 }
 
-export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; bad: boolean };
+/**
+ * `finished` flips only on a provider terminator ([DONE] or a non-null finish_reason).
+ * A stream that closes without one was cut off and must not be reported as done.
+ */
+export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; bad: boolean; finished: boolean };
 
 export function createSseFeed(): SseFeed {
-  return { buffer: "", text: "", usage: null, bad: false };
+  return { buffer: "", text: "", usage: null, bad: false, finished: false };
 }
 
 export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: string[] } {
@@ -41,12 +46,18 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
     const trimmed = line.trim();
     if (!trimmed.startsWith("data:")) continue;
     const data = trimmed.slice(5).trim();
-    if (!data || data === "[DONE]") continue;
+    if (!data) continue;
+    if (data === "[DONE]") {
+      feed.finished = true;
+      continue;
+    }
     try {
       const parsed = JSON.parse(data) as {
-        choices?: { delta?: { content?: string }; message?: { content?: string } }[];
+        choices?: { delta?: { content?: string }; message?: { content?: string }; finish_reason?: string | null }[];
         usage?: ModelUsage | null;
       };
+      const reason = parsed.choices?.[0]?.finish_reason;
+      if (typeof reason === "string" && reason) feed.finished = true;
       const text = parsed.choices?.[0]?.delta?.content ?? parsed.choices?.[0]?.message?.content ?? "";
       if (text) {
         feed.text += text;

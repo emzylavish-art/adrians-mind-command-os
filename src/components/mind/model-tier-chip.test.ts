@@ -40,3 +40,15 @@ describe("ModelTierChip Orchestrator", () => {
     assert.equal(label, "Orchestrator · grok-4.7");
   });
 });
+
+describe("ModelTierChip Auto residue", () => {
+  it("clears Auto residue when Orchestrator is selected with a mismatched lastResolved", () => {
+    const label = chipLabelForTier({
+      selected: "Orchestrator",
+      lastResolved: "Fast",
+      lastModel: "grok-fast",
+    });
+    assert.equal(label, "Orchestrator");
+    assert.equal(label.includes("Auto"), false);
+  });
+});
