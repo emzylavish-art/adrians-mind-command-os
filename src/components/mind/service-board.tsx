@@ -23,6 +23,8 @@ const SERVICES: Service[] = [
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
 ];
 
+const LOCAL_COMPUTER_SETUP_HINT = "Pair from the HP EliteBook — install the agent first";
+
 export function ServiceBoard({
   grokConfigured,
   onSetup,
@@ -64,6 +66,20 @@ export function ServiceBoard({
             <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
               Disconnect
             </button>
+          ) : service.name === "Local computer" ? (
+            <div className="mt-3">
+              <button
+                type="button"
+                className="min-h-11 rounded-panel border border-line px-3 text-sm opacity-60"
+                disabled
+                aria-disabled="true"
+                title={LOCAL_COMPUTER_SETUP_HINT}
+                data-testid="local-computer-setup-disabled"
+              >
+                Setup
+              </button>
+              <p className="mt-1 text-xs text-muted">{LOCAL_COMPUTER_SETUP_HINT}</p>
+            </div>
           ) : (
             <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
               {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
