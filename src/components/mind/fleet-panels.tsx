@@ -26,6 +26,8 @@ import {
   type ProviderConnection,
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
+import { fleetSimEnabled } from "@/lib/mind/build-session";
+import { BuildSessionPanel } from "@/components/mind/build/build-session-panel";
 import {
   MCP_LIST_LOAD_TIMEOUT_MS,
   McpListStatusRows,
@@ -91,11 +93,15 @@ export function FleetPanel({
   ws,
   setWs,
   onFailure,
+  onOpenChat,
+  onOpenBuild,
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
   onFailure?: (message: string, retry: () => void) => void;
+  onOpenChat?: (agentId: string, agentName: string) => void;
+  onOpenBuild?: (agentId: string, agentName: string) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [gmailBusy, setGmailBusy] = useState(false);
@@ -414,6 +420,8 @@ export function FleetPanel({
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => onOpenChat?.(agent.id, agent.name)}>Open chat</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => onOpenBuild?.(agent.id, agent.name)}>Open build</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "local-worker"))}>Arm local worker</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "hosted-worker"))}>Record hosted target</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => togglePin(prev, "agent", agent.id))}>Pin</button>
@@ -433,7 +441,10 @@ export function FleetPanel({
       <section className="page-shell">
         <div className="page-hero mb-4">
         <h2 className="font-display text-3xl font-bold">Agent runs</h2>
-        <p className="text-sm text-muted">Events come from the local worker. This does not call a model, send mail, or invent browser screenshots.</p>
+        <p className="text-sm text-muted">Live builds call the model through BuildSession and stream progress. The local tickFleet simulation stays behind MIND_FLEET_SIM=1 only.</p>
+        </div>
+        <div className="mt-4">
+          <BuildSessionPanel botId={active?.id ?? "build-bot"} initialGoal={goal} />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <select aria-label="Choose agent" value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
@@ -443,6 +454,8 @@ export function FleetPanel({
             ))}
           </select>
           <input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="What should this run do?" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
+          {fleetSimEnabled() ? (
+            <>
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
@@ -454,15 +467,19 @@ export function FleetPanel({
               apply(enqueueRun(ws, active.id, goal));
             }}
           >
-            Queue run
+            Queue run (sim)
           </button>
           <button
             type="button"
             className="min-h-11 rounded-panel border border-line px-3 text-sm"
             onClick={() => setWs((prev) => tickFleet(prev, { now: new Date().toISOString(), workerId: "browser-worker" }))}
           >
-            Run worker once
+            Run worker once (sim)
           </button>
+            </>
+          ) : (
+            <p className="text-xs text-muted">Local sim controls hidden. Set MIND_FLEET_SIM=1 to enable enqueueRun/tickFleet.</p>
+          )}
         </div>
         {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
         <ul className="mt-4 space-y-3">

@@ -55,6 +55,7 @@ import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
+import { BuildSessionPanel } from "@/components/mind/build/build-session-panel";
 import { IntentPredictionChip } from "@/components/mind/intent-prediction-chip";
 import { pushComposerText, pushVoiceChunk } from "@/lib/intent";
 import {
@@ -593,6 +594,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
   const [pcAgentOnline, setPcAgentOnline] = useState(false);
   const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
+  const [buildBotId, setBuildBotId] = useState<string>("build-bot");
   const [buildPick, setBuildPick] = useState<string | null>(null);
   // Last finished turn for the header chip; described only while the same tier stays selected.
   const [lastTierRun, setLastTierRun] = useState<ChipTierRun | null>(null);
@@ -5186,7 +5188,24 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 </ol>
               )}
             </form>
-            <FleetPanel mode="agents" ws={ws} setWs={setWs} />
+            <FleetPanel
+              mode="agents"
+              ws={ws}
+              setWs={setWs}
+              onOpenChat={(agentId, agentName) => {
+                openChat();
+                setView("chat");
+                setDraft(`@${agentName} `);
+                setNotice(`Opened chat for ${agentName}. Builds stream from the Build view.`);
+                void agentId;
+              }}
+              onOpenBuild={(agentId, agentName) => {
+                setView("build");
+                setBuildPick(agentName);
+                setBuildBotId(agentId);
+                setNotice(`Build session ready for ${agentName}.`);
+              }}
+            />
             </>
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
@@ -5320,6 +5339,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                   </div>
                 </div>
               </div>
+              <BuildSessionPanel botId={buildBotId} initialGoal={buildPick || ""} />
               <div className="empty-state" data-testid="build-empty">
                 <img src="/empty/empty-folder.svg" alt="" />
                 <p className="font-semibold">Let's build</p>
@@ -5336,11 +5356,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                     className="suggestion-chip"
                     onClick={() => {
                       setBuildPick(item.label);
-                      if (!pcAgentOnline) {
-                        setNotice(`${item.label} was not run. Not paired. Nothing was executed.`);
-                        return;
-                      }
-                      setNotice(`${item.label} is selected. Nothing was executed.`);
+                      setNotice(`${item.label} loaded into Build session. Start build to run a live model session. Repo/terminal edits still need a paired computer.`);
                     }}
                   >
                     {item.label}

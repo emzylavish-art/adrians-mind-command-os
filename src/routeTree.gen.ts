@@ -23,6 +23,11 @@ import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github/callback'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
+import { Route as ApiMindBuildSessionCancelRouteImport } from './routes/api/mind/build-session/cancel'
+import { Route as ApiMindBuildSessionGetRouteImport } from './routes/api/mind/build-session/get'
+import { Route as ApiMindBuildSessionStartRouteImport } from './routes/api/mind/build-session/start'
+import { Route as ApiMindBuildSessionSteerRouteImport } from './routes/api/mind/build-session/steer'
+import { Route as ApiMindBuildSessionStreamRouteImport } from './routes/api/mind/build-session/stream'
 import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
 import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/builtin'
 import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
@@ -129,6 +134,35 @@ const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   path: '/auth/google/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindBuildSessionCancelRoute =
+  ApiMindBuildSessionCancelRouteImport.update({
+    id: '/api/mind/build-session/cancel',
+    path: '/api/mind/build-session/cancel',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindBuildSessionGetRoute = ApiMindBuildSessionGetRouteImport.update({
+  id: '/api/mind/build-session/get',
+  path: '/api/mind/build-session/get',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildSessionStartRoute =
+  ApiMindBuildSessionStartRouteImport.update({
+    id: '/api/mind/build-session/start',
+    path: '/api/mind/build-session/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindBuildSessionSteerRoute =
+  ApiMindBuildSessionSteerRouteImport.update({
+    id: '/api/mind/build-session/steer',
+    path: '/api/mind/build-session/steer',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindBuildSessionStreamRoute =
+  ApiMindBuildSessionStreamRouteImport.update({
+    id: '/api/mind/build-session/stream',
+    path: '/api/mind/build-session/stream',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiMindDashboardStatusRoute = ApiMindDashboardStatusRouteImport.update({
   id: '/api/mind/dashboard/status',
   path: '/api/mind/dashboard/status',
@@ -330,6 +364,11 @@ export interface FileRoutesByFullPath {
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/api/mind/build-session/cancel': typeof ApiMindBuildSessionCancelRoute
+  '/api/mind/build-session/get': typeof ApiMindBuildSessionGetRoute
+  '/api/mind/build-session/start': typeof ApiMindBuildSessionStartRoute
+  '/api/mind/build-session/steer': typeof ApiMindBuildSessionSteerRoute
+  '/api/mind/build-session/stream': typeof ApiMindBuildSessionStreamRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -381,6 +420,11 @@ export interface FileRoutesByTo {
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/api/mind/build-session/cancel': typeof ApiMindBuildSessionCancelRoute
+  '/api/mind/build-session/get': typeof ApiMindBuildSessionGetRoute
+  '/api/mind/build-session/start': typeof ApiMindBuildSessionStartRoute
+  '/api/mind/build-session/steer': typeof ApiMindBuildSessionSteerRoute
+  '/api/mind/build-session/stream': typeof ApiMindBuildSessionStreamRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -433,6 +477,11 @@ export interface FileRoutesById {
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/api/mind/build-session/cancel': typeof ApiMindBuildSessionCancelRoute
+  '/api/mind/build-session/get': typeof ApiMindBuildSessionGetRoute
+  '/api/mind/build-session/start': typeof ApiMindBuildSessionStartRoute
+  '/api/mind/build-session/steer': typeof ApiMindBuildSessionSteerRoute
+  '/api/mind/build-session/stream': typeof ApiMindBuildSessionStreamRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -486,6 +535,11 @@ export interface FileRouteTypes {
     | '/api/mind/turn'
     | '/auth/github/callback'
     | '/auth/google/callback'
+    | '/api/mind/build-session/cancel'
+    | '/api/mind/build-session/get'
+    | '/api/mind/build-session/start'
+    | '/api/mind/build-session/steer'
+    | '/api/mind/build-session/stream'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -537,6 +591,11 @@ export interface FileRouteTypes {
     | '/api/mind/turn'
     | '/auth/github/callback'
     | '/auth/google/callback'
+    | '/api/mind/build-session/cancel'
+    | '/api/mind/build-session/get'
+    | '/api/mind/build-session/start'
+    | '/api/mind/build-session/steer'
+    | '/api/mind/build-session/stream'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -588,6 +647,11 @@ export interface FileRouteTypes {
     | '/api/mind/turn'
     | '/auth/github/callback'
     | '/auth/google/callback'
+    | '/api/mind/build-session/cancel'
+    | '/api/mind/build-session/get'
+    | '/api/mind/build-session/start'
+    | '/api/mind/build-session/steer'
+    | '/api/mind/build-session/stream'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -640,6 +704,11 @@ export interface RootRouteChildren {
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   AuthGithubCallbackRoute: typeof AuthGithubCallbackRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
+  ApiMindBuildSessionCancelRoute: typeof ApiMindBuildSessionCancelRoute
+  ApiMindBuildSessionGetRoute: typeof ApiMindBuildSessionGetRoute
+  ApiMindBuildSessionStartRoute: typeof ApiMindBuildSessionStartRoute
+  ApiMindBuildSessionSteerRoute: typeof ApiMindBuildSessionSteerRoute
+  ApiMindBuildSessionStreamRoute: typeof ApiMindBuildSessionStreamRoute
   ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
   ApiMindMcpBuiltinRoute: typeof ApiMindMcpBuiltinRoute
   ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
@@ -775,6 +844,41 @@ declare module '@tanstack/react-router' {
       path: '/auth/google/callback'
       fullPath: '/auth/google/callback'
       preLoaderRoute: typeof AuthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build-session/cancel': {
+      id: '/api/mind/build-session/cancel'
+      path: '/api/mind/build-session/cancel'
+      fullPath: '/api/mind/build-session/cancel'
+      preLoaderRoute: typeof ApiMindBuildSessionCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build-session/get': {
+      id: '/api/mind/build-session/get'
+      path: '/api/mind/build-session/get'
+      fullPath: '/api/mind/build-session/get'
+      preLoaderRoute: typeof ApiMindBuildSessionGetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build-session/start': {
+      id: '/api/mind/build-session/start'
+      path: '/api/mind/build-session/start'
+      fullPath: '/api/mind/build-session/start'
+      preLoaderRoute: typeof ApiMindBuildSessionStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build-session/steer': {
+      id: '/api/mind/build-session/steer'
+      path: '/api/mind/build-session/steer'
+      fullPath: '/api/mind/build-session/steer'
+      preLoaderRoute: typeof ApiMindBuildSessionSteerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build-session/stream': {
+      id: '/api/mind/build-session/stream'
+      path: '/api/mind/build-session/stream'
+      fullPath: '/api/mind/build-session/stream'
+      preLoaderRoute: typeof ApiMindBuildSessionStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/dashboard/status': {
@@ -1040,6 +1144,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindTurnRoute: ApiMindTurnRoute,
   AuthGithubCallbackRoute: AuthGithubCallbackRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
+  ApiMindBuildSessionCancelRoute: ApiMindBuildSessionCancelRoute,
+  ApiMindBuildSessionGetRoute: ApiMindBuildSessionGetRoute,
+  ApiMindBuildSessionStartRoute: ApiMindBuildSessionStartRoute,
+  ApiMindBuildSessionSteerRoute: ApiMindBuildSessionSteerRoute,
+  ApiMindBuildSessionStreamRoute: ApiMindBuildSessionStreamRoute,
   ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,
   ApiMindMcpBuiltinRoute: ApiMindMcpBuiltinRoute,
   ApiMindMcpCallRoute: ApiMindMcpCallRoute,

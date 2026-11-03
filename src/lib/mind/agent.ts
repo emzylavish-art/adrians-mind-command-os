@@ -131,6 +131,8 @@ export function buildAgentModelBody(
     temperature?: number;
     max_tokens?: number;
     reasoning_effort?: "low" | "medium" | "high" | "xhigh";
+    /** Build sessions may enable streaming; bounded agent default stays false. */
+    stream?: boolean;
   } = {},
 ) {
   return {
@@ -140,7 +142,7 @@ export function buildAgentModelBody(
     tool_choice: "auto" as const,
     max_tokens: options.max_tokens ?? 500,
     temperature: options.temperature ?? 0.2,
-    stream: false as const,
+    stream: options.stream === true,
     ...(options.reasoning_effort ? { reasoning_effort: options.reasoning_effort } : {}),
   };
 }
