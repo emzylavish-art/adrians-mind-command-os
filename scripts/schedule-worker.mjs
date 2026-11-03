@@ -65,7 +65,7 @@ const loop = createWorkerLoop({
   runPass: async () => {
     const result = await runWorkerPass(sql, new Date().toISOString(), `worker-${process.pid}`);
     writeStatus({ running: true, ...result });
-    log("pass-result", `Owners ${result.owners}. Ran ${result.ran}. Skipped ${result.skipped}. Failed ${result.failed}. Recovered ${result.recovered}.`);
+    log("pass-result", `Owners ${result.owners}. Schedule triggers ${result.ran}. Agent passes ${result.agentPasses}. Skipped ${result.skipped}. Failed ${result.failed}. Recovered ${result.recovered}.`);
     return result;
   },
 });
