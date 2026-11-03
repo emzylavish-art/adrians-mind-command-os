@@ -61,10 +61,16 @@ import {
   ComposerBar,
   type ComposerModelId,
   DictationPill as PreviewDictationPill,
-  LiveSpeakControl,
   LiveVoiceBar as PresentationalLiveVoiceBar,
   VoiceModeStage,
 } from "@/components/mind/voice-ui";
+import { ComposerLiveVoice } from "@/components/mind/composer-live-voice";
+import {
+  CHROME_VOICE_READY_NOTE,
+  chromeSpeakState,
+  decideChromeSpeak,
+  mapOverlayPhaseToStageState,
+} from "@/lib/mind/voice/chrome-actions";
 
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
 const LazyShortcutSheetHost = lazy(() =>
@@ -4664,6 +4670,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               onDictationStop={stopBrowserDictation}
               onDictationCancel={() => cancelBrowserDictation(true)}
               onOpenVoiceMode={() => void openVoiceOverlay()}
+              onCloseVoiceMode={closeVoiceOverlay}
+              overlayPhase={overlayPhase}
               voiceOverlayOpen={voiceOverlayOpen}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
@@ -6046,6 +6054,8 @@ function ChatPane({
   onDictationStop,
   onDictationCancel,
   onOpenVoiceMode,
+  onCloseVoiceMode,
+  overlayPhase,
   voiceOverlayOpen,
   memoryChoice,
   mode,
@@ -6126,6 +6136,8 @@ function ChatPane({
   onDictationStop: () => void;
   onDictationCancel: () => void;
   onOpenVoiceMode: () => void;
+  onCloseVoiceMode: () => void;
+  overlayPhase: VoiceOverlayPhase;
   voiceOverlayOpen: boolean;
   memoryChoice: "off" | "on";
   mode: Autonomy;
@@ -6171,9 +6183,7 @@ function ChatPane({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [chromeNote, setChromeNote] = useState(
-    "Voice chrome preview. Dictate uses this chat’s microphone. Speak, the live bar, and voice mode do not connect a provider.",
-  );
+  const [chromeNote, setChromeNote] = useState(CHROME_VOICE_READY_NOTE);
   const [dictationTick, setDictationTick] = useState(0);
   const [previewModel, setPreviewModel] = useState<ComposerModelId>("heavy");
   const [previewModelOpen, setPreviewModelOpen] = useState(false);
@@ -6523,10 +6533,10 @@ function ChatPane({
                 model={previewModel}
                 modelMenuOpen={previewModelOpen}
                 dictationState={voiceListening ? "recording" : "idle"}
-                speakState="off"
-                level={voiceListening ? voiceLevel : 0}
-                placeholder="Preview only — not a second composer"
-                askSlot={<span className="text-xs text-muted">Preview only. This chip does not change the chat model or send a message.</span>}
+                speakState={chromeSpeakState(speaking)}
+                level={speaking || voiceListening ? voiceLevel : 0}
+                placeholder="Ask anything"
+                askSlot={<span className="text-xs text-muted">Model chip is preview-only. Speak reads the last reply aloud via TTS.</span>}
                 onPlus={() => markPreview("Add attachment")}
                 onModelToggle={() => setPreviewModelOpen((open) => !open)}
                 onModelSelect={(id) => {
@@ -6535,29 +6545,53 @@ function ChatPane({
                   markPreview("Model chip");
                 }}
                 onDictate={() => {
-                  setChromeNote("Dictate uses this chat’s microphone. Speak on this chrome does not start a provider.");
+                  setChromeNote("Dictate uses this chat’s microphone. It does not start a live voice provider.");
                   onListen();
                 }}
-                onSpeak={() => markPreview("Speak")}
+                onSpeak={() => {
+                  const decision = decideChromeSpeak({
+                    lastReplyContent: lastReply?.content,
+                    speaking,
+                  });
+                  setChromeNote(decision.note);
+                  if (decision.action === "speak") onSpeak(decision.text);
+                }}
               />
-              <LiveSpeakControl
-                state="off"
-                level={0}
-                label="Not connected"
-                onToggle={() => markPreview("Live speak")}
-                onMute={() => markPreview("Live speak mute")}
-                onEnd={() => markPreview("Live speak end")}
+              <ComposerLiveVoice
+                isOverlayMicOpen={() => voiceOverlayOpen || voiceListening}
+                stopOverlayMic={() => (onListenStop ?? onListen)()}
+                onUserTranscript={(text) => onLiveUserTranscript?.(text)}
+                onAssistantTranscript={(text) => onLiveAssistantTranscript?.(text)}
+                onError={(message) => {
+                  setChromeNote(message);
+                  onLiveVoiceError?.(message);
+                }}
+                onNotice={(message) => {
+                  setChromeNote(message);
+                  onLiveVoiceNotice?.(message);
+                }}
+                disabled={halted || busy}
               />
             </div>
             <VoiceModeStage
-              open
+              open={voiceOverlayOpen}
               overlay={false}
-              state="idle"
-              level={0}
-              modeLabel="Preview only — no voice provider is connected."
-              muted={false}
-              onMute={() => markPreview("Voice mode mute")}
-              onEnd={() => markPreview("Voice mode end")}
+              state={mapOverlayPhaseToStageState(overlayPhase)}
+              level={voiceLevel}
+              modeLabel={
+                voiceOverlayOpen
+                  ? "Direct realtime voice session (not browser dictation)."
+                  : "Voice mode closed. Open Voice mode to start Direct realtime."
+              }
+              muted={voiceMuted}
+              onMute={() => {
+                setChromeNote("Toggling voice mode mute on the Direct realtime session.");
+                onToggleMute();
+              }}
+              onEnd={() => {
+                setChromeNote("Ending Direct realtime voice mode.");
+                onCloseVoiceMode();
+              }}
             />
             <PresentationalLiveVoiceBar
               state="off"
