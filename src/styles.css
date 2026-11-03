@@ -9822,3 +9822,523 @@ span.hidden.h-11.items-center,
   isolation: isolate;
   margin-bottom: 0.2rem !important;
 }
+
+/* ============================================================================
+ * Pass-10 r2 — stacking/overlap (visual/polish-pass-10)
+ * Priority: 768 tablet regression (61→77 blocked in r1) + recon P1s that
+ * still reproduce on 657a5b4. CSS only. Africa/Lagos (WAT) 2026-11-03.
+ * Root causes found live:
+ *  - topbar voice-controls ~472×167 crushed Search to ~41px → Cmd-K strip
+ *  - dock max-height + overflow:visible spilled tools over page
+ *  - second in-content voice-controls overlapped composer tools
+ *  - Speak/Auto plate still covers rail on non-dock pages
+ * ============================================================================ */
+
+/* —— r2.1 Cmd-K / command palette: centered modal, never parent-width strip —— */
+#command-palette,
+[data-testid="command-palette"],
+.command-palette-panel,
+.floating-menu#command-palette,
+.topbar #command-palette,
+.topbar .relative.min-w-0.flex-1 > #command-palette,
+.relative.min-w-0.flex-1 > .floating-menu#command-palette,
+.relative.min-w-0.flex-1 > [id="command-palette"] {
+  position: fixed !important;
+  left: 50% !important;
+  right: auto !important;
+  top: max(4.5rem, 12vh) !important;
+  bottom: auto !important;
+  width: min(36rem, calc(100vw - 2rem)) !important;
+  min-width: min(20rem, calc(100vw - 2rem)) !important;
+  max-width: calc(100vw - 2rem) !important;
+  max-height: min(70vh, 28rem) !important;
+  margin: 0 !important;
+  transform: translateX(-50%) !important;
+  z-index: var(--z-modal) !important;
+  writing-mode: horizontal-tb !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+}
+#command-palette button,
+[data-testid="command-palette"] button,
+.command-palette-panel button {
+  writing-mode: horizontal-tb !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* —— r2.2 Model picker: never one-letter vertical strip —— */
+button.model-chip ~ [role="menu"],
+.relative:has(> button.model-chip) > [role="menu"],
+.relative:has(> .model-chip) > [role="menu"],
+.composer-bar__model-menu,
+.floating-menu.model-menu,
+.model-chip + [role="listbox"] {
+  min-width: 14rem !important;
+  width: max(14rem, max-content) !important;
+  max-width: min(18rem, calc(100vw - 1.25rem)) !important;
+  writing-mode: horizontal-tb !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  white-space: normal !important;
+  z-index: var(--z-dropdown) !important;
+}
+button.model-chip ~ [role="menu"] [role="menuitemradio"],
+button.model-chip ~ [role="menu"] button,
+.relative:has(> .model-chip) > [role="menu"] [role="menuitemradio"],
+.relative:has(> .model-chip) > [role="menu"] button,
+.composer-bar__model-menu button,
+.composer-bar__model-option {
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  text-align: left !important;
+}
+/* Undo tablet c118 word-break on chrome that was stacking glyphs */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .topbar button,
+  .topbar .model-chip,
+  .main-stage button.model-chip,
+  .main-stage [role="menu"],
+  .main-stage [role="menu"] button,
+  #command-palette,
+  #command-palette button {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+  }
+}
+
+/* —— r2.3 Tablet/desktop topbar: stop voice cluster crushing Search —— */
+@media (min-width: 768px) and (max-width: 1100px) {
+  .topbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.45rem 0.55rem !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+  /* Search owns a full row so Cmd-K parent is never ~40px wide */
+  .topbar > .relative.min-w-0.flex-1 {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    order: 20;
+  }
+  .topbar > .relative.min-w-0.flex-1 > input[role="combobox"] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* Compact the md:block voice-controls cluster to one row */
+  .topbar > .hidden.shrink-0.md\:block:has([data-testid="voice-controls"]),
+  .topbar > .hidden.md\:block:has([data-testid="voice-controls"]) {
+    flex: 1 1 auto !important;
+    max-width: calc(100% - 0.5rem) !important;
+    min-width: 0 !important;
+  }
+  .topbar [data-testid="voice-controls"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    max-width: 100% !important;
+    max-height: 2.85rem !important;
+    overflow: hidden !important;
+  }
+  .topbar [data-testid="voice-mode-badge"] {
+    flex-wrap: nowrap !important;
+    max-height: 2.75rem !important;
+    overflow: hidden !important;
+    min-width: 0 !important;
+  }
+  .topbar [data-testid="voice-mode-toggle"] {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 11rem !important;
+  }
+  /* Drop secondary chrome that duplicates Speak / picker density */
+  .topbar .voice-zone,
+  .topbar [data-testid="voice-controls"] [data-testid="voice-picker"],
+  .topbar [data-testid="voice-controls"] .voice-picker,
+  .topbar [data-testid="voice-level-meter"] {
+    display: none !important;
+  }
+  .topbar span.hidden.h-11.items-center.md\:inline-flex,
+  .topbar span.md\:inline-flex.h-11 {
+    max-width: 8.5rem !important;
+  }
+}
+
+/* Wider desks: keep voice cluster to one line too */
+@media (min-width: 1100.02px) {
+  .topbar [data-testid="voice-controls"] {
+    flex-wrap: nowrap !important;
+    max-height: 3rem !important;
+    overflow: hidden !important;
+    max-width: min(32rem, 46vw) !important;
+  }
+  .topbar > .relative.min-w-0.flex-1 {
+    flex: 1 1 14rem !important;
+    min-width: 12rem !important;
+  }
+}
+
+/* —— r2.4 Duplicate Voice Direct/Orchestrator: keep topbar only —— */
+body:has(.topbar [data-testid="voice-controls"])
+  .main-stage
+  .min-h-0.flex-1.overflow-auto
+  [data-testid="voice-controls"],
+body:has(.topbar [data-testid="voice-controls"])
+  .main-stage
+  .masthead
+  [data-testid="voice-controls"],
+body:has(.topbar [data-testid="voice-controls"])
+  .main-stage
+  .mx-auto.flex.max-w-6xl
+  [data-testid="voice-controls"],
+body:has(.topbar [data-testid="voice-mode-badge"])
+  .main-stage
+  .min-h-0.flex-1.overflow-auto
+  [data-testid="voice-mode-badge"]:not(.topbar *),
+body:has(.topbar [data-testid="voice-controls"])
+  .main-stage
+  .mx-auto.flex.max-w-6xl
+  [data-testid="voice-mode-badge"] {
+  display: none !important;
+}
+/* Lone badge stacks outside topbar when fuller controls exist in header */
+.main-stage > .topbar ~ * [data-testid="voice-controls"],
+.main-stage .topbar + * [data-testid="voice-controls"] {
+  /* handled above via body:has — keep as belt */
+}
+
+/* —— r2.5 Idle dock: no max-height spill; hide bulky lanes instead —— */
+@media (min-width: 768px) {
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]),
+  .command-card.composer-dock:not(:focus-within):not([data-expanded="true"]),
+  .floating-composer.composer-dock:not(:focus-within):not([data-expanded="true"]) {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.65rem !important;
+  }
+  /* Mode tiles ASK/AUTOMATIC already hidden via > .grid.gap-2; also hide in-form mode chips + effort */
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]) form > .mb-2.flex.flex-wrap.gap-2,
+  .composer-dock:not(:focus-within):not([data-expanded="true"]) form > .mb-2.flex.flex-wrap.gap-2,
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]) [data-testid="composer-effort"],
+  .composer-dock:not(:focus-within):not([data-expanded="true"]) [data-testid="composer-effort"] {
+    display: none !important;
+  }
+  /* Tool row stays one wrapped lane with clear gap from textarea */
+  .composer-dock form > textarea.input-glow,
+  .composer-dock form > .input-glow {
+    margin-bottom: 0.35rem !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    position: relative;
+    z-index: var(--z-composer);
+    gap: 0.45rem !important;
+  }
+}
+
+/* Suggestion chips: own lane above dock, never share textarea hit box */
+.main-stage .flex.gap-2.overflow-x-auto.pb-1,
+.main-stage .flex.flex-wrap.gap-2.pb-1:has(.suggestion-chip),
+.main-stage .flex.flex-wrap.gap-2:has(> .suggestion-chip) {
+  position: relative;
+  z-index: var(--z-content);
+  margin-bottom: 1.5rem !important;
+  padding-bottom: 0.5rem !important;
+  isolation: isolate;
+}
+.suggestion-chip {
+  pointer-events: auto !important;
+}
+
+/* —— r2.6 Bottom Speak/Ask plate: don't cover rail or page on non-dock views —— */
+@media (min-width: 768px) {
+  body:not(:has(section.composer-dock)):not(:has([data-composer="floating"])) .main-stage,
+  body:not(:has(section.composer-dock)) .main-stage.page-enter {
+    padding-bottom: 7.25rem !important;
+    scroll-padding-bottom: 7.25rem !important;
+  }
+  body:not(:has(section.composer-dock)) aside.rail nav,
+  body:not(:has(section.composer-dock)) .rail nav {
+    padding-bottom: 6.75rem !important;
+  }
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed,
+  body:not(:has(section.composer-dock)) .shell > .composer-bar.is-fixed,
+  body:not(:has(section.composer-dock)) .shell > [data-testid="composer-bar"].composer-bar {
+    display: block !important;
+    z-index: var(--z-composer) !important;
+    pointer-events: none !important;
+  }
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card * {
+    pointer-events: auto !important;
+  }
+  /* Keep plate clear of rail */
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed,
+  body:not(:has(section.composer-dock)) .shell > .composer-bar.is-fixed {
+    left: calc(16rem + 1rem) !important;
+    right: 1rem !important;
+    bottom: 1rem !important;
+  }
+}
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed,
+  body:not(:has(section.composer-dock)) .shell > .composer-bar.is-fixed {
+    left: calc(16rem + 0.75rem) !important;
+  }
+}
+
+/* —— r2.7 Ghost glass / decorative overlays: never steal clicks —— */
+.glow-card::before,
+.glow-card::after,
+.command-card::before,
+.command-card::after,
+.dense-card::before,
+.dense-card::after,
+.floating-composer::before,
+.floating-composer::after,
+.glass-panel::before,
+.card-texture::before,
+.composer-bar__safe::before,
+.live-voice-bar__glass,
+.composer-bar .live-voice-bar__glass,
+[aria-hidden="true"].pointer-events-none {
+  pointer-events: none !important;
+}
+/* Connected / Settings / Library cards own their hit boxes */
+.main-stage article.rounded-panel,
+.main-stage li.rounded-panel,
+.main-stage .glow-card,
+.main-stage .dense-card {
+  position: relative;
+  z-index: var(--z-content);
+  isolation: isolate;
+  pointer-events: auto;
+}
+.main-stage article.rounded-panel > *,
+.main-stage .glow-card > *,
+.main-stage .dense-card > * {
+  position: relative;
+  z-index: var(--z-content);
+}
+.main-stage article.rounded-panel button,
+.main-stage .glow-card button,
+.main-stage .dense-card button,
+.main-stage article.rounded-panel a {
+  position: relative;
+  z-index: calc(var(--z-content) + 1);
+  pointer-events: auto !important;
+}
+
+/* —— r2.8 Dashboard 3D HUD — CSS-only further separation (no shader/motion) —— */
+@media (max-width: 1023.98px) {
+  .dash3d-flyhud {
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+    right: auto !important;
+    max-width: min(18rem, calc(100vw - 1.5rem)) !important;
+    max-height: 42vh !important;
+    overflow: auto !important;
+    z-index: var(--z-dash-hud, 6) !important;
+  }
+  .dash3d-graph-filters {
+    top: auto !important;
+    bottom: 6.5rem !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    max-width: calc(100vw - 1rem) !important;
+    z-index: var(--z-dash-filters, 14) !important;
+  }
+  .dash3d-minimap {
+    max-width: 9.5rem !important;
+    max-height: 9.5rem !important;
+  }
+  .dash3d-minimap-dot {
+    width: 0.4rem !important;
+    height: 0.4rem !important;
+    min-width: 0.4rem !important;
+    min-height: 0.4rem !important;
+  }
+}
+.dash3d-flyhud,
+.dash3d-graph-filters {
+  isolation: isolate;
+}
+.dash3d-flyhud button,
+.dash3d-graph-filters button,
+.dash3d-graph-filters input,
+.dash3d-graph-filters select {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto !important;
+}
+
+/* —— r2.9 Mic vs Search in topbar: exclusive lanes —— */
+.topbar .relative.min-w-0.flex-1 {
+  position: relative;
+  z-index: var(--z-sticky);
+}
+.topbar [data-testid="mic-button"],
+.topbar [data-testid="open-voice-mode"],
+.topbar [data-testid="alerts-toggle"] {
+  flex-shrink: 0 !important;
+  z-index: var(--z-sticky) !important;
+}
+
+/* —— r2.10 Re-assert logo purple only on .logo-mark —— */
+.logo-mark {
+  color: #fff !important;
+  background: #7c5cff !important;
+}
+
+/* —— r2.11 Speak plate: kill c54 left:50%+translateX(-50%) clash; clear rail —— */
+@media (min-width: 768px) {
+  body:not(:has(section.composer-dock)) .shell > .composer-bar.is-fixed,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed,
+  body:not(:has(section.composer-dock)) .shell > [data-testid="composer-bar"].composer-bar {
+    left: max(16.75rem, calc(var(--rail-w, 16rem) + 0.75rem)) !important;
+    right: 0.75rem !important;
+    width: auto !important;
+    max-width: none !important;
+    transform: none !important;
+    bottom: 0.75rem !important;
+    padding-bottom: 0.25rem !important;
+    max-height: 5.5rem !important;
+    overflow: visible !important;
+  }
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__safe {
+    width: min(100%, 42rem) !important;
+    margin-inline: auto !important;
+    max-height: 5.25rem !important;
+    min-height: 0 !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+  }
+  /* Hide bulky Ask fake / extra rows inside Speak plate when it would steal vertical space */
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__ask-fake,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .live-voice-bar__controls,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .live-call-grid {
+    display: none !important;
+  }
+}
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  body:not(:has(section.composer-dock)) .shell > .composer-bar.is-fixed,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed {
+    left: max(16.75rem, 268px) !important;
+    right: 0.75rem !important;
+    width: auto !important;
+    max-width: none !important;
+    transform: none !important;
+  }
+  /* Extra rail clearance so Scheduled/Memory/Activity stay clickable above plate */
+  body:not(:has(section.composer-dock)) aside.rail,
+  body:not(:has(section.composer-dock)) .rail {
+    padding-bottom: 0 !important;
+  }
+  body:not(:has(section.composer-dock)) aside.rail nav,
+  body:not(:has(section.composer-dock)) .rail nav {
+    padding-bottom: 5.75rem !important;
+  }
+  body:not(:has(section.composer-dock)) aside.rail .nav-item,
+  body:not(:has(section.composer-dock)) aside.rail nav button {
+    position: relative;
+    z-index: calc(var(--z-nav) + 1);
+  }
+  /* Raise plate above content but keep hit box out of rail (x >= rail) */
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card {
+    pointer-events: auto !important;
+  }
+}
+
+/* Cmd-K transform must not leak — re-assert only on palette */
+#command-palette,
+[data-testid="command-palette"],
+.command-palette-panel {
+  transform: translateX(-50%) !important;
+}
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed {
+  /* default: no centering transform when left/right inset used */
+}
+
+/* —— r2.12 Desktop voice cluster: don't clip voice-picker hit targets —— */
+@media (min-width: 1100.02px) {
+  .topbar [data-testid="voice-controls"] {
+    max-height: none !important;
+    overflow: visible !important;
+    flex-wrap: wrap !important;
+    max-width: min(36rem, 52vw) !important;
+  }
+  .topbar {
+    flex-wrap: wrap !important;
+  }
+  .topbar > .relative.min-w-0.flex-1 {
+    flex: 1 1 16rem !important;
+    min-width: 14rem !important;
+  }
+}
+
+/* —— r2.13 Speak plate: one row of controls; more page clearance —— */
+@media (min-width: 768px) {
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__row,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__left {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  body:not(:has(section.composer-dock)) .main-stage,
+  body:not(:has(section.composer-dock)) .main-stage.page-enter {
+    padding-bottom: 8.5rem !important;
+    scroll-padding-bottom: 8.5rem !important;
+  }
+  /* Ensure plate controls own their hits above page glass */
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card button,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__card input,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed [data-testid="composer-speak"],
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed [data-testid="composer-bar-plus"],
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed [data-testid="composer-mic-dictate"],
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .model-chip {
+    position: relative;
+    z-index: var(--z-composer) !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* Suggestion chips that sit under a tall topbar after wrap: keep below chrome */
+@media (min-width: 768px) {
+  .main-stage .min-h-0.flex-1.overflow-auto {
+    position: relative;
+    z-index: var(--z-content);
+  }
+  .topbar {
+    z-index: var(--z-sticky) !important;
+    background:
+      linear-gradient(180deg, rgb(8 10 14 / 0.98), rgb(8 10 14 / 0.94)) !important;
+  }
+}
