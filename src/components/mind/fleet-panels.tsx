@@ -797,7 +797,7 @@ export function FleetPanel({
                 <ul className="mt-2 space-y-1">
                   {tools.map((tool) => (
                     <li key={`${tool.serverId}:${tool.name}`} className="rounded-panel border border-line px-2 py-1">
-                      <p className="font-semibold">{tool.name} · {tool.status === "timeout" ? "Timed out" : tool.status === "error" ? "Error" : server.enabled && tool.enabled ? "Available" : "Gated"}</p>
+                      <p className="font-semibold">{tool.name} · {tool.status === "timeout" ? "Timed out" : tool.status === "error" ? "Error" : tool.status === "needs-config" ? "Needs config" : tool.status === "needs-pairing" ? "Needs pairing" : tool.status === "disabled" || !(server.enabled && tool.enabled) ? "Gated" : tool.status === "ok" ? "Available" : server.enabled && tool.enabled ? "Available" : "Gated"}</p>
                       <p className="text-xs text-muted">{tool.description}</p>
                       {tool.name === "pglite_query" ? (
                         <button

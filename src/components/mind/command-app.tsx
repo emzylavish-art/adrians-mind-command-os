@@ -795,7 +795,7 @@ export function CommandApp() {
   const [mcpSavedListState, setMcpSavedListState] = useState<McpListState>({ status: "loading" });
   const mcpRegistryRetryRef = useRef<(() => void) | null>(null);
   const mcpSavedRetryRef = useRef<(() => void) | null>(null);
-  const [toolResultStatus, setToolResultStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
+  const [toolResultStatus, setToolResultStatus] = useState<"idle" | "running" | "ok" | "error" | "needs-config" | "needs-pairing">("idle");
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
@@ -1347,7 +1347,14 @@ export function CommandApp() {
         return;
       }
       const reply = [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.";
-      const status = result.ok ? "ok" : "error";
+      const raw = `${result.error ?? ""} ${result.text ?? ""}`;
+      const status = result.ok
+        ? "ok"
+        : /not configured|needs config|NOTION_TOKEN|storage accounts are configured/i.test(raw)
+          ? "needs-config"
+          : /No paired PC|needs pairing|not paired/i.test(raw)
+            ? "needs-pairing"
+            : "error";
       setToolResultStatus(status);
       const failure = mcpToolFailure({
         ok: result.ok,

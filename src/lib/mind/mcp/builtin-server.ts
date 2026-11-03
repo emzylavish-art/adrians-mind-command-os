@@ -7,6 +7,7 @@ import {
   pcRunShell,
   pgliteListSchema,
   pgliteQuery,
+  storageListStatus,
   type SqlLike,
   type ToolResult,
 } from "./tools.ts";
@@ -92,6 +93,25 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
     async () => {
       const sqlClient = await getSql();
       return asContent(await pgliteListSchema({ sqlClient }));
+    },
+  );
+
+  server.registerTool(
+    "storage_list_status",
+    {
+      description:
+        "List configured media storage connectors with honest connected/needs-config status. Read-only; never uploads.",
+      inputSchema: {},
+    },
+    async () => {
+      if (!ownerId) {
+        return asContent({
+          ok: false,
+          status: "error",
+          text: "Sign in is required to list storage connectors. Nothing was listed.",
+        });
+      }
+      return asContent(await storageListStatus({ ownerId }));
     },
   );
 

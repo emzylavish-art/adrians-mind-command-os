@@ -108,8 +108,8 @@ describe("connector verify: mocked transports / providers", () => {
     const calls: string[] = [];
     const results = await verifyConnectors("owner-c", { type: "mcp", id: "ext-1" }, deps({
       listTools: async () => [
-        { serverId: "ext-1", serverLabel: "Ext", name: "write_doc", description: "writes", enabled: true, status: "ok" },
-        { serverId: "ext-1", serverLabel: "Ext", name: "pc_run_shell", description: "shell", enabled: true, status: "ok" },
+        { id: "ext-1:write_doc", serverId: "ext-1", serverLabel: "Ext", name: "write_doc", description: "writes", enabled: true, status: "ok" },
+        { id: "ext-1:pc_run_shell", serverId: "ext-1", serverLabel: "Ext", name: "pc_run_shell", description: "shell", enabled: true, status: "ok" },
       ],
       callTool: async (input) => {
         calls.push(input.tool);
@@ -133,8 +133,8 @@ describe("connector verify: mocked transports / providers", () => {
     const calls: string[] = [];
     const results = await verifyConnectors("owner-d", { type: "mcp", id: extId }, deps({
       listTools: async () => [
-        { serverId: extId, serverLabel: "Remote", name: "list_items", description: "read-only list", enabled: true, status: "ok" },
-        { serverId: extId, serverLabel: "Remote", name: "write_items", description: "writes", enabled: true, status: "ok" },
+        { id: `${extId}:list_items`, serverId: extId, serverLabel: "Remote", name: "list_items", description: "read-only list", enabled: true, status: "ok" },
+        { id: `${extId}:write_items`, serverId: extId, serverLabel: "Remote", name: "write_items", description: "writes", enabled: true, status: "ok" },
       ],
       callTool: async (input) => {
         calls.push(input.tool);
@@ -155,14 +155,14 @@ describe("connector verify: mocked transports / providers", () => {
 
     const timed = await verifyConnectors("owner-e", { type: "mcp", id: extId }, deps({
       listTools: async () => [
-        { serverId: extId, serverLabel: "Slow", name: "(timeout)", description: "hung", enabled: true, status: "timeout" },
+        { id: `${extId}:(timeout)`, serverId: extId, serverLabel: "Slow", name: "(timeout)", description: "hung", enabled: true, status: "timeout" },
       ],
     }));
     assert.equal(timed[0].state, "timeout");
 
     const auth = await verifyConnectors("owner-e", { type: "mcp", id: extId }, deps({
       listTools: async () => [
-        { serverId: extId, serverLabel: "Slow", name: "(error)", description: "HTTP 401 unauthorized", enabled: true, status: "error" },
+        { id: `${extId}:(error)`, serverId: extId, serverLabel: "Slow", name: "(error)", description: "HTTP 401 unauthorized", enabled: true, status: "error" },
       ],
     }));
     assert.equal(auth[0].state, "auth_expired");

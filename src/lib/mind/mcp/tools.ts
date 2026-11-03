@@ -1,4 +1,5 @@
 import { resolveNotionToken } from "../connectors/notion-oauth.ts";
+import { BUILTIN_TOOL_CATALOG, type BuiltinCatalogToolName } from "./tool-catalog.ts";
 /**
  * Built-in MCP tool handlers for Adrian's Mind.
  * Honest failures only — never invent success for Notion, PC, or SQL.
@@ -6,7 +7,7 @@ import { resolveNotionToken } from "../connectors/notion-oauth.ts";
 
 export type ToolResult = {
   ok: boolean;
-  status: "ok" | "error";
+  status: "ok" | "error" | "needs-config" | "needs-pairing";
   text: string;
   data?: unknown;
 };
@@ -95,8 +96,8 @@ export async function notionReadPage(input: {
   if (!token) {
     return {
       ok: false,
-      status: "error",
-      text: "Notion is not configured. Set NOTION_TOKEN or NOTION_API_KEY on the server. Nothing was read.",
+      status: "needs-config",
+      text: "Notion is not configured. Set NOTION_TOKEN or NOTION_API_KEY on the server, or connect Notion OAuth. Nothing was read.",
     };
   }
   const pageId = parseNotionPageId(input.pageIdOrUrl);
@@ -120,8 +121,8 @@ export async function notionAppendSection(input: {
   if (!token) {
     return {
       ok: false,
-      status: "error",
-      text: "Notion is not configured. Set NOTION_TOKEN or NOTION_API_KEY on the server. Nothing was written.",
+      status: "needs-config",
+      text: "Notion is not configured. Set NOTION_TOKEN or NOTION_API_KEY on the server, or connect Notion OAuth. Nothing was written.",
     };
   }
   const pageId = parseNotionPageId(input.pageIdOrUrl);
@@ -307,7 +308,7 @@ export async function pcRunShell(input: {
 
   const endpoint = (env.MIND_PC_AGENT_URL || env.PC_AGENT_URL || env.PAIRED_PC_URL || "").trim();
   if (!endpoint) {
-    return { ok: false, status: "error", text: "No paired PC online. Nothing ran on a laptop or phone." };
+    return { ok: false, status: "needs-pairing", text: "No paired PC online. Nothing ran on a laptop or phone." };
   }
   const fetchImpl = input.fetch ?? (globalThis.fetch as NotionFetch);
   let response: Awaited<ReturnType<NotionFetch>>;
@@ -319,7 +320,7 @@ export async function pcRunShell(input: {
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
-    return { ok: false, status: "error", text: "No paired PC online. The pairing endpoint could not be reached. Nothing ran." };
+    return { ok: false, status: "needs-pairing", text: "No paired PC online. The pairing endpoint could not be reached. Nothing ran." };
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
@@ -977,27 +978,94 @@ export async function pgliteListSchema(input: { sqlClient: SqlLike }): Promise<T
   });
 }
 
-export const BUILTIN_TOOL_DEFS = [
-  {
-    name: "notion_read_page",
-    description: "Read a Notion page by id or URL. Requires NOTION_TOKEN / NOTION_API_KEY.",
-  },
-  {
-    name: "notion_append_section",
-    description: "Append a heading and markdown paragraph to a Notion page. Requires NOTION_TOKEN / NOTION_API_KEY.",
-  },
-  {
-    name: "pc_run_shell",
-    description: "Run a shell command on the paired PC agent. Allowlisted commands run; others need a human approval in Tools (confirm tool args are ignored). Honest failure when no PC is paired.",
-  },
-  {
-    name: "pglite_query",
-    description: "Run a read-only SQL query against the app PGLite (or Neon) database. Single SELECT/WITH/EXPLAIN only; row limit + timeout enforced.",
-  },
-  {
-    name: "pglite_list_schema",
-    description: "List non-system tables/views (read-only helper for exploring the app DB).",
-  },
-] as const;
 
-export type BuiltinToolName = (typeof BUILTIN_TOOL_DEFS)[number]["name"];
+/**
+ * Read-only inventory of configured media storage connectors.
+ * Never uploads, never returns tokens or raw account secrets.
+ * Omits account emails from the payload (laneId/service/status only).
+ */
+export async function storageListStatus(input: {
+  ownerId: string;
+  statusFn?: (ownerId: string) => Promise<
+    {
+      service: string;
+      enabled: boolean;
+      connected: boolean;
+      laneId?: string;
+      detail: string;
+      usedBytes: number;
+      capBytes: number;
+      remainingBytes: number;
+    }[]
+  >;
+}): Promise<ToolResult> {
+  if (!input.ownerId?.trim()) {
+    return {
+      ok: false,
+      status: "error",
+      text: "Sign in is required to list storage connectors. Nothing was listed.",
+    };
+  }
+  try {
+    const statusFn =
+      input.statusFn ??
+      (async (ownerId: string) => {
+        const { storageStatusForOwner } = await import("../media/storage/rotation.ts");
+        const rows = await storageStatusForOwner(ownerId);
+        return rows.map((row) => ({
+          service: row.service,
+          enabled: row.enabled,
+          connected: row.connected,
+          laneId: row.laneId,
+          detail: row.detail,
+          usedBytes: row.usedBytes,
+          capBytes: row.capBytes,
+          remainingBytes: row.remainingBytes,
+        }));
+      });
+    const rows = await statusFn(input.ownerId);
+    if (!rows.length) {
+      return {
+        ok: false,
+        status: "needs-config",
+        text: "No media storage accounts are configured. Add accounts in the storage config. Nothing was listed.",
+        data: { accounts: [] },
+      };
+    }
+    const accounts = rows.map((row) => ({
+      service: row.service,
+      enabled: row.enabled,
+      connected: row.connected,
+      laneId: row.laneId ?? null,
+      detail: row.detail,
+      usedBytes: row.usedBytes,
+      capBytes: row.capBytes,
+      remainingBytes: row.remainingBytes,
+      health: row.connected ? "ok" : "needs-config",
+    }));
+    const connected = accounts.filter((a) => a.connected).length;
+    return {
+      ok: true,
+      status: "ok",
+      text: `${accounts.length} storage account(s); ${connected} connected.`,
+      data: { accounts },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Storage status failed.";
+    return { ok: false, status: "error", text: `Storage status error: ${message}` };
+  }
+}
+
+export const BUILTIN_TOOL_DEFS = BUILTIN_TOOL_CATALOG.map((tool) => ({
+  id: tool.id,
+  name: tool.name,
+  description: tool.description,
+  inputSchema: tool.inputSchema,
+})) as ReadonlyArray<{
+  id: string;
+  name: BuiltinCatalogToolName;
+  description: string;
+  inputSchema: (typeof BUILTIN_TOOL_CATALOG)[number]["inputSchema"];
+}>;
+
+export type BuiltinToolName = BuiltinCatalogToolName;

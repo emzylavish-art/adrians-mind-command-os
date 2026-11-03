@@ -361,7 +361,7 @@ export function bindRetry<T extends unknown[]>(action: (...args: T) => void, arg
  */
 export type McpToolCallOutcome = {
   ok: boolean;
-  status?: "running" | "ok" | "error";
+  status?: "running" | "ok" | "error" | "needs-config" | "needs-pairing";
   text?: string;
   error?: string;
   tool?: string;
@@ -381,6 +381,8 @@ function oneLine(value: string): string {
 export function mcpToolFailure(outcome: McpToolCallOutcome): { kind: "mcp_tool_failed"; message: string; target: string } | null {
   if (outcome.needsConfirmation) return null;
   if (outcome.status === "running") return null;
+  // needs-config / needs-pairing are honest gated states, not transport failures
+  if (outcome.status === "needs-config" || outcome.status === "needs-pairing") return null;
   if (outcome.ok && outcome.status !== "error") return null;
   const detail = oneLine(outcome.error || "") || oneLine(outcome.text || "");
   const tool = outcome.tool?.trim();

@@ -8,10 +8,16 @@ import {
   pcRunShell,
   pgliteListSchema,
   pgliteQuery,
+  storageListStatus,
   type BuiltinToolName,
   type SqlLike,
   type ToolResult,
 } from "./tools.ts";
+import {
+  computeBuiltinToolHealth,
+  type JsonSchema,
+  type ToolHealth,
+} from "./tool-catalog.ts";
 import { callStdioTool, isBlockedChildEnvKey, listStdioTools, type StdioOptions } from "./stdio.ts";
 import {
   defaultDnsLookup,
@@ -47,7 +53,7 @@ export type RegistryServer = {
 
 export type RegistryServerPublic = Omit<RegistryServer, "token" | "env"> & { hasToken: boolean; envKeys?: string[] };
 
-export type ToolCallStatus = "running" | "ok" | "error" | "timeout";
+export type ToolCallStatus = "running" | "ok" | "error" | "timeout" | "needs-config" | "needs-pairing";
 
 export type RegistryToolCallResult = {
   status: ToolCallStatus;
@@ -227,23 +233,39 @@ export function removeRegistryServer(userId: string, id: string): RegistryServer
 }
 
 export type ListedTool = {
+  id: string;
   serverId: string;
   serverLabel: string;
   name: string;
   description: string;
+  inputSchema?: JsonSchema;
   enabled: boolean;
-  /** Honest listing status for this row (placeholder rows carry error/timeout/disabled). */
-  status?: "ok" | "error" | "timeout" | "disabled";
+  /** Honest listing status / health for this row. */
+  status?: ToolHealth;
 };
 
-export function listBuiltinTools(enabled: boolean): ListedTool[] {
-  return BUILTIN_TOOL_DEFS.map((tool) => ({
-    serverId: BUILTIN_ID,
-    serverLabel: "Mind built-in",
-    name: tool.name,
-    description: tool.description,
-    enabled,
-  }));
+export function listBuiltinTools(
+  enabled: boolean,
+  options: { ownerId?: string; env?: NodeJS.ProcessEnv } = {},
+): ListedTool[] {
+  return BUILTIN_TOOL_DEFS.map((tool) => {
+    const health = computeBuiltinToolHealth({
+      toolName: tool.name,
+      enabled,
+      ownerId: options.ownerId,
+      env: options.env,
+    });
+    return {
+      id: tool.id,
+      serverId: BUILTIN_ID,
+      serverLabel: "Mind built-in",
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+      enabled,
+      status: health,
+    };
+  });
 }
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{
@@ -431,11 +453,12 @@ export async function listRegistryTools(
   const tools: ListedTool[] = [];
   for (const server of store.servers) {
     if (server.kind === "builtin") {
-      tools.push(...listBuiltinTools(server.enabled));
+      tools.push(...listBuiltinTools(server.enabled, { ownerId: userId }));
       continue;
     }
     if (!server.enabled) {
       tools.push({
+        id: `${server.id}:(disabled)`,
         serverId: server.id,
         serverLabel: server.label,
         name: "(disabled)",
@@ -448,6 +471,7 @@ export async function listRegistryTools(
     if (server.kind === "command") {
       if (await (deps.isHalted ?? defaultIsHalted)(userId)) {
         tools.push({
+          id: `${server.id}:(halted)`,
           serverId: server.id,
           serverLabel: server.label,
           name: "(halted)",
@@ -460,6 +484,7 @@ export async function listRegistryTools(
       const listed = await listStdioTools(stdioConfig(server), deps.stdio);
       if (listed.status !== "ok") {
         tools.push({
+          id: `${server.id}:(stdio-list)`,
           serverId: server.id,
           serverLabel: server.label,
           name: listed.status === "timeout" ? "(timeout)" : "(error)",
@@ -471,6 +496,7 @@ export async function listRegistryTools(
       }
       if (listed.tools.length === 0) {
         tools.push({
+          id: `${server.id}:(no tools)`,
           serverId: server.id,
           serverLabel: server.label,
           name: "(no tools)",
@@ -482,6 +508,7 @@ export async function listRegistryTools(
       }
       for (const tool of listed.tools) {
         tools.push({
+          id: `${server.id}:${tool.name}`,
           serverId: server.id,
           serverLabel: server.label,
           name: tool.name,
@@ -501,6 +528,7 @@ export async function listRegistryTools(
     }, deps.http);
     if (!opened.ok) {
       tools.push({
+        id: `${server.id}:(unreachable)`,
         serverId: server.id,
         serverLabel: server.label,
         name: opened.timedOut ? "(timeout)" : "(unreachable)",
@@ -519,6 +547,7 @@ export async function listRegistryTools(
     }, deps.http);
     if (!listed.ok || !listed.result || typeof listed.result !== "object") {
       tools.push({
+        id: `${server.id}:placeholder`,
         serverId: server.id,
         serverLabel: server.label,
         name: !listed.ok && listed.timedOut ? "(timeout)" : "(error)",
@@ -534,11 +563,13 @@ export async function listRegistryTools(
     for (const tool of remoteTools) {
       if (!tool?.name) continue;
       tools.push({
+        id: `${server.id}:${tool.name.slice(0, 80)}`,
         serverId: server.id,
         serverLabel: server.label,
         name: tool.name.slice(0, 80),
         description: (tool.description ?? "").slice(0, 200),
         enabled: true,
+        status: "ok",
       });
     }
   }
@@ -577,6 +608,12 @@ async function callBuiltin(
     case "pglite_list_schema": {
       const sqlClient = await deps.getSql();
       return pgliteListSchema({ sqlClient });
+    }
+    case "storage_list_status": {
+      if (!deps.ownerId) {
+        return { ok: false, status: "error", text: "Sign in is required to list storage connectors. Nothing was listed." };
+      }
+      return storageListStatus({ ownerId: deps.ownerId });
     }
     default:
       return { ok: false, status: "error", text: `Unknown built-in tool “${name}”. Nothing was called.` };

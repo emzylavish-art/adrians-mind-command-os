@@ -8,6 +8,7 @@ import {
   parseNotionPageId,
   pcRunShell,
   pgliteQuery,
+  storageListStatus,
 } from "./tools.ts";
 
 describe("mcp tools", () => {
@@ -23,6 +24,7 @@ describe("mcp tools", () => {
   it("refuses Notion tools when the token is missing", async () => {
     const read = await notionReadPage({ pageIdOrUrl: "40b1aa27632381768d58cde0731f142a", token: "" });
     assert.equal(read.ok, false);
+    assert.equal(read.status, "needs-config");
     assert.match(read.text, /not configured/i);
     const append = await notionAppendSection({
       pageIdOrUrl: "40b1aa27632381768d58cde0731f142a",
@@ -31,12 +33,14 @@ describe("mcp tools", () => {
       token: "",
     });
     assert.equal(append.ok, false);
+    assert.equal(append.status, "needs-config");
     assert.match(append.text, /not configured/i);
   });
 
   it("returns no paired PC when the agent URL is unset", async () => {
     const result = await pcRunShell({ command: "pwd", env: {}, confirm: true });
     assert.equal(result.ok, false);
+    assert.equal(result.status, "needs-pairing");
     assert.match(result.text, /No paired PC online/);
   });
 
@@ -183,5 +187,49 @@ describe("pc_run_shell allowlist cannot be smuggled past with shell metacharacte
     });
     assert.deepEqual(ran, ["echo hello"]);
     assert.equal(result.ok, true);
+  });
+});
+
+describe("storage_list_status", () => {
+  it("returns needs-config when no accounts are configured", async () => {
+    const result = await storageListStatus({
+      ownerId: "owner-1",
+      statusFn: async () => [],
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "needs-config");
+    assert.match(result.text, /No media storage accounts/i);
+  });
+
+  it("lists connected and needs-config accounts without emails", async () => {
+    const result = await storageListStatus({
+      ownerId: "owner-1",
+      statusFn: async () => [
+        {
+          service: "box",
+          enabled: true,
+          connected: true,
+          laneId: "box-main",
+          detail: "box connected.",
+          usedBytes: 10,
+          capBytes: 100,
+          remainingBytes: 90,
+        },
+        {
+          service: "pcloud",
+          enabled: true,
+          connected: false,
+          detail: "Not connected.",
+          usedBytes: 0,
+          capBytes: 50,
+          remainingBytes: 50,
+        },
+      ],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.status, "ok");
+    const payload = JSON.stringify(result.data);
+    assert.equal(payload.includes("@"), false);
+    assert.match(result.text, /2 storage account/);
   });
 });

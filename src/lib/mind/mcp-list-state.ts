@@ -22,10 +22,12 @@ export const MCP_LIST_LOAD_TIMEOUT_MS = 15_000;
 export type McpListServer = { id: string; label: string; kind: string; enabled: boolean };
 
 export type McpToolRow = {
+  id?: string;
   serverId: string;
   serverLabel: string;
   name: string;
   description: string;
+  inputSchema?: Record<string, unknown>;
   enabled: boolean;
   status?: string;
 };

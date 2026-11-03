@@ -75,6 +75,7 @@ describe("mcp registry", () => {
     });
     assert.equal(called.ok, false);
     assert.match(called.text, /No paired PC online/);
+    assert.equal(called.status, "needs-pairing");
   });
 
   process.env.MIND_MCP_STDIO_ALLOW = process.execPath;
