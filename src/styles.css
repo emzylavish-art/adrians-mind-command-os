@@ -9139,3 +9139,686 @@ button.model-chip ~ [role="menu"] button[role="menuitemradio"][aria-checked="tru
     inset 0 0 22px rgb(255 255 255 / 0.28),
     0 0 18px rgb(255 255 255 / 0.1) !important;
 }
+
+/* ============================================================================
+ * Pass-10 stacking / overlap — CSS-only (visual/polish-pass-10-stacking)
+ * Token scale: base < content < sticky < composer(46) < model-chip(47) < nav(48)
+ *               < dropdown/popover(55) < modal(60) < toast(70)
+ * Africa/Lagos 2026-11-03 — nothing clickable may share another control's hit box.
+ * ============================================================================ */
+:root {
+  --z-base: 0;
+  --z-content: 1;
+  --z-sticky: 20;
+  --z-composer: 46;
+  --z-model-chip: 47;
+  --z-nav: 48;
+  --z-dropdown: 55;
+  --z-modal: 60;
+  --z-toast: 70;
+  /* Mobile chrome stack (nav + speak strip). Safe-area added at use sites. */
+  --chrome-nav-h: 4.85rem;
+  --chrome-speak-h: 3.65rem;
+  --chrome-stack-h: calc(var(--chrome-nav-h) + var(--chrome-speak-h));
+}
+
+/* —— Global layer ownership —— */
+nav.fixed[aria-label="Primary"],
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+  z-index: var(--z-nav) !important;
+  isolation: isolate;
+}
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed,
+.shell > [data-testid="composer-bar"].composer-bar,
+section.command-card.composer-dock,
+.command-card.composer-dock[data-composer="floating"],
+section[data-composer="floating"].composer-dock,
+.floating-composer.composer-dock {
+  z-index: var(--z-composer) !important;
+}
+.model-chip,
+button.model-chip,
+.composer-bar__model-chip,
+.relative.composer-bar__model-chip {
+  z-index: var(--z-model-chip) !important;
+  position: relative;
+}
+.composer-bar__model-menu,
+.live-voice-bar__plus-menu,
+.floating-menu,
+button.model-chip ~ [role="menu"],
+.relative:has(> button.model-chip) > [role="menu"],
+[role="listbox"],
+[data-radix-popper-content-wrapper] {
+  z-index: var(--z-dropdown) !important;
+}
+[role="dialog"],
+[aria-modal="true"],
+.overlay-panel {
+  z-index: var(--z-modal) !important;
+}
+.toast,
+[data-sonner-toaster],
+[data-testid*="toast"] {
+  z-index: var(--z-toast) !important;
+}
+
+/* Decorative overlays never steal clicks */
+.shell::before,
+.shell::after,
+.main-stage::before,
+.main-stage::after,
+.masthead::before,
+.glow-card::before,
+.command-card::before,
+.floating-composer::before,
+.dense-card::before,
+.composer-bar.is-fixed,
+.composer-bar__safe {
+  pointer-events: none !important;
+}
+.composer-bar.is-fixed .composer-bar__card,
+.composer-bar.is-fixed .composer-bar__card * {
+  pointer-events: auto !important;
+}
+
+/* —— Mobile: own vertical lanes for nav / speak / dock —— */
+@media (max-width: 767.98px) {
+  nav.fixed[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    z-index: var(--z-nav) !important;
+    height: auto !important;
+    min-height: var(--chrome-nav-h) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    background: rgb(8 10 14 / 0.96) !important;
+    backdrop-filter: blur(16px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(1.1) !important;
+  }
+
+  /* Speak / Auto strip sits fully ABOVE the primary nav */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > [data-testid="composer-bar"].composer-bar {
+    bottom: calc(var(--chrome-nav-h) + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    z-index: var(--z-composer) !important;
+    padding-bottom: 0.35rem !important;
+    max-height: var(--chrome-speak-h) !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__safe {
+    padding: 0.2rem 0.55rem 0.2rem !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__card {
+    min-height: 2.75rem !important;
+    padding: 0.3rem 0.45rem !important;
+  }
+  /* Hide Ask fake inside speak strip when dock already owns Ask */
+  body:has(section.composer-dock) .composer-bar.is-fixed .composer-bar__ask,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed .composer-bar__ask {
+    display: none !important;
+  }
+
+  /* Dock sits above speak strip + nav */
+  body:has(nav.fixed[aria-label="Primary"]) section.command-card.composer-dock,
+  body:has(nav.fixed[aria-label="Primary"]) .command-card.composer-dock[data-composer="floating"],
+  body:has(nav.fixed[aria-label="Primary"]) section[data-composer="floating"].composer-dock,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage section.command-card.composer-dock,
+  body:has(nav.fixed[aria-label="Primary"]) .floating-composer.composer-dock {
+    bottom: calc(var(--chrome-stack-h) + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    z-index: var(--z-composer) !important;
+    max-height: min(42vh, 17rem) !important;
+  }
+
+  /* Idle dock: collapse mode tiles so quick-action chips keep their own lane */
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]) > .grid.gap-2,
+  .composer-dock:not(:focus-within):not([data-expanded="true"]) > .grid.gap-2.md\:grid-cols-\[1fr_1fr_auto\],
+  section.command-card.composer-dock:not(:focus-within) > .grid.gap-2 {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]),
+  .command-card.composer-dock:not(:focus-within):not([data-expanded="true"]) {
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+    max-height: 6.5rem !important;
+  }
+  section.command-card.composer-dock:not(:focus-within) form > .mb-2.flex.flex-wrap.gap-2 {
+    display: none !important;
+  }
+
+  /* Content clears the full chrome stack */
+  .main-stage.page-enter,
+  .main-stage {
+    padding-bottom: calc(var(--chrome-stack-h) + 7.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-padding-bottom: calc(var(--chrome-stack-h) + 7.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col {
+    padding-bottom: 1.25rem !important;
+  }
+  /* Quick-action chip row: keep above dock via extra trailing space in home column */
+  .main-stage .flex.gap-2.overflow-x-auto.pb-1 {
+    margin-bottom: 0.75rem !important;
+    position: relative;
+    z-index: var(--z-content);
+  }
+
+}
+
+/* Topbar / masthead crowding — wrap & shrink so SWITCH TO ORCHESTRATOR owns a lane */
+.topbar,
+.masthead .flex.flex-wrap.items-center.gap-2,
+.main-stage .flex.flex-wrap.items-center.gap-2.rounded-panel {
+  flex-wrap: wrap !important;
+  gap: 0.4rem 0.5rem !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+.topbar > *,
+.masthead .flex.flex-wrap.items-center.gap-2 > * {
+  min-width: 0;
+  max-width: 100%;
+}
+button[data-testid="voice-mode-toggle"],
+.masthead button.min-h-9.rounded-panel.border.border-line.text-xs {
+  max-width: 100% !important;
+  white-space: normal !important;
+  text-wrap: balance;
+  line-height: 1.2 !important;
+  height: auto !important;
+  min-height: 2.25rem !important;
+}
+
+/* Mobile drawer: sticky search/header must not cover nav rows */
+@media (max-width: 767.98px) {
+  aside.fixed.inset-0.z-40.flex,
+  aside.fixed.inset-0 {
+    z-index: var(--z-modal) !important;
+  }
+  aside.fixed.inset-0 nav,
+  aside.fixed .rail nav,
+  aside.fixed nav {
+    position: relative;
+    z-index: var(--z-content);
+    padding-top: 0.25rem !important;
+    gap: 0.25rem !important;
+  }
+  aside.fixed .nav-item,
+  aside.fixed nav button.nav-item,
+  aside.fixed nav a.nav-item {
+    position: relative;
+    z-index: var(--z-content);
+    flex-shrink: 0;
+    min-height: 2.75rem !important;
+  }
+  /* Header block in drawer stacks above scroll only for its own box */
+  aside.fixed .flex.items-center.gap-3,
+  aside.fixed [class*="logo"] {
+    position: relative;
+    z-index: var(--z-sticky);
+    background: rgb(8 10 14 / 0.96);
+  }
+  aside.fixed input.input-glow,
+  aside.fixed input[role="combobox"] {
+    position: relative;
+    z-index: var(--z-sticky);
+  }
+}
+
+/* Desktop rail: prevent header/search from overlapping nav list */
+@media (min-width: 768px) {
+  aside.rail,
+  .rail {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  aside.rail nav,
+  .rail nav {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    gap: 0.25rem !important;
+    padding-bottom: 0.75rem !important;
+    position: relative;
+    z-index: var(--z-content);
+  }
+  aside.rail .nav-item,
+  aside.rail nav button,
+  aside.rail nav a {
+    position: relative;
+    z-index: var(--z-content);
+    flex-shrink: 0;
+  }
+  aside.rail .sidebar-plus,
+  aside.rail .flex.items-center.gap-3 {
+    position: relative;
+    z-index: var(--z-sticky);
+    flex-shrink: 0;
+    background: inherit;
+  }
+}
+
+/* Crowded toolbars: gap + wrap so chips don't share hit boxes */
+.composer-bar__row,
+.composer-bar__left,
+.composer-voice-btns,
+.composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2,
+.topbar .flex.items-center.gap-2 {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.4rem !important;
+  align-items: center !important;
+  min-width: 0 !important;
+}
+.composer-bar__row > *,
+.composer-voice-btns > *,
+.composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > * {
+  flex-shrink: 0;
+  position: relative;
+  z-index: var(--z-content);
+}
+
+/* Login: password eye owns its corner without covering input center */
+[data-testid="login-password-toggle"] {
+  z-index: var(--z-content);
+  pointer-events: auto !important;
+}
+[data-testid="login-password-input"] {
+  position: relative;
+  z-index: var(--z-base);
+}
+
+/* —— Dashboard 3D HUD stacking (styles.css only; no shader/motion edits) —— */
+.dash3d-root {
+  --z-dash-base: 1;
+  --z-dash-hud: 6;
+  --z-dash-filters: 14;
+  --z-dash-feed: 10;
+  --z-dash-minimap: 12;
+  isolation: isolate;
+}
+.dash3d-flyhud {
+  z-index: var(--z-dash-hud) !important;
+  pointer-events: auto;
+  max-width: min(22rem, 46vw);
+}
+.dash3d-graph-filters {
+  z-index: var(--z-dash-filters) !important;
+  pointer-events: auto;
+  max-width: min(20rem, 42vw);
+}
+.dash3d-feed-glyph {
+  z-index: var(--z-dash-feed) !important;
+  pointer-events: none !important; /* decorative glyph; rows below keep clicks */
+}
+.dash3d-feed-glyph button,
+.dash3d-feed-glyph a,
+.dash3d-feed-glyph [role="button"] {
+  pointer-events: auto !important;
+}
+.dash3d-minimap {
+  z-index: var(--z-dash-minimap) !important;
+}
+.dash3d-minimap-dot {
+  position: absolute;
+  /* keep dots from covering neighboring dots' centers via size cap */
+  width: 0.65rem !important;
+  height: 0.65rem !important;
+  min-width: 0.65rem !important;
+  min-height: 0.65rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.dash3d-mirror-row,
+.dash3d-feed-list button,
+.dash3d-feed-list [role="button"] {
+  position: relative;
+  z-index: var(--z-dash-base);
+}
+/* Separate flyhud / filters so they don't sit on the same pixels */
+@media (max-width: 900px) {
+  .dash3d-flyhud,
+  .dash3d-graph-filters {
+    max-width: calc(100vw - 1.25rem) !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+  }
+  .dash3d-graph-filters {
+    top: auto !important;
+    bottom: 5.5rem !important;
+  }
+}
+
+/* New-chat FAB in bottom nav: keep above speak strip collision via nav isolation */
+nav.fixed[aria-label="Primary"] .sidebar-plus,
+nav.fixed.inset-x-0.bottom-0 .sidebar-plus {
+  z-index: 1;
+  position: relative;
+  margin-top: -0.65rem !important;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.45);
+}
+
+/* Re-assert logo purple only on .logo-mark after mono rules */
+.logo-mark {
+  color: #fff !important;
+  background: #7c5cff !important;
+}
+
+/* In-flow duplicates under fixed mobile chrome: demote hit testing */
+@media (max-width: 767.98px) {
+  /* Voice strips that are NOT inside the fixed dock/bar/nav — often ghost under the stack */
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col > .flex.flex-wrap.items-center.gap-2:has([data-testid="mic-button"]),
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col > .flex.flex-wrap.items-center.gap-2:has([data-testid="open-voice-mode"]),
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col .flex.flex-wrap.items-center.gap-2.rounded-panel:has([data-testid="voice-mode-toggle"]):not(.masthead *):not(.topbar *) {
+    position: relative;
+    z-index: var(--z-content);
+  }
+}
+
+/* ============================================================================
+ * Pass-10b — recon P1 stacking (CSS-only)
+ * P1-01 mobile Send/+ stack · P1-02 duplicate Voice chrome ·
+ * P1-03 rail/glass click steal · P1-06 dual composer docks
+ * ============================================================================ */
+
+/* Shell columns: main-stage must win hit-testing over rail glass */
+.shell {
+  isolation: isolate;
+  position: relative;
+}
+aside.rail,
+.rail {
+  z-index: var(--z-base) !important;
+  position: relative;
+  pointer-events: auto;
+}
+aside.rail::before,
+aside.rail::after,
+.rail::before,
+.rail::after,
+aside.rail .glow-card::before,
+.rail .card-texture::before {
+  pointer-events: none !important;
+}
+.main-stage {
+  position: relative;
+  z-index: var(--z-content) !important;
+  isolation: isolate;
+  pointer-events: auto;
+}
+.topbar {
+  position: relative;
+  z-index: var(--z-sticky) !important;
+}
+
+/* P1-02: one Voice Direct/Orchestrator cluster only */
+@media (min-width: 768px) {
+  /* Prefer the fuller voice-controls cluster; hide lone badge stacks */
+  .main-stage .shrink-0:not(.hidden):not(:has([data-testid="voice-controls"])):has([data-testid="voice-mode-badge"]) {
+    display: none !important;
+  }
+  /* If two voice-controls ever mount, keep the first */
+  .main-stage [data-testid="voice-controls"] ~ [data-testid="voice-controls"] {
+    display: none !important;
+  }
+  /* Nested duplicate badge inside a controls row after another badge in header */
+  body:has(.main-stage [data-testid="voice-controls"] [data-testid="voice-mode-badge"])
+    .main-stage .shrink-0:not(:has([data-testid="voice-controls"])) {
+    display: none !important;
+  }
+}
+/* Mobile: single header badge; hide in-flow ghost under chrome */
+@media (max-width: 767.98px) {
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col [data-testid="voice-mode-badge"],
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col [data-testid="voice-mode-toggle"],
+  .main-stage .mx-auto.flex.max-w-6xl.flex-col [data-testid="voice-controls"] {
+    display: none !important;
+  }
+}
+
+/* P1-01 / P1-06: dual Send in dock — keep the labeled accent Send only */
+.composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button:not([class]),
+.composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button.bg-accent ~ button:not([class]),
+section.command-card.composer-dock form button.inline-flex.min-h-11.bg-accent ~ button:not([class]) {
+  display: none !important;
+}
+
+/* P1-01: mobile + FAB must not cover nav item centers */
+@media (max-width: 767.98px) {
+  nav.fixed[aria-label="Primary"] {
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: space-between !important;
+    gap: 0.15rem !important;
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+  nav.fixed[aria-label="Primary"] > button {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    max-width: 4.5rem !important;
+    position: relative;
+    z-index: 1;
+  }
+  nav.fixed[aria-label="Primary"] .sidebar-plus,
+  nav.fixed.inset-x-0.bottom-0 .sidebar-plus {
+    flex: 0 0 auto !important;
+    width: 3.25rem !important;
+    height: 3.25rem !important;
+    min-width: 3.25rem !important;
+    min-height: 3.25rem !important;
+    max-width: 3.25rem !important;
+    margin-top: -1.1rem !important;
+    margin-bottom: 0.35rem !important;
+    z-index: 2;
+    /* keep FAB in its own lane between Build and Projects without covering labels */
+    align-self: flex-start;
+  }
+  /* Dock Send row: one primary Send, wrap tools with gap */
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    gap: 0.45rem !important;
+    justify-content: flex-start !important;
+  }
+  .composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 > button.bg-accent {
+    margin-left: auto !important;
+    position: relative;
+    z-index: 2;
+  }
+}
+
+/* P1-06: desktop — single dock. Hide the lower Speak/Auto plate when in-card dock exists. */
+@media (min-width: 768px) {
+  body:has(section.composer-dock) .composer-bar.is-fixed,
+  body:has([data-composer="floating"]) .composer-bar.is-fixed,
+  body:has(section.composer-dock) .shell > .composer-bar.is-fixed {
+    display: none !important;
+  }
+  /* In-card dock in normal flow, tightly sized — never a second fixed plate */
+  .main-stage section.command-card.composer-dock,
+  .main-stage .floating-composer.composer-dock,
+  section.command-card.composer-dock[data-composer="floating"] {
+    position: relative !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 56rem !important;
+    max-height: none !important;
+    height: auto !important;
+    margin: 0.75rem auto 1rem !important;
+    z-index: var(--z-composer) !important;
+    inset: auto !important;
+  }
+  .main-stage {
+    padding-bottom: 2.5rem !important;
+  }
+}
+
+/* P1-03: rail Search owns its row; nav list starts below — no shared pixels */
+@media (min-width: 768px) {
+  aside.rail > .flex.items-center.gap-3,
+  aside.rail > header,
+  aside.rail > .px-3,
+  .rail > .flex.items-center.gap-3 {
+    flex-shrink: 0 !important;
+    position: relative;
+    z-index: var(--z-sticky);
+    background:
+      linear-gradient(180deg, rgb(10 14 24 / 0.98), rgb(7 10 18 / 0.98));
+  }
+  aside.rail input.input-glow,
+  aside.rail input[role="combobox"],
+  .rail input.input-glow {
+    position: relative;
+    z-index: var(--z-sticky);
+    margin-bottom: 0.35rem !important;
+  }
+  aside.rail nav .nav-item,
+  aside.rail nav button,
+  aside.rail nav a {
+    /* each row owns exclusive vertical space */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    min-height: 2.75rem !important;
+    line-height: 1.2 !important;
+  }
+  /* Glass panels inside main stage must not extend hit boxes into the rail */
+  .main-stage .glow-card,
+  .main-stage .command-card,
+  .main-stage .dense-card,
+  .main-stage .floating-composer {
+    max-width: 100%;
+    overflow: visible;
+  }
+}
+
+/* Topbar density: voice zone + model wrap cleanly (recon P2-03 adjacent) */
+.topbar .voice-zone,
+.topbar [data-testid="voice-controls"],
+.main-stage .topbar {
+  flex-wrap: wrap !important;
+  gap: 0.4rem !important;
+  max-width: 100% !important;
+}
+
+/* P1-01c: FAB lane — don't cover nav hit centers */
+@media (max-width: 767.98px) {
+  nav.fixed[aria-label="Primary"] .sidebar-plus,
+  nav.fixed.inset-x-0.bottom-0 .sidebar-plus {
+    width: 2.85rem !important;
+    height: 2.85rem !important;
+    min-width: 2.85rem !important;
+    min-height: 2.85rem !important;
+    max-width: 2.85rem !important;
+    margin-top: -0.55rem !important;
+    margin-bottom: 0.55rem !important;
+    margin-left: 0.15rem !important;
+    margin-right: 0.15rem !important;
+  }
+  nav.fixed[aria-label="Primary"] > button {
+    padding-left: 0.1rem !important;
+    padding-right: 0.1rem !important;
+  }
+}
+
+/* Desktop idle dock: collapse ASK/AUTOMATIC/Memory tiles until focus (keeps one compact dock) */
+@media (min-width: 768px) {
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]) > .grid.gap-2 {
+    display: none !important;
+  }
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]) {
+    max-height: 9.5rem !important;
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.65rem !important;
+  }
+}
+
+/* Pass-10c: chips vs dock tools; restore hit-testing on chrome controls */
+.main-stage .flex.flex-wrap.gap-2.pb-1:has(.suggestion-chip),
+.main-stage .flex.flex-wrap.gap-2:has(> .suggestion-chip) {
+  position: relative;
+  z-index: var(--z-content);
+  margin-bottom: 1.25rem !important;
+  padding-bottom: 0.35rem !important;
+}
+.suggestion-chip {
+  position: relative;
+  z-index: var(--z-content) !important;
+}
+
+/* Dock and its controls win over suggestion chips / hero glass */
+section.command-card.composer-dock,
+.floating-composer.composer-dock,
+.composer-dock form,
+.composer-dock textarea,
+.composer-dock input,
+.composer-dock button,
+.composer-dock label {
+  position: relative;
+  z-index: var(--z-composer) !important;
+  pointer-events: auto !important;
+}
+section.command-card.composer-dock {
+  isolation: isolate;
+}
+
+/* Topbar / voice-zone / mic / search must receive their own clicks */
+.topbar,
+.topbar button,
+.topbar a,
+.topbar input,
+.voice-zone,
+.voice-zone button,
+[data-testid="mic-button"],
+[data-testid="open-voice-mode"],
+[data-testid="voice-mode-toggle"],
+[data-testid="voice-controls"],
+[data-testid="voice-controls"] *,
+input.input-glow,
+input[role="combobox"] {
+  pointer-events: auto !important;
+}
+.topbar button,
+.topbar a,
+.topbar input,
+.voice-zone button,
+[data-testid="mic-button"],
+[data-testid="open-voice-mode"] {
+  position: relative;
+  z-index: var(--z-sticky) !important;
+}
+
+/* "Grok configured" pill must not cover Search / mic */
+span.hidden.h-11.items-center,
+.topbar span.h-11.items-center {
+  position: relative;
+  z-index: var(--z-content);
+  flex-shrink: 1;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dashboard: shrink minimap dots further + separate hit boxes */
+.dash3d-minimap-map {
+  position: relative;
+  isolation: isolate;
+}
+.dash3d-minimap-dot {
+  width: 0.5rem !important;
+  height: 0.5rem !important;
+  min-width: 0.5rem !important;
+  min-height: 0.5rem !important;
+  box-sizing: content-box !important;
+  border: 1px solid rgb(255 255 255 / 0.35) !important;
+  transform: translate(-50%, -50%);
+}
+.dash3d-mirror-row {
+  isolation: isolate;
+  margin-bottom: 0.2rem !important;
+}
