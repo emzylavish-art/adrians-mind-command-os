@@ -562,3 +562,19 @@ command on Zack's PC.
 
 - Notion children: merge abort / Merge Gate https://app.notion.com/p/40cb95f33e428142b40bf3b0a22af734 · Gap Dispatcher request https://app.notion.com/p/40cb95f33e4281b9a2caecb3ac200290
 - Workspace handoffs: /workspace/handoffs/error-banners-to-merge-gate.md · /workspace/handoffs/error-banners-to-gap-dispatcher.md
+
+## 2026-11-02T20:29:51-06:00 (America/Chicago) — Error Banners Bot — H28 persona select + H29 fleet apply banners
+- Gap id: H28, H29
+- What:
+  - **H28**: Explore `persona-directory` `selectPersona` ok:false rendered as muted `persona-note`. Now red `PersonaSelectFailureBanner` (Retry identical card params via `persona-select-action` + onceRetry; optional onFailure for View log).
+  - **H29**: FleetPanel `apply()` validation failures (add template/custom, deploy, enqueue, schedule, connection, mailbox) + "Add an agent first" were muted notes. Now `FleetMutationFailureBanner` with snapshotted params + onceRetry. Persisted `deployment.error` display upgraded muted→`text-danger` (status only).
+- Files: `src/lib/mind/persona-select-action.ts(+test)`, `src/lib/mind/fleet-mutation-action.ts(+test)`, `src/components/mind/persona-directory.tsx`, `src/components/mind/fleet-panels.tsx`, `failure-states(+test)`, `integration-persona-explore.test.ts`, `package.json` test list.
+- SHA: `493027af23b799d3725e0aea7c30dc1e721dc687` (pushed origin/error-banners)
+- Gates: typecheck pass; node strip-types tests **1067/1067** (+ scripts 202/202); lint touched **0 errors** / 3 pre-existing hooks warnings on fleet-panels; build pass.
+- Merge: Retried `origin/preview/integration` (`b84dcc2`) into error-banners — **ABORTED**. Conflicts: `.handoff/NOTION_HANDOFF.md`, `package.json`, `fleet-panels.tsx`, `supabase-account.tsx`. Outside-NOTION_HANDOFF conflicts → abort per lane rules. Tip unchanged.
+- Next: Merge Gate resolves PI∪error-banners keeping H24–H29 banners; Gap Dispatcher may assign H30+ if any remain in allowed files. Still BLOCKED for this lane: command-app.tsx mounts (PersonaDirectoryView/SupabaseAccount/ServiceBoard/MessageBody onFailure), voice/, media/, mcp/, server.ts, styles.css shell.
+- Forbidden respected: no command-app / styles shell / voice / media / mcp / server.ts; no force-push; no merge to main.
+
+- Notion children: H28 https://app.notion.com/p/40db95f33e428137afbac78794dff0fe · H29 https://app.notion.com/p/40db95f33e4281889b4ecead023e69bb · cycle https://app.notion.com/p/40db95f33e428113a797c5011e1eccce
+- Workspace handoffs: /workspace/handoffs/error-banners-to-merge-gate.md · /workspace/handoffs/error-banners-to-gap-dispatcher.md
+- Lock releasing.
