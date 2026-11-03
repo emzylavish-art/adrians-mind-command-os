@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "repository": "emzylavish-art/adrians-mind-command-os",
+  "note": "Registry of requested and repository-integrated tools. A catalog/source record is not proof of a native callable adapter. Use each entry's status, install, and live fields to distinguish committed metadata, executable repository code, and verified runtime connections. Unresolved identities remain unresolved. GitHub Codespaces installation is configured in .devcontainer/devcontainer.json; upstream checkouts and package installation occur when a Codespace is created, not in the GitHub repository's tracked source tree.",
+  "tools": [
+    {
+      "name": "Everything Claude Code",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/affaan-m/ECC",
+      "note": "reference only \u2014 prompt/skill collection, not a runnable web-audit tool"
+    },
+    {
+      "name": "Superpowers",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/obra/superpowers",
+      "note": "reference only \u2014 prompt/skill collection, not a runnable web-audit tool"
+    },
+    {
+      "name": "GSD Core",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/gsd-build/get-shit-done",
+      "note": "reference only \u2014 prompt/skill collection, not a runnable web-audit tool"
+    },
+    {
+      "name": "UI UX Pro Max",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "note": "reference only \u2014 prompt/skill collection, not a runnable web-audit tool"
+    },
+    {
+      "name": "n8n-MCP",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/czlonkowski/n8n-mcp",
+      "note": "skipped \u2014 workflow MCP, not a read-only web auditor"
+    },
+    {
+      "name": "LightRAG",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/HKUDS/LightRAG",
+      "note": "skipped \u2014 RAG framework, not a read-only web auditor"
+    },
+    {
+      "name": "Claude Mem",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/thedotmack/claude-mem",
+      "note": "skipped \u2014 memory plugin, not a read-only web auditor"
+    },
+    {
+      "name": "Obsidian Skills",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/kepano/obsidian-skills",
+      "note": "reference only \u2014 prompt/skill collection, not a runnable web-audit tool"
+    },
+    {
+      "name": "Awesome Claude Code",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "engineering",
+      "source_url": "https://github.com/subinium/awesome-claude-code",
+      "note": "reference only \u2014 prompt/skill collection, not a runnable web-audit tool"
+    },
+    {
+      "name": "REA \u2014 Reverse Engineer Anything",
+      "category": "agent-workflow",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-ci",
+      "team_agent": "rea"
+    },
+    {
+      "name": "Ghidra",
+      "category": "authorized-defensive-analysis",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
+      "team_agent": "security",
+      "source_url": "https://github.com/NationalSecurityAgency/ghidra",
+      "note": "not applicable to web audit, available on request"
+    },
+    {
+      "name": "JADX",
+      "category": "authorized-defensive-analysis",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
+      "team_agent": "security",
+      "source_url": "https://github.com/skylot/jadx",
+      "note": "not applicable to web audit, available on request"
+    },
+    {
+      "name": "Frida",
+      "category": "authorized-defensive-analysis",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
+      "team_agent": "security",
+      "source_url": "https://github.com/frida/frida",
+      "note": "not applicable to web audit, available on request"
+    },
+    {
+      "name": "Burp Suite",
+      "category": "authorized-defensive-analysis",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
+      "team_agent": "security",
+      "source_url": "https://portswigger.net/burp/communitydownload",
+      "note": "active/intrusive attack proxy; active mode not installed; skipped for web audit loop"
+    },
+    {
+      "name": "OWASP ZAP",
+      "category": "authorized-defensive-analysis",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-ci",
+      "guardrail": "Passive/read-only against adrians-mind.vercel.app (and localhost tests) only. No active scan, no attack proxy mode.",
+      "team_agent": "security",
+      "source_url": "https://github.com/zaproxy/zaproxy",
+      "entrypoint": "tools/owasp_zap/zap_passive.py",
+      "note": "passive-only wrapper; prefers official zap-baseline/docker when present, else in-repo passive probe; active scan disabled"
+    },
+    {
+      "name": "GDB",
+      "category": "authorized-defensive-analysis",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
+      "team_agent": "security",
+      "source_url": "https://github.com/gnutools/binutils-gdb",
+      "note": "not applicable to web audit, available on request"
+    },
+    {
+      "name": "x64dbg",
+      "category": "authorized-defensive-analysis",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access.",
+      "team_agent": "security",
+      "source_url": "https://github.com/x64dbg/x64dbg",
+      "note": "not applicable to web audit, available on request"
+    },
+    {
+      "name": "BlackEye",
+      "category": "security-risk",
+      "status": "restricted",
+      "install": "blocked",
+      "live": "blocked",
+      "guardrail": "No phishing or credential-collection deployment.",
+      "team_agent": "security"
+    },
+    {
+      "name": "God's Eyes",
+      "category": "read-only-web-audit",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-ci",
+      "team_agent": "gods-eyes",
+      "entrypoint": "tools/godeye/godeye.py",
+      "note": "in-repo implementation; upstream identity still unconfirmed",
+      "guardrail": "Read-only GET/HEAD against allowlisted hosts only; no form submit, no POST, no third-party GodEye download."
+    },
+    {
+      "name": "Arrow EA",
+      "category": "unresolved",
+      "status": "identity-unconfirmed",
+      "install": "not-installed",
+      "live": "not-connected",
+      "team_agent": "unmapped",
+      "note": "identity-unconfirmed; not installed"
+    },
+    {
+      "name": "Mind Command OS Security Review",
+      "category": "defensive-static-analysis",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "guardrail": "Offline heuristic scan of owned/authorized source; no execution, exploitation, or network calls; human review required.",
+      "team_agent": "security"
+    },
+    {
+      "name": "Mind Command OS Knowledge Search",
+      "category": "offline-knowledge-retrieval",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "guardrail": "Local lexical search only; semantic search and external knowledge stores are not connected.",
+      "team_agent": "knowledge"
+    },
+    {
+      "name": "Mind Command OS Durable Queue",
+      "category": "durable-worker-queue",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-runner",
+      "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval.",
+      "team_agent": "worker-runtime"
+    },
+    {
+      "name": "Mind Command OS Allowlisted Worker",
+      "category": "durable-worker-runtime",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner",
+      "guardrail": "Explicit one-shot processing only through allowlisted local tools; no arbitrary shell or code execution.",
+      "team_agent": "worker-runtime"
+    },
+    {
+      "name": "Mind Command OS Agent Prompt Resolver",
+      "category": "agent-routing",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-runner-and-mcp",
+      "guardrail": "Returns agent contract prompt and requirements; external model/runtime execution remains host-controlled.",
+      "team_agent": "orchestrator"
+    },
+    {
+      "name": "Mind Command OS Team Health",
+      "category": "repository-health",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "team_agent": "observability"
+    },
+    {
+      "name": "Mind Command OS Windows Tool Bootstrap",
+      "category": "windows-installation",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "bootstrap-script-available-in-repository",
+      "source_url": "tools/bootstrap/Install-MindCommandTools.ps1",
+      "team_agent": "engineering",
+      "guardrail": "A repository bootstrap script and metadata are committed. This entry does not imply that its third-party tools are exposed as native AI adapters; use the actual tool readiness fields and MCP inventory."
+    },
+    {
+      "name": "L1B3RT4S",
+      "category": "llm-red-team-research",
+      "status": "source-verified",
+      "install": "repo-code-present",
+      "live": "not-connected",
+      "team_agent": "security",
+      "source_url": "https://github.com/elder-plinius/L1B3RT4S",
+      "guardrail": "Research/prompt corpus only. Do not use it to bypass service safeguards or deploy credential theft, phishing, or unauthorized actions.",
+      "note": "jailbreak-prompt collection; unsafe to wire in; not connected"
+    },
+    {
+      "name": "Blackbox",
+      "category": "unresolved-security-tool",
+      "status": "identity-unconfirmed",
+      "install": "not-installed",
+      "live": "not-connected",
+      "team_agent": "security",
+      "guardrail": "No exact repository URL was supplied/verified. Do not substitute a similarly named project; phishing/credential-collection workflows are not integrated.",
+      "note": "identity-unconfirmed; not installed"
+    }
+  ]
+}

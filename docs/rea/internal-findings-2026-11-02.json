@@ -1,0 +1,1017 @@
+{
+  "date": "2026-11-02",
+  "base": "https://adrians-mind.vercel.app",
+  "findings": [
+    {
+      "id": "IF-2026-11-02-01",
+      "severity": "critical",
+      "title": "Universe /dashboard no longer renders for anonymous users (HTTP 307 \u2192 /login)",
+      "route": "/dashboard",
+      "selector": "nav a[href=\"/dashboard\"] / route beforeLoad",
+      "whats_wrong": "Live /dashboard returns 307 Location: /login?next=%2Fdashboard. Capture shows login form, 0 canvases, no Universe/3D. Prior capture 2026-11-01 rendered \"Adrian's Mind \u00b7 Universe\" with bot constellation. Sidebar still advertises Dashboard as a primary workspace destination.",
+      "repro": "curl -sI https://adrians-mind.vercel.app/dashboard \u2192 307 to /login?next=%2Fdashboard; Playwright goto /dashboard lands on login; canvasCount=0",
+      "evidence": [
+        "live-vercel-2026-11-02/dashboard-desktop-meta-2026-11-02.json finalUrl=login?next=%2Fdashboard",
+        "live-vercel-2026-11-01/dashboard-desktop-meta had title Universe and body with Conductor/Gap Dispatcher nodes"
+      ],
+      "code_notes": "preview/ui-completion src/routes/dashboard.tsx uses requireDashboardUser() fail-closed \u2192 /login; component is CommandApp (not DashboardApp). deploy worktree still has ungated DashboardApp \u2014 live matches auth gate.",
+      "owned": true,
+      "owner_lock": "grok-build-ui-completion-wiring.lock (claimed by Grok Build Bot)",
+      "also_related": "dashboard-3d.lock claimed by Dashboard Bot \u2014 lane contradiction (3D vs auth-gated CommandApp)",
+      "user_impact": "Primary advertised 3D dashboard is unreachable without sign-in; guests see login wall instead of Universe."
+    },
+    {
+      "id": "IF-2026-11-02-02",
+      "severity": "high",
+      "title": "Cannot verify 3D nodes/charts render on live dashboard (auth wall blocks audit)",
+      "route": "/dashboard",
+      "selector": "canvas / DashboardApp scene",
+      "whats_wrong": "Lane 2 headless audit cannot confirm whether signed-in users still get DashboardApp 3D or the ui-completion CommandApp swap. Zero canvases observed; asset network for dashboard-3d/art/* never requested on live /dashboard.",
+      "repro": "Unauthenticated Playwright session \u2192 redirected; do not sign in per REA rules. Recorded as blocked.",
+      "evidence": [
+        "spa-exercise-2026-11-02.json deep.dash.canvases=[]",
+        "network never fetched /dashboard-3d/art/* during dashboard probe"
+      ],
+      "owned": true,
+      "owner_lock": "dashboard-3d.lock + dashboard-3d-visual-* (claimed)",
+      "user_impact": "Unknown whether production 3D still ships behind auth; high risk of silent swap to CommandApp."
+    },
+    {
+      "id": "IF-2026-11-02-03",
+      "severity": "medium",
+      "title": "Heavy brand/3D/avatar assets still served from same-origin /public (pending Media migration)",
+      "route": "/, /explore, /memory, /dashboard (when reachable), site-wide",
+      "selector": "img[src^=\"/brand\"], /dashboard-3d/art/*, /avatars/*, textures",
+      "whats_wrong": "Network+DOM show assets loaded as https://adrians-mind.vercel.app/brand/... and /avatars/... and (in repo) public/dashboard-3d/art/*. No Supabase signed URLs. GET /api/mind/media/asset-url?key=brand/logo-mark.jpg \u2192 404. Per Media Storage Fleet: classify as pending_migration, not broken.",
+      "repro": "Load /; DevTools/network shows /brand/logo-mark.jpg, frost-card-texture.jpg, hero-mono-grain.jpg from app origin. curl asset-url \u2192 404 Not Found.",
+      "evidence": [
+        "spa-exercise networkHeavyAll",
+        "assetUrlProbe status 404"
+      ],
+      "owned": false,
+      "owner": "Media",
+      "upload_queue": [
+        {
+          "repo_path": "public/brand/textures/frost-card-texture.jpg",
+          "media_brand_key": "brand/textures/frost-card-texture.jpg",
+          "bytes": 340485,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/brand/textures/frost-card-texture.jpg",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/bot-sheet.jpg",
+          "media_brand_key": "avatars/bot-sheet.jpg",
+          "bytes": 217991,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/bot-sheet.jpg",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/backdrop-city.webp",
+          "media_brand_key": "dashboard-3d/art/backdrop-city.webp",
+          "bytes": 197496,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/backdrop-city.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/backdrop-nebula.webp",
+          "media_brand_key": "dashboard-3d/art/backdrop-nebula.webp",
+          "bytes": 137258,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/backdrop-nebula.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/backdrop-interior.webp",
+          "media_brand_key": "dashboard-3d/art/backdrop-interior.webp",
+          "bytes": 134108,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/backdrop-interior.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/brand/textures/hero-mono-grain.jpg",
+          "media_brand_key": "brand/textures/hero-mono-grain.jpg",
+          "bytes": 123437,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/brand/textures/hero-mono-grain.jpg",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/brand/logo-mark.jpg",
+          "media_brand_key": "brand/logo-mark.jpg",
+          "bytes": 121185,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/brand/logo-mark.jpg",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/__grok/install/assets/homescreen/ob-phone.png",
+          "media_brand_key": "__grok/install/assets/homescreen/ob-phone.png",
+          "bytes": 103612,
+          "route": "PWA/install surfaces",
+          "served_live_as": "https://adrians-mind.vercel.app/__grok/install/assets/homescreen/ob-phone.png",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/__grok/install/assets/homescreen/ob-ipad.png",
+          "media_brand_key": "__grok/install/assets/homescreen/ob-ipad.png",
+          "bytes": 101843,
+          "route": "PWA/install surfaces",
+          "served_live_as": "https://adrians-mind.vercel.app/__grok/install/assets/homescreen/ob-ipad.png",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-documents.png",
+          "media_brand_key": "avatars/avatar-documents.png",
+          "bytes": 101641,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-documents.png",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/building-guild.webp",
+          "media_brand_key": "dashboard-3d/art/building-guild.webp",
+          "bytes": 101384,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/building-guild.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/building-orchestrator.webp",
+          "media_brand_key": "dashboard-3d/art/building-orchestrator.webp",
+          "bytes": 95004,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/building-orchestrator.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/building-gap-cycle.webp",
+          "media_brand_key": "dashboard-3d/art/building-gap-cycle.webp",
+          "bytes": 94852,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/building-gap-cycle.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/brand/hero-bg.jpg",
+          "media_brand_key": "brand/hero-bg.jpg",
+          "bytes": 94615,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/brand/hero-bg.jpg",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-cosmos-painter.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-cosmos-painter.webp",
+          "bytes": 94396,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-cosmos-painter.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-mcp-integration.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-mcp-integration.webp",
+          "bytes": 84970,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-mcp-integration.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-cosmos-light.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-cosmos-light.webp",
+          "bytes": 84764,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-cosmos-light.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-research.png",
+          "media_brand_key": "avatars/avatar-research.png",
+          "bytes": 77017,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-research.png",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-gap-dispatcher.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-gap-dispatcher.webp",
+          "bytes": 77002,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-gap-dispatcher.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-gap.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-gap.webp",
+          "bytes": 77002,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-gap.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-build.png",
+          "media_brand_key": "avatars/avatar-build.png",
+          "bytes": 76387,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-build.png",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-visual-polish.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-visual-polish.webp",
+          "bytes": 74960,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-visual-polish.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-error-banners.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-error-banners.webp",
+          "bytes": 72690,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-error-banners.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-media-integration.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-media-integration.webp",
+          "bytes": 72600,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-media-integration.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-dashboard.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-dashboard.webp",
+          "bytes": 72204,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-dashboard.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-conductor.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-conductor.webp",
+          "bytes": 70292,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-conductor.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-voice-wiring.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-voice-wiring.webp",
+          "bytes": 69754,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-voice-wiring.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-hp-pairing.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-hp-pairing.webp",
+          "bytes": 69536,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-hp-pairing.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-merge-gate.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-merge-gate.webp",
+          "bytes": 69500,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-merge-gate.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-notion.png",
+          "media_brand_key": "avatars/avatar-notion.png",
+          "bytes": 69035,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-notion.png",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-grok-build.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-grok-build.webp",
+          "bytes": 67130,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-grok-build.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-email.png",
+          "media_brand_key": "avatars/avatar-email.png",
+          "bytes": 66876,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-email.png",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-cosmos-motion.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-cosmos-motion.webp",
+          "bytes": 66368,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-cosmos-motion.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-rea-feature-hunter.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-rea-feature-hunter.webp",
+          "bytes": 64074,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-rea-feature-hunter.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-rea.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-rea.webp",
+          "bytes": 64074,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-rea.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-voice-integration.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-voice-integration.webp",
+          "bytes": 57926,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-voice-integration.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-logic.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-logic.webp",
+          "bytes": 56742,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-logic.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/dashboard-3d/art/portrait-xai-verification.webp",
+          "media_brand_key": "dashboard-3d/art/portrait-xai-verification.webp",
+          "bytes": 45934,
+          "route": "/dashboard",
+          "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-xai-verification.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/voice-test/question.wav",
+          "media_brand_key": "voice-test/question.wav",
+          "bytes": 45644,
+          "route": "/ (voice test fixtures)",
+          "served_live_as": "https://adrians-mind.vercel.app/voice-test/question.wav",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/og.jpg",
+          "media_brand_key": "og.jpg",
+          "bytes": 40749,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/og.jpg",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/voice-test/hello.wav",
+          "media_brand_key": "voice-test/hello.wav",
+          "bytes": 14444,
+          "route": "/ (voice test fixtures)",
+          "served_live_as": "https://adrians-mind.vercel.app/voice-test/hello.wav",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-documents.webp",
+          "media_brand_key": "avatars/avatar-documents.webp",
+          "bytes": 11318,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-documents.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-build.webp",
+          "media_brand_key": "avatars/avatar-build.webp",
+          "bytes": 8744,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-build.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        },
+        {
+          "repo_path": "public/avatars/avatar-research.webp",
+          "media_brand_key": "avatars/avatar-research.webp",
+          "bytes": 8368,
+          "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+          "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-research.webp",
+          "classification": "pending_migration",
+          "owner": "Media",
+          "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+        }
+      ],
+      "user_impact": "Larger TTFB/bundle coupling; migration planned. Not user-broken today."
+    },
+    {
+      "id": "IF-2026-11-02-04",
+      "severity": "medium",
+      "title": "Effort Fast/Expert/Heavy UI advertises tiers that do not change the model",
+      "route": "/",
+      "selector": "ComposerEffortControl (Fast/Expert/Heavy)",
+      "whats_wrong": "UI copy: \"This effort is not wired to a different model.\" Code comment in command-app: \"Effort does not change model tier. The server model stays on the Direct path.\" Controls look like model/effort pickers but are cosmetic path labels.",
+      "repro": "Open / Chat; click Fast/Expert/Heavy; read helper text under composer.",
+      "evidence": [
+        "home bodyPreview",
+        "command-app.tsx chooseComposerEffort comment ~732"
+      ],
+      "owned": false,
+      "owner": "Logic",
+      "user_impact": "Users believe they select model power; behavior unchanged \u2014 trust/UX contradiction."
+    },
+    {
+      "id": "IF-2026-11-02-05",
+      "severity": "medium",
+      "title": "Connector/MCP status panels require sign-in (401) \u2014 honest banners present",
+      "route": "/ (Connected view + home)",
+      "selector": "ServiceBoard / fleet MCP list banners",
+      "whats_wrong": "6\u00d7 OAuth status endpoints 401; UI shows \"Status unavailable (sign in required)\" and MCP list \"Sign in is required\" with Retry/View log/Dismiss. Not a silent empty. Previously locked by error-banners (done/released).",
+      "repro": "Load / signed out; see banner + Connected cards.",
+      "evidence": [
+        "home-desktop-meta network401",
+        "spa Connected preview"
+      ],
+      "owned": true,
+      "owner_lock": "error-banners-gap-* (done, released)",
+      "user_impact": "Signed-out users cannot read connector status \u2014 expected until auth; banners are honest."
+    },
+    {
+      "id": "IF-2026-11-02-06",
+      "severity": "low",
+      "title": "Deep-link URL routes for SPA views 404 (/settings,/library,/projects,/voice,/mcp,/tools,/chat,/command,/app,/artifacts,/connectors)",
+      "route": "/settings etc.",
+      "selector": "HTTP routes",
+      "whats_wrong": "Only real app routes live: /, /login, /dashboard (gated), /explore, /memory, /personas\u2192/explore. Sidebar items are in-app views except Dashboard link. Bookmarking /settings returns tiny 404 shell (1354 bytes).",
+      "repro": "curl -sI each path \u2192 404 for listed routes; 200 for / explore memory login.",
+      "evidence": [
+        "capture metas status=404 htmlBytes=1354"
+      ],
+      "owned": false,
+      "owner": "Grok Build",
+      "user_impact": "Low unless users expect shareable URLs; in-app nav works."
+    },
+    {
+      "id": "IF-2026-11-02-07",
+      "severity": "low",
+      "title": "Generate Image / Generate Video quick actions disabled when unsigned/unconfigured",
+      "route": "/",
+      "selector": "Quick actions Generate Image / Generate Video",
+      "whats_wrong": "Buttons present but disabled=true. Imagine control remains available. Honest disabled, not dead-click.",
+      "repro": "Home Chat; inspect Generate Image/Video disabled attribute.",
+      "evidence": [
+        "spa-probes-light dead DISABLED list"
+      ],
+      "owned": true,
+      "owner_lock": "media-integration* (Imagine/media paths)",
+      "user_impact": "Low \u2014 disabled state prevents false starts."
+    },
+    {
+      "id": "IF-2026-11-02-08",
+      "severity": "info",
+      "title": "Login surface expanded (email/password + Google/GitHub/Apple/X)",
+      "route": "/login",
+      "selector": "login form",
+      "whats_wrong": "Not broken \u2014 delta vs Nov1 (Google+X only). Recorded for awareness; visual-polish-login previously worked this area.",
+      "repro": "Open /login",
+      "evidence": [
+        "login-desktop-meta buttons"
+      ],
+      "owned": true,
+      "owner_lock": "visual-polish-login.lock (done) / grok-build-ui-completion-wiring.lock (claimed)",
+      "user_impact": "Positive expansion; auth still required for owner features."
+    }
+  ],
+  "pending_migration_assets": [
+    {
+      "repo_path": "public/brand/textures/frost-card-texture.jpg",
+      "media_brand_key": "brand/textures/frost-card-texture.jpg",
+      "bytes": 340485,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/brand/textures/frost-card-texture.jpg",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/bot-sheet.jpg",
+      "media_brand_key": "avatars/bot-sheet.jpg",
+      "bytes": 217991,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/bot-sheet.jpg",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/backdrop-city.webp",
+      "media_brand_key": "dashboard-3d/art/backdrop-city.webp",
+      "bytes": 197496,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/backdrop-city.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/backdrop-nebula.webp",
+      "media_brand_key": "dashboard-3d/art/backdrop-nebula.webp",
+      "bytes": 137258,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/backdrop-nebula.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/backdrop-interior.webp",
+      "media_brand_key": "dashboard-3d/art/backdrop-interior.webp",
+      "bytes": 134108,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/backdrop-interior.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/brand/textures/hero-mono-grain.jpg",
+      "media_brand_key": "brand/textures/hero-mono-grain.jpg",
+      "bytes": 123437,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/brand/textures/hero-mono-grain.jpg",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/brand/logo-mark.jpg",
+      "media_brand_key": "brand/logo-mark.jpg",
+      "bytes": 121185,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/brand/logo-mark.jpg",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/__grok/install/assets/homescreen/ob-phone.png",
+      "media_brand_key": "__grok/install/assets/homescreen/ob-phone.png",
+      "bytes": 103612,
+      "route": "PWA/install surfaces",
+      "served_live_as": "https://adrians-mind.vercel.app/__grok/install/assets/homescreen/ob-phone.png",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/__grok/install/assets/homescreen/ob-ipad.png",
+      "media_brand_key": "__grok/install/assets/homescreen/ob-ipad.png",
+      "bytes": 101843,
+      "route": "PWA/install surfaces",
+      "served_live_as": "https://adrians-mind.vercel.app/__grok/install/assets/homescreen/ob-ipad.png",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-documents.png",
+      "media_brand_key": "avatars/avatar-documents.png",
+      "bytes": 101641,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-documents.png",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/building-guild.webp",
+      "media_brand_key": "dashboard-3d/art/building-guild.webp",
+      "bytes": 101384,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/building-guild.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/building-orchestrator.webp",
+      "media_brand_key": "dashboard-3d/art/building-orchestrator.webp",
+      "bytes": 95004,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/building-orchestrator.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/building-gap-cycle.webp",
+      "media_brand_key": "dashboard-3d/art/building-gap-cycle.webp",
+      "bytes": 94852,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/building-gap-cycle.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/brand/hero-bg.jpg",
+      "media_brand_key": "brand/hero-bg.jpg",
+      "bytes": 94615,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/brand/hero-bg.jpg",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-cosmos-painter.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-cosmos-painter.webp",
+      "bytes": 94396,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-cosmos-painter.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-mcp-integration.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-mcp-integration.webp",
+      "bytes": 84970,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-mcp-integration.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-cosmos-light.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-cosmos-light.webp",
+      "bytes": 84764,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-cosmos-light.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-research.png",
+      "media_brand_key": "avatars/avatar-research.png",
+      "bytes": 77017,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-research.png",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-gap-dispatcher.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-gap-dispatcher.webp",
+      "bytes": 77002,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-gap-dispatcher.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-gap.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-gap.webp",
+      "bytes": 77002,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-gap.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-build.png",
+      "media_brand_key": "avatars/avatar-build.png",
+      "bytes": 76387,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-build.png",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-visual-polish.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-visual-polish.webp",
+      "bytes": 74960,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-visual-polish.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-error-banners.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-error-banners.webp",
+      "bytes": 72690,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-error-banners.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-media-integration.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-media-integration.webp",
+      "bytes": 72600,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-media-integration.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-dashboard.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-dashboard.webp",
+      "bytes": 72204,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-dashboard.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-conductor.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-conductor.webp",
+      "bytes": 70292,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-conductor.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-voice-wiring.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-voice-wiring.webp",
+      "bytes": 69754,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-voice-wiring.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-hp-pairing.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-hp-pairing.webp",
+      "bytes": 69536,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-hp-pairing.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-merge-gate.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-merge-gate.webp",
+      "bytes": 69500,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-merge-gate.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-notion.png",
+      "media_brand_key": "avatars/avatar-notion.png",
+      "bytes": 69035,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-notion.png",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-grok-build.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-grok-build.webp",
+      "bytes": 67130,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-grok-build.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-email.png",
+      "media_brand_key": "avatars/avatar-email.png",
+      "bytes": 66876,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-email.png",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-cosmos-motion.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-cosmos-motion.webp",
+      "bytes": 66368,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-cosmos-motion.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-rea-feature-hunter.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-rea-feature-hunter.webp",
+      "bytes": 64074,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-rea-feature-hunter.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-rea.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-rea.webp",
+      "bytes": 64074,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-rea.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-voice-integration.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-voice-integration.webp",
+      "bytes": 57926,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-voice-integration.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-logic.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-logic.webp",
+      "bytes": 56742,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-logic.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/dashboard-3d/art/portrait-xai-verification.webp",
+      "media_brand_key": "dashboard-3d/art/portrait-xai-verification.webp",
+      "bytes": 45934,
+      "route": "/dashboard",
+      "served_live_as": "https://adrians-mind.vercel.app/dashboard-3d/art/portrait-xai-verification.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/voice-test/question.wav",
+      "media_brand_key": "voice-test/question.wav",
+      "bytes": 45644,
+      "route": "/ (voice test fixtures)",
+      "served_live_as": "https://adrians-mind.vercel.app/voice-test/question.wav",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/og.jpg",
+      "media_brand_key": "og.jpg",
+      "bytes": 40749,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/og.jpg",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/voice-test/hello.wav",
+      "media_brand_key": "voice-test/hello.wav",
+      "bytes": 14444,
+      "route": "/ (voice test fixtures)",
+      "served_live_as": "https://adrians-mind.vercel.app/voice-test/hello.wav",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-documents.webp",
+      "media_brand_key": "avatars/avatar-documents.webp",
+      "bytes": 11318,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-documents.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-build.webp",
+      "media_brand_key": "avatars/avatar-build.webp",
+      "bytes": 8744,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-build.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    },
+    {
+      "repo_path": "public/avatars/avatar-research.webp",
+      "media_brand_key": "avatars/avatar-research.webp",
+      "bytes": 8368,
+      "route": "/ (home chrome); also /explore,/login,/memory as applicable",
+      "served_live_as": "https://adrians-mind.vercel.app/avatars/avatar-research.webp",
+      "classification": "pending_migration",
+      "owner": "Media",
+      "notes": "Still same-origin static under /public; Supabase media-brand bucket empty; signed-link layer not merged; GET /api/mind/media/asset-url \u2192 404"
+    }
+  ]
+}
