@@ -45,7 +45,7 @@ describe("Koofr storage provider", () => {
   });
 
   it("keeps StoredConnection encrypted (packed basic token, no plaintext password)", () => {
-    const user = "zackosment1@gmail.com";
+    const user = "user@example.com";
     const password = "apppw-PLAIN-should-not-appear";
     const packed = packKoofrBasicToken(user, password);
     storeAccessToken({
@@ -65,7 +65,7 @@ describe("Koofr storage provider", () => {
 
   it("resolves MIND_KOOFR_USER + MIND_KOOFR_APP_PASSWORD into Basic token", () => {
     const env = {
-      MIND_KOOFR_USER: "zackosment1@gmail.com",
+      MIND_KOOFR_USER: "user@example.com",
       MIND_KOOFR_APP_PASSWORD: "sixteencharsapp!",
     };
     const fromEnv = resolveStorageAccessToken("anyone", "koofr", env);
@@ -82,7 +82,7 @@ describe("Koofr storage provider", () => {
   });
 
   it("upload PUTs via WebDAV with redirect:manual and never leaks secrets", async () => {
-    const user = "zackosment1@gmail.com";
+    const user = "user@example.com";
     const password = "super-secret-koofr-app-password";
     const token = packKoofrBasicToken(user, password);
     const methods: string[] = [];
@@ -147,7 +147,7 @@ describe("Koofr storage provider", () => {
   });
 
   it("async resolver returns packed token from encrypted record", async () => {
-    const user = "zackosment1@gmail.com";
+    const user = "user@example.com";
     const packed = packKoofrBasicToken(user, "record-app-password");
     storeAccessToken({
       ownerId: "owner-kf2",
