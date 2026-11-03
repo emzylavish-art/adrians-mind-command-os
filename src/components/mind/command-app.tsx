@@ -47,6 +47,7 @@ import { MessageBody } from "@/components/mind/message-body";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
+import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/components/mind/media/downscale";
 import {
@@ -62,7 +63,7 @@ import {
   type DownscaleQuality,
 } from "@/components/mind/media/downscale-quality";
 import { safeImageDownloadName } from "@/components/mind/media/media-ui-helpers";
-import { BATCH_EDIT_MAX, GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, clampBatchEditCount, collectClipboardImageFiles, createImagineTabLock, estimateImagineBatchCostUsd, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
+import { BATCH_EDIT_MAX, GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, clampBatchEditCount, collectClipboardImageFiles, createImagineTabLock, estimateImagineBatchCostUsd, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, ownerScopeFromBearer, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, writeMediaOwnerScope, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -248,7 +249,7 @@ function formatBytes(bytes: number) {
 }
 
 export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
+  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy, mediaWarning } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -347,6 +348,27 @@ export function CommandApp() {
   const clearedStop = useRef(false);
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
+
+  // Isolation: staged composer images must not carry into another chat/session.
+  useEffect(() => {
+    setPendingImages([]);
+    setBatchEditPreview(null);
+    setBatchEditProgress(null);
+    batchEditAbortRef.current?.abort();
+    batchEditAbortRef.current = null;
+    setAgentImages([]);
+    setCloudPickerOpen(false);
+  }, [activeId]);
+
+  // Bind IndexedDB blob scope to the current bearer (or local) on mount / token change.
+  useEffect(() => {
+    writeMediaOwnerScope(ownerScopeFromBearer(getBearerToken()));
+  }, []);
+
+  useEffect(() => {
+    if (mediaWarning) setNotice(mediaWarning);
+  }, [mediaWarning]);
+
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
 
   useEffect(() => {
@@ -3868,6 +3890,13 @@ function ChatPane({
               </div>
             </div>
           )}
+          <ChatMediaGallery
+            messages={active?.messages}
+            onUseInComposer={onSaveImage}
+            onEditImagine={onEditImagine}
+            onDownload={onDownloadImage}
+          />
+
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (

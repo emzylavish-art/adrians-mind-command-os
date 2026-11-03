@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { compactWorkspaceImages, createIndexedDbBlobStore, hydrateWorkspaceImages } from "./media/blob-store";
+import {
+  collectWorkspaceBlobIds,
+  compactWorkspaceImagesDetailed,
+  createIndexedDbBlobStore,
+  gcOrphanMediaBlobs,
+  hydrateWorkspaceImages,
+  readMediaOwnerScope,
+} from "./media/blob-store";
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
@@ -14,10 +21,12 @@ export function useMindWorkspace() {
   const [ready, setReady] = useState(false);
   const [syncNote, setSyncNote] = useState("Browser copy. Server copy has not been checked.");
   const [serverHeld, setServerHeld] = useState(false);
+  const [mediaWarning, setMediaWarning] = useState<string | null>(null);
   const followServer = useRef(false);
   const savedJson = useRef<string | null>(null);
   const latest = useRef(ws);
-  const blobStore = useRef(createIndexedDbBlobStore());
+  const ownerScope = useRef(readMediaOwnerScope());
+  const blobStore = useRef(createIndexedDbBlobStore(ownerScope.current));
   latest.current = ws;
 
   useEffect(() => {
@@ -88,7 +97,13 @@ export function useMindWorkspace() {
       void (async () => {
         let persisted = ws;
         try {
-          persisted = (await compactWorkspaceImages(ws, blobStore.current)) as Workspace;
+          const compacted = await compactWorkspaceImagesDetailed(ws, blobStore.current);
+          persisted = compacted.workspace as Workspace;
+          if (!cancelled) {
+            setMediaWarning(compacted.warning ?? null);
+          }
+          const live = collectWorkspaceBlobIds(persisted);
+          await gcOrphanMediaBlobs(blobStore.current, live);
         } catch {
           persisted = ws;
         }
@@ -131,5 +146,5 @@ export function useMindWorkspace() {
     return result;
   }
 
-  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy };
+  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, mediaWarning };
 }

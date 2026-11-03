@@ -78,6 +78,7 @@ export function settleWithin(start, timeoutMs) {
  * @property {() => unknown} requestSignOut Ask the server to end the session; must reject on a failed response.
  * @property {() => void} clearToken Drop the stored bearer token.
  * @property {() => void} redirect Leave the page.
+ * @property {() => unknown} [clearLocalMedia] Drop local image caches (IndexedDB + workspace pixels). Never cloud.
  * @property {number} [timeoutMs]
  */
 
@@ -97,6 +98,7 @@ export async function runSignOut({
   requestSignOut,
   clearToken,
   redirect,
+  clearLocalMedia,
   timeoutMs,
 }) {
   if (livePreview) {
@@ -106,6 +108,9 @@ export async function runSignOut({
       await settleWithin(requestSignOut, timeoutMs ?? signOutTimeoutMs(livePreview));
     }
     clearToken();
+    if (typeof clearLocalMedia === "function") {
+      await settleWithin(clearLocalMedia, timeoutMs ?? signOutTimeoutMs(livePreview));
+    }
     redirect();
     return;
   }
@@ -119,6 +124,9 @@ export async function runSignOut({
     );
   }
   clearToken();
+  if (typeof clearLocalMedia === "function") {
+    await settleWithin(clearLocalMedia, timeoutMs ?? signOutTimeoutMs(livePreview));
+  }
   redirect();
 }
 
@@ -128,6 +136,7 @@ export async function runSignOut({
  * @property {boolean} hasBearer Whether a preview bearer token is stored.
  * @property {() => unknown} requestSignOut Ask the server to end any prior session.
  * @property {() => void} clearToken Drop the stored bearer token.
+ * @property {() => unknown} [clearLocalMedia] Drop local image caches before a new identity signs in.
  * @property {number} [timeoutMs]
  */
 
@@ -150,6 +159,7 @@ export async function runPreSignInSignOut({
   hasBearer,
   requestSignOut,
   clearToken,
+  clearLocalMedia,
   timeoutMs,
 }) {
   // In the preview a missing bearer means there is nothing to clear.
@@ -157,4 +167,7 @@ export async function runPreSignInSignOut({
     await settleWithin(requestSignOut, timeoutMs ?? signOutTimeoutMs(livePreview));
   }
   clearToken();
+  if (typeof clearLocalMedia === "function") {
+    await settleWithin(clearLocalMedia, timeoutMs ?? signOutTimeoutMs(livePreview));
+  }
 }

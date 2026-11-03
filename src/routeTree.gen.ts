@@ -14,13 +14,13 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as ApiMindMediaAssetUrlRouteImport } from './routes/api/mind/media/asset-url'
 import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
 import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
 import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
 import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
 import { Route as ApiMindMediaStorageStatusRouteImport } from './routes/api/mind/media/storage/status'
 import { Route as ApiMindMediaStorageUploadRouteImport } from './routes/api/mind/media/storage/upload'
-import { Route as ApiMindMediaAssetUrlRouteImport } from './routes/api/mind/media/asset-url'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -45,6 +45,11 @@ const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   id: '/api/mind/turn',
   path: '/api/mind/turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindMediaAssetUrlRoute = ApiMindMediaAssetUrlRouteImport.update({
+  id: '/api/mind/media/asset-url',
+  path: '/api/mind/media/asset-url',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
@@ -79,11 +84,6 @@ const ApiMindMediaStorageUploadRoute =
     path: '/api/mind/media/storage/upload',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiMindMediaAssetUrlRoute = ApiMindMediaAssetUrlRouteImport.update({
-  id: '/api/mind/media/asset-url',
-  path: '/api/mind/media/asset-url',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -91,13 +91,13 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
-  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -105,13 +105,13 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
-  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -120,13 +120,13 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
   '/api/mind/media/storage/status': typeof ApiMindMediaStorageStatusRoute
   '/api/mind/media/storage/upload': typeof ApiMindMediaStorageUploadRoute
-  '/api/mind/media/asset-url': typeof ApiMindMediaAssetUrlRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -136,13 +136,13 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/media/asset-url'
     | '/api/mind/media/generate'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
-    | '/api/mind/media/asset-url'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -150,13 +150,13 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/media/asset-url'
     | '/api/mind/media/generate'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
-    | '/api/mind/media/asset-url'
   id:
     | '__root__'
     | '/'
@@ -164,13 +164,13 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/media/asset-url'
     | '/api/mind/media/generate'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
     | '/api/mind/media/storage/status'
     | '/api/mind/media/storage/upload'
-    | '/api/mind/media/asset-url'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -179,13 +179,13 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  ApiMindMediaAssetUrlRoute: typeof ApiMindMediaAssetUrlRoute
   ApiMindMediaGenerateRoute: typeof ApiMindMediaGenerateRoute
   ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
   ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
   ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
   ApiMindMediaStorageStatusRoute: typeof ApiMindMediaStorageStatusRoute
   ApiMindMediaStorageUploadRoute: typeof ApiMindMediaStorageUploadRoute
-  ApiMindMediaAssetUrlRoute: typeof ApiMindMediaAssetUrlRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -223,6 +223,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/turn'
       fullPath: '/api/mind/turn'
       preLoaderRoute: typeof ApiMindTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/media/asset-url': {
+      id: '/api/mind/media/asset-url'
+      path: '/api/mind/media/asset-url'
+      fullPath: '/api/mind/media/asset-url'
+      preLoaderRoute: typeof ApiMindMediaAssetUrlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/media/generate': {
@@ -267,13 +274,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMediaStorageUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/mind/media/asset-url': {
-      id: '/api/mind/media/asset-url'
-      path: '/api/mind/media/asset-url'
-      fullPath: '/api/mind/media/asset-url'
-      preLoaderRoute: typeof ApiMindMediaAssetUrlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -283,13 +283,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  ApiMindMediaAssetUrlRoute: ApiMindMediaAssetUrlRoute,
   ApiMindMediaGenerateRoute: ApiMindMediaGenerateRoute,
   ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
   ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,
   ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,
   ApiMindMediaStorageStatusRoute: ApiMindMediaStorageStatusRoute,
   ApiMindMediaStorageUploadRoute: ApiMindMediaStorageUploadRoute,
-  ApiMindMediaAssetUrlRoute: ApiMindMediaAssetUrlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

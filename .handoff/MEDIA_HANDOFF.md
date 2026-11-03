@@ -290,3 +290,26 @@ See `/workspace/locks/media-integration.lock`.
 
 ### Tests
 - tsc pass; src **349/349**; build pass
+
+## Round: media isolation + gallery + blob GC — 2026-11-02T21:05:00-06:00 (America/Chicago)
+
+**Tip before:** `620f66c` · **Branch:** `media-integration` · **Worktree:** `/workspace/mind-command-os-media`
+
+### Isolation leaks found and fixed
+1. **Global IndexedDB blob DB** (`amcos.media.blobs.v1`) shared across sessions/users → now scoped by media owner (`local` or `u_<hash>` from bearer) via `mediaBlobDbName` / `writeMediaOwnerScope`.
+2. **`pendingImages` / batch Imagine / agentImages / cloud picker** survived chat switches → cleared on `activeId` change (composer staging cannot leak into another chat).
+3. **Sign-out left local image pixels** in IDB + workspace JSON → `clearLocalMediaOnSignOut` wired into `runSignOut` / `runPreSignInSignOut` (strips workspace image refs, deletes scoped+legacy IDB). **Never deletes cloud media.**
+4. **Export / history / Use in composer / Imagine results** were already chat-scoped when callers passed the active chat; remaining risk was staged composer + shared IDB (fixed above). Cloud picker had no persistent cache.
+
+### Also shipped
+- Per-chat media gallery (`ChatMediaGallery`) from message refs only — lightbox + Use in composer hooks.
+- Orphan blob GC on persist (`gcOrphanMediaBlobs`) + soft quota warning (`MEDIA_QUOTA_SOFT_CHARS`) before writes fail.
+- Blob ids optionally prefixed with `chatId` for GC/isolation.
+
+### Verify
+- `tsc --noEmit` green
+- Media + sign-out unit tests pass (148 in media/sign-out batch; isolation/GC/gallery/clear covered in `blob-store.test.ts`)
+- `npm run build` green
+
+### command-app note
+Minimal hooks only (clear-on-chat-switch effect, gallery mount, owner-scope bind). Respect whisper-flow claim: no whisper merge surface touched.

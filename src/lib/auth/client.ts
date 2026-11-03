@@ -1,6 +1,8 @@
 import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
+import { clearLocalMediaOnSignOut } from "@/lib/mind/media/clear-media";
+import { ownerScopeFromBearer, writeMediaOwnerScope } from "@/lib/mind/media/blob-store";
 import { GROK_PROVIDERS } from "./providers";
 
 /**
@@ -60,8 +62,12 @@ export function getBearerToken(): string | null {
 function setBearerToken(token: string | null): void {
   if (typeof window === "undefined") return;
   try {
-    if (token) window.sessionStorage.setItem(BEARER_KEY, token);
-    else window.sessionStorage.removeItem(BEARER_KEY);
+    if (token) {
+      window.sessionStorage.setItem(BEARER_KEY, token);
+      writeMediaOwnerScope(ownerScopeFromBearer(token));
+    } else {
+      window.sessionStorage.removeItem(BEARER_KEY);
+    }
   } catch {
     /* storage unavailable — ignore */
   }
@@ -118,6 +124,7 @@ export async function signIn(
     hasBearer: Boolean(getBearerToken()),
     requestSignOut: () => authClient.signOut(),
     clearToken: () => setBearerToken(null),
+    clearLocalMedia: () => clearLocalMediaOnSignOut(),
   });
 
   if (inLivePreview()) {
@@ -229,6 +236,7 @@ export async function signOut(redirectTo = "/"): Promise<void> {
       if (error) throw new Error(error.message ?? "Sign-out failed");
     },
     clearToken: () => setBearerToken(null),
+    clearLocalMedia: () => clearLocalMediaOnSignOut(),
     redirect: () => {
       window.location.href = redirectTo;
     },

@@ -246,3 +246,46 @@ test("the defaults are bounded, and deployed waits longer than preview", async (
   await done;
   assert.deepEqual(h.order, ["clear", "redirect"]);
 });
+
+
+test("preview: clearLocalMedia runs after clearToken and before redirect", async () => {
+  const order = [];
+  const h = preview({
+    clearToken: () => order.push("clear"),
+    clearLocalMedia: () => {
+      order.push("media");
+      return Promise.resolve();
+    },
+    redirect: () => order.push("redirect"),
+  });
+  // harness still has its own order; use the local one via overrides only — re-run manually
+  await runSignOut({
+    livePreview: true,
+    hasBearer: true,
+    requestSignOut: () => Promise.resolve(),
+    clearToken: () => order.push("clear"),
+    clearLocalMedia: () => {
+      order.push("media");
+      return Promise.resolve();
+    },
+    redirect: () => order.push("redirect"),
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  assert.deepEqual(order, ["clear", "media", "redirect"]);
+});
+
+test("deployed: clearLocalMedia runs only after confirmed sign-out", async () => {
+  const order = [];
+  await runSignOut({
+    livePreview: false,
+    hasBearer: false,
+    requestSignOut: () => Promise.resolve(),
+    clearToken: () => order.push("clear"),
+    clearLocalMedia: () => {
+      order.push("media");
+    },
+    redirect: () => order.push("redirect"),
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  assert.deepEqual(order, ["clear", "media", "redirect"]);
+});
