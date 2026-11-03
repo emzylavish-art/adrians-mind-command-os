@@ -210,7 +210,7 @@ export async function researchConnectorRead(input: {
         ok: false,
         status: read.status,
         text: read.text.includes("not configured")
-          ? "Notion is not connected for research. Connect Notion OAuth or set NOTION_TOKEN. No citations were invented."
+          ? "Notion is not connected for research. On ServiceBoard click Setup/Connect for Notion (/api/mind/oauth/notion/start), or set NOTION_TOKEN / NOTION_API_KEY on the server. OAuth needs NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, NOTION_OAUTH_REDIRECT_URI, and CONNECTOR_TOKEN_SECRET. No citations were invented."
           : read.text,
       };
     }

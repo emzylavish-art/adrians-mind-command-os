@@ -25,7 +25,7 @@ describe("mcp tools", () => {
     const read = await notionReadPage({ pageIdOrUrl: "40b1aa27632381768d58cde0731f142a", token: "" });
     assert.equal(read.ok, false);
     assert.equal(read.status, "needs-config");
-    assert.match(read.text, /not configured/i);
+    assert.match(read.text, /not connected|ServiceBoard|NOTION_TOKEN/i);
     const append = await notionAppendSection({
       pageIdOrUrl: "40b1aa27632381768d58cde0731f142a",
       heading: "H",
@@ -34,7 +34,7 @@ describe("mcp tools", () => {
     });
     assert.equal(append.ok, false);
     assert.equal(append.status, "needs-config");
-    assert.match(append.text, /not configured/i);
+    assert.match(append.text, /not connected|ServiceBoard|NOTION_TOKEN/i);
   });
 
   it("returns no paired PC when the agent URL is unset", async () => {

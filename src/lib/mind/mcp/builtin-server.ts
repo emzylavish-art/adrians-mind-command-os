@@ -45,7 +45,7 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
   server.registerTool(
     "notion_read_page",
     {
-      description: "Read a Notion page by id or URL. Requires NOTION_TOKEN / NOTION_API_KEY.",
+      description: "Read a Notion page by id or URL. Requires Notion OAuth (ServiceBoard Connect) or NOTION_TOKEN / NOTION_API_KEY.",
       inputSchema: {
         page_id: z.string().describe("Notion page id or URL"),
       },

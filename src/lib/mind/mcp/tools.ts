@@ -97,7 +97,7 @@ export async function notionReadPage(input: {
     return {
       ok: false,
       status: "needs-config",
-      text: "Notion is not configured. Set NOTION_TOKEN or NOTION_API_KEY on the server, or connect Notion OAuth. Nothing was read.",
+      text: "Notion is not connected. On ServiceBoard click Setup/Connect for Notion (starts /api/mind/oauth/notion/start), or set NOTION_TOKEN / NOTION_API_KEY on the server to an internal integration secret and share pages with that integration. OAuth also needs NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, NOTION_OAUTH_REDIRECT_URI, and CONNECTOR_TOKEN_SECRET. Nothing was read.",
     };
   }
   const pageId = parseNotionPageId(input.pageIdOrUrl);
@@ -122,7 +122,7 @@ export async function notionAppendSection(input: {
     return {
       ok: false,
       status: "needs-config",
-      text: "Notion is not configured. Set NOTION_TOKEN or NOTION_API_KEY on the server, or connect Notion OAuth. Nothing was written.",
+      text: "Notion is not connected. On ServiceBoard click Setup/Connect for Notion (starts /api/mind/oauth/notion/start), or set NOTION_TOKEN / NOTION_API_KEY on the server to an internal integration secret and share pages with that integration. OAuth also needs NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, NOTION_OAUTH_REDIRECT_URI, and CONNECTOR_TOKEN_SECRET. Nothing was written.",
     };
   }
   const pageId = parseNotionPageId(input.pageIdOrUrl);

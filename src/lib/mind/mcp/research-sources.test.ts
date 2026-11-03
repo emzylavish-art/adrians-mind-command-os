@@ -77,6 +77,7 @@ describe("research_connector_read", () => {
       env: {},
     });
     assert.equal(notion.status, "needs-config");
+    assert.match(notion.text, /ServiceBoard|NOTION_TOKEN|Connect Notion/i);
   });
 
   it("gdrive refuses missing file_id and invalid ids", async () => {
