@@ -493,3 +493,31 @@ command on Zack's PC.
 - Notion: https://app.notion.com/p/40db95f33e4281dd98beed60a1b0ac09
 - Merge to main/prod held until Grok Build baseline is live.
 - External handoff page 40b1aa27… not writable from this connector (404).
+
+## MCP Tool Registry enrichment (2026-11-02 America/Chicago)
+
+- SHA: `909787f` on `mcp-integration` (worktree `/workspace/mcp-registry-wt`, branch `mcp-tool-registry`)
+- Built: `tool-catalog.ts` with id/name/description/inputSchema + honest health; `storage_list_status` MCP tool; UI/chat needs-config/needs-pairing
+- Tools status: notion_* needs-config; pc_run_shell needs-pairing; pglite_* ok; storage_list_status ok (6 accounts configured, 0 connected)
+- E2E: tools/call pglite_query SELECT 1 → rowCount 1
+- Tests: typecheck pass; 1192/1192; build pass
+- Primary Notion page 40b1aa27… 404; child created: https://app.notion.com/p/40db95f33e4281c483adeb997bec0966
+- Never force-pushed; scrubbed storage files untouched
+
+## Governance gap #73 — Tool Registry activation (proposal only)
+
+**Owner bot:** Grok Build (8939df01), lane `governance / tool-registry` — **not** MCP Integration file ownership for `tools/registry.json` on `main` or prod `/tools`.
+
+**Exact proposal for Grok Build:**
+1. Add `src/routes/tools.tsx` (or settings subview) that loads `tools/registry.json` at runtime via a server fn.
+2. Filter activatable rows to `status ∈ {source-verified, implemented}` only; show `identity-unconfirmed` / `restricted` as pending/disabled.
+3. Hard-exclude BlackEye and L1B3RT4S (and any `status: restricted`).
+4. Do **not** invent MCP `tools/call` handlers for Codespaces-only upstreams — link to install status instead.
+5. Keep Adrian's Mind MCP builtin catalog (`src/lib/mind/mcp/tool-catalog.ts`) as the single source of truth for **callable** chat/MCP tools; optionally cross-link registry.json entries that map 1:1 to builtin ids (`notion_*`, `pglite_*`, `storage_list_status`, `build_*`, `research_*`).
+6. Ship on `main` + live `https://adrians-mind.vercel.app/tools` (today 404).
+
+MCP lane will not claim `tools/registry.json` or the `/tools` page route while gap #73 is assigned to Grok Build.
+
+## Tools toggle verification (item 2)
+
+Already implemented: `setServerEnabled` + Tools card `mcpRegistryToggle`; `callRegistryTool` refuses disabled servers ("MCP server … is disabled. Nothing was called."). Re-verified live 2026-11-02 CT after storage diag.
