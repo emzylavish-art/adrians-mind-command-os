@@ -74,3 +74,12 @@ describe("Composer model menu subtitles are honest (catalog-derived)", () => {
     assert.ok(/composerTierSubtitle\(/.test(src), "uses composerTierSubtitle");
   });
 });
+
+describe("composerTierSubtitle hostile input", () => {
+  it("returns empty for unknown or prototype-key tiers instead of throwing", async () => {
+    const { composerTierSubtitle } = await import("../../lib/mind/model-tiers.ts");
+    for (const bad of ["Orchestrator", "__proto__", "constructor", "toString", ""]) {
+      assert.equal(composerTierSubtitle(bad as never), "");
+    }
+  });
+});

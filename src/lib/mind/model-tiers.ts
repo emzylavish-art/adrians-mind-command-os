@@ -273,5 +273,6 @@ const COMPOSER_TIER_BLURB: Record<"Auto" | "Fast" | "Expert" | "Heavy" | "Build"
  */
 export function composerTierSubtitle(tier: "Auto" | "Fast" | "Expert" | "Heavy" | "Build"): string {
   if (tier === "Auto") return "Routes to Fast, Expert, Heavy, or Build";
+  if (!Object.prototype.hasOwnProperty.call(COMPOSER_TIER_BLURB, tier)) return "";
   return `${COMPOSER_TIER_BLURB[tier]} · ${DEFAULTS[tier].model}`;
 }
