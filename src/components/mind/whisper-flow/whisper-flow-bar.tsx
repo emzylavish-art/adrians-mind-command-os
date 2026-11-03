@@ -6,7 +6,8 @@ import {
 } from "@/lib/mind/whisper-flow/session";
 import type { WhisperFlowState } from "@/lib/mind/whisper-flow/types";
 import { createWhisperFlowState } from "@/lib/mind/whisper-flow/machine";
-import { transcribeDictation } from "@/lib/mind/server";
+import { mapSttClientError, STT_SIGN_IN_REQUIRED } from "@/lib/mind/whisper-flow/stt-client-errors";
+import { refineDictationOptional, transcribeDictation } from "@/lib/mind/server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 
 export type WhisperFlowBarProps = {
@@ -30,26 +31,67 @@ export type WhisperFlowBarProps = {
 export function WhisperFlowBar(props: WhisperFlowBarProps) {
   const [state, setState] = useState<WhisperFlowState>(() => createWhisperFlowState());
   const [interim, setInterim] = useState("");
+  const [llmEnabled, setLlmEnabled] = useState(props.llmRefineEnabled === true);
+  const [llmStatus, setLlmStatus] = useState<string | null>(null);
   const sessionRef = useRef<WhisperSession | null>(null);
-  const llmEnabled = props.llmRefineEnabled === true;
+  const propsRef = useRef(props);
+  propsRef.current = props;
+
+  useEffect(() => {
+    if (typeof props.llmRefineEnabled === "boolean") setLlmEnabled(props.llmRefineEnabled);
+  }, [props.llmRefineEnabled]);
 
   useEffect(() => {
     const session = createWhisperSession({
       onState: setState,
       onInterim: setInterim,
-      onUndoLastSegment: props.onUndoLastSegment,
+      onUndoLastSegment: () => propsRef.current.onUndoLastSegment?.(),
       llmRefineEnabled: llmEnabled,
-      llmRefine: props.llmRefine,
+      llmRefine:
+        propsRef.current.llmRefine ||
+        (async (text: string) => {
+          try {
+            const result = await refineDictationOptional({ data: { text, enabled: true } });
+            if (!result || typeof result !== "object") {
+              setLlmStatus("Optional LLM refinement failed. Local refinement was kept.");
+              return null;
+            }
+            if ("ok" in result && result.ok === true && "text" in result) {
+              const polished = String((result as { text?: string }).text || "").trim();
+              setLlmStatus(
+                polished && polished !== text
+                  ? "Optional LLM refinement ready (local text already inserted; not auto-replaced)."
+                  : "Optional LLM refinement matched local text.",
+              );
+              return polished || null;
+            }
+            const err = String((result as { error?: string }).error || "Optional LLM refinement skipped.");
+            setLlmStatus(err);
+            return null;
+          } catch (err) {
+            const mapped = mapSttClientError(err);
+            setLlmStatus(
+              /Sign in to use server transcription/i.test(mapped)
+                ? "Sign in to use optional LLM refinement. Local refinement was kept."
+                : "Optional LLM refinement failed. Local refinement was kept.",
+            );
+            return null;
+          }
+        }),
       transcribe: async (input) => {
         // E2E override — never used in production paths unless window flag set.
         const e2e = (window as unknown as {
           __whisperFlowE2E?: {
             transcribe?: (i: typeof input) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
             forceMicDenied?: boolean;
+            forceSttUnauthorized?: boolean;
           };
         }).__whisperFlowE2E;
         if (e2e?.forceMicDenied) {
           return { ok: false, error: "Microphone permission was denied. Allow the mic for this site, then Retry. Nothing was transcribed." };
+        }
+        if (e2e?.forceSttUnauthorized) {
+          return { ok: false, error: STT_SIGN_IN_REQUIRED };
         }
         if (e2e?.transcribe) return e2e.transcribe(input);
         try {
@@ -64,31 +106,24 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
             return { ok: false, error: "Speech-to-text returned an unreadable response. Nothing was transcribed." };
           }
           if ("ok" in result && result.ok === false) {
-            return { ok: false, error: String((result as { error?: string }).error || "Transcription failed.") };
+            return { ok: false, error: mapSttClientError({ error: String((result as { error?: string }).error || "Transcription failed.") }) };
           }
           const text = String((result as { text?: string }).text || "").trim();
           if (!text) return { ok: false, error: "No words were recognized. Nothing was inserted." };
           return { ok: true, text, provider: (result as { provider?: string }).provider };
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (/unauthorized|sign in/i.test(message)) {
-            return {
-              ok: false,
-              error: "Sign in is required for server speech-to-text. Browser speech still works when available. Nothing was transcribed via the server.",
-            };
-          }
-          return { ok: false, error: message || "Speech-to-text failed. Nothing was transcribed." };
+          return { ok: false, error: mapSttClientError(err) };
         }
       },
       onInserted: () => {
-        // Composer sync: if active element is a textarea the parent controls, read value.
         const active = document.activeElement;
+        const onSync = propsRef.current.onComposerSync;
         if (
-          props.onComposerSync &&
+          onSync &&
           active instanceof HTMLTextAreaElement &&
           active.className.includes("input-glow")
         ) {
-          props.onComposerSync(active.value);
+          onSync(active.value);
         }
       },
     });
@@ -97,9 +132,6 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
       session.cancel();
       sessionRef.current = null;
     };
-    // Intentionally once — handlers read from props via closure updates on each render through ref pattern would be better;
-    // recreate only on llm toggle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [llmEnabled]);
 
   // Keyboard: Alt+Shift+D toggles start/stop when focused in app
@@ -213,9 +245,32 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
       ) : props.compact ? null : (
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Whisper Flow</span>
       )}
+      <label className="inline-flex min-h-9 items-center gap-1 text-[10px] uppercase tracking-wide text-muted">
+        <input
+          type="checkbox"
+          className="size-3"
+          data-testid="whisper-flow-llm-toggle"
+          checked={llmEnabled}
+          disabled={props.disabled}
+          onChange={(event) => {
+            setLlmEnabled(event.target.checked);
+            setLlmStatus(
+              event.target.checked
+                ? "Optional LLM refinement on. Local text still inserts first; polish never blocks."
+                : "Optional LLM refinement off. Local refinement only.",
+            );
+          }}
+        />
+        LLM polish
+      </label>
       {llmEnabled ? (
         <span className="sr-only" data-testid="whisper-flow-llm-flag">
           Optional LLM refinement enabled; local refinement always inserts first.
+        </span>
+      ) : null}
+      {llmStatus ? (
+        <span className="max-w-[12rem] truncate text-[10px] text-muted" data-testid="whisper-flow-llm-status">
+          {llmStatus}
         </span>
       ) : null}
     </div>
