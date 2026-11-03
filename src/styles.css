@@ -13868,3 +13868,126 @@ div.shell > div.composer-bar.is-fixed {
     max-height: 36px !important;
   }
 }
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r4g — beat .composer-bar__row .composer-mic-dictation.relative
+ * (spec 0,8,2) so mic can shrink to 36; trim Auto+gaps so Ask≥140 fits 375.
+ * ============================================================================ */
+@media (max-width: 429.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row .composer-mic-dictation.relative,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row [data-testid="composer-mic-dictate"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed button.composer-mic-dictation.relative,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed button.composer-mic-dictation,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-mic-dictate"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-mic-dictation,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-voice-btns [data-testid="composer-mic-dictate"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-voice-btns .composer-mic-dictation {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+  }
+
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-pill,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-voice-btns [data-testid="composer-speak"] {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  /* Compact Auto pill — keep readable "Auto" text, ~44px */
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap .model-chip {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 44px !important;
+    max-width: 48px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+    letter-spacing: 0 !important;
+    gap: 0 !important;
+  }
+
+  /* Tight row gaps */
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed form,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__left,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-voice-btns {
+    gap: 4px !important;
+    column-gap: 4px !important;
+  }
+
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-plus"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__plus {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r4h — clear last 375 overflow: Auto≤44, gap 3px,
+ * Speak label fully hidden (glyph+aria+title remain).
+ * ============================================================================ */
+@media (max-width: 429.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed button.model-chip {
+    flex: 0 0 44px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 6px !important;
+    font-size: 11px !important;
+    letter-spacing: 0 !important;
+    justify-content: center !important;
+  }
+
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed form,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__left,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-voice-btns {
+    gap: 3px !important;
+    column-gap: 3px !important;
+  }
+
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live__label,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"] .composer-speak-live__label {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    clip: rect(0 0 0 0) !important;
+  }
+
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"] > svg,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live > svg {
+    width: 18px !important;
+    height: 18px !important;
+    display: block !important;
+    opacity: 1 !important;
+    stroke: #0a0a0b !important;
+    color: #0a0a0b !important;
+  }
+}
