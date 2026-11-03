@@ -5,11 +5,13 @@ on:
     branches:
       - audit/am-002-playwright
       - audit/am-003-regression
+      - audit/am-004-auth-interactions
     paths:
       - ".github/workflows/am-002-browser-smoke.yml"
       - "scripts/browser-smoke.mjs"
       - "scripts/browser-smoke-verdict.test.mjs"
       - "scripts/browser-smoke-verdict.mjs"
+      - "scripts/browser-interactions.mjs"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +23,7 @@ concurrency:
 
 jobs:
   local-browser-smoke:
-    if: github.ref == 'refs/heads/audit/am-002-playwright' || github.ref == 'refs/heads/audit/am-003-regression'
+    if: contains(fromJSON('["refs/heads/audit/am-002-playwright","refs/heads/audit/am-003-regression","refs/heads/audit/am-004-auth-interactions"]'), github.ref)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -83,6 +85,9 @@ jobs:
             http://127.0.0.1:8080/ \
             "$RUNNER_TEMP/am-002-browser-smoke/repeat.png" \
             --baseline "$RUNNER_TEMP/am-002-browser-smoke/localhost.json"
+
+          # Interaction tests are local and do not submit passwords or start OAuth.
+          node scripts/browser-interactions.mjs http://127.0.0.1:8080/
 
       - name: Check TypeScript without modifying app
         run: npm run typecheck
