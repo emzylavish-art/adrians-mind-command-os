@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
-import type { ScheduleJob } from "./fleet.ts";
+import { addAgentFromTemplate, type ScheduleJob } from "./fleet.ts";
 import type { Workspace } from "./types.ts";
 import { claimSchedules, runWorkerPass } from "./worker-pass.ts";
 import { emptyWorkspace } from "./workspace.ts";
@@ -37,8 +37,11 @@ function db(initial: { userId: string; ws: Workspace }[]) {
 
 describe("worker pass", () => {
   it("persists one due job and does not run another owner or the same job twice", async () => {
-    const due = emptyWorkspace();
-    due.schedules.push(job({ id: "job-1", name: "Morning", nextRunAt: "2026-04-01T12:00:00.000Z" }));
+    const made = addAgentFromTemplate(emptyWorkspace(), "Documents", "2026-04-01T11:00:00.000Z");
+    assert.equal(made.ok, true);
+    if (!made.ok) return;
+    const due = made.ws;
+    due.schedules.push(job({ id: "job-1", name: "Morning", agentId: made.agent.id, nextRunAt: "2026-04-01T12:00:00.000Z" }));
     const later = emptyWorkspace();
     later.schedules.push(job({ id: "job-2", name: "Later", nextRunAt: "2026-04-02T12:00:00.000Z" }));
     const { sql, snaps } = db([{ userId: "owner-a", ws: due }, { userId: "owner-b", ws: later }]);
@@ -48,10 +51,45 @@ describe("worker pass", () => {
     const savedB = JSON.parse(snaps.get("owner-b") ?? "{}") as Workspace;
     assert.equal(savedA.schedules[0]?.nextRunAt, "2026-04-01T13:00:00.000Z");
     assert.equal(savedA.schedules[0]?.lastStatus, "ran");
-    assert.equal(savedA.audit[0]?.action, "schedule_ran");
+    assert.equal(savedA.audit[0]?.action, "schedule_queued");
+    assert.equal(savedA.runs.length, 1);
+    assert.equal(savedA.runs[0]?.state, "queued");
+    assert.equal(savedA.runs[0]?.agentId, made.agent.id);
+    assert.match(savedA.audit[0]?.result ?? "", /has not executed yet/);
     assert.equal(savedB.schedules[0]?.nextRunAt, "2026-04-02T12:00:00.000Z");
     const second = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-b");
     assert.equal(second.ran, 0);
+    assert.equal(JSON.parse(snaps.get("owner-a") ?? "{}").runs.length, 1);
+  });
+
+  it("does not fabricate a successful schedule when no agent is assigned", async () => {
+    const ws = emptyWorkspace();
+    ws.schedules.push(job({ id: "orphan", name: "No agent", nextRunAt: "2026-04-01T12:00:00.000Z" }));
+    const { sql, snaps } = db([{ userId: "owner-a", ws }]);
+    const result = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-a");
+    const saved = JSON.parse(snaps.get("owner-a") ?? "{}") as Workspace;
+    assert.equal(result.ran, 0);
+    assert.equal(result.failed, 1);
+    assert.equal(saved.runs.length, 0);
+    assert.equal(saved.schedules[0]?.lastStatus, "failed");
+    assert.match(saved.schedules[0]?.lastError ?? "", /No agent is assigned/);
+    assert.equal(saved.audit[0]?.action, "schedule_failed");
+  });
+
+  it("does not dispatch a due schedule while emergency stop is enabled", async () => {
+    const made = addAgentFromTemplate(emptyWorkspace(), "Documents", "2026-04-01T11:00:00.000Z");
+    assert.equal(made.ok, true);
+    if (!made.ok) return;
+    const ws = { ...made.ws, halted: true };
+    ws.schedules.push(job({ id: "halted", name: "Stopped", agentId: made.agent.id, nextRunAt: "2026-04-01T12:00:00.000Z" }));
+    const { sql, snaps } = db([{ userId: "owner-a", ws }]);
+    const result = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-a");
+    const saved = JSON.parse(snaps.get("owner-a") ?? "{}") as Workspace;
+    assert.equal(result.skipped, 1);
+    assert.equal(result.ran, 0);
+    assert.equal(result.failed, 0);
+    assert.equal(saved.runs.length, 0);
+    assert.equal(saved.schedules[0]?.lastRunAt, null);
   });
 
   it("claims before running so a second worker skips, and an expired lease can be recovered", () => {
