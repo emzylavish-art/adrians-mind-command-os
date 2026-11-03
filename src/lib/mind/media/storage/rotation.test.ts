@@ -8,7 +8,7 @@ import { redactSecrets, appendStorageAudit, setStorageAuditPath, readAuditRaw } 
 import { setStorageAccountsConfigPath } from "./config.ts";
 import { setStorageConnectorDirectory } from "./credentials.ts";
 import { bumpLedgerUsed, setStorageLedgerPath, withLedgerLock, readLedgerUsed } from "./ledger.ts";
-import { storeMedia, nearCap } from "./rotation.ts";
+import { storeMedia, nearCap, storageStatusForOwner } from "./rotation.ts";
 import {
   createGoogleDriveProvider,
   createDropboxProvider,
@@ -410,5 +410,68 @@ describe("connection record resolution", () => {
     );
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.service, "google_drive");
+  });
+});
+
+
+describe("storageStatusForOwner live-health honesty", () => {
+  it("does not count a lane as connected when live health refuses the token", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mind-status-"));
+    writeConfig(dir, [
+      { service: "google_drive", accountEmail: "drive@example.com", capBytes: 10_000, order: 1, enabled: true },
+    ]);
+    const providers = mockProviders({ quotas: { google_drive: { used: 0, total: 10_000 } } });
+    providers.google_drive.health = async () => ({
+      ok: true,
+      connected: false,
+      detail: "Google Drive refused the token. Reconnect on ServiceBoard.",
+    });
+    const rows = await storageStatusForOwner("owner-z", {
+      providers,
+      env: { MIND_GOOGLE_DRIVE_TOKEN: "stale-token" },
+      configPath: join(dir, "accounts.json"),
+      ledgerPath: join(dir, "l.json"),
+    });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.connected, false);
+    assert.equal(rows[0]!.statusKind, "needs-reconnect");
+    assert.match(rows[0]!.detail, /refused the token/i);
+  });
+
+  it("counts connected only after live health succeeds", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mind-status-"));
+    writeConfig(dir, [
+      { service: "dropbox", accountEmail: "db@example.com", capBytes: 10_000, order: 1, enabled: true },
+    ]);
+    const providers = mockProviders({ quotas: { dropbox: { used: 1, total: 10_000 } } });
+    providers.dropbox.health = async () => ({ ok: true, connected: true, detail: "Dropbox reachable." });
+    const rows = await storageStatusForOwner("owner-z", {
+      providers,
+      env: { MIND_DROPBOX_TOKEN: "good" },
+      configPath: join(dir, "accounts.json"),
+      ledgerPath: join(dir, "l.json"),
+    });
+    assert.equal(rows[0]!.connected, true);
+    assert.equal(rows[0]!.statusKind, "connected");
+  });
+
+  it("marks unverified when live health throws (decrypt-only is not connected)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mind-status-"));
+    writeConfig(dir, [
+      { service: "box", accountEmail: "box@example.com", capBytes: 10_000, order: 1, enabled: true },
+    ]);
+    const providers = mockProviders({ quotas: { box: { used: 0, total: 10_000 } } });
+    providers.box.health = async () => {
+      throw new Error("network down");
+    };
+    const rows = await storageStatusForOwner("owner-z", {
+      providers,
+      env: { MIND_BOX_TOKEN: "maybe" },
+      configPath: join(dir, "accounts.json"),
+      ledgerPath: join(dir, "l.json"),
+    });
+    assert.equal(rows[0]!.connected, false);
+    assert.equal(rows[0]!.statusKind, "unverified");
+    assert.match(rows[0]!.detail, /not live-verified/i);
   });
 });

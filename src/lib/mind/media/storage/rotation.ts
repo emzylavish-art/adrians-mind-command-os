@@ -209,31 +209,59 @@ export async function storageStatusForOwner(
       fetch: deps.fetch,
       nowMs: deps.nowMs,
     });
-    const connected = tokenResult.ok;
     let used = readLedgerUsed(account.service, account.accountEmail, deps.ledgerPath);
     let quotaSource: StorageQuota["source"] = "ledger";
-    let detail = connected
-      ? `${account.service} connected.`
-      : tokenResult.ok === false
-        ? tokenResult.detail
-        : "Not connected.";
+    let connected = false;
+    let statusKind: import("./types.ts").StorageLaneStatusKind = "not_connected";
+    let detail = "Not connected.";
 
-    if (tokenResult.ok) {
+    if (!tokenResult.ok) {
+      detail = tokenResult.detail;
+      if (
+        tokenResult.reason === "encrypted_only" ||
+        /CONNECTOR_TOKEN_SECRET|could not be decrypted|needs-config/i.test(tokenResult.detail)
+      ) {
+        statusKind = "needs-config";
+      } else if (
+        tokenResult.reason === "refresh_failed" ||
+        tokenResult.reason === "incomplete" ||
+        /reconnect|expired|invalid|revoked|unauthorized/i.test(tokenResult.detail)
+      ) {
+        statusKind = "needs-reconnect";
+      } else {
+        statusKind = "not_connected";
+      }
+    } else {
+      // Token resolved — must still pass a live provider health check before "connected".
       try {
         const health = await providers[account.service].health(tokenResult.token);
-        if (!health.connected) {
-          detail = health.detail;
+        if (health.connected) {
+          connected = true;
+          statusKind = "connected";
+          detail = health.detail?.trim() || `${account.service} connected.`;
+          try {
+            const { used: liveUsed, quota } = await resolveUsed(
+              providers[account.service],
+              tokenResult.token,
+              account,
+              deps.ledgerPath,
+            );
+            used = liveUsed;
+            quotaSource = quota.source;
+          } catch {
+            // Live health ok; quota optional — keep connected.
+            quotaSource = "ledger";
+          }
+        } else {
+          connected = false;
+          statusKind = "needs-reconnect";
+          detail = health.detail || `${account.service} refused the token. Reconnect on ServiceBoard.`;
         }
-        const { used: liveUsed, quota } = await resolveUsed(
-          providers[account.service],
-          tokenResult.token,
-          account,
-          deps.ledgerPath,
-        );
-        used = liveUsed;
-        quotaSource = quota.source;
-      } catch {
-        detail = `${account.service} connected (ledger-only quota; live quota unavailable).`;
+      } catch (error) {
+        connected = false;
+        statusKind = "unverified";
+        const message = error instanceof Error ? error.message : "live health check failed";
+        detail = `${account.service} token resolved but was not live-verified (${message}). Not counted as connected.`;
       }
     }
 
@@ -244,6 +272,7 @@ export async function storageStatusForOwner(
       enabled: account.enabled,
       order: account.order,
       connected,
+      statusKind,
       laneId: account.laneId,
       credentialOwnerId: account.credentialOwnerId,
       detail,

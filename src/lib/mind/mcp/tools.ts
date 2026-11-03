@@ -7,7 +7,7 @@ import { BUILTIN_TOOL_CATALOG, type BuiltinCatalogToolName } from "./tool-catalo
 
 export type ToolResult = {
   ok: boolean;
-  status: "ok" | "error" | "needs-config" | "needs-pairing";
+  status: "ok" | "error" | "needs-config" | "needs-pairing" | "needs-reconnect";
   text: string;
   data?: unknown;
 };
@@ -991,6 +991,7 @@ export async function storageListStatus(input: {
       service: string;
       enabled: boolean;
       connected: boolean;
+      statusKind?: string;
       laneId?: string;
       detail: string;
       usedBytes: number;
@@ -1020,6 +1021,7 @@ export async function storageListStatus(input: {
           service: row.service,
           enabled: row.enabled,
           connected: row.connected,
+          statusKind: row.statusKind,
           laneId: row.laneId,
           detail: row.detail,
           usedBytes: row.usedBytes,
@@ -1036,17 +1038,31 @@ export async function storageListStatus(input: {
         data: { accounts: [], diagnostics: { connectorTokenSecret: secretStatus.ok ? "ok" : "missing" } },
       };
     }
-    const accounts = rows.map((row) => ({
-      service: row.service,
-      enabled: row.enabled,
-      connected: row.connected,
-      laneId: row.laneId ?? null,
-      detail: row.detail,
-      usedBytes: row.usedBytes,
-      capBytes: row.capBytes,
-      remainingBytes: row.remainingBytes,
-      health: row.connected ? "ok" : "needs-config",
-    }));
+    const accounts = rows.map((row) => {
+      const kind = row.statusKind ?? (row.connected ? "connected" : "not_connected");
+      const health =
+        kind === "connected"
+          ? "ok"
+          : kind === "needs-reconnect"
+            ? "needs-reconnect"
+            : kind === "unverified"
+              ? "unverified"
+              : kind === "needs-config"
+                ? "needs-config"
+                : "needs-config";
+      return {
+        service: row.service,
+        enabled: row.enabled,
+        connected: row.connected,
+        statusKind: kind,
+        laneId: row.laneId ?? null,
+        detail: row.detail,
+        usedBytes: row.usedBytes,
+        capBytes: row.capBytes,
+        remainingBytes: row.remainingBytes,
+        health,
+      };
+    });
     const connected = accounts.filter((a) => a.connected).length;
     if (!secretStatus.ok && connected === 0) {
       return {

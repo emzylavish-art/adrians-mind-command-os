@@ -94,12 +94,23 @@ export type StoreMediaFailure = {
 
 export type StoreMediaResult = StoreMediaSuccess | StoreMediaFailure;
 
+/** Honest lane connection state for status / MCP surfaces. */
+export type StorageLaneStatusKind =
+  | "connected"
+  | "not_connected"
+  | "needs-config"
+  | "needs-reconnect"
+  | "unverified";
+
 export type AccountPublicStatus = {
   service: StorageService;
   accountEmail: string;
   enabled: boolean;
   order: number;
+  /** True only after a live provider health check succeeds. */
   connected: boolean;
+  /** Finer status for UI/MCP (needs-reconnect when token refused/expired). */
+  statusKind: StorageLaneStatusKind;
   detail: string;
   usedBytes: number;
   capBytes: number;
