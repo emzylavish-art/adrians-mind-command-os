@@ -12,7 +12,8 @@ const DROPBOX_UPLOAD_SESSION_START = "https://content.dropboxapi.com/2/files/upl
 const DROPBOX_UPLOAD_SESSION_APPEND = "https://content.dropboxapi.com/2/files/upload_session/append_v2";
 const DROPBOX_UPLOAD_SESSION_FINISH = "https://content.dropboxapi.com/2/files/upload_session/finish";
 const DROPBOX_SPACE = "https://api.dropboxapi.com/2/users/get_space_usage";
-const DROPBOX_ACCOUNT = "https://api.dropboxapi.com/2/users/get_current_account";
+/** files.list_folder works with files.* scopes; users.get_current_account needs account_info.read. */
+const DROPBOX_LIST_FOLDER = "https://api.dropboxapi.com/2/files/list_folder";
 const SESSION_THRESHOLD = 8 * 1024 * 1024; // use sessions above 8 MiB
 const SESSION_CHUNK = 4 * 1024 * 1024;
 
@@ -29,12 +30,29 @@ export function createDropboxProvider(fetchImpl: FetchLike = fetch): StorageProv
         return { ok: true, connected: false, detail: "Dropbox is not connected." };
       }
       try {
-        const res = await fetchImpl(DROPBOX_ACCOUNT, {
+        // Prefer files.list_folder so tokens granted with files.* scopes (without account_info.read) still verify.
+        const res = await fetchImpl(DROPBOX_LIST_FOLDER, {
           method: "POST",
-          headers: { authorization: `Bearer ${accessToken}`, accept: "application/json" },
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+            accept: "application/json",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ path: "", limit: 1 }),
         });
         if (res.status === 401 || res.status === 403) {
-          return { ok: true, connected: false, detail: "Dropbox refused the token. Reconnect on ServiceBoard." };
+          let detail = "Dropbox refused the token. Reconnect on ServiceBoard.";
+          try {
+            const body = (await res.json()) as { error_summary?: string; error?: { ".tag"?: string; required_scope?: string } };
+            const tag = body.error?.[".tag"] || body.error_summary || "";
+            if (String(tag).includes("missing_scope")) {
+              const required = body.error?.required_scope ? ` (needs ${body.error.required_scope})` : "";
+              detail = `Dropbox token is missing required scope${required}. Re-consent with files.content.read (and account_info.read for quota).`;
+            }
+          } catch {
+            /* keep default detail */
+          }
+          return { ok: true, connected: false, detail };
         }
         if (!res.ok) {
           return { ok: false, connected: false, detail: `Dropbox health check returned ${res.status}.` };

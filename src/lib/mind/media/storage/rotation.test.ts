@@ -475,3 +475,52 @@ describe("storageStatusForOwner live-health honesty", () => {
     assert.match(rows[0]!.detail, /not live-verified/i);
   });
 });
+
+
+describe("storageStatusForOwner missing OAuth client", () => {
+  it("reports needs-config when stored token fails health and refresh client is missing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mind-status-client-"));
+    const connectors = join(dir, "connectors");
+    setStorageConnectorDirectory(connectors);
+    const owner = "owner-box";
+    const hashDir = join(connectors, createHash("sha256").update(owner).digest("hex"));
+    mkdirSync(hashDir, { recursive: true });
+    writeFileSync(
+      join(hashDir, "box.json"),
+      JSON.stringify({
+        connector: "box",
+        ownerId: owner,
+        accessToken: "stale-box-token",
+        refreshToken: "refresh-present",
+        accountLabel: "box@example.com",
+        connectedAt: "2026-11-02T12:00:00+01:00",
+      }),
+    );
+    writeConfig(dir, [
+      {
+        service: "box",
+        accountEmail: "box@example.com",
+        capBytes: 10_000,
+        order: 1,
+        enabled: true,
+        laneId: "box-test",
+        credentialOwnerId: owner,
+      },
+    ]);
+    const providers = mockProviders({ quotas: { box: { used: 0, total: 10_000 } } });
+    providers.box.health = async () => ({
+      ok: true,
+      connected: false,
+      detail: "Box refused the token. Reconnect the account.",
+    });
+    const rows = await storageStatusForOwner(owner, {
+      providers,
+      env: {}, // no BOX_OAUTH_CLIENT_*
+      configPath: join(dir, "accounts.json"),
+      ledgerPath: join(dir, "l.json"),
+    });
+    assert.equal(rows[0]!.connected, false);
+    assert.equal(rows[0]!.statusKind, "needs-config");
+    assert.match(rows[0]!.detail, /BOX_OAUTH_CLIENT|OAuth client/i);
+  });
+});

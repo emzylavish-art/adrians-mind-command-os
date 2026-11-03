@@ -22,10 +22,12 @@
     },
     {
       "service": "dropbox",
-      "accountEmail": "dropbox-placeholder@example.com",
+      "accountEmail": "emzylavish@gmail.com",
       "capBytes": 2147483648,
       "order": 3,
-      "enabled": true
+      "enabled": true,
+      "laneId": "dropbox-emzylavish",
+      "credentialOwnerId": "emzylavish@gmail.com"
     },
     {
       "service": "onedrive",

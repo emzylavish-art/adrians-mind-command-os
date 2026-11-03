@@ -1,5 +1,9 @@
 import { orderedEnabledAccounts, loadStorageAccountsConfig } from "./config.ts";
-import { resolveStorageAccessTokenForAccount } from "./lanes.ts";
+import { credentialOwnerForAccount, resolveStorageAccessTokenForAccount } from "./lanes.ts";
+import {
+  isStorageOAuthService,
+  resolveStorageRefreshMaterial,
+} from "../../connectors/storage-token-refresh.ts";
 import { appendStorageAudit } from "./audit.ts";
 import { bumpLedgerUsed, readLedgerUsed, setLedgerUsed } from "./ledger.ts";
 import { createDefaultProviders } from "./providers/index.ts";
@@ -256,6 +260,19 @@ export async function storageStatusForOwner(
           connected = false;
           statusKind = "needs-reconnect";
           detail = health.detail || `${account.service} refused the token. Reconnect on ServiceBoard.`;
+          // Stale stored access + missing OAuth client looks like reconnect but is really needs-config.
+          // Env break-glass tokens that fail live health remain needs-reconnect.
+          if (
+            isStorageOAuthService(account.service) &&
+            tokenResult.source !== "env"
+          ) {
+            const credOwner = credentialOwnerForAccount(account, ownerId);
+            const material = resolveStorageRefreshMaterial(credOwner, account.service, env);
+            if (!material.ok && material.reason === "missing_client") {
+              statusKind = "needs-config";
+              detail = `${material.detail} (live token check failed; refresh cannot run without the OAuth client).`;
+            }
+          }
         }
       } catch (error) {
         connected = false;
