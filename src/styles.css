@@ -10342,3 +10342,462 @@ body:has(.topbar [data-testid="voice-controls"])
       linear-gradient(180deg, rgb(8 10 14 / 0.98), rgb(8 10 14 / 0.94)) !important;
   }
 }
+
+/* ============================================================================
+ * Pass-10 r3 — stacking/overlap zero-push (visual/polish-pass-10-stacking)
+ * America/Chicago (CST) 2026-11-02. CSS only on e105caf.
+ * Recon round-2 P1s verified locally first; page-enter dead-zone, drawer
+ * cover, speak↔nav lanes, topbar mic vs Search, dash3d HUD hit steal.
+ * ============================================================================ */
+
+/* —— r3.1 .main-stage.page-enter: never a covering hit layer ——
+ * Animation creates a stacking context; empty padding below the scrollport
+ * was winning elementFromPoint over clipped chips and composer chrome.
+ * Opacity-only enter; wrapper ignores pointers; descendants keep them. */
+.main-stage.page-enter {
+  animation-name: page-fade-opacity !important;
+  animation-duration: var(--dur-slow) !important;
+  animation-timing-function: var(--ease-out) !important;
+  animation-fill-mode: both !important;
+  pointer-events: none !important;
+  transform: none !important;
+}
+@keyframes page-fade-opacity {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.main-stage.page-enter > *,
+.main-stage.page-enter .topbar,
+.main-stage.page-enter .min-h-0.flex-1.overflow-auto,
+.main-stage.page-enter .min-h-0.flex-1.overflow-auto * {
+  pointer-events: auto;
+}
+/* Suggestion chips + in-flow actions: own layer above dead padding */
+.main-stage .suggestion-chip,
+.main-stage .flex.flex-wrap.gap-2.pb-1:has(> .suggestion-chip),
+.main-stage .flex.gap-2.overflow-x-auto.pb-1 {
+  position: relative;
+  z-index: calc(var(--z-content) + 2) !important;
+  pointer-events: auto !important;
+}
+/* Kill Tailwind pb-36 dead-zone under the scrollport (chips were clipped into it) */
+.main-stage.page-enter,
+.main-stage.flex.min-h-0.min-w-0.flex-1.flex-col.pb-36,
+.main-stage.pb-36,
+.main-stage.md\:pb-36 {
+  padding-bottom: 0 !important;
+}
+/* Scrollport owns the column; end padding lives INSIDE overflow-auto */
+.main-stage > .min-h-0.flex-1.overflow-auto {
+  position: relative;
+  z-index: var(--z-content);
+  isolation: isolate;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  scroll-padding-bottom: 6rem;
+  padding-bottom: 6rem !important;
+}
+
+/* —— r3.2 Mobile drawer open: underlying stage/chrome don't compete ——
+ * Emergency stop (in-page, far below fold) was clamped into the viewport and
+ * reported as covered by Research/Scheduled. Demote under-drawer hits. */
+@media (max-width: 767.98px) {
+  body:has(aside.rail.flex.fixed.inset-0) .main-stage,
+  body:has(aside.rail.flex.fixed.inset-0) .main-stage.page-enter,
+  body:has(aside.rail.flex.fixed.inset-0) .main-stage * {
+    pointer-events: none !important;
+  }
+  body:has(aside.rail.flex.fixed.inset-0) nav.fixed[aria-label="Primary"],
+  body:has(aside.rail.flex.fixed.inset-0) nav.fixed[aria-label="Primary"] *,
+  body:has(aside.rail.flex.fixed.inset-0) .composer-bar.is-fixed,
+  body:has(aside.rail.flex.fixed.inset-0) .composer-bar.is-fixed *,
+  body:has(aside.rail.flex.fixed.inset-0) section.composer-dock,
+  body:has(aside.rail.flex.fixed.inset-0) section.composer-dock * {
+    pointer-events: none !important;
+  }
+  body:has(aside.rail.flex.fixed.inset-0) aside.rail.flex.fixed.inset-0,
+  body:has(aside.rail.flex.fixed.inset-0) aside.rail.flex.fixed.inset-0 * {
+    pointer-events: auto !important;
+  }
+  aside.rail.flex.fixed.inset-0 {
+    z-index: var(--z-modal) !important;
+    background: rgb(8 10 14 / 0.98) !important;
+    isolation: isolate;
+  }
+  aside.rail.flex.fixed.inset-0 nav {
+    position: relative;
+    z-index: 1;
+  }
+  aside.rail.flex.fixed.inset-0 .nav-item,
+  aside.rail.flex.fixed.inset-0 nav button,
+  aside.rail.flex.fixed.inset-0 nav a {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto !important;
+  }
+}
+
+/* —— r3.3 Mobile speak plate ↔ Primary tab bar: exclusive vertical lanes —— */
+@media (max-width: 767.98px) {
+  :root {
+    --chrome-nav-h: 4.75rem;
+    --chrome-speak-h: 3.35rem;
+    --chrome-stack-h: calc(var(--chrome-nav-h) + var(--chrome-speak-h));
+  }
+  nav.fixed[aria-label="Primary"],
+  nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+    z-index: var(--z-nav) !important;
+    min-height: var(--chrome-nav-h) !important;
+    max-height: var(--chrome-nav-h) !important;
+    overflow: hidden !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > .composer-bar.is-fixed,
+  body:has(nav.fixed[aria-label="Primary"]) .shell > [data-testid="composer-bar"].composer-bar {
+    bottom: calc(var(--chrome-nav-h) + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    max-height: var(--chrome-speak-h) !important;
+    height: var(--chrome-speak-h) !important;
+    overflow: hidden !important;
+    z-index: var(--z-composer) !important;
+    padding-top: 0.15rem !important;
+    padding-bottom: 0.15rem !important;
+    transform: none !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__card,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__row,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed .composer-bar__left {
+    max-height: calc(var(--chrome-speak-h) - 0.3rem) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  /* Dock fully above speak + nav — no spill onto tab hits */
+  body:has(nav.fixed[aria-label="Primary"]) section.command-card.composer-dock,
+  body:has(nav.fixed[aria-label="Primary"]) .floating-composer.composer-dock,
+  body:has(nav.fixed[aria-label="Primary"]) .command-card.composer-dock[data-composer="floating"] {
+    bottom: calc(var(--chrome-stack-h) + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: var(--z-composer) !important;
+    overflow: hidden !important;
+  }
+  /* New-chat FAB: don't invade speak controls */
+  nav.fixed[aria-label="Primary"] button.sidebar-plus,
+  nav.fixed[aria-label="Primary"] .sidebar-plus {
+    margin-top: 0 !important;
+    max-height: 2.75rem !important;
+  }
+}
+
+/* —— r3.4 Mobile topbar: Search must not cover Dictate / Voice / Alerts —— */
+@media (max-width: 767.98px) {
+  .topbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.4rem 0.45rem !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    position: relative;
+    z-index: var(--z-sticky) !important;
+    background: rgb(8 10 14 / 0.96) !important;
+  }
+  .topbar > .relative.min-w-0.flex-1 {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+    order: 30;
+    position: relative;
+    z-index: 1;
+  }
+  .topbar > .relative.min-w-0.flex-1 > input[role="combobox"],
+  .topbar > .relative.min-w-0.flex-1 > input {
+    width: 100% !important;
+    position: relative;
+    z-index: 1;
+  }
+  .topbar [data-testid="mic-button"],
+  .topbar [data-testid="open-voice-mode"],
+  .topbar [data-testid="alerts-toggle"],
+  .topbar button.flex.h-11.items-center {
+    position: relative;
+    z-index: 2 !important;
+    flex-shrink: 0 !important;
+  }
+}
+
+/* —— r3.5 Model picker / Cmd-K: above chrome, never under tab/FAB —— */
+@media (max-width: 767.98px) {
+  .composer-bar__model-menu,
+  button.model-chip ~ [role="menu"],
+  .relative:has(> button.model-chip) > [role="menu"],
+  [data-testid="composer-bar"] [role="menu"] {
+    position: fixed !important;
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: calc(var(--chrome-stack-h) + 0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(50vh, 20rem) !important;
+    z-index: var(--z-dropdown) !important;
+    overflow: auto !important;
+  }
+}
+#command-palette,
+[data-testid="command-palette"],
+.command-palette-panel {
+  z-index: var(--z-modal) !important;
+  pointer-events: auto !important;
+}
+body:has(#command-palette),
+body:has([data-testid="command-palette"]) {
+  /* palette open: don't let page-enter dead zone eat palette clicks */
+}
+body:has(#command-palette) .main-stage.page-enter,
+body:has([data-testid="command-palette"]) .main-stage.page-enter {
+  pointer-events: none !important;
+}
+
+/* —— r3.6 Connected/Settings Setup CTAs: above ask-input / speak plate —— */
+.main-stage article.rounded-panel button,
+.main-stage .glow-card button,
+.main-stage [data-testid="service-card"] button,
+.main-stage button:is(:has(> span), .min-h-11) {
+  position: relative;
+  z-index: calc(var(--z-content) + 1);
+}
+@media (min-width: 768px) {
+  body:not(:has(section.composer-dock)) .main-stage article.rounded-panel,
+  body:not(:has(section.composer-dock)) .main-stage .glow-card {
+    margin-bottom: 0.35rem;
+  }
+  /* Extra clearance so Setup isn't under fixed speak plate */
+  body:not(:has(section.composer-dock)) .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: 9rem !important;
+    scroll-padding-bottom: 9rem !important;
+  }
+}
+
+/* —— r3.7 Dashboard 3D HUD — filters/minimap must not steal graph clicks ——
+ * HUD CSS only (no shader/material/atmosphere/postfx/motion). */
+.dash3d-root {
+  --z-dash-canvas: 1;
+  --z-dash-hud: 6;
+  --z-dash-filters: 8;
+  --z-dash-minimap: 7;
+}
+.dash3d-canvas-wrap,
+.dash3d-root canvas,
+[data-testid="universe-canvas"] {
+  position: relative;
+  z-index: var(--z-dash-canvas) !important;
+  pointer-events: auto !important;
+}
+/* Filters: compact strip; panel pe none except real controls */
+.dash3d-graph-filters {
+  z-index: var(--z-dash-filters) !important;
+  max-width: min(16rem, 36vw) !important;
+  max-height: min(28vh, 14rem) !important;
+  overflow: auto !important;
+  pointer-events: none !important;
+  bottom: 0.5rem !important;
+  top: auto !important;
+}
+.dash3d-graph-filters input,
+.dash3d-graph-filters select,
+.dash3d-graph-filters button,
+.dash3d-graph-filters label,
+.dash3d-graph-filters .dash3d-input,
+.dash3d-graph-filters [role="button"] {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 1;
+}
+/* Minimap: don't cover the graph; dots can't overlap each other as 24px WCAG ghosts */
+.dash3d-minimap {
+  z-index: var(--z-dash-minimap) !important;
+  pointer-events: none !important;
+  max-width: 7.5rem !important;
+  width: 7.5rem !important;
+  right: 0.5rem !important;
+  bottom: 0.5rem !important;
+}
+.dash3d-minimap-map {
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+.dash3d-minimap-dot {
+  pointer-events: auto !important;
+  width: 0.45rem !important;
+  height: 0.45rem !important;
+  min-width: 0.45rem !important;
+  min-height: 0.45rem !important;
+  margin: -0.225rem 0 0 -0.225rem !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  background: #7dd3fc !important;
+  border-radius: 50% !important;
+}
+.dash3d-minimap-dot[data-health="stalled"] { background: #fbbf24 !important; }
+.dash3d-minimap-dot[data-health="blocked"] { background: #fb7185 !important; }
+.dash3d-minimap-dot[data-health="idle"] { background: #94a3b8 !important; }
+.dash3d-minimap-dot.is-focus {
+  box-shadow: 0 0 0 2px #fff !important;
+}
+/* Dive / pills in flyhud stay above canvas but below modal chrome */
+.dash3d-flyhud {
+  z-index: var(--z-dash-hud) !important;
+  pointer-events: none !important;
+  max-width: min(18rem, 40vw) !important;
+}
+.dash3d-flyhud button,
+.dash3d-flyhud a,
+.dash3d-flyhud input,
+.dash3d-flyhud select,
+.dash3d-flyhud .dash3d-pill {
+  pointer-events: auto !important;
+}
+/* Mirror rows / feed: don't lose to canvas or time scrub */
+.dash3d-mirror-row,
+.dash3d-feed-list button,
+.dash3d-notion-mirror button {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto !important;
+}
+.dash3d-time-scrub,
+.dash3d-time-range {
+  pointer-events: auto;
+  max-width: 100%;
+}
+@media (max-width: 1023.98px) {
+  .dash3d-graph-filters {
+    left: 0.4rem !important;
+    right: auto !important;
+    max-width: min(14rem, calc(100vw - 8rem)) !important;
+    bottom: 5.5rem !important;
+  }
+  .dash3d-minimap {
+    max-width: 6.5rem !important;
+    width: 6.5rem !important;
+  }
+  .dash3d-flyhud {
+    max-width: min(16rem, calc(100vw - 1.5rem)) !important;
+  }
+}
+
+/* —— r3.8 SWITCH TO ORCHESTRATOR vs Adrian/Auto overlap in topbar —— */
+.topbar [data-testid="voice-mode-toggle"],
+.topbar [data-testid="voice-controls"] {
+  position: relative;
+  z-index: calc(var(--z-sticky) + 1);
+  max-width: 100%;
+}
+.topbar button.flex.h-11.items-center.gap-2.rounded-full {
+  position: relative;
+  z-index: calc(var(--z-sticky) + 1);
+  flex-shrink: 0;
+}
+
+/* —— r3.9 Re-assert logo purple only on .logo-mark —— */
+.logo-mark {
+  color: #fff !important;
+  background: #7c5cff !important;
+}
+
+/* ============================================================================
+ * Pass-10 r3b — leftover comparable hits after first r3 measure
+ * ============================================================================ */
+
+/* Quick-action chips under the floating dock: keep them in the scroll
+ * lane with enough end padding; never share the dock textarea hit box. */
+@media (max-width: 767.98px) {
+  .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(var(--chrome-stack-h) + 10rem + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-padding-bottom: calc(var(--chrome-stack-h) + 10rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .main-stage .flex.gap-2.overflow-x-auto.pb-1,
+  .main-stage .flex.flex-wrap.gap-2.pb-1:has(> .suggestion-chip),
+  .main-stage .flex.flex-wrap.gap-2:has(> button.inline-flex.min-h-11) {
+    margin-bottom: 1.25rem !important;
+    padding-bottom: 0.75rem !important;
+    position: relative;
+    z-index: calc(var(--z-content) + 2);
+  }
+  /* Idle dock: tighter so chips above it keep a lane */
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]),
+  .floating-composer.composer-dock:not(:focus-within):not([data-expanded="true"]) {
+    max-height: 5.75rem !important;
+  }
+}
+
+/* Non-chat pages: speak plate is presentational chrome — don't cover Setup/Retry.
+ * Keep the plate, but shrink + clear the content column. */
+@media (min-width: 768px) {
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed,
+  body:not(:has([data-composer="floating"])) .composer-bar.is-fixed {
+    max-height: 4.25rem !important;
+    overflow: hidden !important;
+  }
+  body:not(:has(section.composer-dock)) .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: 10.5rem !important;
+    scroll-padding-bottom: 10.5rem !important;
+  }
+  /* Ask fake inside speak plate steals Setup centers — hide on non-dock pages */
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__ask,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__ask-input,
+  body:not(:has(section.composer-dock)) .composer-bar.is-fixed .composer-bar__ask-fake {
+    display: none !important;
+  }
+}
+
+/* Topbar: SWITCH TO ORCHESTRATOR must not share pixels with Adrian / Auto */
+.topbar [data-testid="voice-mode-toggle"] {
+  max-width: min(12rem, 42vw) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.topbar [data-testid="voice-controls"] {
+  gap: 0.35rem !important;
+  margin-right: 0.25rem !important;
+}
+.topbar .model-chip,
+.topbar button.model-chip {
+  flex-shrink: 0 !important;
+  margin-left: 0.15rem !important;
+}
+.topbar button.flex.h-11.items-center.gap-2.rounded-full {
+  margin-left: 0.25rem !important;
+}
+
+/* Cmd-K open: underlying page chrome demoted (palette owns the hit lane) */
+body:has(#command-palette) .main-stage,
+body:has([data-testid="command-palette"]) .main-stage,
+body:has(#command-palette) .composer-bar.is-fixed,
+body:has([data-testid="command-palette"]) .composer-bar.is-fixed,
+body:has(#command-palette) section.composer-dock,
+body:has([data-testid="command-palette"]) section.composer-dock {
+  pointer-events: none !important;
+}
+body:has(#command-palette) #command-palette,
+body:has(#command-palette) #command-palette *,
+body:has([data-testid="command-palette"]) [data-testid="command-palette"],
+body:has([data-testid="command-palette"]) [data-testid="command-palette"] *,
+body:has(#command-palette) .topbar > .relative.min-w-0.flex-1,
+body:has(#command-palette) .topbar > .relative.min-w-0.flex-1 * {
+  pointer-events: auto !important;
+}
+
+/* Model menu open: demote primary tab bar under the menu on mobile */
+@media (max-width: 767.98px) {
+  body:has(.composer-bar__model-menu),
+  body:has(button.model-chip[aria-expanded="true"]),
+  body:has(.relative:has(> button.model-chip) > [role="menu"]) {
+    /* menu itself already fixed above chrome */
+  }
+  body:has(button.model-chip[aria-expanded="true"]) nav.fixed[aria-label="Primary"],
+  body:has(.composer-bar__model-menu) nav.fixed[aria-label="Primary"] {
+    pointer-events: none !important;
+  }
+}
