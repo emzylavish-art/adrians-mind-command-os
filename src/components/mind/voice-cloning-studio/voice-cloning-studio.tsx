@@ -70,6 +70,7 @@ export function VoiceCloningStudioPage() {
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const playbackRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
   const [recordingTarget, setRecordingTarget] = useState<"consent" | "sample" | null>(null);
 
   const selected = useMemo(
@@ -96,6 +97,18 @@ export function VoiceCloningStudioPage() {
 
   const stopPlayback = useCallback(() => {
     sharedAudioOutput.interrupt();
+    const cur = playbackRef.current;
+    if (cur) {
+      try {
+        cur.audio.pause();
+        cur.audio.removeAttribute("src");
+        cur.audio.load();
+      } catch {
+        /* ignore */
+      }
+      URL.revokeObjectURL(cur.url);
+      playbackRef.current = null;
+    }
     setPlaying(false);
   }, []);
 
@@ -105,18 +118,21 @@ export function VoiceCloningStudioPage() {
       setPlaying(true);
       try {
         if (mime.includes("wav") || mime.includes("wave")) {
-          // Shared speaker path: HTML audio element via SharedAudioOutput interrupt surface.
           const bin = atob(audioBase64);
           const bytes = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
           const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
           const audio = new Audio(url);
+          playbackRef.current = { audio, url };
           await new Promise<void>((resolve) => {
             audio.onended = () => resolve();
             audio.onerror = () => resolve();
             void audio.play().catch(() => resolve());
           });
-          URL.revokeObjectURL(url);
+          if (playbackRef.current?.url === url) {
+            URL.revokeObjectURL(url);
+            playbackRef.current = null;
+          }
         } else {
           await sharedAudioOutput.playMpegBase64(audioBase64);
         }
@@ -126,6 +142,10 @@ export function VoiceCloningStudioPage() {
     },
     [stopPlayback],
   );
+
+  useEffect(() => {
+    return () => stopPlayback();
+  }, [stopPlayback]);
 
   async function startChallenge() {
     setError("");
@@ -528,7 +548,13 @@ export function VoiceCloningStudioPage() {
                     className={`flex w-full min-h-11 items-center justify-between rounded-panel border px-3 text-left text-sm ${
                       selectedId === p.id ? "vcs-profile-active border-accent bg-accent/10" : "border-line"
                     }`}
-                    onClick={() => setSelectedId(p.id)}
+                    onClick={() => {
+                      if (p.id !== selectedId) {
+                        stopPlayback();
+                        setLastAudio(null);
+                      }
+                      setSelectedId(p.id);
+                    }}
                     data-testid={`vcs-profile-${p.id}`}
                   >
                     <span>

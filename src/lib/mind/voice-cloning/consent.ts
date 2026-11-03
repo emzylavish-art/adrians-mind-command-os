@@ -44,10 +44,44 @@ export const PUBLIC_FIGURE_BLOCKLIST: readonly string[] = [
   "musk",
 ];
 
+/** Map common Cyrillic/Greek lookalikes used to evade the public-figure blocklist. */
+const HOMOGLYPH: Record<string, string> = {
+  "а": "a",
+  "е": "e",
+  "о": "o",
+  "р": "p",
+  "с": "c",
+  "у": "y",
+  "х": "x",
+  "і": "i",
+  "ј": "j",
+  "α": "a",
+  "ο": "o",
+  "ν": "v",
+  "τ": "t",
+  "ρ": "p",
+  "ι": "i",
+  "ѕ": "s",
+  "һ": "h",
+  "ԛ": "q",
+  "ԝ": "w",
+};
+
+export function foldHomoglyphs(raw: string): string {
+  let out = "";
+  for (const ch of raw.normalize("NFKC")) {
+    const lower = ch.toLowerCase();
+    out += HOMOGLYPH[lower] ?? lower;
+  }
+  return out;
+}
+
 export function normalizeSpokenText(raw: string): string {
-  return stripControlChars(raw)
+  return foldHomoglyphs(
+    stripControlChars(raw).replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, ""),
+  )
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^a-z0-9\s']/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

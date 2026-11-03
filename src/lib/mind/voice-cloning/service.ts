@@ -20,6 +20,7 @@ import {
 import {
   buildAudioExportFilename,
   buildConsentExportFilename,
+  assertConsentExportHasNoSecrets,
   buildConsentExportPayload,
   prepareExportAudio,
 } from "./export.ts";
@@ -45,6 +46,7 @@ import {
   validateGenerateText,
   validateProfileName,
 } from "./validate.ts";
+import { sniffAudioMagic } from "./audio-sniff.ts";
 
 function newId(prefix: string): string {
   return `${prefix}_${randomBytes(12).toString("hex")}`;
@@ -127,6 +129,12 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         label: "Voice sample",
       });
       if (!sampleAudio.ok) return sampleAudio;
+      const consentBytes = decodeAudioBase64(consentAudio.audioBase64);
+      const sampleBytes = decodeAudioBase64(sampleAudio.audioBase64);
+      const consentSniff = sniffAudioMagic(consentBytes, consentAudio.mime);
+      if (!consentSniff.ok) return { ok: false, error: `Consent recording: ${consentSniff.error}`, code: consentSniff.code };
+      const sampleSniff = sniffAudioMagic(sampleBytes, sampleAudio.mime);
+      if (!sampleSniff.ok) return { ok: false, error: `Voice sample: ${sampleSniff.error}`, code: sampleSniff.code };
       if (store.countActiveProfiles(userId) >= VCS_MAX_PROFILES_PER_USER) {
         return { ok: false, error: `Profile limit reached (${VCS_MAX_PROFILES_PER_USER}). Delete one first.`, code: "limit" };
       }
@@ -142,7 +150,8 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       }
 
       const apiKey = resolveKey();
-      if (!apiKey) {
+      const e2eMockSttEarly = (deps.env ?? process.env).VCS_E2E_MOCK_STT === "1";
+      if (!apiKey && !e2eMockSttEarly) {
         return {
           ok: false,
           error: "No speech key is configured. Consent could not be verified by STT. Nothing was created.",
@@ -150,12 +159,15 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         };
       }
 
-      const stt = await transcribe({
-        bytes: decodeAudioBase64(consentAudio.audioBase64),
-        apiKey,
-        mime: consentAudio.mime,
-        filename: "consent.wav",
-      });
+      const e2eMockStt = e2eMockSttEarly;
+      const stt = e2eMockStt
+        ? { ok: true as const, text: challenge.phrase, duration: 1 }
+        : await transcribe({
+            bytes: consentBytes,
+            apiKey: apiKey as string,
+            mime: consentAudio.mime,
+            filename: "consent.wav",
+          });
       if (!stt.ok) {
         return { ok: false, error: stt.error, code: "stt_failed" };
       }
@@ -179,7 +191,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       const clone = await activeProvider.createVoice({
         name: nameV.name,
         profileId,
-        fileBytes: decodeAudioBase64(sampleAudio.audioBase64),
+        fileBytes: sampleBytes,
         filename: "sample.wav",
         mime: sampleAudio.mime,
         consentToken,
@@ -194,7 +206,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       if (clone.ok) {
         providerVoiceId = clone.voiceId;
         providerStatus = "ready";
-        providerMessage = "Custom voice created on xAI.";
+        providerMessage = "Custom voice created via Voice Connection Hub.";
         status = "active";
       } else {
         providerMessage = clone.error;
@@ -386,6 +398,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         return { ok: false, error: "Verified consent is required to export.", code: "missing_consent" };
       }
       const payload = buildConsentExportPayload(profile, consent);
+      assertConsentExportHasNoSecrets(payload);
       return {
         ok: true,
         filename: buildConsentExportFilename(profile.name, new Date(now())),

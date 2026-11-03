@@ -16,8 +16,24 @@ import { createVoiceCloningService } from "./service.ts";
 import { VoiceCloningStore } from "./store.ts";
 
 function fakeWavB64(size = 256): string {
-  return Buffer.alloc(size, 1).toString("base64");
+  const n = Math.max(size, 64);
+  const buf = Buffer.alloc(44 + n);
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + n, 4);
+  buf.write("WAVEfmt ", 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(16000, 24);
+  buf.writeUInt32LE(32000, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write("data", 36);
+  buf.writeUInt32LE(n, 40);
+  buf.fill(1, 44);
+  return buf.toString("base64");
 }
+
 
 describe("MOCK-VERIFIED studio→hub→mock flow (not a real clone)", () => {
   const dirs: string[] = [];
