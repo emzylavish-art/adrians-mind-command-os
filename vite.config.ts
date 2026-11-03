@@ -145,6 +145,32 @@ function authPopupPlugin(): Plugin {
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
+
+/** Gap#43 — long-cache Imagine art in vite preview/dev (prod via vercel.json headers). */
+function artCacheHeadersPlugin(): Plugin {
+  return {
+    name: "dashboard-3d-art-cache",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (pathOnly.startsWith("/dashboard-3d/art/")) {
+          res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+        }
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (pathOnly.startsWith("/dashboard-3d/art/")) {
+          res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ command, isPreview }) => ({
   server: {
     host: "0.0.0.0",
@@ -157,6 +183,59 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  // Perf: fold origin/perf-split@4a79f1a (MCP) and extend. Rolldown ignores
+  // output.manualChunks when codeSplitting is set (Nitro server). CLIENT groups
+  // stream three / dashboard-3d / voice / media / charts as separate chunks.
+  environments: {
+    client: {
+      build: {
+        rollupOptions: {
+          output: {
+            codeSplitting: {
+              groups: [
+                {
+                  name: "vendor-three",
+                  test: /[\\/]node_modules[\\/]three[\\/]/,
+                  priority: 50,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-charts",
+                  test: /[\\/]node_modules[\\/]recharts[\\/]/,
+                  priority: 45,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-postfx",
+                  test: /[\\/]src[\\/]components[\\/]mind[\\/]dashboard-3d[\\/]postfx[\\/]/,
+                  priority: 42,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "dashboard-3d",
+                  test: /[\\/]src[\\/]components[\\/]mind[\\/]dashboard-3d[\\/]/,
+                  priority: 40,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-voice",
+                  test: /[\\/]src[\\/]lib[\\/]mind[\\/]voice(?:-live)?[\\/]/,
+                  priority: 35,
+                  includeDependenciesRecursively: false,
+                },
+                {
+                  name: "vendor-media",
+                  test: /[\\/](?:src[\\/]lib[\\/]mind[\\/]media|src[\\/]components[\\/]mind[\\/]media)[\\/]/,
+                  priority: 34,
+                  includeDependenciesRecursively: false,
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
@@ -170,7 +249,9 @@ export default defineConfig(({ command, isPreview }) => ({
     ...(command === "build" || isPreview
       ? [
           nitro({
-            preset: "vercel",
+            // Default stays Vercel. Cloudflare Pages burner: NITRO_PRESET=cloudflare_pages
+            // (see npm run build:cf + wrangler.toml). Do not flip the default.
+            preset: process.env.NITRO_PRESET || "vercel",
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.

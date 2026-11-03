@@ -1,0 +1,365 @@
+{
+  "date": "2026-11-01",
+  "timezone": "Africa/Lagos",
+  "cycle": 2,
+  "product": "Adrian's Mind Command OS",
+  "closed_since_c1": [
+    {
+      "feature": "Working live model replies (Grok key + Send path)",
+      "status": "closed",
+      "branch": "xai-verification",
+      "commit": "7fb9839",
+      "was_c1_rank": 1
+    },
+    {
+      "feature": "Model / effort / Mode picker wired to real model ids",
+      "status": "closed",
+      "branch": "logic-wiring",
+      "commit": "aee35a8",
+      "was_c1_rank": 2,
+      "note": "Also mirrored effort UX on preview/ui-completion"
+    },
+    {
+      "feature": "Full-duplex / Live voice (ephemeral secrets, waveform, mute, TTS/STT)",
+      "status": "closed",
+      "branch": "voice-integration",
+      "commit": "574ae49",
+      "was_c1_rank": 8,
+      "note": "Ollama Orchestrator still mocked/unreachable on box"
+    },
+    {
+      "feature": "Honest failure banners (model/db/emergency-stop)",
+      "status": "closed",
+      "branch": "error-banners",
+      "commit": "aded415",
+      "was_c1_rank": null
+    },
+    {
+      "feature": "Image attach / camera / vision multimodal input",
+      "status": "closed",
+      "branch": "media-integration",
+      "commit": "78c370f",
+      "was_c1_rank": 9,
+      "note": "Generation still open (see gap #6)"
+    },
+    {
+      "feature": "Built-in MCP server + Tools registry toggles",
+      "status": "closed_partial",
+      "branch": "mcp-integration",
+      "commit": "60552be",
+      "was_c1_rank": 5,
+      "note": "Does not replace OAuth connectors gap"
+    }
+  ],
+  "gaps": [
+    {
+      "rank": 1,
+      "feature": "Web search + Deep research with citations",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Perplexity",
+        "Claude",
+        "Gemini",
+        "Poe",
+        "You.com"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-c2-features-2026-11-01.md",
+        "/workspace/rea-captures/perplexity/perplexity-c2-features-2026-11-01.md",
+        "/workspace/rea-captures/youcom/youcom-c2-features-2026-11-01.md"
+      ],
+      "adrians_today": "Research UI + citation filter exist; still blocked without MIND_SEARCH_ENDPOINT/KEY.",
+      "effort": "M",
+      "why": "Highest remaining daily-use gap now that Grok replies and model tiers ship on feature branches.",
+      "changed_since_c1": "Rose from #3 \u2014 live replies and model picker closed/in-branch."
+    },
+    {
+      "rank": 2,
+      "feature": "Connectors / plugins that OAuth-connect (Gmail, Drive, GitHub, \u2026)",
+      "status": "open",
+      "branch": null,
+      "note": "MCP builtin tools closed a slice on mcp-integration but not OAuth connector catalog",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-c2-features-2026-11-01.md",
+        "/workspace/mind-command-os-mcp/.handoff/NOTION_HANDOFF.md"
+      ],
+      "adrians_today": "ServiceBoard mostly Not connected; MCP registry + notion_*/pc_*/pglite_* on mcp-integration; no Google OAuth.",
+      "effort": "L",
+      "why": "Command OS value still hinges on real mailbox/drive/git connect.",
+      "changed_since_c1": "MCP lane partial mitigation; core OAuth gap remains open."
+    },
+    {
+      "rank": 3,
+      "feature": "In-thread tool-execution timeline + live activity rail",
+      "status": "in_progress",
+      "branch": "preview/tools-timeline",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/audit/reference/03-chat-hero.jpg",
+        "git:preview/tools-timeline@b81ac64"
+      ],
+      "adrians_today": "Branch has Executing tools timeline + chat activity rail; not on main / polish checkout.",
+      "effort": "M",
+      "why": "Agent legibility during a turn; implementation exists off-main.",
+      "changed_since_c1": "Status \u2192 in_progress (branch identified)."
+    },
+    {
+      "rank": 4,
+      "feature": "Cloud file sources (Drive / OneDrive / library cloud attach)",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "Gemini",
+        "Manus",
+        "Perplexity",
+        "ChatGPT",
+        "Claude"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-gemini.md",
+        "/workspace/mind-command-os-media/.handoff/MEDIA_HANDOFF.md"
+      ],
+      "adrians_today": "Local image attach/camera/vision closed on media-integration; Drive/OneDrive still Not connected.",
+      "effort": "L",
+      "why": "Local images help; cloud libraries remain daily friction.",
+      "changed_since_c1": "Narrowed \u2014 local multimodal closed; cloud still open."
+    },
+    {
+      "rank": 5,
+      "feature": "Guest / logged-out usable chat (progressive auth)",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "HuggingChat",
+        "Pi"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-c2-features-2026-11-01.md",
+        "/workspace/rea-captures/huggingchat/huggingchat-c2-features-2026-11-01.md",
+        "/workspace/rea-captures/claude/claude-c2-app-features-2026-11-01.md"
+      ],
+      "adrians_today": "Page loads signed-out; protected ops 401. Claude.ai still login-walled publicly.",
+      "effort": "M",
+      "why": "Activation; competitors still allow guest starts.",
+      "changed_since_c1": "Unchanged open; Claude app now reaches login UI (was CF 403)."
+    },
+    {
+      "rank": 6,
+      "feature": "Image / media generation (create), not just vision input",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "HuggingChat",
+        "Meta AI",
+        "Poe",
+        "Copilot"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-c2-features-2026-11-01.md",
+        "/workspace/rea-captures/huggingchat/huggingchat-c2-features-2026-11-01.md",
+        "/workspace/mind-command-os-media/.handoff/MEDIA_HANDOFF.md"
+      ],
+      "adrians_today": "Vision attach live on media-integration; generation APIs still paid_required / not called.",
+      "effort": "M",
+      "why": "Public competitor homes still push create-image; input path closed.",
+      "changed_since_c1": "Split from broad media gap; generation remains open."
+    },
+    {
+      "rank": 7,
+      "feature": "Keyboard shortcut sheet + composer \u2318K polish",
+      "status": "open",
+      "branch": null,
+      "note": "visual/polish-pass-4 in progress for related chrome",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Manus",
+        "Perplexity",
+        "Gemini"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/locks/visual-polish.lock"
+      ],
+      "adrians_today": "Palette exists; full shortcut help sheet incomplete; polish pass-4 WIP on styles/voice-ui only.",
+      "effort": "S",
+      "why": "Cheap power-user win still outstanding.",
+      "changed_since_c1": "Visual polish claimed but not this feature specifically."
+    },
+    {
+      "rank": 8,
+      "feature": "Projects dashboard with progress / agent stats",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity",
+        "Copilot"
+      ],
+      "evidence": [
+        "/workspace/audit/reference/02-screen-grid.jpg",
+        "/workspace/rea-captures/copilot/copilot-c2-features-2026-11-01.md"
+      ],
+      "adrians_today": "Local projects create/list; no % / agent stats cards.",
+      "effort": "M",
+      "why": "Shell breadth exists; depth missing.",
+      "changed_since_c1": "Unchanged open."
+    },
+    {
+      "rank": 9,
+      "feature": "Scheduled automations that run unattended",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/mind-command-os/docs/FEATURE_COMPLETION_MATRIX.md",
+        "/workspace/audit/signed-in/findings-manus.md"
+      ],
+      "adrians_today": "Scheduled UI + local due queue; hosted worker needs DATABASE_URL.",
+      "effort": "L",
+      "why": "OS promise incomplete without durable worker.",
+      "changed_since_c1": "Unchanged open."
+    },
+    {
+      "rank": 10,
+      "feature": "Artifacts / Canvas / Studio build surface (paired computer)",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Perplexity",
+        "Manus",
+        "HuggingChat"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/claude/claude-c2-claude-com-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-manus.md"
+      ],
+      "adrians_today": "Build cards Not available / PC not paired; Claude.com still markets Artifacts/Code/Cowork/Duet.",
+      "effort": "L",
+      "why": "Create/coding surface remains competitor table-stakes.",
+      "changed_since_c1": "Claude.com still captured; app still login-only."
+    },
+    {
+      "rank": 11,
+      "feature": "Multi-bot / persona directory (Explore-style)",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "Poe",
+        "Character.AI",
+        "Manus",
+        "HuggingChat",
+        "Copilot"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/poe/poe-c2-explore-features-2026-11-01.md",
+        "/workspace/rea-captures/characterai/characterai-c2-features-2026-11-01.md"
+      ],
+      "adrians_today": "Bots & Agents + templates; no public Explore marketplace UI.",
+      "effort": "M",
+      "why": "Poe Explore still public and rich in c2 capture.",
+      "changed_since_c1": "Evidence refreshed via Poe Explore recapture."
+    },
+    {
+      "rank": 12,
+      "feature": "Memory UX depth (editable prefs, attach toggles, import)",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Poe",
+        "Perplexity",
+        "ChatGPT"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md"
+      ],
+      "adrians_today": "Memory scopes/versions exist; thinner than competitor settings.",
+      "effort": "M",
+      "why": "Trust/personalization depth.",
+      "changed_since_c1": "Unchanged open."
+    },
+    {
+      "rank": 13,
+      "feature": "Settings IA (billing, data controls, voice, shortcuts)",
+      "status": "in_progress",
+      "branch": "preview/ui-completion",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini"
+      ],
+      "evidence": [
+        "git:preview/ui-completion@fc4775d",
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md"
+      ],
+      "adrians_today": "ui-completion adds Voice settings + effort; still thinner than ChatGPT settings trees.",
+      "effort": "M",
+      "why": "Partial progress on voice/effort settings.",
+      "changed_since_c1": "\u2192 in_progress on preview/ui-completion."
+    },
+    {
+      "rank": 14,
+      "feature": "Durable cloud DB + hosted worker / multi-device sync",
+      "status": "open",
+      "branch": null,
+      "platforms": [
+        "All major SaaS"
+      ],
+      "evidence": [
+        "/workspace/mind-command-os/docs/EXTERNAL_BLOCKERS.md"
+      ],
+      "adrians_today": "PGLite + browser snapshot; DATABASE_URL unset.",
+      "effort": "L",
+      "why": "Foundation gap.",
+      "changed_since_c1": "Unchanged open."
+    },
+    {
+      "rank": 15,
+      "feature": "Screen-state design system + visual polish merge",
+      "status": "in_progress",
+      "branch": "visual/polish-pass-4",
+      "platforms": [
+        "Reference board"
+      ],
+      "evidence": [
+        "/workspace/locks/visual-polish.lock",
+        "/workspace/audit/visual-pass-4/"
+      ],
+      "adrians_today": "error-banners closed honest failures; polish-pass-3 shipped; pass-4 claimed (styles + voice-ui).",
+      "effort": "M",
+      "why": "Consistency across lanes before merge.",
+      "changed_since_c1": "Actively claimed; banners closed on error-banners."
+    }
+  ],
+  "capture_summary": "/workspace/rea-captures/capture-cycle2-summary-2026-11-01.json",
+  "inventory": "/workspace/rea-captures/adrians-mind-inventory-2026-11-01-c2.md"
+}

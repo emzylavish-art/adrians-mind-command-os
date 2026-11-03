@@ -1,0 +1,16 @@
+owner: Voice Integration Bot
+branch: voice-integration
+worktree: /workspace/mind-command-os-voice-integration
+base: 7cef107
+status: claimed
+claimed_at: 2026-11-01T15:10:26+01:00
+released_at:
+commits: []
+paths_claimed:
+  - src/lib/mind/voice/
+  - src/components/mind/command-app.tsx (voice wiring only)
+  - src/components/mind/voice-mode-overlay.tsx
+  - .handoff/
+  - /workspace/voice-test/
+notes: |
+  Round 5: Speaking vs audio duration + Thinking→Speaking gap; voice turns into chat thread.

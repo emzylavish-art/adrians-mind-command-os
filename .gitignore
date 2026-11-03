@@ -9,6 +9,22 @@ dist/
 *.log
 .env
 .env.*
+!.env.example
 *.pem
 .DS_Store
 .data/
+.env.local.proof
+scripts/_window-proof.mjs
+
+__pycache__/
+*.pyc
+
+# Telegram fleet: live secrets and sessions stay local. Examples stay tracked.
+fleet/**/.env
+fleet/.env.fleet
+*.session
+*.session-journal
+fleet_session*
+fleet/**/*.json.tmp
+!fleet/**/.env.example
+!fleet/.env.fleet.example

@@ -1,0 +1,13 @@
+feature: Push-to-talk (hold Space to talk), then voice picker, then interim partial transcripts
+lane: voice-wiring
+owner_bot: Voice Wiring Bot
+status: done
+claimed_by: Voice Wiring Bot
+released_at: 2026-11-01T15:20:00+01:00
+completed_tip: e527875
+worktree: /workspace/mind-command-os-voice
+acceptance: met (transcript harden, Space PTT, official voices+allowlist, interim partials, attack-pass tests, Direct 200)
+avoid: honored (styles/media/mcp untouched; command-app voice-only slices coexisting with media clipboard + visual presentational)
+notes: |
+  Commits: 7390b9f 8d31058 84a1896 4982ec5 e527875 on voice-wiring (pushed).
+  Docs: https://docs.x.ai/docs/guides/voice

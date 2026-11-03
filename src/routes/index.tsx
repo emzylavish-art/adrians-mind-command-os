@@ -1,8 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CommandApp } from "@/components/mind/command-app";
+import { loadMindCopy } from "@/lib/mind/server";
+import type { Workspace } from "@/lib/mind/types";
 
-export const Route = createFileRoute("/")({ component: Home });
+export const Route = createFileRoute("/")({
+  loader: async (): Promise<{ serverWorkspace: Workspace | null }> => {
+    try {
+      const result = await loadMindCopy();
+      if (result.ok && result.workspace) {
+        return { serverWorkspace: result.workspace as Workspace };
+      }
+    } catch {
+      /* signed-out or server unavailable — paint from local cache */
+    }
+    return { serverWorkspace: null };
+  },
+  component: Home,
+});
 
 function Home() {
-  return <CommandApp />;
+  const { serverWorkspace } = Route.useLoaderData();
+  return <CommandApp serverWorkspace={serverWorkspace} />;
 }

@@ -1,0 +1,20 @@
+feature: SECURITY — pglite_query guard lets side-effect functions through (set_config poisons shared search_path, pg_sleep freezes event loop, advisory locks, lo_create, query_to_xml, U& unicode-escape identifiers)
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: MCP Integration Bot
+claimed_at: 2026-11-01T14:54:43+01:00
+status: done, released
+released: true
+released_at: 2026-11-01T14:57:51+01:00
+branch: mcp-integration
+worktree: /workspace/mind-command-os-mcp
+paths_claimed: []
+previous_paths:
+  - src/lib/mind/mcp/tools.ts (assertReadOnlySql / pgliteQuery only)
+  - src/lib/mind/mcp/pglite-guard.test.ts (new)
+  - package.json (test script entry only)
+  - .handoff/NOTION_HANDOFF.md
+notes: |
+  Attacker pass: confirmed on real in-memory PGLite that set_config('search_path','evil',false) persists, U&"\0073et_config" bypasses word checks, pg_sleep ignores the 5s timeout (sync WASM blocks the event loop).
+  Released 2026-11-01T14:57:51+01:00. Commits c2266bb (fix + 24 regression tests), 6490b9e (handoff) pushed to origin/mcp-integration.
+  typecheck pass; mind/src 320/320; build pass; mcp:e2e pass. Notion stop-point: 40bb95f33e4281f2a1b8f4f77dc2147e

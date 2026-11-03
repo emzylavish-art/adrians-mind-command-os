@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
@@ -7,12 +7,14 @@ import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 const MODEL = "grok-4.5";
 
 function envCheck() {
   return guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
@@ -32,7 +34,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   } catch {
     signedIn = false;
   }
-  const described = describePersistence(process.env.DATABASE_URL);
+  const described = describePersistence(resolveDatabaseUrl(process.env));
   const persistence = described.note;
   const databaseBackend = described.backend;
   if (!gate.ok) {
@@ -54,7 +56,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const mindUrl = process.env.MIND_SUPABASE_URL;
   return {
     ok: true as const,
-    grok: process.env.XAI_API_KEY ? ("configured" as const) : ("unconfigured" as const),
+    grok: resolveXaiInferenceApiKey(process.env).ok ? ("configured" as const) : ("unconfigured" as const),
     model: MODEL,
     modelTiers: modelTierCatalog(process.env),
     database: mindUrl
@@ -359,28 +361,317 @@ export const loadMindCopy = createServerFn({ method: "POST" })
 
 export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text: string }) => input)
+  .validator((input: { text: string; voiceId?: string }) => input)
   .handler(async ({ data, context }) => {
+    const { validateSpeakTextInput } = await import("./voice/voice-input");
+    const parsed = validateSpeakTextInput((data as { text?: unknown } | null)?.text);
+    if (!parsed.ok) return { ok: false as const, error: parsed.error };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
-    const text = data.text.trim().slice(0, 500);
-    if (!text) return { ok: false as const, error: "Nothing to read." };
-    const apiKey = process.env.VOICE_API_KEY;
+    const text = parsed.text;
+    const { resolveVoiceApiKey } = await import("./voice/keys");
+    const { resolveXaiVoiceId } = await import("./voice/voices");
+    const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
+    const voice_id = resolveXaiVoiceId(data.voiceId);
     let res: Response;
     try {
       res = await fetch("https://api.x.ai/v1/tts", {
         method: "POST",
         signal: AbortSignal.timeout(20_000),
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ text, voice_id: "eve" }),
+        body: JSON.stringify({ text, voice_id, language: "en", output_format: { codec: "mp3" } }),
       });
     } catch {
       return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
     }
     if (!res.ok) return { ok: false as const, error: `Voice returned ${res.status}. Nothing was played.` };
+    const contentLength = Number(res.headers.get("content-length") || 0);
+    if (contentLength > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     const bytes = Buffer.from(await res.arrayBuffer());
     if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
     return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };
+  });
+
+export const createVoiceClientSecret = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Voice was not started." };
+    if (!allowMindRequest("voice_secret", context.userId, 20)) {
+      return { ok: false as const, error: "Too many voice requests. Wait a minute." };
+    }
+    // Dev-only e2e flag: force honest "provider not configured" without touching real keys.
+    if (process.env.VOICE_E2E_FORCE_UNCONFIGURED === "1" && process.env.NODE_ENV !== "production") {
+      const { providerUnconfiguredMessage } = await import("./voice/provider-unconfigured");
+      return { ok: false as const, error: providerUnconfiguredMessage() };
+    }
+    const { mintRealtimeClientSecret } = await import("./voice/client-secret");
+    return mintRealtimeClientSecret({});
+  });
+/**
+ * MCP server list for Tools. Soft-auth: always calls getSessionUser (Supabase
+ * HttpOnly cookies first, then Better Auth) via resolveMcpListUserId — same
+ * session helper as authMiddleware/requireUserId — but returns typed
+ * `unauthenticated` instead of throwing so Tools stays quiet when signed out.
+ */
+export const mcpRegistryList = createServerFn({ method: "GET" })
+  .middleware([
+    createMiddleware({ type: "function" })
+      .client(async ({ next }) => {
+        const { getBearerToken } = await import("../auth/client");
+        return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+      })
+      .server(async ({ next, context }) => {
+        const { getRequest } = await import("@tanstack/react-start/server");
+        const { CrossSiteRequestError } = await import("../auth/isolation.server");
+        const { softAuthMcpListDecision } = await import("./mcp-list-auth");
+        const request = getRequest();
+        let forceUnauthenticated = false;
+        if (request) {
+          const h = request.headers;
+          const decision = softAuthMcpListDecision({
+            site: h.get("sec-fetch-site"),
+            mode: h.get("sec-fetch-mode"),
+            dest: h.get("sec-fetch-dest"),
+            method: request.method,
+            origin: h.get("origin"),
+            host: h.get("host"),
+            forwardedHost: h.get("x-forwarded-host"),
+          });
+          if (decision === "block") throw new CrossSiteRequestError();
+          if (decision === "soft_unauth") forceUnauthenticated = true;
+        }
+        return next({
+          context: {
+            bearerToken: forceUnauthenticated ? undefined : (context.bearerToken as string | undefined),
+            forceUnauthenticated,
+          },
+        });
+      }),
+  ])
+  .handler(async ({ context }) => {
+    const { buildMcpRegistryListPayload } = await import("./mcp-list-auth");
+    if ((context as { forceUnauthenticated?: boolean }).forceUnauthenticated) {
+      // Same-site / missing Origin: quiet 200 unauthenticated (do not ride cookies).
+      return buildMcpRegistryListPayload(null, []);
+    }
+    const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
+    const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
+    const { resolveMcpListUserId } = await import("./mcp-list-auth");
+    // Always reuse getSessionUser (Supabase cookies first, then Better Auth) so a
+    // signed-in Supabase user is never short-circuited when Better Auth is off.
+    const sessionUser = await getSessionUser(context.bearerToken);
+    const userId = resolveMcpListUserId({
+      sessionUser,
+      authConfigured,
+      gateIdentityEnabled: gateIdentityEnabled(),
+      databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+      devUserId: DEV_USER_ID,
+    });
+    if (!userId) {
+      return buildMcpRegistryListPayload(null, []);
+    }
+    const { listRegistryServers } = await import("./mcp/registry");
+    return buildMcpRegistryListPayload(userId, listRegistryServers(userId));
+  });
+
+export const mcpRegistryToggle = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; enabled?: boolean }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
+    enabled: input.enabled === true,
+  }))
+  .handler(async ({ data, context }) => {
+    const { setServerEnabled } = await import("./mcp/registry");
+    return { servers: setServerEnabled(context.userId, data.id, data.enabled) };
+  });
+
+export const mcpRegistryTools = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { listRegistryTools } = await import("./mcp/registry");
+    return { tools: await listRegistryTools(context.userId) };
+  });
+
+export const mcpRegistryCall = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { serverId?: string; tool?: string; args?: Record<string, unknown> }) => ({
+    serverId: typeof input.serverId === "string" ? input.serverId.slice(0, 80) : "",
+    tool: typeof input.tool === "string" ? input.tool.slice(0, 80) : "",
+    args: input.args && typeof input.args === "object" ? input.args : {},
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false, status: "error" as const, serverId: data.serverId, tool: data.tool, text: "Emergency stop is on. No MCP tool was called." };
+    }
+    const { callRegistryTool } = await import("./mcp/registry");
+    const { getSql } = await import("../db");
+    const result = await callRegistryTool({
+      userId: context.userId,
+      serverId: data.serverId,
+      tool: data.tool,
+      args: data.args,
+      getSql,
+    });
+    return {
+      ok: result.ok,
+      status: result.status,
+      serverId: result.serverId,
+      tool: result.tool,
+      text: result.text,
+    };
+  });
+
+
+/**
+ * Real per-connector verification for Tools.
+ * Soft-auth like mcpRegistryList: getSessionUser + same-site origin check.
+ * Signed-out → typed unauthenticated (no probes, no red banner).
+ * Never trusts a stored status badge.
+ */
+export const mcpConnectorVerify = createServerFn({ method: "POST" })
+  .middleware([
+    createMiddleware({ type: "function" })
+      .client(async ({ next }) => {
+        const { getBearerToken } = await import("../auth/client");
+        return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+      })
+      .server(async ({ next, context }) => {
+        const { assertSameSiteRequest } = await import("../auth/isolation.server");
+        assertSameSiteRequest();
+        return next({ context: { bearerToken: context.bearerToken as string | undefined } });
+      }),
+  ])
+  .validator((input: { target?: "all" | "mcp" | "oauth"; id?: string } = {}) => {
+    const target = input?.target === "mcp" || input?.target === "oauth" || input?.target === "all" ? input.target : "all";
+    const id = typeof input?.id === "string" ? input.id.trim().slice(0, 80) : "";
+    return { target, id };
+  })
+  .handler(async ({ data, context }) => {
+    const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
+    const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
+    const { resolveMcpListUserId } = await import("./mcp-list-auth");
+    const sessionUser = await getSessionUser(context.bearerToken);
+    const userId = resolveMcpListUserId({
+      sessionUser,
+      authConfigured,
+      gateIdentityEnabled: gateIdentityEnabled(),
+      databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+      devUserId: DEV_USER_ID,
+    });
+    const {
+      buildConnectorVerifyPayload,
+      verifyConnectors,
+      VERIFY_TIMEOUT_MS,
+      VERIFY_MAX_BYTES,
+    } = await import("./mcp/connector-verify");
+    if (!userId) {
+      return buildConnectorVerifyPayload(null, []);
+    }
+    const { getSql } = await import("../db");
+    let verifyTarget: { type: "all" } | { type: "mcp"; id: string } | { type: "oauth"; id: import("./connectors/store").ConnectorId };
+    if (data.target === "all" || !data.id) {
+      verifyTarget = { type: "all" };
+    } else if (data.target === "oauth") {
+      const { isConnectorId } = await import("./connectors/store");
+      if (!isConnectorId(data.id)) {
+        return buildConnectorVerifyPayload(userId, [{
+          id: data.id,
+          kind: "oauth",
+          label: data.id,
+          state: "error",
+          detail: "Unknown OAuth connector.",
+        }]);
+      }
+      verifyTarget = { type: "oauth", id: data.id };
+    } else {
+      verifyTarget = { type: "mcp", id: data.id };
+    }
+    const results = await verifyConnectors(userId, verifyTarget, {
+      getSql,
+      timeoutMs: VERIFY_TIMEOUT_MS,
+      maxBytes: VERIFY_MAX_BYTES,
+    });
+    return buildConnectorVerifyPayload(userId, results);
+  });
+
+export const listMindMemories = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Memories were not listed.", memories: [] as const };
+    }
+    const { getSql } = await import("../db");
+    const { listOwnerMemories } = await import("./memory/owner-ops");
+    const listed = await listOwnerMemories(await getSql(), context.userId, { includeArchived: false });
+    return { ok: true as const, memories: listed.memories };
+  });
+
+export const createMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { scope?: string; text?: string; projectId?: string | null; chatId?: string | null; source?: string }) => {
+    const scope = input.scope === "project" || input.scope === "chat" ? input.scope : ("global" as const);
+    return {
+      scope: scope as "global" | "project" | "chat",
+      text: typeof input.text === "string" ? input.text : "",
+      projectId: typeof input.projectId === "string" ? input.projectId : null,
+      chatId: typeof input.chatId === "string" ? input.chatId : null,
+      source: typeof input.source === "string" ? input.source.slice(0, 160) : "owner",
+    };
+  })
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was saved.", memorySaved: false as const, savedMemoryId: null };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute.", memorySaved: false as const, savedMemoryId: null };
+    }
+    const { getSql } = await import("../db");
+    const { createOwnerMemory } = await import("./memory/owner-ops");
+    const { memorySignalFromSave } = await import("./memory/signal");
+    const saved = await createOwnerMemory(await getSql(), context.userId, data);
+    if (!saved.ok) return { ok: false as const, error: saved.error, ...memorySignalFromSave(saved) };
+    return { ok: true as const, item: saved.item, ...memorySignalFromSave({ ok: true, id: saved.item.id }) };
+  });
+
+export const editMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string; text?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+    text: typeof input.text === "string" ? input.text : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was edited." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { editOwnerMemory } = await import("./memory/owner-ops");
+    return editOwnerMemory(await getSql(), context.userId, data.id, data.text);
+  });
+
+export const deleteMindMemory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string }) => ({
+    id: typeof input.id === "string" ? input.id.slice(0, 120) : "",
+  }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was deleted." };
+    }
+    if (!allowMindRequest("memory_write", context.userId, 30)) {
+      return { ok: false as const, error: "Too many memory writes. Wait a minute." };
+    }
+    const { getSql } = await import("../db");
+    const { deleteOwnerMemory } = await import("./memory/owner-ops");
+    return deleteOwnerMemory(await getSql(), context.userId, data.id);
   });

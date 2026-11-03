@@ -1,9 +1,10 @@
 import type { MemoryNote } from "./types";
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
+import { buildHistoryMessages, type HistoryInputMessage } from "./media/history.ts";
 
 export function assembleTurn(input: {
   memory: "off" | "on";
-  history: { role: "user" | "assistant"; content: string }[];
+  history: HistoryInputMessage[];
   text: string;
   memoryContext: MemoryNote[];
   images?: ImageAttachment[];
@@ -34,6 +35,7 @@ export function assembleTurn(input: {
   if (images.length > 0 && typeof userContent === "string") {
     return { ok: false, error: "Those image attachments could not be packaged." };
   }
+  const historyMessages = buildHistoryMessages(input.history);
   return {
     ok: true,
     usedIds: notes.map((note) => note.id),
@@ -42,7 +44,7 @@ export function assembleTurn(input: {
         role: "system",
         content: `You are Adrian's Mind in Direct mode. ${memoryLine} Do not claim tools, agents, or other models ran.`,
       },
-      ...input.history.slice(-12),
+      ...historyMessages,
       { role: "user", content: userContent },
     ],
   };

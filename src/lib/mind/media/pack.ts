@@ -1,4 +1,5 @@
 import { isImageDataUrl, normalizeImageDataUrl, parseImageDataUrl } from "./data-url.ts";
+import { sanitizeMediaLabel } from "./harden.ts";
 import type { ChatContent, ImageAttachment, MultimodalContentPart } from "./types.ts";
 import { MAX_IMAGES_PER_TURN } from "./types.ts";
 
@@ -14,7 +15,7 @@ export function sanitizeAttachments(input: unknown): ImageAttachment[] {
     const parsed = parseImageDataUrl(normalized);
     out.push({
       dataUrl: normalized,
-      name: typeof record.name === "string" ? record.name.slice(0, 120) : undefined,
+      name: sanitizeMediaLabel(record.name),
       mime: parsed.ok ? parsed.mime : typeof record.mime === "string" ? record.mime : undefined,
     });
     if (out.length >= MAX_IMAGES_PER_TURN) break;
@@ -56,3 +57,9 @@ export function historyTextForImages(text: string, images: ImageAttachment[]): s
   const base = text.trim() || "Attached image.";
   return `${base}\n\n[Attached: ${labels}]`;
 }
+
+/** Runtime attachments for model turns: only hydrated data-URLs. */
+export function toImageAttachments(images: { dataUrl?: string; name?: string; mime?: string }[] | undefined): ImageAttachment[] {
+  return sanitizeAttachments(images ?? []);
+}
+

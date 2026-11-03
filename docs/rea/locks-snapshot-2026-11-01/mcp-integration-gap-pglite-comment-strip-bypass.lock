@@ -1,0 +1,13 @@
+feature: HARDENING (HIGH) — H12 pglite_query guard bypass: comment stripping ignores string literals
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: 
+claimed_at: 2026-11-01T15:05:16+01:00
+updated_at: 2026-11-01T15:09:43+01:00
+released_at: 2026-11-01T15:09:43+01:00
+status: released
+gap_rank: hardening H12 HIGH
+commit: af084a4
+notion_stop_point: https://app.notion.com/p/40bb95f33e4281cc9416e2105756c530
+notes: |
+  Complete. Quote-aware tokenizer + BEGIN READ ONLY + RESET ALL.

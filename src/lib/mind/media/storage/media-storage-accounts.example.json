@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "switchThreshold": 0.9,
+  "accounts": [
+    {
+      "service": "supabase",
+      "accountEmail": "media@xarxhdsnprpnosimehon.supabase.co",
+      "capBytes": 1073741824,
+      "order": 1,
+      "enabled": true
+    },
+    {
+      "service": "google_drive",
+      "accountEmail": "drive-placeholder@example.com",
+      "capBytes": 16106127360,
+      "order": 2,
+      "enabled": true
+    },
+    {
+      "service": "dropbox",
+      "accountEmail": "dropbox-placeholder@example.com",
+      "capBytes": 2147483648,
+      "order": 3,
+      "enabled": true
+    },
+    {
+      "service": "onedrive",
+      "accountEmail": "onedrive-placeholder@example.com",
+      "capBytes": 5368709120,
+      "order": 4,
+      "enabled": true
+    }
+  ]
+}

@@ -7,7 +7,9 @@ import { AGENT_RATE_LIMIT_REPLY, consumeMindRateLimit, jsonRateLimited } from ".
 import { decideFetchSite } from "./request-guard";
 import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 const MAX_BODY = 2_500_000;
 
@@ -61,6 +63,9 @@ export async function handleAgentRun(request: Request): Promise<Response> {
       mode: request.headers.get("sec-fetch-mode"),
       dest: request.headers.get("sec-fetch-dest"),
       method: request.method,
+      origin: request.headers.get("origin"),
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
     }) === "block"
   ) {
     return json({ ok: false, error: "Forbidden: cross-site request blocked", log: [] }, 403);
@@ -85,13 +90,14 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const limited = consumeMindRateLimit("agent", userId, 6);
   if (!limited.ok) return jsonRateLimited(AGENT_RATE_LIMIT_REPLY, limited.retryAfterSec, { log: [] });
   const gate = guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
   if (!gate.ok) return json({ ok: false, error: gate.error, log: [] });
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server.", log: [] });
+  const keyed = resolveXaiInferenceApiKey(process.env);
+  if (!keyed.ok) return json({ ok: false, error: keyed.error, log: [] });
+  const apiKey = keyed.key;
   const ws = emptyWorkspace();
   const stamp = "2026-01-01T00:00:00.000Z";
   ws.projects = names(body.projects, 20).map((name, index) => ({ id: `p${index}`, name, description: "", createdAt: stamp }));
@@ -158,6 +164,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
       modelTier: tier.selected,
       resolvedTier: tier.resolved,
       tierReason: tier.reason,
+      images: result.images?.map((image) => ({ dataUrl: image.dataUrl, name: image.name, mime: image.mime })) ?? [],
     });
   } catch (caught) {
     if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {

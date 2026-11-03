@@ -1,0 +1,14 @@
+owner: Cosmos Painter Bot
+lane: painter
+branch: dashboard-3d-visual-painter
+worktree: /workspace/mind-command-os-dashboard-painter
+base: origin/dashboard-3d
+status: claimed
+cycle: 4
+claimed_at: 2026-11-01T14:54:16+01:00
+refreshed_at: 2026-11-01T14:54:16+01:00
+paths_claimed:
+  - src/components/mind/dashboard-3d/shaders/
+  - src/components/mind/dashboard-3d/materials/
+  - .handoff/DASHBOARD_QUEUE.md (painter queue line only, via lane branch)
+task: c4 hacker pass (context-loss texture rebind) + visual upgrade

@@ -2,23 +2,25 @@ import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { CHAT_RATE_LIMIT_REPLY, checkTurnSize, consumeMindRateLimit, jsonRateLimited } from "./limits";
 import { assembleTurn } from "./prompt";
-import { sanitizeAttachments, type ImageAttachment } from "./media/index.ts";
-import type { ChatContent } from "./media/types.ts";
+import { sanitizeAttachments, type ImageAttachment } from "./media";
+import type { ChatContent } from "./media/types";
+import { resolveXaiInferenceApiKey } from "./xai-adapter";
+import type { HistoryInputMessage } from "./media/history";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, httpStatusForProviderSelection, httpStatusForTurnFailure, selectProvider } from "./provider-call";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
-import { readModelPayload } from "./stream";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
+import { readModelPayload } from "./stream";
+import { resolveDatabaseUrl } from "../env.server.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
 /** Raised so a few downscaled image data-URLs can ride with the turn JSON. */
 const MAX_BODY = 2_500_000;
 
-type HistoryItem = { role: "user" | "assistant"; content: string };
 type NoteItem = { id: string; text: string };
 
 export type TurnBody = {
@@ -28,16 +30,20 @@ export type TurnBody = {
   history?: unknown;
   memoryContext?: unknown;
   provider?: unknown;
-  /** UI picker: Auto | Fast | Expert | Heavy | Build | Orchestrator */
+  /** UI picker: Auto | Fast | Expert | Heavy | Build */
   modelTier?: unknown;
   /** Optional image attachments (data-URLs) for multimodal Direct turns. */
   images?: unknown;
+  /** Optional explicit note to persist with this turn (owner-scoped). */
+  saveMemory?: unknown;
 };
 
-function isHistory(item: unknown): item is HistoryItem {
+function isHistory(item: unknown): item is HistoryInputMessage {
   if (!item || typeof item !== "object") return false;
-  const record = item as { role?: unknown; content?: unknown };
-  return (record.role === "user" || record.role === "assistant") && typeof record.content === "string";
+  const record = item as { role?: unknown; content?: unknown; images?: unknown };
+  if (!(record.role === "user" || record.role === "assistant") || typeof record.content !== "string") return false;
+  if (record.images != null && !Array.isArray(record.images)) return false;
+  return true;
 }
 
 function isNote(item: unknown): item is NoteItem {
@@ -48,7 +54,7 @@ function isNote(item: unknown): item is NoteItem {
 
 function envCheck() {
   return guardMindEnv({
-    databaseUrl: process.env.DATABASE_URL,
+    databaseUrl: resolveDatabaseUrl(process.env),
     mindUrl: process.env.MIND_SUPABASE_URL,
     mindRef: process.env.MIND_SUPABASE_PROJECT_REF,
   });
@@ -68,7 +74,12 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   if (!text && images.length === 0) return { ok: false as const, error: "Write a message first." };
   const history = Array.isArray(data.history) ? data.history.filter(isHistory).slice(-12) : [];
   const memoryContext = Array.isArray(data.memoryContext) ? data.memoryContext.filter(isNote).slice(0, 12) : [];
-  const sized = checkTurnSize({ text: text || "Describe the attached image.", history, memoryContext });
+  const sized = checkTurnSize({
+    text: text || "Describe the attached image.",
+    history,
+    memoryContext,
+    images,
+  });
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
   if (!memory) return { ok: false as const, error: "Memory setting is invalid." };
@@ -84,16 +95,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     images,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
-  const limited = consumeMindRateLimit("chat", userId, 12);
-  if (!limited.ok) {
-    return {
-      ok: false as const,
-      error: CHAT_RATE_LIMIT_REPLY,
-      rateLimited: true as const,
-      retryAfterSec: limited.retryAfterSec,
-    };
-  }
   const tier = resolveModelTier(tierField.tier, text || "image", process.env);
+  const saveMemoryText = typeof data.saveMemory === "string" ? data.saveMemory : "";
   return {
     ok: true as const,
     assembled,
@@ -102,6 +105,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     modelTier: tier,
     provider: routed.id,
     images,
+    saveMemoryText,
+    userId,
   };
 }
 
@@ -114,8 +119,9 @@ export async function completeModelReply(prepared: {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
   }
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return { ok: false as const, error: "Grok is not configured on the server." };
+  const keyed = resolveXaiInferenceApiKey(process.env);
+  if (!keyed.ok) return { ok: false as const, error: keyed.error };
+  const apiKey = keyed.key;
   let res: Response;
   try {
     res = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -147,6 +153,8 @@ export async function completeModelReply(prepared: {
     usage: parsed.usage,
     memory: prepared.memory,
     usedIds: prepared.assembled.usedIds,
+    memorySaved: false as const,
+    savedMemoryId: null as string | null,
   };
 }
 
@@ -165,6 +173,9 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       mode: request.headers.get("sec-fetch-mode"),
       dest: request.headers.get("sec-fetch-dest"),
       method: request.method,
+      origin: request.headers.get("origin"),
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
     }) === "block"
   ) {
     return json({ ok: false, error: "Forbidden: cross-site request blocked" }, 403);
@@ -183,9 +194,36 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const body = read.body as TurnBody;
   const tierField = parseModelTierField(body.modelTier);
   if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
+  const pendingImages = sanitizeAttachments(body.images);
+  const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
+  // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.
+  if (pendingImages.length > 0 && typeof requestedProvider === "string" && requestedProvider !== "grok") {
+    return json({
+      ok: false,
+      error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+      provider: requestedProvider,
+    });
+  }
   const selected = selectProvider(body.provider, process.env);
-  if (!selected.ok) return json(selected, httpStatusForProviderSelection(selected.error));
+  if (!selected.ok) {
+    // If images somehow accompany a failed non-Grok selection, still prefer cannot-see copy.
+    if (pendingImages.length > 0 && requestedProvider !== "grok") {
+      return json({
+        ok: false,
+        error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+        provider: requestedProvider,
+      });
+    }
+    return json(selected);
+  }
   if (selected.id !== "grok") {
+    if (pendingImages.length > 0) {
+      return json({
+        ok: false,
+        error: `${selected.id} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
+        provider: selected.id,
+      });
+    }
     const { haltIsOn } = await import("./halt.server");
     if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." }, 409);
     // Same chat rate limit as Grok — non-Grok must not skip the token bucket.
@@ -207,8 +245,26 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." }, 503);
   }
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return json({ ok: false, error: "Grok is not configured on the server." }, 503);
+  const keyed = resolveXaiInferenceApiKey(process.env);
+  if (!keyed.ok) return json({ ok: false, error: keyed.error });
+  const apiKey = keyed.key;
+  let memorySaved = false;
+  let savedMemoryId: string | null = null;
+  const { shouldPersistTurnMemory, memorySignalFromSave } = await import("./memory/signal");
+  if (shouldPersistTurnMemory({ memory: prepared.memory, saveText: prepared.saveMemoryText })) {
+    const { getSql } = await import("../db");
+    const { createOwnerMemory } = await import("./memory/owner-ops");
+    const saved = await createOwnerMemory(await getSql(), userId, {
+      scope: "chat",
+      text: prepared.saveMemoryText,
+      source: "turn",
+      projectId: null,
+      chatId: null,
+    });
+    const signal = memorySignalFromSave(saved.ok ? { ok: true, id: saved.item.id } : { ok: false });
+    memorySaved = signal.memorySaved;
+    savedMemoryId = signal.savedMemoryId;
+  }
   return relayModelStream({
     apiKey,
     model: prepared.model,
@@ -226,6 +282,8 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       resolvedTier: prepared.modelTier.resolved,
       tierReason: prepared.modelTier.reason,
       images: prepared.images.length,
+      memorySaved,
+      savedMemoryId,
     },
   });
 }

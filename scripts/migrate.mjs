@@ -3,25 +3,37 @@
  * Deploy-time database migrator (node-postgres, `pg`).
  *
  * Runs during `npm run build` — on every Vercel deploy — applying pending files
- * in ../migrations to DATABASE_URL. Each file is applied in one transaction and
+ * in ../migrations to DATABASE_URL or POSTGRES_URL. Each file is applied in one transaction and
  * recorded in a `_migrations` table, so it runs once and is safe to re-run.
  *
  * The read is non-recursive, so the opt-in auth schema under migrations/auth/
  * is not applied to an app that never asked for sign-in.
  *
- * No DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
+ * No DATABASE_URL/POSTGRES_URL (local / preview builds) -> skip; the PGLite fallback applies
  * the same files at startup instead (see src/lib/db.ts).
+ *
+ * TLS: Supabase + newer `pg` can fail with SELF_SIGNED_CERT_IN_CHAIN when the
+ * URL carries sslmode=require (treated as verify-full). Pool config strips
+ * sslmode and uses ssl: { rejectUnauthorized: false }.
+ *
+ * Failures: fatal only when VERCEL_ENV=production. Preview/lane builds log a
+ * warning and exit 0 so a migrate blip cannot block the deploy.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
+import {
+  resolveMigrateDatabaseUrl,
+  buildMigratePoolConfig,
+  migrateFailuresAreFatal,
+} from "./database-url.mjs";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = resolveMigrateDatabaseUrl(process.env);
 if (!databaseUrl) {
   console.log(
-    "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
+    "[migrate] DATABASE_URL/POSTGRES_URL not set — skipping (the PGLite fallback migrates itself).",
   );
   process.exit(0);
 }
@@ -42,7 +54,7 @@ async function main() {
     return;
   }
 
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = new pg.Pool(buildMigratePoolConfig(databaseUrl, { max: 1 }));
   const client = await pool.connect();
   try {
     await client.query(
@@ -86,5 +98,11 @@ main().catch((err) => {
   for (const key of ["code", "detail", "hint", "position", "where"]) {
     if (err?.[key] != null) console.error(`[migrate]   ${key}: ${err[key]}`);
   }
-  process.exit(1);
+  if (migrateFailuresAreFatal(process.env)) {
+    process.exit(1);
+  }
+  console.warn(
+    "[migrate] non-production build — treating migrate failure as non-fatal so the deploy can proceed. Set VERCEL_ENV=production for strict migrate.",
+  );
+  process.exit(0);
 });

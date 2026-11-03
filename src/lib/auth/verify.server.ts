@@ -1,4 +1,5 @@
 import { getRequest } from "@tanstack/react-start/server";
+import { resolveDatabaseUrl } from "../env.server.ts";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
 
@@ -13,14 +14,14 @@ import { auth, authConfigured } from "./server";
  */
 
 /** True when a real database is configured server-side. */
-const databaseConfigured = Boolean(process.env.DATABASE_URL?.trim());
+const databaseConfigured = Boolean(resolveDatabaseUrl(process.env));
 
 /** Re-export so callers can branch on it without importing `server.ts`. */
 export { authConfigured };
 
 if (databaseConfigured && !authConfigured) {
   console.error(
-    "[auth] DATABASE_URL is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
+    "[auth] DATABASE_URL/POSTGRES_URL is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
       "— requireUserId() will reject every request (fail closed) rather than " +
       "share one dev user on a real database.",
   );
@@ -54,7 +55,22 @@ export type VerifiedUser = { id: string; email: string | null };
  * as a bearer token, which we present as `Authorization: Bearer …` (the `bearer`
  * plugin resolves it). When deployed no token is passed and the cookie is used.
  */
-export async function getSessionUser(
+async function readSupabaseSessionUser(): Promise<VerifiedUser | null> {
+  try {
+    const { readSupabaseEnv, createSupabaseServerClient } = await import(
+      "../supabase/server"
+    );
+    if (!readSupabaseEnv()) return null;
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user?.id) return null;
+    return { id: data.user.id, email: data.user.email ?? null };
+  } catch {
+    return null;
+  }
+}
+
+async function readBetterAuthSessionUser(
   bearerToken?: string,
 ): Promise<VerifiedUser | null> {
   if (!authConfigured && !gateIdentityEnabled()) return null;
@@ -66,8 +82,23 @@ export async function getSessionUser(
     headers.set("Authorization", `Bearer ${bearerToken}`);
   }
   const session = await auth.api.getSession({ headers });
-  if (!session?.user) return null;
+  if (!session?.user?.id) return null;
   return { id: session.user.id, email: session.user.email ?? null };
+}
+
+export async function getSessionUser(
+  bearerToken?: string,
+): Promise<VerifiedUser | null> {
+  const { pickSessionUser } = await import("./session-user");
+  const supabaseUser = await readSupabaseSessionUser();
+  // When Supabase Auth is configured and has a user, that is the owner session
+  // MCP list / turn / halt endpoints accept. Better Auth remains a fallback for
+  // existing broker sessions.
+  if (supabaseUser) {
+    return pickSessionUser({ supabaseUser, betterAuthUser: null });
+  }
+  const betterAuthUser = await readBetterAuthSessionUser(bearerToken);
+  return pickSessionUser({ supabaseUser: null, betterAuthUser });
 }
 
 /**
@@ -85,7 +116,7 @@ export async function requireUserId(bearerToken?: string): Promise<string> {
   if (!authConfigured && !gateIdentityEnabled()) {
     if (databaseConfigured) {
       throw new Error(
-        "Auth is disabled (VITE_AUTH_ENABLED=false) but DATABASE_URL is set — " +
+        "Auth is disabled (VITE_AUTH_ENABLED=false) but DATABASE_URL/POSTGRES_URL is set — " +
           "refusing to fall back to the shared dev user against a real database.",
       );
     }

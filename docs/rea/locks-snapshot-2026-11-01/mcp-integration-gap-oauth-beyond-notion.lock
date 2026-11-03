@@ -1,0 +1,14 @@
+feature: OAuth connectors beyond Notion (Gmail, Google Calendar, Google Drive token, Slack, GitHub)
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: 
+claimed_at: 
+updated_at: 2026-11-01T13:39:56+01:00
+released_at: 2026-11-01T13:39:56+01:00
+status: released
+gap_rank: 3
+paths_claimed: []
+notes: |
+  Done 2026-11-01. Providers: gmail, google_calendar, google_drive, slack, github.
+  Commits b64b7cf..5dd31ef on mcp-integration. Mock e2e PASS; live UNVERIFIED.
+  typecheck + mind/src tests + build passed.

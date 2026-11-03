@@ -1,0 +1,29 @@
+feature: Connectors/plugins that actually OAuth-connect (ServiceBoard catalog)
+lane: mcp-integration
+owner_bot: MCP Integration Bot
+claimed_by: MCP Integration Bot
+claimed_at: 2026-11-01T12:31:37+01:00
+released_at: 2026-11-01T12:34:26+01:00
+status: done, released
+cycle: 2
+paths_claimed:
+  - src/lib/mind/connectors/
+  - src/routes/api/mind/oauth/
+  - src/components/mind/service-board.tsx
+  - src/lib/mind/mcp/tools.ts (Notion token source: OAuth store when present)
+  - .env.example
+  - scripts/mcp/oauth-e2e.mjs
+  - .handoff/NOTION_HANDOFF.md
+  - src/routeTree.gen.ts
+  - package.json (test script entries only)
+commits:
+  - ffdbc9c (store/crypto/oauth core)
+  - f711d3b (HTTP routes)
+  - 9d2ac57 (ServiceBoard + MCP token)
+  - adb4bc5 (tests + e2e)
+  - 72de166 (.env.example)
+  - 043f289 (handoff note)
+notes: |
+  Pushed origin/mcp-integration. Notion mirror append succeeded.
+  Live provider OAuth unverified (no client credentials on box env).
+  Mock e2e: Connected → Disconnect → Not connected verified.

@@ -38,7 +38,7 @@ export function deepSearchTimeoutMs(env: Record<string, string | undefined> = pr
 
 function sanitizeTitle(raw: string): string {
   return raw
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\p{Cc}/gu, " ")  // C0/C1 controls + DEL; unicode property avoids no-control-regex
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 200);

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
+import { SupabaseAccountControls } from "@/components/mind/supabase-account";
 import {
   Activity,
   Bell,
@@ -14,6 +15,7 @@ import {
   Lock,
   MessageSquare,
   Mic,
+  MicOff,
   Paperclip,
   Camera,
   Plus,
@@ -31,6 +33,7 @@ import {
   PanelLeft,
   Pin,
   Terminal,
+  Volume2,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -38,16 +41,130 @@ import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { consumeMindTurn, shouldStoreReply } from "@/lib/mind/live-turn";
-import { mcpCommand, mcpList, mcpRemove, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
-import type { Chat, MemoryScope, Workspace } from "@/lib/mind/types";
+import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
+import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
+import { VoiceWaveform } from "@/components/mind/voice-waveform";
+import { probeOllamaForBadge } from "@/lib/mind/voice-live/ollama-status";
+import { isInternalSessionPrompt } from "@/lib/mind/voice-live/session-context";
+import type { LiveVoiceUiAttr } from "@/lib/mind/voice-live/types";
+import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
+import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
+import { VoicePicker } from "@/components/mind/voice-picker";
+import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
+import { DictationPill } from "@/components/mind/dictation-pill";
+import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
+import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
+import { IntentPredictionChip } from "@/components/mind/intent-prediction-chip";
+import { pushComposerText, pushVoiceChunk } from "@/lib/intent";
+import {
+  ComposerBar,
+  type ComposerModelId,
+  DictationPill as PreviewDictationPill,
+  LiveSpeakControl,
+  LiveVoiceBar as PresentationalLiveVoiceBar,
+  VoiceModeStage,
+} from "@/components/mind/voice-ui";
+
+const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
+const LazyShortcutSheetHost = lazy(() =>
+  import("@/components/mind/shortcut-sheet").then((mod) => ({ default: mod.ShortcutSheetHost })),
+);
+const LazyCameraCapture = lazy(() =>
+  import("@/components/mind/media/camera-capture").then((mod) => ({ default: mod.CameraCapture })),
+);
+const LazyCloudPicker = lazy(() =>
+  import("@/components/mind/media/cloud-picker").then((mod) => ({ default: mod.CloudPicker })),
+);
+
+import { DICTATE_MINT_TIMEOUT_MS, withDictateTimeout } from "@/components/mind/live-voice-bar/dictate-timeout";
+import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
+import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
+import { formatVoiceClientError } from "@/lib/mind/voice/errors";
+import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
+import {
+  getServerVoiceMode,
+  getVoiceMode,
+  hydrateVoiceModeStore,
+  setVoiceModeStore,
+  subscribeVoiceMode,
+} from "@/lib/mind/voice/mode-store";
+import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
+import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
+import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
+import { formatMicCaptureError, mapBrowserSpeechError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
+import {
+  matchesVoiceToggleShortcut,
+  voiceMicAriaLabel,
+  VOICE_TOGGLE_SHORTCUT,
+} from "@/lib/mind/voice/shortcut";
+import {
+  createHoldToTalkController,
+  shouldToggleVoiceShortcut,
+} from "@/lib/mind/voice/hold-to-talk";
+import { clampLiveTranscript, shouldClearLiveTranscriptOnModeSwitch } from "@/lib/mind/voice/live-transcript";
+import {
+  DEFAULT_XAI_VOICE,
+  type XaiBuiltinVoice,
+  readStoredVoiceChoice,
+  writeStoredVoiceChoice,
+} from "@/lib/mind/voice/voices";
+import type { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
+import { appendDictationText } from "@/lib/mind/voice/dictation";
+import {
+  createDictationMachine,
+  DICTATION_SILENCE_PEAK,
+  reduceDictation,
+  type DictationAction,
+  type DictationMachineState,
+} from "@/lib/mind/voice/dictation-machine";
+import { dictationTranscriptForTestAudio, readVoiceTestAudioParam, resolveVoiceTestAudioUrl } from "@/lib/mind/voice/test-audio";
+import { providerUnconfiguredMessage, shouldForceVoiceUnconfigured } from "@/lib/mind/voice/provider-unconfigured";
+import {
+  createVoiceConnectState,
+  enterStage,
+  failStage,
+  normalizeVoiceConnectError,
+  stageTimeoutMessage,
+  VOICE_STAGE_TIMEOUT_MS,
+  type VoiceConnectStage,
+} from "@/lib/mind/voice/connection-stages";
+import {
+  createBargeInState,
+  reduceBargeIn,
+  shouldCutPlayback,
+  SPEAKING_MIN_VISIBLE_MS,
+  type BargeInAction,
+} from "@/lib/mind/voice/barge-in";
+import {
+  allowCancel,
+  beginFlight,
+  completeSpeak,
+  createCancelBudget,
+  createFlightGate,
+  createSpeakQueue,
+  createTranscriptDedupe,
+  endFlight,
+  enqueueSpeak,
+  nextMuteState,
+  secretNeedsRemint,
+  shouldAcceptTranscript,
+  toggleMute,
+} from "@/lib/mind/voice/spam-guard";
+import { buildVoiceChatTurn } from "@/lib/mind/voice/voice-chat-turn";
+import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
+import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
+import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
+import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
-import { CameraCapture } from "@/components/mind/media/camera-capture";
+import type { CloudPickerAttach } from "@/components/mind/media/cloud-picker";
+import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
-import { historyTextForImages, type ImageAttachment } from "@/lib/mind/media";
+import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, collectClipboardImageFiles, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -55,7 +172,19 @@ import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
 import { relevantMemories } from "@/lib/mind/memory";
 import { databaseMode } from "@/lib/mind/persistence";
-import { runAgentTurn, type AgentTool } from "@/lib/mind/orchestrator";
+import { runAgentTurn, type AgentTool, type ToolEvent } from "@/lib/mind/orchestrator";
+import {
+  agentActivityFromTimeline,
+  applyToolEvent,
+  attachAuditIds,
+  connectedServicesRail,
+  elapsedMs,
+  formatElapsed,
+  recentTasksFromAudit,
+  systemStatusRail,
+  timelineCounts,
+  type ToolTimelineRow,
+} from "@/lib/mind/tools-timeline";
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
@@ -64,6 +193,43 @@ import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers"
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import { COMPOSER_MODES, composerModeToModelTier, loadComposerEffort, modelTierToComposerMode, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { canSend } from "@/lib/mind/send-gate";
+import { saveFailureMessage } from "@/lib/mind/save-error";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  loadVoiceSettings,
+  personalityPrompt,
+  saveVoiceSettings,
+  savedOnThisDeviceNotice,
+  unusedUntilLiveNotice,
+  type VoiceActivation,
+  type VoicePersonality,
+  type VoiceSettings,
+  type VoiceSpeed,
+} from "@/lib/mind/voice/settings";
+import {
+  classifyHonestFailure,
+  honestFailureAuditAction,
+  HONEST_FAILURE_MESSAGES,
+  imageGenerationFailure,
+  imagineRetryParams,
+  isAuthRequiredNotice,
+  mcpToolFailure,
+  MCP_AUTH_REQUIRED_NOTICE,
+  normalizeClientFailureMessage,
+  shouldShowFailureBanner,
+  type HonestFailureKind,
+} from "@/lib/mind/failure-states";
+import {
+  commandSendPlan,
+  historyForDeliver,
+  onceRetry,
+  resolveChatMessages,
+  shouldBlockForEmergencyStop,
+  snapshotImages,
+} from "@/lib/mind/retry-fidelity";
+import { McpListStatusRows, loadMcpList, onceListRetry, type McpListServer, type McpListState } from "@/lib/mind/mcp-list-state";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
   addLocalFile,
@@ -78,6 +244,7 @@ import {
   reviseMemory,
   unpackWorkspace,
 } from "@/lib/mind/workspace";
+import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 
 type View =
   | "command"
@@ -96,7 +263,8 @@ type View =
   | "activity"
   | "help"
   | "skills"
-  | "settings";
+  | "settings"
+  | "dashboard";
 
 type Pending = {
   id: string;
@@ -123,6 +291,28 @@ const EXTERNAL = [
 ];
 
 type Staged = { name: string; text: string };
+
+const NAV_ICON_SRC: Partial<Record<View, string>> = {
+  command: "/icons/chat.svg",
+  agents: "/icons/bots.svg",
+  build: "/icons/build.svg",
+  projects: "/icons/projects.svg",
+  research: "/icons/research.svg",
+  files: "/icons/library.svg",
+  chat: "/icons/thread.svg",
+  runs: "/icons/runs.svg",
+  connected: "/icons/systems.svg",
+  tools: "/icons/systems.svg",
+  scheduled: "/icons/systems.svg",
+  skills: "/icons/systems.svg",
+  memory: "/icons/library.svg",
+  dashboard: "/icons/systems.svg",
+  activity: "/icons/runs.svg",
+  settings: "/icons/systems.svg",
+  help: "/icons/systems.svg",
+  integrations: "/icons/systems.svg",
+};
+
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
@@ -160,6 +350,13 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
 
 const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
+/** Shown on an empty Build view. Click selects only — mounting this list does not run a tool. */
+const BUILD_SUGGESTIONS = [
+  { id: "outline", label: "Outline a change" },
+  { id: "tests", label: "Plan the tests" },
+  { id: "notes", label: "Review a local note" },
+] as const;
+
 const TITLES: Record<View, string> = {
   command: "Chat",
   chat: "Thread",
@@ -178,6 +375,7 @@ const TITLES: Record<View, string> = {
   activity: "Activity",
   help: "Help",
   settings: "Settings",
+  dashboard: "Dashboard",
 };
 
 function statusWord(status: CapabilityStatus) {
@@ -214,6 +412,12 @@ function humanAction(action: string) {
     create_project: "Project created",
     archive_memory: "Note archived",
     message_sent: "Grok replied",
+    chat_failed: "Chat failed",
+    open_page_failed: "Open page failed",
+    research_failed: "Research failed",
+    model_unavailable: "Model unavailable",
+    database_write_failed: "Database write failed",
+    emergency_stop_active: "Emergency stop blocked an action",
     rea_doctor: "REA doctor ran",
     rea_inspect: "REA inspected a file",
   };
@@ -233,8 +437,67 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, publishServerCopy } = useMindWorkspace();
+type SavedMcpServer = {
+  id: string;
+  label: string;
+  host: string;
+  state: "unchecked" | "connected" | "failed";
+  tools: { name: string; description: string }[];
+  error: string;
+};
+
+function isSavedMcpServer(server: unknown): server is SavedMcpServer {
+  if (!server || typeof server !== "object") return false;
+  const row = server as Partial<SavedMcpServer>;
+  return (
+    typeof row.id === "string" &&
+    typeof row.label === "string" &&
+    typeof row.host === "string" &&
+    (row.state === "unchecked" || row.state === "connected" || row.state === "failed") &&
+    Array.isArray(row.tools) &&
+    typeof row.error === "string"
+  );
+}
+
+/** Live transcript for Retry: keep a flushed user turn, but do not resurrect a reply the caller just removed. */
+function selectRetryMessages(passed: Msg[], live: Msg[]): Msg[] {
+  if (live.length === passed.length) {
+    const passedLast = passed.at(-1);
+    const liveLast = live.at(-1);
+    if (passedLast?.role === "user" && liveLast?.role === "user" && passedLast.content !== liveLast.content) return passed;
+    return live;
+  }
+  if (live.length === passed.length + 1 && live.at(-1)?.role === "user") return live;
+  if (passed.length + 1 === live.length && passed.at(-1)?.role === "user" && live.at(-1)?.role === "assistant") return passed;
+  if (passed.length < live.length && passed.at(-1)?.role === "user") return passed;
+  return live.length >= passed.length ? live : passed;
+}
+
+type BrowserSpeechRec = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  abort?: () => void;
+  onresult: ((event: { results: ArrayLike<{ isFinal?: boolean; 0?: { transcript?: string } }> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+
+function browserSpeechCtor(): (new () => BrowserSpeechRec) | null {
+  if (typeof window === "undefined") return null;
+  const host = window as Window & {
+    SpeechRecognition?: new () => BrowserSpeechRec;
+    webkitSpeechRecognition?: new () => BrowserSpeechRec;
+  };
+  return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
+}
+
+export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types").Workspace | null } = {}) {
+  const serverWorkspace = props.serverWorkspace ?? null;
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, cloudHydrating } = useMindWorkspace(serverWorkspace);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -248,15 +511,83 @@ export function CommandApp() {
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
   const voiceNext = useRef(false);
+  const voiceSession = useRef<RealtimeVoiceSession | null>(null);
+  const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
+  const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
+  const [orchestratorDetail, setOrchestratorDetail] = useState<string | null>(null);
+  const [liveSessionActive, setLiveSessionActive] = useState(false);
+  const [liveSessionUiAttr, setLiveSessionUiAttr] = useState<LiveVoiceUiAttr | "off">("off");
+  const [orchestratorDetailTone, setOrchestratorDetailTone] = useState<"muted" | "warn" | "danger">("muted");
+  const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceLevel, setVoiceLevel] = useState(0);
+  const [voiceLiveTranscript, setVoiceLiveTranscript] = useState("");
+  const [voiceChoice, setVoiceChoice] = useState<XaiBuiltinVoice>(DEFAULT_XAI_VOICE);
+  const voiceChoiceRef = useRef<XaiBuiltinVoice>(DEFAULT_XAI_VOICE);
+  const listenMintAbortRef = useRef<AbortController | null>(null);
+  const speakAbortRef = useRef<AbortController | null>(null);
+  const speakGenRef = useRef(0);
+  const listenGuardRef = useRef(createListenGuard());
+  const voiceReconnectRef = useRef(0);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const [dictation, setDictation] = useState<DictationMachineState>(() => createDictationMachine(""));
+  const dictationRef = useRef(dictation);
+  dictationRef.current = dictation;
+  const dictationRecRef = useRef<BrowserSpeechRec | null>(null);
+  const dictationBufferRef = useRef("");
+  const userStoppedDictationRef = useRef(false);
+  const [dictationElapsed, setDictationElapsed] = useState(0);
+  const [dictationLevel, setDictationLevel] = useState(0);
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
+  const overlayOpenRef = useRef(false);
+  overlayOpenRef.current = voiceOverlayOpen;
+  const [overlayPhase, setOverlayPhase] = useState<VoiceOverlayPhase>("idle");
+  const [overlayError, setOverlayError] = useState<string | null>(null);
+  const [overlayNotice, setOverlayNotice] = useState<string | null>(null);
+  const connectStateRef = useRef(createVoiceConnectState());
+  const bargeRef = useRef(createBargeInState());
+  const holdInterruptedRef = useRef(false);
+  const lastLevelAtRef = useRef(0);
+  const lastSessionStatusRef = useRef<string>("idle");
+  const transcriptDedupeRef = useRef(createTranscriptDedupe());
+  const speakQueueRef = useRef(createSpeakQueue());
+  const flightGateRef = useRef(createFlightGate());
+  const voiceCancelBudgetRef = useRef(createCancelBudget());
+  const voiceMutedRef = useRef(false);
+  voiceMutedRef.current = voiceMuted;
+  const stageTimerRef = useRef(0);
+  const stageGenRef = useRef(0);
+  const voiceActiveRef = useRef(false);
+  const openVoiceOverlayRef = useRef<(() => void) | null>(null);
+  const closeVoiceOverlayRef = useRef<() => void>(() => undefined);
+  const cancelDictationRef = useRef<(announce?: boolean) => void>(() => undefined);
   const turnGen = useRef(0);
+  const turnInFlight = useRef(false);
+  const imagineInFlight = useRef(false);
+  const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null } | null>(null);
+  const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
+  const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
+  const [timelineTickMs, setTimelineTickMs] = useState(0);
+  const [statusSignedIn, setStatusSignedIn] = useState<boolean | null>(null);
+  const [databaseConfigured, setDatabaseConfigured] = useState(false);
+  const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
+  const wsRef = useRef(ws);
+  wsRef.current = ws;
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
+  const [pcAgentOnline, setPcAgentOnline] = useState(false);
+  const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
+  const [buildPick, setBuildPick] = useState<string | null>(null);
   const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
@@ -265,6 +596,7 @@ export function CommandApp() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
   const [agentLog, setAgentLog] = useState<{ step: number; tool: string; ok: boolean; detail: string }[]>([]);
+  const [agentImages, setAgentImages] = useState<ImageAttachment[]>([]);
   const agentAbort = useRef<AbortController | null>(null);
   const [system, setSystem] = useState("Checking isolation.");
   const [checkedAt, setCheckedAt] = useState("");
@@ -296,7 +628,11 @@ export function CommandApp() {
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [imagineModel, setImagineModel] = useState<GrokImagineModel>(GROK_IMAGINE_MODEL);
+  const [imagineBusy, setImagineBusy] = useState(false);
+  const imagineTabLockRef = useRef(createImagineTabLock("composer"));
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -304,13 +640,213 @@ export function CommandApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
+
+  useEffect(() => {
+    // Single store: hydrate from localStorage once; every badge reads the same snapshot.
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    hydrateVoiceModeStore(storage);
+    const choice = readStoredVoiceChoice(storage);
+    voiceChoiceRef.current = choice;
+    setVoiceChoice(choice);
+  }, []);
+
+  useEffect(() => {
+    if (view !== "build") return;
+    let cancel = false;
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    const controller = new AbortController();
+    void fetch(`${prefix}/api/mind/pc/status`, {
+      method: "GET",
+      signal: controller.signal,
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as { ok?: boolean; onlineAgentIds?: unknown; detail?: unknown };
+      })
+      .then((body) => {
+        if (cancel) return;
+        const online = body?.ok && Array.isArray(body.onlineAgentIds) ? body.onlineAgentIds.length : 0;
+        setPcAgentOnline(online > 0);
+        setPcAgentDetail(
+          body?.ok && typeof body.detail === "string" && body.detail.trim()
+            ? body.detail
+            : online > 0
+              ? `${online} paired PC agent(s) online.`
+              : "No paired PC agent is online.",
+        );
+      })
+      .catch(() => {
+        if (cancel) return;
+        setPcAgentOnline(false);
+        setPcAgentDetail("No paired PC agent is online.");
+      });
+    return () => {
+      cancel = true;
+      controller.abort();
+    };
+  }, [view]);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+
+  useEffect(() => {
+    if (dictation.phase !== "recording") {
+      setDictationElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    setDictationElapsed(0);
+    const id = window.setInterval(() => {
+      setDictationElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [dictation.phase]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "amcos.voice.choice.v1") return;
+      const next = readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage);
+      voiceChoiceRef.current = next;
+      setVoiceChoice(next);
+      voiceSession.current?.setVoice(next);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : null;
+    if (!devices || typeof devices.addEventListener !== "function") return;
+    const onDeviceChange = () => {
+      const session = voiceSession.current;
+      if (!session?.isCapturing) return;
+      // Mic unplugged / device change while listening — stop cleanly, no stuck Listening.
+      stopVoiceSession();
+      setError("The microphone changed or was removed. Voice capture stopped.");
+      setNotice("The microphone changed or was removed. Voice capture stopped.");
+    };
+    devices.addEventListener("devicechange", onDeviceChange);
+    return () => devices.removeEventListener("devicechange", onDeviceChange);
+  }, []);
+
+  function applyVoiceMode(next: VoiceRoutingMode) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const previous = voiceModeRef.current;
+    // commitVoiceMode persists; setVoiceModeStore keeps every badge on the same value.
+    const committed = setVoiceModeStore(commitVoiceMode(next, storage), storage);
+    voiceModeRef.current = committed;
+    // Mode toggle always cuts local Speak / TTS immediately (live session also cancels via store subscribe).
+    interruptSpeakPlayback();
+    if (shouldClearLiveTranscriptOnModeSwitch(previous, committed)) {
+      setVoiceLiveTranscript("");
+    }
+    if (committed === "orchestrator") {
+      const model =
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || "qwen2.5:0.5b";
+      const baseUrl =
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) ||
+        "http://127.0.0.1:11434";
+      void probeOllamaForBadge({ model, baseUrl }).then((status) => {
+        setOrchestratorDetail(status.detail);
+        setOrchestratorDetailTone(status.detailTone);
+        if (!status.ok) setNotice(status.detail || "Ollama conductor unreachable.");
+      });
+    } else {
+      setOrchestratorDetail(null);
+      setOrchestratorDetailTone("muted");
+    }
+  }
+
+  function applyVoiceChoice(next: XaiBuiltinVoice) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const committed = writeStoredVoiceChoice(next, storage);
+    voiceChoiceRef.current = committed;
+    setVoiceChoice(committed);
+    voiceSession.current?.setVoice(committed);
+  }
+
+  function chooseComposerEffort(mode: ComposerModeId) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    saveComposerEffort(storage, mode);
+    setComposerEffort(mode);
+    setModelTier(composerModeToModelTier(mode));
+    const resolved = resolveSendPath(mode);
+    if (resolved.notice) setNotice(resolved.notice);
+    if (mode === "build") setView("build");
+  }
+
+  function chooseModelTier(tier: ModelTier) {
+    setModelTier(tier);
+    const mode = modelTierToComposerMode(tier);
+    setComposerEffort(mode);
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    saveComposerEffort(storage, mode);
+  }
+
+  function interruptSpeakPlayback() {
+    interruptMessageSpeak({
+      sharedAudio: sharedAudioOutput,
+      abortSpeak: speakAbortRef.current,
+      speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
+    });
+    speakAbortRef.current = null;
+    setSpeaking(false);
+  }
+
+  useEffect(() => {
+    const releaseVoice = () => {
+      interruptMessageSpeak({
+        sharedAudio: sharedAudioOutput,
+        abortSpeak: speakAbortRef.current,
+        speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
+      });
+      listenMintAbortRef.current?.abort();
+      listenMintAbortRef.current = null;
+      voiceSession.current?.close();
+      voiceSession.current = null;
+      setVoiceListening(false);
+      setVoiceLevel(0);
+      setVoiceLiveTranscript("");
+      setSpeaking(false);
+      listenGuardRef.current.end();
+      clearStageTimeout();
+      voiceActiveRef.current = false;
+      speakQueueRef.current.active = null;
+      speakQueueRef.current.pending = null;
+      cancelDictationRef.current(false);
+      overlayOpenRef.current = false;
+      setVoiceOverlayOpen(false);
+      setOverlayPhase("idle");
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") releaseVoice();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", releaseVoice);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", releaseVoice);
+      releaseVoice();
+    };
+  }, []);
+
   const [reaBusy, setReaBusy] = useState(false);
   const [reaReport, setReaReport] = useState<string | null>(null);
   const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
   const [notionQuery, setNotionQuery] = useState("");
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
-  const [mcpServers, setMcpServers] = useState<{ id: string; label: string; host: string; state: "unchecked" | "connected" | "failed"; tools: { name: string; description: string }[]; error: string }[]>([]);
+  const [mcpServers, setMcpServers] = useState<SavedMcpServer[]>([]);
+  const [mcpRegistry, setMcpRegistry] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [mcpRegistryListState, setMcpRegistryListState] = useState<McpListState>({ status: "loading" });
+  const [mcpSavedListState, setMcpSavedListState] = useState<McpListState>({ status: "loading" });
+  const mcpRegistryRetryRef = useRef<(() => void) | null>(null);
+  const mcpSavedRetryRef = useRef<(() => void) | null>(null);
+  const [toolResultStatus, setToolResultStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
@@ -325,11 +861,27 @@ export function CommandApp() {
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
 
   useEffect(() => {
+    if (!focusAuditId || view !== "activity") return;
+    const node = document.getElementById(`audit-${focusAuditId}`);
+    node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focusAuditId, view, ws.audit]);
+
+  const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
+  useEffect(() => {
+    if (!timelineRunning) return;
+    setTimelineTickMs(Date.now());
+    const id = window.setInterval(() => setTimelineTickMs(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [timelineRunning]);
+
+  useEffect(() => {
     if (!ready) return;
     mindStatus()
       .then((status) => {
         setGrokConfigured(status.grok === "configured");
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
+        setStatusSignedIn(status.signedIn === true);
+        setDatabaseConfigured(status.databaseBackend === "postgres");
         const mode = databaseMode(status.databaseBackend === "postgres" || status.databaseBackend === "refused" ? status.databaseBackend : "memory");
         setDatabasePill(mode.pill);
         setDatabaseDetail(mode.detail);
@@ -348,9 +900,69 @@ export function CommandApp() {
     notionStatus()
       .then((status) => setNotion(status))
       .catch(() => setNotion({ state: "unconfigured", detail: "Notion status could not be read. Nothing was searched or updated." }));
-    mcpList()
-      .then((result) => setMcpServers(result.servers))
-      .catch(() => setMcpServers([]));
+    const loadMcpLists = () => {
+      const loadRegistry = () => {
+        setMcpRegistryListState({ status: "loading" });
+        void loadMcpList(() => mcpRegistryList()).then((next) => {
+          setMcpRegistryListState(next);
+          if (next.status === "ready") {
+            setMcpRegistry(next.servers);
+            mcpRegistryRetryRef.current = null;
+            return;
+          }
+          setMcpRegistry([]);
+          if (next.status !== "error") return;
+          const retry = onceListRetry(loadRegistry);
+          mcpRegistryRetryRef.current = retry;
+          if (!shouldShowFailureBanner(next.message)) {
+            setNotice(isAuthRequiredNotice(next.message) ? MCP_AUTH_REQUIRED_NOTICE : next.message);
+            return;
+          }
+          reportFailureRef.current(next.message, next.kind, "mcp:registry", retry);
+        });
+      };
+      const loadSaved = () => {
+        setMcpSavedListState({ status: "loading" });
+        void loadMcpList(() => mcpList()).then((next) => {
+          if (next.status === "ready" && next.servers.every(isSavedMcpServer)) {
+            setMcpSavedListState(next);
+            setMcpServers(next.servers as unknown as SavedMcpServer[]);
+            mcpSavedRetryRef.current = null;
+            return;
+          }
+          if (next.status === "ready") {
+            const failed = {
+              status: "error" as const,
+              kind: "network_failure" as const,
+              message: `${HONEST_FAILURE_MESSAGES.mcp_list_failed} (response was not JSON)`,
+            };
+            setMcpSavedListState(failed);
+            setMcpServers([]);
+            const retry = onceListRetry(loadSaved);
+            mcpSavedRetryRef.current = retry;
+            if (!shouldShowFailureBanner(failed.message)) {
+              setNotice(isAuthRequiredNotice(failed.message) ? MCP_AUTH_REQUIRED_NOTICE : failed.message);
+              return;
+            }
+            reportFailureRef.current(failed.message, failed.kind, "mcp:list", retry);
+            return;
+          }
+          setMcpSavedListState(next);
+          setMcpServers([]);
+          if (next.status !== "error") return;
+          const retry = onceListRetry(loadSaved);
+          mcpSavedRetryRef.current = retry;
+          if (!shouldShowFailureBanner(next.message)) {
+            setNotice(isAuthRequiredNotice(next.message) ? MCP_AUTH_REQUIRED_NOTICE : next.message);
+            return;
+          }
+          reportFailureRef.current(next.message, next.kind, "mcp:list", retry);
+        });
+      };
+      loadRegistry();
+      loadSaved();
+    };
+    loadMcpLists();
     try {
       const saved = localStorage.getItem("amcos.skills.v1");
       if (saved) setEnabledSkills(JSON.parse(saved) as Record<string, boolean>);
@@ -363,7 +975,15 @@ export function CommandApp() {
     try {
       if (localStorage.getItem("amcos.provider.v1") === "grok") setProviderChoice("grok");
       const tier = localStorage.getItem("amcos.modelTier.v1");
-      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) setModelTier(tier as ModelTier);
+      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) {
+        const next = tier as ModelTier;
+        setModelTier(next);
+        setComposerEffort(modelTierToComposerMode(next));
+      } else {
+        const effort = loadComposerEffort(localStorage);
+        setComposerEffort(effort);
+        setModelTier(composerModeToModelTier(effort));
+      }
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
     } catch {
@@ -403,10 +1023,58 @@ export function CommandApp() {
         setPaletteOpen(true);
         searchRef.current?.focus();
       }
-      if (event.key === "Escape") setPaletteOpen(false);
+      if (event.key === "Escape") {
+        if (overlayOpenRef.current) {
+          event.preventDefault();
+          closeVoiceOverlayRef.current();
+          return;
+        }
+        setPaletteOpen(false);
+      }
+      if (matchesVoiceToggleShortcut(event) && shouldToggleVoiceShortcut(event, document)) {
+        event.preventDefault();
+        void listenRef.current({ mode: "toggle" });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const hold = createHoldToTalkController({
+      start: () => {
+        void listenRef.current({ mode: "start" });
+      },
+      stop: () => {
+        stopVoiceSession();
+        setNotice("Voice capture stopped.");
+      },
+      isListening: () =>
+        Boolean(
+          voiceSession.current?.isOpen ||
+            voiceSession.current?.isCapturing ||
+            listenMintAbortRef.current,
+        ),
+    });
+    // stopVoiceSession is stable enough via refs; hold controller owns blur/hide.
+    const onDown = (event: KeyboardEvent) => hold.onKeyDown(event);
+    const onUp = (event: KeyboardEvent) => hold.onKeyUp(event);
+    const onBlur = () => hold.onBlurOrHide();
+    const onVis = () => {
+      if (document.visibilityState === "hidden") hold.onBlurOrHide();
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVis);
+      hold.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hold wired once; listenRef/stopVoiceSession use refs
   }, []);
 
   useEffect(() => {
@@ -562,11 +1230,25 @@ export function CommandApp() {
     ];
   }
 
+  function observeToolEvent(event: ToolEvent) {
+    const atMs = typeof event.atMs === "number" ? event.atMs : Date.now();
+    setToolTimeline((current) => applyToolEvent(current, { ...event, atMs }));
+    if (event.status === "running" || event.status === "queued" || event.status === "awaiting_confirmation") return;
+    const entryId = crypto.randomUUID();
+    setToolTimeline((current) => attachAuditIds(current, { [event.toolId]: entryId }));
+    setWs((prev) => ({
+      ...prev,
+      audit: [{ id: entryId, at: new Date(atMs).toISOString(), action: event.toolId, target: event.toolId, result: event.text.slice(0, 500) }, ...prev.audit].slice(0, 200),
+    }));
+  }
+
   function settleIntent(chat: Chat, text: string, source: Workspace, action: "chat" | "voice" = "chat"): boolean {
     const intent = interpretCommand(text, source.agents, commandMode);
     if (intent.kind === "chat") return false;
     if (intent.kind === "local" || intent.kind === "skill") {
       const toolId = intent.kind === "skill" ? "search_skills" : intent.tool;
+      setToolTimeline([]);
+      clearFailure();
       const turn = runAgentTurn({
         userId: "local-owner",
         sessionId: chat.id,
@@ -575,6 +1257,7 @@ export function CommandApp() {
         tools: agentTools(source),
         toolId,
         nowMs: Date.now(),
+        onEvent: observeToolEvent,
       });
       if (turn.status === "awaiting_confirmation" && turn.confirm) {
         const grantNow = turn.confirm;
@@ -585,6 +1268,7 @@ export function CommandApp() {
           detail: turn.text,
           confirm: "This runs only the action you just asked for.",
           run: () => {
+            setToolTimeline([]);
             const again = runAgentTurn({
               userId: "local-owner",
               sessionId: chat.id,
@@ -594,8 +1278,14 @@ export function CommandApp() {
               toolId,
               confirm: grantNow,
               nowMs: Date.now(),
+              onEvent: observeToolEvent,
             });
             recordToolTurn(chat, text, again.text, toolId === "run_due_schedules" && again.status === "completed" ? (prev) => runDueSchedules(prev, new Date().toISOString()) : undefined, { tool: toolId, ok: again.status === "completed", action });
+            if (again.status === "failed" || again.status === "timed_out" || again.status === "cancelled") {
+              reportFailure(again.text, "tool_failed", toolId, () => {
+                settleIntent(chat, text, source, action);
+              });
+            }
             setNotice("The confirmed action finished on this device. Hosted realtime is not connected.");
           },
         });
@@ -604,6 +1294,11 @@ export function CommandApp() {
       const notes = chat.memory === "on" ? relevantMemories(source.memories, text) : [];
       const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
       recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
+      if (turn.status === "failed" || turn.status === "timed_out" || turn.status === "cancelled") {
+        reportFailure(turn.text, "tool_failed", toolId, () => {
+          settleIntent(chat, text, source, action);
+        });
+      }
       setNotice(turn.status === "completed" ? "The agent finished on this device. Hosted realtime is not connected." : turn.text);
       return true;
     }
@@ -692,13 +1387,24 @@ export function CommandApp() {
   }
 
   async function askMcp(chat: Chat, text: string, confirmed = false) {
+    if (mcpInFlight.current) return;
+    mcpInFlight.current = true;
     setBusy(true);
     setError(null);
+    clearFailure();
+    setToolResultStatus("running");
     try {
       const result = await mcpCommand({ data: { text, confirmed } });
       setBusy(false);
-      setMcpServers(result.servers);
+      if (result.servers.every(isSavedMcpServer)) {
+        setMcpServers(result.servers);
+        setMcpSavedListState({
+          status: "ready",
+          servers: result.servers.map((server) => ({ id: server.id, label: server.label, kind: "saved", enabled: server.state !== "failed" })),
+        });
+      }
       if (result.needsConfirmation) {
+        setToolResultStatus("idle");
         setPending({
           id: "mcp-call",
           kind: "mcp-call",
@@ -711,14 +1417,43 @@ export function CommandApp() {
         });
         return;
       }
-      recordToolTurn(chat, text, [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.");
+      const reply = [result.error, result.text].filter(Boolean).join("\n") || "MCP returned nothing.";
+      const status = result.ok ? "ok" : "error";
+      setToolResultStatus(status);
+      const failure = mcpToolFailure({
+        ok: result.ok,
+        status,
+        text: result.text,
+        error: result.error,
+        needsConfirmation: result.needsConfirmation,
+      });
+      if (failure) {
+        reportFailure(failure.message, failure.kind, failure.target, () => {
+          void askMcp(chat, text, confirmed);
+        });
+      }
+      recordToolTurn(chat, text, `[${status}] ${reply}`, undefined, { tool: "mcp", ok: result.ok, action: "chat" });
     } catch {
       setBusy(false);
-      setError("The MCP server could not be reached. Nothing was called.");
+      setToolResultStatus("error");
+      const message = HONEST_FAILURE_MESSAGES.mcp_unreachable;
+      reportFailure(message, "mcp_tool_failed", "mcp", () => {
+        void askMcp(chat, text, confirmed);
+      });
+    } finally {
+      mcpInFlight.current = false;
     }
   }
 
-  async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []) {
+  async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []): Promise<string | null> {
+    if (turnInFlight.current) return null;
+    const snapped = snapshotImages(images);
+    if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
+      reportEmergencyStop(chat.id, () => {
+        void deliver(chat, text, wsRef.current, resume, snapped);
+      });
+      return null;
+    }
     let routed = chosenProvider(providerChoice, grokConfigured);
     if (!routed.ok) {
       const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
@@ -728,19 +1463,31 @@ export function CommandApp() {
       }
     }
     if (!routed.ok) {
-      setError(routed.error);
-      return;
+      reportFailure(routed.error, "model_unavailable", "provider", () => {
+        void deliver(chat, text, wsRef.current, resume, snapped);
+      });
+      return null;
     }
-    const title = resume || chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
-    const history = (resume ? chat.messages.slice(0, -1) : chat.messages).slice(-12);
+    const live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    const messages = selectRetryMessages(chat.messages, live);
+    if (resume && messages.at(-1)?.role === "assistant") return null;
+    const history = historyForDeliver(messages, resume);
+    const retryThisTurn = () => {
+      if (turnInFlight.current) return;
+      const liveNow = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+      const chosen = selectRetryMessages(chat.messages, liveNow);
+      if (chosen.at(-1)?.role === "assistant") return;
+      void deliver(chat, text, wsRef.current, true, snapped);
+    };
+    const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     if (!resume) {
-      const displayText = historyTextForImages(text, images);
+      const displayText = historyTextForImages(text, snapped);
       const userMsg = {
         id: crypto.randomUUID(),
         role: "user" as const,
         content: displayText,
         at: new Date().toISOString(),
-        images: images.length ? images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
+        images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
       };
       setWs((prev) => ({
         ...prev,
@@ -752,6 +1499,8 @@ export function CommandApp() {
     setBusy(true);
     setLiveText("");
     setError(null);
+    setFailure(null);
+    setToolTimeline([]);
     turnAbort.current?.abort();
     const generation = ++turnGen.current;
     const controller = new AbortController();
@@ -760,6 +1509,7 @@ export function CommandApp() {
     const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    turnInFlight.current = true;
     try {
       const result = await consumeMindTurn({
         url: `${prefix}/api/mind/turn`,
@@ -771,25 +1521,37 @@ export function CommandApp() {
         body: {
           text,
           memory: chat.memory,
-          halted: source.halted,
-          history: history.map((item) => ({ role: item.role, content: item.content })),
+          halted: wsRef.current.halted,
+          history: history.map((item) => ({
+            role: item.role,
+            content: item.content,
+            images: item.images
+              ?.filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+              .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
+          })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
           modelTier,
-          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         },
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
           setLiveText((current) => current + chunk);
         },
       });
-      if (generation !== turnGen.current) return;
+      if (generation !== turnGen.current) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (!shouldStoreReply(result)) {
-        setError(result.ok ? "Grok returned an empty reply." : result.error);
-        return;
+        const message = result.ok ? "Grok returned an empty reply." : result.error;
+        if (message === STOPPED_REPLY) {
+          setError(message);
+          return null;
+        }
+        const kind = classifyHonestFailure(message);
+        reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+        return null;
       }
       setWs((prev) => {
         const next = {
@@ -806,6 +1568,12 @@ export function CommandApp() {
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      ...(result.memorySaved === true
+                        ? {
+                            memorySaved: true as const,
+                            savedMemoryId: result.savedMemoryId ?? null,
+                          }
+                        : {}),
                     },
                   ],
                   retrievalLog: [{ at: new Date().toISOString(), ids: result.usedIds }, ...item.retrievalLog].slice(0, 20),
@@ -840,12 +1608,22 @@ export function CommandApp() {
           tierLabel,
         );
       });
+      return result.text;
     } catch (caught) {
-      if (generation !== turnGen.current) return;
+      if (generation !== turnGen.current) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
-      setError(caught instanceof Error && caught.message === "Unauthorized" ? "Sign in is required." : caught instanceof Error ? caught.message : "Grok could not be reached.");
+      if (controller.signal.aborted) {
+        setError(STOPPED_REPLY);
+        return null;
+      }
+      const message = normalizeClientFailureMessage(caught);
+      const kind = classifyHonestFailure(message);
+      reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+      return null;
+    } finally {
+      turnInFlight.current = false;
     }
   }
 
@@ -864,53 +1642,190 @@ export function CommandApp() {
     setError(null);
   }
 
+
+
+  function useImageAsAgentInput(src: string, alt: string) {
+    if (!src.startsWith("data:image/")) {
+      setError("Only in-chat data URLs can be used as Agent vision input.");
+      return;
+    }
+    setPendingImages((prev) => {
+      if (prev.some((image) => image.dataUrl === src)) return prev;
+      if (prev.length >= 4) {
+        setError("You can attach up to 4 images per message.");
+        return prev;
+      }
+      return [...prev, { dataUrl: src, name: alt || `agent-input-${prev.length + 1}.jpg` }];
+    });
+    setView("agents");
+    setNotice("Image staged for Agent vision. Add a goal and run the planner.");
+  }
+
+  function acceptAgentImageDrop(event: React.DragEvent) {
+    event.preventDefault();
+    const dt = event.dataTransfer;
+    if (!dt) return;
+    const raw = dt.getData(AMCOS_IMAGE_DRAG_TYPE);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { dataUrl?: string; name?: string };
+        if (typeof parsed.dataUrl === "string") {
+          useImageAsAgentInput(parsed.dataUrl, parsed.name || "dragged-image");
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    const files = Array.from(dt.files ?? []).filter((file) => (file.type || "").startsWith("image/"));
+    for (const file of files.slice(0, 4)) void addImageAttachment(file);
+    if (files.length) {
+      setView("agents");
+      setNotice("Dropped image staged for Agent vision.");
+    }
+  }
+
+  function downloadImageDataUrl(src: string, alt: string) {
+    const link = document.createElement("a");
+    const ext = src.startsWith("data:image/png") ? "png" : src.startsWith("data:image/webp") ? "webp" : "jpg";
+    link.href = src;
+    link.download = (alt || "image").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80) + "." + ext;
+    link.click();
+  }
+
+  function saveImageToComposer(src: string, alt: string) {
+    if (!src.startsWith("data:image/")) {
+      setError("Only in-chat data URLs can be saved back into the composer.");
+      return;
+    }
+    setPendingImages((prev) => {
+      if (prev.length >= 4) {
+        setError("You can attach up to 4 images per message.");
+        return prev;
+      }
+      return [...prev, { dataUrl: src, name: alt || `saved-${prev.length + 1}.jpg` }];
+    });
+    setNotice("Image saved into the composer for a follow-up turn.");
+  }
+
   function editMessage(messageId: string, text: string) {
-    if (!active || busy || ws.halted) return;
-    const revised = reviseUserTurn(ws, active.id, messageId, text);
+    if (!active || busy || turnInFlight.current) return;
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop(active.id, () => editMessage(messageId, text));
+      return;
+    }
+    const revised = reviseUserTurn(wsRef.current, active.id, messageId, text);
     if ("error" in revised) {
       setError(revised.error);
       return;
     }
     setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true);
+    void deliver(revised.chat, revised.text, revised.ws, true, snapshotImages(toImageAttachments(revised.images)));
   }
 
   function regenerate() {
-    if (!active || busy || ws.halted) return;
-    const prepared = prepareRegenerate(ws, active.id);
+    if (!active || busy || turnInFlight.current) return;
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop(active.id, () => regenerate());
+      return;
+    }
+    const prepared = prepareRegenerate(wsRef.current, active.id);
     if ("error" in prepared) {
       setError(prepared.error);
       return;
     }
     setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true);
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, snapshotImages(toImageAttachments(prepared.images)));
   }
 
   function retryLast() {
-    if (!active || busy || ws.halted) return;
-    const prepared = prepareRetry(ws, active.id);
+    if (!active || busy || turnInFlight.current) return;
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop(active.id, () => retryLast());
+      return;
+    }
+    const prepared = prepareRetry(wsRef.current, active.id);
     if ("error" in prepared) {
       setError(prepared.error);
       return;
     }
+    if (prepared.chat.messages.at(-1)?.role !== "user") return;
     setError(null);
-    void deliver(prepared.chat, prepared.text, ws, true);
+    void deliver(prepared.chat, prepared.text, wsRef.current, true, snapshotImages(toImageAttachments(prepared.images)));
   }
 
-  function exportActive() {
-    if (!active) return;
-    const packed = exportChat(ws, active.id);
-    if ("error" in packed) {
-      setError(packed.error);
+  function onComposerPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const imageFiles = collectClipboardImageFiles(event.clipboardData, 4);
+    if (imageFiles.length) {
+      event.preventDefault();
+      for (const file of imageFiles) void addImageAttachment(file);
       return;
     }
-    const blob = new Blob([packed.json], { type: "application/json" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = packed.filename;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
+    const html = event.clipboardData?.getData("text/html") || "";
+    const text = event.clipboardData?.getData("text/plain") || "";
+    const safeImg = extractSafeImageSrcFromHtml(html) || sanitizePastedImageCandidate(text);
+    if (html && /<img/i.test(html) && !safeImg) {
+      event.preventDefault();
+      setError("That paste included an unsafe image link (javascript/data HTML). It was blocked.");
+      return;
+    }
+    if (/^(javascript|vbscript):/i.test(text.trim())) {
+      event.preventDefault();
+      setError("That paste looked like a script URL. It was blocked.");
+      return;
+    }
+    if (html && !safeImg) {
+      // Prefer sanitized plain text over raw HTML blobs in the composer.
+      const cleaned = sanitizeComposerPasteText(html || text);
+      if (cleaned !== text) {
+        event.preventDefault();
+        const target = event.currentTarget;
+        const start = target.selectionStart ?? draft.length;
+        const end = target.selectionEnd ?? draft.length;
+        const next = draft.slice(0, start) + cleaned + draft.slice(end);
+        setDraft(next);
+      }
+    }
+  }
+
+    async function exportActive() {
+    if (!active) return;
+    try {
+      const store = tryCreateIndexedDbBlobStore();
+      const chat = ws.chats.find((item) => item.id === active.id);
+      if (!chat) {
+        setError("That chat is gone.");
+        return;
+      }
+      // Hydrate blobIds → dataUrls before export so consumers are not left with empty refs.
+      const hydratedMessages: typeof chat.messages = [];
+      for (const msg of chat.messages) {
+        if (!msg.images?.length) {
+          hydratedMessages.push(msg);
+          continue;
+        }
+        const images = await imagesForExport(msg.images, store);
+        hydratedMessages.push({
+          ...msg,
+          images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? undefined })),
+        });
+      }
+      const hydratedWs = { ...ws, chats: ws.chats.map((item) => (item.id === active.id ? { ...item, messages: hydratedMessages } : item)) };
+      const packed = exportChat(hydratedWs, active.id);
+      if ("error" in packed) {
+        setError(packed.error);
+        return;
+      }
+      const blob = new Blob([packed.json], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = packed.filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Export failed.");
+    }
   }
 
   function runLookup(query: string) {
@@ -931,11 +1846,52 @@ export function CommandApp() {
   }
 
   async function sendCommand() {
-    if (busy || ws.halted) return;
+    if (busy || turnInFlight.current) return;
     const text = draft.trim();
-    const images = pendingImages;
-    if (!text && images.length === 0) {
+    const images = snapshotImages(pendingImages);
+    const file = staged;
+    const gate = canSend({ halted: wsRef.current.halted, busy });
+    if (!gate.ok) {
+      if (wsRef.current.halted) {
+        reportEmergencyStop("command", () => {
+          setDraft(text);
+          if (file) setStaged(file);
+          setPendingImages(images);
+          void sendCommand();
+        });
+      } else {
+        setError(gate.reason);
+      }
+      return;
+    }
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, null);
+      return;
+    }
+    const plan = commandSendPlan({
+      liveHalted: wsRef.current.halted,
+      text,
+      imageCount: images.length,
+    });
+    if (plan === "empty") {
       setError("Write what you want to work on.");
+      return;
+    }
+    if (plan === "blocked") {
+      const snapshot = text;
+      const heldFile = file;
+      const imageSnapshot = images;
+      reportEmergencyStop("command", () => {
+        setDraft(snapshot);
+        if (heldFile) setStaged(heldFile);
+        setPendingImages(imageSnapshot);
+        void sendCommand();
+      });
       return;
     }
     const made = createChat(ws, {
@@ -944,7 +1900,6 @@ export function CommandApp() {
       temporary,
       projectId: projectChoice || null,
     });
-    const file = staged;
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
     setDraft("");
@@ -962,24 +1917,44 @@ export function CommandApp() {
       if (file) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
+    const effortPath = resolveSendPath(composerEffort);
+    if (effortPath.notice) setNotice(effortPath.notice);
     await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, false, images);
   }
 
   async function startResearch() {
-    if (ws.halted) {
-      setError("Emergency stop is on. No new action can run.");
+    if (wsRef.current.halted) {
+      const query = researchText;
+      reportEmergencyStop("search", () => {
+        setResearchText(query);
+        void startResearch();
+      });
       return;
     }
     setResearchCitations([]);
+    const query = researchText;
     try {
-      const result = await searchWeb({ data: { query: researchText } });
+      const result = await searchWeb({ data: { query } });
       setError(null);
       setResearchCitations(result.citations);
       setResearchNote(result.ok ? (result.summary || "") : result.error);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
+      if (!result.ok) {
+        reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
+          setResearchText(query);
+          void startResearch();
+        });
+      } else {
+        clearFailure();
+      }
     } catch (caught) {
       setResearchCitations([]);
-      setResearchNote(caught instanceof Error ? caught.message : "The search did not run. No citations were created.");
+      const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
+      setResearchNote(message);
+      reportFailure(message, "research_failed", "search", () => {
+        setResearchText(query);
+        void startResearch();
+      });
     }
   }
 
@@ -996,6 +1971,7 @@ export function CommandApp() {
     setAgentBusy(true);
     setAgentNote(null);
     setAgentLog([]);
+    setAgentImages([]);
     const plannerImages = pendingImages;
     setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -1022,12 +1998,26 @@ export function CommandApp() {
         model?: string;
         modelTier?: string;
         resolvedTier?: string;
+        images?: { dataUrl: string; name?: string; mime?: string }[];
       };
       if (controller.signal.aborted) return;
       setAgentLog(payload.log ?? []);
       const modelBit = payload.model ? ` Model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? modelTier}→${payload.resolvedTier})` : ""}.` : "";
-      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : ""));
-      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? "finished" : "stopped"));
+      const agentImages = (payload.images ?? [])
+        .filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
+        .map((image, index) => ({
+          dataUrl: image.dataUrl,
+          name: image.name || `imagine-${index + 1}.jpg`,
+          mime: image.mime,
+        }));
+      if (agentImages.length) {
+        setPendingImages(agentImages);
+        setAgentImages(agentImages);
+      } else {
+        setAgentImages([]);
+      }
+      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : "") + (agentImages.length ? ` · ${agentImages.length} image staged for follow-up.` : ""));
+      setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? (agentImages.length ? "finished+imagine" : "finished") : "stopped"));
     } catch {
       if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
       else setAgentNote("The planner did not finish. Nothing was marked finished.");
@@ -1038,11 +2028,52 @@ export function CommandApp() {
   }
 
   async function sendInChat() {
-    if (!active || busy || ws.halted) return;
+    if (!active || busy || turnInFlight.current) return;
     const text = draft.trim();
-    const images = pendingImages;
-    if (!text && !staged && images.length === 0) return;
+    const images = snapshotImages(pendingImages);
     const file = staged;
+    const gate = canSend({ halted: wsRef.current.halted, busy });
+    if (!gate.ok) {
+      if (wsRef.current.halted) {
+        reportEmergencyStop(active.id, () => {
+          setDraft(text);
+          if (file) setStaged(file);
+          setPendingImages(images);
+          void sendInChat();
+        });
+      } else {
+        setError(gate.reason);
+      }
+      return;
+    }
+    const imaginePrompt = parseImagineCommand(text);
+    if (imaginePrompt !== null) {
+      if (!imaginePrompt) {
+        setError("Write a prompt after /imagine.");
+        return;
+      }
+      await runImagine(imaginePrompt, active);
+      return;
+    }
+    const plan = commandSendPlan({
+      liveHalted: wsRef.current.halted,
+      text: text || (file ? file.name : ""),
+      imageCount: images.length,
+    });
+    if (plan === "empty") return;
+    if (plan === "blocked") {
+      const snapshot = text;
+      const heldFile = file;
+      const chatId = active.id;
+      const imageSnapshot = images;
+      reportEmergencyStop(chatId, () => {
+        setDraft(snapshot);
+        if (heldFile) setStaged(heldFile);
+        setPendingImages(imageSnapshot);
+        void sendInChat();
+      });
+      return;
+    }
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
     setDraft("");
@@ -1058,7 +2089,329 @@ export function CommandApp() {
     if (file) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
+    const effortPath = resolveSendPath(composerEffort);
+    if (effortPath.notice) setNotice(effortPath.notice);
     await deliver(active, full, ws, false, images);
+  }
+
+  async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
+    if (imagineInFlight.current || busy || imagineBusy) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write a prompt for Imagine, or use /imagine <prompt>.");
+      return;
+    }
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop("imagine", () => {
+        void runImagine(prompt, targetChat, opts);
+      });
+      return;
+    }
+    if (!imagineTabLockRef.current.tryAcquire()) {
+      setError("Imagine is already running in another tab. Wait for it to finish.");
+      return;
+    }
+    if (!opts?.retry) setDraft("");
+    setError(null);
+    setBusy(true);
+    setImagineBusy(true);
+    setLiveText("");
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    let chat = targetChat;
+    if (!chat) {
+      if (opts?.retry) {
+        setBusy(false);
+        return;
+      }
+      const made = createChat(ws, {
+        memory: memoryChoice,
+        autonomy,
+        temporary,
+        projectId: projectChoice || null,
+      });
+      chat = made.chat;
+      setActiveId(made.chat.id);
+      setView("chat");
+      setWs((prev) =>
+        pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, `imagine; memory ${made.chat.memory}`),
+      );
+    }
+    const chatId = chat.id;
+    if (!opts?.retry) {
+      const userMsg = {
+        id: crypto.randomUUID(),
+        role: "user" as const,
+        content: `/imagine ${prompt}`,
+        at: new Date().toISOString(),
+      };
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
+                messages: [...item.messages, userMsg],
+              }
+            : item,
+        ),
+      }));
+    }
+    const rememberImagineFailure = (failure: ReturnType<typeof imageGenerationFailure>) => {
+      const params = imagineRetryParams(failure);
+      reportFailure(failure.message, failure.kind, failure.target, () => {
+        const again = wsRef.current.chats.find((item) => item.id === chatId) ?? chat;
+        void runImagine(params.prompt, again, { retry: true });
+      });
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                messages: [
+                  ...item.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant" as const,
+                    content: failure.message,
+                    at: new Date().toISOString(),
+                  },
+                ],
+              }
+            : item,
+        ),
+      }));
+    };
+    imagineInFlight.current = true;
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ prompt, n: 1, model: resolveImagineModel(imagineModel) }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        rememberImagineFailure(
+          imageGenerationFailure({
+            mode: "generate",
+            prompt,
+            status: response.status,
+            serverError: payload.error || "",
+            n: 1,
+            target: `imagine:${chatId}`,
+          }),
+        );
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      const model = payload.model || "grok-imagine-image";
+      setPendingImages(images);
+      setNotice(`Imagine (${model}). Attached for a follow-up vision turn — Send or Agent to reuse.`);
+      clearFailure();
+      setWs((prev) => {
+        const next = {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Generated with ${model}. The image is shown below and staged in the composer so you can Send or run Agent with it as vision input.`,
+                      at: new Date().toISOString(),
+                      model,
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        };
+        return pushAudit(next, "imagine_generate", chatId, model);
+      });
+    } catch (caught) {
+      const normalized = normalizeClientFailureMessage(caught);
+      const kind = classifyHonestFailure(normalized);
+      if (kind === "auth_required" || kind === "forbidden_cross_site" || kind === "rate_limited") {
+        reportFailure(normalized, honestFailureAuditAction(kind), `imagine:${chatId}`, () => {
+          const again = wsRef.current.chats.find((item) => item.id === chatId) ?? chat;
+          void runImagine(prompt, again, { retry: true });
+        });
+        return;
+      }
+      rememberImagineFailure(
+        imageGenerationFailure({
+          mode: "generate",
+          prompt,
+          caughtMessage: normalized,
+          n: 1,
+          target: `imagine:${chatId}`,
+        }),
+      );
+    } finally {
+      imagineInFlight.current = false;
+      setBusy(false);
+      setImagineBusy(false);
+      imagineTabLockRef.current.release();
+      setLiveText("");
+    }
+  }
+
+  async function runImagineEdit(imageDataUrl: string, promptRaw?: string, extraImages: string[] = [], opts?: { retry?: boolean }) {
+    if (imagineInFlight.current || busy) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write an edit instruction in the composer, then press Edit with Imagine.");
+      return;
+    }
+    if (!imageDataUrl.startsWith("data:image/")) {
+      setError("Edit with Imagine only works on images kept as data URLs in this chat.");
+      return;
+    }
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop("imagine:edit", () => {
+        void runImagineEdit(imageDataUrl, prompt, extraImages, opts);
+      });
+      return;
+    }
+    if (!opts?.retry) setDraft("");
+    setError(null);
+    setBusy(true);
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    imagineInFlight.current = true;
+    try {
+      const response = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(
+          ([imageDataUrl, ...extraImages].length === 1
+            ? { prompt, image: imageDataUrl, mode: "edit", n: 1, model: resolveImagineModel(imagineModel) }
+            : { prompt, images: [imageDataUrl, ...extraImages], mode: "edit", n: 1, model: resolveImagineModel(imagineModel) })
+        ),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        model?: string;
+        images?: { dataUrl: string; mime?: string; name?: string }[];
+      };
+      if (!response.ok || !payload.ok || !payload.images?.length) {
+        const failure = imageGenerationFailure({
+          mode: "edit",
+          prompt,
+          status: response.status,
+          serverError: payload.error || "",
+          imageDataUrl,
+          n: 1,
+        });
+        const params = imagineRetryParams(failure);
+        reportFailure(failure.message, failure.kind, failure.target, () => {
+          if (!params.imageDataUrl) return;
+          void runImagineEdit(params.imageDataUrl, params.prompt, [], { retry: true });
+        });
+        return;
+      }
+      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+        dataUrl: image.dataUrl,
+        name: image.name || `imagine-edit-${index + 1}.jpg`,
+        mime: image.mime,
+      }));
+      setPendingImages(images);
+      setNotice(`Edited with ${payload.model || "grok-imagine-image"}. Staged for Send / Agent.`);
+      clearFailure();
+      if (active && !opts?.retry) {
+        const chatId = active.id;
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "user" as const,
+                      content: `Edit with Imagine: ${prompt}`,
+                      at: new Date().toISOString(),
+                    },
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Edited with ${payload.model || "grok-imagine-image"}.`,
+                      at: new Date().toISOString(),
+                      model: payload.model || "grok-imagine-image",
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+      } else if (active) {
+        const chatId = active.id;
+        const model = payload.model || "grok-imagine-image";
+        setWs((prev) => ({
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: [
+                    ...item.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant" as const,
+                      content: `Edited with ${model}.`,
+                      at: new Date().toISOString(),
+                      model,
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        }));
+      }
+    } catch (caught) {
+      const normalized = normalizeClientFailureMessage(caught);
+      const failure = imageGenerationFailure({
+        mode: "edit",
+        prompt,
+        caughtMessage: normalized,
+        imageDataUrl,
+        n: 1,
+      });
+      const params = imagineRetryParams(failure);
+      reportFailure(failure.message, failure.kind, failure.target, () => {
+        if (!params.imageDataUrl) return;
+        void runImagineEdit(params.imageDataUrl, params.prompt, [], { retry: true });
+      });
+    } finally {
+      imagineInFlight.current = false;
+      setBusy(false);
+    }
   }
 
   function enableMemory() {
@@ -1096,6 +2449,22 @@ export function CommandApp() {
     setError(null);
   }
 
+  function applyCloudAttach(item: CloudPickerAttach) {
+    if (item.kind === "image") {
+      setPendingImages((prev) => {
+        if (prev.length >= 4) {
+          setError("You can attach up to 4 images per message.");
+          return prev;
+        }
+        return [...prev, { dataUrl: item.dataUrl, name: item.name, mime: item.mime }];
+      });
+      setError(null);
+      return;
+    }
+    setStaged({ name: item.name, text: item.text });
+    setError(null);
+  }
+
   async function addImageAttachment(file: File) {
     try {
       const scaled = await fileToDownscaledDataUrl(file);
@@ -1107,7 +2476,21 @@ export function CommandApp() {
         return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
       });
       setError(null);
-      setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`);
+      let notice = `Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`;
+      // Keep mcp/voice analyzeImageFile path alongside media attach when the raw file is small enough.
+      if (file.size <= 400_000) {
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let binary = "";
+          for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+          const result = await analyzeImageFile({ data: { name: file.name, bytes: file.size, imageBase64: btoa(binary) } });
+          if (result.analyzed) notice = `${notice} ${result.provider} returned: ${result.text}`;
+          else if (result.error) notice = `${notice} Analyze: ${result.error}`;
+        } catch {
+          // attach already succeeded
+        }
+      }
+      setNotice(notice);
     } catch {
       setError("That image could not be prepared.");
     }
@@ -1206,6 +2589,29 @@ export function CommandApp() {
     setError(null);
   }
 
+  function clearFailure() {
+    setFailure(null);
+    setError(null);
+  }
+
+  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null) {
+    const kind = classifyHonestFailure(message);
+    const auditAction = kind ? honestFailureAuditAction(kind) : action;
+    const auditId = crypto.randomUUID();
+    setWs((prev) => ({
+      ...prev,
+      audit: [{ id: auditId, at: new Date().toISOString(), action: auditAction, target, result: message }, ...prev.audit].slice(0, 200),
+    }));
+    setFailure({ message, auditId, retry: onceRetry(retry), kind });
+    setError(message);
+    setNotice(null);
+  }
+  reportFailureRef.current = reportFailure;
+
+  function reportEmergencyStop(target: string, retry: () => void) {
+    reportFailure(HONEST_FAILURE_MESSAGES.emergency_stop_active, "emergency_stop_active", target, retry);
+  }
+
   function openChat() {
     const made = createChat(ws, {
       memory: memoryChoice,
@@ -1226,67 +2632,1004 @@ export function CommandApp() {
   }
 
   async function speak(text: string) {
+    interruptSpeakPlayback();
+    const clipped = clampSpeakText(text);
+    if (!clipped) {
+      setError("Nothing to read aloud.");
+      return;
+    }
+    const generation = ++speakGenRef.current;
+    const abort = new AbortController();
+    speakAbortRef.current = abort;
     setSpeaking(true);
     setError(null);
-    const result = await speakText({ data: { text } });
-    setSpeaking(false);
+    let result: Awaited<ReturnType<typeof speakText>>;
+    try {
+      result = await speakText({ data: { text: clipped, voiceId: voiceChoiceRef.current } });
+    } catch (caught) {
+      if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
+      setSpeaking(false);
+      setError(formatVoiceClientError(caught));
+      return;
+    }
+    if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
     if (!result.ok) {
       if (!result.error.includes("No speech key")) {
+        setSpeaking(false);
         setError(result.error);
         return;
       }
       const synth = window.speechSynthesis;
       if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
+        setSpeaking(false);
         setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
         return;
       }
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => {
-        setSpeaking(false);
-        setError("Browser speech failed. Nothing was spoken.");
+      const utter = new SpeechSynthesisUtterance(clipped);
+      utter.onend = () => {
+        if (generation === speakGenRef.current) setSpeaking(false);
       };
-      setSpeaking(true);
+      utter.onerror = () => {
+        if (generation === speakGenRef.current) {
+          setSpeaking(false);
+          setError("Browser speech failed. Nothing was spoken.");
+        }
+      };
       synth.cancel();
       synth.speak(utter);
       setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
       return;
     }
-    const binary = Uint8Array.from(atob(result.audio), (char) => char.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([binary], { type: result.mime }));
-    const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    await audio.play().catch(() => setError("The browser blocked playback."));
+    try {
+      // Headless e2e: count HTTP TTS bytes the same way WS deltas are counted.
+      try {
+        const e2e = (window as unknown as { __voiceE2E?: { ttsBytes?: number; httpTts?: boolean } }).__voiceE2E;
+        if (e2e && result.ok && result.audio) {
+          e2e.ttsBytes = (e2e.ttsBytes || 0) + Math.floor((result.audio.length * 3) / 4);
+          e2e.httpTts = true;
+        }
+      } catch {
+        /* ignore */
+      }
+      await sharedAudioOutput.playMpegBase64(result.audio);
+    } catch {
+      if (!shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) {
+        setError("The browser blocked playback.");
+      }
+    } finally {
+      if (generation === speakGenRef.current) setSpeaking(false);
+    }
   }
 
-  function listen() {
-    const host = window as Window & {
-      SpeechRecognition?: new () => {
-        lang: string;
-        start: () => void;
-        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-      };
-      webkitSpeechRecognition?: new () => {
-        lang: string;
-        start: () => void;
-        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-      };
-    };
-    const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
-    if (!Ctor) {
-      setNotice("This browser has no speech recognition. Nothing was transcribed. This is not a realtime voice provider.");
+  function appendLiveVoiceUser(text: string) {
+    const clipped = text.trim();
+    if (!clipped) return;
+    // Screen/camera session prompts must never land in Ask Anything / chat as user text.
+    if (isInternalSessionPrompt(clipped)) return;
+    const targetId = activeId ?? active?.id ?? null;
+    if (!targetId) {
+      setDraft(clipped);
+      setNotice("Live voice heard you. Open a chat to keep the transcript in the thread.");
       return;
     }
+    const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: clipped, at: new Date().toISOString() };
+    setWs((prev) =>
+      pushAudit(
+        {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === targetId ? { ...item, messages: [...item.messages, userMsg] } : item,
+          ),
+        },
+        "message_sent",
+        targetId,
+        "live-voice-user",
+      ),
+    );
+  }
+
+  function appendLiveVoiceAssistant(text: string) {
+    const clipped = text.trim();
+    if (!clipped) return;
+    const targetId = activeId ?? active?.id ?? null;
+    if (!targetId) {
+      setNotice(`Live voice reply: ${clipped.slice(0, 160)}`);
+      return;
+    }
+    const assistantMsg = {
+      id: crypto.randomUUID(),
+      role: "assistant" as const,
+      content: clipped,
+      at: new Date().toISOString(),
+      model: "grok-voice-latest",
+    };
+    setWs((prev) =>
+      pushAudit(
+        {
+          ...prev,
+          chats: prev.chats.map((item) =>
+            item.id === targetId ? { ...item, messages: [...item.messages, assistantMsg] } : item,
+          ),
+        },
+        "message_sent",
+        targetId,
+        "live-voice-assistant",
+      ),
+    );
+  }
+
+    function stopVoiceSession() {
+    clearStageTimeout();
+    voiceActiveRef.current = false;
+    speakQueueRef.current.active = null;
+    speakQueueRef.current.pending = null;
+    voiceMutedRef.current = false;
+    interruptSpeakPlayback();
+    listenMintAbortRef.current?.abort();
+    listenMintAbortRef.current = null;
+    voiceSession.current?.close();
+    voiceSession.current = null;
+    setVoiceListening(false);
+    setVoiceMuted(false);
+    setVoiceLevel(0);
+    setVoiceLiveTranscript("");
+    listenGuardRef.current.end();
+    bargeRef.current = createBargeInState();
+    holdInterruptedRef.current = false;
+  }
+
+  function toggleVoiceMute() {
+    const desired = toggleMute(voiceMutedRef.current);
+    const decided = nextMuteState(voiceMutedRef.current, desired);
+    if (!decided.changed) return;
+    voiceMutedRef.current = decided.muted;
+    setVoiceMuted(decided.muted);
+    voiceSession.current?.setMuted(decided.muted);
+    const message = decided.muted ? "Microphone muted. Listening session stays open." : "Microphone unmuted.";
+    setNotice(message);
+    if (overlayOpenRef.current) setOverlayNotice(message);
+  }
+
+  async function handleVoiceTranscript(transcript: string) {
+    if (!shouldAcceptTranscript(transcriptDedupeRef.current, transcript)) return;
+    const sanitized = sanitizeVoiceTranscript(transcript);
+    if (!sanitized.ok) {
+      setNotice(sanitized.error);
+      return;
+    }
+    const text = sanitized.text;
+    if (overlayOpenRef.current) {
+      const routed = routeVoiceModeTranscript(text);
+      setVoiceLiveTranscript(clampLiveTranscript(routed.overlayTranscript));
+      // Empty composerDraft means the transcript stays out of the composer. Do not wipe text the user already typed.
+      if (routed.composerDraft) setDraft(routed.composerDraft);
+      if (!routed.sendAsChatTurn) return;
+      setOverlayNotice("Heard you. This realtime turn goes to chat, not the composer.");
+    } else {
+      setDraft(text);
+      voiceNext.current = true;
+      setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
+    }
+    if (voiceModeRef.current === "orchestrator") {
+      setBusy(true);
+      const storedModel =
+        typeof localStorage !== "undefined" ? localStorage.getItem("amcos.ollama.model") || "" : "";
+      const conducted = await runOllamaConductor(text, {
+        baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+        // Empty → conductor resolves an installed tag (e.g. qwen2.5:0.5b). Never invent llama3.2.
+        model: storedModel.trim() || undefined,
+      });
+      setBusy(false);
+      if (!conducted.ok) {
+        setError(conducted.error);
+        if (overlayOpenRef.current) {
+          setOverlayPhase("error");
+          setOverlayError(conducted.error);
+        }
+        return;
+      }
+      if (overlayOpenRef.current) {
+        setOverlayNotice(`Ollama (${conducted.model}): ${conducted.text.slice(0, 160)}`);
+      }
+      if (active) {
+        const turn = buildVoiceChatTurn({
+          userText: text,
+          assistantText: conducted.text,
+          model: conducted.model,
+        });
+        if (turn) {
+          setWs((prev) =>
+            pushAudit(
+              {
+                ...prev,
+                chats: prev.chats.map((item) =>
+                  item.id === active.id ? { ...item, messages: [...item.messages, turn.user, turn.assistant] } : item,
+                ),
+              },
+              "message_sent",
+              active.id,
+              conducted.model,
+            ),
+          );
+        }
+      }
+      // Orchestrator replies often arrive 15–30s after connect. Realtime force_message can
+      // mark Speaking with zero audio deltas after that idle gap; HTTP /v1/tts is reliable
+      // xAI speech and still drives the overlay Speaking stage.
+      speakOrchestratorReply(conducted.text);
+      return;
+    }
+    // Dev test-audio shortcut: speak a canned reply so headless can reach Speaking without a live chat turn.
+    if (readDevTestAudioUrl() && voiceModeRef.current === "direct") {
+      const reply = "It is about noon.";
+      if (voiceSession.current?.isOpen) voiceSession.current.speakText(reply);
+      else void speak(reply);
+      if (overlayOpenRef.current) setOverlayNotice("Heard you. Dev test reply via TTS.");
+      return;
+    }
+    if (!active) {
+      setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
+      if (overlayOpenRef.current) {
+        setOverlayNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
+      }
+      return;
+    }
+    if (ws.halted || busy) return;
+    const reply = await deliver(active, text, ws);
+    if (reply) speakOnOpenSession(reply);
+  }
+
+
+  function readDevTestAudioUrl(): string | null {
+    if (!import.meta.env.DEV) return null;
+    if (typeof window === "undefined") return null;
+    const raw = readVoiceTestAudioParam(window.location.search, true);
+    if (!raw) return null;
+    return resolveVoiceTestAudioUrl(raw);
+  }
+
+  function clearStageTimeout() {
+    stageGenRef.current += 1;
+    if (stageTimerRef.current) {
+      window.clearTimeout(stageTimerRef.current);
+      stageTimerRef.current = 0;
+    }
+  }
+
+  function armStageTimeout(stage: Exclude<VoiceConnectStage, "error" | "idle" | "listening">) {
+    const gen = ++stageGenRef.current;
+    if (stageTimerRef.current) window.clearTimeout(stageTimerRef.current);
+    if (!overlayOpenRef.current) return;
+    stageTimerRef.current = window.setTimeout(() => {
+      if (gen !== stageGenRef.current) return;
+      if (!overlayOpenRef.current) return;
+      const message = stageTimeoutMessage(stage);
+      const failed = failStage(stage, message);
+      connectStateRef.current = failed;
+      setOverlayPhase("error");
+      setOverlayError(failed.error);
+      setError(message);
+      stopVoiceSession();
+    }, VOICE_STAGE_TIMEOUT_MS);
+  }
+
+  function publishConnectStage(stage: Exclude<VoiceConnectStage, "error">) {
+    const entered = enterStage(stage);
+    connectStateRef.current = entered;
+    if (!overlayOpenRef.current) return;
+    if (stage === "listening" || stage === "idle") {
+      clearStageTimeout();
+      setOverlayError(null);
+      setOverlayPhase(stage === "listening" ? "listening" : "idle");
+      return;
+    }
+    setOverlayPhase(stage);
+    armStageTimeout(stage);
+  }
+
+  function noteConnectFailure(stage: VoiceConnectStage, message: string) {
+    clearStageTimeout();
+    voiceActiveRef.current = false;
+    const normalized = normalizeVoiceConnectError(new Error(message));
+    const shown = /sign in/i.test(normalized) ? normalized : message;
+    const failed = failStage(stage, shown);
+    connectStateRef.current = failed;
+    setError(shown);
+    setVoiceListening(false);
+    if (overlayOpenRef.current) {
+      setOverlayPhase("error");
+      setOverlayError(failed.error);
+    }
+  }
+
+  function pushBarge(action: BargeInAction) {
+    const prev = bargeRef.current;
+    const next = reduceBargeIn(prev, action);
+    bargeRef.current = next;
+    if (!shouldCutPlayback(prev, next)) return next;
+    interruptSpeakPlayback();
+    voiceSession.current?.interruptPlayback();
+    holdInterruptedRef.current = true;
+    if (overlayOpenRef.current) setOverlayPhase("interrupted");
+    window.setTimeout(() => {
+      if (!holdInterruptedRef.current) return;
+      holdInterruptedRef.current = false;
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "resume_listening" });
+      if (overlayOpenRef.current && voiceSession.current?.isOpen) setOverlayPhase("listening");
+    }, SPEAKING_MIN_VISIBLE_MS);
+    return next;
+  }
+
+  function speakOrchestratorReply(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    // Cut any stranded realtime playback first.
+    voiceSession.current?.interruptPlayback();
+    speakQueueRef.current.active = null;
+    speakQueueRef.current.pending = null;
+    if (overlayOpenRef.current) {
+      holdInterruptedRef.current = false;
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+      setOverlayPhase("speaking");
+      // Re-assert Speaking so a fast HTTP TTS settle cannot hide Interrupt before e2e samples.
+      window.setTimeout(() => {
+        if (!overlayOpenRef.current) return;
+        if (holdInterruptedRef.current) return;
+        if (bargeRef.current.phase === "interrupted") return;
+        bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+        setOverlayPhase("speaking");
+      }, SPEAKING_MIN_VISIBLE_MS);
+    }
+    void speak(trimmed);
+  }
+
+  function speakOnOpenSession(text: string) {
+    const session = voiceSession.current;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    // Prefer realtime force_message when the socket is live; otherwise HTTP TTS.
+    if (session?.isOpen) {
+      const decision = enqueueSpeak(speakQueueRef.current, trimmed);
+      if (decision === "start" || decision === "replace_pending") {
+        // replace_pending: prior active speak may be stranded after a long Ollama wait — force cut + start.
+        if (decision === "replace_pending") {
+          session.interruptPlayback();
+          speakQueueRef.current.active = null;
+          speakQueueRef.current.pending = null;
+          enqueueSpeak(speakQueueRef.current, trimmed);
+        }
+        const started = session.speakText(trimmed);
+        if (started) return;
+      } else if (decision === "ignore") {
+        return;
+      }
+    }
+    // Fallback: xAI HTTP TTS (still real speech bytes) + overlay Speaking label.
+    if (overlayOpenRef.current) {
+      holdInterruptedRef.current = false;
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+      setOverlayPhase("speaking");
+      setOverlayNotice("Speaking via speech API (realtime socket was not writable).");
+    }
+    void speak(trimmed);
+  }
+
+  function commitDictation(action: DictationAction, announce = true) {
+    const prev = { ...dictationRef.current, draft: draftRef.current };
+    let next = reduceDictation(prev, action);
+    if (action.type === "stop_inserted") {
+      next = { ...next, draft: appendDictationText(draftRef.current, action.text) };
+    }
+    dictationRef.current = next;
+    setDictation(next);
+    if (next.draft !== draftRef.current) {
+      draftRef.current = next.draft;
+      setDraft(next.draft);
+    }
+    if (announce && next.status && next.status !== prev.status) {
+      setNotice(`${next.status} Browser speech, not a realtime voice session.`);
+    }
+    return next;
+  }
+
+  function cancelBrowserDictation(announce = true) {
+    const rec = dictationRecRef.current;
+    dictationRecRef.current = null;
+    dictationBufferRef.current = "";
+    userStoppedDictationRef.current = true;
+    try {
+      rec?.abort?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      rec?.stop();
+    } catch {
+      /* ignore */
+    }
+    if (dictationRef.current.phase !== "idle") commitDictation({ type: "cancel" }, announce);
+    setDictationLevel(0);
+  }
+
+  function stopBrowserDictation() {
+    if (dictationRef.current.phase !== "recording") return;
+    userStoppedDictationRef.current = true;
+    const rec = dictationRecRef.current;
+    dictationRecRef.current = null;
+    try {
+      rec?.stop();
+    } catch {
+      /* ignore */
+    }
+    commitDictation({ type: "stop_begin" }, false);
+    window.setTimeout(() => {
+      if (dictationRef.current.phase !== "transcribing") return;
+      const text = dictationBufferRef.current.trim();
+      dictationBufferRef.current = "";
+      const peak = dictationRef.current.peakLevel;
+      setDictationLevel(0);
+      if (!text && peak < DICTATION_SILENCE_PEAK) {
+        commitDictation({ type: "stop_silent" });
+        return;
+      }
+      if (!text) {
+        commitDictation({ type: "stop_empty" });
+        return;
+      }
+      commitDictation({ type: "stop_inserted", text });
+    }, 220);
+  }
+
+  function startBrowserDictation() {
+    // Browser SpeechRecognition only. Recorder capture in dictation.ts and server stt.ts stay unwired:
+    // no transcribe server fn exists, and a new xAI STT call would be a live provider call.
+    if (wsRef.current.halted) {
+      setError("Emergency stop is on. Dictation was not started.");
+      return;
+    }
+    if (
+      overlayOpenRef.current ||
+      voiceActiveRef.current ||
+      voiceSession.current?.isOpen ||
+      voiceSession.current?.isCapturing ||
+      isLiveVoiceOccupied()
+    ) {
+      setNotice("End live voice before dictation. Dictation is browser speech, not a realtime voice session.");
+      return;
+    }
+    if (dictationRef.current.phase !== "idle") return;
+    const testText = dictationTranscriptForTestAudio(new URLSearchParams(window.location.search).get("voiceTestAudio"));
+    if (testText) {
+      commitDictation({ type: "stop_inserted", text: testText });
+      setDictationLevel(0);
+      setNotice("Test clip inserted into the composer. Browser speech path, not a realtime voice provider. Nothing was sent.");
+      return;
+    }
+    const Ctor = browserSpeechCtor();
+    if (!Ctor) {
+      commitDictation({
+        type: "stop_error",
+        message: "This browser has no speech recognition. Nothing was transcribed. This is browser speech, not a realtime voice provider.",
+      });
+      setDictationLevel(0);
+      return;
+    }
+    commitDictation({ type: "start" });
+    setDictationLevel(0.2);
     const rec = new Ctor();
     rec.lang = "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
+    dictationBufferRef.current = "";
+    userStoppedDictationRef.current = false;
     rec.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      setDraft(transcript);
-      voiceNext.current = Boolean(transcript);
-      setNotice(transcript ? "The transcript is in the message box. Send uses the same agent. This is browser speech, not a realtime voice provider." : "No words were recognized. Nothing was sent.");
+      let finalText = "";
+      let interim = "";
+      const results = event.results;
+      for (let i = 0; i < results.length; i++) {
+        const row = results[i];
+        const transcript = row?.[0]?.transcript ?? "";
+        if (row?.isFinal) finalText += transcript;
+        else interim += transcript;
+      }
+      dictationBufferRef.current = `${finalText} ${interim}`.trim();
+      if (dictationBufferRef.current) {
+        setDictationLevel(0.45);
+        commitDictation({ type: "level", level: 0.45 }, false);
+      }
     };
-    rec.start();
+    rec.onerror = (event) => {
+      const code = event.error || "";
+      if (code === "no-speech" || code === "aborted") return;
+      userStoppedDictationRef.current = true;
+      dictationRecRef.current = null;
+      setDictationLevel(0);
+      commitDictation({
+        type: "stop_error",
+        message: mapBrowserSpeechError(code),
+      });
+    };
+    rec.onend = () => {
+      if (userStoppedDictationRef.current) return;
+      if (dictationRef.current.phase !== "recording") return;
+      stopBrowserDictation();
+    };
+    dictationRecRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      dictationRecRef.current = null;
+      setDictationLevel(0);
+      commitDictation({
+        type: "stop_error",
+        message: "Browser speech could not start. Nothing was transcribed. This is not a realtime voice provider.",
+      });
+    }
   }
+
+  function onDictationMic() {
+    if (dictationRef.current.phase === "recording") {
+      stopBrowserDictation();
+      return;
+    }
+    if (dictationRef.current.phase === "transcribing") return;
+    startBrowserDictation();
+  }
+
+  function closeVoiceOverlay() {
+    overlayOpenRef.current = false;
+    setVoiceOverlayOpen(false);
+    setOverlayPhase("idle");
+    setOverlayError(null);
+    setOverlayNotice(null);
+    holdInterruptedRef.current = false;
+    clearStageTimeout();
+    bargeRef.current = createBargeInState();
+    stopVoiceSession();
+    setNotice("Voice mode closed. Realtime session stopped.");
+  }
+
+  function interruptVoiceOverlay() {
+    // Force Speaking into barge so manual_interrupt always cuts playback + shows Interrupted.
+    if (bargeRef.current.phase !== "speaking" && bargeRef.current.phase !== "interrupted") {
+      bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+    }
+    pushBarge({ type: "manual_interrupt" });
+    // Belt-and-suspenders: always surface Interrupted even if barge was desynced.
+    holdInterruptedRef.current = true;
+    if (overlayOpenRef.current) setOverlayPhase("interrupted");
+    interruptSpeakPlayback();
+    voiceSession.current?.interruptPlayback();
+  }
+
+  async function openVoiceOverlay() {
+    if (isLiveVoiceOccupied()) {
+      setNotice(LIVE_VOICE_BUSY_MESSAGE);
+      return;
+    }
+    cancelBrowserDictation(false);
+    overlayOpenRef.current = true;
+    setVoiceOverlayOpen(true);
+    setOverlayError(null);
+    if (voiceSession.current?.isOpen || voiceActiveRef.current || listenMintAbortRef.current) {
+      setOverlayPhase(bargeRef.current.phase === "speaking" ? "speaking" : "listening");
+      setOverlayNotice("Realtime voice session. Not browser dictation.");
+      return;
+    }
+    if (!allowCancel(voiceCancelBudgetRef.current)) {
+      setOverlayNotice("Too many voice mode starts. Wait a moment.");
+      setNotice("Too many voice mode starts. Wait a moment.");
+      return;
+    }
+    setOverlayNotice("Realtime voice session. Not browser dictation.");
+    setOverlayPhase("idle");
+    holdInterruptedRef.current = false;
+    bargeRef.current = createBargeInState();
+    await listen({ mode: "start" });
+  }
+
+  async function retryVoiceOverlay() {
+    if (!allowCancel(voiceCancelBudgetRef.current)) {
+      setOverlayNotice("Too many voice retries. Wait a moment.");
+      return;
+    }
+    if (isLiveVoiceOccupied()) {
+      setOverlayNotice(LIVE_VOICE_BUSY_MESSAGE);
+      return;
+    }
+    stopVoiceSession();
+    overlayOpenRef.current = true;
+    setVoiceOverlayOpen(true);
+    setOverlayError(null);
+    setOverlayPhase("idle");
+    holdInterruptedRef.current = false;
+    bargeRef.current = createBargeInState();
+    await listen({ mode: "start" });
+  }
+
+  async function listen(opts?: { mode?: "toggle" | "start" | "stop" }) {
+    const mode = opts?.mode ?? "toggle";
+    const sessionBusy = Boolean(
+      voiceActiveRef.current ||
+        voiceSession.current?.isOpen ||
+        voiceSession.current?.isCapturing ||
+        listenMintAbortRef.current,
+    );
+    const action = resolveListenAction(mode, sessionBusy);
+    if (action === "start" && isLiveVoiceOccupied()) {
+      setNotice(LIVE_VOICE_BUSY_MESSAGE);
+      if (overlayOpenRef.current) setOverlayNotice(LIVE_VOICE_BUSY_MESSAGE);
+      return;
+    }
+    if (action === "stop") {
+      stopVoiceSession();
+      listenGuardRef.current.end();
+      setNotice("Voice capture stopped.");
+      if (overlayOpenRef.current) {
+        setOverlayPhase("idle");
+        setOverlayNotice("Voice capture stopped.");
+      }
+      return;
+    }
+    if (action === "ignore") {
+      // Already listening or minting — do not toggle-stop (fixes reconnect/PTT race).
+      return;
+    }
+    if (!listenGuardRef.current.begin()) {
+      setNotice("Voice is already starting. Wait a moment.");
+      return;
+    }
+    const flight = beginFlight(flightGateRef.current);
+    if (!flight) {
+      listenGuardRef.current.end();
+      setNotice("Voice is already starting. Wait a moment.");
+      return;
+    }
+    // Cut message-level Speak / TTS / browser speech before opening the mic.
+    interruptSpeakPlayback();
+    if (ws.halted) {
+      endFlight(flightGateRef.current, flight.generation);
+      listenGuardRef.current.end();
+      const haltedMessage = "Emergency stop is on. Voice was not started.";
+      setError(haltedMessage);
+      if (overlayOpenRef.current) {
+        const failed = failStage("idle", haltedMessage);
+        connectStateRef.current = failed;
+        setOverlayPhase("error");
+        setOverlayError(failed.error);
+      }
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    if (overlayOpenRef.current) setOverlayError(null);
+    // Close any stale session before minting a new secret (spam / race).
+    voiceSession.current?.close();
+    voiceSession.current = null;
+    voiceActiveRef.current = true;
+
+    const markCanceled = () => {
+      if (connectStateRef.current.stage === "error") {
+        voiceActiveRef.current = false;
+        setVoiceListening(false);
+        return;
+      }
+      clearStageTimeout();
+      voiceActiveRef.current = false;
+      setNotice("Voice start canceled.");
+      setVoiceListening(false);
+      if (overlayOpenRef.current) {
+        setOverlayPhase("idle");
+        setOverlayNotice("Voice start canceled.");
+      }
+    };
+
+    try {
+      if (voiceModeRef.current === "orchestrator") {
+        const storedModel =
+          typeof localStorage !== "undefined" ? localStorage.getItem("amcos.ollama.model") || "" : "";
+        const probe = await probeOllamaConductor({
+          baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+          model: storedModel.trim() || undefined,
+        });
+        if (!probe.ok) {
+          noteConnectFailure("getting_session", probe.error);
+          return;
+        }
+      }
+
+      publishConnectStage("getting_session");
+      // Dev-only: ?voiceForceUnconfigured=1 proves provider-not-configured UI without route stubs.
+      if (
+        typeof window !== "undefined" &&
+        shouldForceVoiceUnconfigured(window.location.search, Boolean(import.meta.env.DEV))
+      ) {
+        noteConnectFailure("getting_session", providerUnconfiguredMessage());
+        return;
+      }
+      listenMintAbortRef.current?.abort();
+      const mintAbort = new AbortController();
+      listenMintAbortRef.current = mintAbort;
+      setNotice("Minting voice session… (press mic or release Space to cancel)");
+
+      let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
+      try {
+        secret = await createVoiceClientSecret();
+        if (mintAbort.signal.aborted) {
+          markCanceled();
+          return;
+        }
+      } catch (caught) {
+        if (mintAbort.signal.aborted) {
+          markCanceled();
+          return;
+        }
+        noteConnectFailure("getting_session", normalizeVoiceConnectError(caught) || formatVoiceClientError(caught));
+        return;
+      }
+      if (!secret || typeof secret !== "object" || !("ok" in secret)) {
+        noteConnectFailure("getting_session", formatVoiceClientError(secret));
+        return;
+      }
+      if (secret.ok) {
+        const expiresAt = "expiresAt" in secret && typeof secret.expiresAt === "number" ? secret.expiresAt : 0;
+        if (expiresAt > 0 && secretNeedsRemint(expiresAt) && !mintAbort.signal.aborted) {
+          setNotice("Voice secret is near expiry. Minting a fresh session…");
+          try {
+            secret = await createVoiceClientSecret();
+          } catch (caught) {
+            if (mintAbort.signal.aborted) {
+              markCanceled();
+              return;
+            }
+            noteConnectFailure("getting_session", normalizeVoiceConnectError(caught) || formatVoiceClientError(caught));
+            return;
+          }
+        }
+      }
+      if (mintAbort.signal.aborted) {
+        markCanceled();
+        return;
+      }
+      if (!secret || typeof secret !== "object" || !("ok" in secret)) {
+        noteConnectFailure("getting_session", formatVoiceClientError(secret));
+        return;
+      }
+      if (!secret.ok) {
+        noteConnectFailure("getting_session", formatVoiceClientError(secret));
+        return;
+      }
+
+      publishConnectStage("connecting");
+      const testAudioUrl = readDevTestAudioUrl();
+      const { RealtimeVoiceSession: RealtimeVoiceSessionCtor } = await import("@/lib/mind/voice/realtime-session");
+      const session = new RealtimeVoiceSessionCtor(
+        {
+          onTranscript: (text) => {
+            setVoiceLiveTranscript(clampLiveTranscript(text));
+            void handleVoiceTranscript(text);
+          },
+          onPartialTranscript: (text) => {
+            setVoiceLiveTranscript(clampLiveTranscript(text));
+            pushVoiceChunk(text);
+          },
+          onSpeechStarted: () => {
+            if (overlayOpenRef.current) {
+              pushBarge({ type: "speech_started" });
+              return;
+            }
+            interruptSpeakPlayback();
+            session.interruptPlayback();
+          },
+          onError: (message) => {
+            const shown = message || "Voice realtime error.";
+            setError(shown);
+            if (overlayOpenRef.current) {
+              const failed = failStage(connectStateRef.current.stage, shown);
+              connectStateRef.current = failed;
+              setOverlayPhase("error");
+              setOverlayError(failed.error);
+            }
+          },
+          onStatus: (status) => {
+            const previous = lastSessionStatusRef.current;
+            lastSessionStatusRef.current = status;
+            setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
+            if (status === "speaking") setSpeaking(true);
+            if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
+            if (status === "idle" || status === "closed") {
+              setVoiceLevel(0);
+              if (status === "closed") setVoiceLiveTranscript("");
+            }
+            if (overlayOpenRef.current) {
+              if (status === "speaking") {
+                holdInterruptedRef.current = false;
+                if (bargeRef.current.phase !== "speaking") pushBarge({ type: "session_speaking" });
+                setOverlayPhase("speaking");
+              } else if (status === "processing") {
+                setOverlayPhase((phase) => (phase === "speaking" || phase === "interrupted" ? phase : "processing"));
+              } else if (status === "connecting") {
+                setOverlayPhase("connecting");
+              } else if (status === "listening") {
+                if (!holdInterruptedRef.current) {
+                  // Do not clobber Speaking/Interrupted — Interrupt must stay clickable through TTS.
+                  setOverlayPhase((phase) => {
+                    if (phase === "speaking" || phase === "interrupted") return phase;
+                    return "listening";
+                  });
+                  if (bargeRef.current.phase !== "listening" && bargeRef.current.phase !== "speaking" && bargeRef.current.phase !== "interrupted") {
+                    pushBarge({ type: "session_listening" });
+                  }
+                }
+              } else if (status === "idle" || status === "closed") {
+                pushBarge({ type: "session_idle" });
+              }
+            }
+            if (previous === "speaking" && status !== "speaking") {
+              const nextSpeak = completeSpeak(speakQueueRef.current);
+              if (nextSpeak && voiceSession.current?.isOpen && status !== "closed" && status !== "idle") {
+                voiceSession.current.speakText(nextSpeak);
+              } else if (nextSpeak) {
+                speakQueueRef.current.active = null;
+              }
+            }
+          },
+          onLevel: (level) => {
+            setVoiceLevel(level);
+            if (!overlayOpenRef.current) return;
+            const now = performance.now();
+            const dt = lastLevelAtRef.current ? now - lastLevelAtRef.current : 0;
+            lastLevelAtRef.current = now;
+            pushBarge({ type: "local_rms", level, dtMs: dt });
+          },
+          onUnexpectedClose: () => {
+            clearStageTimeout();
+            voiceActiveRef.current = false;
+            listenGuardRef.current.end();
+            setVoiceListening(false);
+            setVoiceLevel(0);
+            setVoiceLiveTranscript("");
+            setSpeaking(false);
+            setError(VOICE_CONNECTION_DROPPED);
+            setNotice(VOICE_CONNECTION_DROPPED);
+            if (overlayOpenRef.current) {
+              const failed = failStage("connecting", VOICE_CONNECTION_DROPPED);
+              connectStateRef.current = failed;
+              setOverlayPhase("error");
+              setOverlayError(failed.error ?? VOICE_CONNECTION_DROPPED);
+            }
+            if (voiceReconnectRef.current < 1) {
+              voiceReconnectRef.current += 1;
+              setNotice("Voice connection dropped. Reconnecting once…");
+              window.setTimeout(() => {
+                void listenRef.current({ mode: "start" });
+              }, 400);
+            }
+          },
+        },
+        sharedAudioOutput,
+        undefined,
+        { voice: voiceChoiceRef.current },
+      );
+      voiceSession.current = session;
+      const voicePrefs = loadVoiceSettings(typeof localStorage === "undefined" ? null : localStorage);
+      await session.connect(secret.value, {
+        captureOnly: true,
+        testAudioUrl,
+        instructions: `${personalityPrompt(voicePrefs.personality)} You only listen for transcription. Do not answer unless a force_message is sent.`,
+      });
+      if (mintAbort.signal.aborted) {
+        session.close();
+        voiceSession.current = null;
+        markCanceled();
+        return;
+      }
+      publishConnectStage("requesting_mic");
+      await session.startCapture();
+      publishConnectStage("listening");
+      setVoiceListening(true);
+      voiceReconnectRef.current = 0;
+      listenMintAbortRef.current = null;
+      const modeLabel = voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct";
+      const listeningMsg = testAudioUrl
+        ? `Realtime voice listening (test audio ${testAudioUrl}). Capture-only STT; replies use TTS.`
+        : `Realtime voice listening (${modeLabel}). Hold Space or press mic to stop.`;
+      setNotice(listeningMsg);
+      if (overlayOpenRef.current) setOverlayNotice(listeningMsg);
+      // Dev headless: if STT is slow/empty, still exercise Speaking + Interrupt via force_message.
+      if (testAudioUrl && voiceModeRef.current === "direct") {
+        window.setTimeout(() => {
+          if (!voiceSession.current?.isOpen) return;
+          if (bargeRef.current.phase === "speaking") return;
+          voiceSession.current.setMuted(true);
+          // Keep overlay phase in sync — capture-only test audio can otherwise leave the UI on getting_session.
+          if (overlayOpenRef.current) {
+            holdInterruptedRef.current = false;
+            bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+            setOverlayPhase("speaking");
+            setOverlayNotice("Dev test reply via TTS. Interrupt cuts playback.");
+            // Re-assert Speaking for SPEAKING_MIN_VISIBLE_MS so a fast response.done cannot hide Interrupt.
+            window.setTimeout(() => {
+              if (!overlayOpenRef.current || !voiceSession.current?.isOpen) return;
+              if (holdInterruptedRef.current) return;
+              if (bargeRef.current.phase === "interrupted") return;
+              bargeRef.current = reduceBargeIn(bargeRef.current, { type: "session_speaking" });
+              setOverlayPhase("speaking");
+            }, SPEAKING_MIN_VISIBLE_MS);
+          }
+          voiceSession.current.speakText("It is about noon.");
+        }, 2500);
+      }
+      // Dev headless Orchestrator: inject the named test-audio transcript through the real
+      // Ollama conductor → speakOnOpenSession path (not a canned Direct force_message).
+      if (testAudioUrl && voiceModeRef.current === "orchestrator") {
+        window.setTimeout(() => {
+          if (!voiceSession.current?.isOpen) return;
+          if (bargeRef.current.phase === "speaking") return;
+          const raw = readVoiceTestAudioParam(
+            typeof window !== "undefined" ? window.location.search : "",
+            Boolean(import.meta.env.DEV),
+          );
+          const injected = dictationTranscriptForTestAudio(raw) || "What time is it?";
+          voiceSession.current.setMuted(true);
+          if (overlayOpenRef.current) {
+            setOverlayNotice("Dev test transcript → Ollama conductor → realtime TTS.");
+          }
+          void handleVoiceTranscript(injected);
+        }, 2800);
+      }
+    } catch (caught) {
+      stopVoiceSession();
+      const normalized = normalizeVoiceConnectError(caught);
+      const mic = formatMicCaptureError(caught);
+      const message = /sign in/i.test(normalized) ? normalized : mic || normalized || formatVoiceClientError(caught);
+      const stage = connectStateRef.current.stage === "idle" ? "connecting" : connectStateRef.current.stage;
+      const failed = failStage(stage, message);
+      connectStateRef.current = failed;
+      setError(message);
+      if (overlayOpenRef.current) {
+        setOverlayPhase("error");
+        setOverlayError(failed.error);
+      }
+    } finally {
+      endFlight(flightGateRef.current, flight.generation);
+      if (!voiceSession.current?.isOpen) {
+        voiceActiveRef.current = false;
+        listenGuardRef.current.end();
+      }
+    }
+  }
+  listenRef.current = (opts) => {
+    void listen(opts);
+  };
+
+  /** Dictation with hard mint/mic timeout — never leave "Minting…" forever. */
+  async function dictateWithTimeout() {
+    const already =
+      voiceListening ||
+      Boolean(voiceSession.current?.isOpen || voiceSession.current?.isCapturing || listenMintAbortRef.current);
+    if (already) {
+      void listen({ mode: "stop" });
+      return;
+    }
+    try {
+      await withDictateTimeout(
+        listen({ mode: "start" }),
+        DICTATE_MINT_TIMEOUT_MS,
+        "Dictation timed out waiting for the microphone or voice mint. Check permissions, then try again.",
+      );
+    } catch (caught) {
+      void listen({ mode: "stop" });
+      setVoiceListening(false);
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : "Dictation timed out. Check mic permission, then try again.";
+      setError(message);
+      setNotice(null);
+    }
+  }
+
 
   async function checkRea() {
     setReaBusy(true);
@@ -1332,13 +3675,36 @@ export function CommandApp() {
     return item.text.toLowerCase().includes(memoryQuery.trim().toLowerCase());
   });
   const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
+  const mcpBoard =
+    mcpSavedListState.status === "loading"
+      ? { state: "Checking", detail: "Loading MCP servers…" }
+      : mcpSavedListState.status === "error"
+        ? { state: "Unavailable", detail: mcpSavedListState.message }
+        : mcpServers.some((server) => server.state === "connected")
+          ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
+          : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." };
+  closeVoiceOverlayRef.current = closeVoiceOverlay;
+  openVoiceOverlayRef.current = openVoiceOverlay;
+  cancelDictationRef.current = cancelBrowserDictation;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const prefs = loadVoiceSettings(localStorage);
+    if (!prefs.openInVoiceMode) return;
+    const timer = window.setTimeout(() => {
+      void openVoiceOverlayRef.current?.();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
-    <div className="flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col bg-surface md:static md:flex md:h-dvh ${railCollapsed ? "md:w-16" : "md:w-64"} md:shrink-0 md:border-r md:border-line`}>
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-cloud-hydrating={cloudHydrating ? "1" : "0"} data-workspace-ready={ready ? "1" : "0"}>
+      <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-info to-accent text-lg font-bold text-white shadow-[0_0_18px_rgb(124_92_255/0.55)]">
-            A
+          <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
+            <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
           </span>
           {!railCollapsed && (
             <div className="min-w-0 flex-1">
@@ -1353,30 +3719,92 @@ export function CommandApp() {
             <PanelLeft className="size-4" />
           </button>
         </div>
+        <div className={`px-3 pb-2 ${railCollapsed ? "flex justify-center" : ""}`}>
+          <button
+            type="button"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            aria-label="Search workspace"
+            onClick={() => {
+              setPaletteOpen(true);
+              setNavOpen(false);
+              window.setTimeout(() => searchRef.current?.focus(), 0);
+            }}
+          >
+            <Search className="size-4 shrink-0" />
+            {!railCollapsed && <span>Search</span>}
+          </button>
+          <button
+            type="button"
+            className={`nav-item mt-2 flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            aria-label="Keyboard shortcuts"
+            data-testid="nav-open-shortcuts"
+            onClick={() => {
+              window.dispatchEvent(new Event("mind:open-shortcut-sheet"));
+              setNavOpen(false);
+            }}
+          >
+            <span className="text-sm font-semibold" aria-hidden>?</span>
+            {!railCollapsed && <span>Shortcuts</span>}
+          </button>
+        </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
           {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-3">
-              {!railCollapsed && <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">{group.label.toUpperCase()}</p>}
-              {group.items.map((item) => {
+            <div key={group.label} className="mb-4">
+              {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
+              <div className="space-y-1">
+              {group.items.map((item, itemIndex) => {
                 const Icon = item.icon;
                 const on = view === item.id;
-                return (
+                const button = (
                   <button
                     key={item.id}
                     type="button"
                     title={item.label}
+                    aria-label={item.label}
+                    aria-current={on ? "page" : undefined}
                     onClick={() => {
                       setView(item.id);
                       setNavOpen(false);
                       closeMenus();
                     }}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "bg-accent text-white shadow-[0_0_18px_rgb(124_92_255/0.45)]" : "text-muted"}`}
+                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                   >
-                    <Icon className="size-4 shrink-0" />
+                    {NAV_ICON_SRC[item.id] ? <img src={NAV_ICON_SRC[item.id]} alt="" className="nav-icon-img" /> : <Icon className="size-4 shrink-0 opacity-90" />}
                     {!railCollapsed && item.label}
                   </button>
                 );
+                if (group.label === "Workspace" && itemIndex === 0) {
+                  return (
+                    <div key={`workspace-head-${item.id}`} className="contents">
+                      {button}
+                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => {
+                        const routeOn =
+                          pathname === routeItem.href || pathname.startsWith(`${routeItem.href}/`);
+                        return (
+                        <Link
+                          key={routeItem.id}
+                          to={routeItem.href}
+                          title={routeItem.label}
+                          aria-label={routeItem.label}
+                          aria-current={routeOn ? "page" : undefined}
+                          data-testid={`nav-route-${routeItem.id}`}
+                          onClick={() => {
+                            setNavOpen(false);
+                            closeMenus();
+                          }}
+                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${routeOn ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
+                        >
+                          <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
+                          {!railCollapsed && routeItem.label}
+                        </Link>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+                return button;
               })}
+              </div>
             </div>
           ))}
           {ws.pins.length > 0 && !railCollapsed && (
@@ -1434,25 +3862,76 @@ export function CommandApp() {
             </div>
           )}
         </nav>
-        {!railCollapsed && (
-          <div className="border-t border-line p-4">
-            <p className="text-sm font-semibold">Adrian (Personal)</p>
-            <p className="text-xs text-muted">Only workspace on this device.</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+        <div className={`border-t border-line/70 p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
+          <button
+            type="button"
+            className={`sidebar-plus inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-accent px-3 text-sm font-semibold text-accent-ink ${railCollapsed ? "size-11 px-0" : "w-full"}`}
+            aria-label="New chat"
+            onClick={() => {
+              openChat();
+              setView("chat");
+              setNavOpen(false);
+            }}
+          >
+            <Plus className="size-4" />
+            {!railCollapsed && "New"}
+          </button>
+          {!railCollapsed && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold">Adrian (Personal)</p>
+              <p className="text-xs text-muted">Only workspace on this device.</p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full bg-glow" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
+              <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
             </div>
-            <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
-            <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-16 md:pb-0">
-        <header className="flex items-center gap-2 border-b border-line px-3 py-3 md:gap-3 md:px-5">
+      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36">
+        <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
             <Menu className="size-4" />
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
+          <div className="shrink-0">
+            <VoiceModeBadge
+              mode={voiceMode}
+              listening={voiceListening}
+              sessionActive={liveSessionActive}
+              sessionUiAttr={liveSessionUiAttr}
+              detail={voiceMode === "orchestrator" ? orchestratorDetail : null}
+              detailTone={orchestratorDetailTone}
+              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+            />
+          </div>
+          <div className="hidden shrink-0 md:block">
+            <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+              <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+              <VoiceModeBadge
+                mode={voiceMode}
+                listening={voiceListening}
+                onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+              />
+              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                onClick={toggleVoiceMute}
+                aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
+                aria-pressed={voiceMuted}
+                data-testid="voice-mute"
+                disabled={!voiceListening}
+              >
+                {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
+              <VoiceLiveTranscript text={voiceLiveTranscript} />
+              <VoicePicker value={voiceChoice} onChange={applyVoiceChoice} disabled={voiceListening} />
+            </div>
+
+          </div>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -1464,15 +3943,18 @@ export function CommandApp() {
               }}
               onFocus={() => setPaletteOpen(true)}
               placeholder="Search or jump…"
-              className="h-11 w-full rounded-panel border border-line bg-surface pr-14 pl-10 text-sm"
+              className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
+              role="combobox"
               aria-label="Search"
               aria-keyshortcuts="Control+K Meta+K"
               aria-expanded={paletteOpen}
               aria-controls="command-palette"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="absolute z-30 mt-2 max-h-80 w-full overflow-auto rounded-panel border border-line bg-surface p-2 shadow-panel">
+              <div id="command-palette" className="floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
                 {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
                 {hits.map((hit) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
@@ -1503,28 +3985,59 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex ${headerTone}`}>
+          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}>
             <span className="size-2 rounded-full bg-current" />
             {headerState}
           </span>
           <div className="hidden md:block">
             <ModelTierChip
               tier={modelTier}
-              onChoose={setModelTier}
+              onChoose={chooseModelTier}
               lastResolved={lastResolvedTier}
               lastModel={lastModelUsed}
             />
           </div>
+          <div className={`voice-zone ${dictation.phase === "recording" || speaking ? "is-live" : ""}`} aria-label="Voice controls">
+            <BrowserDictationControl
+              compact
+              state={dictation.phase}
+              level={dictationLevel}
+              elapsedSec={dictationElapsed}
+              disabled={dictationDisabled}
+              onMicClick={onDictationMic}
+              onStop={stopBrowserDictation}
+              onCancel={() => cancelBrowserDictation(true)}
+            />
+            <VoiceModeButton compact pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
+            <span className="waveform" aria-hidden="true">
+              <span /><span /><span /><span /><span /><span /><span />
+            </span>
+            <button
+              type="button"
+              className="focus-ring grid size-9 place-items-center rounded-full text-muted"
+              aria-label="Speak last reply"
+              disabled={speaking}
+              onClick={() => {
+                const last = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
+                if (last) void speak(last.content);
+              }}
+            >
+              <Volume2 className="size-4" />
+            </button>
+          </div>
           <button
             type="button"
-            className="grid size-11 place-items-center rounded-full border border-line"
+            className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Alerts"
+            aria-expanded={bellOpen}
+            aria-controls="alerts-panel"
+            data-testid="alerts-toggle"
             onClick={() => {
               setBellOpen((open) => !open);
               setAccountOpen(false);
             }}
           >
-            <Bell className="size-4" />
+            <Bell className="size-4" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -1539,7 +4052,7 @@ export function CommandApp() {
           </button>
         </header>
         {bellOpen && (
-          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+          <div id="alerts-panel" className="border-b border-line bg-surface px-4 py-3 text-sm" data-testid="alerts-panel" role="region" aria-label="Alerts">
             <p className="font-semibold">Alerts</p>
             {ws.halted && <p className="mt-1 text-danger">Emergency stop is on. Sending and approvals are blocked.</p>}
             {ws.audit.length === 0 && !ws.halted && <p className="mt-1 text-muted">No alerts.</p>}
@@ -1554,6 +4067,7 @@ export function CommandApp() {
           <div className="border-b border-line bg-surface px-4 py-3 text-sm">
             <p className="font-semibold">Adrian (Personal)</p>
             <UserButton />
+            <SupabaseAccountControls />
             <SignedOut>
               <Link to="/login" className="mt-2 inline-flex min-h-11 items-center text-accent">
                 Sign in
@@ -1575,15 +4089,82 @@ export function CommandApp() {
           </div>
         )}
         {ws.halted && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2">
+          <div className="banner-error mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 px-4 py-2 md:mx-5">
             <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
               Clear stop
             </button>
           </div>
         )}
+        {failure && (
+          <div
+            className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2"
+            role="alert"
+            data-testid="failure-banner"
+            data-failure-kind={failure.kind ?? "unknown"}
+          >
+            <p className="text-sm text-danger">{failure.message}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-testid="failure-retry"
+                className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50"
+                disabled={!failure.retry}
+                onClick={() => {
+                  const retry = failure.retry;
+                  clearFailure();
+                  retry?.();
+                }}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                data-testid="failure-view-log"
+                className="inline-flex min-h-11 items-center justify-center rounded-panel border border-danger/40 px-4 text-sm text-danger"
+                onClick={() => {
+                  setView("activity");
+                  setFocusAuditId(failure.auditId);
+                  setActivityQuery("");
+                  setNavOpen(false);
+                }}
+              >
+                View log
+              </button>
+              <button
+                type="button"
+                data-testid="failure-dismiss"
+                className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm"
+                onClick={() => clearFailure()}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+        {saveError ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-2" role="status" data-testid="save-retry">
+            <p className="text-sm text-muted">{saveError}</p>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm"
+              onClick={() => {
+                void retrySave();
+              }}
+            >
+              Retry save
+            </button>
+          </div>
+        ) : null}
 
-        <div className={`min-h-0 flex-1 ${view === "chat" ? "overflow-hidden" : "overflow-auto"}`}>
+        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" ? "overflow-hidden" : "overflow-auto"}`}>
+          {view === "dashboard" && (
+            <div className="h-full min-h-0">
+              <Suspense fallback={<p className="p-6 text-sm text-muted">Opening the dashboard…</p>}>
+                <DashboardApp />
+              </Suspense>
+            </div>
+          )}
           {view === "command" && (
             <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
               <div className="masthead flex flex-wrap items-end justify-between gap-3">
@@ -1603,13 +4184,13 @@ export function CommandApp() {
                 </p>
               </div>
 
-              <section className="command-card rounded-panel bg-surface p-3 md:p-4">
+              <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">ASK</span>
                     <span className="block text-xs">Review and approve before action</span>
                   </button>
-                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}>
+                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
                     <span className="block text-sm font-bold">AUTOMATIC</span>
                     <span className="block text-xs">Deletes and replacements still ask you</span>
                   </button>
@@ -1652,25 +4233,44 @@ export function CommandApp() {
                       <button
                         key={id}
                         type="button"
-                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}
+                        className={`min-h-11 rounded-full px-3 text-sm ${commandMode === id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
                         onClick={() => setCommandMode(id)}
                       >
                         {label}
                       </button>
                     ))}
                   </div>
+                  <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
+                  <IntentPredictionChip
+                    text={draft}
+                    source="keystroke"
+                    handlers={{
+                      setView: (view) => setView(view as View),
+                      navigate: (href) => {
+                        window.location.assign(href);
+                      },
+                      setModelTier: (tier) => chooseModelTier(tier as ModelTier),
+                      openModelPicker: () => setPaletteOpen(true),
+                      startVoice: () => {
+                        void openVoiceOverlay();
+                      },
+                      openPalette: () => setPaletteOpen(true),
+                      searchMemory: () => setView("memory"),
+                    }}
+                  />
                   <textarea
                     value={draft}
+                    onPaste={onComposerPaste}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
                     rows={3}
-                    className="w-full resize-none rounded-panel border border-line bg-bg px-3 py-3 text-sm"
+                    className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
                       <Paperclip className="size-4" /> Attach
                     </button>
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
@@ -1679,7 +4279,58 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
                       <Camera className="size-4" /> Camera
                     </button>
-                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} />
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
+                      Drive
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="imagine-generate"
+                      aria-label="Imagine"
+                      aria-busy={imagineBusy}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      disabled={busy || imagineBusy || ws.halted}
+                      onClick={() => {
+                        const viaCmd = parseImagineCommand(draft);
+                        const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                        if (!(prompt || "").trim()) {
+                          setError("Write a prompt for Imagine, or use /imagine <prompt>.");
+                          return;
+                        }
+                        void runImagine(prompt, null);
+                      }}
+                    >
+                      {imagineBusy ? "Imagining…" : "Imagine"}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL}
+                      onClick={() =>
+                        setImagineModel((current) =>
+                          current === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_MODEL : GROK_IMAGINE_QUALITY_MODEL,
+                        )
+                      }
+                    >
+                      {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
+                    </button>
+                    {pendingImages.length > 1 && (
+                      <button
+                        type="button"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                        disabled={busy || ws.halted}
+                        onClick={() => {
+                          const urls = pendingImages.map((image) => image.dataUrl).filter((url) => url.startsWith("data:image/"));
+                          if (urls.length < 2) {
+                            setError("Attach at least two images to edit them together.");
+                            return;
+                          }
+                          void runImagineEdit(urls[0]!, undefined, urls.slice(1));
+                        }}
+                      >
+                        Edit all with Imagine
+                      </button>
+                    )}
+                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -1706,12 +4357,25 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={() => listen()} aria-label="Dictate">
-                      <Mic className="size-4" />
+                    <VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" />
+                    <BrowserDictationControl
+                      state={dictation.phase}
+                      level={dictationLevel}
+                      elapsedSec={dictationElapsed}
+                      disabled={dictationDisabled}
+                      onMicClick={onDictationMic}
+                      onStop={stopBrowserDictation}
+                      onCancel={() => cancelBrowserDictation(true)}
+                    />
+                    <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
+                    <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+                    <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
+                      {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button>
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
+                    <button type="submit" tabIndex={-1} disabled={busy || ws.halted}>Send</button>
                   </div>
                 </form>
                 {contextOpen && (
@@ -1744,7 +4408,39 @@ export function CommandApp() {
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
-                    <li className="text-muted">Image and video — paid APIs, not called. HP — not paired.</li>
+                    <li className="text-muted">Imagine — Grok Imagine (composer /imagine). Video — paid API, not called. HP — not paired.</li>
+                    <li>
+                      <p className="font-semibold">MCP servers</p>
+                      <ul className="mt-2 space-y-2">
+                        {mcpRegistryListState.status === "ready" && mcpRegistry.map((server) => (
+                          <li key={server.id} className="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line px-3 py-2">
+                            <span>{server.label} · {server.kind} · {server.enabled ? "On" : "Off"}</span>
+                            <button
+                              type="button"
+                              className="min-h-11 rounded-panel border border-line px-3"
+                              onClick={() => {
+                                void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => setMcpRegistry(result.servers));
+                              }}
+                            >
+                              {server.enabled ? "Turn off" : "Turn on"}
+                            </button>
+                          </li>
+                        ))}
+                        <McpListStatusRows
+                          state={mcpRegistryListState}
+                          onRetry={() => mcpRegistryRetryRef.current?.()}
+                          onViewLog={() => {
+                            setView("activity");
+                            setActivityQuery("");
+                            setNavOpen(false);
+                          }}
+                        />
+                      </ul>
+                      <button type="button" className="mt-2 min-h-11 text-accent" onClick={() => setView("tools")}>
+                        Open Tools panel
+                      </button>
+                      {toolResultStatus !== "idle" ? <p className="mt-2 text-xs text-muted">Last tool call: {toolResultStatus}</p> : null}
+                    </li>
                     <li>
                       <button type="button" className="min-h-11 text-accent" onClick={() => { setView("agents"); void checkRea(); }}>
                         Run REA doctor
@@ -1754,23 +4450,57 @@ export function CommandApp() {
                 )}
               </section>
 
+              <div className="flex flex-wrap gap-2 pb-1">
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("Summarize my projects on this device")}>Summarize my projects</button>
+                <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
+                <button type="button" className="suggestion-chip" onClick={() => setView("connected")}>Review connected services</button>
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
                 <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
                 <Quick label="Research" icon={Search} tone="text-ok" onClick={() => { setView("research"); if (staged) void inspectWithRea(staged, "research"); else void checkRea(); }} />
-                <Quick label="Generate Image" icon={Image} tone="text-warn" onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
-                <Quick label="Generate Video" icon={Video} tone="text-accent" onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
+                <Quick label="Generate Image" icon={Image} tone="text-warn" comingSoon title="Coming soon — image generation is a paid API and is not called from this app." onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
+                <Quick label="Generate Video" icon={Video} tone="text-accent" comingSoon title="Coming soon — video generation is a paid API and is not called from this app." onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
-              {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
-              {error && <p className="text-sm text-danger">{error}</p>}
+              <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+                <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+                <VoiceModeBadge
+                  mode={voiceMode}
+                  listening={voiceListening}
+                  onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+                />
+                <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
+                <button
+                  type="button"
+                  className="grid size-9 place-items-center rounded-panel border border-line text-muted"
+                  onClick={toggleVoiceMute}
+                  aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
+                  aria-pressed={voiceMuted}
+                  data-testid="voice-mute"
+                  disabled={!voiceListening}
+                >
+                  {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                </button>
+                <BrowserDictationControl
+                  state={dictation.phase}
+                  level={dictationLevel}
+                  elapsedSec={dictationElapsed}
+                  disabled={dictationDisabled}
+                  onMicClick={onDictationMic}
+                  onStop={stopBrowserDictation}
+                  onCancel={() => cancelBrowserDictation(true)}
+                />
+                <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
+              </div>
+
+              {notice && <p className="banner-notice px-3 py-2 text-sm text-muted">{notice}</p>}
+              {error && <p className="banner-error px-3 py-2 text-sm text-danger" role="alert">{error}</p>}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
-                mcp={mcpServers.some((server) => server.state === "connected")
-                  ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
-                  : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
+                mcp={mcpBoard}
                 onSetup={(message) => setNotice(message)}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
@@ -1804,7 +4534,7 @@ export function CommandApp() {
                 <Panel title="System Status" action="Details" onAction={() => setView("integrations")}>
                   <StatusRow icon={Database} name="Memory" detail={memoryChoice === "on" ? "On for the next command" : "Off for the next command"} pill={memoryChoice === "on" ? "On" : "Off"} tone={memoryChoice === "on" ? "ok" : "muted"} />
                   <StatusRow icon={Database} name="Database" detail={databaseDetail} pill={databasePill} tone={databasePill === "Refused" ? "danger" : "muted"} />
-                  <StatusRow icon={Bot} name="Voice" detail="Browser speech when this browser has it. Not a realtime voice session. Nothing is spoken until you press speak." pill="Not realtime" tone="muted" />
+                  <StatusRow icon={Bot} name="Voice" detail="Dictate uses browser speech and inserts text. It is not a realtime session. Voice mode opens the realtime session." pill={voiceOverlayOpen ? "Voice mode" : "Browser speech"} tone="muted" />
                   <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
                   <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>
@@ -1870,21 +4600,6 @@ export function CommandApp() {
                   setActiveId(null);
                 });
               }}
-              onMemory={() => {
-                if (!active) return;
-                if (active.memory === "off") {
-                  setArmMemory(active.id);
-                  return;
-                }
-                setWs((prev) =>
-                  pushAudit(
-                    { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
-                    "memory_off",
-                    active.id,
-                    "retrieval stopped",
-                  ),
-                );
-              }}
               onSave={(content) => {
                 if (!active || active.memory !== "on") {
                   setError("Memory is off for this chat, so the note was not saved.");
@@ -1901,25 +4616,42 @@ export function CommandApp() {
               }}
               onNew={openChat}
               onSpeak={(text) => void speak(text)}
-              onListen={listen}
+              onListen={() => void listen()}
+              onListenStop={() => void listen({ mode: "stop" })}
+              onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
+              onLiveAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+              onLiveVoiceError={(message) => setError(message)}
+              onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
+              voiceListening={voiceListening}
+              voiceMuted={voiceMuted}
+              voiceLevel={voiceLevel}
+              onToggleMute={toggleVoiceMute}
+              onToggleVoiceMode={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
+              dictationState={dictation.phase}
+              dictationLevel={dictationLevel}
+              dictationElapsed={dictationElapsed}
+              dictationDisabled={dictationDisabled}
+              onDictationMic={onDictationMic}
+              onDictationStop={stopBrowserDictation}
+              onDictationCancel={() => cancelBrowserDictation(true)}
+              onOpenVoiceMode={() => void openVoiceOverlay()}
+              voiceOverlayOpen={voiceOverlayOpen}
               memoryChoice={active?.memory ?? memoryChoice}
               mode={active?.autonomy ?? autonomy}
-              onComposerMemory={() => {
-                if ((active?.memory ?? memoryChoice) === "on") {
-                  if (active) {
-                    setWs((prev) =>
-                      pushAudit(
-                        { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: "off" } : chat)) },
-                        "memory_off",
-                        active.id,
-                        "retrieval stopped",
-                      ),
-                    );
-                  } else setMemoryChoice("off");
+              onMemoryChange={(next) => {
+                if (!active) {
+                  setMemoryChoice(next);
                   return;
                 }
-                setArmMemory(active?.id ?? "composer");
+                setWs((prev) =>
+                  pushAudit(
+                    { ...prev, chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, memory: next } : chat)) },
+                    next === "on" ? "memory_on" : "memory_off",
+                    active.id,
+                    next === "on" ? "owner enabled retrieval" : "retrieval stopped",
+                  ),
+                );
               }}
               onComposerMode={(next) => {
                 setAutonomy(next);
@@ -1929,12 +4661,30 @@ export function CommandApp() {
                   chats: prev.chats.map((chat) => (chat.id === active.id ? { ...chat, autonomy: next } : chat)),
                 }));
               }}
+              composerEffort={composerEffort}
+              onComposerEffort={chooseComposerEffort}
               stagedName={staged?.name ?? null}
               pendingImages={pendingImages}
               onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
+              onOpenCloud={() => setCloudPickerOpen(true)}
+              onImagine={() => {
+                const viaCmd = parseImagineCommand(draft);
+                const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                void runImagine(prompt || undefined, active);
+              }}
+              onEditImagine={(src) => void runImagineEdit(src)}
+              imagineModel={imagineModel}
+              onToggleImagineQuality={() =>
+                setImagineModel((current) =>
+                  current === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_MODEL : GROK_IMAGINE_QUALITY_MODEL,
+                )
+              }
+              onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
+              onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
+              onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)}
               onAddImageFile={(file) => void addImageAttachment(file)}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
@@ -1953,15 +4703,38 @@ export function CommandApp() {
                 if (id === "grok") setProviderChoice("grok");
               }}
               modelTier={modelTier}
-              onModelTier={setModelTier}
+              onModelTier={chooseModelTier}
+              toolTimeline={toolTimeline}
+              timelineNowMs={timelineTickMs || Date.now()}
+              agentActivity={agentActivityFromTimeline(toolTimeline)}
+              recentTasks={recentTasksFromAudit(ws.audit)}
+              connectedServices={connectedServicesRail({
+                grokConfigured,
+                notionState: notion?.state ?? null,
+                mcpConnected: mcpServers.some((server) => server.state === "connected"),
+              })}
+              systemStatus={systemStatusRail({
+                grokConfigured,
+                databaseConfigured,
+                searchConfigured: (CAPABILITIES.find((item) => item.id === "research")?.status === "configured"
+                  || CAPABILITIES.find((item) => item.id === "research")?.status === "ready"
+                  || CAPABILITIES.find((item) => item.id === "research")?.status === "live_verified") ?? false,
+                signedIn: statusSignedIn,
+              })}
+              onViewAudit={(auditId) => {
+                setView("activity");
+                setFocusAuditId(auditId);
+                setActivityQuery("");
+                setNavOpen(false);
+              }}
             />
           )}
 
           {view === "projects" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card flex flex-wrap items-center justify-between gap-3 rounded-panel border border-line bg-surface px-4 py-4">
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-12 place-items-center rounded-2xl bg-accent/20 text-accent"><Folder className="size-5" /></span>
+                  <img src="/icons/projects.svg" alt="" className="size-10" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
                     <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
@@ -1977,9 +4750,10 @@ export function CommandApp() {
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 {ws.projects.length === 0 && (
-                  <article className="glow-card rounded-panel border border-line bg-surface p-4 lg:col-span-2">
+                  <article className="empty-state lg:col-span-2">
+                    <img src="/empty/empty-folder.svg" alt="" />
                     <p className="font-semibold">No projects on this device yet.</p>
-                    <p className="mt-1 text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
+                    <p className="text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
                   </article>
                 )}
                 {ws.projects.map((project) => {
@@ -1987,7 +4761,7 @@ export function CommandApp() {
                   const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
                   return (
-                    <article key={project.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={project.id} className="dense-card card-texture p-4">
                       <div className="flex items-start gap-3">
                         <span className="grid size-11 place-items-center rounded-2xl bg-accent/15 text-accent"><Folder className="size-5" /></span>
                         <div className="min-w-0 flex-1">
@@ -2099,12 +4873,12 @@ export function CommandApp() {
                 <div className="grid gap-2">
                 <textarea value={memoryText} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={3} className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <div className="flex flex-wrap gap-2">
-                  <select value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                  <select aria-label="Memory scope" value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                     <option value="global">Global</option>
                     <option value="project">Project</option>
                   </select>
                   {memoryScope === "project" && (
-                    <select value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+                    <select aria-label="Memory project" value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                       <option value="">Choose project</option>
                       {ws.projects.map((project) => (
                         <option key={project.id} value={project.id}>{project.name}</option>
@@ -2221,7 +4995,20 @@ export function CommandApp() {
             >
               <p className="font-semibold">Bounded planner</p>
               <p className="mt-1 text-sm text-muted">Grok may call only three local reads: projects, chats, and notes. It stops after four steps or twenty seconds. It cannot use a shell, the network, or files. A live tool call was not verified in the last test. Run spends a model request.</p>
-              <textarea value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} placeholder="What should the planner look up?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+              <textarea
+                value={agentGoal}
+                onChange={(event) => setAgentGoal(event.target.value)}
+                placeholder="What should the planner look up? Drop an image here for vision."
+                rows={3}
+                className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm"
+                onDragOver={(event) => {
+                  if (event.dataTransfer?.types?.includes(AMCOS_IMAGE_DRAG_TYPE) || event.dataTransfer?.types?.includes("Files")) event.preventDefault();
+                }}
+                onDrop={(event) => acceptAgentImageDrop(event)}
+              />
+              {pendingImages.length > 0 && (
+                <p className="mt-2 text-xs text-muted">{pendingImages.length} image(s) staged for Agent vision. Run the planner to send them.</p>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || agentBusy}>Run planner</button>
                 <button
@@ -2237,6 +5024,13 @@ export function CommandApp() {
                 </button>
               </div>
               {agentNote ? <p className="mt-3 text-sm text-muted">{agentNote}</p> : null}
+              {agentImages.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {agentImages.map((image, index) => (
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)} />
+                  ))}
+                </div>
+              )}
               {agentLog.length > 0 && (
                 <ol className="mt-3 space-y-1 text-sm">
                   {agentLog.map((entry) => (
@@ -2250,15 +5044,12 @@ export function CommandApp() {
           )}
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
           {view === "connected" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Connected</h2>
-              <p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex items-center gap-3"><img src="/icons/systems.svg" alt="" className="size-8" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
-                mcp={mcpServers.some((server) => server.state === "connected")
-                  ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
-                  : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
+                mcp={mcpBoard}
                 onSetup={(message) => setNotice(message)}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
@@ -2304,6 +5095,15 @@ export function CommandApp() {
                       return;
                     }
                     setMcpServers(result.servers);
+                    setMcpSavedListState({
+                      status: "ready",
+                      servers: result.servers.map((server) => ({
+                        id: server.id,
+                        label: server.label,
+                        kind: "saved",
+                        enabled: server.state !== "failed",
+                      })),
+                    });
                     setMcpLabel("");
                     setMcpUrl("");
                     const connected = result.servers.some((server) => server.state === "connected");
@@ -2318,7 +5118,7 @@ export function CommandApp() {
                 <input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" placeholder="Token, optional" autoComplete="off" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
                 <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || !mcpUrl.trim()}>Test and save</button>
                 <ul className="mt-3 space-y-2">
-                  {mcpServers.map((server) => (
+                  {mcpSavedListState.status === "ready" && mcpServers.map((server) => (
                     <li key={server.id} className="rounded-panel border border-line px-3 py-2 text-sm">
                       <span className="font-semibold">{server.label}</span>
                       <span className="ml-2 text-muted">{server.host} · {server.state}</span>
@@ -2327,13 +5127,33 @@ export function CommandApp() {
                         type="button"
                         className="mt-2 min-h-11 rounded-panel border border-line px-3"
                         onClick={() => {
-                          void mcpRemove({ data: { id: server.id } }).then((result) => setMcpServers(result.servers));
+                          void mcpRemove({ data: { id: server.id } }).then((result) => {
+                            setMcpServers(result.servers);
+                            setMcpSavedListState({
+                              status: "ready",
+                              servers: result.servers.map((item) => ({
+                                id: item.id,
+                                label: item.label,
+                                kind: "saved",
+                                enabled: item.state !== "failed",
+                              })),
+                            });
+                          });
                         }}
                       >
                         Remove
                       </button>
                     </li>
                   ))}
+                  <McpListStatusRows
+                    state={mcpSavedListState}
+                    onRetry={() => mcpSavedRetryRef.current?.()}
+                    onViewLog={() => {
+                      setView("activity");
+                      setActivityQuery("");
+                      setNavOpen(false);
+                    }}
+                  />
                 </ul>
               </form>
               {notice && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{notice}</p>}
@@ -2341,32 +5161,86 @@ export function CommandApp() {
             </section>
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
-          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} />}
+          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry) => reportFailure(message, "open_page_failed", "browser", retry)} />}
           {view === "build" && (
-            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Build</h2>
-              <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
-              <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">Edit files, run tests, and use git. Not available. No files were changed.</li>
-                <li className="rounded-panel border border-line bg-surface p-3">HP EliteBook and iPhone control. Not paired.</li>
+            <section className="page-shell space-y-4">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/build.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Build</h2>
+                    <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="empty-state" data-testid="build-empty">
+                <img src="/empty/empty-folder.svg" alt="" />
+                <p className="font-semibold">Let's build</p>
+                <p className="text-sm text-muted">No build is running. Suggestion cards do not run anything just by appearing.</p>
+                <p className="text-sm font-semibold">{pcAgentOnline ? "PC agent online" : "Not paired"}</p>
+                <p className="text-sm text-muted">{pcAgentDetail}</p>
+                <p className="text-xs text-muted">Build effort selects the Build model tier for the next send.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {BUILD_SUGGESTIONS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="suggestion-chip"
+                    onClick={() => {
+                      setBuildPick(item.label);
+                      if (!pcAgentOnline) {
+                        setNotice(`${item.label} was not run. Not paired. Nothing was executed.`);
+                        return;
+                      }
+                      setNotice(`${item.label} is selected. Nothing was executed.`);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {buildPick ? <p className="text-sm text-muted">Selected {buildPick}. Nothing was executed.</p> : null}
+              <div className="promo-banner text-sm">
+                <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Local Companion not paired</p>
+                  <p className="text-muted">Pair a computer to unlock file edits, tests, and git. Nothing runs until then.</p>
+                </div>
+              </div>
+              <ul className="dense-grid space-y-0 text-sm">
+                <li className="dense-card dense-row">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
+                <li className="dense-card dense-row">Edit files, run tests, and use git. Not available. No files were changed.</li>
+                <li className="dense-card dense-row">HP EliteBook and iPhone control. Not paired.</li>
               </ul>
             </section>
           )}
           {view === "research" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead glow-card rounded-panel border border-line bg-surface p-4">
-                <h2 className="font-display text-3xl font-bold">Research</h2>
-                <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
-                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+            <section className="page-shell">
+              <div className="page-hero card-texture">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/research.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Research</h2>
+                    <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
+                  </div>
+                </div>
+                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
                   Check research
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
+                {researchCitations.length === 0 && !researchNote ? (
+                  <div className="empty-state mt-4">
+                    <img src="/empty/empty-search.svg" alt="" />
+                    <p className="font-semibold">No citations yet</p>
+                    <p className="text-sm text-muted">Run a check when a search provider is configured.</p>
+                  </div>
+                ) : null}
                 {researchCitations.length > 0 && (
                   <ul className="mt-3 space-y-2 text-sm">
                     {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
-                      <li key={item.url}>
+                      <li key={item.url} className="dense-row">
                         <a className="text-accent underline" href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
                       </li>
                     ))}
@@ -2386,15 +5260,15 @@ export function CommandApp() {
             </section>
           )}
           {view === "skills" && (
-            <section className="space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Skills</h2>
-              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p>
+            <section className="page-shell space-y-4">
+              <div className="page-hero"><h2 className="font-display text-3xl font-bold">Skills</h2>
+              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p></div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <div className="grid gap-3 md:grid-cols-2">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
                   const on = skill.kind === "built-in" && enabledSkills[skill.id] !== false;
                   return (
-                    <article key={skill.id} className="rounded-panel border border-line bg-surface p-3">
+                    <article key={skill.id} className="dense-card p-3">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-semibold">{skill.name}</h3>
                         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "built-in" ? (on ? "On" : "Off") : "Not installed"}</span>
@@ -2435,31 +5309,48 @@ export function CommandApp() {
             </section>
           )}
           {view === "files" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-3xl font-bold">Library</h2>
-                  <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF and images are stored only. They are not decoded.</p>
+            <section className="page-shell">
+              <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/library.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Library</h2>
+                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Images attached on Command are decoded for Grok vision and Imagine — they are not OCR’d into Library text copies.</p>
+                  </div>
                 </div>
-                <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button>
+                </div>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
-                <aside className="glow-card rounded-panel border border-line bg-surface p-3 text-sm">
+                <aside className="dense-card card-texture p-3 text-sm">
                   <p className="font-semibold">Text copies</p>
                   <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
                   <ul className="mt-3 space-y-1">
-                    {ws.files.length === 0 && <li className="text-muted">No files yet.</li>}
+                    {ws.files.length === 0 && (
+                      <li className="empty-state py-6">
+                        <img src="/empty/empty-folder.svg" alt="" />
+                        <p className="text-muted">No files yet.</p>
+                      </li>
+                    )}
                     {ws.files.map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`min-h-11 w-full rounded-panel px-2 text-left ${openFileId === file.id ? "bg-accent text-white" : ""}`}>
+                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
                           {file.name}
                         </button>
                       </li>
                     ))}
                   </ul>
                 </aside>
-                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
-                  {!ws.files.find((file) => file.id === openFileId) && <p className="text-muted">Select a file to read the text copy. Upload text from the button above, or attach a file on Command.</p>}
+                <div className="dense-card p-4 text-sm">
+                  {!ws.files.find((file) => file.id === openFileId) && (
+                    <div className="empty-state">
+                      <img src="/empty/empty-folder.svg" alt="" />
+                      <p className="font-semibold">Select a file</p>
+                      <p className="text-muted">Upload text from the button above, or attach a file on Command.</p>
+                    </div>
+                  )}
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold">{file.name}</p>
@@ -2488,8 +5379,8 @@ export function CommandApp() {
             </section>
           )}
           {view === "integrations" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
+            <section className="page-shell">
+              <div className="page-hero">
                 <h2 className="font-display text-3xl font-bold">Integrations</h2>
                 <p className="text-sm text-muted">{system}</p>
                 <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
@@ -2498,7 +5389,7 @@ export function CommandApp() {
                 {CAPABILITIES.map((item) => {
                   const live = isVerifiedCapability(item.status);
                   return (
-                    <article key={item.id} className="glow-card rounded-panel border border-line bg-surface p-4">
+                    <article key={item.id} className="dense-card card-texture p-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold">{item.name}</h3>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
@@ -2513,19 +5404,34 @@ export function CommandApp() {
             </section>
           )}
           {view === "activity" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
-                <h2 className="font-display text-3xl font-bold">Activity</h2>
-                <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+            <section className="page-shell">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/icons/runs.svg" alt="" className="size-8" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Activity</h2>
+                    <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+                  </div>
+                </div>
               </div>
-              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="mt-4 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" aria-label="Filter activity" />
+              <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="input-glow mt-4 min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm" aria-label="Filter activity" />
               <ul className="mt-4 space-y-2">
-                {ws.audit.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-sm text-muted">No events yet.</li>}
+                {ws.audit.length === 0 && (
+                  <li className="empty-state">
+                    <img src="/empty/empty-activity.svg" alt="" />
+                    <p className="font-semibold">No events yet</p>
+                    <p className="text-sm text-muted">Actions you take will appear here.</p>
+                  </li>
+                )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).length === 0 && ws.audit.length > 0 && (
                   <li className="text-sm text-muted">No events match that filter.</li>
                 )}
                 {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).map((entry) => (
-                  <li key={entry.id} className="glow-card flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface p-3 text-sm">
+                  <li
+                    key={entry.id}
+                    id={`audit-${entry.id}`}
+                    className={`dense-card dense-row flex-wrap justify-between text-sm ${focusAuditId === entry.id ? "border-danger bg-danger/10" : ""}`}
+                  >
                     <div>
                       <p className="font-semibold">{humanAction(entry.action)}</p>
                       <p className="text-muted">{entry.result}</p>
@@ -2541,28 +5447,42 @@ export function CommandApp() {
               <h2 className="font-display text-3xl font-bold">Help</h2>
               <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
               <ul className="space-y-2 text-sm">
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
-                <li className="rounded-panel border border-line bg-surface p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
               </ul>
             </section>
           )}
           {view === "settings" && (
-            <section className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Settings</h2>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
-                <p className="font-semibold">Appearance</p>
-                <p className="mt-1 text-muted">The theme is saved in this browser. It does not change a server setting.</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(["dark", "light", "system"] as const).map((choice) => (
-                    <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink" : "border-line"}`} onClick={() => setTheme(choice)}>
-                      {choice}
-                    </button>
-                  ))}
+            <section className="page-shell mx-auto max-w-3xl space-y-4">
+              <div className="page-hero">
+                <h2 className="font-display text-3xl font-bold">Settings</h2>
+                <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+              </div>
+              <div className="settings-card card-texture rounded-panel p-4 text-sm">
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Appearance</p>
+                    <p className="text-muted">Theme for the app UI. Saved in this browser only.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["dark", "light", "system"] as const).map((choice) => (
+                      <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">Provider failover</p>
+                    <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
+                  </div>
+                  <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
                 </div>
               </div>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="settings-card rounded-panel p-4 text-sm hidden">
                 <p className="font-semibold">Provider failover</p>
                 <p className="mt-1 text-muted">
                   {failoverPolicy === "none"
@@ -2580,16 +5500,30 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
+              <VoiceSettingsBlock />
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
                 <button
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
-                  onClick={() =>
-                    void publishServerCopy().then((result) => {
-                      if (!result.ok) setError(result.error);
-                    })
-                  }
+                  onClick={() => {
+                    const run = () => {
+                      void retrySave()
+                        .then((result) => {
+                          const message = saveFailureMessage(result);
+                          if (message) {
+                            reportFailure(message, "database_write_failed", "server-copy", run);
+                            return;
+                          }
+                          clearFailure();
+                        })
+                        .catch(() => {
+                          const message = saveFailureMessage({ ok: false });
+                          if (message) reportFailure(message, "database_write_failed", "server-copy", run);
+                        });
+                    };
+                    run();
+                  }}
                 >
                   Save this browser copy over the server copy
                 </button>
@@ -2700,14 +5634,23 @@ export function CommandApp() {
           if (file) void addImageAttachment(file);
         }}
       />
-      <CameraCapture
+      <Suspense fallback={null}><LazyCameraCapture
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onCapture={(dataUrl, name) => {
           setPendingImages((prev) => (prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]));
           setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
         }}
-      />
+      /></Suspense>
+      <Suspense fallback={null}><LazyCloudPicker
+        open={cloudPickerOpen}
+        onClose={() => setCloudPickerOpen(false)}
+        onAttach={applyCloudAttach}
+        onNotice={(message) => setNotice(message)}
+      /></Suspense>
+      <Suspense fallback={null}>
+        <LazyShortcutSheetHost />
+      </Suspense>
 
       {projectOpen && (
         <Overlay>
@@ -2741,12 +5684,30 @@ export function CommandApp() {
           </div>
         </Overlay>
       )}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Primary">
-        {NAV.filter((item) => item.id === "command" || item.id === "agents" || item.id === "build" || item.id === "projects").map((item) => {
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
+        {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
           return (
-            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-accent" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+              <Icon className="size-4" />
+              {item.label}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className="sidebar-plus relative -mt-3 flex size-14 flex-col items-center justify-center rounded-full bg-accent text-accent-ink"
+          aria-label="New chat"
+          onClick={() => { openChat(); setView("chat"); setNavOpen(false); }}
+        >
+          <Plus className="size-5" />
+        </button>
+        {NAV.filter((item) => item.id === "build" || item.id === "projects").map((item) => {
+          const Icon = item.icon;
+          const on = view === item.id;
+          return (
+            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
               <Icon className="size-4" />
               {item.label}
             </button>
@@ -2757,13 +5718,164 @@ export function CommandApp() {
           More
         </button>
       </nav>
+
+      <VoiceModeOverlay
+        open={voiceOverlayOpen}
+        phase={overlayPhase}
+        level={voiceLevel}
+        muted={voiceMuted}
+        mode={voiceMode}
+        transcript={voiceLiveTranscript}
+        notice={overlayNotice}
+        error={overlayError}
+        onMute={toggleVoiceMute}
+        onClose={closeVoiceOverlay}
+        onInterrupt={interruptVoiceOverlay}
+        onRetry={() => void retryVoiceOverlay()}
+      />
+      <LiveVoiceBar
+        isOverlayMicOpen={() =>
+          Boolean(
+            overlayOpenRef.current ||
+              voiceListening ||
+              voiceSession.current?.isOpen ||
+              voiceSession.current?.isCapturing ||
+              listenMintAbortRef.current,
+          )
+        }
+        stopOverlayMic={() => void listen({ mode: "stop" })}
+        onUserTranscript={(text) => appendLiveVoiceUser(text)}
+        onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+        onError={(message) => setError(message)}
+        onNotice={(message) => setNotice(message)}
+        askValue={draft}
+        onAskChange={setDraft}
+        dictating={voiceListening}
+        onDictateToggle={() => {
+          const fake =
+            typeof window !== "undefined"
+              ? (window as Window & { __AMCOS_FAKE_DICTATION__?: string }).__AMCOS_FAKE_DICTATION__
+              : undefined;
+          if (typeof fake === "string" && fake.trim()) {
+            setDraft((prev) => (prev ? `${prev} ${fake.trim()}` : fake.trim()));
+            setNotice("Dictation (test stub) inserted into Ask Anything.");
+            return;
+          }
+          void dictateWithTimeout();
+        }}
+        onSessionStatusChange={(status) => {
+          setLiveSessionActive(status.active);
+          setLiveSessionUiAttr(status.uiAttr || "off");
+        }}
+        onAttachFileClick={() => fileRef.current?.click()}
+        modelPickerSlot={
+          <ModelTierChip
+            tier={modelTier}
+            onChoose={chooseModelTier}
+            lastResolved={lastResolvedTier}
+            lastModel={lastModelUsed}
+            className="composer-bar__model-chip"
+          />
+        }
+        onChatSend={(text) => {
+          const clipped = text.trim().slice(0, 8000);
+          if (!clipped) return;
+          if (ws.halted) {
+            setError("Emergency stop is on. No new action can run.");
+            return;
+          }
+          if (active) {
+            setView("chat");
+            void deliver(active, clipped, ws);
+            return;
+          }
+          const made = createChat(ws, {
+            memory: memoryChoice,
+            autonomy,
+            temporary,
+            projectId: projectChoice || chatProjectId || null,
+          });
+          setActiveId(made.chat.id);
+          setView("chat");
+          setWs((prev) =>
+            pushAudit(
+              { ...prev, chats: [made.chat, ...prev.chats] },
+              "create_chat",
+              made.chat.id,
+              `ask-anything; memory ${made.chat.memory}`,
+            ),
+          );
+          void deliver(made.chat, clipped, { ...ws, chats: [made.chat, ...ws.chats] });
+        }}
+        onChatAttachText={(text, name) => {
+          setDraft((prev) => (prev ? `${prev}\n\n${text}` : text));
+          setNotice(`Attached ${name} into the composer (live was off).`);
+        }}
+      />
     </div>
   );
 }
 
-function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
+function BrowserDictationControl(props: {
+  state: DictationMachineState["phase"];
+  level: number;
+  elapsedSec: number;
+  disabled?: boolean;
+  compact?: boolean;
+  onMicClick: () => void;
+  onStop: () => void;
+  onCancel: () => void;
+}) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm">
+    <div className="inline-flex flex-wrap items-center gap-2" data-testid="browser-dictation" title="Browser speech, not a realtime voice session">
+      <DictationPill
+        state={props.state}
+        level={props.level}
+        elapsedSec={props.elapsedSec}
+        disabled={props.disabled}
+        onMicClick={props.onMicClick}
+        onStop={props.onStop}
+        onCancel={props.onCancel}
+      />
+      {props.compact ? (
+        <span className="sr-only">Browser speech, not a realtime voice session.</span>
+      ) : (
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Browser speech</span>
+      )}
+    </div>
+  );
+}
+
+function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compact?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={
+        props.compact
+          ? `focus-ring grid size-9 place-items-center rounded-full ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+          : `inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+      }
+      onClick={props.onClick}
+      aria-label="Open voice mode"
+      aria-pressed={props.pressed ?? false}
+      data-testid="open-voice-mode"
+      title="Realtime voice session. Not browser dictation."
+    >
+      <Mic className="size-4" />
+      {props.compact ? <span className="sr-only">Voice mode</span> : "Voice mode"}
+    </button>
+  );
+}
+
+function Quick({ label, icon: Icon, tone, onClick, comingSoon, title }: { label: string; icon: typeof Folder; tone: string; onClick: () => void; comingSoon?: boolean; title?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title || (comingSoon ? "Coming soon — not wired yet" : undefined)}
+      aria-disabled={comingSoon ? true : undefined}
+      className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line/80 bg-surface/80 px-3 text-sm shadow-[0_8px_24px_rgb(0_0_0/0.25)] backdrop-blur${comingSoon ? " is-coming-soon" : ""}`}
+    >
       <Icon className={`size-4 ${tone}`} />
       {label}
     </button>
@@ -2772,7 +5884,7 @@ function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: type
 
 function Panel({ title, action, onAction, children }: { title: string; action: string; onAction: () => void; children: ReactNode }) {
   return (
-    <section className="rounded-panel border border-line bg-surface p-4 shadow-panel">
+    <section className="glow-card rounded-panel border border-line/80 p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">{title}</h2>
         <button type="button" className="text-sm text-info" onClick={onAction}>{action}</button>
@@ -2810,8 +5922,8 @@ function StatusRow({
 
 function Overlay({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-40 grid place-items-end bg-bg/80 p-4 md:place-items-center">
-      <div className="w-full max-w-md rounded-panel border border-line bg-surface p-4 shadow-panel">{children}</div>
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center">
+      <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
     </div>
   );
 }
@@ -2838,7 +5950,7 @@ function ReaPanel({
         <p className="mt-2 max-w-2xl text-sm text-muted">{lead}</p>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_18rem]">
-        <div className="glow-card rounded-panel border border-line bg-surface p-4">
+        <div className="dense-card card-texture p-4">
           <p className="text-sm font-semibold">What can run</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA doctor</span><span className="text-xs text-muted">Live check</span></li>
@@ -2883,22 +5995,50 @@ function ChatPane({
   onRetry,
   onExport,
   onDelete,
-  onMemory,
   onSave,
   onNew,
   onSpeak,
   onListen,
+  onListenStop,
+  onLiveUserTranscript,
+  onLiveAssistantTranscript,
+  onLiveVoiceError,
+  onLiveVoiceNotice,
   speaking,
+  voiceListening,
+  voiceMuted,
+  voiceLevel,
+  onToggleMute,
+  onToggleVoiceMode,
+  dictationState,
+  dictationLevel,
+  dictationElapsed,
+  dictationDisabled,
+  onDictationMic,
+  onDictationStop,
+  onDictationCancel,
+  onOpenVoiceMode,
+  voiceOverlayOpen,
   memoryChoice,
   mode,
-  onComposerMemory,
+  onMemoryChange,
   onComposerMode,
+  composerEffort,
+  onComposerEffort,
   stagedName,
   pendingImages,
   onRemoveImage,
   onAttach,
   onAttachImage,
   onOpenCamera,
+  onOpenCloud,
+  onImagine,
+  imagineModel,
+  onToggleImagineQuality,
+  onEditImagine,
+  onSaveImage,
+  onDownloadImage,
+  onUseAsAgentInput,
   onAddImageFile,
   onAnalyze,
   onDoctor,
@@ -2907,6 +6047,13 @@ function ChatPane({
   onProvider,
   modelTier,
   onModelTier,
+  toolTimeline,
+  timelineNowMs,
+  agentActivity,
+  recentTasks,
+  connectedServices,
+  systemStatus,
+  onViewAudit,
 }: {
   active: Chat | null;
   chats: Chat[];
@@ -2928,22 +6075,50 @@ function ChatPane({
   onRetry: () => void;
   onExport: () => void;
   onDelete: () => void;
-  onMemory: () => void;
   onSave: (content: string) => void;
   onNew: () => void;
   onSpeak: (text: string) => void;
   onListen: () => void;
+  onListenStop?: () => void;
+  onLiveUserTranscript?: (text: string) => void;
+  onLiveAssistantTranscript?: (text: string) => void;
+  onLiveVoiceError?: (message: string) => void;
+  onLiveVoiceNotice?: (message: string) => void;
   speaking: boolean;
+  voiceListening: boolean;
+  voiceMuted: boolean;
+  voiceLevel: number;
+  onToggleMute: () => void;
+  onToggleVoiceMode: () => void;
+  dictationState: DictationMachineState["phase"];
+  dictationLevel: number;
+  dictationElapsed: number;
+  dictationDisabled: boolean;
+  onDictationMic: () => void;
+  onDictationStop: () => void;
+  onDictationCancel: () => void;
+  onOpenVoiceMode: () => void;
+  voiceOverlayOpen: boolean;
   memoryChoice: "off" | "on";
   mode: Autonomy;
-  onComposerMemory: () => void;
+  onMemoryChange: (next: "off" | "on") => void;
   onComposerMode: (mode: Autonomy) => void;
+  composerEffort: ComposerModeId;
+  onComposerEffort: (mode: ComposerModeId) => void;
   stagedName: string | null;
   pendingImages: ImageAttachment[];
   onRemoveImage: (index: number) => void;
   onAttach: () => void;
   onAttachImage: () => void;
   onOpenCamera: () => void;
+  onOpenCloud: () => void;
+  onImagine: () => void;
+  imagineModel: GrokImagineModel;
+  onToggleImagineQuality: () => void;
+  onEditImagine: (src: string) => void;
+  onSaveImage: (src: string, alt: string) => void;
+  onDownloadImage: (src: string, alt: string) => void;
+  onUseAsAgentInput: (src: string, alt: string) => void;
   onAddImageFile: (file: File) => void;
   onAnalyze: () => void;
   onDoctor: () => void;
@@ -2952,6 +6127,13 @@ function ChatPane({
   onProvider: (id: string) => void;
   modelTier: ModelTier;
   onModelTier: (tier: ModelTier) => void;
+  toolTimeline: ToolTimelineRow[];
+  timelineNowMs: number;
+  agentActivity: ReturnType<typeof agentActivityFromTimeline>;
+  recentTasks: ReturnType<typeof recentTasksFromAudit>;
+  connectedServices: ReturnType<typeof connectedServicesRail>;
+  systemStatus: ReturnType<typeof systemStatusRail>;
+  onViewAudit: (auditId: string) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -2961,10 +6143,27 @@ function ChatPane({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [chromeNote, setChromeNote] = useState(
+    "Voice chrome preview. Dictate uses this chat’s microphone. Speak, the live bar, and voice mode do not connect a provider.",
+  );
+  const [dictationTick, setDictationTick] = useState(0);
+  const [previewModel, setPreviewModel] = useState<ComposerModelId>("heavy");
+  const [previewModelOpen, setPreviewModelOpen] = useState(false);
   useEffect(() => {
     setRenaming(false);
     setEditingId(null);
   }, [active?.id]);
+  useEffect(() => {
+    if (!voiceListening) {
+      setDictationTick(0);
+      return;
+    }
+    const id = window.setInterval(() => setDictationTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [voiceListening]);
+  const markPreview = (control: string) => {
+    setChromeNote(`${control} is preview only. No voice provider is connected.`);
+  };
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
@@ -3029,6 +6228,11 @@ function ChatPane({
             </form>
           )}
           <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
+          {active && (
+            <div className="mt-3 max-w-md" data-testid="memory-chat-toggle-header">
+              <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
+            </div>
+          )}
           <div className="mt-3 xl:hidden">
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
             <div className="mt-3">
@@ -3039,20 +6243,13 @@ function ChatPane({
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
           {(!active || active.messages.length === 0) && !busy && (
             <div className="grid min-h-64 place-items-center text-center">
-              <div>
-                <span className="mx-auto grid size-16 place-items-center rounded-full bg-accent/20 text-accent shadow-[0_0_28px_rgb(124_92_255/0.45)]">
-                  <Zap className="size-7" />
-                </span>
-                <p className="mt-4 text-2xl font-bold">Grok 4.5</p>
-                <p className="text-sm text-muted">How can I help you today?</p>
-                <p className="mt-1 text-xs text-muted">Nothing is sent until you press Send.</p>
-              </div>
+              <ChatEmptyHero />
             </div>
           )}
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-surface-2" : "bg-surface"}`}>
+            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "ml-auto bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -3070,7 +6267,7 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} images={msg.images} />
+                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onUseAsAgentInput={onUseAsAgentInput} />
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
@@ -3109,16 +6306,63 @@ function ChatPane({
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSave(msg.content)}>Save as chat memory</button>
                 )}
               </div>
+              {msg.role === "assistant" && msg.memorySaved === true ? (
+                <div className="mt-2">
+                  <MemorySavedIndicator memorySaved={true} savedMemoryId={msg.savedMemoryId} />
+                </div>
+              ) : null}
             </article>
             );
           })}
+          {toolTimeline.length > 0 && (
+            <div className="max-w-3xl rounded-panel border border-line bg-surface p-3" data-testid="executing-tools">
+              {(() => {
+                const counts = timelineCounts(toolTimeline);
+                return (
+                  <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                    <span className={`inline-block size-2 rounded-full ${counts.failed ? "bg-danger" : counts.running ? "bg-accent" : "bg-ok"}`} />
+                    Executing tools ({counts.done}/{counts.total})
+                  </p>
+                );
+              })()}
+              <ul className="space-y-2">
+                {toolTimeline.map((row) => {
+                  const ms = elapsedMs(row, timelineNowMs);
+                  const failed = row.status === "failed" || row.status === "timed_out" || row.status === "cancelled";
+                  const done = row.endedAtMs != null && !failed;
+                  return (
+                    <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-panel border border-line bg-bg px-3 py-2 text-sm" data-testid="tool-timeline-row" data-status={row.status}>
+                      <span className={`size-2 shrink-0 rounded-full ${failed ? "bg-danger" : done ? "bg-ok" : "bg-accent"}`} />
+                      <span className="min-w-0 flex-1 font-medium">{row.name}</span>
+                      <span className={`text-xs ${failed ? "text-danger" : "text-muted"}`}>{row.status}</span>
+                      <span className="text-xs text-muted tabular-nums">{formatElapsed(ms)}</span>
+                      {row.auditId ? (
+                        <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onViewAudit(row.auditId!)}>
+                          View
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {busy && liveText && (
             <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
-          {busy && !liveText && <p className="text-sm text-muted">Waiting for Grok.</p>}
+          {busy && !liveText && toolTimeline.length === 0 && (
+            <div className="max-w-3xl space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
+              <p className="text-xs text-muted">Waiting for Grok.</p>
+              <div className="skeleton h-3" style={{ width: "75%" }} />
+              <div className="skeleton h-3" style={{ width: "50%" }} />
+              <div className="skeleton h-3" style={{ width: "66%" }} />
+            </div>
+          )}
           {busy && (
             <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
           )}
@@ -3129,7 +6373,7 @@ function ChatPane({
           {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
         </div>
         <form
-          className="command-card m-3 rounded-panel bg-surface p-3"
+          className="floating-composer command-card composer-dock m-3 p-3" data-composer="floating"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
@@ -3143,23 +6387,20 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
+          <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onPaste={(event) => {
-              const items = Array.from(event.clipboardData?.items ?? []);
-              const imageItems = items.filter((item) => item.type.startsWith("image/"));
-              if (imageItems.length === 0) return;
+              const imageFiles = collectClipboardImageFiles(event.clipboardData, 4);
+              if (imageFiles.length === 0) return;
               event.preventDefault();
-              for (const item of imageItems.slice(0, 4)) {
-                const file = item.getAsFile();
-                if (file) onAddImageFile(file);
-              }
+              for (const file of imageFiles) onAddImageFile(file);
             }}
             placeholder={`Message (${modelTier})...`}
-            className="min-h-11 w-full bg-transparent text-sm outline-none"
+            className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
           />
-          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} />
+          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -3170,56 +6411,358 @@ function ChatPane({
             <div className="mt-2 space-y-1 rounded-panel border border-line bg-bg p-3 text-sm">
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onDoctor}>Run REA doctor</button>
               <button type="button" className="block min-h-11 text-left text-accent" onClick={onAnalyze}>Inspect a file with REA</button>
-              <p className="text-xs text-muted">Chat stays on Grok 4.5. Image, video, and web search are not called.</p>
+              <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttach}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
               <Paperclip className="size-4" /> Attach
             </button>
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttachImage}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage}>
               <Image className="size-4" /> Image
             </button>
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCamera}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCamera}>
               <Camera className="size-4" /> Camera
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCloud}>
+              Drive
+            </button>
+            <button type="button" data-testid="imagine-generate" aria-label="Imagine" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+              Imagine
+            </button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL} onClick={onToggleImagineQuality}>
+              {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onMemory} disabled={!active}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
             <button type="button" className="ml-auto grid size-11 place-items-center rounded-panel border border-line" onClick={onListen} aria-label="Dictate">
               <Mic className="size-4" />
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+              Imagine
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+            <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+            <BrowserDictationControl
+              state={dictationState}
+              level={dictationLevel}
+              elapsedSec={dictationElapsed}
+              disabled={dictationDisabled}
+              onMicClick={onDictationMic}
+              onStop={onDictationStop}
+              onCancel={onDictationCancel}
+            />
+            <VoiceModeButton pressed={voiceOverlayOpen} onClick={onOpenVoiceMode} />
+            <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
+            <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
+              {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
+            </button>
+            <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
+              {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+            </button>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
               {speaking ? "Speaking" : "Speak"}
             </button>
             <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
+          <div className="composer-voice-chrome" data-testid="composer-voice-chrome">
+            <p className="text-xs text-muted" role="status">{chromeNote}</p>
+            <div className="composer-voice-chrome__row">
+              <PreviewDictationPill
+                state={voiceListening ? "recording" : "idle"}
+                level={voiceLevel}
+                elapsedSec={voiceListening ? dictationTick : 0}
+                onStart={() => {
+                  setChromeNote("Dictate uses this chat’s microphone. It does not start a live voice provider.");
+                  onListen();
+                }}
+                onStop={() => {
+                  setChromeNote("Dictation stopped. No voice provider is connected.");
+                  (onListenStop ?? onListen)();
+                }}
+                onCancel={() => {
+                  setChromeNote("Dictation cancelled. No voice provider is connected.");
+                  (onListenStop ?? onListen)();
+                }}
+              />
+              <ComposerBar
+                className="composer-voice-chrome__bar"
+                model={previewModel}
+                modelMenuOpen={previewModelOpen}
+                dictationState={voiceListening ? "recording" : "idle"}
+                speakState="off"
+                level={voiceListening ? voiceLevel : 0}
+                placeholder="Preview only — not a second composer"
+                askSlot={<span className="text-xs text-muted">Preview only. This chip does not change the chat model or send a message.</span>}
+                onPlus={() => markPreview("Add attachment")}
+                onModelToggle={() => setPreviewModelOpen((open) => !open)}
+                onModelSelect={(id) => {
+                  setPreviewModel(id);
+                  setPreviewModelOpen(false);
+                  markPreview("Model chip");
+                }}
+                onDictate={() => {
+                  setChromeNote("Dictate uses this chat’s microphone. Speak on this chrome does not start a provider.");
+                  onListen();
+                }}
+                onSpeak={() => markPreview("Speak")}
+              />
+              <LiveSpeakControl
+                state="off"
+                level={0}
+                label="Not connected"
+                onToggle={() => markPreview("Live speak")}
+                onMute={() => markPreview("Live speak mute")}
+                onEnd={() => markPreview("Live speak end")}
+              />
+            </div>
+            <VoiceModeStage
+              open
+              overlay={false}
+              state="idle"
+              level={0}
+              modeLabel="Preview only — no voice provider is connected."
+              muted={false}
+              onMute={() => markPreview("Voice mode mute")}
+              onEnd={() => markPreview("Voice mode end")}
+            />
+            <PresentationalLiveVoiceBar
+              state="off"
+              level={0}
+              placeholder="Preview only — not a live call"
+              askSlot={<span className="text-xs text-muted">Preview only. Not a connected voice session. Type in the composer above.</span>}
+              onMute={() => markPreview("Live bar mute")}
+              onEnd={() => markPreview("Live bar end")}
+              onSpeaker={() => markPreview("Speaker")}
+              onScreenShare={() => markPreview("Screen share")}
+              onSettings={() => markPreview("Voice settings")}
+              onPlus={() => markPreview("Add attachment")}
+              onPlusItem={(id) => markPreview(`Add ${id}`)}
+              onAskFocus={() => markPreview("Live bar ask")}
+            />
+          </div>
         </form>
       </section>
-      <aside className="hidden w-72 shrink-0 flex-col gap-3 border-l border-line p-3 xl:flex">
-        <section className="rounded-panel border border-line bg-surface p-3">
+      <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-auto border-l border-line/70 p-3 xl:flex" data-testid="chat-right-rail">
+        <section className="glass-panel rounded-panel p-3">
           <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
+        <section className="glass-panel rounded-panel p-3">
           <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} />
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
-          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Ask</button>
-          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink" : "bg-surface-2"}`}>Automatic</button>
+        <section className="glass-panel rounded-panel p-3">
+          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
+          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3">
-          <button type="button" role="switch" aria-checked={memoryChoice === "on"} onClick={onComposerMemory} className="flex min-h-11 w-full items-center justify-between text-sm">
-            Memory: {memoryChoice === "on" ? "ON" : "OFF"}
-            <span className={`h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`} />
-          </button>
+        <section className="glass-panel rounded-panel p-3" data-testid="memory-chat-toggle-rail">
+          <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={!active || busy || halted} />
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
         </section>
-        <section className="rounded-panel border border-line bg-surface p-3 text-sm">
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="agent-activity-live">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-semibold">Agent Activity</p>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${agentActivity.live ? "bg-ok/20 text-ok" : "bg-surface-2 text-muted"}`}>
+              {agentActivity.live ? "Live" : "Idle"}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-muted">{agentActivity.label}</p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
+            <div className={`h-full ${agentActivity.live ? "bg-accent" : agentActivity.percent > 0 ? "bg-ok" : "bg-transparent"}`} style={{ width: `${agentActivity.percent}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {agentActivity.total === 0
+              ? agentActivity.detail
+              : `Step ${agentActivity.step} of ${agentActivity.total}: ${agentActivity.detail}`}
+          </p>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="recent-tasks">
+          <p className="font-semibold">Recent Tasks</p>
+          {recentTasks.length === 0 && <p className="mt-2 text-xs text-muted">No tasks yet. Actions you take show up here.</p>}
+          <ul className="mt-2 space-y-2">
+            {recentTasks.map((task) => (
+              <li key={task.id} className="flex items-start justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate font-medium">{task.label}</span>
+                <span className="shrink-0 text-muted">{task.result}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="connected-services-rail">
+          <p className="font-semibold">Connected Services</p>
+          <ul className="mt-2 space-y-2">
+            {connectedServices.map((item) => (
+              <li key={item.name} className="flex items-center justify-between gap-2 text-xs">
+                <span>{item.name}</span>
+                <span className={item.tone === "ok" ? "text-ok" : item.tone === "danger" ? "text-danger" : "text-muted"}>{item.state}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="system-status-rail">
+          <p className="font-semibold">System Status</p>
+          <p className="mt-1 text-xs text-muted">{systemStatus.headline}</p>
+          <ul className="mt-2 space-y-2">
+            {systemStatus.rows.map((row) => (
+              <li key={row.name} className="flex items-center justify-between gap-2 text-xs">
+                <span>{row.name}</span>
+                <span className={row.ok ? "text-ok" : "text-muted"}>{row.state}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="glass-panel rounded-panel p-3 text-sm">
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
+        <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)}>
+            <Mic className="size-4" />
+          </button>
+          <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
+            <Volume2 className="size-4" />
+          </button>
+        </div>
       </aside>
+    </div>
+  );
+}
+
+function ComposerEffortControl({
+  mode,
+  onChoose,
+}: {
+  mode: ComposerModeId;
+  onChoose: (mode: ComposerModeId) => void;
+}) {
+  const resolved = resolveSendPath(mode);
+  const current = COMPOSER_MODES.find((item) => item.id === mode) ?? COMPOSER_MODES[0];
+  return (
+    <div className="mb-2" data-testid="composer-effort">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted">Effort</span>
+        {COMPOSER_MODES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-pressed={mode === item.id}
+            className={`min-h-11 rounded-full px-3 text-sm ${mode === item.id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
+            onClick={() => onChoose(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{resolved.badge}</span>
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        {current?.detail}
+        {resolved.notice ? ` ${resolved.notice}` : ""}
+      </p>
+    </div>
+  );
+}
+
+const VOICE_PERSONALITIES: { id: VoicePersonality; label: string }[] = [
+  { id: "new", label: "New" },
+  { id: "adrian", label: "Adrian" },
+  { id: "assistant", label: "Assistant" },
+  { id: "therapist", label: "Therapist" },
+];
+
+const VOICE_ACTIVATIONS: { id: VoiceActivation; label: string }[] = [
+  { id: "default", label: "Default" },
+  { id: "isolation", label: "Isolation" },
+  { id: "push_to_talk", label: "Push to talk" },
+];
+
+const VOICE_SPEEDS: { id: VoiceSpeed; label: string }[] = [
+  { id: "slow", label: "Slow" },
+  { id: "normal", label: "Normal" },
+  { id: "fast", label: "Fast" },
+];
+
+function VoiceSettingsBlock() {
+  const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
+  useEffect(() => {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    setSettings(loadVoiceSettings(storage));
+  }, []);
+  function update(patch: Partial<VoiceSettings>) {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      const storage = typeof localStorage === "undefined" ? null : localStorage;
+      saveVoiceSettings(storage, next);
+      return next;
+    });
+  }
+  return (
+    <div className="settings-card card-texture rounded-panel p-4 text-sm" data-testid="voice-settings">
+      <p className="font-semibold">Voice</p>
+      <p className="text-muted">{savedOnThisDeviceNotice()}</p>
+      <p className="mt-1 text-xs text-muted">{unusedUntilLiveNotice()}</p>
+      <p className="mt-1 text-xs text-muted" data-testid="voice-settings-provider-note">
+        Realtime voice needs a server speech key. Browser dictation is separate and never pretends to be a provider session.
+      </p>
+      <div className="settings-row mt-3">
+        <div>
+          <p className="font-semibold">Personality</p>
+          <p className="text-muted">Saved on this device. Applied to realtime session instructions.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {VOICE_PERSONALITIES.map((item) => (
+            <button key={item.id} type="button" aria-pressed={settings.personality === item.id} className={`min-h-11 rounded-panel border px-3 ${settings.personality === item.id ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => update({ personality: item.id })}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <p className="font-semibold">Activation</p>
+          <p className="text-muted">Saved on this device. Preference only — hold-Space / tap controls are unchanged.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {VOICE_ACTIVATIONS.map((item) => (
+            <button key={item.id} type="button" aria-pressed={settings.activation === item.id} className={`min-h-11 rounded-panel border px-3 ${settings.activation === item.id ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => update({ activation: item.id })}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <p className="font-semibold">Speed</p>
+          <p className="text-muted">Saved on this device. Playback speed is unchanged (label only).</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {VOICE_SPEEDS.map((item) => (
+            <button key={item.id} type="button" aria-pressed={settings.speed === item.id} className={`min-h-11 rounded-panel border px-3 ${settings.speed === item.id ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => update({ speed: item.id })}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <p className="font-semibold">Open in voice</p>
+          <p className="text-muted">Saved on this device. When on, opens the realtime voice overlay on load.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.openInVoiceMode}
+          data-testid="voice-settings-open-in-voice"
+          className={`min-h-11 rounded-panel border px-3 ${settings.openInVoiceMode ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`}
+          onClick={() => update({ openInVoiceMode: !settings.openInVoiceMode })}
+        >
+          {settings.openInVoiceMode ? "On" : "Off"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -3262,7 +6805,10 @@ function ProviderPicker({
     <fieldset className="space-y-2">
       <legend className="text-sm font-semibold">Provider</legend>
       {choices.map((item) => (
-        <label key={item.id} className="flex items-start gap-2 text-sm">
+        <label
+          key={item.id}
+          className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : "hover:bg-white/5"} ${!item.enabled ? "opacity-60" : ""}`}
+        >
           <input
             type="radio"
             name={name}

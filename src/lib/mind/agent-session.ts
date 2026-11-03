@@ -1,4 +1,4 @@
-import { relevantMemories } from "./memory.ts";
+import { relevantMemories } from "./memory/index.ts";
 import { runAgentTurn, type AgentTool } from "./orchestrator.ts";
 import type { Workspace } from "./types.ts";
 

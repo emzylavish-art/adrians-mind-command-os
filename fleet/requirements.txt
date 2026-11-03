@@ -1,0 +1,13 @@
+# Human rebuild dependencies for the Telegram fleet scaffold.
+# The harness calls Telegram, Notion, and OpenAI over HTTPS with requests,
+# and calls the model through the openai package.
+# notion-client and python-telegram-bot are installed for the operator
+# extending this scaffold. The shipped harness does not import them, so a
+# major-version change in those clients cannot block a rebuild.
+
+telethon>=1.36.0
+python-dotenv>=1.0.1
+requests>=2.32.0
+python-telegram-bot>=21.6
+notion-client>=2.2.1
+openai>=1.40.0

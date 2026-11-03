@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { inspectWebPage, workerHealth } from "@/lib/mind/server";
+import { useEffect, useRef, useState } from "react";
+import { inspectWebPage, mcpConnectorVerify, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -24,15 +24,76 @@ import {
   type ProviderConnection,
 } from "@/lib/mind/fleet";
 import type { Workspace } from "@/lib/mind/types";
+import {
+  MCP_LIST_LOAD_TIMEOUT_MS,
+  McpListStatusRows,
+  McpToolsListStatusRows,
+  PcApprovalsListStatusRows,
+  WorkerHealthStatusRows,
+  formatVerifyBadge,
+  isCurrentListGeneration,
+  isListAuthRequiredNotice,
+  loadConnectorVerify,
+  loadMcpList,
+  loadMcpToolsList,
+  loadPcApprovalsList,
+  loadWorkerHealthStatus,
+  nextListGeneration,
+  onceListRetry,
+  verifyResultFor,
+  type ConnectorVerifyResult,
+  type ConnectorVerifyUiState,
+  type FleetListState,
+  type McpListState,
+  type McpToolRow,
+  type PcApprovalRow,
+  type WorkerHealthState,
+} from "@/lib/mind/mcp-list-state";
+import {
+  PcApprovalActionStatusRows,
+  onceRetry,
+  runPcApprovalAction,
+  snapshotPcApprovalActionParams,
+  type PcApprovalActionState,
+} from "@/lib/mind/pc-approval-action";
+import {
+  McpCallActionStatusRows,
+  onceRetry as onceMcpCallRetry,
+  runMcpTrySelect,
+  snapshotMcpTrySelectParams,
+  type McpCallActionState,
+} from "@/lib/mind/mcp-call-action";
+
+
+function botAvatarSrc(name: string) {
+  const lower = name.toLowerCase();
+  if (lower.includes("document") || lower.includes("personal") || lower.includes("content") || lower.includes("knowledge")) return "/avatars/avatar-documents.webp";
+  if (lower.includes("research") || lower.includes("data")) return "/avatars/avatar-research.webp";
+  if (lower.includes("cod") || lower.includes("build") || lower.includes("browser") || lower.includes("project")) return "/avatars/avatar-build.webp";
+  if (lower.includes("notion") || lower.includes("knowledge")) return "/avatars/avatar-notion.webp";
+  if (lower.includes("email") || lower.includes("mail")) return "/avatars/avatar-email.webp";
+  const pool = [
+    "/avatars/avatar-documents.webp",
+    "/avatars/avatar-research.webp",
+    "/avatars/avatar-build.webp",
+    "/avatars/avatar-notion.webp",
+    "/avatars/avatar-email.webp",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash + name.charCodeAt(i) * (i + 1)) % pool.length;
+  return pool[hash];
+}
 
 export function FleetPanel({
   mode,
   ws,
   setWs,
+  onFailure,
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
+  onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [goal, setGoal] = useState("");
@@ -44,20 +105,243 @@ export function FleetPanel({
   const [jobName, setJobName] = useState("");
   const [jobZone, setJobZone] = useState("America/Chicago");
   const [jobHour, setJobHour] = useState("");
-  const [workerNote, setWorkerNote] = useState("Checking the worker.");
+  const [workerHealthState, setWorkerHealthState] = useState<WorkerHealthState>({ status: "loading" });
+  const workerHealthInFlight = useRef(false);
+  const workerHealthGeneration = useRef(0);
   const [pageUrl, setPageUrl] = useState("");
   const [pageNote, setPageNote] = useState<string | null>(null);
+  const [mcpServers, setMcpServers] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
+  const [mcpListState, setMcpListState] = useState<McpListState>({ status: "loading" });
+  const mcpListInFlight = useRef(false);
+  const mcpListGeneration = useRef(0);
+  const [mcpTools, setMcpTools] = useState<McpToolRow[]>([]);
+  const [mcpToolsState, setMcpToolsState] = useState<FleetListState<McpToolRow>>({ status: "loading" });
+  const mcpToolsInFlight = useRef(false);
+  const mcpToolsGeneration = useRef(0);
+  const [mcpCallNote, setMcpCallNote] = useState<string | null>(null);
+  const [mcpCallStatus, setMcpCallStatus] = useState<"idle" | "running" | "ok" | "error" | "timeout">("idle");
+  const [mcpCallActionState, setMcpCallActionState] = useState<McpCallActionState>({ status: "idle" });
+  const [pcApprovals, setPcApprovals] = useState<PcApprovalRow[]>([]);
+  const [pcApprovalsState, setPcApprovalsState] = useState<FleetListState<PcApprovalRow>>({ status: "loading" });
+  const pcApprovalsInFlight = useRef(false);
+  const pcApprovalsGeneration = useRef(0);
+  const [pcApprovalNote, setPcApprovalNote] = useState<string | null>(null);
+  const [pcApprovalActionState, setPcApprovalActionState] = useState<PcApprovalActionState>({ status: "idle" });
+  const [connectorVerifyState, setConnectorVerifyState] = useState<ConnectorVerifyUiState>({ status: "idle" });
+  const [connectorVerifyResults, setConnectorVerifyResults] = useState<ConnectorVerifyResult[]>([]);
+  const connectorVerifyInFlight = useRef(false);
+  const connectorVerifyGeneration = useRef(0);
+  const oauthConnectorIds = ["notion", "gmail", "google_calendar", "google_drive", "slack", "github"] as const;
+  const oauthConnectorLabels: Record<(typeof oauthConnectorIds)[number], string> = {
+    notion: "Notion",
+    gmail: "Gmail",
+    google_calendar: "Google Calendar",
+    google_drive: "Google Drive",
+    slack: "Slack",
+    github: "GitHub",
+  };
+
+
+  /** One MCP server list load: loading → ready (maybe empty) or error banner. Timeout + stale guard. */
+  function loadMcpServers() {
+    if (mcpListInFlight.current) return;
+    mcpListInFlight.current = true;
+    const generation = nextListGeneration(mcpListGeneration.current);
+    mcpListGeneration.current = generation;
+    setMcpListState({ status: "loading" });
+    void loadMcpList(() => mcpRegistryList(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, mcpListGeneration.current)) return;
+        setMcpListState(next);
+        if (next.status === "ready") {
+          setMcpServers(next.servers);
+          // Automatic verify on load when signed in — never trusts stored badges.
+          runConnectorVerify({ target: "all" });
+          return;
+        }
+        if (next.status === "unauthenticated") {
+          setMcpServers([]);
+          setConnectorVerifyState({ status: "unauthenticated" });
+          setConnectorVerifyResults([]);
+          return;
+        }
+        setMcpServers([]);
+        // auth_required → local dismissible notice in McpListStatusRows; do not escalate to top red banner / Retry storm.
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadMcpServers));
+        }
+      })
+      .finally(() => {
+        if (generation === mcpListGeneration.current) mcpListInFlight.current = false;
+      });
+  }
+
+  /** One MCP tools list load — never swallows failures as []. */
+  function loadMcpTools() {
+    if (mcpToolsInFlight.current) return;
+    mcpToolsInFlight.current = true;
+    const generation = nextListGeneration(mcpToolsGeneration.current);
+    mcpToolsGeneration.current = generation;
+    setMcpToolsState({ status: "loading" });
+    void loadMcpToolsList(() => mcpRegistryTools(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, mcpToolsGeneration.current)) return;
+        setMcpToolsState(next);
+        if (next.status === "ready") {
+          setMcpTools(next.items);
+          return;
+        }
+        setMcpTools([]);
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadMcpTools));
+        }
+      })
+      .finally(() => {
+        if (generation === mcpToolsGeneration.current) mcpToolsInFlight.current = false;
+      });
+  }
+
+
+  /** Backend-verified connector states. Signed-out → quiet unauthenticated, no probes. */
+  function runConnectorVerify(target: { target?: "all" | "mcp" | "oauth"; id?: string } = { target: "all" }) {
+    if (connectorVerifyInFlight.current) return;
+    // Soft-auth on the server: signed-out returns unauthenticated with no probes.
+    connectorVerifyInFlight.current = true;
+    const generation = nextListGeneration(connectorVerifyGeneration.current);
+    connectorVerifyGeneration.current = generation;
+    setConnectorVerifyState({ status: "loading" });
+    void loadConnectorVerify(
+      () => mcpConnectorVerify({ data: { target: target.target ?? "all", id: target.id } }),
+      { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS },
+    )
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, connectorVerifyGeneration.current)) return;
+        setConnectorVerifyState(next);
+        if (next.status === "ready") {
+          setConnectorVerifyResults((prev) => {
+            if (!target.id || target.target === "all") return next.results;
+            const others = prev.filter((row) => row.id !== target.id);
+            return [...others, ...next.results];
+          });
+          return;
+        }
+        if (next.status === "unauthenticated") {
+          setConnectorVerifyResults([]);
+        }
+      })
+      .finally(() => {
+        if (generation === connectorVerifyGeneration.current) connectorVerifyInFlight.current = false;
+      });
+  }
+
+  /** One PC approvals list load — failed fetch must not look like "nothing pending". */
+  function refreshPcApprovals() {
+    if (pcApprovalsInFlight.current) return;
+    pcApprovalsInFlight.current = true;
+    const generation = nextListGeneration(pcApprovalsGeneration.current);
+    pcApprovalsGeneration.current = generation;
+    setPcApprovalsState({ status: "loading" });
+    void loadPcApprovalsList(async () => {
+      const res = await fetch("/api/mind/pc/approvals", { credentials: "include" });
+      if (!res.ok) {
+        throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+      }
+      return res.json();
+    }, { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, pcApprovalsGeneration.current)) return;
+        setPcApprovalsState(next);
+        if (next.status === "ready") {
+          setPcApprovals(next.items);
+          return;
+        }
+        setPcApprovals([]);
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(refreshPcApprovals));
+        }
+      })
+      .finally(() => {
+        if (generation === pcApprovalsGeneration.current) pcApprovalsInFlight.current = false;
+      });
+  }
+
+  useEffect(() => {
+    if (mode !== "tools") return;
+    loadMcpServers();
+    loadMcpTools();
+    refreshPcApprovals();
+    const timer = window.setInterval(refreshPcApprovals, 15_000);
+    return () => {
+      window.clearInterval(timer);
+      // Invalidate in-flight responses when leaving tools mode.
+      mcpListGeneration.current = nextListGeneration(mcpListGeneration.current);
+      mcpToolsGeneration.current = nextListGeneration(mcpToolsGeneration.current);
+      pcApprovalsGeneration.current = nextListGeneration(pcApprovalsGeneration.current);
+      connectorVerifyGeneration.current = nextListGeneration(connectorVerifyGeneration.current);
+      mcpListInFlight.current = false;
+      mcpToolsInFlight.current = false;
+      pcApprovalsInFlight.current = false;
+    };
+  }, [mode]);
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
   const active = ws.agents.find((agent) => agent.id === agentId && !agent.archived) ?? ws.agents.find((agent) => !agent.archived) ?? null;
 
+  /** One workerHealth probe: loading → ready (offline/local detail) or error banner. Timeout + stale guard. */
+  function loadWorkerHealth() {
+    if (workerHealthInFlight.current) return;
+    workerHealthInFlight.current = true;
+    const generation = nextListGeneration(workerHealthGeneration.current);
+    workerHealthGeneration.current = generation;
+    setWorkerHealthState({ status: "loading" });
+    void loadWorkerHealthStatus(() => workerHealth(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+      .then((next) => {
+        if (!isCurrentListGeneration(generation, workerHealthGeneration.current)) return;
+        setWorkerHealthState(next);
+        if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
+          onFailure?.(next.message, onceListRetry(loadWorkerHealth));
+        }
+      })
+      .finally(() => {
+        if (generation === workerHealthGeneration.current) workerHealthInFlight.current = false;
+      });
+  }
+
+  // After sign-in, refetch MCP list so servers appear without a full reload (one quiet notice).
+  useEffect(() => {
+    if (mode !== "tools") return;
+    if (mcpListState.status !== "unauthenticated") return;
+    const refetchIfSignedIn = () => {
+      void mindStatus()
+        .then((status) => {
+          if (status.signedIn === true) loadMcpServers();
+        })
+        .catch(() => undefined);
+    };
+    const onFocus = () => refetchIfSignedIn();
+    const onVis = () => {
+      if (document.visibilityState === "visible") refetchIfSignedIn();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    const poll = window.setInterval(refetchIfSignedIn, 4_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(poll);
+    };
+  }, [mode, mcpListState.status]);
+
   useEffect(() => {
     if (mode !== "scheduled") return;
-    void workerHealth()
-      .then((health) => setWorkerNote(health.detail))
-      .catch(() => setWorkerNote("Worker status could not be read. Nothing is reported as online."));
+    loadWorkerHealth();
+    return () => {
+      workerHealthGeneration.current = nextListGeneration(workerHealthGeneration.current);
+      workerHealthInFlight.current = false;
+    };
   }, [mode]);
+
 
   function apply(result: { ok: true; ws: Workspace } | { ok: false; error: string }) {
     if (!result.ok) {
@@ -70,12 +354,13 @@ export function FleetPanel({
 
   if (mode === "agents") {
     return (
-      <section className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6">
+      <section className="dense-card card-texture mx-4 mb-6 p-4 md:mx-6">
         <h3 className="font-semibold">Agent directory</h3>
         <p className="mt-1 text-sm text-muted">Templates are definitions. A saved agent is not deployed. Local ready means the Run worker button in this app can execute it. Hosted stays external until a worker process exists.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {AGENT_TEMPLATES.map((template) => (
-            <button key={template.name} type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addAgentFromTemplate(ws, template.name))}>
+            <button key={template.name} type="button" className="dense-card inline-flex min-h-11 items-center gap-2 px-3 text-sm" onClick={() => apply(addAgentFromTemplate(ws, template.name))}>
+              <img src={botAvatarSrc(template.name)} alt="" className="bot-avatar-img size-8" />
               Add {template.name}
             </button>
           ))}
@@ -113,11 +398,16 @@ export function FleetPanel({
           {ws.agents.filter((agent) => !agent.archived).map((agent) => {
             const deployment = ws.deployments.find((item) => item.agentId === agent.id);
             return (
-              <li key={agent.id} className="rounded-panel border border-line p-3 text-sm">
+              <li key={agent.id} className="glow-card rounded-panel border border-line/80 p-3 text-sm">
+                <div className="flex items-start gap-3">
+                  <img src={botAvatarSrc(agent.name)} alt="" className="bot-avatar-img" />
+                  <div className="min-w-0 flex-1">
                 <p className="font-semibold">{agent.name}</p>
                 <p className="text-muted">{agent.description}</p>
                 <p className="mt-1 text-xs text-muted">Tools: {agent.tools.join(", ") || "none"}. Version {agent.version}. {deployment ? `${deployment.target} · ${deployment.state}` : "Not deployed"}.</p>
                 {deployment?.error ? <p className="text-xs text-muted">{deployment.error}</p> : null}
+                  </div>
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "local-worker"))}>Arm local worker</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "hosted-worker"))}>Record hosted target</button>
@@ -135,11 +425,13 @@ export function FleetPanel({
 
   if (mode === "runs") {
     return (
-      <section className="p-4 md:p-6">
+      <section className="page-shell">
+        <div className="page-hero mb-4">
         <h2 className="font-display text-3xl font-bold">Agent runs</h2>
         <p className="text-sm text-muted">Events come from the local worker. This does not call a model, send mail, or invent browser screenshots.</p>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <select value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+          <select aria-label="Choose agent" value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
             <option value="">Choose agent</option>
             {ws.agents.filter((agent) => !agent.archived).map((agent) => (
               <option key={agent.id} value={agent.id}>{agent.name}</option>
@@ -169,7 +461,13 @@ export function FleetPanel({
         </div>
         {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
         <ul className="mt-4 space-y-3">
-          {ws.runs.length === 0 && <li className="text-sm text-muted">No runs yet.</li>}
+          {ws.runs.length === 0 && (
+            <li className="empty-state">
+              <img src="/empty/empty-activity.svg" alt="" />
+              <p className="font-semibold">No runs yet</p>
+              <p className="text-sm text-muted">Queue a run, then press Run worker once.</p>
+            </li>
+          )}
           {ws.runs.slice(0, 20).map((run) => (
             <li key={run.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
               <p className="font-semibold">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state}</p>
@@ -198,11 +496,13 @@ export function FleetPanel({
 
   if (mode === "connected") {
     return (
-      <section className="p-4 md:p-6">
-        <h2 className="font-display text-3xl font-bold">Connected apps</h2>
-        <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Gmail stays not connected until Google OAuth is configured.</p>
+      <section className="page-shell">
+        <div className="page-hero mb-4">
+          <h2 className="font-display text-3xl font-bold">Connected apps</h2>
+          <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Gmail stays not connected until Google OAuth is configured.</p>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <select value={provider} onChange={(event) => setProvider(event.target.value as ProviderConnection["provider"])} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+          <select aria-label="Connection provider" value={provider} onChange={(event) => setProvider(event.target.value as ProviderConnection["provider"])} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
             {["grok", "openai", "anthropic", "gemini", "openrouter", "ollama"].map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
@@ -213,7 +513,7 @@ export function FleetPanel({
         <ul className="mt-4 space-y-2">
           {ws.connections.length === 0 && <li className="text-sm text-muted">No extra connections yet. Chat still uses the server Grok key only when you press Send.</li>}
           {ws.connections.map((item) => (
-            <li key={item.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
+            <li key={item.id} className="dense-card dense-row text-sm">
               {item.label} · {item.provider} · {item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected."} · secret stored: no
             </li>
           ))}
@@ -222,7 +522,7 @@ export function FleetPanel({
           <input value={mailLabel} onChange={(event) => setMailLabel(event.target.value)} placeholder="Mailbox label" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={mailAddress} onChange={(event) => setMailAddress(event.target.value)} placeholder="name@example.com" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addMailbox(ws, mailLabel, mailAddress))}>Add mailbox record</button>
-          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
+          <button type="button" className="is-coming-soon min-h-11 rounded-panel border border-line px-3 text-sm" title="Coming soon — Google OAuth is not started from this button" aria-disabled={true} onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
         </div>
         <ul className="mt-3 space-y-2">
           {ws.mailboxes.map((item) => (
@@ -235,10 +535,18 @@ export function FleetPanel({
   }
 
   if (mode === "scheduled") {
+    const workerDetail =
+      workerHealthState.status === "ready"
+        ? workerHealthState.health.detail
+        : workerHealthState.status === "loading"
+          ? "Checking the worker."
+          : null;
     return (
-      <section className="p-4 md:p-6">
-        <h2 className="font-display text-3xl font-bold">Scheduled tasks</h2>
-        <p className="text-sm text-muted">{workerNote} This database is local. It is not hosted scheduling.</p>
+      <section className="page-shell">
+        <div className="page-hero mb-4"><h2 className="font-display text-3xl font-bold">Scheduled tasks</h2><p className="text-sm text-muted">{workerDetail ? `${workerDetail} ` : ""}This database is local. It is not hosted scheduling.</p></div>
+        <ul className="mb-2 space-y-2">
+          <WorkerHealthStatusRows state={workerHealthState} onRetry={onceListRetry(loadWorkerHealth)} />
+        </ul>
         <p className="mt-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
@@ -257,9 +565,15 @@ export function FleetPanel({
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
         </div>
         <ul className="mt-4 space-y-2">
-          {ws.schedules.length === 0 && <li className="text-sm text-muted">No schedules yet.</li>}
+          {ws.schedules.length === 0 && (
+            <li className="empty-state">
+              <img src="/empty/empty-activity.svg" alt="" />
+              <p className="font-semibold">No schedules yet</p>
+              <p className="text-sm text-muted">Add a daily job to queue local work.</p>
+            </li>
+          )}
           {ws.schedules.map((job) => (
-            <li key={job.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
+            <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
               <p className="text-xs text-muted">{job.enabled ? "On" : "Off"} · {job.timeZone || "UTC"}{job.clockHour == null ? ` · every ${job.intervalMinutes} minutes` : ` · ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")}`} · next {job.nextRunAt} · last {job.lastRunAt ?? "never"} · {job.lastStatus || "no run"} · {job.lastError || "No error"}</p>
               <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
@@ -271,38 +585,346 @@ export function FleetPanel({
     );
   }
 
+
   return (
-    <section className="p-4 md:p-6">
-      <h2 className="font-display text-3xl font-bold">Tools</h2>
-      <p className="text-sm text-muted">Local reads run in the worker. Page inspect uses the browser driver only when you press Open page. Image, video, and model calls are not made here.</p>
+    <section className="page-shell">
+      <div className="page-hero mb-4">
+        <h2 className="font-display text-3xl font-bold">Tools</h2>
+        <p className="text-sm text-muted">Local reads run in the worker. Page inspect uses the browser driver only when you press Open page. Image, video, and model calls are not made here.</p>
+      </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <input value={pageUrl} onChange={(event) => setPageUrl(event.target.value)} placeholder="https://example.com" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
         <button
           type="button"
           className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
           onClick={() => {
-            void inspectWebPage({ data: { url: pageUrl } }).then((result) => {
-              setPageNote(result.ok ? `${result.title}\n${result.excerpt}` : result.error);
-            }).catch((error: unknown) => {
-              setPageNote(error instanceof Error ? error.message : "The page was not opened.");
-            });
+            const run = () => {
+              void inspectWebPage({ data: { url: pageUrl } }).then((result) => {
+                if (result.ok) {
+                  setPageNote(`${result.title}\n${result.excerpt}`);
+                  return;
+                }
+                setPageNote(result.error);
+                onFailure?.(result.error, run);
+              }).catch((error: unknown) => {
+                const message = error instanceof Error ? error.message : "The page was not opened.";
+                setPageNote(message);
+                onFailure?.(message, run);
+              });
+            };
+            run();
           }}
         >
           Open page
         </button>
       </div>
       {pageNote ? <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{pageNote}</p> : null}
-      <ul className="mt-4 space-y-2 text-sm">
+      <ul className="tool-list mt-4 space-y-2 text-sm">
         {toolCatalog().map((tool) => (
-          <li key={tool.id} className="rounded-panel border border-line bg-surface p-3">
+          <li key={tool.id} className="tool-card dense-card flex flex-col gap-1 p-3" data-available={tool.available ? "true" : "false"}>
             <p className="font-semibold">{tool.name} · {tool.available ? "Available" : "Not available"}</p>
             <p className="text-xs text-muted">{tool.reason}</p>
           </li>
         ))}
       </ul>
+
+      <div className="mt-6 space-y-3">
+        <h3 className="font-semibold">PC shell approvals</h3>
+        <p className="text-sm text-muted">Non-allowlisted pc_run_shell commands wait here. Approve or deny from this panel only — tool confirm args cannot authorize them.</p>
+        <ul className="space-y-2 text-sm">
+          {pcApprovalsState.status === "ready"
+            ? pcApprovals.map((item) => (
+            <li key={item.id} className="rounded-panel border border-line bg-surface p-3">
+              <p className="font-semibold">{item.command}</p>
+              <p className="text-xs text-muted">Agent {item.agentLabel || item.agentId} · expires {item.expiresAt} · id {item.id}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    const params = snapshotPcApprovalActionParams({
+                      action: "approve",
+                      approvalId: item.id,
+                      token: item.token,
+                      command: item.command,
+                    });
+                    const run = () => {
+                      setPcApprovalActionState({ status: "running", action: "approve", approvalId: item.id });
+                      setPcApprovalNote(`approving ${item.id}`);
+                      void runPcApprovalAction(params, fetch).then((result) => {
+                        if (result.ok) {
+                          setPcApprovalActionState({ status: "ok", note: result.note });
+                          setPcApprovalNote(result.note);
+                          refreshPcApprovals();
+                          return;
+                        }
+                        setPcApprovalActionState({
+                          status: "error",
+                          kind: result.kind,
+                          message: result.message,
+                          params: result.params,
+                        });
+                        setPcApprovalNote(null);
+                        const retry = onceRetry(() => run());
+                        if (retry) onFailure?.(result.message, retry);
+                      });
+                    };
+                    run();
+                  }}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    const params = snapshotPcApprovalActionParams({
+                      action: "deny",
+                      approvalId: item.id,
+                      token: item.token,
+                    });
+                    const run = () => {
+                      setPcApprovalActionState({ status: "running", action: "deny", approvalId: item.id });
+                      setPcApprovalNote(`denying ${item.id}`);
+                      void runPcApprovalAction(params, fetch).then((result) => {
+                        if (result.ok) {
+                          setPcApprovalActionState({ status: "ok", note: result.note });
+                          setPcApprovalNote(result.note);
+                          refreshPcApprovals();
+                          return;
+                        }
+                        setPcApprovalActionState({
+                          status: "error",
+                          kind: result.kind,
+                          message: result.message,
+                          params: result.params,
+                        });
+                        setPcApprovalNote(null);
+                        const retry = onceRetry(() => run());
+                        if (retry) onFailure?.(result.message, retry);
+                      });
+                    };
+                    run();
+                  }}
+                >
+                  Deny
+                </button>
+              </div>
+            </li>
+              ))
+            : null}
+          <PcApprovalsListStatusRows state={pcApprovalsState} onRetry={onceListRetry(refreshPcApprovals)} />
+        </ul>
+        <PcApprovalActionStatusRows
+          state={pcApprovalActionState}
+          onRetry={
+            pcApprovalActionState.status === "error"
+              ? onceRetry(() => {
+                  const params = pcApprovalActionState.params;
+                  const run = () => {
+                    setPcApprovalActionState({ status: "running", action: params.action, approvalId: params.approvalId });
+                    void runPcApprovalAction(params, fetch).then((result) => {
+                      if (result.ok) {
+                        setPcApprovalActionState({ status: "ok", note: result.note });
+                        setPcApprovalNote(result.note);
+                        refreshPcApprovals();
+                        return;
+                      }
+                      setPcApprovalActionState({
+                        status: "error",
+                        kind: result.kind,
+                        message: result.message,
+                        params: result.params,
+                      });
+                      setPcApprovalNote(null);
+                      const retry = onceRetry(() => run());
+                      if (retry) onFailure?.(result.message, retry);
+                    });
+                  };
+                  run();
+                }) ?? (() => undefined)
+              : () => undefined
+          }
+        />
+        {pcApprovalNote && pcApprovalActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">{pcApprovalNote}</p> : null}
+      </div>
+
+      <div className="mt-6 space-y-3">
+        <h3 className="font-semibold">MCP servers</h3>
+        <p className="text-sm text-muted">Every registered server is listed with a backend-verified state (never a stored badge). Disabled servers keep their tools visible but calls refuse honestly. Toggles persist on the server.</p>
+        <ul className="space-y-2 text-sm">
+          {mcpListState.status === "ready" ? mcpServers.map((server) => {
+            const tools = mcpToolsState.status === "ready" ? mcpTools.filter((tool) => tool.serverId === server.id) : [];
+            return (
+              <li key={server.id} className="rounded-panel border border-line bg-surface p-3" data-testid={`mcp-server-${server.id}`} data-verify-state={verifyResultFor(connectorVerifyResults, server.id)?.state ?? "unverified"}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{server.label}</p>
+                    <p className="text-xs text-muted">{server.kind} · {server.enabled ? "Enabled" : "Disabled"} · {tools.filter((t) => !t.name.startsWith("(")).length} tool(s)</p>
+                    <p className="text-xs text-muted" data-testid={`mcp-verify-badge-${server.id}`}>
+                      {connectorVerifyState.status === "loading" && !verifyResultFor(connectorVerifyResults, server.id)
+                        ? "Verifying…"
+                        : formatVerifyBadge(verifyResultFor(connectorVerifyResults, server.id))}
+                      {verifyResultFor(connectorVerifyResults, server.id)?.detail
+                        ? ` — ${verifyResultFor(connectorVerifyResults, server.id)?.detail}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                      data-testid={`mcp-verify-${server.id}`}
+                      disabled={connectorVerifyState.status === "loading"}
+                      onClick={() => runConnectorVerify({ target: "mcp", id: server.id })}
+                    >
+                      Verify
+                    </button>
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                      onClick={() => {
+                        void mcpRegistryToggle({ data: { id: server.id, enabled: !server.enabled } }).then((result) => {
+                          setMcpServers(result.servers);
+                          loadMcpTools();
+                        });
+                      }}
+                    >
+                      {server.enabled ? "Turn off" : "Turn on"}
+                    </button>
+                  </div>
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {tools.map((tool) => (
+                    <li key={`${tool.serverId}:${tool.name}`} className="rounded-panel border border-line px-2 py-1">
+                      <p className="font-semibold">{tool.name} · {tool.status === "timeout" ? "Timed out" : tool.status === "error" ? "Error" : server.enabled && tool.enabled ? "Available" : "Gated"}</p>
+                      <p className="text-xs text-muted">{tool.description}</p>
+                      {tool.name === "pglite_query" ? (
+                        <button
+                          type="button"
+                          className="mt-1 min-h-11 rounded-panel border border-line px-3 text-sm"
+                          disabled={mcpCallStatus === "running"}
+                          onClick={() => {
+                            const params = snapshotMcpTrySelectParams({ serverId: server.id, serverLabel: server.label });
+                            const run = () => {
+                              setMcpCallStatus("running");
+                              setMcpCallActionState({ status: "running", params });
+                              setMcpCallNote(`running: pglite_query on ${server.label} (enabled=${server.enabled})`);
+                              void runMcpTrySelect(params, (input) => mcpRegistryCall(input)).then((result) => {
+                                if (result.ok) {
+                                  setMcpCallStatus("ok");
+                                  setMcpCallActionState({ status: "ok", note: result.note });
+                                  setMcpCallNote(result.note);
+                                  return;
+                                }
+                                setMcpCallStatus(result.kind === "network_failure" && /timed out|timeout/i.test(result.message) ? "timeout" : "error");
+                                setMcpCallActionState({
+                                  status: "error",
+                                  kind: result.kind,
+                                  message: result.message,
+                                  params: result.params,
+                                });
+                                setMcpCallNote(null);
+                                const retry = onceMcpCallRetry(() => run());
+                                if (retry) onFailure?.(result.message, retry);
+                              });
+                            };
+                            run();
+                          }}
+                        >
+                          Try SELECT 1
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            );
+          }) : null}
+          <McpListStatusRows state={mcpListState} onRetry={onceListRetry(loadMcpServers)} />
+          <McpToolsListStatusRows state={mcpToolsState} onRetry={onceListRetry(loadMcpTools)} />
+        </ul>
+        <McpCallActionStatusRows
+          state={mcpCallActionState}
+          onRetry={
+            mcpCallActionState.status === "error"
+              ? onceMcpCallRetry(() => {
+                  const params = mcpCallActionState.params;
+                  const run = () => {
+                    setMcpCallStatus("running");
+                    setMcpCallActionState({ status: "running", params });
+                    void runMcpTrySelect(params, (input) => mcpRegistryCall(input)).then((result) => {
+                      if (result.ok) {
+                        setMcpCallStatus("ok");
+                        setMcpCallActionState({ status: "ok", note: result.note });
+                        setMcpCallNote(result.note);
+                        return;
+                      }
+                      setMcpCallStatus("error");
+                      setMcpCallActionState({
+                        status: "error",
+                        kind: result.kind,
+                        message: result.message,
+                        params: result.params,
+                      });
+                      setMcpCallNote(null);
+                      const retry = onceMcpCallRetry(() => run());
+                      if (retry) onFailure?.(result.message, retry);
+                    });
+                  };
+                  run();
+                }) ?? (() => undefined)
+              : () => undefined
+          }
+        />
+        {mcpCallNote && mcpCallActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
+      </div>
+
+      <div className="mt-6 space-y-3" data-testid="oauth-connectors">
+        <h3 className="font-semibold">OAuth connectors</h3>
+        <p className="text-sm text-muted">Backend-verified states only. Stored badges are never trusted. No tokens are shown here.</p>
+        <ul className="space-y-2 text-sm">
+          {mcpListState.status === "unauthenticated" ? (
+            <li className="text-sm text-muted" data-testid="oauth-verify-signed-out">Sign in to verify OAuth connectors.</li>
+          ) : (
+            oauthConnectorIds.map((id) => {
+              const verified = verifyResultFor(connectorVerifyResults, id);
+              return (
+                <li key={id} className="rounded-panel border border-line bg-surface p-3" data-testid={`oauth-connector-${id}`} data-verify-state={verified?.state ?? "unverified"}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{oauthConnectorLabels[id]}</p>
+                      <p className="text-xs text-muted" data-testid={`oauth-verify-badge-${id}`}>
+                        {connectorVerifyState.status === "loading" && !verified
+                          ? "Verifying…"
+                          : formatVerifyBadge(verified)}
+                        {verified?.detail ? ` — ${verified.detail}` : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                      data-testid={`oauth-verify-${id}`}
+                      disabled={connectorVerifyState.status === "loading" || mcpListState.status !== "ready"}
+                      onClick={() => runConnectorVerify({ target: "oauth", id })}
+                    >
+                      Verify
+                    </button>
+                  </div>
+                </li>
+              );
+            })
+          )}
+        </ul>
+        {connectorVerifyState.status === "error" ? (
+          <p className="text-sm text-danger" role="status" data-testid="connector-verify-error">{connectorVerifyState.message}</p>
+        ) : null}
+      </div>
+
       <ul className="mt-4 space-y-2 text-sm">
+        {ws.browserSessions.length === 0 && <li className="rounded-panel border border-line bg-surface p-3 text-muted">No browser sessions yet. Open page records one only after a successful inspect.</li>}
         {ws.browserSessions.map((session) => (
-          <li key={session.id} className="rounded-panel border border-line bg-surface p-3">
+          <li key={session.id} className="dense-card p-3">
             <p className="font-semibold">{session.title || "No title"} · {session.status}</p>
             <p className="text-xs text-muted">{session.url}</p>
             <p className="mt-1">{session.excerpt || session.lastAction}</p>

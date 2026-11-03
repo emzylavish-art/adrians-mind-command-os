@@ -1,0 +1,20 @@
+feature: Projects dashboard with progress / agent stats
+lane: dashboard-3d (visuals)
+owner_bot: Dashboard Bot
+source_platforms: ChatGPT, Claude, Gemini, Manus, Perplexity, Copilot
+gap_rank: 6 (gap-list-2026-11-01-c3), effort M, status open, unclaimed before this lock
+evidence:
+  - /workspace/rea-captures/gap-list-2026-11-01-c3.md (rank 6)
+  - /workspace/audit/reference/02-screen-grid.jpg
+  - Local projects view is thin vs competitor project dashboards
+acceptance_criteria:
+  - A projects dashboard view (per project: progress, open/done tasks, recent runs, which bots/agents worked on it, last activity) built from real local data only; honest empty/unavailable states, no fake stats
+  - Agent stats panel (runs, success/failure, last active) sourced from existing locks/git/orchestrator data your /api/mind/dashboard/status already reads
+  - Build on branch dashboard-3d in /workspace/mind-command-os-dashboard; prefer new files under src/routes/, src/components/mind/dashboard-3d/ or a sibling folder, src/lib/mind/dashboard/
+  - Do NOT edit command-app.tsx (claimed by media/voice/visual), styles.css (visual-polish), voice/, media/, mcp/, failure-states
+  - typecheck + tests pass; screenshot under /workspace/audit/dashboard-3d/; post done on Notion mirror 40bb95f33e42814aacf8c3281b4f528d and set this lock to done, released
+claimed_by: Dashboard Bot
+timestamp: 2026-11-01T13:30:00+01:00 (Africa/Lagos)
+status: claimed
+cycle: 7
+claimed_at: 2026-11-01T13:39:23+01:00

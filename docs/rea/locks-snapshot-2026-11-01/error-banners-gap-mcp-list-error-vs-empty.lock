@@ -1,0 +1,24 @@
+feature: MCP server list swallows load failures as an empty state
+lane: error-banners
+owner_bot: Error Banners Bot
+branch: error-banners (rebase on preview/integration 9545007 if needed)
+status: dispatched
+dispatched_by: Gap Dispatcher (cycle 21)
+dispatched_at: 2026-11-01T15:12:00+01:00
+evidence: /workspace/audit/mind-os/integration-2/verifier/report.md (line ~74): fleet-panels.tsx mcpRegistryList() catch → [] → UI "No MCP servers loaded yet." — a 401/500/network failure is shown as an honest-looking empty list (silent failure).
+acceptance: |
+  - fleet-panels MCP list distinguishes loading / empty / error (401 sign-in needed vs 5xx/network) using failure-states.ts classifier
+  - error state shows the standard red banner with one-line description + Retry (re-runs the list fetch) + View log
+  - same treatment for any other fleet-panels list that catch→[] (audit the file)
+  - regression tests (classifier + markup) green; typecheck/lint/build green
+  - post done on Notion mirror page, release this lock
+paths: src/components/mind/fleet-panels.tsx (error/empty branches only), src/lib/mind/failure-states.ts(+tests)
+avoid: mcp-integration-pc-shell-allowlist-metachar.lock and mcp-integration-gap-pglite-comment-strip-bypass.lock are claimed by MCP; touch only the list error/empty rendering in fleet-panels.tsx
+claimed_by: Error Banners Bot
+claimed_at: 2026-11-01T09:09:33-05:00
+status_update: claimed
+lock_check: mcp-integration-gap-pc-shell-confirm-bypass (H9) released 2026-11-01T14:52:35+01:00; mcp-integration.lock / mcp-integration-hardening.lock (fleet-panels.tsx) released; no active exclusive claim on fleet-panels.tsx
+status: done, released
+released_at: 2026-11-01T09:13:21-05:00
+commits: [24bcbc8 (merge preview/integration), 826aa99 (fix+tests), 3ebdc18 (handoff)]
+notion: https://app.notion.com/p/40bb95f33e4281d7a921c1780538952d

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fleet bot STATE.json",
+  "description": "Initial and runtime state for one Telegram fleet bot. Secrets do not belong in this object. Timestamps are UTC.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bot_id",
+    "display_name",
+    "status",
+    "last_task",
+    "last_result",
+    "last_error",
+    "failure_count",
+    "halted",
+    "updated_at",
+    "cycle"
+  ],
+  "properties": {
+    "bot_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Folder name and Task Queue assignee. One of the five fleet bot ids."
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human display name registered with BotFather."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["IDLE", "CLAIMED", "WORKING", "HALTED"],
+      "description": "IDLE is the seeded waiting state. CLAIMED and WORKING are written before the model call. HALTED stops the loop."
+    },
+    "last_task": {
+      "type": ["string", "null"],
+      "description": "Title of the latest claimed task, or null when no task has been claimed."
+    },
+    "last_result": {
+      "type": ["string", "null"],
+      "description": "One-line redacted result of the latest successful task, or null."
+    },
+    "last_error": {
+      "type": ["string", "null"],
+      "description": "One-line redacted reason for the latest failure, or null."
+    },
+    "failure_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Consecutive failed cycles. Two consecutive failures halt the bot."
+    },
+    "halted": {
+      "type": "boolean",
+      "description": "True after a double failure or a startup BLOCKED condition. Stays true until the human sets FLEET_RESUME=1."
+    },
+    "updated_at": {
+      "type": ["string", "null"],
+      "description": "UTC timestamp of the latest state write, or null in the seeded file. The harness writes this before it thinks."
+    },
+    "cycle": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of tasks claimed in this state file. Idle polls do not increment it."
+    }
+  }
+}

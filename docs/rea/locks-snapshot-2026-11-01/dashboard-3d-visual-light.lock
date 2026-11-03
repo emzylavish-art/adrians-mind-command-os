@@ -1,0 +1,13 @@
+owner: Cosmos Light Bot
+lane: light
+branch: dashboard-3d-visual-light
+worktree: /workspace/mind-command-os-dashboard-light
+status: claimed
+claimed_at: 2026-11-01T14:55:44+01:00
+released_at:
+paths:
+  - src/components/mind/dashboard-3d/atmosphere/
+  - src/components/mind/dashboard-3d/postfx/
+notes: |
+  Cycle 2 landing: god-ray shafts (#11) + hacker fix (neutral idle / bloom dispose).
+  Tip local 915ef90. Push feature then wait for dashboard-3d.lock (Dashboard Bot click-zoom).

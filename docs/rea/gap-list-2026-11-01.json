@@ -1,0 +1,486 @@
+{
+  "date": "2026-11-01",
+  "timezone": "Africa/Lagos",
+  "cycle": 1,
+  "product": "Adrian's Mind Command OS",
+  "gaps": [
+    {
+      "rank": 1,
+      "feature": "Working live model replies (provider keys + Send path)",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Perplexity",
+        "Manus",
+        "Poe",
+        "Pi",
+        "HuggingChat",
+        "Copilot"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md",
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/pi/pi-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/mind-os/gap-report.md"
+      ],
+      "adrians_today": "Composer + streaming path exist; Send fails without XAI_API_KEY; other providers refused/disabled.",
+      "effort": "S",
+      "why": "Highest user impact \u2014 without replies the rest of the OS is a shell. Competitors all expose a usable send path (guest or signed-in)."
+    },
+    {
+      "rank": 2,
+      "feature": "Model / effort / thinking-level picker wired to real catalogs",
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Poe",
+        "Manus",
+        "Perplexity",
+        "ChatGPT",
+        "HuggingChat"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/poe/poe-features-2026-11-01.md",
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/gemini/gemini-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/signed-in/findings-gemini.md",
+        "/workspace/rea-captures/poe/poe-explore-retry-features-2026-11-01.md"
+      ],
+      "adrians_today": "Presentational Auto/Fast/Expert/Heavy/Build menu; provider radios mostly disabled; no effort API.",
+      "effort": "M",
+      "why": "Users expect to choose speed vs depth; Poe/HuggingChat advertise large catalogs even on public pages."
+    },
+    {
+      "rank": 3,
+      "feature": "Web search + Deep research with citations in-chat",
+      "platforms": [
+        "ChatGPT",
+        "Perplexity",
+        "Claude",
+        "Gemini",
+        "Poe",
+        "You.com"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md",
+        "/workspace/rea-captures/perplexity/perplexity-features-2026-11-01.md",
+        "/workspace/rea-captures/youcom/youcom-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-perplexity.md"
+      ],
+      "adrians_today": "Research view + citation filter code; blocked without MIND_SEARCH_ENDPOINT/KEY; ChatGPT public UI gates Deep research behind login.",
+      "effort": "M",
+      "why": "Core daily-use differentiator for research OS positioning; Perplexity/You.com are search-first."
+    },
+    {
+      "rank": 4,
+      "feature": "In-thread tool-execution timeline + live activity rail",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/audit/mind-os/gap-report.md",
+        "/workspace/audit/reference/03-chat-hero.jpg",
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/rea-captures/manus/manus-features-2026-11-01.md"
+      ],
+      "adrians_today": "Runs/Activity are separate views; no Executing-tools card or right-rail Agent Activity Live in chat.",
+      "effort": "M",
+      "why": "Makes agent work legible during a turn; reference board already shows the target UX."
+    },
+    {
+      "rank": 5,
+      "feature": "Connectors/plugins that actually OAuth-connect",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-manus.md",
+        "/workspace/audit/signed-in/findings-gemini.md",
+        "/workspace/mind-command-os/src/components/mind/service-board.tsx"
+      ],
+      "adrians_today": "ServiceBoard Setup shows detail only; Gmail OAuth stub; Notion/MCP often unconfigured.",
+      "effort": "L",
+      "why": "Command OS value depends on mail/drive/git/notion; competitors ship connectable catalogs."
+    },
+    {
+      "rank": 6,
+      "feature": "Cloud file sources (Drive / OneDrive / library attach)",
+      "platforms": [
+        "Gemini",
+        "Manus",
+        "Perplexity",
+        "ChatGPT",
+        "Claude"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-gemini.md",
+        "/workspace/audit/signed-in/findings-manus.md",
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md"
+      ],
+      "adrians_today": "Local attach/stage only; Drive card Not connected.",
+      "effort": "L",
+      "why": "Users attach work docs from cloud; local-only is a daily friction."
+    },
+    {
+      "rank": 7,
+      "feature": "Guest / logged-out usable chat (progressive auth)",
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "HuggingChat",
+        "Pi",
+        "Meta AI"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md",
+        "/workspace/rea-captures/gemini/gemini-features-2026-11-01.md",
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/pi/pi-features-2026-11-01.md"
+      ],
+      "adrians_today": "Page loads signed-out but protected ops 401; no guest trial send.",
+      "effort": "M",
+      "why": "Public capture cycle shows competitors let users start before full auth; improves activation."
+    },
+    {
+      "rank": 8,
+      "feature": "Full-duplex / Live voice mode",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Poe",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/gemini/gemini-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/public-rea/chatgpt-voice-mode-blank.png"
+      ],
+      "adrians_today": "Dictate + one-shot Speak; registry voice=configured but not realtime.",
+      "effort": "L",
+      "why": "High desire; owner previously deferred until management key \u2014 still a ranked gap."
+    },
+    {
+      "rank": 9,
+      "feature": "Image generation in composer (+ shopping/vision assistants)",
+      "platforms": [
+        "ChatGPT",
+        "HuggingChat",
+        "Meta AI",
+        "Copilot",
+        "Poe"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md",
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/metaai/metaai-features-2026-11-01.md"
+      ],
+      "adrians_today": "Image analyze hook; generation paid_required / not called.",
+      "effort": "M",
+      "why": "Visible on public competitor homes; Meta AI leans shopping+images."
+    },
+    {
+      "rank": 10,
+      "feature": "Keyboard shortcut sheet + composer \u2318K polish",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Manus",
+        "Perplexity",
+        "Gemini"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/signed-in/findings-perplexity.md",
+        "/workspace/rea-captures/gemini/gemini-features-2026-11-01.md"
+      ],
+      "adrians_today": "Palette exists; full shortcut help sheet and ref-style composer \u2318K incomplete.",
+      "effort": "S",
+      "why": "Power-user velocity; cheap win vs competitors' Ctrl+/ sheets."
+    },
+    {
+      "rank": 11,
+      "feature": "Projects with progress / agent stats dashboard",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity",
+        "Copilot"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/reference/02-screen-grid.jpg",
+        "/workspace/rea-captures/copilot/copilot-features-2026-11-01.md"
+      ],
+      "adrians_today": "Local projects create/list; no % complete / agent stats cards like reference grid.",
+      "effort": "M",
+      "why": "Projects exist but feel thin vs competitor + blueprint UI."
+    },
+    {
+      "rank": 12,
+      "feature": "Scheduled automations that run unattended",
+      "platforms": [
+        "ChatGPT",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/signed-in/findings-manus.md",
+        "/workspace/mind-command-os/docs/FEATURE_COMPLETION_MATRIX.md"
+      ],
+      "adrians_today": "Scheduled UI + local due queue; hosted worker exits without DATABASE_URL.",
+      "effort": "L",
+      "why": "Command OS promise includes schedules; needs durable DB + worker host."
+    },
+    {
+      "rank": 13,
+      "feature": "Artifacts / Canvas / Studio build surface",
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Perplexity",
+        "Manus",
+        "HuggingChat"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/signed-in/findings-manus.md",
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/claude/claude-claude-com-retry-features-2026-11-01.md"
+      ],
+      "adrians_today": "Build view cards report Not available / computer not paired.",
+      "effort": "L",
+      "why": "Coding/create surfaces are competitor table-stakes; blocked on pairing."
+    },
+    {
+      "rank": 14,
+      "feature": "Multi-bot / character / persona directory",
+      "platforms": [
+        "Character.AI",
+        "Poe",
+        "Manus",
+        "HuggingChat",
+        "Copilot"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/characterai/characterai-features-2026-11-01.md",
+        "/workspace/rea-captures/poe/poe-features-2026-11-01.md",
+        "/workspace/rea-captures/manus/manus-features-2026-11-01.md",
+        "/workspace/rea-captures/poe/poe-chatgpt-bot-retry-features-2026-11-01.md"
+      ],
+      "adrians_today": "Bots & Agents + templates exist but not a discoverable persona marketplace UI.",
+      "effort": "M",
+      "why": "Engagement pattern from Character.AI/Poe; Adrian has fleet primitives to build on."
+    },
+    {
+      "rank": 15,
+      "feature": "Omni / auto model routing across open models",
+      "platforms": [
+        "HuggingChat",
+        "Poe",
+        "You.com"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/poe/poe-features-2026-11-01.md",
+        "/workspace/rea-captures/youcom/youcom-features-2026-11-01.md",
+        "/workspace/rea-captures/poe/poe-explore-retry-features-2026-11-01.md"
+      ],
+      "adrians_today": "chat.router capability marked ready locally; no multi-model auto router to external catalogs.",
+      "effort": "L",
+      "why": "HuggingChat Omni + You Inference Router are public differentiators."
+    },
+    {
+      "rank": 16,
+      "feature": "Memory UX depth (editable prefs, import, toggles in attach)",
+      "platforms": [
+        "Claude",
+        "Gemini",
+        "Poe",
+        "Perplexity",
+        "ChatGPT"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/signed-in/findings-gemini.md",
+        "/workspace/audit/reference/02-screen-grid.jpg"
+      ],
+      "adrians_today": "Memory view with scopes/versions; thinner than competitor settings + attach toggles.",
+      "effort": "M",
+      "why": "Trust + personalization; local memory already works \u2014 UX depth is the gap."
+    },
+    {
+      "rank": 17,
+      "feature": "Settings information architecture (billing, data, voice, shortcuts)",
+      "platforms": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Manus",
+        "Perplexity"
+      ],
+      "evidence": [
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md",
+        "/workspace/audit/signed-in/chatgpt/settings-general.png"
+      ],
+      "adrians_today": "Settings thinner: appearance, import/export, requirements, failover note.",
+      "effort": "M",
+      "why": "Users hunt for data controls and shortcuts; competitors have deep trees."
+    },
+    {
+      "rank": 18,
+      "feature": "Suggestion chips / starter prompts on empty chat",
+      "platforms": [
+        "HuggingChat",
+        "ChatGPT",
+        "Claude",
+        "Pi",
+        "Meta AI"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md",
+        "/workspace/rea-captures/pi/pi-features-2026-11-01.md"
+      ],
+      "adrians_today": "Greeting exists; rich chip grids like HuggingChat less prominent.",
+      "effort": "S",
+      "why": "Activation UX; low effort polish."
+    },
+    {
+      "rank": 19,
+      "feature": "Cowork / shared workspaces / Work IQ style modes",
+      "platforms": [
+        "Copilot",
+        "Claude",
+        "Manus"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/copilot/copilot-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-chatgpt-claude.md"
+      ],
+      "adrians_today": "Single-owner workspace; no cowork surface.",
+      "effort": "L",
+      "why": "Enterprise/collab wedge; lower than personal daily gaps but visible on Copilot marketing."
+    },
+    {
+      "rank": 20,
+      "feature": "Mobile app / PWA install path polished",
+      "platforms": [
+        "Gemini",
+        "Copilot",
+        "ChatGPT",
+        "Pi"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/gemini/gemini-features-2026-11-01.md",
+        "/workspace/rea-captures/copilot/copilot-features-2026-11-01.md",
+        "/workspace/mind-command-os/docs/EXTERNAL_BLOCKERS.md"
+      ],
+      "adrians_today": "iPhone Add to Home Screen documented as blocker/manual; no strong public install CTA.",
+      "effort": "S",
+      "why": "Distribution; competitors push apps on public pages."
+    },
+    {
+      "rank": 21,
+      "feature": "Screen-state design system (Loading/Empty/Error/Success tokens)",
+      "platforms": [
+        "Reference board",
+        "ChatGPT",
+        "Claude"
+      ],
+      "evidence": [
+        "/workspace/audit/reference/01-blueprint-board.jpg",
+        "/workspace/audit/mind-os/gap-report.md",
+        "/workspace/audit/visual-pass-1/mismatches.md"
+      ],
+      "adrians_today": "Failure banner improved; full state token system incomplete vs blueprint.",
+      "effort": "M",
+      "why": "Consistency and trust; visual polish pass already targeting related issues."
+    },
+    {
+      "rank": 22,
+      "feature": "MCP / agent-intern modes in chat (tool-using specialist)",
+      "platforms": [
+        "HuggingChat",
+        "Manus",
+        "Claude"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/huggingchat/huggingchat-features-2026-11-01.md",
+        "/workspace/audit/signed-in/findings-manus.md"
+      ],
+      "adrians_today": "MCP client stubs + skills list; not a first-class 'ML Intern'-style mode chip.",
+      "effort": "M",
+      "why": "HuggingChat publicly ships MCP-backed intern mode; aligns with Adrian skills/MCP direction."
+    },
+    {
+      "rank": 23,
+      "feature": "Auth provider variety on public wall (Google/Microsoft/Apple/phone)",
+      "platforms": [
+        "ChatGPT",
+        "Poe",
+        "Claude",
+        "Pi"
+      ],
+      "evidence": [
+        "/workspace/rea-captures/chatgpt/chatgpt-features-2026-11-01.md",
+        "/workspace/rea-captures/poe/poe-features-2026-11-01.md"
+      ],
+      "adrians_today": "Email/password + existing auth stack; fewer social options than ChatGPT public wall.",
+      "effort": "M",
+      "why": "Reduces signup friction when opening the product beyond owner."
+    },
+    {
+      "rank": 24,
+      "feature": "Durable cloud DB + hosted worker for multi-device sync",
+      "platforms": [
+        "All major SaaS competitors"
+      ],
+      "evidence": [
+        "/workspace/mind-command-os/docs/EXTERNAL_BLOCKERS.md",
+        "/workspace/mind-command-os/docs/FEATURE_COMPLETION_MATRIX.md"
+      ],
+      "adrians_today": "Browser snapshot + embedded PGLite; DATABASE_URL unset; hosted worker blocked.",
+      "effort": "L",
+      "why": "Foundation for schedules, sync, and multi-device \u2014 platform gap more than a single UI widget."
+    },
+    {
+      "rank": 25,
+      "feature": "Healthy REA / reverse-engineering doctor environment",
+      "platforms": [
+        "N/A (Adrian differentiator blocked)"
+      ],
+      "evidence": [
+        "/workspace/mind-command-os/docs/PLATFORM_CAPABILITY_RESEARCH.md",
+        "/workspace/mind-command-os/docs/FEATURE_COMPLETION_MATRIX.md"
+      ],
+      "adrians_today": "REA pinned but doctor unhealthy; native engines missing.",
+      "effort": "L",
+      "why": "Unique Command OS capability vs chat apps; ranks last among UI gaps because env/install, not competitor parity."
+    }
+  ],
+  "retry_walled": {
+    "date": "2026-11-01",
+    "timezone": "Africa/Lagos",
+    "claude": "app_blocked_marketing_captured",
+    "phind": "still_404",
+    "poe": "explore_and_bot_pages_captured",
+    "summary": "/workspace/rea-captures/capture-retry-walled-summary-2026-11-01.json"
+  }
+}
