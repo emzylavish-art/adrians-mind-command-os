@@ -113,4 +113,4 @@ export function buildGitHubAuthorizeUrl(input: {
 }
 
 // Re-export the browser-safe URL validator for existing server/test imports.
-export { isFirstPartyAuthorizeUrl } from "./first-party-authorize-url";
+export { isFirstPartyAuthorizeUrl } from "./first-party-authorize-url.ts";
