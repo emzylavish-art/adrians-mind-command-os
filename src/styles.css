@@ -13261,3 +13261,249 @@ body:has(.account-panel) nav.fixed[aria-label="Primary"] {
     min-width: 3.5rem !important;
   }
 }
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u s — <430px: compact Speak + Auto so Ask ≥140px;
+ * dock CSS vars drive scroll clearance (composer + tab + safe-area).
+ * ============================================================================ */
+
+/* Dock measured chrome → clearance token (consumed by scrollports + chip rows) */
+.composer-bar.is-fixed,
+.composer-bar.is-fixed.fixed,
+div.shell > div.composer-bar.is-fixed {
+  --am-composer-h: 4.5rem; /* ~72px measured card+pad */
+  --am-tabbar-h: 3.375rem; /* ~54px Primary */
+  --am-dock-clearance: calc(
+    var(--am-composer-h) + var(--am-tabbar-h) + env(safe-area-inset-bottom, 0px)
+  );
+}
+
+@media (max-width: 767.98px) {
+  /* Scroll content clears fixed composer + tab bar */
+  body:has(.composer-bar.is-fixed) .main-stage > .min-h-0.flex-1.overflow-auto,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage > .min-h-0.flex-1.overflow-auto,
+  body:has(.composer-bar.is-fixed) .min-h-0.flex-1.overflow-auto {
+    padding-bottom: var(--am-dock-clearance, calc(4.5rem + 3.375rem + env(safe-area-inset-bottom, 0px))) !important;
+  }
+
+  /* Quick-action rows: margin from the same dock token so wrapped rows scroll clear */
+  body:has(.composer-bar.is-fixed) .main-stage .flex.gap-2.overflow-x-auto,
+  body:has(.composer-bar.is-fixed) .main-stage .flex.gap-2.overflow-x-auto.pb-1,
+  body:has(.composer-bar.is-fixed) .main-stage .mt-4.flex.gap-2.overflow-x-auto,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto.pb-1 {
+    margin-bottom: var(--am-dock-clearance, 7.875rem) !important;
+    scroll-margin-bottom: var(--am-dock-clearance, 7.875rem) !important;
+  }
+
+  /* Let Generate Image/Video share a row (shrink) so Analyze/More sit above the dock at rest */
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto > button,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto.pb-1 > button {
+    flex: 1 1 calc(50% - 0.25rem) !important;
+    min-width: 0 !important;
+    max-width: calc(50% - 0.25rem) !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* Narrow phones: Speak → icon pill; Auto → 40px chip; Ask ≥140px */
+@media (max-width: 429.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-pill {
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    max-width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border-radius: 999px !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live__label {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-speak-live__bars,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-speak"] > svg {
+    width: 1rem !important;
+    height: 1rem !important;
+    margin: 0 !important;
+  }
+
+  /* Auto → 40px icon chip (letter A); hide chevron + long label */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-chip,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"] {
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    max-width: 2.5rem !important;
+    height: 2.5rem !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 2.5rem !important;
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    max-width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 999px !important;
+    border: 1px solid rgb(255 255 255 / 0.14) !important;
+    background: #1c1c1e !important;
+    overflow: hidden !important;
+    font-size: 0 !important; /* hide "Auto" + chevron text metrics */
+    color: transparent !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip > span,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip > svg {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    opacity: 0 !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip::after {
+    content: "A" !important;
+    display: grid !important;
+    place-items: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+    color: #f4f4f5 !important;
+    line-height: 1 !important;
+  }
+
+  /* Ask field: hard floor 140px */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-ask"] {
+    flex: 1 1 140px !important;
+    min-width: 140px !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask-input,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="live-voice-bar-input"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed input[placeholder="Ask Anything"] {
+    min-width: 140px !important;
+    width: 100% !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    font-size: 0.9375rem !important; /* keep placeholder readable */
+  }
+
+  /* Tighten form gap so 140px Ask fits with + / A / mic / Speak icons */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card > form {
+    gap: 0.25rem !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card {
+    padding: 0.35rem 0.4rem !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u t — opaque dock plate; no Ask↔Auto AABB bleed;
+ * account/voice error above dock; pointer-events shield under chrome.
+ * ============================================================================ */
+@media (max-width: 767.98px) {
+  /* Full-bleed opaque plate behind composer (kills see-through chips) */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed {
+    background: #050507 !important;
+    background-color: #050507 !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 !important;
+    background: #050507 !important;
+    opacity: 1 !important;
+    border-radius: 0 !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__safe,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card {
+    position: relative !important;
+    z-index: 2 !important;
+    background: #0c0c0e !important;
+    background-color: #0c0c0e !important;
+    opacity: 1 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Ask clip — keep Auto readable on 430–767; <430 uses icon chip rules */
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-ask"] {
+    overflow: hidden !important;
+    margin-right: 0.15rem !important;
+  }
+
+  /* Voice / support error toast: above dock, wrap, no clip */
+  .composer-bar.is-fixed .alert,
+  .composer-bar.is-fixed [role="alert"],
+  .main-stage [role="alert"],
+  .live-voice-bar [role="alert"],
+  body:has(.composer-bar.is-fixed) .toast,
+  body:has(.composer-bar.is-fixed) [data-testid="voice-error"],
+  body:has(.composer-bar.is-fixed) .text-danger.border-danger\/40 {
+    position: relative;
+    z-index: 47 !important;
+    max-width: min(100%, 22rem) !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    padding: 0.5rem 0.75rem !important;
+    margin-bottom: 0.35rem !important;
+    border-radius: 0.75rem !important;
+    background: #1a0c0c !important;
+    border: 1px solid rgb(255 120 120 / 0.45) !important;
+    color: #fecaca !important;
+  }
+
+  /* Account panel above composer dock */
+  .account-panel,
+  [data-testid="account-panel"],
+  .topbar [role="menu"],
+  .shell .account-menu {
+    z-index: 55 !important;
+  }
+  body:has(.account-panel, [data-testid="account-panel"], .topbar [role="menu"][data-state="open"]) .composer-bar.is-fixed {
+    z-index: 40 !important;
+  }
+}
+
