@@ -604,3 +604,538 @@ div.flex.gap-2.overflow-x-auto > [data-media="generate-video"] {
     transition: none !important;
   }
 }
+
+/* ============================================================================
+ * Media visual r2 — new hooks from BLOCKERS.md (burst, batch, gallery,
+ * attachment chips, downscale segmented, composer-drop, use-in-composer).
+ * Same glass mono language. Purple only on .logo-mark (untouched).
+ * ============================================================================ */
+
+/* —— Shared glass action (reuse token look) —— */
+[data-media="attachment-chips-remove-selected"],
+[data-media="attachment-chips-clear-selection"],
+[data-media="attachment-chip-move-left"],
+[data-media="attachment-chip-move-right"],
+[data-media="attachment-chip-edit"],
+[data-media="attachment-chip-remove"],
+[data-media="camera-burst-attach"],
+[data-media="camera-burst-discard"],
+[data-media="camera-burst-cancel"],
+[data-media="camera-burst-size"],
+[data-media="camera-burst-run"],
+[data-media="imagine-batch-edit"],
+[data-media="imagine-batch-confirm"],
+[data-media="imagine-batch-cancel"],
+[data-media="imagine-batch-abort"],
+[data-media="use-in-composer"],
+[data-media="chat-gallery-toggle"],
+[data-media="chat-gallery-close"] {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  min-height: 2.5rem; /* 40px phone controls */
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-panel, 1rem) !important;
+  color: var(--media-text-primary) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 42%),
+    linear-gradient(180deg, rgb(14 16 22 / 0.72), rgb(10 12 18 / 0.82)),
+    linear-gradient(145deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.08) 45%, rgb(255 255 255 / 0.22)) !important;
+  background-color: transparent !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.18) !important;
+  backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  transition: transform 160ms ease, opacity 160ms ease !important;
+  cursor: pointer;
+}
+[data-media="attachment-chips-remove-selected"]:hover:not(:disabled),
+[data-media="attachment-chips-clear-selection"]:hover:not(:disabled),
+[data-media="attachment-chip-move-left"]:hover:not(:disabled),
+[data-media="attachment-chip-move-right"]:hover:not(:disabled),
+[data-media="attachment-chip-edit"]:hover:not(:disabled),
+[data-media="attachment-chip-remove"]:hover:not(:disabled),
+[data-media="camera-burst-attach"]:hover:not(:disabled),
+[data-media="camera-burst-discard"]:hover:not(:disabled),
+[data-media="camera-burst-cancel"]:hover:not(:disabled),
+[data-media="camera-burst-size"]:hover:not(:disabled),
+[data-media="camera-burst-run"]:hover:not(:disabled),
+[data-media="imagine-batch-edit"]:hover:not(:disabled),
+[data-media="imagine-batch-confirm"]:hover:not(:disabled),
+[data-media="imagine-batch-cancel"]:hover:not(:disabled),
+[data-media="imagine-batch-abort"]:hover:not(:disabled),
+[data-media="use-in-composer"]:hover:not(:disabled),
+[data-media="chat-gallery-toggle"]:hover:not(:disabled),
+[data-media="chat-gallery-close"]:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+[data-media="attachment-chips-remove-selected"]:focus-visible,
+[data-media="attachment-chips-clear-selection"]:focus-visible,
+[data-media="attachment-chip-move-left"]:focus-visible,
+[data-media="attachment-chip-move-right"]:focus-visible,
+[data-media="attachment-chip-edit"]:focus-visible,
+[data-media="attachment-chip-remove"]:focus-visible,
+[data-media="attachment-chip-select"]:focus-visible,
+[data-media="attachment-chip-thumb"]:focus-visible,
+[data-media="camera-burst-candidate"]:focus-visible,
+[data-media="camera-burst-attach"]:focus-visible,
+[data-media="camera-burst-discard"]:focus-visible,
+[data-media="camera-burst-cancel"]:focus-visible,
+[data-media="camera-burst-size"]:focus-visible,
+[data-media="camera-burst-run"]:focus-visible,
+[data-media="imagine-batch-edit"]:focus-visible,
+[data-media="imagine-batch-confirm"]:focus-visible,
+[data-media="imagine-batch-cancel"]:focus-visible,
+[data-media="imagine-batch-abort"]:focus-visible,
+[data-media="use-in-composer"]:focus-visible,
+[data-media="downscale-quality"]:focus-visible,
+[data-media="chat-gallery-toggle"]:focus-visible,
+[data-media="chat-gallery-thumb"]:focus-visible,
+[data-media="chat-gallery-close"]:focus-visible,
+[data-media="composer-drop"]:focus-within {
+  outline: 2px solid var(--media-focus-ring) !important;
+  outline-offset: 2px !important;
+  box-shadow:
+    0 0 0 2px var(--media-focus-gap),
+    0 0 0 4px rgb(244 244 245 / 0.95) !important;
+}
+
+/* Disabled */
+[data-media="attachment-chip-move-left"]:disabled,
+[data-media="attachment-chip-move-right"]:disabled,
+[data-media="camera-burst-attach"]:disabled,
+[data-media="camera-burst-size"]:disabled,
+[data-media="camera-burst-run"]:disabled,
+[data-media="imagine-batch-edit"]:disabled,
+[data-media="imagine-batch-confirm"]:disabled,
+[data-media="use-in-composer"]:disabled {
+  opacity: 0.45 !important;
+  color: var(--media-text-tertiary) !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  filter: grayscale(0.2);
+}
+
+/* —— Attachment chips tray —— */
+[data-media="attachment-chips-tray"] {
+  gap: var(--media-gap);
+  padding: var(--media-gap) 0;
+}
+[data-media="attachment-chips-bulk"] {
+  gap: var(--media-gap) !important;
+}
+[data-media="attachment-chips-remove-selected"] {
+  color: #f5d0d0 !important; /* danger on dark, still mono-ish */
+}
+[data-media="attachment-chips"] {
+  gap: var(--media-gap) !important;
+}
+[data-media="attachment-chip"] {
+  position: relative;
+  isolation: isolate;
+  gap: 6px !important;
+  padding: 6px 8px !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-panel, 1rem) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 50%),
+    linear-gradient(180deg, rgb(12 14 20 / 0.85), rgb(8 10 14 / 0.92)),
+    linear-gradient(145deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0.06) 45%, rgb(255 255 255 / 0.18)) !important;
+  background-color: transparent !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  color: var(--media-text-secondary) !important;
+  transition: transform 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
+}
+[data-media="attachment-chip"][data-selected="true"],
+[data-media="attachment-chip"].ring-2 {
+  box-shadow:
+    0 0 0 2px var(--media-focus-gap),
+    0 0 0 3px rgb(244 244 245 / 0.85),
+    inset 0 1px 0 rgb(255 255 255 / 0.16) !important;
+  /* kill purple ring-accent */
+  --tw-ring-color: transparent !important;
+}
+[data-media="attachment-chip-thumb"] {
+  border-radius: calc(var(--radius-panel, 1rem) - 4px) !important;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.12);
+}
+[data-media="attachment-chip-thumb"] img {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+}
+[data-media="attachment-chip-select"] {
+  accent-color: #f4f4f5;
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+[data-media="attachment-chip-remove"] {
+  color: #f0c4c4 !important;
+}
+[data-media="attachment-chip-edit"] {
+  /* demote purple text-accent */
+  color: var(--media-text-primary) !important;
+}
+
+/* —— Downscale quality: segmented Fast / Balanced / Full —— */
+[data-media="downscale-quality"] {
+  position: relative;
+  isolation: isolate;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.75rem !important;
+  gap: 0.5rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  color: var(--media-text-primary) !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 50%),
+    linear-gradient(180deg, rgb(14 16 22 / 0.75), rgb(10 12 18 / 0.85)),
+    linear-gradient(145deg, rgb(255 255 255 / 0.36), rgb(255 255 255 / 0.06) 45%, rgb(255 255 255 / 0.18)) !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  transition: transform 160ms ease, opacity 160ms ease !important;
+}
+/* Segmented indicator: 3-stop rail under the label (never covers text) */
+[data-media="downscale-quality"] {
+  padding-bottom: 0.7rem !important;
+}
+[data-media="downscale-quality"]::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 6px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  pointer-events: none;
+  z-index: 0;
+}
+[data-media="downscale-quality"]::after {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  width: 28%;
+  height: 5px;
+  border-radius: 999px;
+  background: #f4f4f5;
+  box-shadow: 0 0 10px rgb(255 255 255 / 0.35);
+  pointer-events: none;
+  z-index: 1;
+  transition: left 160ms ease, right 160ms ease;
+}
+[data-media="downscale-quality"][data-quality="fast"]::after { left: 12px; right: auto; }
+[data-media="downscale-quality"][data-quality="balanced"]::after { left: 36%; right: auto; }
+[data-media="downscale-quality"][data-quality="full"]::after { left: auto; right: 12px; }
+[data-media="downscale-quality"][data-quality="fast"],
+[data-media="downscale-quality"][data-quality="balanced"],
+[data-media="downscale-quality"][data-quality="full"] {
+  color: var(--media-text-primary) !important;
+}
+
+/* —— Camera burst tray —— */
+[data-media="camera-burst-tray"] {
+  padding: var(--media-gap);
+  border-radius: var(--radius-panel, 1rem);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(8 10 14 / 0.55);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+[data-media="camera-burst-candidate"] {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-panel, 1rem) !important;
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  /* kill purple ring */
+  --tw-ring-color: transparent !important;
+}
+[data-media="camera-burst-candidate"][data-selected="true"],
+[data-media="camera-burst-candidate"][aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--media-focus-gap),
+    0 0 0 3px rgb(244 244 245 / 0.9) !important;
+  transform: translateY(-1px);
+}
+[data-media="camera-burst-candidate"] img {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+  object-fit: cover;
+}
+[data-media="camera-burst-attach"] {
+  background-image: linear-gradient(180deg, #f8fafc, #e4e4e7) !important;
+  color: #0a0d14 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 0 14px rgb(255 255 255 / 0.08) !important;
+}
+[data-media="camera-burst-attach"]:disabled {
+  background-image: none !important;
+  background-color: rgb(255 255 255 / 0.06) !important;
+  color: var(--media-text-tertiary) !important;
+}
+
+/* —— Imagine batch edit —— */
+[data-media="imagine-batch-edit"] {
+  font-weight: 600;
+}
+[data-media="imagine-batch-preview"] {
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-panel, 1rem) !important;
+  color: var(--media-text-secondary) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 50%),
+    linear-gradient(180deg, rgb(12 14 20 / 0.88), rgb(8 10 14 / 0.94)),
+    linear-gradient(145deg, rgb(255 255 255 / 0.3), rgb(255 255 255 / 0.05) 45%, rgb(255 255 255 / 0.14)) !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1) !important;
+  backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+}
+[data-media="imagine-batch-confirm"] {
+  /* demote purple bg-accent */
+  background-image: linear-gradient(180deg, #f8fafc, #e4e4e7) !important;
+  background-color: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 0 14px rgb(255 255 255 / 0.08) !important;
+}
+[data-media="imagine-batch-progress"] {
+  color: var(--media-text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+}
+[data-media="imagine-batch-abort"] {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: var(--media-text-primary) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  min-height: auto !important;
+  padding: 0.25rem 0.4rem !important;
+}
+
+/* —— Use in composer —— */
+[data-media="use-in-composer"] {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* —— Composer drop zone —— */
+[data-media="composer-drop"] {
+  position: relative;
+  border-radius: var(--radius-panel, 1rem);
+  border: 1px dashed rgb(255 255 255 / 0.14);
+  transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+[data-media="composer-drop"]:hover,
+[data-media="composer-drop"]:focus-within {
+  border-color: rgb(255 255 255 / 0.32);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 0 24px rgb(255 255 255 / 0.06);
+}
+/* Drag affordance hint (CSS-only; Media can add data-drag="over" later) */
+[data-media="composer-drop"][data-drag="over"],
+[data-media="composer-drop"].is-dragover {
+  border-style: dashed !important;
+  border-color: rgb(244 244 245 / 0.7) !important;
+  box-shadow:
+    0 0 0 1px rgb(244 244 245 / 0.25),
+    0 0 28px rgb(255 255 255 / 0.12),
+    inset 0 0 24px rgb(255 255 255 / 0.04) !important;
+}
+[data-media="composer-drop"][data-drag="over"]::after,
+[data-media="composer-drop"].is-dragover::after {
+  content: "Drop to attach";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0a0a0b;
+  background: #f4f4f5;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+
+/* —— Hidden attach-image input: keep accessible when un-hidden —— */
+[data-media="attach-image-input"] {
+  /* stays .hidden in markup; if revealed, match mono control */
+  accent-color: #f4f4f5;
+}
+[data-media="attach-image-input"]:not(.hidden):not([hidden]) {
+  display: block;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.5rem;
+  border: 1px dashed rgb(255 255 255 / 0.2);
+  border-radius: var(--radius-panel, 1rem);
+  color: var(--media-text-secondary);
+  background: rgb(8 10 14 / 0.6);
+}
+[data-media="attach-image-input"]:focus-visible {
+  outline: 2px solid var(--media-focus-ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* —— Chat gallery —— */
+[data-media="chat-gallery"] {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-panel, 1rem) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 42%),
+    linear-gradient(180deg, rgb(14 16 22 / 0.82), rgb(10 12 18 / 0.9)),
+    linear-gradient(145deg, rgb(255 255 255 / 0.32), rgb(255 255 255 / 0.06) 45%, rgb(255 255 255 / 0.16)) !important;
+  background-color: transparent !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  color: var(--media-text-primary);
+}
+[data-media="chat-gallery"] > .mb-2 p,
+[data-media="chat-gallery"] .text-muted {
+  color: var(--media-text-secondary) !important;
+  letter-spacing: 0.06em;
+}
+[data-media="chat-gallery-grid"] {
+  gap: var(--media-gap) !important;
+}
+[data-media="chat-gallery-thumb"] {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  border-radius: var(--radius-panel, 1rem) !important;
+  background: rgb(8 10 14 / 0.7) !important;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  color: var(--media-text-secondary);
+}
+[data-media="chat-gallery-thumb"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.4);
+}
+[data-media="chat-gallery-thumb"] img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+[data-media="chat-gallery-thumb"][data-kind="attached"] {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+[data-media="chat-gallery-thumb"][data-kind="camera"]::before,
+[data-media="chat-gallery-thumb"][data-kind="generated"]::before,
+[data-media="chat-gallery-thumb"][data-kind="attached"]::before {
+  content: attr(data-kind);
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0a0a0b;
+  background: rgb(244 244 245 / 0.92);
+  pointer-events: none;
+}
+[data-media="chat-gallery-thumb"][data-kind="generated"]::before {
+  background: #f4f4f5;
+}
+[data-media="chat-gallery-thumb"][data-kind="camera"]::before {
+  background: rgb(220 220 225 / 0.95);
+}
+[data-media="chat-gallery-lightbox"] {
+  margin-top: calc(var(--media-gap) * 1.5);
+  padding: var(--media-gap);
+  border-radius: var(--radius-panel, 1rem);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(0 0 0 / 0.35);
+}
+[data-media="chat-gallery-close"] {
+  margin-top: var(--media-gap);
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-media="attachment-chip"],
+  [data-media="camera-burst-candidate"],
+  [data-media="chat-gallery-thumb"],
+  [data-media="downscale-quality"],
+  [data-media="downscale-quality"]::after,
+  [data-media="composer-drop"] {
+    transition: none !important;
+  }
+}
+
+
+/* camera-capture alias (Media renamed camera-dialog → camera-capture) */
+[data-media="camera-capture"] {
+  z-index: var(--media-z-modal) !important;
+}
+[data-media="camera-capture"] button.bg-accent,
+[data-media="camera-capture"] button.bg-accent.text-accent-ink {
+  background-image: linear-gradient(180deg, #f8fafc, #e4e4e7) !important;
+  background-color: #e8ecf5 !important;
+  color: #0a0d14 !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    inset 0 0 22px rgb(255 255 255 / 0.25),
+    0 0 16px rgb(255 255 255 / 0.08) !important;
+}
+[data-media="camera-capture"] .mt-3.flex.flex-wrap > button {
+  min-height: 2.5rem;
+  border: 1px solid transparent !important;
+  color: var(--media-text-primary) !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 50%),
+    linear-gradient(180deg, rgb(14 16 22 / 0.7), rgb(10 12 18 / 0.8)),
+    linear-gradient(145deg, rgb(255 255 255 / 0.32), rgb(255 255 255 / 0.06) 45%, rgb(255 255 255 / 0.16)) !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+  backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(var(--media-glass-blur)) saturate(1.05) !important;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+[data-media="camera-capture"] .mt-3.flex.flex-wrap > button:disabled {
+  opacity: 0.45 !important;
+  color: var(--media-text-tertiary) !important;
+  cursor: not-allowed !important;
+}
