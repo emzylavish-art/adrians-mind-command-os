@@ -4,7 +4,7 @@ import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { assertAllowedRequestHost } from "@/lib/mind/mcp/request-host";
 import { consumePcApproval } from "@/lib/mind/pc-pairing/approvals";
 import { readHaltFile } from "@/lib/mind/halt-file";
-import { runOnPairedAgent } from "@/lib/mind/pc-pairing/run";
+import { runApprovedOnPairedAgent } from "@/lib/mind/pc-pairing/run";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -45,15 +45,16 @@ export const Route = createFileRoute("/api/mind/pc/approve")({
           if (!consumed.ok) {
             return json({ ok: false, error: consumed.error }, 403);
           }
-          const result = await runOnPairedAgent({
+          // Run only on the PC named on the approval card — never the first online PC.
+          const result = await runApprovedOnPairedAgent({
             ownerId: userId,
-            command: consumed.record.command,
-            confirm: true,
+            record: consumed.record,
           });
           if (!result) {
+            const label = consumed.record.agentLabel || "the approved PC";
             return json({
               ok: false,
-              error: "Approval was consumed, but no paired PC is online. Nothing ran.",
+              error: `Approval was consumed, but ${label} is not online. Nothing ran on any PC.`,
               approvalId: consumed.record.id,
             });
           }

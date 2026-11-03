@@ -28,13 +28,25 @@ export async function runOnPairedAgent(input: {
   command: string;
   /** Server-authorized only (allowlist or consumed human approval). */
   confirm: boolean;
+  /**
+   * Pin dispatch to this paired agent. When set, the job is queued ONLY on
+   * this agent (must be owned by ownerId and online); otherwise nothing runs.
+   * Never fall back to "first online PC" for a pinned run.
+   */
+  agentId?: string;
   timeoutMs?: number;
   pollMs?: number;
   now?: number;
 }): Promise<PairingRunResult | null> {
   const online = onlineAgents(input.ownerId, 60_000, input.now ?? Date.now());
   if (online.length === 0) return null;
-  const agent: PairedAgent = online[0];
+  let agent: PairedAgent | undefined;
+  if (input.agentId !== undefined) {
+    agent = online.find((candidate) => candidate.id === input.agentId);
+    if (!agent) return null;
+  } else {
+    agent = online[0];
+  }
   const job = enqueueJob({
     ownerId: input.ownerId,
     agentId: agent.id,
@@ -72,4 +84,30 @@ export async function runOnPairedAgent(input: {
     text: "Timed out waiting for the paired PC agent. Nothing was invented.",
     data: { agentId: agent.id, jobId: job.id },
   };
+}
+
+/**
+ * Run a command a human approved in the UI. The approval names a specific
+ * paired PC (agentId + label shown on the approval card); the command must run
+ * on THAT PC only. If it is offline, unpaired, or owned by someone else, return
+ * null so the caller reports "nothing ran" — never hop to another online PC.
+ */
+export async function runApprovedOnPairedAgent(input: {
+  ownerId: string;
+  record: { command: string; agentId: string; agentLabel?: string };
+  timeoutMs?: number;
+  pollMs?: number;
+  now?: number;
+}): Promise<PairingRunResult | null> {
+  const agentId = typeof input.record.agentId === "string" ? input.record.agentId.trim() : "";
+  if (!agentId) return null;
+  return runOnPairedAgent({
+    ownerId: input.ownerId,
+    command: input.record.command,
+    confirm: true,
+    agentId,
+    timeoutMs: input.timeoutMs,
+    pollMs: input.pollMs,
+    now: input.now,
+  });
 }
