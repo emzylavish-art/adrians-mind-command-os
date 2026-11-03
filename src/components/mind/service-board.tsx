@@ -5,6 +5,13 @@ import {
   isStatusUnavailable,
   type OauthStatusPayload,
 } from "@/lib/mind/service-board-status";
+import {
+  OauthBoardActionStatusRows,
+  onceRetry,
+  runOauthBoardAction,
+  snapshotOauthBoardActionParams,
+  type OauthBoardActionState,
+} from "@/lib/mind/oauth-board-action";
 
 type Service = {
   name: string;
@@ -84,6 +91,7 @@ export function ServiceBoard({
   mcp,
   localComputer,
   onDisconnect,
+  onFailure,
 }: {
   grokConfigured: boolean;
   onSetup: (message: string) => void;
@@ -91,11 +99,14 @@ export function ServiceBoard({
   mcp?: { state: string; detail: string } | null;
   localComputer?: { state: string; detail: string } | null;
   onDisconnect?: () => void;
+  /** Optional: reportFailure for top View log — mount wiring may live outside this lane. */
+  onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [oauthByName, setOauthByName] = useState<Record<string, OauthStatus | null | undefined>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
+  const [oauthActionState, setOauthActionState] = useState<OauthBoardActionState>({ status: "idle" });
   const inFlight = useRef<Set<string>>(new Set());
 
   const refreshOne = useCallback((name: string) => {
@@ -150,52 +161,58 @@ export function ServiceBoard({
     return { name: service.name, state: board.state, detail: board.detail };
   });
 
-  async function connectOauth(name: string) {
-    const meta = OAUTH_BOARD[name];
-    if (!meta) return;
-    setBusy(name);
+  function runOauthAction(params: ReturnType<typeof snapshotOauthBoardActionParams>) {
+    setBusy(params.name);
     setNote(null);
-    try {
-      const res = await fetch(`/api/mind/oauth/${meta.path}/start?format=json`, {
-        credentials: "include",
-        headers: { accept: "application/json" },
-      });
-      const body = (await res.json().catch(() => null)) as { ok?: boolean; url?: string; error?: string } | null;
-      if (!res.ok || !body?.ok || !body.url) {
-        const message = body?.error || `${name} OAuth could not be started.`;
-        setNote({ name, text: message });
-        onSetup(message);
+    setOauthActionState({ status: "running", action: params.action, name: params.name });
+    const run = () => {
+      setBusy(params.name);
+      setOauthActionState({ status: "running", action: params.action, name: params.name });
+      void runOauthBoardAction(params, fetch).then((result) => {
+        if (result.ok) {
+          setOauthActionState({ status: "ok", note: result.note, name: result.name, redirectUrl: result.redirectUrl });
+          if (params.action === "connect" && result.redirectUrl) {
+            window.location.assign(result.redirectUrl);
+            return;
+          }
+          if (params.action === "disconnect") {
+            if (result.oauth) {
+              setOauthByName((prev) => ({ ...prev, [params.name]: result.oauth! }));
+            }
+            setNote({ name: params.name, text: result.note });
+            if (params.name === "Notion") onDisconnect?.();
+            refreshOne(params.name);
+          }
+          setBusy(null);
+          return;
+        }
+        setOauthActionState({
+          status: "error",
+          kind: result.kind,
+          message: result.message,
+          params: result.params,
+        });
+        setNote(null);
         setBusy(null);
-        return;
-      }
-      window.location.assign(body.url);
-    } catch {
-      const message = `${name} OAuth could not be started. Nothing was connected.`;
-      setNote({ name, text: message });
-      onSetup(message);
-      setBusy(null);
-    }
+        const retry = onceRetry(() => run());
+        if (retry) onFailure?.(result.message, retry);
+        // Keep Setup notice for connect failures (legacy surface) without replacing the red banner.
+        if (params.action === "connect") onSetup(result.message);
+      });
+    };
+    run();
   }
 
-  async function disconnectOauth(name: string) {
+  function connectOauth(name: string) {
     const meta = OAUTH_BOARD[name];
     if (!meta) return;
-    setBusy(name);
-    setNote(null);
-    try {
-      const res = await fetch(`/api/mind/oauth/${meta.path}/disconnect`, { method: "POST", credentials: "include" });
-      const body = (await res.json().catch(() => null)) as OauthStatus & { ok?: boolean; error?: string } | null;
-      if (body?.state) {
-        setOauthByName((prev) => ({ ...prev, [name]: { state: body.state, detail: body.detail } }));
-        setNote({ name, text: body.detail });
-      }
-      if (name === "Notion") onDisconnect?.();
-      refreshOne(name);
-    } catch {
-      setNote({ name, text: "Disconnect failed. The board was not changed." });
-    } finally {
-      setBusy(null);
-    }
+    runOauthAction(snapshotOauthBoardActionParams({ action: "connect", name, path: meta.path }));
+  }
+
+  function disconnectOauth(name: string) {
+    const meta = OAUTH_BOARD[name];
+    if (!meta) return;
+    runOauthAction(snapshotOauthBoardActionParams({ action: "disconnect", name, path: meta.path }));
   }
 
   return (
@@ -254,7 +271,18 @@ export function ServiceBoard({
                 {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
               </button>
             )}
-            {note && note.name === service.name ? <p className="mt-2 text-xs text-muted">{note.text}</p> : null}
+            {oauthActionState.status === "error" && oauthActionState.params.name === service.name ? (
+              <OauthBoardActionStatusRows
+                state={oauthActionState}
+                onRetry={
+                  onceRetry(() =>
+                    runOauthAction(snapshotOauthBoardActionParams(oauthActionState.params)),
+                  ) ?? (() => undefined)
+                }
+              />
+            ) : note && note.name === service.name ? (
+              <p className="mt-2 text-xs text-muted">{note.text}</p>
+            ) : null}
           </article>
         );
       })}

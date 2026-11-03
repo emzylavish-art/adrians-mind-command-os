@@ -8,6 +8,11 @@
  * media keeps request/HTTP mapping — this module only classifies and banners that copy.
  * H22: intentional user Stop (STOPPED_REPLY) is classified as user_stopped — not chat_failed,
  * and must not paint the red failure banner (see shouldShowFailureBanner / classifyHonestTurnOutcome).
+ * H24/H25: ServiceBoard OAuth connect/disconnect and Tools Open page failures classify as network_failure.
+ * H26: MCP enable/disable toggle failures classify as network_failure (or auth_required).
+ * H27: Supabase account probe/sign-out failures classify as network_failure.
+ * H28: Explore persona select failures classify as network_failure (or emergency_stop).
+ * H29: Fleet panel apply() mutation failures classify as network_failure (or emergency_stop).
  */
 
 export type HonestFailureKind =
@@ -56,6 +61,22 @@ export const HONEST_FAILURE_MESSAGES = {
   pc_approve_failed: "The PC shell approval could not be completed.",
   pc_deny_failed: "The PC shell denial could not be completed.",
   mcp_try_select_failed: "The MCP Try SELECT 1 call failed.",
+  /** ServiceBoard OAuth Connect start failed (non-ok / network). */
+  oauth_connect_failed: "Nothing was connected.",
+  /** ServiceBoard OAuth Disconnect failed. */
+  oauth_disconnect_failed: "Disconnect failed. The board was not changed.",
+  /** Tools panel Open page / inspectWebPage failed. */
+  open_page_failed: "The page was not opened.",
+  /** Tools panel MCP enable/disable toggle failed. */
+  mcp_toggle_failed: "The MCP server toggle could not be completed.",
+  /** Account menu: getSupabaseAuthUser probe rejected (not the same as configured:false). */
+  supabase_account_probe_failed: "Supabase account status could not be loaded.",
+  /** Account menu: signOutSupabase rejected without a redirect. */
+  supabase_sign_out_failed: "Supabase sign out could not be completed.",
+  /** Explore persona Open in Chat (selectPersona) failed. */
+  persona_select_failed: "That persona could not be opened.",
+  /** Fleet panel local mutation (add/deploy/enqueue/schedule/connection/mailbox) failed. */
+  fleet_mutation_failed: "That fleet change could not be applied.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -211,6 +232,21 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text.includes("PC shell denial could not be completed")
     || text === HONEST_FAILURE_MESSAGES.mcp_try_select_failed
     || text.includes("MCP Try SELECT 1 call failed")
+    || text === HONEST_FAILURE_MESSAGES.oauth_disconnect_failed
+    || text.includes("Disconnect failed. The board was not changed")
+    || text === HONEST_FAILURE_MESSAGES.open_page_failed
+    || text.includes("The page was not opened")
+    || text.includes("OAuth could not be started")
+    || text === HONEST_FAILURE_MESSAGES.mcp_toggle_failed
+    || text.includes("MCP server toggle could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.supabase_account_probe_failed
+    || text.includes("Supabase account status could not be loaded")
+    || text === HONEST_FAILURE_MESSAGES.supabase_sign_out_failed
+    || text.includes("Supabase sign out could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.persona_select_failed
+    || text.includes("That persona could not be opened")
+    || text === HONEST_FAILURE_MESSAGES.fleet_mutation_failed
+    || text.includes("That fleet change could not be applied")
   ) {
     return "network_failure";
   }
