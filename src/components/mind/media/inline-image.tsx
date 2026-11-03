@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { isSafeImageSrc, sanitizeMediaLabel } from "@/lib/mind/media";
-import { nextLightboxZoom, prevLightboxZoom } from "./media-ui-helpers";
+import { nextLightboxZoom, prevLightboxZoom, safeImageDownloadName } from "./media-ui-helpers";
 
 export const AMCOS_IMAGE_DRAG_TYPE = "application/x-amcos-image";
-export { nextLightboxZoom, prevLightboxZoom } from "./media-ui-helpers";
+export { nextLightboxZoom, prevLightboxZoom, safeImageDownloadName } from "./media-ui-helpers";
 
-function downloadFallback(src: string, alt: string) {
+function downloadFallback(src: string, label?: string | null) {
   const link = document.createElement("a");
   link.href = src;
-  link.download = sanitizeMediaLabel(alt) || "image.jpg";
+  link.download = safeImageDownloadName(src, label);
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
@@ -32,6 +32,7 @@ export function InlineImage({
 }) {
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState<number>(1);
+  const [loading, setLoading] = useState(true);
   const safeSrc = isSafeImageSrc(src) ? src : null;
   const safeAlt = sanitizeMediaLabel(alt) || "image";
 
@@ -39,18 +40,24 @@ export function InlineImage({
     if (!open) setZoom(1);
   }, [open]);
 
+  useEffect(() => {
+    setLoading(true);
+  }, [safeSrc]);
+
   if (!safeSrc) {
     return <p className="my-2 text-xs text-muted">Blocked unsafe image source.</p>;
   }
 
   function handleDownload() {
-    if (onDownload) onDownload(safeSrc!, safeAlt);
-    else downloadFallback(safeSrc!, safeAlt);
+    // Pass a machine-safe label only — never raw chat/prompt text as a Downloads filename.
+    const safeLabel = /^(camera|saved|generated|image|attachment|amcos)/i.test(safeAlt) ? safeAlt : null;
+    if (onDownload) onDownload(safeSrc!, safeLabel || "amcos-image");
+    else downloadFallback(safeSrc!, safeLabel);
   }
 
   return (
     <>
-      <div className="my-2 space-y-2">
+      <div className="my-2 space-y-2" data-media="inline-image" data-loading={loading ? "true" : "false"}>
         <button
           type="button"
           className="block max-w-full overflow-hidden rounded-panel border border-line"
@@ -64,7 +71,14 @@ export function InlineImage({
             event.dataTransfer.effectAllowed = "copy";
           }}
         >
-          <img src={safeSrc} alt={safeAlt} className="max-h-64 max-w-full object-contain" draggable={false} />
+          <img
+            src={safeSrc}
+            alt={safeAlt}
+            className="max-h-64 max-w-full object-contain"
+            draggable={false}
+            onLoad={() => setLoading(false)}
+            onError={() => setLoading(false)}
+          />
         </button>
         <div className="flex flex-wrap gap-2">
           {onEditImagine && (
@@ -83,7 +97,7 @@ export function InlineImage({
             </button>
           )}
           {onDownload && (
-            <button type="button" data-testid="image-download" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onDownload(safeSrc, safeAlt)}>
+            <button type="button" data-testid="image-download" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={handleDownload}>
               Download
             </button>
           )}
@@ -95,7 +109,8 @@ export function InlineImage({
           role="dialog"
           aria-modal="true"
           aria-label={safeAlt}
-          data-testid="image-lightbox" data-media="lightbox"
+          data-testid="image-lightbox"
+          data-media="lightbox"
           onClick={() => setOpen(false)}
           onKeyDown={(event) => {
             if (event.key === "Escape") setOpen(false);
@@ -125,7 +140,8 @@ export function InlineImage({
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
-                data-testid="image-lightbox-zoom-out" data-media="lightbox-zoom-out"
+                data-testid="image-lightbox-zoom-out"
+                data-media="lightbox-zoom-out"
                 className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
                 onClick={() => setZoom((current) => prevLightboxZoom(current))}
                 title="Zoom out"
@@ -137,7 +153,8 @@ export function InlineImage({
               </span>
               <button
                 type="button"
-                data-testid="image-lightbox-zoom-in" data-media="lightbox-zoom-in"
+                data-testid="image-lightbox-zoom-in"
+                data-media="lightbox-zoom-in"
                 className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
                 onClick={() => setZoom((current) => nextLightboxZoom(current))}
                 title="Zoom in"
@@ -146,7 +163,8 @@ export function InlineImage({
               </button>
               <button
                 type="button"
-                data-testid="image-lightbox-download" data-media="lightbox-download"
+                data-testid="image-lightbox-download"
+                data-media="lightbox-download"
                 className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
                 onClick={handleDownload}
                 title="Download image"
@@ -156,6 +174,7 @@ export function InlineImage({
               <button
                 type="button"
                 data-testid="image-lightbox-close"
+                data-media="lightbox-close"
                 className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
                 onClick={() => setOpen(false)}
               >

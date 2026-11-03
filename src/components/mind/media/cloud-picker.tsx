@@ -143,7 +143,7 @@ export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Cloud files">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Cloud files" data-media="cloud-picker">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-panel border border-line bg-surface p-4">
         <h3 className="font-display text-xl font-bold">Cloud files</h3>
         <p className="mt-1 text-sm text-muted">Browse a connected Drive. OAuth/connect lives on ServiceBoard (MCP Integration).</p>

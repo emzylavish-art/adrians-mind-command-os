@@ -49,6 +49,14 @@ import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
+import {
+  cycleDownscaleQuality,
+  downscaleQualityLabel,
+  loadDownscaleQuality,
+  saveDownscaleQuality,
+  type DownscaleQuality,
+} from "@/components/mind/media/downscale-quality";
+import { safeImageDownloadName } from "@/components/mind/media/media-ui-helpers";
 import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, collectClipboardImageFiles, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
@@ -296,6 +304,9 @@ export function CommandApp() {
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [downscaleQuality, setDownscaleQuality] = useState<DownscaleQuality>(() =>
+    typeof window === "undefined" ? "balanced" : loadDownscaleQuality(window.localStorage),
+  );
   const [imagineModel, setImagineModel] = useState<GrokImagineModel>(GROK_IMAGINE_MODEL);
   const [imagineBusy, setImagineBusy] = useState(false);
   const imagineTabLockRef = useRef(createImagineTabLock("composer"));
@@ -882,9 +893,10 @@ export function CommandApp() {
 
   function downloadImageDataUrl(src: string, alt: string) {
     const link = document.createElement("a");
-    const ext = src.startsWith("data:image/png") ? "png" : src.startsWith("data:image/webp") ? "webp" : "jpg";
     link.href = src;
-    link.download = (alt || "image").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80) + "." + ext;
+    // Never put chat/prompt text into Downloads filenames (data leak).
+    link.download = safeImageDownloadName(src, alt);
+    link.rel = "noopener";
     link.click();
   }
 
@@ -898,7 +910,7 @@ export function CommandApp() {
         setError("You can attach up to 4 images per message.");
         return prev;
       }
-      return [...prev, { dataUrl: src, name: alt || `saved-${prev.length + 1}.jpg` }];
+      return [...prev, { dataUrl: src, name: /^(camera|saved|generated|image|attachment|amcos)/i.test(alt || "") ? (alt || `saved-${prev.length + 1}.jpg`) : `saved-${prev.length + 1}.jpg` }];
     });
     setNotice("Image saved into the composer for a follow-up turn.");
   }
@@ -1488,7 +1500,7 @@ export function CommandApp() {
 
   async function addImageAttachment(file: File) {
     try {
-      const scaled = await fileToDownscaledDataUrl(file);
+      const scaled = await fileToDownscaledDataUrl(file, { quality: downscaleQuality });
       setPendingImages((prev) => {
         if (prev.length >= 4) {
           setError("You can attach up to 4 images per message.");
@@ -2105,6 +2117,24 @@ export function CommandApp() {
                     >
                       {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
                     </button>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      data-media="downscale-quality"
+                      data-quality={downscaleQuality}
+                      title="Client attach/camera downscale: Fast (1280), Balanced (2048), Full (2048 higher JPEG). Always EXIF-strips."
+                      aria-label={`Attach quality ${downscaleQualityLabel(downscaleQuality)}`}
+                      onClick={() => {
+                        setDownscaleQuality((current) => {
+                          const next = cycleDownscaleQuality(current);
+                          saveDownscaleQuality(next, window.localStorage);
+                          setNotice(`Attach quality: ${downscaleQualityLabel(next)}. Applies to new Image/Camera attaches.`);
+                          return next;
+                        });
+                      }}
+                    >
+                      Attach: {downscaleQualityLabel(downscaleQuality)}
+                    </button>
                     {pendingImages.length > 1 && (
                       <button
                         type="button"
@@ -2122,7 +2152,7 @@ export function CommandApp() {
                         Edit all with Imagine
                       </button>
                     )}
-                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
+                    <AttachmentChips images={pendingImages} onChange={setPendingImages} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -2403,7 +2433,17 @@ export function CommandApp() {
               }}
               stagedName={staged?.name ?? null}
               pendingImages={pendingImages}
+              onPendingImagesChange={setPendingImages}
               onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
+              downscaleQuality={downscaleQuality}
+              onToggleDownscaleQuality={() => {
+                setDownscaleQuality((current) => {
+                  const next = cycleDownscaleQuality(current);
+                  saveDownscaleQuality(next, window.localStorage);
+                  setNotice(`Attach quality: ${downscaleQualityLabel(next)}. Applies to new Image/Camera attaches.`);
+                  return next;
+                });
+              }}
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
@@ -3441,7 +3481,10 @@ function ChatPane({
   onComposerMode,
   stagedName,
   pendingImages,
+  onPendingImagesChange,
   onRemoveImage,
+  downscaleQuality,
+  onToggleDownscaleQuality,
   onAttach,
   onAttachImage,
   onOpenCamera,
@@ -3494,7 +3537,10 @@ function ChatPane({
   onComposerMode: (mode: Autonomy) => void;
   stagedName: string | null;
   pendingImages: ImageAttachment[];
+  onPendingImagesChange: (images: ImageAttachment[]) => void;
   onRemoveImage: (index: number) => void;
+  downscaleQuality: DownscaleQuality;
+  onToggleDownscaleQuality: () => void;
   onAttach: () => void;
   onAttachImage: () => void;
   onOpenCamera: () => void;
@@ -3717,7 +3763,7 @@ function ChatPane({
             placeholder={`Message (${modelTier})...`}
             className="min-h-11 w-full bg-transparent text-sm outline-none"
           />
-          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
+          <AttachmentChips images={pendingImages} onChange={onPendingImagesChange} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
@@ -3765,6 +3811,17 @@ function ChatPane({
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL} onClick={onToggleImagineQuality}>
               {imagineModel === GROK_IMAGINE_QUALITY_MODEL ? "Quality on" : "Quality off"}
+            </button>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+              data-media="downscale-quality"
+              data-quality={downscaleQuality}
+              title="Client attach/camera downscale: Fast (1280), Balanced (2048), Full (2048 higher JPEG). Always EXIF-strips."
+              aria-label={`Attach quality ${downscaleQualityLabel(downscaleQuality)}`}
+              onClick={onToggleDownscaleQuality}
+            >
+              Attach: {downscaleQualityLabel(downscaleQuality)}
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>

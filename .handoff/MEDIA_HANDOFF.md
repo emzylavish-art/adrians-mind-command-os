@@ -242,3 +242,14 @@ See `/workspace/locks/media-integration.lock`.
 - Client downscale-quality toggle
 - Video gen only if Zack approves spend + endpoint
 - Parent: SendToAgent Visual Polish with SHA + hooks (executor lacks SendToAgent tool)
+
+## Evolve round: chips reorder + downscale quality + harden + VP CSS — 2026-11-02T20:30:00-06:00 (America/Chicago)
+
+### Shipped
+1. **Attachment chips:** drag reorder, ←/→ keyboard-accessible move, multi-select + Remove selected. `data-media="attachment-chips"` (+ chip/tray hooks).
+2. **Attach quality toggle:** Fast / Balanced / Full (persisted `localStorage` key `amcos.media.downscaleQuality.v1`). Feeds `downscale.ts` while keeping canvas EXIF-strip + re-encode + `MAX_DATA_URL_CHARS`.
+3. **Harden:** download filenames no longer echo chat/prompt text (`safeImageDownloadName`). Generate Image still routes through `runImagine` → `/api/mind/media/generate` (rate limit + spend ledger). Camera mirror is canvas-only (no EXIF/metadata flag).
+4. **Visual Polish CSS cherry-pick:** `ebf7f59` → `styles-media-visual.css` + `@import` in `styles.css` (as-is). VP markup hooks: `cloud-picker`, `attachment-chips`, `inline-image` (+ `data-loading`), `lightbox-close`, `camera-capture`.
+
+### Tests
+- tsc pass; src suite **344/344**; `npm run build` pass

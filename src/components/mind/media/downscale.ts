@@ -1,4 +1,9 @@
 import { dimensionsLookLikeBomb, fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE, sanitizeMediaLabel } from "@/lib/mind/media";
+import {
+  downscaleOptionsFor,
+  type DownscaleQuality,
+  type DownscaleQualityOptions,
+} from "./downscale-quality";
 
 export type DownscaleResult = {
   dataUrl: string;
@@ -8,6 +13,22 @@ export type DownscaleResult = {
   height: number;
   scaled: boolean;
 };
+
+export type DownscaleCallOptions = Partial<DownscaleQualityOptions> & {
+  quality?: DownscaleQuality;
+};
+
+function resolveOptions(options?: DownscaleCallOptions | number): DownscaleQualityOptions & { maxEdge: number } {
+  // Back-compat: second arg used to be maxEdge number.
+  if (typeof options === "number") {
+    return { ...downscaleOptionsFor("balanced"), maxEdge: options };
+  }
+  const preset = downscaleOptionsFor(options?.quality ?? "balanced");
+  return {
+    maxEdge: Math.min(options?.maxEdge ?? preset.maxEdge, MAX_IMAGE_EDGE),
+    jpegQualities: options?.jpegQualities ?? preset.jpegQualities,
+  };
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -47,15 +68,14 @@ function bitmapSize(image: ImageBitmap | HTMLImageElement): { width: number; hei
   return { width: image.width, height: image.height };
 }
 
-/** Downscale a File or data-URL to max edge (default 2048) as JPEG/PNG data-URL. */
+/** Downscale a File or data-URL to max edge as JPEG/PNG data-URL (canvas redraw strips EXIF). */
 export async function fileToDownscaledDataUrl(
   file: File,
-  maxEdge = MAX_IMAGE_EDGE,
+  options?: DownscaleCallOptions | number,
 ): Promise<DownscaleResult> {
   if (!file || file.size === 0) {
     throw new Error("That file is empty.");
   }
-  // HEIC/AVIF and other unsupported types fail honestly before canvas work.
   const type = (file.type || "").toLowerCase();
   if (type && !type.startsWith("image/")) {
     throw new Error("That file is not an image.");
@@ -64,14 +84,19 @@ export async function fileToDownscaledDataUrl(
     throw new Error("HEIC/AVIF is not supported here. Convert to JPEG or PNG first.");
   }
   const source = await readFileAsDataUrl(file);
-  return dataUrlToDownscaled(source, sanitizeMediaLabel(file.name) || "image.jpg", maxEdge);
+  const resolved = resolveOptions(options);
+  return dataUrlToDownscaled(source, sanitizeMediaLabel(file.name) || "image.jpg", resolved);
 }
 
 export async function dataUrlToDownscaled(
   dataUrl: string,
   name = "image.jpg",
-  maxEdge = MAX_IMAGE_EDGE,
+  options?: DownscaleCallOptions | number,
 ): Promise<DownscaleResult> {
+  const resolved = resolveOptions(options);
+  const maxEdge = resolved.maxEdge;
+  const qualities = resolved.jpegQualities.length ? resolved.jpegQualities : [0.85, 0.72, 0.58, 0.45];
+
   const image = await loadImageBitmap(dataUrl);
   const { width: naturalW, height: naturalH } = bitmapSize(image);
   if (dimensionsLookLikeBomb(naturalW, naturalH)) {
@@ -88,7 +113,6 @@ export async function dataUrlToDownscaled(
   let mime = preferPng ? "image/png" : guessMimeFromName(name).includes("png") ? "image/png" : "image/jpeg";
   let out = "";
   let scaled = fitted.scaled;
-  const qualities = [0.85, 0.72, 0.58, 0.45];
 
   const paint = (width: number, height: number) => {
     canvas.width = width;
@@ -102,7 +126,6 @@ export async function dataUrlToDownscaled(
   if (mime === "image/png") {
     out = canvas.toDataURL("image/png");
     if (out.length > MAX_DATA_URL_CHARS) {
-      // Fall back to JPEG for oversized PNGs.
       mime = "image/jpeg";
       name = name.replace(/\.png$/i, ".jpg");
     }
@@ -115,14 +138,13 @@ export async function dataUrlToDownscaled(
     }
   }
 
-  // Still too big — shrink the edge further.
   let edge = Math.min(fitted.width, fitted.height, maxEdge);
   while (out.length > MAX_DATA_URL_CHARS && edge > 256) {
     edge = Math.floor(edge * 0.75);
     fitted = fitWithinBox(naturalW, naturalH, edge);
     paint(fitted.width, fitted.height);
     scaled = true;
-    out = canvas.toDataURL("image/jpeg", 0.7);
+    out = canvas.toDataURL("image/jpeg", Math.min(0.7, qualities[qualities.length - 1] ?? 0.7));
     mime = "image/jpeg";
   }
 

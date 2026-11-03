@@ -24,3 +24,57 @@ export function applyCameraMirrorTransform(
   ctx.translate(width, 0);
   ctx.scale(-1, 1);
 }
+
+export function moveAttachmentIndex<T>(items: readonly T[], from: number, direction: -1 | 1): T[] {
+  const to = from + direction;
+  if (!Number.isInteger(from) || from < 0 || from >= items.length) return [...items];
+  if (to < 0 || to >= items.length) return [...items];
+  const next = items.slice();
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item!);
+  return next;
+}
+
+export function removeAttachmentIndexes<T>(items: readonly T[], indexes: Iterable<number>): T[] {
+  const drop = new Set<number>();
+  for (const index of indexes) {
+    if (Number.isInteger(index) && index >= 0) drop.add(index);
+  }
+  if (drop.size === 0) return [...items];
+  return items.filter((_, index) => !drop.has(index));
+}
+
+export function toggleIndexSelection(selected: ReadonlySet<number>, index: number): Set<number> {
+  const next = new Set(selected);
+  if (next.has(index)) next.delete(index);
+  else next.add(index);
+  return next;
+}
+
+/**
+ * Download filenames must not echo chat/prompt text (data leak via Downloads folder).
+ * Only allow short machine-ish stems we mint ourselves; otherwise use a generic stamp.
+ */
+export function safeImageDownloadName(src: string, label?: string | null): string {
+  const ext = src.startsWith("data:image/png")
+    ? "png"
+    : src.startsWith("data:image/webp")
+      ? "webp"
+      : src.startsWith("data:image/gif")
+        ? "gif"
+        : "jpg";
+  const raw = typeof label === "string" ? label.trim() : "";
+  const stem = raw
+    .replace(/\.(png|jpe?g|gif|webp)$/i, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  const allowed =
+    !!stem &&
+    stem.length <= 40 &&
+    /^(camera|saved|generated|image|attachment|amcos)([-_.]|$)/i.test(stem) &&
+    !/\s/.test(raw);
+  const base = allowed ? stem : `amcos-image-${Date.now().toString(36)}`;
+  return `${base}.${ext}`;
+}

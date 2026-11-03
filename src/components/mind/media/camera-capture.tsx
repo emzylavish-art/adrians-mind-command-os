@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { dataUrlToDownscaled } from "./downscale";
+import type { DownscaleQuality } from "./downscale-quality";
 import { applyCameraMirrorTransform } from "./media-ui-helpers";
 
 export { applyCameraMirrorTransform } from "./media-ui-helpers";
@@ -12,11 +13,13 @@ export function CameraCapture({
   open,
   onClose,
   onCapture,
+  downscaleQuality = "balanced",
 }: {
   open: boolean;
   onClose: () => void;
   /** Each successful snapshot invokes this (burst keeps the dialog open). */
   onCapture: (dataUrl: string, name: string) => void;
+  downscaleQuality?: DownscaleQuality;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -134,7 +137,7 @@ export function CameraCapture({
     ctx.drawImage(video, 0, 0, width, height);
     const raw = canvas.toDataURL("image/jpeg", 0.92);
     try {
-      const scaled = await dataUrlToDownscaled(raw, `camera-${Date.now()}.jpg`);
+      const scaled = await dataUrlToDownscaled(raw, `camera-${Date.now()}.jpg`, { quality: downscaleQuality });
       onCapture(scaled.dataUrl, scaled.name);
       setBurstCount((count) => count + 1);
       if (closeAfter) onClose();
@@ -146,7 +149,7 @@ export function CameraCapture({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Camera capture" data-media="camera-dialog">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Camera capture" data-media="camera-capture">
       <div className="w-full max-w-lg rounded-panel border border-line bg-surface p-4">
         <h3 className="font-display text-xl font-bold">Camera</h3>
         <p className="mt-1 text-sm text-muted">
