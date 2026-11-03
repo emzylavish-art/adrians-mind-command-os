@@ -596,3 +596,17 @@ command on Zack's PC.
 - Pushed origin/error-banners → ef20284882c21a19b57f2eacdb5cafdf2ad31aea
 - Lock releasing.
 
+
+## 2026-11-02T22:18:00-06:00 (America/Chicago) — Error Banners Bot — H31 hunt: no remaining allowed-file gaps
+- Gap id: HUNT-H31 (no code fix)
+- What:
+  - Re-checked `/workspace/audit/full-function/to-error-banners.md`, `/workspace/handoffs/`, Notion Gap Dispatcher — no new H31+ assignment.
+  - All `error-banners-gap-*.lock` (+ imagine/verifier/top5) still **done, released**.
+  - Fresh hunt in allowed files (components/mind excl. voice/media/mcp/dashboard-3d/live-voice-bar/command-app; banner action libs; login/explore/memory routes): swallowed catches, fetch !ok, muted-note errors, missing Retry/View log where fixable, Retry params, stuck loaders.
+  - **Honest result: no remaining fixable silent-failure gap for H31+.** H16–H30 stand. Tip unchanged.
+- Skipped / BLOCKED (not this lane): AUTH-01 callback 500 (Grok Build `23860f7`); command-app.tsx onFailure mounts + saveError muted strip; Merge Gate PI∪error-banners; voice/; media/; mcp/; server.ts; styles.css shell; auth callback route.
+- Gates (honesty): focused banner suite **119/119**; tip gates from H30 stand (tsc / 1069 tests / lint 0 / build).
+- Tip: `836c1dbcf7a6b99e7ea6b800ac5bdac0ef9edf6e` (no product SHA this cycle)
+- Notion child: https://app.notion.com/p/40db95f33e4281fea288ce8bda62426a
+- STATE: /workspace/fleet/error-banners/STATE.json
+- Lock releasing.
