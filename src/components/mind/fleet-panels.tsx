@@ -99,6 +99,8 @@ export function FleetPanel({
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [gmailBusy, setGmailBusy] = useState(false);
+  // Synchronous guard: a fast double-click fires twice before `disabled` re-renders.
+  const gmailInFlight = useRef(false);
   const [goal, setGoal] = useState("");
   const [agentId, setAgentId] = useState("");
   const [mailLabel, setMailLabel] = useState("");
@@ -531,6 +533,8 @@ export function FleetPanel({
             title="Start Google OAuth for Gmail (same path as ServiceBoard)"
             disabled={gmailBusy}
             onClick={() => {
+              if (gmailInFlight.current) return;
+              gmailInFlight.current = true;
               void (async () => {
                 setGmailBusy(true);
                 setNote(null);
@@ -544,12 +548,14 @@ export function FleetPanel({
                   if (!interpreted.ok) {
                     setNote(interpreted.error);
                     setGmailBusy(false);
+                    gmailInFlight.current = false;
                     return;
                   }
                   window.location.assign(interpreted.url);
                 } catch {
                   setNote(gmailConnectAttempt().error);
                   setGmailBusy(false);
+                  gmailInFlight.current = false;
                 }
               })();
             }}

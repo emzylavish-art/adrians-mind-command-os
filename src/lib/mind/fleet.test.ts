@@ -277,3 +277,39 @@ describe("Connect Google OAuth start wiring", () => {
     if (!got.ok) assert.match(got.error, /not configured/);
   });
 });
+
+describe("Connect Google OAuth start hardening", () => {
+  for (const url of [
+    "javascript:alert(1)",
+    "JaVaScRiPt:alert(document.cookie)",
+    " data:text/html,<script>alert(1)</script>",
+    "file:///etc/passwd",
+    "http://accounts.google.com/o/oauth2/v2/auth",
+    "//evil.example/cb",
+    "/relative/path",
+    "https://evil.example/o/oauth2/v2/auth",
+    "https://accounts.google.com.evil.example/auth",
+    "https://user@evil.example/auth",
+  ]) {
+    it(`refuses to redirect to ${JSON.stringify(url)}`, () => {
+      const got = interpretGmailOauthStart({ httpOk: true, body: { ok: true, url } });
+      assert.equal(got.ok, false);
+      if (!got.ok) assert.match(got.error, /unexpected sign-in address|Nothing was started/);
+    });
+  }
+
+  it("does not throw when the body has a non-string url or error", () => {
+    const got = interpretGmailOauthStart({ httpOk: true, body: { ok: true, url: 42 as unknown as string, error: {} as unknown as string } });
+    assert.equal(got.ok, false);
+  });
+
+  it("does not trust ok:true when HTTP failed", () => {
+    const got = interpretGmailOauthStart({ httpOk: false, body: { ok: true, url: "https://accounts.google.com/o/oauth2/v2/auth" } });
+    assert.equal(got.ok, false);
+  });
+
+  it("still accepts the real Google authorize URL", () => {
+    const got = interpretGmailOauthStart({ httpOk: true, body: { ok: true, url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=y" } });
+    assert.equal(got.ok, true);
+  });
+});
