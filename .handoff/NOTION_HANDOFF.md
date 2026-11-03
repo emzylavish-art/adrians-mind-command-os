@@ -610,3 +610,18 @@ command on Zack's PC.
 - Notion child: https://app.notion.com/p/40db95f33e4281fea288ce8bda62426a
 - STATE: /workspace/fleet/error-banners/STATE.json
 - Lock releasing.
+
+
+## 2026-11-02T22:38:20-06:00 (America/Chicago) — Error Banners Bot — H32 research-layer banners
+- Gap id: H32 (research-layer audit `/workspace/audit/research-layer/tasks/to-error-banners.md`)
+- What:
+  - Added `research_failed` HonestFailureKind + honest research.ts copy markers (timeout, not configured, MIND_SEARCH_*, provider HTTP/unreachable/empty/stopped).
+  - Provider `429` still `rate_limited` (priority). Partial deep copy is warning-only (`isResearchPartialNotice` → no red banner).
+  - New `research-failure-action.ts`: `researchFailureFromResult` / `researchFailureFromCatch` / `ResearchFailureBanner` / `ResearchPartialWarningBanner` / mount hint.
+  - Never invents “sources found” on failure; empty query is `empty_query` (not red failure).
+  - Tests: failure-states + markup + research-failure-action (focused suite green).
+- Skipped / BLOCKED (not this lane): `command-app.tsx` startResearch/runWebResearch mount (Grok Build / Merge Gate) — startResearch already `reportFailure`; classifiers now map kinds on that path. Chat `runWebResearch` still muted note until mount. Voice/media/mcp/server.ts/styles untouched.
+- Gates: typecheck PASS · focused H32 suite 55/55 · lint touched 0 errors
+- Tip: (pending commit)
+- Notion: (pending)
+- STATE: /workspace/fleet/error-banners/STATE.json

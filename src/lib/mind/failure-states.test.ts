@@ -335,3 +335,24 @@ describe("H23 auth_required is a notice, not a red failure banner", () => {
     assert.match(failureBannerMountHint(), /reportFailureRef|reportFailure/);
   });
 });
+
+
+describe("H32 research-layer classifyHonestFailure", () => {
+  it("classifies research timeout, not-configured, and provider HTTP as research_failed", () => {
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.research_timeout), "research_failed");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.research_not_configured), "research_failed");
+    assert.equal(classifyHonestFailure("The search provider returned 502. No citations were created."), "research_failed");
+    assert.equal(classifyHonestFailure("Search timed out. No citations were created."), "research_failed");
+    assert.equal(honestFailureAuditAction("research_failed"), "research_failed");
+    assert.equal(honestFailureDescription("research_failed"), HONEST_FAILURE_MESSAGES.research_failed);
+  });
+
+  it("keeps 429 research HTTP as rate_limited (priority over research_failed)", () => {
+    assert.equal(classifyHonestFailure("The search provider returned 429. No citations were created."), "rate_limited");
+  });
+
+  it("partial warning copy is not an honest failure kind and not a red banner", () => {
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.research_partial), null);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.research_partial), false);
+  });
+});

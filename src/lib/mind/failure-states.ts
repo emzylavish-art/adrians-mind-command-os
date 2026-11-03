@@ -13,7 +13,11 @@
  * H27: Supabase account probe/sign-out failures classify as network_failure.
  * H28: Explore persona select failures classify as network_failure (or emergency_stop).
  * H29: Fleet panel apply() mutation failures classify as network_failure (or emergency_stop).
+ * H32: Research-layer failures (not configured / timeout / provider HTTP / empty sources) classify as
+ * research_failed. Provider 429 still rate_limited (earlier check). Partial deep is a warning tone
+ * (research-failure-action), not a red failure — citations stay visible.
  */
+
 
 export type HonestFailureKind =
   | "model_unavailable"
@@ -25,7 +29,8 @@ export type HonestFailureKind =
   | "auth_required"
   | "forbidden_cross_site"
   | "rate_limited"
-  | "image_generation_failed";
+  | "image_generation_failed"
+  | "research_failed";
 
 /** Logic-wiring turn-timeouts copy (CHAT_TIMEOUT_REPLY) — recognized even when that module is not on this branch. */
 export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
@@ -85,6 +90,15 @@ export const HONEST_FAILURE_MESSAGES = {
   image_generation_invalid: "That Imagine request was invalid. Check the prompt and images.",
   image_generation_too_large: "That Imagine request was too large.",
   image_generation_timeout: "Image generation timed out. Nothing was saved as a success.",
+  /** Research page / chat web_research hard failure (mirrors research.ts copy). */
+  research_failed: "Research failed. No citations were created.",
+  research_not_configured: "No search provider is configured. Nothing was searched and no citations were created.",
+  research_timeout: "Search timed out. No citations were created.",
+  research_provider_http: "The search provider returned an error. No citations were created.",
+  research_provider_unreachable: "The search provider did not answer. No citations were created.",
+  research_empty_sources: "The search returned no usable sources. No citations were created.",
+  /** Partial deep: warning copy — citations still shown; not a red failure. */
+  research_partial: "Some research searches timed out. Only confirmed sources are listed.",
 } as const;
 
 /** Non-blocking copy when MCP (or similar) list load hits 401 before sign-in. */
@@ -102,6 +116,7 @@ export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
   forbidden_cross_site: "forbidden_cross_site",
   rate_limited: "rate_limited",
   image_generation_failed: "image_generation_failed",
+  research_failed: "research_failed",
 };
 
 /** Copy the MCP integration code returns when a tool call fails (status "error"). */
@@ -180,6 +195,31 @@ const IMAGE_GENERATION_FAILURE_MARKERS = [
   "No xAI inference API key is available for image",
 ];
 
+/** Honest research.ts / searchWeb failure copy (H32). Empty-query validation is not listed (not a banner). */
+const RESEARCH_FAILURE_MARKERS = [
+  HONEST_FAILURE_MESSAGES.research_failed,
+  HONEST_FAILURE_MESSAGES.research_not_configured,
+  HONEST_FAILURE_MESSAGES.research_timeout,
+  HONEST_FAILURE_MESSAGES.research_provider_http,
+  HONEST_FAILURE_MESSAGES.research_provider_unreachable,
+  HONEST_FAILURE_MESSAGES.research_empty_sources,
+  "Search timed out. No citations were created.",
+  "No search provider is configured",
+  "MIND_SEARCH_ENDPOINT is missing",
+  "MIND_SEARCH_KEY is missing",
+  "Nothing was searched and no citations were created",
+  "The search provider did not answer",
+  "The search provider returned",
+  "The search provider returned an unreadable result",
+  "The search provider returned a result that is too large",
+  "The search returned no usable sources",
+  "Deep research ran but returned no usable sources",
+  "Research stopped. No citations were saved as a success",
+  "The search provider could not be reached",
+  "The search did not run. No citations were created",
+  "Research refused. No citations were created",
+];
+
 export function classifyHonestFailure(message: string): HonestFailureKind | null {
   const text = message.trim();
   if (!text) return null;
@@ -216,6 +256,9 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
   }
   if (MODEL_UNAVAILABLE_MARKERS.some((marker) => text.includes(marker))) {
     return "model_unavailable";
+  }
+  if (RESEARCH_FAILURE_MARKERS.some((marker) => text.includes(marker))) {
+    return "research_failed";
   }
   if (
     text === HONEST_FAILURE_MESSAGES.mcp_list_failed
@@ -284,12 +327,19 @@ export function classifyHonestTurnOutcome(message: string): HonestTurnOutcomeKin
 export function shouldShowFailureBanner(message: string): boolean {
   if (isUserStoppedReply(message)) return false;
   if (classifyHonestFailure(message) === "auth_required") return false;
+  if (isResearchPartialNotice(message)) return false;
   return true;
 }
 
 /** True when copy is the pre-sign-in auth gate (not a hard failure). */
 export function isAuthRequiredNotice(message: string): boolean {
   return classifyHonestFailure(message) === "auth_required";
+}
+
+/** True when copy is the H32 partial-deep warning (citations kept; use warning banner, not red failure). */
+export function isResearchPartialNotice(message: string): boolean {
+  const text = message.trim();
+  return text === HONEST_FAILURE_MESSAGES.research_partial || text.startsWith("Some research searches timed out");
 }
 
 /**
@@ -322,7 +372,10 @@ export function honestTurnAuditAction(message: string): string | null {
  * is from command-app loadMcpLists above and needs the one-line gate from the owning lane.
  */
 export function failureBannerMountHint(): string {
-  return "loadMcpLists catch: if (!shouldShowFailureBanner(message)) { setNotice(\"Sign in to load MCP servers.\"); return; } else reportFailureRef.current(...)";
+  return [
+    "loadMcpLists catch: if (!shouldShowFailureBanner(message)) { setNotice(\"Sign in to load MCP servers.\"); return; } else reportFailureRef.current(...)",
+    "H32 research: startResearch/runWebResearch — researchFailureFromResult(result); if failure reportFailure(message, honestFailureAuditAction(kind), \"search\", retry); if partial show ResearchPartialWarningBanner (citations stay).",
+  ].join(" | ");
 }
 
 export function honestFailureDescription(kind: HonestFailureKind, message?: string): string {
@@ -348,6 +401,8 @@ export function honestFailureDescription(kind: HonestFailureKind, message?: stri
       return HONEST_FAILURE_MESSAGES.rate_limited;
     case "image_generation_failed":
       return HONEST_FAILURE_MESSAGES.image_generation_failed;
+    case "research_failed":
+      return HONEST_FAILURE_MESSAGES.research_failed;
   }
 }
 

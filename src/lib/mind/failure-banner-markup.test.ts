@@ -53,6 +53,9 @@ describe("failure banner markup contract", () => {
     ["image_generation_failed", HONEST_FAILURE_MESSAGES.image_generation_failed],
     ["image_generation_failed", HONEST_FAILURE_MESSAGES.image_generation_rate_limited],
     ["image_generation_failed", "Imagine failed (HTTP 502)."],
+    ["research_failed", HONEST_FAILURE_MESSAGES.research_timeout],
+    ["research_failed", "The search provider returned 502. No citations were created."],
+    ["rate_limited", "The search provider returned 429. No citations were created."],
   ] as const;
 
   for (const [kind, message] of cases) {
