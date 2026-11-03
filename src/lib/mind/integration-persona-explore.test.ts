@@ -38,13 +38,18 @@ describe("integration persona directory survives merge", () => {
       'data-testid="persona-search"',
       'data-testid="persona-grid"',
       'data-testid="persona-empty"',
-      "selectPersona",
+      "runPersonaSelect",
+      "PersonaSelectFailureBanner",
+      "persona-select-action",
       "buildPersonaDirectory",
       "filterPersonaDirectory",
       "PersonaDirectoryView",
     ]) {
       assert.match(directoryUi, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
+    const actionSrc = readFileSync(join(root, "src/lib/mind/persona-select-action.ts"), "utf8");
+    assert.match(actionSrc, /selectPersona/);
+    assert.match(actionSrc, /onceRetry/);
   });
 
   it("builds a directory from templates and selects into agent chat href", () => {

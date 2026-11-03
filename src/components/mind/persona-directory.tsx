@@ -4,11 +4,17 @@ import {
   buildPersonaDirectory,
   emptyStateForCategory,
   filterPersonaDirectory,
-  selectPersona,
   writePersonaSelection,
   type PersonaCard,
   type PersonaCategoryId,
 } from "@/lib/mind/personas";
+import {
+  PersonaSelectFailureBanner,
+  onceRetry,
+  runPersonaSelect,
+  snapshotPersonaSelectParams,
+  type PersonaSelectActionState,
+} from "@/lib/mind/persona-select-action";
 import type { Workspace } from "@/lib/mind/types";
 
 function botAvatarSrc(name: string) {
@@ -29,15 +35,19 @@ export function PersonaDirectoryView({
   ws,
   setWs,
   onOpened,
+  onFailure,
 }: {
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
   /** Optional hook after a successful select (e.g. router navigate). */
   onOpened?: (href: string, card: PersonaCard) => void;
+  /** Optional: reportFailure for top View log — mount wiring may live outside this lane. */
+  onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [category, setCategory] = useState<PersonaCategoryId | "all">("official");
   const [query, setQuery] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  const [selectState, setSelectState] = useState<PersonaSelectActionState>({ status: "idle" });
 
   const directory = useMemo(
     () => buildPersonaDirectory({ agents: ws.agents, deployments: ws.deployments }),
@@ -50,24 +60,37 @@ export function PersonaDirectoryView({
   const empty = emptyStateForCategory(category, visible.length);
 
   function openCard(card: PersonaCard) {
-    const result = selectPersona(ws, card);
-    if (!result.ok) {
-      setNote(result.error);
-      return;
-    }
-    setWs(() => result.ws);
-    try {
-      writePersonaSelection(localStorage, result.selection);
-    } catch {
-      /* storage may be unavailable in locked-down contexts */
-    }
-    setNote(
-      `Opened ${result.selection.agentName} through agent mode. Chat uses the existing orchestrator path. CommandApp URL/localStorage mount is pending if the main shell does not read the selection yet.`,
-    );
-    onOpened?.(result.href, card);
-    if (typeof window !== "undefined") {
-      window.location.assign(result.href);
-    }
+    const params = snapshotPersonaSelectParams(card);
+    const run = () => {
+      const result = runPersonaSelect(ws, params);
+      if (!result.ok) {
+        setSelectState({
+          status: "error",
+          kind: result.kind,
+          message: result.message,
+          params: result.params,
+        });
+        setNote(null);
+        const retry = onceRetry(() => run());
+        if (retry) onFailure?.(result.message, retry);
+        return;
+      }
+      setSelectState({ status: "idle" });
+      setWs(() => result.result.ws);
+      try {
+        writePersonaSelection(localStorage, result.result.selection);
+      } catch {
+        /* storage may be unavailable in locked-down contexts */
+      }
+      setNote(
+        `Opened ${result.result.selection.agentName} through agent mode. Chat uses the existing orchestrator path. CommandApp URL/localStorage mount is pending if the main shell does not read the selection yet.`,
+      );
+      onOpened?.(result.result.href, card);
+      if (typeof window !== "undefined") {
+        window.location.assign(result.result.href);
+      }
+    };
+    run();
   }
 
   return (
@@ -175,7 +198,30 @@ export function PersonaDirectoryView({
         </ul>
       )}
 
-      {note ? (
+      <PersonaSelectFailureBanner
+        state={selectState}
+        onRetry={
+          selectState.status === "error"
+            ? onceRetry(() => openCard({
+                id: selectState.params.cardId,
+                name: selectState.params.name,
+                description: selectState.params.description,
+                role: selectState.params.role,
+                category: selectState.params.category,
+                roleCategory: selectState.params.roleCategory,
+                source: selectState.params.source,
+                templateName: selectState.params.templateName,
+                agentId: selectState.params.agentId,
+                tools: selectState.params.tools,
+                live: false,
+                badge: selectState.params.badge,
+                statusLabel: selectState.params.statusLabel,
+              })) ?? (() => undefined)
+            : () => undefined
+        }
+      />
+
+      {note && selectState.status !== "error" ? (
         <p className="mt-4 text-sm text-muted" data-testid="persona-note">
           {note}
         </p>

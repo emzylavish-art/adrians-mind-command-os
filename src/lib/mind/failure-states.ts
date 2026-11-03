@@ -11,6 +11,8 @@
  * H24/H25: ServiceBoard OAuth connect/disconnect and Tools Open page failures classify as network_failure.
  * H26: MCP enable/disable toggle failures classify as network_failure (or auth_required).
  * H27: Supabase account probe/sign-out failures classify as network_failure.
+ * H28: Explore persona select failures classify as network_failure (or emergency_stop).
+ * H29: Fleet panel apply() mutation failures classify as network_failure (or emergency_stop).
  */
 
 export type HonestFailureKind =
@@ -71,6 +73,10 @@ export const HONEST_FAILURE_MESSAGES = {
   supabase_account_probe_failed: "Supabase account status could not be loaded.",
   /** Account menu: signOutSupabase rejected without a redirect. */
   supabase_sign_out_failed: "Supabase sign out could not be completed.",
+  /** Explore persona Open in Chat (selectPersona) failed. */
+  persona_select_failed: "That persona could not be opened.",
+  /** Fleet panel local mutation (add/deploy/enqueue/schedule/connection/mailbox) failed. */
+  fleet_mutation_failed: "That fleet change could not be applied.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -237,6 +243,10 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text.includes("Supabase account status could not be loaded")
     || text === HONEST_FAILURE_MESSAGES.supabase_sign_out_failed
     || text.includes("Supabase sign out could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.persona_select_failed
+    || text.includes("That persona could not be opened")
+    || text === HONEST_FAILURE_MESSAGES.fleet_mutation_failed
+    || text.includes("That fleet change could not be applied")
   ) {
     return "network_failure";
   }

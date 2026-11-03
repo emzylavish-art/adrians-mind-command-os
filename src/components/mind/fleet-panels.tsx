@@ -72,6 +72,15 @@ import {
   snapshotMcpToggleParams,
   type McpToggleActionState,
 } from "@/lib/mind/mcp-toggle-action";
+import {
+  FleetMutationFailureBanner,
+  onceRetry as onceFleetMutationRetry,
+  runFleetMutation,
+  snapshotFleetMutationParams,
+  type FleetMutationActionState,
+  type FleetMutationParams,
+  type FleetMutationResult,
+} from "@/lib/mind/fleet-mutation-action";
 
 
 function botAvatarSrc(name: string) {
@@ -105,6 +114,7 @@ export function FleetPanel({
   onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
+  const [mutationState, setMutationState] = useState<FleetMutationActionState>({ status: "idle" });
   const [goal, setGoal] = useState("");
   const [agentId, setAgentId] = useState("");
   const [mailLabel, setMailLabel] = useState("");
@@ -298,13 +308,70 @@ export function FleetPanel({
   }, [mode]);
 
 
-  function apply(result: { ok: true; ws: Workspace } | { ok: false; error: string }) {
+  function executeFleetMutation(current: Workspace, params: FleetMutationParams): FleetMutationResult {
+    switch (params.kind) {
+      case "add_template":
+        return addAgentFromTemplate(current, params.templateName);
+      case "add_custom":
+        return addCustomAgent(current, {
+          name: params.name,
+          instructions: params.instructions,
+          tools: params.tools,
+        });
+      case "deploy":
+        return deployAgent(current, params.agentId, params.target);
+      case "enqueue":
+        return enqueueRun(current, params.agentId, params.goal);
+      case "enqueue_no_agent":
+        return { ok: false, error: "Add an agent first." };
+      case "add_connection":
+        return addConnection(current, params.provider, params.label, false);
+      case "add_mailbox":
+        return addMailbox(current, params.label, params.address);
+      case "add_schedule":
+        return addSchedule(
+          current,
+          params.name,
+          params.agentId,
+          params.intervalMinutes,
+          undefined,
+          params.timeZone,
+          params.clockHour,
+          params.clockMinute,
+        );
+    }
+  }
+
+  function runMutation(params: FleetMutationParams) {
+    const result = runFleetMutation(params, (snap) => executeFleetMutation(ws, snap));
     if (!result.ok) {
-      setNote(result.error);
+      setMutationState({
+        status: "error",
+        kind: result.kind,
+        message: result.message,
+        params: result.params,
+      });
+      setNote(null);
+      const retry = onceFleetMutationRetry(() => runMutation(result.params));
+      if (retry) onFailure?.(result.message, retry);
       return;
     }
+    setMutationState({ status: "idle" });
     setWs(() => result.ws);
     setNote(null);
+  }
+
+  function mutationBanner() {
+    return (
+      <FleetMutationFailureBanner
+        state={mutationState}
+        onRetry={
+          mutationState.status === "error"
+            ? onceFleetMutationRetry(() => runMutation(mutationState.params)) ?? (() => undefined)
+            : () => undefined
+        }
+      />
+    );
   }
 
   if (mode === "agents") {
@@ -314,7 +381,7 @@ export function FleetPanel({
         <p className="mt-1 text-sm text-muted">Templates are definitions. A saved agent is not deployed. Local ready means the Run worker button in this app can execute it. Hosted stays external until a worker process exists.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {AGENT_TEMPLATES.map((template) => (
-            <button key={template.name} type="button" className="dense-card inline-flex min-h-11 items-center gap-2 px-3 text-sm" onClick={() => apply(addAgentFromTemplate(ws, template.name))}>
+            <button key={template.name} type="button" className="dense-card inline-flex min-h-11 items-center gap-2 px-3 text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_template", templateName: template.name }))}>
               <img src={botAvatarSrc(template.name)} alt="" className="bot-avatar-img size-8" />
               Add {template.name}
             </button>
@@ -343,7 +410,7 @@ export function FleetPanel({
           <button
             type="button"
             className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
-            onClick={() => apply(addCustomAgent(ws, { name: customName, instructions: customInstructions, tools: customTools }))}
+            onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_custom", name: customName, instructions: customInstructions, tools: customTools }))}
           >
             Save agent
           </button>
@@ -360,12 +427,12 @@ export function FleetPanel({
                 <p className="font-semibold">{agent.name}</p>
                 <p className="text-muted">{agent.description}</p>
                 <p className="mt-1 text-xs text-muted">Tools: {agent.tools.join(", ") || "none"}. Version {agent.version}. {deployment ? `${deployment.target} · ${deployment.state}` : "Not deployed"}.</p>
-                {deployment?.error ? <p className="text-xs text-muted">{deployment.error}</p> : null}
+                {deployment?.error ? <p className="text-xs text-danger" role="status">{deployment.error}</p> : null}
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "local-worker"))}>Arm local worker</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => apply(deployAgent(ws, agent.id, "hosted-worker"))}>Record hosted target</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "deploy", agentId: agent.id, target: "local-worker" }))}>Arm local worker</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "deploy", agentId: agent.id, target: "hosted-worker" }))}>Record hosted target</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => togglePin(prev, "agent", agent.id))}>Pin</button>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => ({ ...prev, agents: prev.agents.map((item) => (item.id === agent.id ? { ...item, archived: true } : item)) }))}>Archive</button>
                 </div>
@@ -373,7 +440,8 @@ export function FleetPanel({
             );
           })}
         </ul>
-        {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
+        {mutationBanner()}
+        {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
       </section>
     );
   }
@@ -398,10 +466,10 @@ export function FleetPanel({
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
             onClick={() => {
               if (!active) {
-                setNote("Add an agent first.");
+                runMutation(snapshotFleetMutationParams({ kind: "enqueue_no_agent", goal }));
                 return;
               }
-              apply(enqueueRun(ws, active.id, goal));
+              runMutation(snapshotFleetMutationParams({ kind: "enqueue", agentId: active.id, goal }));
             }}
           >
             Queue run
@@ -414,7 +482,8 @@ export function FleetPanel({
             Run worker once
           </button>
         </div>
-        {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
+        {mutationBanner()}
+        {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
         <ul className="mt-4 space-y-3">
           {ws.runs.length === 0 && (
             <li className="empty-state">
@@ -463,7 +532,7 @@ export function FleetPanel({
             ))}
           </select>
           <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection name" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
-          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => apply(addConnection(ws, provider, connectionLabel, false))}>Add connection</button>
+          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_connection", provider, label: connectionLabel }))}>Add connection</button>
         </div>
         <ul className="mt-4 space-y-2">
           {ws.connections.length === 0 && <li className="text-sm text-muted">No extra connections yet. Chat still uses the server Grok key only when you press Send.</li>}
@@ -476,7 +545,7 @@ export function FleetPanel({
         <div className="mt-6 flex flex-wrap gap-2">
           <input value={mailLabel} onChange={(event) => setMailLabel(event.target.value)} placeholder="Mailbox label" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={mailAddress} onChange={(event) => setMailAddress(event.target.value)} placeholder="name@example.com" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
-          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addMailbox(ws, mailLabel, mailAddress))}>Add mailbox record</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_mailbox", label: mailLabel, address: mailAddress }))}>Add mailbox record</button>
           <button type="button" className="is-coming-soon min-h-11 rounded-panel border border-line px-3 text-sm" title="Coming soon — Google OAuth is not started from this button" aria-disabled={true} onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
         </div>
         <ul className="mt-3 space-y-2">
@@ -484,7 +553,8 @@ export function FleetPanel({
             <li key={item.id} className="text-sm text-muted">{item.label} · {item.address} · {item.status}</li>
           ))}
         </ul>
-        {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
+        {mutationBanner()}
+        {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
       </section>
     );
   }
@@ -512,7 +582,15 @@ export function FleetPanel({
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
             onClick={() => {
               const hour = jobHour.trim() === "" ? null : Number(jobHour);
-              apply(addSchedule(ws, jobName, active?.id ?? null, 1440, undefined, jobZone || "UTC", hour != null && Number.isFinite(hour) ? hour : null, 0));
+              runMutation(snapshotFleetMutationParams({
+                kind: "add_schedule",
+                name: jobName,
+                agentId: active?.id ?? null,
+                intervalMinutes: 1440,
+                timeZone: jobZone || "UTC",
+                clockHour: hour != null && Number.isFinite(hour) ? hour : null,
+                clockMinute: 0,
+              }));
             }}
           >
             Add daily job
@@ -535,7 +613,8 @@ export function FleetPanel({
             </li>
           ))}
         </ul>
-        {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
+        {mutationBanner()}
+        {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
       </section>
     );
   }
