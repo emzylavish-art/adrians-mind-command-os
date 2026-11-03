@@ -10,7 +10,7 @@
  *
  * Model-agnostic: provider ids/models come from provider-call's catalog, not the UI.
  */
-import { callConfiguredProvider, type ProviderName } from "./provider-call.ts";
+import { callConfiguredProvider, toTextOnlyMessages, type AssembledMessage, type ProviderName } from "./provider-call.ts";
 
 export type FallbackId = Exclude<ProviderName, "grok">;
 export const PROVIDER_IDS: readonly ProviderName[] = ["grok", "openai", "anthropic", "gemini", "openrouter"];
@@ -122,7 +122,13 @@ type FetchLike = Parameters<typeof callConfiguredProvider>[0]["fetch"];
 export async function runFallback(input: {
   primary: ProviderName;
   primaryError: string;
-  prompt: string;
+  /**
+   * The exact messages the primary was sent (assembleTurn output: system/persona prompt,
+   * memory notes, history, current turn). Preferred — the fallback gets the same context.
+   */
+  messages?: readonly AssembledMessage[];
+  /** Legacy: latest user text only. Used only when `messages` is absent. */
+  prompt?: string;
   env: Record<string, string | undefined>;
   fetch: FetchLike;
   signal?: AbortSignal;
@@ -140,11 +146,23 @@ export async function runFallback(input: {
   if (!pick) {
     return { ok: false, error: `${reason} Failover is on, but no other provider is configured on the server. Nothing was substituted.` };
   }
-  const prompt = input.prompt.trim();
-  if (!prompt) return { ok: false, error: `${reason} Failover needs text to resend; nothing was substituted.` };
+  const messages: readonly AssembledMessage[] = Array.isArray(input.messages)
+    ? input.messages
+    : [{ role: "user", content: typeof input.prompt === "string" ? input.prompt.trim() : "" }];
+  // The fallback is text-only: a current turn that carries images never fails over
+  // (it would answer as if it had seen them). Prior-turn images become text stubs.
+  const current = messages[messages.length - 1];
+  if (current && Array.isArray(current.content) && current.content.some((p) => p && typeof p === "object" && (p as { type?: unknown }).type === "image_url")) {
+    return { ok: false, error: `${reason} This turn has images and the fallback is text-only; nothing was substituted.` };
+  }
+  const flat = toTextOnlyMessages(messages);
+  const last = flat[flat.length - 1];
+  if (!last || last.role !== "user" || !last.content.trim() || current?.role !== "user") {
+    return { ok: false, error: `${reason} Failover needs text to resend; nothing was substituted.` };
+  }
   let called: Awaited<ReturnType<typeof callConfiguredProvider>>;
   try {
-    called = await callConfiguredProvider({ id: pick.id, key: pick.key, prompt, fetch: input.fetch });
+    called = await callConfiguredProvider({ id: pick.id, key: pick.key, messages, fetch: input.fetch });
   } catch {
     called = { ok: false, text: "", error: `${pick.id} could not be reached.` };
   }
