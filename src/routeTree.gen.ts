@@ -15,6 +15,7 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
+import { Route as VoiceCloningStudioRouteImport } from './routes/voice-cloning-studio'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiIntentOutcomesRouteImport } from './routes/api/intent/outcomes'
@@ -43,6 +44,7 @@ import { Route as ApiMindPcJobsRouteImport } from './routes/api/mind/pc/jobs'
 import { Route as ApiMindPcRegisterRouteImport } from './routes/api/mind/pc/register'
 import { Route as ApiMindPcResultRouteImport } from './routes/api/mind/pc/result'
 import { Route as ApiMindPcStatusRouteImport } from './routes/api/mind/pc/status'
+import { Route as ApiMindVoiceCloningStatusRouteImport } from './routes/api/mind/voice-cloning/status'
 import { Route as ApiMindMediaCloudFetchRouteImport } from './routes/api/mind/media/cloud/fetch'
 import { Route as ApiMindMediaCloudListRouteImport } from './routes/api/mind/media/cloud/list'
 import { Route as ApiMindMediaCloudStatusRouteImport } from './routes/api/mind/media/cloud/status'
@@ -85,6 +87,11 @@ const MemoryRoute = MemoryRouteImport.update({
 const PersonasRoute = PersonasRouteImport.update({
   id: '/personas',
   path: '/personas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VoiceCloningStudioRoute = VoiceCloningStudioRouteImport.update({
+  id: '/voice-cloning-studio',
+  path: '/voice-cloning-studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -227,6 +234,12 @@ const ApiMindPcStatusRoute = ApiMindPcStatusRouteImport.update({
   path: '/api/mind/pc/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindVoiceCloningStatusRoute =
+  ApiMindVoiceCloningStatusRouteImport.update({
+    id: '/api/mind/voice-cloning/status',
+    path: '/api/mind/voice-cloning/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiMindMediaCloudFetchRoute = ApiMindMediaCloudFetchRouteImport.update({
   id: '/api/mind/media/cloud/fetch',
   path: '/api/mind/media/cloud/fetch',
@@ -309,6 +322,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/voice-cloning-studio': typeof VoiceCloningStudioRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
@@ -337,6 +351,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/voice-cloning/status': typeof ApiMindVoiceCloningStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
@@ -358,6 +373,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/voice-cloning-studio': typeof VoiceCloningStudioRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
@@ -386,6 +402,7 @@ export interface FileRoutesByTo {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/voice-cloning/status': typeof ApiMindVoiceCloningStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
@@ -408,6 +425,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/voice-cloning-studio': typeof VoiceCloningStudioRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/intent/outcomes': typeof ApiIntentOutcomesRoute
@@ -436,6 +454,7 @@ export interface FileRoutesById {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/voice-cloning/status': typeof ApiMindVoiceCloningStatusRoute
   '/api/mind/media/cloud/fetch': typeof ApiMindMediaCloudFetchRoute
   '/api/mind/media/cloud/list': typeof ApiMindMediaCloudListRoute
   '/api/mind/media/cloud/status': typeof ApiMindMediaCloudStatusRoute
@@ -459,6 +478,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/voice-cloning-studio'
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/intent/outcomes'
@@ -487,6 +507,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/voice-cloning/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
@@ -508,6 +529,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/voice-cloning-studio'
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/intent/outcomes'
@@ -536,6 +558,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/voice-cloning/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
@@ -557,6 +580,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/voice-cloning-studio'
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/intent/outcomes'
@@ -585,6 +609,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/voice-cloning/status'
     | '/api/mind/media/cloud/fetch'
     | '/api/mind/media/cloud/list'
     | '/api/mind/media/cloud/status'
@@ -607,6 +632,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MemoryRoute: typeof MemoryRoute
   PersonasRoute: typeof PersonasRoute
+  VoiceCloningStudioRoute: typeof VoiceCloningStudioRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiIntentOutcomesRoute: typeof ApiIntentOutcomesRoute
@@ -635,6 +661,7 @@ export interface RootRouteChildren {
   ApiMindPcRegisterRoute: typeof ApiMindPcRegisterRoute
   ApiMindPcResultRoute: typeof ApiMindPcResultRoute
   ApiMindPcStatusRoute: typeof ApiMindPcStatusRoute
+  ApiMindVoiceCloningStatusRoute: typeof ApiMindVoiceCloningStatusRoute
   ApiMindMediaCloudFetchRoute: typeof ApiMindMediaCloudFetchRoute
   ApiMindMediaCloudListRoute: typeof ApiMindMediaCloudListRoute
   ApiMindMediaCloudStatusRoute: typeof ApiMindMediaCloudStatusRoute
@@ -692,6 +719,13 @@ declare module '@tanstack/react-router' {
       path: '/personas'
       fullPath: '/personas'
       preLoaderRoute: typeof PersonasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/voice-cloning-studio': {
+      id: '/voice-cloning-studio'
+      path: '/voice-cloning-studio'
+      fullPath: '/voice-cloning-studio'
+      preLoaderRoute: typeof VoiceCloningStudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -890,6 +924,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindPcStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/voice-cloning/status': {
+      id: '/api/mind/voice-cloning/status'
+      path: '/api/mind/voice-cloning/status'
+      fullPath: '/api/mind/voice-cloning/status'
+      preLoaderRoute: typeof ApiMindVoiceCloningStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/media/cloud/fetch': {
       id: '/api/mind/media/cloud/fetch'
       path: '/api/mind/media/cloud/fetch'
@@ -991,6 +1032,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MemoryRoute: MemoryRoute,
   PersonasRoute: PersonasRoute,
+  VoiceCloningStudioRoute: VoiceCloningStudioRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiIntentOutcomesRoute: ApiIntentOutcomesRoute,
@@ -1019,6 +1061,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindPcRegisterRoute: ApiMindPcRegisterRoute,
   ApiMindPcResultRoute: ApiMindPcResultRoute,
   ApiMindPcStatusRoute: ApiMindPcStatusRoute,
+  ApiMindVoiceCloningStatusRoute: ApiMindVoiceCloningStatusRoute,
   ApiMindMediaCloudFetchRoute: ApiMindMediaCloudFetchRoute,
   ApiMindMediaCloudListRoute: ApiMindMediaCloudListRoute,
   ApiMindMediaCloudStatusRoute: ApiMindMediaCloudStatusRoute,

@@ -1,0 +1,8 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+# Real backends (install on Zack's PC only — never on the agent box):
+# chatterbox-tts   # or current ResembleAI/chatterbox package name
+# torch            # match your CUDA
+# cosyvoice / Fun-CosyVoice3 deps per upstream README
+# huggingface_hub  # to pull ResembleAI/chatterbox (~3.2 GB) or FunAudioLLM/Fun-CosyVoice3-0.5B-2512 (~9.7 GB)

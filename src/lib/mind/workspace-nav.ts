@@ -12,6 +12,12 @@ export const WORKSPACE_ROUTE_LINKS = [
     href: "/explore",
     iconSrc: "/icons/bots.svg",
   },
+  {
+    id: "voice-cloning-studio",
+    label: "Voice Cloning",
+    href: "/voice-cloning-studio",
+    iconSrc: "/icons/voice.svg",
+  },
 ] as const;
 
 export type WorkspaceRouteLink = (typeof WORKSPACE_ROUTE_LINKS)[number];
