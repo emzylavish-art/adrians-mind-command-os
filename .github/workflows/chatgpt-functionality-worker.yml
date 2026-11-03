@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - chatgpt/functionality-worker-2026-11-03
+      - chatgpt/functionality-agent-execution-2026-11-03
     paths:
       - ".github/workflows/chatgpt-functionality-worker.yml"
       - "src/lib/mind/worker-pass.ts"
       - "src/lib/mind/worker-pass.test.ts"
+      - "scripts/schedule-worker.mjs"
+      - "scripts/schedule-tick.mjs"
       - "src/lib/supabase/oauth-redirect.ts"
       - "src/lib/supabase/first-party-oauth.ts"
   workflow_dispatch:
@@ -21,7 +24,7 @@ concurrency:
 
 jobs:
   functionality-regression:
-    if: github.ref == 'refs/heads/chatgpt/functionality-worker-2026-11-03'
+    if: contains(fromJSON('["refs/heads/chatgpt/functionality-worker-2026-11-03","refs/heads/chatgpt/functionality-agent-execution-2026-11-03"]'), github.ref)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
