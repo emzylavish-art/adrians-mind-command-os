@@ -18,4 +18,12 @@ describe("workspace-nav", () => {
     assert.equal(explore.href, "/explore");
     assert.ok(explore.iconSrc.startsWith("/icons/"));
   });
+
+  it("includes Voice Cloning Studio linking to /voice-cloning-studio", () => {
+    const vcs = WORKSPACE_ROUTE_LINKS.find((item) => item.id === "voice-cloning-studio");
+    assert.ok(vcs, "Voice Cloning workspace route link missing");
+    assert.equal(vcs.label, "Voice Cloning");
+    assert.equal(vcs.href, "/voice-cloning-studio");
+    assert.ok(vcs.iconSrc.startsWith("/icons/"));
+  });
 });
