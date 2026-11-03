@@ -8,6 +8,9 @@ export const CONNECTOR_IDS = [
   "gmail",
   "google_calendar",
   "google_drive",
+  "dropbox",
+  "onedrive",
+  "pcloud",
   "slack",
   "github",
 ] as const;
@@ -23,6 +26,9 @@ export const CONNECTOR_DISPLAY_NAMES: Record<ConnectorId, string> = {
   gmail: "Gmail",
   google_calendar: "Google Calendar",
   google_drive: "Google Drive",
+  dropbox: "Dropbox",
+  onedrive: "OneDrive",
+  pcloud: "pCloud",
   slack: "Slack",
   github: "GitHub",
 };
@@ -103,6 +109,12 @@ export function getAccessToken(ownerId: string, connector: ConnectorId): string 
   const conn = readConnection(ownerId, connector);
   if (!conn) return null;
   return decryptSecret(conn.accessTokenEnc);
+}
+
+export function getRefreshToken(ownerId: string, connector: ConnectorId): string | null {
+  const conn = readConnection(ownerId, connector);
+  if (!conn?.refreshTokenEnc) return null;
+  return decryptSecret(conn.refreshTokenEnc);
 }
 
 export function storeAccessToken(input: {

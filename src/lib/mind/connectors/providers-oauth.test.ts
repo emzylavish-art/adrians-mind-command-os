@@ -36,8 +36,8 @@ describe("oauth providers beyond notion", () => {
           clientSecret: "client-secret",
           redirectUri: `http://127.0.0.1:8099/api/mind/oauth/${connector}/callback`,
           authorizeUrl: provider.defaults.authorizeUrl,
-          tokenUrl: "http://mock/token",
-          revokeUrl: provider.defaults.revokeUrl || "http://mock/revoke",
+          tokenUrl: provider.defaults.tokenUrl,
+          revokeUrl: provider.defaults.revokeUrl || provider.defaults.tokenUrl,
         };
         const started = buildConnectorAuthorizeUrl(connector, { ownerId: "owner", env });
         assert.equal(started.ok, true);
@@ -65,8 +65,8 @@ describe("oauth providers beyond notion", () => {
           clientSecret: "client-secret",
           redirectUri: `http://127.0.0.1:8099/api/mind/oauth/${connector}/callback`,
           authorizeUrl: provider.defaults.authorizeUrl,
-          tokenUrl: "http://mock/token",
-          revokeUrl: "http://mock/revoke",
+          tokenUrl: provider.defaults.tokenUrl,
+          revokeUrl: provider.defaults.revokeUrl || provider.defaults.tokenUrl,
         };
         const started = buildConnectorAuthorizeUrl(connector, { ownerId: "owner", env });
         assert.equal(started.ok, true);

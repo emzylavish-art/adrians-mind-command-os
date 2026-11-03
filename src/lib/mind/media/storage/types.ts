@@ -1,6 +1,6 @@
 /** Multi-account cloud storage rotation types (server-only). */
 
-export const STORAGE_SERVICES = ["supabase", "google_drive", "dropbox", "onedrive"] as const;
+export const STORAGE_SERVICES = ["supabase", "google_drive", "dropbox", "onedrive", "pcloud"] as const;
 export type StorageService = (typeof STORAGE_SERVICES)[number];
 
 /** How an upload is filed into Supabase Storage buckets. Unknown lands in media-images. */
@@ -119,6 +119,7 @@ export const DEFAULT_CAPS = {
   google_drive: 15 * 1024 * 1024 * 1024, // 15 GiB
   dropbox: 2 * 1024 * 1024 * 1024, // 2 GiB
   onedrive: 5 * 1024 * 1024 * 1024, // 5 GiB
+  pcloud: 10 * 1024 * 1024 * 1024, // 10 GiB free-tier default
 } as const;
 
 /** Per-provider object size ceiling. Omitted services accept any file under STORE_MEDIA_MAX_BYTES. */

@@ -15,33 +15,67 @@ export function isLocalHostname(host: string): boolean {
 }
 
 /**
+ * Parse IPv4 literals including decimal/octal/hex encodings (e.g. 2130706433,
+ * 0177.0.0.1, 0x7f.0.0.1) used to smuggle loopback past naive dotted-decimal checks.
+ */
+export function parseEncodedIpv4(host: string): number[] | null {
+  const h = host.trim().toLowerCase();
+  if (!h) return null;
+  if (h.includes(".")) {
+    const parts = h.split(".");
+    if (parts.length !== 4) return null;
+    const octets: number[] = [];
+    for (const part of parts) {
+      let n: number;
+      if (/^0x[0-9a-f]+$/i.test(part)) n = Number.parseInt(part.slice(2), 16);
+      else if (/^0[0-7]+$/.test(part)) n = Number.parseInt(part, 8);
+      else if (/^\d+$/.test(part)) n = Number.parseInt(part, 10);
+      else return null;
+      if (!Number.isFinite(n) || n < 0 || n > 255) return null;
+      octets.push(n);
+    }
+    return octets;
+  }
+  let n: number;
+  if (/^0x[0-9a-f]+$/i.test(h)) n = Number.parseInt(h.slice(2), 16);
+  else if (/^0[0-7]+$/.test(h)) n = Number.parseInt(h, 8);
+  else if (/^\d+$/.test(h)) n = Number.parseInt(h, 10);
+  else return null;
+  if (!Number.isFinite(n) || n < 0 || n > 0xffffffff) return null;
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+}
+
+function isPrivateOrReservedIpv4(octets: number[]): boolean {
+  const [a, b] = octets;
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a >= 224) return true; // multicast / reserved
+  return false;
+}
+
+/**
  * True for private, loopback, link-local, CGNAT, unspecified, multicast and
- * IPv4-mapped literals. Hostnames that are not IP literals return false.
+ * IPv4-mapped literals (including decimal/octal/hex encodings). Hostnames that
+ * are not IP literals return false.
  */
 export function isPrivateAddressLiteral(hostname: string): boolean {
   let host = hostname.toLowerCase();
   if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return (
-      a === 0 || a === 10 || a === 127 || a >= 224 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127)
-    );
-  }
+  const encoded = parseEncodedIpv4(host);
+  if (encoded) return isPrivateOrReservedIpv4(encoded);
   if (!host.includes(":")) return false;
   if (host === "::" || host === "::1") return true;
   const mapped = /^::ffff:(.+)$/.exec(host);
   if (mapped) {
-    const tail = mapped[1];
+    const tail = mapped[1]!;
     if (tail.includes(".")) return isPrivateAddressLiteral(tail);
     const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(tail);
     if (hex) {
-      const n = (parseInt(hex[1], 16) << 16) | parseInt(hex[2], 16);
-      return isPrivateAddressLiteral([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join("."));
+      const n = (parseInt(hex[1]!, 16) << 16) | parseInt(hex[2]!, 16);
+      return isPrivateOrReservedIpv4([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]);
     }
     return true;
   }
@@ -62,7 +96,7 @@ function stripBrackets(host: string): string {
 
 export function isIpLiteralHostname(hostname: string): boolean {
   const host = stripBrackets(hostname);
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+  if (parseEncodedIpv4(host)) return true;
   if (host.includes(":")) return true;
   return false;
 }

@@ -260,11 +260,118 @@ const notionProvider: OAuthProvider = {
     "Notion OAuth is not configured. Set NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, and NOTION_OAUTH_REDIRECT_URI. Nothing was started.",
 };
 
+
+const dropboxProvider: OAuthProvider = {
+  id: "dropbox",
+  displayName: "Dropbox",
+  envKeys: {
+    clientId: "DROPBOX_OAUTH_CLIENT_ID",
+    clientSecret: "DROPBOX_OAUTH_CLIENT_SECRET",
+    redirectUri: "DROPBOX_OAUTH_REDIRECT_URI",
+    authorizeUrl: "DROPBOX_OAUTH_AUTHORIZE_URL",
+    tokenUrl: "DROPBOX_OAUTH_TOKEN_URL",
+    revokeUrl: "DROPBOX_OAUTH_REVOKE_URL",
+  },
+  defaults: {
+    authorizeUrl: "https://www.dropbox.com/oauth2/authorize",
+    tokenUrl: "https://api.dropboxapi.com/oauth2/token",
+    revokeUrl: "https://api.dropboxapi.com/2/auth/token/revoke",
+  },
+  scopes: ["files.content.write", "files.content.read"],
+  pkce: true,
+  tokenAuth: "body",
+  revokeStyle: "bearer_json",
+  authorizeExtra: { token_access_type: "offline" },
+  readEnv: (env = process.env) => ({
+    clientId: trim(env, "DROPBOX_OAUTH_CLIENT_ID"),
+    clientSecret: trim(env, "DROPBOX_OAUTH_CLIENT_SECRET"),
+    redirectUri: trim(env, "DROPBOX_OAUTH_REDIRECT_URI"),
+    authorizeUrl: trim(env, "DROPBOX_OAUTH_AUTHORIZE_URL") || "https://www.dropbox.com/oauth2/authorize",
+    tokenUrl: trim(env, "DROPBOX_OAUTH_TOKEN_URL") || "https://api.dropboxapi.com/oauth2/token",
+    revokeUrl: trim(env, "DROPBOX_OAUTH_REVOKE_URL") || "https://api.dropboxapi.com/2/auth/token/revoke",
+  }),
+  parseAccount: (json) => ({
+    accountLabel: typeof json.account_id === "string" ? `Dropbox · ${json.account_id}` : "Dropbox account",
+  }),
+  notConfiguredDetail:
+    "Dropbox OAuth is not configured. Set DROPBOX_OAUTH_CLIENT_ID, DROPBOX_OAUTH_CLIENT_SECRET, and DROPBOX_OAUTH_REDIRECT_URI. Nothing was started.",
+};
+
+const onedriveProvider: OAuthProvider = {
+  id: "onedrive",
+  displayName: "OneDrive",
+  envKeys: {
+    clientId: "MICROSOFT_OAUTH_CLIENT_ID",
+    clientSecret: "MICROSOFT_OAUTH_CLIENT_SECRET",
+    redirectUri: "MICROSOFT_OAUTH_REDIRECT_URI",
+    authorizeUrl: "MICROSOFT_OAUTH_AUTHORIZE_URL",
+    tokenUrl: "MICROSOFT_OAUTH_TOKEN_URL",
+    revokeUrl: "MICROSOFT_OAUTH_REVOKE_URL",
+  },
+  defaults: {
+    authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+  },
+  scopes: ["Files.ReadWrite", "offline_access"],
+  pkce: true,
+  tokenAuth: "body",
+  revokeStyle: "none",
+  readEnv: (env = process.env) => ({
+    clientId: trim(env, "MICROSOFT_OAUTH_CLIENT_ID"),
+    clientSecret: trim(env, "MICROSOFT_OAUTH_CLIENT_SECRET"),
+    redirectUri: trim(env, "MICROSOFT_OAUTH_REDIRECT_URI"),
+    authorizeUrl:
+      trim(env, "MICROSOFT_OAUTH_AUTHORIZE_URL") ||
+      "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    tokenUrl:
+      trim(env, "MICROSOFT_OAUTH_TOKEN_URL") ||
+      "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    revokeUrl: trim(env, "MICROSOFT_OAUTH_REVOKE_URL"),
+  }),
+  parseAccount: () => ({ accountLabel: "OneDrive account" }),
+  notConfiguredDetail:
+    "OneDrive OAuth is not configured. Set MICROSOFT_OAUTH_CLIENT_ID, MICROSOFT_OAUTH_CLIENT_SECRET, and MICROSOFT_OAUTH_REDIRECT_URI. Nothing was started.",
+};
+
+
+const pcloudProvider: OAuthProvider = {
+  id: "pcloud",
+  displayName: "pCloud",
+  envKeys: {
+    clientId: "PCLOUD_OAUTH_CLIENT_ID",
+    clientSecret: "PCLOUD_OAUTH_CLIENT_SECRET",
+    redirectUri: "PCLOUD_OAUTH_REDIRECT_URI",
+    authorizeUrl: "PCLOUD_OAUTH_AUTHORIZE_URL",
+    tokenUrl: "PCLOUD_OAUTH_TOKEN_URL",
+  },
+  defaults: {
+    authorizeUrl: "https://my.pcloud.com/oauth2/authorize",
+    tokenUrl: "https://api.pcloud.com/oauth2_token",
+  },
+  scopes: [],
+  pkce: true,
+  tokenAuth: "body",
+  revokeStyle: "none",
+  readEnv: (env = process.env) => ({
+    clientId: trim(env, "PCLOUD_OAUTH_CLIENT_ID"),
+    clientSecret: trim(env, "PCLOUD_OAUTH_CLIENT_SECRET"),
+    redirectUri: trim(env, "PCLOUD_OAUTH_REDIRECT_URI"),
+    authorizeUrl: trim(env, "PCLOUD_OAUTH_AUTHORIZE_URL") || "https://my.pcloud.com/oauth2/authorize",
+    tokenUrl: trim(env, "PCLOUD_OAUTH_TOKEN_URL") || "https://api.pcloud.com/oauth2_token",
+  }),
+  parseAccount: () => ({ accountLabel: "pCloud account" }),
+  notConfiguredDetail:
+    "pCloud OAuth is not configured. Set PCLOUD_OAUTH_CLIENT_ID, PCLOUD_OAUTH_CLIENT_SECRET, and PCLOUD_OAUTH_REDIRECT_URI. Nothing was started.",
+};
+
 export const OAUTH_PROVIDERS: Record<ConnectorId, OAuthProvider> = {
   notion: notionProvider,
   gmail: gmailProvider,
   google_calendar: googleCalendarProvider,
   google_drive: googleDriveProvider,
+  dropbox: dropboxProvider,
+  onedrive: onedriveProvider,
+  pcloud: pcloudProvider,
   slack: slackProvider,
   github: githubProvider,
 };

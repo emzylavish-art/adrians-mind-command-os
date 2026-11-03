@@ -13,6 +13,7 @@ import {
   createGoogleDriveProvider,
   createDropboxProvider,
   createOneDriveProvider,
+  createPcloudProvider,
   createSupabaseProvider,
   GOOGLE_DRIVE_FORBIDDEN_OPS,
   DROPBOX_FORBIDDEN_OPS,
@@ -80,6 +81,7 @@ function mockProviders(opts: {
     google_drive: make("google_drive"),
     dropbox: make("dropbox"),
     onedrive: make("onedrive"),
+    pcloud: make("pcloud"),
   };
 }
 
@@ -297,6 +299,7 @@ describe("storage rotation policy", () => {
     assert.equal(createGoogleDriveProvider().service, "google_drive");
     assert.equal(createDropboxProvider().service, "dropbox");
     assert.equal(createOneDriveProvider().service, "onedrive");
+    assert.equal(createPcloudProvider().service, "pcloud");
   });
 
   it("path traversal in filenames is sanitized before upload", async () => {

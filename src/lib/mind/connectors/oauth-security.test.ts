@@ -98,8 +98,8 @@ describe("oauth security H3 TTL single-use cross-provider", () => {
       clientSecret: "s",
       redirectUri: "http://127.0.0.1:8099/api/mind/oauth/gmail/callback",
       authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-      tokenUrl: "http://mock/token",
-      revokeUrl: "http://mock/revoke",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      revokeUrl: "https://oauth2.googleapis.com/revoke",
     };
     const started = buildConnectorAuthorizeUrl("gmail", { ownerId: "owner-a", env });
     assert.equal(started.ok, true);
@@ -134,7 +134,7 @@ describe("oauth security H3 TTL single-use cross-provider", () => {
         clientSecret: "s",
         redirectUri: "http://127.0.0.1:8099/api/mind/oauth/slack/callback",
         authorizeUrl: "https://slack.com/oauth/v2/authorize",
-        tokenUrl: "http://mock/token",
+        tokenUrl: "https://slack.com/api/oauth.v2.access",
       },
     });
     assert.equal(cross.ok, true);
@@ -209,8 +209,8 @@ describe("oauth security attacker pass extras", () => {
       clientSecret: "s",
       redirectUri: "http://127.0.0.1:8099/api/mind/oauth/gmail/callback",
       authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-      tokenUrl: "http://mock/token",
-      revokeUrl: "http://mock/revoke",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      revokeUrl: "https://oauth2.googleapis.com/revoke",
     };
     const started = buildConnectorAuthorizeUrl("gmail", { ownerId: "owner", env });
     assert.equal(started.ok, true);

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getSql } from "@/lib/db";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
+import { assertAllowedRequestHost } from "@/lib/mind/mcp/request-host";
 import { callRegistryTool } from "@/lib/mind/mcp/registry";
 
 function json(body: unknown, status = 200) {
@@ -16,6 +17,8 @@ export const Route = createFileRoute("/api/mind/mcp/call")({
     handlers: {
       POST: async ({ request }) => {
         try {
+          const hostCheck = assertAllowedRequestHost(request);
+          if (!hostCheck.ok) return json({ ok: false, error: hostCheck.error }, 403);
           const originCheck = assertSameOrigin(request);
           if (!originCheck.ok) return json({ ok: false, error: originCheck.error }, 403);
           const authorization = request.headers.get("authorization");

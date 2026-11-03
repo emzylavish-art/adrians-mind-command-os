@@ -90,6 +90,203 @@ export function providerConfigured(env: OAuthProviderEnv): boolean {
   return Boolean(env.clientId && env.clientSecret && env.redirectUri);
 }
 
+/**
+ * Exact authorize hosts per connector. Env AUTHORIZE_URL overrides must still
+ * land on one of these hosts (https only, default port). Fail closed otherwise.
+ */
+export const OAUTH_AUTHORIZE_HOSTS: Record<ConnectorId, readonly string[]> = {
+  notion: ["api.notion.com"],
+  gmail: ["accounts.google.com"],
+  google_calendar: ["accounts.google.com"],
+  google_drive: ["accounts.google.com"],
+  dropbox: ["www.dropbox.com"],
+  onedrive: ["login.microsoftonline.com"],
+  pcloud: ["my.pcloud.com"],
+  slack: ["slack.com"],
+  github: ["github.com"],
+};
+
+function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
+}
+
+/** Honest client-safe error; never echo the bad URL or secrets. */
+function safeAuthorizeConfigError(name: string, kind: "authorize" | "redirect"): string {
+  return kind === "authorize"
+    ? `${name} authorize URL is not allowed. Use the official provider host over https. Nothing was started.`
+    : `${name} redirect URI is not allowed. Use https (or http on localhost) without credentials. Nothing was started.`;
+}
+
+/**
+ * Validate OAuth authorize URL: https only, exact allowlisted host, no userinfo,
+ * no odd ports, no javascript:/data:/http: or lookalike hosts.
+ */
+export function validateOAuthAuthorizeUrl(
+  connector: ConnectorId,
+  authorizeUrl: string,
+): { ok: true; url: URL } | { ok: false; reason: string } {
+  const allowed = OAUTH_AUTHORIZE_HOSTS[connector];
+  if (!allowed?.length) {
+    return { ok: false, reason: "unknown_connector" };
+  }
+  const trimmed = typeof authorizeUrl === "string" ? authorizeUrl.trim() : "";
+  if (!trimmed) return { ok: false, reason: "empty" };
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("javascript:") || lower.startsWith("data:") || lower.startsWith("http:")) {
+    return { ok: false, reason: "bad_scheme" };
+  }
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { ok: false, reason: "unparseable" };
+  }
+  if (url.protocol !== "https:") {
+    return { ok: false, reason: "bad_scheme" };
+  }
+  if (url.username || url.password) {
+    return { ok: false, reason: "userinfo" };
+  }
+  // URL.hostname is already IDNA/lowercase and strips brackets for IPv6.
+  const host = url.hostname.toLowerCase();
+  if (!allowed.includes(host)) {
+    return { ok: false, reason: "host_not_allowlisted" };
+  }
+  // Default https port only (empty or 443). Reject :8443, :80, etc.
+  if (url.port && url.port !== "443") {
+    return { ok: false, reason: "odd_port" };
+  }
+  return { ok: true, url };
+}
+
+/**
+ * Validate configurable redirect_uri origin: https (or http on loopback only),
+ * no userinfo, no javascript/data, no credentials@host tricks.
+ */
+export function validateOAuthRedirectUri(
+  redirectUri: string,
+): { ok: true; url: URL } | { ok: false; reason: string } {
+  const trimmed = typeof redirectUri === "string" ? redirectUri.trim() : "";
+  if (!trimmed) return { ok: false, reason: "empty" };
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("javascript:") || lower.startsWith("data:")) {
+    return { ok: false, reason: "bad_scheme" };
+  }
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { ok: false, reason: "unparseable" };
+  }
+  if (url.username || url.password) {
+    return { ok: false, reason: "userinfo" };
+  }
+  const local = isLoopbackHost(url.hostname);
+  if (url.protocol === "http:") {
+    if (!local) return { ok: false, reason: "http_non_local" };
+  } else if (url.protocol !== "https:") {
+    return { ok: false, reason: "bad_scheme" };
+  }
+  // Reject obviously odd ports on non-loopback https (allow empty/443; also common app ports on loopback).
+  if (!local && url.protocol === "https:" && url.port && url.port !== "443") {
+    return { ok: false, reason: "odd_port" };
+  }
+  return { ok: true, url };
+}
+
+
+/**
+ * Exact token endpoint hosts per connector. Env *_OAUTH_TOKEN_URL overrides must
+ * still land on one of these hosts (https only, default port). Fail closed.
+ */
+export const OAUTH_TOKEN_HOSTS: Record<ConnectorId, readonly string[]> = {
+  notion: ["api.notion.com"],
+  gmail: ["oauth2.googleapis.com"],
+  google_calendar: ["oauth2.googleapis.com"],
+  google_drive: ["oauth2.googleapis.com"],
+  dropbox: ["api.dropboxapi.com"],
+  onedrive: ["login.microsoftonline.com"],
+  pcloud: ["api.pcloud.com", "eapi.pcloud.com"],
+  slack: ["slack.com"],
+  github: ["github.com"],
+};
+
+/** Exact revoke endpoint hosts (subset may be empty when provider has no revoke). */
+export const OAUTH_REVOKE_HOSTS: Record<ConnectorId, readonly string[]> = {
+  notion: ["api.notion.com"],
+  gmail: ["oauth2.googleapis.com"],
+  google_calendar: ["oauth2.googleapis.com"],
+  google_drive: ["oauth2.googleapis.com"],
+  dropbox: ["api.dropboxapi.com"],
+  onedrive: ["login.microsoftonline.com"],
+  pcloud: ["api.pcloud.com", "eapi.pcloud.com"],
+  slack: ["slack.com"],
+  github: ["api.github.com", "github.com"],
+};
+
+function safeTokenUrlConfigError(name: string): string {
+  return `${name} token URL is not allowed. Use the official provider host over https. Nothing was stored.`;
+}
+
+/**
+ * Validate OAuth token URL: https only, exact allowlisted host, no userinfo,
+ * no odd ports. Same style as validateOAuthAuthorizeUrl.
+ */
+export function validateOAuthTokenUrl(
+  connector: ConnectorId,
+  tokenUrl: string,
+): { ok: true; url: URL } | { ok: false; reason: string } {
+  const allowed = OAUTH_TOKEN_HOSTS[connector];
+  if (!allowed?.length) return { ok: false, reason: "unknown_connector" };
+  const trimmed = typeof tokenUrl === "string" ? tokenUrl.trim() : "";
+  if (!trimmed) return { ok: false, reason: "empty" };
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("javascript:") || lower.startsWith("data:") || lower.startsWith("http:")) {
+    return { ok: false, reason: "bad_scheme" };
+  }
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { ok: false, reason: "unparseable" };
+  }
+  if (url.protocol !== "https:") return { ok: false, reason: "bad_scheme" };
+  if (url.username || url.password) return { ok: false, reason: "userinfo" };
+  const host = url.hostname.toLowerCase();
+  if (!allowed.includes(host)) return { ok: false, reason: "host_not_allowlisted" };
+  if (url.port && url.port !== "443") return { ok: false, reason: "odd_port" };
+  return { ok: true, url };
+}
+
+export function validateOAuthRevokeUrl(
+  connector: ConnectorId,
+  revokeUrl: string,
+): { ok: true; url: URL } | { ok: false; reason: string } {
+  const allowed = OAUTH_REVOKE_HOSTS[connector];
+  if (!allowed?.length) return { ok: false, reason: "unknown_connector" };
+  const trimmed = typeof revokeUrl === "string" ? revokeUrl.trim() : "";
+  if (!trimmed) return { ok: false, reason: "empty" };
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("javascript:") || lower.startsWith("data:") || lower.startsWith("http:")) {
+    return { ok: false, reason: "bad_scheme" };
+  }
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { ok: false, reason: "unparseable" };
+  }
+  if (url.protocol !== "https:") return { ok: false, reason: "bad_scheme" };
+  if (url.username || url.password) return { ok: false, reason: "userinfo" };
+  const host = url.hostname.toLowerCase();
+  if (!allowed.includes(host)) return { ok: false, reason: "host_not_allowlisted" };
+  if (url.port && url.port !== "443") return { ok: false, reason: "odd_port" };
+  return { ok: true, url };
+}
+
+export const OAUTH_TOKEN_FETCH_TIMEOUT_MS = 15_000;
+
 export function buildAuthorizeUrl(
   provider: OAuthProvider,
   input: { ownerId: string; env?: OAuthProviderEnv },
@@ -104,18 +301,17 @@ export function buildAuthorizeUrl(
         `${name} OAuth is not configured. Set ${provider.envKeys.clientId}, ${provider.envKeys.clientSecret}, and ${provider.envKeys.redirectUri}. Nothing was started.`,
     };
   }
-  try {
-    const redirect = new URL(env.redirectUri);
-    const local = redirect.hostname === "localhost" || redirect.hostname === "127.0.0.1";
-    if (redirect.protocol === "http:" && !local) {
-      return { ok: false, error: `${name} redirect URI must use https (or http on localhost). Nothing was started.` };
-    }
-    if (redirect.protocol !== "https:" && redirect.protocol !== "http:") {
-      return { ok: false, error: `${name} redirect URI scheme is not allowed. Nothing was started.` };
-    }
-  } catch {
-    return { ok: false, error: `${name} redirect URI is invalid. Nothing was started.` };
+
+  const redirectCheck = validateOAuthRedirectUri(env.redirectUri);
+  if (!redirectCheck.ok) {
+    return { ok: false, error: safeAuthorizeConfigError(name, "redirect") };
   }
+
+  const authorizeCheck = validateOAuthAuthorizeUrl(provider.id, env.authorizeUrl);
+  if (!authorizeCheck.ok) {
+    return { ok: false, error: safeAuthorizeConfigError(name, "authorize") };
+  }
+
   const { state, codeVerifier, codeChallenge } = newOAuthState();
   savePendingOAuth({
     state,
@@ -126,7 +322,8 @@ export function buildAuthorizeUrl(
     createdAt: new Date().toISOString(),
     scopes: provider.scopes.join(" "),
   });
-  const url = new URL(env.authorizeUrl);
+
+  const url = new URL(authorizeCheck.url.toString());
   url.searchParams.set("client_id", env.clientId);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", env.redirectUri);
@@ -140,6 +337,11 @@ export function buildAuthorizeUrl(
   }
   for (const [k, v] of Object.entries(provider.authorizeExtra || {})) {
     url.searchParams.set(k, v);
+  }
+  // Final belt-and-suspenders: never return a URL that left the allowlist while adding params.
+  const finalCheck = validateOAuthAuthorizeUrl(provider.id, url.origin + url.pathname);
+  if (!finalCheck.ok) {
+    return { ok: false, error: safeAuthorizeConfigError(name, "authorize") };
   }
   return { ok: true, url: url.toString(), state };
 }
@@ -174,6 +376,10 @@ export async function exchangeAuthorizationCode(
   if (env.redirectUri && pending.redirectUri !== env.redirectUri) {
     return { ok: false, error: "OAuth redirect URI mismatch. Nothing was stored." };
   }
+  const tokenCheck = validateOAuthTokenUrl(provider.id, env.tokenUrl);
+  if (!tokenCheck.ok) {
+    return { ok: false, error: safeTokenUrlConfigError(name) };
+  }
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: input.code,
@@ -196,9 +402,24 @@ export async function exchangeAuthorizationCode(
   const fetchImpl = input.fetch ?? (globalThis.fetch as FetchLike);
   let response: Awaited<ReturnType<FetchLike>>;
   try {
-    response = await fetchImpl(env.tokenUrl, { method: "POST", headers, body });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OAUTH_TOKEN_FETCH_TIMEOUT_MS);
+    try {
+      response = await fetchImpl(tokenCheck.url.toString(), {
+        method: "POST",
+        headers,
+        body,
+        redirect: "manual",
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     return { ok: false, error: `${name} token endpoint could not be reached. Nothing was stored.` };
+  }
+  if (response.status >= 300 && response.status < 400) {
+    return { ok: false, error: `${name} token endpoint tried to redirect. Nothing was stored.` };
   }
   let json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
   if (json && provider.normalizeTokenJson) {
@@ -248,12 +469,25 @@ export async function disconnectProvider(
   let revokeOk: boolean | undefined;
   let revokeDetail: string | undefined;
   if (token && env.revokeUrl && provider.revokeStyle !== "none") {
+    const revokeCheck = validateOAuthRevokeUrl(provider.id, env.revokeUrl);
+    if (!revokeCheck.ok) {
+      clearConnection(input.ownerId, provider.id);
+      const pub = toPublic(provider.id, null, providerConfigured(env));
+      return {
+        ...pub,
+        detail: `${pub.detail} Revoke URL is not allowed; local token was still cleared.`,
+        revokeOk: false,
+        revokeDetail: "Revoke URL is not allowed; local token was still cleared.",
+      };
+    }
     const fetchImpl = input.fetch ?? (globalThis.fetch as FetchLike);
+    const revokeTarget = revokeCheck.url.toString();
     try {
       let response: Awaited<ReturnType<FetchLike>> | null = null;
       if (provider.revokeStyle === "bearer_json") {
-        response = await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(revokeTarget, {
           method: "POST",
+          redirect: "manual",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -261,14 +495,16 @@ export async function disconnectProvider(
           body: JSON.stringify({ token }),
         });
       } else if (provider.revokeStyle === "form_token") {
-        response = await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(revokeTarget, {
           method: "POST",
+          redirect: "manual",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({ token }),
         });
       } else if (provider.revokeStyle === "slack_auth_revoke") {
-        response = await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(revokeTarget, {
           method: "POST",
+          redirect: "manual",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/x-www-form-urlencoded",
@@ -276,8 +512,9 @@ export async function disconnectProvider(
           body: new URLSearchParams({ token }),
         });
       } else if (provider.revokeStyle === "github_basic" && env.clientId && env.clientSecret) {
-        response = await fetchImpl(env.revokeUrl, {
+        response = await fetchImpl(revokeTarget, {
           method: "DELETE",
+          redirect: "manual",
           headers: {
             Authorization: `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`,
             Accept: "application/vnd.github+json",
