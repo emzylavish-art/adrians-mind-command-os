@@ -17,7 +17,7 @@ type Props = {
   triggerOnly?: boolean;
 };
 
-export function GraphFiltersPanel({ triggerOnly = false }: Props = {}) {
+export function GraphFiltersPanel({ triggerOnly = false }: Props) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<GraphFilterState>(DEFAULT_GRAPH_FILTER);
   const lanes = useMemo(() => laneOptions(), []);

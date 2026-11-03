@@ -342,6 +342,8 @@ export function createCityLayer(scene: THREE.Scene): CityLayerHandle {
       // label (textContent + sanitize — never innerHTML)
       const el = document.createElement("div");
       el.className = `dash3d-label dash3d-city-label ${b.health}`;
+      el.title = sanitizeLabelText(b.name, 80);
+      el.dataset.priority = b.health === "blocked" ? "0" : b.health === "stalled" ? "1" : "4";
       el.textContent = sanitizeLabelText(b.name.replace(/ Bot$/, ""), 28);
       const label = new CSS2DObject(el);
       label.visible = labelsVisible;

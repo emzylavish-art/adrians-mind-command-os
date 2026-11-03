@@ -12,7 +12,9 @@ export type MobilePanelId =
   | "charts"
   | "mirror"
   | "compass"
-  | "flyhud";
+  | "flyhud"
+  | "filters"
+  | "controls";
 
 export const MOBILE_SECTIONS: Array<{ id: MobilePanelId; label: string; hash: string }> = [
   { id: "scene", label: "Scene", hash: "panel-scene" },
@@ -27,7 +29,7 @@ export const MOBILE_SECTIONS: Array<{ id: MobilePanelId; label: string; hash: st
 type CardProps = {
   id: MobilePanelId;
   title: string;
-  children: ReactNode;
+  children?: ReactNode;
   defaultOpen?: boolean;
   focused: MobilePanelId | null;
   onFocus: (id: MobilePanelId | null) => void;

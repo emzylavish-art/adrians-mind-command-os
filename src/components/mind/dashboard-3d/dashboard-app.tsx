@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { hudDefaultOpen, sortHudCards } from "@/lib/mind/dashboard/hud-order";
 import { subscribePrefersReducedMotion } from "./motion";
 import { GraphFiltersPanel } from "./graph-filters-panel";
 import { MobileChrome, MobilePanelCard, useMobilePanelFocus } from "./mobile-structure";
@@ -194,7 +195,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       data-health-filter={operatorPrefs.healthFilter}
       onPointerDownCapture={unlockSound}
     >
-      {state.status === "ready" && sceneData && !webglError ? (
+      {state.status === "ready" && sceneData && !webglError && (!narrow || sceneInteract) ? (
         <UniverseScene
           data={sceneData}
           reducedMotion={reducedMotion}
@@ -272,163 +273,105 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
 
       {state.status === "ready" ? (
         <div className="dash3d-panel-stack" data-testid="dash3d-panel-stack">
-        <MobilePanelCard
-          id="weather"
-          title="Status"
-          defaultOpen
-          focused={panelFocus}
-          onFocus={setPanelFocus}
-          summary={state.data.weather.label}
-        >
-        <div className="dash3d-skybar" aria-live="polite">
-          {state.stale ? (
-            <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
-              <h2>Status stale</h2>
-              <p className="dash3d-title">Showing last good data</p>
-              <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
-                since {new Date(state.stale.since).toLocaleTimeString("en-GB", { timeZone: "Africa/Lagos", hour12: false })} WAT — {state.stale.error.slice(0, 90)}
-              </p>
-            </div>
-          ) : null}
-          <div className="dash3d-glass dash3d-skybar-card">
-            <h2>System weather</h2>
-            <p className="dash3d-title">{state.data.weather.label}</p>
-            <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>{state.data.weather.summary}</p>
+        {sortHudCards([
+          { id: "weather" as const, band: state.data.weather.tone === "blocked" || state.data.weather.tone === "stalled" ? "needs" as const : "status" as const, seq: 0, title: "System weather", summary: state.data.weather.label, col: "left" as const },
+          { id: "notion" as const, band: state.data.notionGraph.available ? "status" as const : "needs" as const, seq: 1, title: "Notion galaxy", summary: state.data.notionGraph.available ? `${state.data.notionGraph.stats.pages} pages` : "Unavailable", col: "left" as const },
+          { id: "money" as const, band: state.data.money?.available ? "status" as const : "needs" as const, seq: 2, title: "Money", summary: state.data.money?.available ? "Spend" : "no spend source yet", col: "left" as const },
+          { id: "fleet" as const, band: state.data.fleetPlan?.queueHead ? "status" as const : "needs" as const, seq: 3, title: "Fleet plan", summary: state.data.fleetPlan?.queueHead?.title ?? "Queue unavailable", col: "left" as const },
+          { id: "compass" as const, band: state.data.bots.some((bot) => bot.health === "blocked") ? "needs" as const : "status" as const, seq: 4, title: "Universe list", summary: `${state.data.bots.length} from status`, col: "left" as const },
+          { id: "time" as const, band: "status" as const, seq: 5, title: "Time", summary: scrubView.mode, col: "left" as const },
+          { id: "mirror" as const, band: "status" as const, seq: 6, title: "Notion mirror", summary: state.data.notionMirror.available ? "Mapped" : "Unavailable", col: "left" as const },
+          { id: "feed" as const, band: "status" as const, seq: 7, title: "Feed", summary: `${sceneData?.skyFeed?.list.length ?? state.data.skyFeed.list.length} events`, col: "left" as const },
+          { id: "filters" as const, band: "status" as const, seq: 8, title: "Filters", summary: "Search · health · lane", col: "left" as const },
+          { id: "controls" as const, band: "status" as const, seq: 9, title: "Controls", summary: "Operator", col: "right" as const },
+          { id: "flyhud" as const, band: "status" as const, seq: 10, title: "Flyover", summary: fly.level, col: "right" as const },
+          { id: "charts" as const, band: "charts" as const, seq: 0, title: "Charts", summary: "From status", col: "right" as const },
+        ]).map((card, index) => (
+          <div key={card.id} className="dash3d-hud-card" data-hud-card="1" data-hud-col={card.col} data-hud-band={card.band}>
+            <MobilePanelCard
+              id={card.id}
+              title={card.title}
+              summary={card.summary}
+              defaultOpen={hudDefaultOpen(index)}
+              focused={panelFocus}
+              onFocus={setPanelFocus}
+            >
+              {card.id === "weather" ? (
+                <div className="dash3d-glass dash3d-skybar-card">
+                  <h2>System weather</h2>
+                  <p className="dash3d-title">{state.data.weather.label}</p>
+                  <p className="dash3d-muted">{state.data.weather.summary}</p>
+                </div>
+              ) : null}
+              {card.id === "notion" ? (
+                <div className="dash3d-glass dash3d-skybar-card">
+                  <h2>Notion galaxy</h2>
+                  <p className="dash3d-title">{state.data.notionGraph.available ? `${state.data.notionGraph.stats.pages} pages · ${state.data.notionGraph.stats.edges} edges` : "Unavailable"}</p>
+                  <p className="dash3d-muted">{state.data.notionGraph.mode}{state.data.notionGraph.reason ? ` — ${state.data.notionGraph.reason}` : ""}</p>
+                </div>
+              ) : null}
+              {card.id === "money" ? <MoneyPanel money={state.data.money} /> : null}
+              {card.id === "fleet" ? (
+                <div className="dash3d-glass dash3d-skybar-card">
+                  <h2>Fleet plan</h2>
+                  <p className="dash3d-title">{state.data.fleetPlan?.queueHead ? `#${state.data.fleetPlan.queueHead.index} ${state.data.fleetPlan.queueHead.title}` : "Queue unavailable"}</p>
+                  <p className="dash3d-muted">{(state.data.fleetPlan?.fleetStars ?? []).map((star) => `${star.lane}:${star.health}`).join(" · ") || "—"}</p>
+                </div>
+              ) : null}
+              {card.id === "compass" ? (
+                <section className="dash3d-plain-fallback" data-testid="dash3d-plain-fallback" aria-label="Universe list">
+                  <p className="dash3d-muted">Same status payload as the scene. {state.data.weather.label}: {state.data.weather.summary}</p>
+                  <ul className="dash3d-list">
+                    {state.data.bots.map((bot) => (
+                      <li key={bot.id}>
+                        <button type="button" className="dash3d-pill" onClick={() => setSelected(bot)}>
+                          <span className={`dash3d-dot ${bot.health}`} />
+                          {bot.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {card.id === "time" && operatorPrefs.layers.time ? (
+                <TimeScrubber
+                  timeline={state.data.timeline ?? { events: [], earliestMs: null, latestMs: null, droppedFuture: 0, droppedInvalid: 0, truncated: false }}
+                  scrubMs={scrubView.scrubMs}
+                  nowMs={nowMs}
+                  message={scrubView.message}
+                  mode={scrubView.mode}
+                  onScrubMs={setScrubMs}
+                />
+              ) : null}
+              {card.id === "mirror" ? (
+                <NotionMirrorPanel mirror={state.data.notionMirror} onOpenPage={openNotion} />
+              ) : null}
+              {card.id === "feed" && sceneData && operatorPrefs.layers.feed ? (
+                <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
+              ) : null}
+              {card.id === "filters" ? <GraphFiltersPanel /> : null}
+              {card.id === "controls" ? (
+                <div className="dash3d-flyhud-row">
+                  {state.stale ? <p className="dash3d-muted" data-testid="status-stale">Status stale — showing last good data. {state.stale.error}</p> : null}
+                  <button type="button" className="dash3d-glass dash3d-zoomout" data-testid="operator-open" onClick={() => setOperatorOpen(true)}>Operator</button>
+                  <button type="button" className="dash3d-glass dash3d-zoomout" data-testid="sound-mute" aria-pressed={soundMuted} onClick={() => { unlockSound(); const next = !soundMuted; soundRef.current?.setMuted(next); setSoundMuted(next); }}>{soundMuted ? "Sound muted" : "Sound on"}</button>
+                  <button type="button" className="dash3d-glass dash3d-zoomout" data-testid="zoom-sky" onClick={() => { unlockSound(); setSelected(null); setNotionPage(null); document.dispatchEvent(new CustomEvent("dash3d-sky")); }}>Zoom to sky</button>
+                </div>
+              ) : null}
+              {card.id === "flyhud" && !webglError ? <FlyoverHud fly={fly} layout={layoutForHud} /> : null}
+              {card.id === "charts" && sceneData?.charts && operatorPrefs.layers.charts ? <ChartsPanel charts={sceneData.charts} /> : null}
+            </MobilePanelCard>
           </div>
-          <div className="dash3d-glass dash3d-skybar-card">
-            <h2>Notion galaxy</h2>
-            <p className="dash3d-title">
-              {state.data.notionGraph.available
-                ? `${state.data.notionGraph.stats.pages} pages · ${state.data.notionGraph.stats.edges} edges`
-                : "Unavailable"}
-            </p>
-            <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
-              {state.data.notionGraph.mode}
-              {state.data.notionGraph.reason ? ` — ${state.data.notionGraph.reason.slice(0, 90)}` : ""}
-            </p>
-          </div>
-          <MoneyPanel money={state.data.money} />
-          <div className="dash3d-glass dash3d-skybar-card">
-            <h2>Fleet plan</h2>
-            <p className="dash3d-title">
-              {state.data.fleetPlan?.queueHead
-                ? `#${state.data.fleetPlan.queueHead.index} ${state.data.fleetPlan.queueHead.title}`
-                : "Queue"}
-            </p>
-            <p className="dash3d-muted" style={{ fontSize: "0.72rem" }}>
-              {(state.data.fleetPlan?.fleetStars ?? []).map((s) => `${s.lane}:${s.health}`).join(" · ") || "—"}
-            </p>
-          </div>
-          {operatorPrefs.layers.time ? (
-          <TimeScrubber
-            timeline={state.data.timeline ?? {
-              events: [],
-              earliestMs: null,
-              latestMs: null,
-              droppedFuture: 0,
-              droppedInvalid: 0,
-              truncated: false,
-            }}
-            scrubMs={scrubView.scrubMs}
-            nowMs={nowMs}
-            message={scrubView.message}
-            mode={scrubView.mode}
-            onScrubMs={setScrubMs}
-          />
-          ) : null}
-          <button
-            type="button"
-            className="dash3d-glass dash3d-zoomout"
-            data-testid="operator-open"
-            onClick={() => setOperatorOpen(true)}
-          >
-            Operator (⌘K)
-          </button>
-          <button
-            type="button"
-            className="dash3d-glass dash3d-zoomout"
-            data-testid="sound-mute"
-            aria-pressed={soundMuted}
-            onClick={() => {
-              unlockSound();
-              const next = !soundMuted;
-              soundRef.current?.setMuted(next);
-              setSoundMuted(next);
-            }}
-          >
-            {soundMuted ? "Sound muted" : "Sound on"}
-          </button>
-          <button
-            type="button"
-            className="dash3d-glass dash3d-zoomout"
-            data-testid="zoom-sky"
-            onClick={() => {
-              unlockSound();
-              setSelected(null);
-              setNotionPage(null);
-              // scene also listens for empty-space click; this is accessible control
-              document.dispatchEvent(new CustomEvent("dash3d-sky"));
-            }}
-          >
-            Zoom to sky
-          </button>
+        ))}
         </div>
-        </MobilePanelCard>
-        <MobilePanelCard
-          id="compass"
-          title="Universe list"
-          defaultOpen
-          focused={panelFocus}
-          onFocus={setPanelFocus}
-          summary={`${state.data.bots.length} from status`}
-        >
-          <section className="dash3d-plain-fallback" data-testid="dash3d-plain-fallback" aria-label="Universe list">
-            <p className="dash3d-muted" style={{ fontSize: "0.75rem" }}>
-              Same status payload as the scene. {state.data.weather.label}: {state.data.weather.summary}
-            </p>
-            <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
-              {state.data.bots.map((b) => (
-                <li key={b.id}>
-                  <button type="button" className="dash3d-pill" onClick={() => setSelected(b)}>
-                    <span className={`dash3d-dot ${b.health}`} />
-                    {b.name}
-                    <span className="dash3d-muted"> — {b.health}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </MobilePanelCard>
-        {!webglError ? (
-          <MobilePanelCard id="flyhud" title="Flyover" focused={panelFocus} onFocus={setPanelFocus} summary={fly.level}>
-            <FlyoverHud fly={fly} layout={layoutForHud} />
-          </MobilePanelCard>
-        ) : null}
+      ) : null}
+      {state.status === "ready" ? (
         <BuildingInteriorPanel
           fly={fly}
           projects={state.data.projects}
           bots={state.data.bots}
           onClose={() => sendFly({ type: "ZOOM_OUT" })}
         />
-        {sceneData && operatorPrefs.layers.feed ? (
-          <MobilePanelCard id="feed" title="Feed" focused={panelFocus} onFocus={setPanelFocus}>
-            <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
-          </MobilePanelCard>
-        ) : null}
-        {sceneData?.charts && operatorPrefs.layers.charts ? (
-          <MobilePanelCard id="charts" title="Charts" focused={panelFocus} onFocus={setPanelFocus}>
-            <ChartsPanel charts={sceneData.charts} />
-          </MobilePanelCard>
-        ) : null}
-        <MobilePanelCard id="mirror" title="Notion mirror" focused={panelFocus} onFocus={setPanelFocus}>
-          <NotionMirrorPanel
-            mirror={state.data.notionMirror}
-            onOpenPage={(pageId) => {
-              openNotion(pageId);
-            }}
-          />
-        </MobilePanelCard>
-        </div>
       ) : null}
       {state.status === "ready" ? (
         <OperatorConsole

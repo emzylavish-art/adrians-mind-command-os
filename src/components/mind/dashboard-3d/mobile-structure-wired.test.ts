@@ -15,6 +15,8 @@ describe("mobile structure wiring", () => {
     assert.match(app, /GraphFiltersPanel triggerOnly/);
     assert.match(app, /dash3d-panel-stack/);
     assert.match(app, /dash3d-plain-fallback/);
+    assert.match(app, /!narrow \|\| sceneInteract/);
+    assert.match(app, /data-hud-card/);
     assert.equal((app.match(/data-testid="scene-interact"/g) ?? []).length, 0);
     assert.match(readFileSync(join(here, "mobile-structure.tsx"), "utf8"), /data-testid="scene-interact"/);
     assert.match(readFileSync(join(here, "mobile-structure.tsx"), "utf8"), /Orbit off/);

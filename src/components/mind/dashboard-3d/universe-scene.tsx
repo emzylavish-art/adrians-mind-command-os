@@ -15,6 +15,7 @@ import {
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
 import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, bloomTier } from "./postfx";
 import { filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
+import { cullLabelIds } from "@/lib/mind/dashboard/label-cull";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
@@ -236,6 +237,26 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   return tex;
 }
 
+function cullDomLabels(root: HTMLElement, zoomedOut: boolean) {
+  const nodes = [...root.querySelectorAll<HTMLElement>(".dash3d-label")];
+  const rects = nodes.map((el, index) => {
+    const box = el.getBoundingClientRect();
+    const priority = Number(el.dataset.priority ?? "5");
+    return {
+      id: String(index),
+      priority: Number.isFinite(priority) ? priority : 5,
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+    };
+  });
+  const hide = new Set(cullLabelIds(rects, { zoomedOut, viewportHeight: root.clientHeight || window.innerHeight }));
+  nodes.forEach((el, index) => {
+    el.style.opacity = hide.has(String(index)) ? "0" : "1";
+  });
+}
+
 function signatureFromStatus(data: DashboardStatus): string {
   const projects = data.projects?.projects ?? [];
   return universeMotionSignature({
@@ -450,7 +471,10 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         botGroup.add(glow);
 
         const el = document.createElement("div");
+        const fullName = sanitizeLabelText(bot.name);
         el.className = "dash3d-label";
+        el.title = fullName;
+        el.dataset.priority = bot.health === "blocked" ? "0" : bot.health === "stalled" ? "1" : bot.health === "healthy" ? "2" : "3";
         el.textContent = sanitizeLabelText(bot.name.replace(/ Bot$/, "").replace(" / Orchestrator", ""));
         const label = new CSS2DObject(el);
         label.position.set(pos.x, pos.y + 0.75, pos.z);
@@ -565,7 +589,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       mk(
         `Weather · ${status.weather.label}`,
         status.weather.summary,
-        status.weather.tone === "blocked" ? "#ff6b8a" : status.weather.tone === "stalled" ? "#fbbf24" : "#3dd68c",
+        status.weather.tone === "blocked" ? "#f3f5ff" : status.weather.tone === "stalled" ? "#c4b5fd" : "#f3f5ff",
         [-7.5, 5.5, -2],
       );
       mk(
@@ -1257,6 +1281,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (composer) composer.render();
       else renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
+      cullDomLabels(labelRenderer.domElement, camera.position.distanceTo(lookAt) > 16);
 
       const sig = signatureFromStatus(dataRef.current);
       if (sig !== lastMotionSig) {
