@@ -120,6 +120,8 @@ import {
   type DictationMachineState,
 } from "@/lib/mind/voice/dictation-machine";
 import { dictationTranscriptForTestAudio, readVoiceTestAudioParam, resolveVoiceTestAudioUrl } from "@/lib/mind/voice/test-audio";
+import { WhisperFlowBar } from "@/components/mind/whisper-flow/whisper-flow-bar";
+import { processDictationSegment } from "@/lib/mind/whisper-flow/session";
 import { providerUnconfiguredMessage, shouldForceVoiceUnconfigured } from "@/lib/mind/voice/provider-unconfigured";
 import {
   createVoiceConnectState,
@@ -537,6 +539,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   dictationRef.current = dictation;
   const dictationRecRef = useRef<BrowserSpeechRec | null>(null);
   const dictationBufferRef = useRef("");
+  const dictationSegmentsRef = useRef<string[]>([]);
   const userStoppedDictationRef = useRef(false);
   const [dictationElapsed, setDictationElapsed] = useState(0);
   const [dictationLevel, setDictationLevel] = useState(0);
@@ -3014,11 +3017,70 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
     void speak(trimmed);
   }
 
+  function undoLastDictationSegment() {
+    const last = dictationSegmentsRef.current.pop();
+    if (!last) return;
+    const draft = draftRef.current;
+    // Remove the last occurrence of the segment (trimmed match at end preferred).
+    const trimmedLast = last.trim();
+    if (!trimmedLast) return;
+    let nextDraft = draft;
+    if (draft.endsWith(trimmedLast)) nextDraft = draft.slice(0, -trimmedLast.length).trimEnd();
+    else if (draft.endsWith(` ${trimmedLast}`)) nextDraft = draft.slice(0, -(trimmedLast.length + 1));
+    else {
+      const idx = draft.lastIndexOf(trimmedLast);
+      if (idx >= 0) nextDraft = `${draft.slice(0, idx)}${draft.slice(idx + trimmedLast.length)}`.replace(/\s{2,}/g, " ").trim();
+    }
+    draftRef.current = nextDraft;
+    setDraft(nextDraft);
+    setNotice("Removed the last dictated segment. Nothing was sent.");
+  }
+
   function commitDictation(action: DictationAction, announce = true) {
     const prev = { ...dictationRef.current, draft: draftRef.current };
     let next = reduceDictation(prev, action);
     if (action.type === "stop_inserted") {
-      next = { ...next, draft: appendDictationText(draftRef.current, action.text) };
+      const processed = processDictationSegment(action.text);
+      for (const cmd of processed.commands) {
+        if (cmd.kind === "stop") {
+          // stop is handled by caller; ignore literal
+        }
+      }
+      if (processed.undoPrevious || processed.discardSegment) {
+        undoLastDictationSegment();
+      }
+      if (processed.discardSegment) {
+        next = {
+          ...next,
+          draft: draftRef.current,
+          status: "Dictation segment discarded (scratch that). Nothing was sent.",
+        };
+      } else {
+        const pieces = processed.insertPieces;
+        if (processed.refined) dictationSegmentsRef.current.push(processed.refined);
+        if (pieces.length) {
+          let draft = draftRef.current;
+          for (const piece of pieces) {
+            if (piece === "\n" || piece === "\n\n") draft = `${draft}${piece}`;
+            else if (piece === "." || piece === "," || piece === "?" || piece === "!") {
+              draft = draft.replace(/\s+$/, "") + piece;
+            } else draft = appendDictationText(draft, piece);
+          }
+          next = {
+            ...next,
+            draft,
+            status: "Dictation inserted (refined). Nothing was sent.",
+          };
+        } else {
+          next = {
+            ...next,
+            draft: draftRef.current,
+            status: processed.commands.length
+              ? "Voice command handled. Nothing was sent."
+              : "No speech detected. Nothing was inserted.",
+          };
+        }
+      }
     }
     dictationRef.current = next;
     setDictation(next);
@@ -3081,8 +3143,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   }
 
   function startBrowserDictation() {
-    // Browser SpeechRecognition only. Recorder capture in dictation.ts and server stt.ts stay unwired:
-    // no transcribe server fn exists, and a new xAI STT call would be a live provider call.
+    // Browser SpeechRecognition is the primary live path (Whisper Flow). MediaRecorder + server STT
+    // is available via WhisperFlowBar as fallback when browser speech is unsupported or fails.
     if (wsRef.current.halted) {
       setError("Emergency stop is on. Dictation was not started.");
       return;
@@ -4008,6 +4070,15 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               onStop={stopBrowserDictation}
               onCancel={() => cancelBrowserDictation(true)}
             />
+            <WhisperFlowBar
+              compact
+              disabled={dictationDisabled || ws.halted}
+              onComposerSync={(value) => {
+                draftRef.current = value;
+                setDraft(value);
+              }}
+              onUndoLastSegment={undoLastDictationSegment}
+            />
             <VoiceModeButton compact pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
             <span className="waveform" aria-hidden="true">
               <span /><span /><span /><span /><span /><span /><span />
@@ -4259,6 +4330,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                     }}
                   />
                   <textarea
+                    data-testid="composer-input"
                     value={draft}
                     onPaste={onComposerPaste}
                     onChange={(event) => setDraft(event.target.value)}
@@ -4366,6 +4438,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                       onMicClick={onDictationMic}
                       onStop={stopBrowserDictation}
                       onCancel={() => cancelBrowserDictation(true)}
+                    />
+                    <WhisperFlowBar
+                      disabled={dictationDisabled || ws.halted}
+                      onComposerSync={(value) => {
+                        draftRef.current = value;
+                        setDraft(value);
+                      }}
+                      onUndoLastSegment={undoLastDictationSegment}
                     />
                     <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
                     <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
