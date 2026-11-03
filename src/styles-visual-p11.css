@@ -209,7 +209,10 @@
 }
 
 /* ============================================================================
- * Agents page — Grok Bot–style header (page-local; not global topbar)
+ * Agents / Bots shell header — CSS-only polish for Grok Build markup
+ * Classes: .agents-grok-header / .bots-shell-header (feat/bots-shell-auth).
+ * Harmless when those classes are absent. Matches ref_grokbot_header.jpg.
+ * Phone + desktop. Gear · Search pill · new-bot · white compose.
  * ============================================================================ */
 
 .agents-page {
@@ -218,24 +221,28 @@
   gap: var(--p11-gap-lg);
 }
 
-.agents-grok-header {
-  position: sticky;
-  top: 0;
+.agents-grok-header,
+.bots-shell-header {
+  position: relative;
   z-index: var(--p11-z-sticky, 20);
   display: flex;
   align-items: center;
   gap: var(--p11-gap);
-  padding: var(--p11-gap) var(--p11-gap-md);
-  margin: 0 0 var(--p11-gap);
+  margin: 0 var(--p11-gap-md) var(--p11-gap-md);
+  padding: var(--p11-gap);
   border-radius: 999px;
   border: 1px solid var(--p11-line);
-  background: linear-gradient(180deg, rgb(22 22 26 / 0.88), rgb(12 12 16 / 0.92));
+  background: linear-gradient(180deg, rgb(28 28 32 / 0.78), rgb(14 14 18 / 0.88));
+  backdrop-filter: blur(var(--p11-blur)) saturate(1.05);
+  -webkit-backdrop-filter: blur(var(--p11-blur)) saturate(1.05);
   box-shadow:
-    0 8px 28px rgb(0 0 0 / 0.45),
-    inset 0 1px 0 rgb(255 255 255 / 0.12);
+    0 8px 24px rgb(0 0 0 / 0.4),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
 }
 
-.agents-grok-header__btn {
+.agents-grok-header__btn,
+.bots-shell-header .agents-grok-header__btn {
+  position: relative;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -245,14 +252,14 @@
   min-height: 2.75rem;
   border-radius: 999px;
   border: 1px solid var(--p11-line);
-  background: rgb(255 255 255 / 0.06);
+  background: rgb(255 255 255 / 0.08);
   color: var(--p11-ink);
   transition: transform 160ms ease, opacity 160ms ease;
   cursor: pointer;
 }
 .agents-grok-header__btn:hover:not([aria-disabled="true"]):not(:disabled) {
   transform: translateY(-1px);
-  background: rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.14);
 }
 .agents-grok-header__btn:focus-visible {
   outline: 2px solid #f4f4f5;
@@ -265,23 +272,26 @@
   transform: none;
 }
 
-.agents-grok-header__search {
+.agents-grok-header__search,
+.bots-shell-header .agents-grok-header__search {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   height: 2.75rem;
+  min-height: 2.75rem;
   padding: 0 1rem;
   border-radius: 999px;
   border: 1px solid var(--p11-line);
-  background: rgb(0 0 0 / 0.35);
+  background: rgb(0 0 0 / 0.45);
   color: var(--p11-ink-2);
   font-size: 0.875rem;
   transition: transform 160ms ease, opacity 160ms ease;
   cursor: pointer;
 }
-.agents-grok-header__search:hover:not([aria-disabled="true"]) {
+.agents-grok-header__search:hover:not([aria-disabled="true"]):not(:disabled) {
   transform: translateY(-1px);
   color: var(--p11-ink);
 }
@@ -289,16 +299,24 @@
   outline: 2px solid #f4f4f5;
   outline-offset: 2px;
 }
+.agents-grok-header__search:disabled,
+.agents-grok-header__search[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
 .agents-grok-header__search svg {
   flex-shrink: 0;
   opacity: 0.85;
 }
 
-.agents-grok-header__compose {
+/* White compose pill — matches ref_grokbot_header.jpg */
+.agents-grok-header__compose,
+.bots-shell-header .agents-grok-header__compose {
   background: #f4f4f5 !important;
   color: #0a0a0b !important;
   border-color: transparent !important;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), 0 0 16px rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 0 14px rgb(255 255 255 / 0.06);
 }
 .agents-grok-header__compose:hover:not([aria-disabled="true"]):not(:disabled) {
   filter: brightness(1.04);
@@ -316,9 +334,12 @@
 }
 
 @media (max-width: 389.98px) {
-  .agents-grok-header {
+  .agents-grok-header,
+  .bots-shell-header {
     gap: 6px;
     padding: 6px;
+    margin-left: 8px;
+    margin-right: 8px;
   }
   .agents-grok-header__btn {
     width: 2.5rem;
@@ -328,16 +349,25 @@
   }
   .agents-grok-header__search {
     height: 2.5rem;
+    min-height: 2.5rem;
     padding: 0 0.75rem;
     font-size: 0.8125rem;
   }
 }
 
 @media (min-width: 768px) {
-  .agents-grok-header {
+  .agents-grok-header,
+  .bots-shell-header {
     max-width: 42rem;
     margin-left: auto;
     margin-right: auto;
+  }
+}
+
+@media (min-width: 1440px) {
+  .agents-grok-header,
+  .bots-shell-header {
+    max-width: 48rem;
   }
 }
 
