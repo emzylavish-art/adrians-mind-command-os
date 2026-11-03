@@ -75,6 +75,7 @@ describe("voice attack pass", () => {
       },
       isListening: () => listening,
       thresholdMs: 20,
+      getDocument: () => null,
     });
     ctl.onKeyDown({
       key: " ",
@@ -82,7 +83,7 @@ describe("voice attack pass", () => {
       target: { tagName: "DIV" } as unknown as EventTarget,
       preventDefault() {},
     } as unknown as KeyboardEvent);
-    await new Promise((r) => setTimeout(r, 40));
+    await new Promise((r) => setTimeout(r, 250));
     assert.deepEqual(log, ["start"]);
     ctl.onBlurOrHide();
     assert.deepEqual(log, ["start", "stop"]);

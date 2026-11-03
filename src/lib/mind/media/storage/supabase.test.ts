@@ -85,6 +85,7 @@ function providers(partial: Partial<Record<StorageService, StorageProvider>>): R
     google_drive: partial.google_drive ?? idle("google_drive"),
     dropbox: partial.dropbox ?? idle("dropbox"),
     onedrive: partial.onedrive ?? idle("onedrive"),
+    pcloud: partial.pcloud ?? idle("pcloud"),
   };
 }
 

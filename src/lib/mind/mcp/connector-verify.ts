@@ -431,7 +431,13 @@ async function verifyMcpServer(
 
 const OAUTH_PROBE: Record<
   ConnectorId,
-  { url: string; method: "GET" | "POST"; headers?: Record<string, string> }
+  {
+    url: string;
+    method: "GET" | "POST";
+    headers?: Record<string, string>;
+    /** Dropbox-style POST with literal JSON null body (Bearer auth only). */
+    emptyJsonBody?: boolean;
+  }
 > = {
   notion: {
     url: "https://api.notion.com/v1/users/me",
@@ -441,6 +447,9 @@ const OAUTH_PROBE: Record<
   gmail: { url: "https://www.googleapis.com/oauth2/v3/userinfo", method: "GET" },
   google_calendar: { url: "https://www.googleapis.com/oauth2/v3/userinfo", method: "GET" },
   google_drive: { url: "https://www.googleapis.com/oauth2/v3/userinfo", method: "GET" },
+  dropbox: { url: "https://api.dropboxapi.com/2/users/get_current_account", method: "POST", emptyJsonBody: true },
+  onedrive: { url: "https://graph.microsoft.com/v1.0/me", method: "GET" },
+  pcloud: { url: "https://api.pcloud.com/userinfo", method: "GET" },
   slack: { url: "https://slack.com/api/auth.test", method: "POST" },
   github: {
     url: "https://api.github.com/user",
@@ -509,9 +518,20 @@ export async function verifyOauthConnector(
         headers: {
           Authorization: `Bearer ${token}`,
           ...(probe.headers ?? {}),
-          ...(probe.method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+          ...(probe.method === "POST"
+            ? {
+                "Content-Type": probe.emptyJsonBody
+                  ? "application/json"
+                  : "application/x-www-form-urlencoded",
+              }
+            : {}),
         },
-        body: probe.method === "POST" ? new URLSearchParams({ token }).toString() : undefined,
+        body:
+          probe.method === "POST"
+            ? probe.emptyJsonBody
+              ? "null"
+              : new URLSearchParams({ token }).toString()
+            : undefined,
       }),
       deps.timeoutMs ?? VERIFY_TIMEOUT_MS,
       `${label} verify`,

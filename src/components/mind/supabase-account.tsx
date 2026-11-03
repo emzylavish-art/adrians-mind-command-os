@@ -4,6 +4,13 @@ import {
   signOutSupabase,
 } from "@/lib/supabase/actions";
 import { serverFnRedirectHref } from "@/lib/auth/login-providers";
+import {
+  SupabaseAccountFailureBanner,
+  onceRetry,
+  runSupabaseAccountProbe,
+  runSupabaseSignOut,
+  type SupabaseAccountActionState,
+} from "@/lib/mind/supabase-account-action";
 
 /**
  * Shows the Supabase-signed-in email and a sign-out control in the account menu.

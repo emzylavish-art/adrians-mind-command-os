@@ -121,6 +121,7 @@ export function FleetPanel({
   onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
+  const [mutationState, setMutationState] = useState<FleetMutationActionState>({ status: "idle" });
   const [gmailBusy, setGmailBusy] = useState(false);
   // Synchronous guard: a fast double-click fires twice before `disabled` re-renders.
   const gmailInFlight = useRef(false);
@@ -610,7 +611,7 @@ export function FleetPanel({
         <div className="mt-6 flex flex-wrap gap-2">
           <input value={mailLabel} onChange={(event) => setMailLabel(event.target.value)} placeholder="Mailbox label" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={mailAddress} onChange={(event) => setMailAddress(event.target.value)} placeholder="name@example.com" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
-          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addMailbox(ws, mailLabel, mailAddress))}>Add mailbox record</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_mailbox", label: mailLabel, address: mailAddress }))}>Add mailbox record</button>
           <button
             type="button"
             className="min-h-11 rounded-panel border border-line px-3 text-sm"

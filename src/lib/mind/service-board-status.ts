@@ -50,9 +50,14 @@ export async function fetchOauthStatusPayload(
 ): Promise<OauthStatusPayload> {
   const fetchFn = deps.fetchFn ?? fetch;
   const timeoutMs = deps.timeoutMs ?? OAUTH_STATUS_FETCH_TIMEOUT_MS;
-  const timeout = AbortSignal.timeout(timeoutMs);
+  // AbortSignal.timeout() is unref'd and will not fire if nothing else is
+  // keeping the event loop alive (unit tests, short scripts). A normal timer does.
+  const timeout = new AbortController();
+  const timer = setTimeout(() => {
+    timeout.abort(new DOMException("The operation timed out", "TimeoutError"));
+  }, timeoutMs);
   const signal =
-    deps.signal && typeof AbortSignal.any === "function" ? AbortSignal.any([deps.signal, timeout]) : timeout;
+    deps.signal && typeof AbortSignal.any === "function" ? AbortSignal.any([deps.signal, timeout.signal]) : timeout.signal;
 
   try {
     const res = await fetchFn(url, { credentials: "include", signal });
@@ -80,5 +85,7 @@ export async function fetchOauthStatusPayload(
     return status;
   } catch {
     return unavailableStatus();
+  } finally {
+    clearTimeout(timer);
   }
 }
