@@ -10,6 +10,7 @@ export const CONNECTOR_IDS = [
   "google_drive",
   "dropbox",
   "onedrive",
+  "pcloud",
   "slack",
   "github",
 ] as const;
@@ -27,6 +28,7 @@ export const CONNECTOR_DISPLAY_NAMES: Record<ConnectorId, string> = {
   google_drive: "Google Drive",
   dropbox: "Dropbox",
   onedrive: "OneDrive",
+  pcloud: "pCloud",
   slack: "Slack",
   github: "GitHub",
 };

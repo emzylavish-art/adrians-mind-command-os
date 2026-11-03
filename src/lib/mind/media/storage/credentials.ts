@@ -45,6 +45,7 @@ const ENV_KEYS: Record<StorageService, string> = {
   google_drive: "MIND_GOOGLE_DRIVE_TOKEN",
   dropbox: "MIND_DROPBOX_TOKEN",
   onedrive: "MIND_ONEDRIVE_TOKEN",
+  pcloud: "MIND_PCLOUD_TOKEN",
 };
 
 /** Map storage service → on-disk connection record filename stem. */
@@ -122,8 +123,8 @@ export function resolveStorageAccessToken(
       source: "record",
     };
   }
-  if (record.accessTokenEnc && isStorageOAuthService(service)) {
-    const decrypted = decryptStoredAccessToken(ownerId, service);
+  if (record.accessTokenEnc) {
+    const decrypted = decryptStoredAccessToken(ownerId, service as import("../../connectors/store.ts").ConnectorId);
     if (decrypted) {
       return {
         ok: true,
@@ -132,7 +133,10 @@ export function resolveStorageAccessToken(
         source: "record",
       };
     }
-    if (record.refreshTokenEnc || hasStorageRefreshCapability(ownerId, service, env)) {
+    if (
+      isStorageOAuthService(service) &&
+      (record.refreshTokenEnc || hasStorageRefreshCapability(ownerId, service, env))
+    ) {
       return {
         ok: false,
         reason: "incomplete",
@@ -143,13 +147,6 @@ export function resolveStorageAccessToken(
       ok: false,
       reason: "encrypted_only",
       detail: `${service} connection record exists but the token could not be decrypted.`,
-    };
-  }
-  if (record.accessTokenEnc) {
-    return {
-      ok: false,
-      reason: "encrypted_only",
-      detail: `${service} connection record exists but the token is encrypted. MCP Integration Bot must expose a decryptable token helper.`,
     };
   }
   return {

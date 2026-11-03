@@ -76,8 +76,8 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
   const folderSegments = sanitizeFolderSegments(input.folderSegments ?? ["media"]);
   const config = loadStorageAccountsConfig(deps.configPath);
   const accounts = orderedEnabledAccounts(config);
-  const providers = deps.providers ?? createDefaultProviders();
   const env = deps.env ?? process.env;
+  const providers = deps.providers ?? createDefaultProviders(globalThis.fetch, env);
 
   let switchedFrom: StorageService | undefined;
   let lastConnectedService: StorageService | undefined;
@@ -195,8 +195,8 @@ export async function storageStatusForOwner(
 ): Promise<AccountPublicStatus[]> {
   const config = loadStorageAccountsConfig(deps.configPath);
   const accounts = orderedEnabledAccounts(config);
-  const providers = deps.providers ?? createDefaultProviders();
   const env = deps.env ?? process.env;
+  const providers = deps.providers ?? createDefaultProviders(globalThis.fetch, env);
   const out: AccountPublicStatus[] = [];
 
   for (const account of accounts) {

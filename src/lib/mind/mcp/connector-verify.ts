@@ -449,6 +449,7 @@ const OAUTH_PROBE: Record<
   google_drive: { url: "https://www.googleapis.com/oauth2/v3/userinfo", method: "GET" },
   dropbox: { url: "https://api.dropboxapi.com/2/users/get_current_account", method: "POST", emptyJsonBody: true },
   onedrive: { url: "https://graph.microsoft.com/v1.0/me", method: "GET" },
+  pcloud: { url: "https://api.pcloud.com/userinfo", method: "GET" },
   slack: { url: "https://slack.com/api/auth.test", method: "POST" },
   github: {
     url: "https://api.github.com/user",

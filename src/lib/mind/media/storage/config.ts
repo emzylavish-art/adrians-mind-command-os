@@ -31,6 +31,13 @@ const DEFAULT_ACCOUNTS: StorageAccountConfig[] = [
     order: 3,
     enabled: true,
   },
+  {
+    service: "pcloud",
+    accountEmail: "pcloud-placeholder@example.com",
+    capBytes: DEFAULT_CAPS.pcloud,
+    order: 4,
+    enabled: true,
+  },
 ];
 
 let configPath = join(process.cwd(), ".data", "media-storage-accounts.json");

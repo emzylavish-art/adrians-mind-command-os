@@ -313,7 +313,7 @@ export async function mintStorageAccessToken(
 /**
  * Decrypt a stored access token without refreshing. Returns null if missing/undecryptable.
  */
-export function decryptStoredAccessToken(ownerId: string, service: StorageOAuthService): string | null {
+export function decryptStoredAccessToken(ownerId: string, service: ConnectorId | StorageOAuthService): string | null {
   const conn = readConnection(ownerId, service as ConnectorId);
   if (!conn?.accessTokenEnc) return null;
   return decryptSecret(conn.accessTokenEnc);
