@@ -61,7 +61,16 @@ const globalAuthRef = globalThis as typeof globalThis & {
   __grokAuthPreviewSecret__?: string;
 };
 function previewAuthSecret(): string {
-  globalAuthRef.__grokAuthPreviewSecret__ ??= randomBytes(32).toString("hex");
+  if (globalAuthRef.__grokAuthPreviewSecret__) {
+    return globalAuthRef.__grokAuthPreviewSecret__;
+  }
+  try {
+    globalAuthRef.__grokAuthPreviewSecret__ = randomBytes(32).toString("hex");
+  } catch {
+    // Cloudflare Workers forbid crypto random during module evaluation.
+    globalAuthRef.__grokAuthPreviewSecret__ =
+      "cf-workers-preview-auth-secret-v1";
+  }
   return globalAuthRef.__grokAuthPreviewSecret__;
 }
 
@@ -104,7 +113,10 @@ const LOCAL_DEV_ORIGINS: string[] = [
   "http://127.0.0.1:8080",
   "http://[::1]:8080",
 ];
-const APP_PUBLIC_HOSTS = ["adrians-mind.vercel.app"];
+const APP_PUBLIC_HOSTS = [
+  "adrians-mind.vercel.app",
+  "*.workers.dev",
+];
 const APP_PUBLIC_ORIGINS = APP_PUBLIC_HOSTS.map((host) => `https://${host}`);
 const baseURL = explicitBaseURL ?? {
   // Include loopback hosts so dynamic baseURL resolves for local email/password
