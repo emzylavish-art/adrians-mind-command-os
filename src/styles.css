@@ -14421,3 +14421,11 @@ aside.rail .px-3.pb-2 > a {
     column-gap: 1px !important;
   }
 }
+
+
+@media (max-width: 379.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card > form {
+    overflow-x: hidden !important;
+  }
+}
