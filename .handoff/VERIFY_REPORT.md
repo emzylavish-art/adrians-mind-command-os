@@ -1,20 +1,20 @@
-# VERIFY_REPORT — Adrian's Mind Command OS, logic-wiring-queue @ 0e3146e
+# VERIFY_REPORT — Adrian's Mind Command OS, logic-wiring-queue @ 41b7ee6
 
-Date: 2026-11-02T21:13:49-06:00 (America/Chicago)
+Date: 2026-11-02T21:21:19-06:00 (America/Chicago)
 
 ## Scope
-4c0294b + 0e3146e: composer model menu subtitles derived from the model-tier catalog (composerTierSubtitle) instead of hard-coded "Grok 4.7" everywhere and "Chooses Fast or Expert" for Auto.
+41b7ee6: Mode picker / Effort row / intent-predictor chip selections validated through tierSelection / effortSelection. Previously chooseModelTier accepted an unchecked `tier as ModelTier` cast from the intent chip and chooseComposerEffort trusted its id, so an unknown value set modelTier to garbage, Effort to undefined, persisted both, and sent the bad tier on the next request.
 
 ## PASS / FAIL
-- PASS: Fast/Expert/Heavy/Build subtitles name the real default model ids (grok-4.20-0309-non-reasoning, grok-4.5, grok-4.7, grok-build-0.1).
-- PASS: Auto subtitle lists all four routed tiers, matching routeAutoTier.
-- PASS: source check — no hard-coded "· Grok 4.7" or stale Auto copy in composer-voice-buttons.tsx.
-- PASS: hostile input (Orchestrator, __proto__, constructor, toString, empty) returns "" with no throw.
+- PASS: every MODEL_TIER and every COMPOSER_MODE round-trips to a consistent Mode/Effort pair.
+- PASS: hostile input refused with no throw (mis-cased, padded, NUL, full-width, __proto__, constructor, valueOf, __defineGetter__, NaN, Symbol, null-proto object, boxed String).
+- PASS: 200-step rapid alternating switching always ends on a consistent pair.
+- PASS: no remaining `as ModelTier)` unchecked casts in command-app.tsx.
 - PASS: no xAI key material in the diff or build output.
-- PASS: no nav/drawer or Notion status files touched; no voice/media/visual files changed beyond the subtitle data.
+- PASS: no nav/drawer or Notion status files touched; no voice/media/visual files changed.
 
 ## Gates
-tsc clean; test:mind 1796/1796; test:scripts 205 pass 0 fail 4 skipped; build green.
+tsc clean; test:mind 1800/1800; test:scripts 205 pass 0 fail 4 skipped; build green.
 
 ## Verdict
 PASS
