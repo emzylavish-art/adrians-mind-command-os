@@ -190,7 +190,8 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
-import { MODEL_TIERS, isConcreteModelTier, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
+import { MODEL_TIERS, type ModelTier } from "@/lib/mind/model-tiers";
+import { chipPropsForSelection, forgetTierOutcome, tierRunFromResult, type ChipTierRun } from "@/lib/mind/model-tier-memory";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
@@ -591,8 +592,9 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   const [pcAgentOnline, setPcAgentOnline] = useState(false);
   const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
   const [buildPick, setBuildPick] = useState<string | null>(null);
-  const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
-  const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
+  // Last finished turn for the header chip; described only while the same tier stays selected.
+  const [lastTierRun, setLastTierRun] = useState<ChipTierRun | null>(null);
+  const { lastResolved: lastResolvedTier, lastModel: lastModelUsed } = chipPropsForSelection(lastTierRun, modelTier);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [agentGoal, setAgentGoal] = useState("");
@@ -1591,10 +1593,10 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
         const tierLabel = result.model
           ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
           : result.model;
-        if (isConcreteModelTier(result.resolvedTier)) {
-          setLastResolvedTier(result.resolvedTier);
-        }
-        if (result.model) setLastModelUsed(result.model);
+        const tierRun = tierRunFromResult(result, modelTier);
+        // Always replace: Orchestrator turns and missing/forged resolvedTier must not leave stale Auto→Fast.
+        setLastTierRun(tierRun);
+        if (!tierRun.resolved) forgetTierOutcome();
         setNotice(`Ran ${tierLabel}.`);
         return pushAudit(
           pushUsage(next, {
