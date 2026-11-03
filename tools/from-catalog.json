@@ -1,0 +1,168 @@
+{
+  "generatedAt": "2026-11-03T05:26:23.704Z",
+  "sourceOfTruth": "src/lib/mind/mcp/tool-catalog.ts",
+  "hardExcluded": [
+    "BlackEye",
+    "blackeye",
+    "L1B3RT4S",
+    "BlackEye",
+    "L1B3RT4S"
+  ],
+  "builtins": [
+    {
+      "name": "notion_read_page",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "notion_read_page"
+    },
+    {
+      "name": "notion_append_section",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "notion_append_section"
+    },
+    {
+      "name": "pc_run_shell",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "pc_run_shell"
+    },
+    {
+      "name": "pglite_query",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "pglite_query"
+    },
+    {
+      "name": "pglite_list_schema",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "pglite_list_schema"
+    },
+    {
+      "name": "storage_list_status",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "storage_list_status"
+    },
+    {
+      "name": "build_repo_list",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "build_repo_list"
+    },
+    {
+      "name": "build_repo_read",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "build_repo_read"
+    },
+    {
+      "name": "build_terminal_run",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "build_terminal_run"
+    },
+    {
+      "name": "build_git_status",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "build_git_status"
+    },
+    {
+      "name": "build_git_diff",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "build_git_diff"
+    },
+    {
+      "name": "build_git_commit",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "build_git_commit"
+    },
+    {
+      "name": "research_deep",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "research_deep"
+    },
+    {
+      "name": "research_connector_read",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "research_connector_read"
+    },
+    {
+      "name": "research_fetch_url",
+      "category": "mcp-builtin",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "callable": true,
+      "builtinId": "research_fetch_url"
+    }
+  ],
+  "registryCallable": [],
+  "registryUnverifiedGithub": [
+    "Everything Claude Code",
+    "Superpowers",
+    "GSD Core",
+    "UI UX Pro Max",
+    "n8n-MCP",
+    "LightRAG",
+    "Claude Mem",
+    "Obsidian Skills",
+    "Awesome Claude Code",
+    "Ghidra",
+    "JADX",
+    "Frida",
+    "Burp Suite",
+    "OWASP ZAP",
+    "GDB",
+    "x64dbg",
+    "God's Eyes"
+  ]
+}
