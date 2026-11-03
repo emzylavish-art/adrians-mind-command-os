@@ -13272,7 +13272,7 @@ body:has(.account-panel) nav.fixed[aria-label="Primary"] {
 .composer-bar.is-fixed,
 .composer-bar.is-fixed.fixed,
 div.shell > div.composer-bar.is-fixed {
-  --am-composer-h: 4.5rem; /* ~72px measured card+pad */
+  --am-composer-h: 5.25rem; /* card+pad+buffer so last chip row clears */
   --am-tabbar-h: 3.375rem; /* ~54px Primary */
   --am-dock-clearance: calc(
     var(--am-composer-h) + var(--am-tabbar-h) + env(safe-area-inset-bottom, 0px)
@@ -13292,9 +13292,10 @@ div.shell > div.composer-bar.is-fixed {
   body:has(.composer-bar.is-fixed) .main-stage .flex.gap-2.overflow-x-auto.pb-1,
   body:has(.composer-bar.is-fixed) .main-stage .mt-4.flex.gap-2.overflow-x-auto,
   body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto,
-  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto.pb-1 {
-    margin-bottom: var(--am-dock-clearance, 7.875rem) !important;
-    scroll-margin-bottom: var(--am-dock-clearance, 7.875rem) !important;
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto.pb-1,
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .grid.gap-2:has(> button) {
+    margin-bottom: calc(var(--am-dock-clearance, 7.875rem) + 1.25rem) !important;
+    scroll-margin-bottom: calc(var(--am-dock-clearance, 7.875rem) + 1.25rem) !important;
   }
 
   /* Let Generate Image/Video share a row (shrink) so Analyze/More sit above the dock at rest */
