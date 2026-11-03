@@ -252,6 +252,7 @@ describe("authUserLoaderFallback", () => {
     const fallback = authUserLoaderFallback(new Error("boom"));
     assert.equal(fallback.configured, true);
     assert.equal(fallback.user, null);
+    assert.deepEqual(fallback.supabaseOAuthProviders, ["google", "github"]);
   });
 });
 
