@@ -4092,7 +4092,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           </div>
         )}
         {accountOpen && (
-          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+          <div className="account-panel border-b border-line bg-surface px-4 py-3 text-sm" data-testid="account-panel" role="region" aria-label="Account menu">
             <p className="font-semibold">Adrian (Personal)</p>
             <UserButton />
             <SupabaseAccountControls />
@@ -5190,8 +5190,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry) => reportFailure(message, "open_page_failed", "browser", retry)} />}
-          {view === "build" && (
-            <section className="page-shell space-y-4">
+                    {view === "build" && (
+            <section className="page-shell space-y-4" data-testid="build-page">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
                   <img src="/icons/build.svg" alt="" className="size-8" />
@@ -5203,8 +5203,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               </div>
               <div className="empty-state" data-testid="build-empty">
                 <img src="/empty/empty-folder.svg" alt="" />
-                <p className="font-semibold">Let's build</p>
-                <p className="text-sm text-muted">No build is running. Suggestion cards do not run anything just by appearing.</p>
+                <p className="font-semibold">Let&apos;s build</p>
+                <p className="text-sm text-muted">No build is running on this tip. Live BuildSessionPanel styling ships on visual/build-session-style (from logic-build-session). Suggestion cards do not run anything just by appearing.</p>
                 <p className="text-sm font-semibold">{pcAgentOnline ? "PC agent online" : "Not paired"}</p>
                 <p className="text-sm text-muted">{pcAgentDetail}</p>
                 <p className="text-xs text-muted">Build effort selects the Build model tier for the next send.</p>
@@ -5232,8 +5232,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
               <div className="promo-banner text-sm">
                 <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold">Local Companion not paired</p>
-                  <p className="text-muted">Pair a computer to unlock file edits, tests, and git. Nothing runs until then.</p>
+                  <p className="font-semibold">{pcAgentOnline ? "Local Companion paired" : "Local Companion not paired"}</p>
+                  <p className="text-muted">{pcAgentOnline ? "File edits, tests, and git stay gated by approvals." : "Pair a computer to unlock file edits, tests, and git. Nothing runs until then."}</p>
                 </div>
               </div>
               <ul className="dense-grid space-y-0 text-sm">
@@ -5880,17 +5880,22 @@ function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compac
       type="button"
       className={
         props.compact
-          ? `focus-ring grid size-9 place-items-center rounded-full ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
-          : `inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+          ? `voice-action-talk focus-ring inline-flex min-h-9 items-center gap-1 rounded-full border border-line px-2 ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
+          : `voice-action-talk inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
       }
       onClick={props.onClick}
-      aria-label="Open voice mode"
+      aria-label="Talk — open realtime voice mode"
       aria-pressed={props.pressed ?? false}
       data-testid="open-voice-mode"
+      data-voice-action="talk"
       title="Realtime voice session. Not browser dictation."
     >
-      <Mic className="size-4" />
-      {props.compact ? <span className="sr-only">Voice mode</span> : "Voice mode"}
+      <Mic className="size-4 shrink-0" aria-hidden="true" />
+      {props.compact ? (
+        <span className="voice-action-talk__label text-[10px] font-semibold uppercase tracking-wide">Talk</span>
+      ) : (
+        "Voice mode"
+      )}
     </button>
   );
 }
