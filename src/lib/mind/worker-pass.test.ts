@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
-import { addAgentFromTemplate, type ScheduleJob } from "./fleet.ts";
+import { addAgentFromTemplate, addCustomAgent, enqueueRun, type ScheduleJob } from "./fleet.ts";
 import type { Workspace } from "./types.ts";
 import { claimSchedules, runWorkerPass } from "./worker-pass.ts";
 import { emptyWorkspace } from "./workspace.ts";
@@ -59,7 +59,11 @@ describe("worker pass", () => {
     assert.equal(savedB.schedules[0]?.nextRunAt, "2026-04-02T12:00:00.000Z");
     const second = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-b");
     assert.equal(second.ran, 0);
-    assert.equal(JSON.parse(snaps.get("owner-a") ?? "{}").runs.length, 1);
+    assert.equal(second.agentPasses, 1);
+    const progressed = JSON.parse(snaps.get("owner-a") ?? "{}") as Workspace;
+    assert.equal(progressed.runs.length, 1);
+    assert.equal(progressed.runs[0]?.step, 1);
+    assert.equal(progressed.runEvents.some((event) => event.kind === "tool_result"), true);
   });
 
   it("does not fabricate a successful schedule when no agent is assigned", async () => {
@@ -90,6 +94,39 @@ describe("worker pass", () => {
     assert.equal(result.failed, 0);
     assert.equal(saved.runs.length, 0);
     assert.equal(saved.schedules[0]?.lastRunAt, null);
+  });
+
+  it("advances an existing queued local agent task without a due schedule or provider call", async () => {
+    const made = addAgentFromTemplate(emptyWorkspace(), "Coding", "2026-04-01T11:00:00.000Z");
+    assert.equal(made.ok, true);
+    if (!made.ok) return;
+    made.ws.projects.push({ id: "p-1", name: "Lake", description: "", createdAt: "2026-04-01T11:00:00.000Z" });
+    const queued = enqueueRun(made.ws, made.agent.id, "List projects", "2026-04-01T11:30:00.000Z");
+    assert.equal(queued.ok, true);
+    if (!queued.ok) return;
+    const { sql, snaps } = db([{ userId: "owner-a", ws: queued.ws }]);
+    const result = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-a");
+    const saved = JSON.parse(snaps.get("owner-a") ?? "{}") as Workspace;
+    assert.equal(result.ran, 0);
+    assert.equal(result.agentPasses, 1);
+    assert.equal(saved.runs[0]?.step, 1);
+    assert.equal(saved.runEvents.some((event) => event.kind === "tool_result" && event.detail.includes("Lake")), true);
+    assert.equal(saved.projects[0]?.name, "Lake");
+  });
+
+  it("fails closed for unconfigured external agent tools and never invokes a model", async () => {
+    const made = addCustomAgent(emptyWorkspace(), { name: "No model key", instructions: "", tools: ["model"] }, "2026-04-01T11:00:00.000Z");
+    assert.equal(made.ok, true);
+    if (!made.ok) return;
+    const queued = enqueueRun(made.ws, made.agent.id, "Say hello", "2026-04-01T11:30:00.000Z");
+    assert.equal(queued.ok, true);
+    if (!queued.ok) return;
+    const { sql, snaps } = db([{ userId: "owner-a", ws: queued.ws }]);
+    const result = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-a");
+    const saved = JSON.parse(snaps.get("owner-a") ?? "{}") as Workspace;
+    assert.equal(result.agentPasses, 1);
+    assert.equal(saved.runs[0]?.state, "waiting_external");
+    assert.match(saved.runs[0]?.error ?? "", /does not call a model/i);
   });
 
   it("claims before running so a second worker skips, and an expired lease can be recovered", () => {
