@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
+import "./command-drawer-nav.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -3314,7 +3315,7 @@ export function CommandApp() {
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`rail ${navOpen ? "flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside className={`rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
           <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
             <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
@@ -3383,11 +3384,12 @@ export function CommandApp() {
                           to={routeItem.href}
                           title={routeItem.label}
                           aria-label={routeItem.label}
+                          data-testid={`nav-route-${routeItem.id}`}
                           onClick={() => {
                             setNavOpen(false);
                             closeMenus();
                           }}
-                          className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
+                          className={`nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
                         >
                           <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
                           {!railCollapsed && routeItem.label}
