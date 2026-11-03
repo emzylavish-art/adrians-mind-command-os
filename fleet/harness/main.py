@@ -1,11 +1,11 @@
 """Shared fleet loop.
 
 Write STATE.json before thinking. Poll the Notion Task Queue for one OPEN
-task assigned to this bot, mark it CLAIMED, confirm the OpenAI key and a
-credit balance greater than zero, then call the model once. Log one line to
-JOURNAL.md and the Notion Achievement Log. Two consecutive failures halt the
-process and alert the human on Telegram. Secrets are redacted before they
-reach a log, Notion, or Telegram.
+task assigned to this bot, mark it CLAIMED, confirm the active model
+provider with a one-token test completion (OpenAI or xAI/Grok), then call
+the model once. Log one line to JOURNAL.md and the Notion Achievement Log.
+Two consecutive failures halt the process and alert the human on Telegram.
+Secrets are redacted before they reach a log, Notion, or Telegram.
 """
 
 from __future__ import annotations
@@ -32,6 +32,8 @@ from harness.guard import (
 
 NOTION_VERSION = "2022-06-28"
 DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_XAI_MODEL = "grok-3-mini"
+DEFAULT_XAI_BASE_URL = "https://api.x.ai/v1"
 DEFAULT_INTERVAL_SECONDS = 20
 MIN_INTERVAL_SECONDS = 5
 
@@ -237,8 +239,10 @@ class Ctx:
     soul: str
     token: str
     chat_id: str
-    openai_key: str
+    provider: str
+    api_key: str
     model: str
+    base_url: str | None
 
 
 def _append_journal(path: Path, line: str) -> None:
@@ -268,6 +272,7 @@ def _secret_values() -> list[str]:
         "TELEGRAM_TOKEN",
         "NOTION_TOKEN",
         "OPENAI_API_KEY",
+        "XAI_API_KEY",
         "TELEGRAM_API_HASH",
         "TELEGRAM_PHONE",
         "HUMAN_TELEGRAM_CHAT_ID",
@@ -275,17 +280,43 @@ def _secret_values() -> list[str]:
     return [os.environ[name].strip() for name in names if len(os.environ.get(name, "").strip()) >= 8]
 
 
+def _provider_name() -> str:
+    raw = os.environ.get("MODEL_PROVIDER", "").strip().lower() or "openai"
+    if raw not in {"openai", "xai"}:
+        return ""
+    return raw
+
+
+def _provider_bundle(name: str) -> dict[str, str | None] | None:
+    if name == "openai":
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if len(key) < 20:
+            return None
+        model = os.environ.get("OPENAI_MODEL", "").strip() or DEFAULT_MODEL
+        return {"provider": "openai", "api_key": key, "model": model, "base_url": None}
+    if name == "xai":
+        key = os.environ.get("XAI_API_KEY", "").strip()
+        if len(key) < 20:
+            return None
+        model = os.environ.get("XAI_MODEL", "").strip() or DEFAULT_XAI_MODEL
+        return {"provider": "xai", "api_key": key, "model": model, "base_url": DEFAULT_XAI_BASE_URL}
+    return None
+
+
 def _settings_problem() -> str | None:
     token = os.environ.get("TELEGRAM_TOKEN", "").strip()
     notion = os.environ.get("NOTION_TOKEN", "").strip()
-    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
     chat_id = os.environ.get("HUMAN_TELEGRAM_CHAT_ID", "").strip()
+    provider = _provider_name()
     if TOKEN_RE.fullmatch(token) is None:
         return "TELEGRAM_TOKEN is missing or invalid"
     if len(notion) < 20:
         return "NOTION_TOKEN is missing or invalid"
-    if len(openai_key) < 20:
-        return "OPENAI_API_KEY is missing or invalid"
+    if not provider:
+        return "MODEL_PROVIDER must be openai or xai"
+    if _provider_bundle(provider) is None:
+        needed = "OPENAI_API_KEY" if provider == "openai" else "XAI_API_KEY"
+        return f"{needed} is missing or invalid for MODEL_PROVIDER={provider}"
     if re.fullmatch(r"-?\d{3,20}", chat_id) is None:
         return "HUMAN_TELEGRAM_CHAT_ID is missing or not a numeric chat id"
     return None
@@ -335,123 +366,70 @@ def _acquire_lock(bot_id: str) -> Path:
     return path
 
 
-def check_openai(api_key: str) -> tuple[bool, str]:
-    import requests
+def _quota_failure(exc: BaseException) -> bool:
+    status_code = getattr(exc, "status_code", None)
+    if status_code in {402, 429}:
+        return True
+    body = getattr(exc, "body", None)
+    text_blob = ""
+    if isinstance(body, dict):
+        err = body.get("error") if isinstance(body.get("error"), dict) else body
+        if isinstance(err, dict):
+            text_blob = " ".join(str(err.get(key) or "") for key in ("code", "type", "message"))
+    text_blob = (text_blob + " " + str(exc)).lower()
+    return "insufficient_quota" in text_blob or "credit" in text_blob and "billing" in text_blob
 
-    headers = {"Authorization": f"Bearer {api_key}"}
+
+def _probe_provider(bundle: dict[str, str | None]) -> tuple[bool, str]:
+    from openai import OpenAI
+
+    kwargs = {"api_key": bundle["api_key"], "timeout": 30}
+    if bundle.get("base_url"):
+        kwargs["base_url"] = bundle["base_url"]
     try:
-        models = requests.get("https://api.openai.com/v1/models", headers=headers, timeout=30)
-    except requests.RequestException:
-        return False, "openai key check could not reach the network"
-    if models.status_code != 200:
-        return False, f"openai key check status={models.status_code}"
-    remaining = _credit_remaining(api_key)
-    if remaining is None:
-        return False, "openai credit check did not return a balance"
-    if remaining <= 0:
-        return False, "openai credits are not greater than zero"
-    return True, "openai key accepted and credits are greater than zero"
+        client = OpenAI(**kwargs)
+        client.chat.completions.create(
+            model=str(bundle["model"]),
+            temperature=0,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+    except ImportError:
+        return False, "openai package is not installed"
+    except Exception as exc:
+        status_code = getattr(exc, "status_code", None)
+        provider = bundle["provider"]
+        if _quota_failure(exc):
+            return False, f"{provider} blocked by quota/billing status={status_code or 'unknown'}"
+        if status_code:
+            return False, f"{provider} key check status={status_code}"
+        return False, f"{provider} key check failed"
+    return True, f"{bundle['provider']} key accepted via one-token probe"
 
 
-def _credit_remaining(api_key: str) -> float | None:
-    import requests
-
-    headers = {"Authorization": f"Bearer {api_key}"}
-    grant_urls = (
-        "https://api.openai.com/dashboard/billing/credit_grants",
-        "https://api.openai.com/v1/dashboard/billing/credit_grants",
-    )
-    for url in grant_urls:
-        available = _available_from_grants(requests, url, headers)
-        if available is not None and available > 0:
-            return available
-    subscription = _subscription_remaining(requests, headers)
-    if subscription is not None:
-        return subscription
-    for url in grant_urls:
-        available = _available_from_grants(requests, url, headers)
-        if available is not None:
-            return available
-    return None
+def check_model_ready(preferred: str) -> tuple[bool, str, dict[str, str | None] | None]:
+    primary = _provider_bundle(preferred)
+    if primary is None:
+        needed = "OPENAI_API_KEY" if preferred == "openai" else "XAI_API_KEY"
+        return False, f"{needed} is missing or invalid for MODEL_PROVIDER={preferred}", None
+    ok, reason = _probe_provider(primary)
+    if ok:
+        return True, reason, primary
+    if not _quota_failure_message(reason):
+        return False, reason, None
+    other_name = "xai" if preferred == "openai" else "openai"
+    other = _provider_bundle(other_name)
+    if other is None:
+        return False, reason, None
+    ok2, reason2 = _probe_provider(other)
+    if ok2:
+        return True, f"{reason}; fallback to {other_name} ok", other
+    return False, f"{reason}; fallback {other_name} also failed ({reason2})", None
 
 
-def _available_from_grants(requests_module, url: str, headers: dict[str, str]) -> float | None:
-    try:
-        response = requests_module.get(url, headers=headers, timeout=30)
-    except requests_module.RequestException:
-        return None
-    if response.status_code != 200:
-        return None
-    try:
-        body = response.json()
-    except ValueError:
-        return None
-    if not isinstance(body, dict):
-        return None
-    if isinstance(body.get("total_available"), (int, float)) and not isinstance(body.get("total_available"), bool):
-        return float(body["total_available"])
-    grants = body.get("grants")
-    data = grants.get("data") if isinstance(grants, dict) else None
-    if not isinstance(data, list):
-        return None
-    remaining = 0.0
-    found = False
-    for grant in data:
-        if not isinstance(grant, dict):
-            continue
-        amount = grant.get("grant_amount")
-        used = grant.get("used_amount")
-        if isinstance(amount, (int, float)) and isinstance(used, (int, float)):
-            remaining += float(amount) - float(used)
-            found = True
-    return remaining if found else None
-
-
-def _subscription_remaining(requests_module, headers: dict[str, str]) -> float | None:
-    from datetime import datetime, timezone
-
-    today = datetime.now(timezone.utc).date()
-    start = today.replace(day=1).isoformat()
-    end = today.isoformat()
-    hard_limit = None
-    for url in (
-        "https://api.openai.com/dashboard/billing/subscription",
-        "https://api.openai.com/v1/dashboard/billing/subscription",
-    ):
-        try:
-            response = requests_module.get(url, headers=headers, timeout=30)
-        except requests_module.RequestException:
-            continue
-        if response.status_code != 200:
-            continue
-        try:
-            body = response.json()
-        except ValueError:
-            continue
-        if isinstance(body, dict) and isinstance(body.get("hard_limit_usd"), (int, float)):
-            hard_limit = float(body["hard_limit_usd"])
-            break
-    if hard_limit is None:
-        return None
-    used = 0.0
-    for url in (
-        "https://api.openai.com/dashboard/billing/usage",
-        "https://api.openai.com/v1/dashboard/billing/usage",
-    ):
-        try:
-            response = requests_module.get(url, headers=headers, params={"start_date": start, "end_date": end}, timeout=30)
-        except requests_module.RequestException:
-            continue
-        if response.status_code != 200:
-            continue
-        try:
-            body = response.json()
-        except ValueError:
-            continue
-        if isinstance(body, dict) and isinstance(body.get("total_usage"), (int, float)):
-            used = float(body["total_usage"]) / 100.0
-            return hard_limit - used
-    return None
+def _quota_failure_message(reason: str) -> bool:
+    lowered = reason.lower()
+    return "quota" in lowered or "billing" in lowered or "402" in lowered or "429" in lowered
 
 
 def call_model(ctx: Ctx, title: str, detail: str) -> str:
@@ -459,7 +437,10 @@ def call_model(ctx: Ctx, title: str, detail: str) -> str:
 
     task = title if not detail else f"{title}\n{detail}"
     task = redact(task, ctx.secrets)[:4000]
-    client = OpenAI(api_key=ctx.openai_key, timeout=60)
+    kwargs = {"api_key": ctx.api_key, "timeout": 60}
+    if ctx.base_url:
+        kwargs["base_url"] = ctx.base_url
+    client = OpenAI(**kwargs)
     response = client.chat.completions.create(
         model=ctx.model,
         temperature=0,
@@ -543,9 +524,13 @@ def one_cycle(ctx: Ctx) -> str:
         _record_notion(ctx, "CLAIMED", claimed, task, "CLAIMED")
     except NotionError as exc:
         return _fail(ctx, str(exc), task)
-    ready, reason = check_openai(ctx.openai_key)
-    if not ready:
+    ready, reason, bundle = check_model_ready(ctx.provider)
+    if not ready or bundle is None:
         return _fail(ctx, reason, task)
+    ctx.provider = str(bundle["provider"])
+    ctx.api_key = str(bundle["api_key"])
+    ctx.model = str(bundle["model"])
+    ctx.base_url = bundle.get("base_url")
     ctx.state["status"] = "WORKING"
     _persist(ctx)
     try:
@@ -554,9 +539,10 @@ def one_cycle(ctx: Ctx) -> str:
         return _fail(ctx, "openai package is not installed", task)
     except Exception as exc:
         status_code = getattr(exc, "status_code", None)
+        provider = ctx.provider
         if status_code:
-            return _fail(ctx, f"openai model call status={status_code}", task)
-        return _fail(ctx, "openai model call failed", task)
+            return _fail(ctx, f"{provider} model call status={status_code}", task)
+        return _fail(ctx, f"{provider} model call failed", task)
     detail = one_line(redact(result, ctx.secrets))
     if detail == "no detail":
         return _fail(ctx, "empty model result", task)
@@ -630,6 +616,10 @@ def run(config_root: Path, poll_interval_seconds: int | None = None) -> int:
         notion = Notion(os.environ["NOTION_TOKEN"].strip())
     except ImportError as exc:
         raise SystemExit("BLOCKED: requests is not installed. Run pip install -r fleet/requirements.txt") from exc
+    provider = _provider_name()
+    bundle = _provider_bundle(provider)
+    if bundle is None:
+        raise SystemExit("BLOCKED: model provider configuration missing after settings check")
     ctx = Ctx(
         root=root,
         bot_id=state["bot_id"],
@@ -641,8 +631,10 @@ def run(config_root: Path, poll_interval_seconds: int | None = None) -> int:
         soul=soul_path.read_text(encoding="utf-8")[:6000],
         token=os.environ["TELEGRAM_TOKEN"].strip(),
         chat_id=os.environ["HUMAN_TELEGRAM_CHAT_ID"].strip(),
-        openai_key=os.environ["OPENAI_API_KEY"].strip(),
-        model=os.environ.get("OPENAI_MODEL", "").strip() or DEFAULT_MODEL,
+        provider=str(bundle["provider"]),
+        api_key=str(bundle["api_key"]),
+        model=str(bundle["model"]),
+        base_url=bundle.get("base_url"),
     )
     _emit(ctx, "IDLE", f"harness started; poll every {interval} seconds")
     try:
