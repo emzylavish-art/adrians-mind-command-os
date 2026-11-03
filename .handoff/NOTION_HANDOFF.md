@@ -521,3 +521,51 @@ MCP lane will not claim `tools/registry.json` or the `/tools` page route while g
 ## Tools toggle verification (item 2)
 
 Already implemented: `setServerEnabled` + Tools card `mcpRegistryToggle`; `callRegistryTool` refuses disabled servers ("MCP server … is disabled. Nothing was called."). Re-verified live 2026-11-02 CT after storage diag.
+
+
+## 2026-11-02 (America/Chicago) — MCP Tool Registry: storage honesty + gdrive research read
+- Branch tip: `6f1cf15` on `mcp-integration` (commits `90e387c`, `6f1cf15`)
+- Worktree: `/workspace/mcp-registry-wt`
+- Honesty: `storageStatusForOwner` connected only after live `providers.*.health`; statusKind = connected | needs-reconnect | needs-config | unverified | not_connected
+- Live lane table (emzylavish session owner): gdrive-emzylavish connected; gdrive-emmanuelohilebo4 connected; dropbox needs-reconnect; onedrive-* needs-reconnect; pcloud-emzylavish connected; box-emzylavish needs-reconnect
+- Zack reconnect lanes: dropbox (placeholder), onedrive-emzylavish, onedrive-emmanuelohilebo4, box-emzylavish
+- research_connector_read source=`gdrive` + `file_id` (default lane gdrive-emzylavish): live files.list then read of `1EkW-VcxoVu3s1zOa6r7MtDISmQacB9d8` (seed txt) → ok, 63 bytes via download
+- Tests: 1219 pass; typecheck pass; build pass
+
+
+## 2026-11-02 (America/Chicago) — A#73 + B reconnect diag + C Notion + D live
+- Tip: `7bae280` (A `d9522dd`, C `5cc8c3d`, B `7bae280`; honesty `90e387c`, gdrive `6f1cf15`)
+- A: catalog SSOT + /tools + BlackEye/L1B3RT4S hard-exclude; GitHub/GodEye unverified without tools/verifications
+- B: dropbox missing_scope health fixed; OD/Box were missing OAuth client env (not Zack re-consent); all 4 connected with clients loaded
+- C: Notion OAuth+env already wired; clearer needs-config
+- D: prod `/tools` 404; MCP tools/call 401 sign-in; mcp-integration preview Vercel Auth protected; code not on preview/integration or main
+
+
+## 2026-11-02 (America/Chicago) — MCP Tool Registry: storage honesty + gdrive research read
+- Branch tip: `6f1cf15` on `mcp-integration` (commits `90e387c`, `6f1cf15`)
+- Worktree: `/workspace/mcp-registry-wt`
+- Honesty: `storageStatusForOwner` connected only after live `providers.*.health`; statusKind = connected | needs-reconnect | needs-config | unverified | not_connected
+- Live lane table (emzylavish session owner): gdrive-emzylavish connected; gdrive-emmanuelohilebo4 connected; dropbox needs-reconnect; onedrive-* needs-reconnect; pcloud-emzylavish connected; box-emzylavish needs-reconnect
+- Zack reconnect lanes: dropbox (placeholder), onedrive-emzylavish, onedrive-emmanuelohilebo4, box-emzylavish
+- research_connector_read source=`gdrive` + `file_id` (default lane gdrive-emzylavish): live files.list then read of `1EkW-VcxoVu3s1zOa6r7MtDISmQacB9d8` (seed txt) → ok, 63 bytes via download
+- Tests: 1219 pass; typecheck pass; build pass
+
+
+## 2026-11-02 (America/Chicago) — A#73 + B reconnect diag + C Notion + D live
+- Tip: `7bae280` (A `d9522dd`, C `5cc8c3d`, B `7bae280`; honesty `90e387c`, gdrive `6f1cf15`)
+- A: catalog SSOT + /tools + BlackEye/L1B3RT4S hard-exclude; GitHub/GodEye unverified without tools/verifications
+- B: dropbox missing_scope health fixed; OD/Box were missing OAuth client env (not Zack re-consent); all 4 connected with clients loaded
+- C: Notion OAuth+env already wired; clearer needs-config
+- D: prod `/tools` 404; MCP tools/call 401 sign-in; mcp-integration preview Vercel Auth protected; code not on preview/integration or main
+
+(Above two sections carried over from the uncommitted /workspace/mcp-registry-wt stop-point note.)
+
+## 2026-11-02 23:37 CST (America/Chicago) — MCP attacker pass + fix (stop-point)
+- Commit: `6b857d8` on `mcp-integration` (base `7bae280`), worktree `/workspace/mind-command-os-mcp`
+- **Weakness found (real, reproduced):** `research_connector_read` source=gdrive accepted any `lane_id`. Passing `lane_id=dropbox-emzylavish` (or onedrive-*/box-*/pcloud-*) resolved *that* provider's bearer token and sent it in `Authorization` to `www.googleapis.com` (cross-provider credential leak), then misreported the lane as "needs-reconnect". Probe on 7bae280 captured `Bearer DROPBOX-SECRET` on the Drive files.get URL.
+- **Fix:** lane must be `service: google_drive` or the tool returns error with zero network calls. Also: 15s `AbortSignal.timeout` on Drive files.get/export/download (old code hung forever on a stalled Drive); body streamed and cancelled at 200 KB cap (old code buffered the whole export before checking); network errors no longer echo raw `error.message`; unreadable files.get JSON reported as error.
+- **Regression tests** (research-sources.test.ts, +4): non-Drive lanes → no fetch, no token; hanging fetch times out; oversized stream stops early + cancelled; error text never contains token. Against old code: lane test fails and timeout test hangs (killed at 120s).
+- **Checks:** typecheck pass; tests 206/206 scripts (202 pass, 4 skipped, 0 fail) + 1230/1230 src (0 fail); build pass.
+- **Other probes (no change needed / out of lane):** file_id regex blocks traversal/injection (`^[A-Za-z0-9_-]{10,128}$` + encodeURIComponent); storage provider health fetches (Dropbox list_folder etc.) and lane token refresh have no timeouts either — media/storage lane, proposal: add AbortSignal.timeout(10s) in providers/*.health and storage-token-refresh.
+- **Open:** pc-pairing lock `mcp-integration-pc-approval-agent-binding.lock` still says active (work shipped in 984b525) — owner should mark released. Logic Bot `logic-research-deep` lock active on research allowlist; this change only touched gdrive read path.
+- **Status:** done, lock released.
