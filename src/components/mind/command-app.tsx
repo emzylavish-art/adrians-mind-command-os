@@ -48,6 +48,12 @@ import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
+import {
+  composerDragEnter,
+  composerDragLeave,
+  composerDragReset,
+  createComposerDragOverState,
+} from "@/components/mind/media/media-ui-helpers";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/components/mind/media/downscale";
 import {
@@ -320,6 +326,8 @@ export function CommandApp() {
   const [batchEditPreview, setBatchEditPreview] = useState<null | { urls: string[]; prompt: string; model: GrokImagineModel; costUsd: number }>(null);
   const [batchEditProgress, setBatchEditProgress] = useState<null | { done: number; total: number }>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const homeComposerDrag = useRef(createComposerDragOverState());
+  const [homeComposerDragOver, setHomeComposerDragOver] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachQueueRef = useRef<File[]>([]);
@@ -1716,6 +1724,8 @@ export function CommandApp() {
   function onComposerImageDrop(event: React.DragEvent) {
     event.preventDefault();
     event.stopPropagation();
+    composerDragReset(homeComposerDrag.current);
+    setHomeComposerDragOver(false);
     const files = Array.from(event.dataTransfer?.files ?? []);
     if (files.length === 0) return;
     enqueueImageFiles(files);
@@ -2261,12 +2271,21 @@ export function CommandApp() {
                   </div>
                   <div
                     data-media="composer-drop"
+                    data-drag={homeComposerDragOver ? "over" : undefined}
                     className="rounded-panel"
+                    onDragEnter={(event) => {
+                      if (!event.dataTransfer?.types?.includes("Files")) return;
+                      event.preventDefault();
+                      if (composerDragEnter(homeComposerDrag.current)) setHomeComposerDragOver(true);
+                    }}
                     onDragOver={(event) => {
                       if (event.dataTransfer?.types?.includes("Files")) {
                         event.preventDefault();
                         event.dataTransfer.dropEffect = "copy";
                       }
+                    }}
+                    onDragLeave={() => {
+                      if (composerDragLeave(homeComposerDrag.current)) setHomeComposerDragOver(false);
                     }}
                     onDrop={onComposerImageDrop}
                   >
@@ -3817,9 +3836,13 @@ function ChatPane({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const chatComposerDrag = useRef(createComposerDragOverState());
+  const [chatComposerDragOver, setChatComposerDragOver] = useState(false);
   useEffect(() => {
     setRenaming(false);
     setEditingId(null);
+    composerDragReset(chatComposerDrag.current);
+    setChatComposerDragOver(false);
   }, [active?.id]);
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
@@ -3998,14 +4021,25 @@ function ChatPane({
             onSend();
           }}
           data-media="composer-drop"
+          data-drag={chatComposerDragOver ? "over" : undefined}
+          onDragEnter={(event) => {
+            if (!event.dataTransfer?.types?.includes("Files")) return;
+            event.preventDefault();
+            if (composerDragEnter(chatComposerDrag.current)) setChatComposerDragOver(true);
+          }}
           onDragOver={(event) => {
             if (event.dataTransfer?.types?.includes("Files")) {
               event.preventDefault();
               event.dataTransfer.dropEffect = "copy";
             }
           }}
+          onDragLeave={() => {
+            if (composerDragLeave(chatComposerDrag.current)) setChatComposerDragOver(false);
+          }}
           onDrop={(event) => {
             event.preventDefault();
+            composerDragReset(chatComposerDrag.current);
+            setChatComposerDragOver(false);
             const files = Array.from(event.dataTransfer?.files ?? []);
             if (files.length === 0) return;
             // Parent wires onAddImageFile through the same hardened queue via wrapper below.

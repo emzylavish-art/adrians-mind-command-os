@@ -330,3 +330,8 @@ Minimal hooks only (clear-on-chat-switch effect, gallery mount, owner-scope bind
 
 ### Verify
 - tsc green · full src suite **363/363** · build green
+
+## Visual Polish CSS r2 + composer-drop data-drag — 2026-11-02T21:40:00-06:00 (America/Chicago)
+
+- Cherry-picked VP commit `9aaac47` (`visual(media-r2): style burst/batch/gallery/chips/drop/downscale hooks`) as-is onto media-integration (clean; no patch fallback). CSS untouched by media lane.
+- Hook request: `data-drag="over"` on `[data-media="composer-drop"]` (home + chat) during dragenter/dragover; cleared on dragleave/drop. Child flicker avoided with depth counter (`composerDragEnter`/`Leave`/`Reset` in `media-ui-helpers.ts`) + unit test.

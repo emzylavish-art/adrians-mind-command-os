@@ -5,6 +5,11 @@ import {
   BURST_MAX,
   BURST_MIN,
   clampBurstCount,
+  composerDragEnter,
+  composerDragIsOver,
+  composerDragLeave,
+  composerDragReset,
+  createComposerDragOverState,
   moveAttachmentIndex,
   nextLightboxZoom,
   prevLightboxZoom,
@@ -151,5 +156,23 @@ describe("batch imagine cost preview", () => {
     assert.equal(estimateImagineBatchCostUsd(GROK_IMAGINE_MODEL, 4), 0.28);
     assert.equal(estimateImagineBatchCostUsd(GROK_IMAGINE_QUALITY_MODEL, 2), 0.28);
     assert.equal(estimateImagineBatchCostUsd(GROK_IMAGINE_MODEL, 99), 0.28);
+  });
+});
+
+describe("composer drag-over counter", () => {
+  it("sets over on first enter and clears only after matching leaves (no child flicker)", () => {
+    const state = createComposerDragOverState();
+    assert.equal(composerDragEnter(state), true);
+    assert.equal(composerDragIsOver(state), true);
+    assert.equal(composerDragEnter(state), false); // nested child
+    assert.equal(composerDragIsOver(state), true);
+    assert.equal(composerDragLeave(state), false);
+    assert.equal(composerDragIsOver(state), true);
+    assert.equal(composerDragLeave(state), true);
+    assert.equal(composerDragIsOver(state), false);
+    composerDragEnter(state);
+    composerDragEnter(state);
+    composerDragReset(state);
+    assert.equal(composerDragIsOver(state), false);
   });
 });

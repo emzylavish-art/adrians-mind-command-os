@@ -121,3 +121,30 @@ export function selectBurstAttachments(
   if (picked.length === 0) return { ok: false, error: "Select at least one burst frame to attach." };
   return { ok: true, items: picked };
 }
+
+/** Counter-based dragover so child enter/leave does not flicker `data-drag="over"`. */
+export type ComposerDragOverState = { depth: number };
+
+export function createComposerDragOverState(): ComposerDragOverState {
+  return { depth: 0 };
+}
+
+/** @returns true when the zone newly becomes "over" (depth 0 → 1). */
+export function composerDragEnter(state: ComposerDragOverState): boolean {
+  state.depth += 1;
+  return state.depth === 1;
+}
+
+/** @returns true when the zone newly leaves "over" (depth 1 → 0). */
+export function composerDragLeave(state: ComposerDragOverState): boolean {
+  state.depth = Math.max(0, state.depth - 1);
+  return state.depth === 0;
+}
+
+export function composerDragReset(state: ComposerDragOverState): void {
+  state.depth = 0;
+}
+
+export function composerDragIsOver(state: ComposerDragOverState): boolean {
+  return state.depth > 0;
+}
