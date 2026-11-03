@@ -84,6 +84,7 @@ export function ComposerVoiceButtons(props: ComposerVoiceButtonsProps) {
         data-live-voice={speak}
         data-state={speak}
         aria-label={speakActive ? "Voice conversation active" : "Start voice conversation"}
+        title={speakActive ? "Speak — live voice active" : "Speak — live two-way voice (not dictation)"}
         aria-pressed={speakActive}
         onClick={props.onSpeak}
         disabled={props.disabled}
