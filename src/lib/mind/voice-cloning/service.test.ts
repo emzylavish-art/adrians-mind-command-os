@@ -7,24 +7,28 @@ import { resetMindRateLimitsForTests } from "../limits.ts";
 import { createConsentChallenge } from "./consent.ts";
 import { createVoiceCloningService } from "./service.ts";
 import { VoiceCloningStore } from "./store.ts";
-import type { XaiCustomVoicesProvider } from "./provider.ts";
+import type { VoiceCloneProvider } from "./provider.ts";
 
 function fakeWavB64(size = 256): string {
   return Buffer.alloc(size, 1).toString("base64");
 }
 
-function mockProvider(overrides: Partial<XaiCustomVoicesProvider> = {}): XaiCustomVoicesProvider {
+function mockProvider(overrides: Partial<VoiceCloneProvider> = {}): VoiceCloneProvider {
   return {
-    id: "xai-custom-voices",
+    id: "local-http",
     async status() {
       return {
-        provider: "xai-custom-voices",
+        provider: "local-http",
         voiceKeyPresent: true,
         canList: true,
         canClone: false,
         reason: "Custom voices are not enabled for this team.",
         banner: "Provider not configured: test",
         probedAt: new Date().toISOString(),
+        endpoint: "",
+        xaiOptionalEnabled: false,
+        watermark: null,
+        backend: null,
       };
     },
     async createVoice() {
@@ -54,7 +58,7 @@ describe("voice-cloning service delete + consent + export", () => {
     dirs.length = 0;
   });
 
-  function setup(provider?: XaiCustomVoicesProvider) {
+  function setup(provider?: VoiceCloneProvider) {
     const dir = mkdtempSync(join(tmpdir(), "vcs-"));
     dirs.push(dir);
     const store = new VoiceCloningStore(dir);
@@ -125,13 +129,17 @@ describe("voice-cloning service delete + consent + export", () => {
     const ready = mockProvider({
       async status() {
         return {
-          provider: "xai-custom-voices",
+          provider: "local-http",
           voiceKeyPresent: true,
           canList: true,
           canClone: true,
           reason: "ok",
           banner: "ok",
           probedAt: new Date().toISOString(),
+          endpoint: "http://127.0.0.1:7860",
+          xaiOptionalEnabled: false,
+          watermark: { enabled: true, name: "PerTh", note: "test" },
+          backend: "mock-tone",
         };
       },
       async createVoice() {

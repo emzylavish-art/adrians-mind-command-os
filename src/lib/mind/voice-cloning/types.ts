@@ -4,6 +4,8 @@ export type ConsentAttestation =
   | "own_voice"
   | "written_permission";
 
+export type VoiceCloneProviderId = "local-http" | "xai-custom-voices";
+
 export type ProviderCloneStatus =
   | "ready"
   | "not_configured"
@@ -33,7 +35,7 @@ export type VoiceProfile = {
   createdAt: string;
   updatedAt: string;
   status: VoiceProfileStatus;
-  provider: "xai-custom-voices";
+  provider: VoiceCloneProviderId;
   providerVoiceId: string | null;
   providerStatus: ProviderCloneStatus;
   providerMessage: string;
@@ -43,8 +45,16 @@ export type VoiceProfile = {
   deletedAt: string | null;
 };
 
+export type WatermarkStatus = {
+  enabled: boolean;
+  name: string | null;
+  note: string;
+};
+
 export type ProviderStatusReport = {
-  provider: "xai-custom-voices";
+  provider: VoiceCloneProviderId;
+  /** Local engine base URL (safe to show); empty for cloud. */
+  endpoint: string;
   voiceKeyPresent: boolean;
   canList: boolean;
   canClone: boolean;
@@ -52,6 +62,11 @@ export type ProviderStatusReport = {
   /** Honest product copy for the Studio banner. */
   banner: string;
   probedAt: string;
+  /** True when the configured provider is the optional xAI path. */
+  xaiOptionalEnabled: boolean;
+  /** From local /health — Chatterbox PerTh is enabled:true. */
+  watermark: WatermarkStatus | null;
+  backend: string | null;
 };
 
 export type ConsentChallenge = {
@@ -65,10 +80,8 @@ export type CreateProfileInput = {
   name: string;
   attestation: ConsentAttestation;
   challengeId: string;
-  /** Consent utterance audio (base64). */
   consentAudioBase64: string;
   consentMime: string;
-  /** Reference sample for cloning (base64). May match consent clip. */
   sampleAudioBase64: string;
   sampleMime: string;
   sampleFilename?: string;

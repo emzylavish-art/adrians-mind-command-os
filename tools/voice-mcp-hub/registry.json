@@ -1,0 +1,12 @@
+{
+  "defaultProvider": "chatterbox-local",
+  "enabled": [
+    "chatterbox-local",
+    "cosyvoice3-local",
+    "generic-http",
+    "elevenlabs",
+    "mcp-proxy",
+    "mock",
+    "xai"
+  ]
+}

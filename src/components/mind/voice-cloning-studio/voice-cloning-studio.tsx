@@ -100,11 +100,26 @@ export function VoiceCloningStudioPage() {
   }, []);
 
   const playAudio = useCallback(
-    async (audioBase64: string) => {
+    async (audioBase64: string, mime = "audio/mpeg") => {
       stopPlayback();
       setPlaying(true);
       try {
-        await sharedAudioOutput.playMpegBase64(audioBase64);
+        if (mime.includes("wav") || mime.includes("wave")) {
+          // Shared speaker path: HTML audio element via SharedAudioOutput interrupt surface.
+          const bin = atob(audioBase64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+          const audio = new Audio(url);
+          await new Promise<void>((resolve) => {
+            audio.onended = () => resolve();
+            audio.onerror = () => resolve();
+            void audio.play().catch(() => resolve());
+          });
+          URL.revokeObjectURL(url);
+        } else {
+          await sharedAudioOutput.playMpegBase64(audioBase64);
+        }
       } finally {
         setPlaying(false);
       }
@@ -239,7 +254,7 @@ export function VoiceCloningStudioPage() {
         return;
       }
       setLastAudio({ profileId: selected.id, audioBase64: res.audioBase64, mime: res.mime });
-      await playAudio(res.audioBase64);
+      await playAudio(res.audioBase64, res.mime);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate failed.");
     } finally {
@@ -317,7 +332,13 @@ export function VoiceCloningStudioPage() {
   }
 
   return (
-    <main className="min-h-screen bg-bg text-fg" data-testid="voice-cloning-studio">
+    <main
+      className="min-h-screen bg-bg text-fg"
+      data-testid="voice-cloning-studio"
+      data-vcs-state={
+        !status ? "loading" : status.canClone ? "ready" : "engine-down"
+      }
+    >
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <Link
@@ -337,15 +358,34 @@ export function VoiceCloningStudioPage() {
           data-testid="vcs-provider-banner"
           data-can-clone={status?.canClone ? "true" : "false"}
         >
-          <p className="text-sm font-medium">Provider: xAI Custom Voices</p>
-          <p className="mt-1 text-sm text-muted" data-testid="vcs-provider-reason">
-            {status?.banner || "Checking provider…"}
+          <p className="text-sm font-medium">
+            Provider: {status?.provider === "xai-custom-voices" ? "xAI Custom Voices (optional)" : "Local voice engine"}
           </p>
+          <p className="mt-1 text-sm text-muted" data-testid="vcs-provider-reason">
+            {status?.banner || "Checking local voice engine…"}
+          </p>
+          {status?.endpoint ? (
+            <p className="mt-1 font-mono text-xs text-muted" data-testid="vcs-provider-endpoint">
+              {status.endpoint}
+            </p>
+          ) : null}
           {!status?.canClone ? (
-            <p className="vcs-badge" data-tone="warn">Provider not configured</p>
+            <p className="vcs-badge" data-tone="warn">Local voice engine not running</p>
           ) : (
-            <p className="vcs-badge" data-tone="ready">Cloning available</p>
+            <p className="vcs-badge" data-tone="ready">Local engine ready</p>
           )}
+          {status?.backend ? (
+            <p className="mt-2 text-xs text-muted" data-testid="vcs-backend">
+              Backend: {status.backend}
+            </p>
+          ) : null}
+          <p className="mt-1 text-xs text-muted" data-testid="vcs-watermark">
+            {status?.watermark?.enabled
+              ? `Watermark: on (${status.watermark.name || "PerTh"}) — ${status.watermark.note}`
+              : status?.watermark
+                ? `Watermark: off — ${status.watermark.note || "This backend does not embed a perceptual watermark."}`
+                : "Watermark: unknown until the local engine answers /health."}
+          </p>
         </section>
 
         {error ? (
@@ -476,7 +516,9 @@ export function VoiceCloningStudioPage() {
         <section className="mt-6 space-y-3 rounded-panel border border-line p-4 glass-panel" data-testid="vcs-profiles">
           <h2 className="text-base font-semibold">Your profiles</h2>
           {profiles.length === 0 ? (
-            <p className="text-sm text-muted">No voice profiles yet.</p>
+            <div className="vcs-empty" data-testid="vcs-profiles-empty">
+              <p className="text-sm text-muted">No voice profiles yet.</p>
+            </div>
           ) : (
             <ul className="space-y-2">
               {profiles.map((p) => (
@@ -505,7 +547,7 @@ export function VoiceCloningStudioPage() {
           <section className="mt-6 space-y-3 rounded-panel border border-line p-4 glass-panel" data-testid="vcs-generate">
             <h2 className="text-base font-semibold">Generate / preview / export</h2>
             <p className="text-xs text-muted">
-              Uses the existing xAI TTS endpoint and SharedAudioOutput speaker path. Generate requires a provider-side cloned voice.
+              Uses the local voice-clone HTTP engine (default) and SharedAudioOutput speaker path. Generate requires a provider-side voice id from that engine.
             </p>
             <textarea
               className="min-h-24 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm"
@@ -536,7 +578,7 @@ export function VoiceCloningStudioPage() {
                 type="button"
                 className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50"
                 disabled={busy || !lastAudio || lastAudio.profileId !== selected.id}
-                onClick={() => lastAudio && void playAudio(lastAudio.audioBase64)}
+                onClick={() => lastAudio && void playAudio(lastAudio.audioBase64, lastAudio.mime)}
                 data-testid="vcs-replay"
               >
                 {playing ? "Playing…" : "Replay"}

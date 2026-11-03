@@ -23,7 +23,8 @@ import {
   buildConsentExportPayload,
   prepareExportAudio,
 } from "./export.ts";
-import { createXaiCustomVoicesProvider, type XaiCustomVoicesProvider } from "./provider.ts";
+import { resolveVoiceCloneProvider, type VoiceCloneProvider } from "./provider.ts";
+import { issueConsentToken } from "./hub-client.ts";
 import { getVoiceCloningStore, type VoiceCloningStore } from "./store.ts";
 import type {
   ConsentAttestation,
@@ -51,11 +52,12 @@ function newId(prefix: string): string {
 
 export type VoiceCloningServiceDeps = {
   store?: VoiceCloningStore;
-  provider?: XaiCustomVoicesProvider;
+  provider?: VoiceCloneProvider;
   apiKey?: string | undefined;
   /** Inject STT for tests. */
   transcribe?: typeof transcribeWavBytes;
   now?: () => number;
+  env?: Record<string, string | undefined>;
 };
 
 export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
@@ -68,9 +70,12 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     return resolveVoiceApiKey(process.env);
   }
 
-  function provider(): XaiCustomVoicesProvider {
-    if (deps.provider) return deps.provider;
-    return createXaiCustomVoicesProvider({ apiKey: resolveKey() });
+  function provider(): VoiceCloneProvider {
+    return resolveVoiceCloneProvider({
+      override: deps.provider,
+      apiKey: resolveKey(),
+      env: deps.env,
+    });
   }
 
   return {
@@ -165,11 +170,20 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       const consentId = newId("vcc");
       const createdAt = new Date(now()).toISOString();
 
-      const clone = await provider().createVoice({
+      const activeProvider = provider();
+      const consentToken = issueConsentToken(
+        { consentRecordId: consentId, userId, profileId },
+        deps.env ?? process.env,
+        now(),
+      );
+      const clone = await activeProvider.createVoice({
         name: nameV.name,
+        profileId,
         fileBytes: decodeAudioBase64(sampleAudio.audioBase64),
         filename: "sample.wav",
         mime: sampleAudio.mime,
+        consentToken,
+        consentRecordId: consentId,
       });
 
       let providerVoiceId: string | null = null;
@@ -207,7 +221,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         createdAt,
         updatedAt: createdAt,
         status,
-        provider: "xai-custom-voices",
+        provider: activeProvider.id,
         providerVoiceId,
         providerStatus,
         providerMessage,
@@ -253,7 +267,11 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         };
       }
 
-      const tts = await provider().synthesize({ text: textV.text, voiceId: profile.providerVoiceId });
+      const tts = await provider().synthesize({
+        text: textV.text,
+        voiceId: profile.providerVoiceId,
+        format: profile.provider === "local-http" ? "wav" : "mp3",
+      });
       if (!tts.ok) return { ok: false, error: tts.error, code: tts.code };
       return {
         ok: true,

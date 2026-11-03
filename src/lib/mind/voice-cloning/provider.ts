@@ -1,270 +1,197 @@
 /**
- * xAI Custom Voices provider adapter.
- * Honest about Enterprise/team gating — never fakes a successful clone.
- * Reuses the same TTS endpoint as speakText (`https://api.x.ai/v1/tts`).
+ * Provider registry for Voice Cloning Studio.
+ * Default: local-http (Zack's PC). xAI Custom Voices is optional and disabled by default
+ * (xAI does not provide cloning for this team / product path).
  */
 import type { ProviderStatusReport } from "./types.ts";
+import type { VoiceCloneProvider } from "./provider-interface.ts";
+import { createLocalHttpVoiceProvider } from "./local-provider.ts";
+import { createHubVoiceProvider } from "./hub-provider.ts";
+import { resolveVoiceApiKey } from "../voice/keys.ts";
+
+export type {
+  CreateCustomVoiceResult,
+  DeleteCustomVoiceResult,
+  TtsResult,
+  VoiceCloneProvider,
+} from "./provider-interface.ts";
 
 export const XAI_CUSTOM_VOICES_URL = "https://api.x.ai/v1/custom-voices";
-/** Same TTS URL used by src/lib/mind/server.ts speakText and speech.ts. */
 export const XAI_TTS_URL = "https://api.x.ai/v1/tts";
-
-export type CreateCustomVoiceResult =
-  | { ok: true; voiceId: string }
-  | { ok: false; code: "not_configured" | "rejected" | "network" | "invalid"; error: string };
-
-export type DeleteCustomVoiceResult =
-  | { ok: true; deleted: boolean }
-  | { ok: false; error: string };
-
-export type TtsResult =
-  | { ok: true; bytes: Uint8Array; mime: string }
-  | { ok: false; error: string; code?: string };
-
-export type XaiCustomVoicesProvider = {
-  id: "xai-custom-voices";
-  status(): Promise<ProviderStatusReport>;
-  createVoice(input: {
-    name: string;
-    language?: string;
-    fileBytes: Uint8Array;
-    filename: string;
-    mime: string;
-  }): Promise<CreateCustomVoiceResult>;
-  deleteVoice(voiceId: string): Promise<DeleteCustomVoiceResult>;
-  synthesize(input: { text: string; voiceId: string }): Promise<TtsResult>;
-};
 
 type FetchLike = typeof fetch;
 
-function notConfiguredBanner(reason: string): string {
-  return `Provider not configured: xAI Custom Voices API is unavailable (${reason}). Consent and profile storage still work; cloning and generate stay blocked until the team enables Custom Voices.`;
+function xaiDisabledBanner(): string {
+  return "xAI Custom Voices is optional and disabled by default. Adrian's Mind uses the local voice engine on your PC. Set VOICE_CLONE_PROVIDER=xai only if you intentionally enable that path.";
 }
 
-let cachedStatus: { at: number; report: ProviderStatusReport } | null = null;
-const STATUS_TTL_MS = 60_000;
-
-export function clearProviderStatusCache(): void {
-  cachedStatus = null;
-}
-
+/** Optional xAI adapter — only used when VOICE_CLONE_PROVIDER=xai. */
 export function createXaiCustomVoicesProvider(deps: {
   apiKey: string | undefined;
   fetchImpl?: FetchLike;
   forceUnconfigured?: boolean;
   now?: () => number;
-}): XaiCustomVoicesProvider {
+  /** When false (default), status reports disabled even if a key exists. */
+  enabled?: boolean;
+}): VoiceCloneProvider {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.now ?? Date.now;
+  const enabled = deps.enabled === true;
 
   async function status(): Promise<ProviderStatusReport> {
     const probedAt = new Date(now()).toISOString();
+    if (!enabled) {
+      return {
+        provider: "xai-custom-voices",
+        endpoint: "",
+        voiceKeyPresent: Boolean(deps.apiKey),
+        canList: false,
+        canClone: false,
+        reason: "xAI provider disabled (default).",
+        banner: xaiDisabledBanner(),
+        probedAt,
+        xaiOptionalEnabled: false,
+        watermark: null,
+        backend: null,
+      };
+    }
     if (deps.forceUnconfigured || process.env.VOICE_CLONING_FORCE_UNCONFIGURED === "1") {
       return {
         provider: "xai-custom-voices",
+        endpoint: "",
         voiceKeyPresent: Boolean(deps.apiKey),
         canList: false,
         canClone: false,
         reason: "Forced unconfigured (dev/e2e).",
-        banner: notConfiguredBanner("forced"),
+        banner: "Provider not configured: xAI Custom Voices forced off.",
         probedAt,
+        xaiOptionalEnabled: true,
+        watermark: null,
+        backend: null,
       };
     }
     if (!deps.apiKey) {
       return {
         provider: "xai-custom-voices",
+        endpoint: "",
         voiceKeyPresent: false,
         canList: false,
         canClone: false,
-        reason: "No XAI_VOICE_API_KEY configured. Chat key is not used for voice cloning.",
-        banner: notConfiguredBanner("missing voice key"),
+        reason: "No XAI_VOICE_API_KEY.",
+        banner: "Provider not configured: missing voice key for optional xAI path.",
         probedAt,
+        xaiOptionalEnabled: true,
+        watermark: null,
+        backend: null,
       };
     }
-    if (cachedStatus && now() - cachedStatus.at < STATUS_TTL_MS) {
-      return cachedStatus.report;
-    }
-
-    let canList = false;
-    let canClone = false;
-    let reason = "Probe incomplete.";
-
+    // Lightweight probe — never assume cloning works.
     try {
       const list = await fetchImpl(XAI_CUSTOM_VOICES_URL, {
         method: "GET",
         signal: AbortSignal.timeout(15_000),
         headers: { Authorization: `Bearer ${deps.apiKey}` },
       });
-      canList = list.ok;
       if (!list.ok) {
-        reason = `GET /v1/custom-voices returned ${list.status}.`;
-      } else {
-        const boundary = "----vcsprobe";
-        const body =
-          `--${boundary}\r\n` +
-          `Content-Disposition: form-data; name="name"\r\n\r\nvcs-capability-probe\r\n` +
-          `--${boundary}\r\n` +
-          `Content-Disposition: form-data; name="file"; filename="probe.wav"\r\n` +
-          `Content-Type: audio/wav\r\n\r\n` +
-          `RIFF` +
-          `\r\n--${boundary}--\r\n`;
-        const create = await fetchImpl(XAI_CUSTOM_VOICES_URL, {
-          method: "POST",
-          signal: AbortSignal.timeout(20_000),
-          headers: {
-            Authorization: `Bearer ${deps.apiKey}`,
-            "Content-Type": `multipart/form-data; boundary=${boundary}`,
-          },
-          body,
-        });
-        if (create.status === 403) {
-          let msg = "Custom voices are not enabled for this team.";
-          try {
-            const j = (await create.json()) as { error?: string };
-            if (j?.error) msg = j.error;
-          } catch {
-            /* keep default */
-          }
-          reason = msg;
-          canClone = false;
-        } else if (create.status === 400 || create.status === 422) {
-          canClone = true;
-          reason = "Custom Voices API enabled for this team.";
-        } else if (create.ok) {
-          canClone = true;
-          reason = "Custom Voices API enabled for this team.";
-          try {
-            const j = (await create.json()) as { voice_id?: string };
-            if (j.voice_id) {
-              await fetchImpl(`${XAI_CUSTOM_VOICES_URL}/${j.voice_id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${deps.apiKey}` },
-              }).catch(() => undefined);
-            }
-          } catch {
-            /* ignore */
-          }
-        } else {
-          reason = `POST /v1/custom-voices returned ${create.status}.`;
-          canClone = false;
-        }
+        return {
+          provider: "xai-custom-voices",
+          endpoint: XAI_CUSTOM_VOICES_URL,
+          voiceKeyPresent: true,
+          canList: false,
+          canClone: false,
+          reason: `GET /v1/custom-voices returned ${list.status}.`,
+          banner: `Provider not configured: xAI list returned ${list.status}.`,
+          probedAt,
+          xaiOptionalEnabled: true,
+          watermark: null,
+          backend: null,
+        };
       }
+      return {
+        provider: "xai-custom-voices",
+        endpoint: XAI_CUSTOM_VOICES_URL,
+        voiceKeyPresent: true,
+        canList: true,
+        canClone: false,
+        reason: "xAI list OK but product default is local cloning; treat xAI as non-cloning.",
+        banner: "Optional xAI path is listed but Adrian's Mind cloning uses the local engine. Prefer VOICE_CLONE_PROVIDER=local.",
+        probedAt,
+        xaiOptionalEnabled: true,
+        watermark: null,
+        backend: null,
+      };
     } catch {
-      reason = "Custom Voices API did not answer in time.";
-      canList = false;
-      canClone = false;
+      return {
+        provider: "xai-custom-voices",
+        endpoint: "",
+        voiceKeyPresent: true,
+        canList: false,
+        canClone: false,
+        reason: "xAI Custom Voices did not answer.",
+        banner: "Provider not configured: xAI Custom Voices did not answer.",
+        probedAt,
+        xaiOptionalEnabled: true,
+        watermark: null,
+        backend: null,
+      };
     }
-
-    const report: ProviderStatusReport = {
-      provider: "xai-custom-voices",
-      voiceKeyPresent: true,
-      canList,
-      canClone,
-      reason,
-      banner: canClone
-        ? "xAI Custom Voices is configured. Authorized cloning is available."
-        : notConfiguredBanner(reason),
-      probedAt,
-    };
-    cachedStatus = { at: now(), report };
-    return report;
   }
 
   return {
     id: "xai-custom-voices",
     status,
-    async createVoice(input) {
+    async createVoice() {
       const st = await status();
-      if (!st.canClone || !deps.apiKey) {
-        return { ok: false, code: "not_configured", error: st.banner };
-      }
-      const form = new FormData();
-      const copy = new Uint8Array(input.fileBytes);
-      form.append("file", new Blob([copy], { type: input.mime }), input.filename);
-      form.append("name", input.name.slice(0, 64));
-      form.append("language", input.language || "en");
-      let res: Response;
-      try {
-        res = await fetchImpl(XAI_CUSTOM_VOICES_URL, {
-          method: "POST",
-          signal: AbortSignal.timeout(60_000),
-          headers: { Authorization: `Bearer ${deps.apiKey}` },
-          body: form,
-        });
-      } catch {
-        return { ok: false, code: "network", error: "Custom voice create did not answer in time." };
-      }
-      if (res.status === 403) {
-        clearProviderStatusCache();
-        return {
-          ok: false,
-          code: "not_configured",
-          error: notConfiguredBanner("Custom voices are not enabled for this team."),
-        };
-      }
-      if (!res.ok) {
-        return { ok: false, code: "rejected", error: `Custom voice create returned ${res.status}.` };
-      }
-      let payload: { voice_id?: string };
-      try {
-        payload = (await res.json()) as { voice_id?: string };
-      } catch {
-        return { ok: false, code: "invalid", error: "Custom voice create returned unreadable JSON." };
-      }
-      if (!payload.voice_id || typeof payload.voice_id !== "string") {
-        return { ok: false, code: "invalid", error: "Custom voice create returned no voice_id." };
-      }
-      return { ok: true, voiceId: payload.voice_id };
+      return { ok: false, code: "not_configured", error: st.banner };
     },
-    async deleteVoice(voiceId) {
-      if (!deps.apiKey) return { ok: true, deleted: false };
-      if (!voiceId || !/^[a-z0-9]{4,64}$/i.test(voiceId)) {
-        return { ok: false, error: "Invalid provider voice id." };
-      }
-      try {
-        const res = await fetchImpl(`${XAI_CUSTOM_VOICES_URL}/${encodeURIComponent(voiceId)}`, {
-          method: "DELETE",
-          signal: AbortSignal.timeout(20_000),
-          headers: { Authorization: `Bearer ${deps.apiKey}` },
-        });
-        if (res.status === 404) return { ok: true, deleted: true };
-        if (res.status === 403 || res.status === 401) return { ok: true, deleted: false };
-        if (!res.ok) return { ok: false, error: `Provider delete returned ${res.status}.` };
-        return { ok: true, deleted: true };
-      } catch {
-        return { ok: false, error: "Provider delete did not answer in time." };
-      }
+    async deleteVoice() {
+      return { ok: true, deleted: false };
     },
-    async synthesize(input) {
-      if (!deps.apiKey) {
-        return { ok: false, code: "not_configured", error: notConfiguredBanner("missing voice key") };
-      }
-      let res: Response;
-      try {
-        // Same request shape as speakText in server.ts — reuse existing TTS plumbing.
-        res = await fetchImpl(XAI_TTS_URL, {
-          method: "POST",
-          signal: AbortSignal.timeout(20_000),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${deps.apiKey}`,
-          },
-          body: JSON.stringify({
-            text: input.text,
-            voice_id: input.voiceId,
-            language: "en",
-            output_format: { codec: "mp3" },
-          }),
-        });
-      } catch {
-        return { ok: false, error: "Voice did not answer in time. Nothing was played." };
-      }
-      if (!res.ok) return { ok: false, error: `Voice returned ${res.status}. Nothing was played.` };
-      const buf = new Uint8Array(await res.arrayBuffer());
-      if (buf.length < 32 || buf.length > 2_000_000) {
-        return { ok: false, error: "Voice returned audio that could not be played." };
-      }
-      return { ok: true, bytes: buf, mime: "audio/mpeg" };
+    async synthesize() {
+      const st = await status();
+      return { ok: false, error: st.banner, code: "not_configured" };
     },
   };
+}
+
+export function clearProviderStatusCache(): void {
+  /* local provider is uncached per-call; kept for API compatibility */
+}
+
+export type ResolveProviderOptions = {
+  env?: Record<string, string | undefined>;
+  fetchImpl?: FetchLike;
+  /** Injected provider for tests. */
+  override?: VoiceCloneProvider;
+  localBaseUrl?: string;
+  apiKey?: string | undefined;
+};
+
+/**
+ * Pick the active provider.
+ * Default: local-http. Set VOICE_CLONE_PROVIDER=xai to opt into the disabled-by-default xAI path.
+ */
+export function resolveVoiceCloneProvider(options: ResolveProviderOptions = {}): VoiceCloneProvider {
+  if (options.override) return options.override;
+  const env = options.env ?? process.env;
+  const which = (env.VOICE_CLONE_PROVIDER || "hub").trim().toLowerCase();
+  if (which === "xai" || which === "xai-custom-voices") {
+    const apiKey = options.apiKey !== undefined ? options.apiKey : resolveVoiceApiKey(env);
+    return createXaiCustomVoicesProvider({
+      apiKey,
+      fetchImpl: options.fetchImpl,
+      enabled: true,
+    });
+  }
+  // Direct local HTTP bypass (debug only). Default is hub.
+  if (which === "local" || which === "local-http" || which === "direct-local") {
+    return createLocalHttpVoiceProvider({
+      baseUrl: options.localBaseUrl ?? env.VOICE_CLONE_LOCAL_URL,
+      fetchImpl: options.fetchImpl,
+    });
+  }
+  return createHubVoiceProvider({
+    env,
+    providerId: env.VOICE_HUB_DEFAULT_PROVIDER || "chatterbox-local",
+  });
 }
