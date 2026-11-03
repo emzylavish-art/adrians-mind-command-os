@@ -19,6 +19,7 @@ import {
   buildRepoRead,
   buildTerminalRun,
 } from "./build-workspace-tools.ts";
+import { researchConnectorRead, researchDeep, researchFetchAllowlistedUrl } from "./research-sources.ts";
 
 function asContent(result: ToolResult) {
   return {
@@ -183,6 +184,34 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
       },
     },
     async ({ message, paths }) => asContent(await buildGitCommit({ message, paths })),
+  );
+
+  server.registerTool(
+    "research_deep",
+    {
+      description: "Deep research via configured search endpoint; Sites allowlist filters citations.",
+      inputSchema: { query: z.string().describe("Research question") },
+    },
+    async ({ query }) => asContent(await researchDeep({ query })),
+  );
+  server.registerTool(
+    "research_connector_read",
+    {
+      description: "Read-only research connector (notion + page_id).",
+      inputSchema: {
+        source: z.string().describe("notion"),
+        page_id: z.string().describe("Notion page id or URL"),
+      },
+    },
+    async ({ source, page_id }) => asContent(await researchConnectorRead({ source, page_id, ownerId })),
+  );
+  server.registerTool(
+    "research_fetch_url",
+    {
+      description: "Fetch one Sites-allowlisted https URL (DNS-pinned).",
+      inputSchema: { url: z.string().describe("https URL") },
+    },
+    async ({ url }) => asContent(await researchFetchAllowlistedUrl({ url })),
   );
 
   return server;

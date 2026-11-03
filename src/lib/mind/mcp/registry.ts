@@ -26,6 +26,7 @@ import {
   buildRepoRead,
   buildTerminalRun,
 } from "./build-workspace-tools.ts";
+import { researchConnectorRead, researchDeep, researchFetchAllowlistedUrl } from "./research-sources.ts";
 import { callStdioTool, isBlockedChildEnvKey, listStdioTools, type StdioOptions } from "./stdio.ts";
 import {
   defaultDnsLookup,
@@ -652,6 +653,16 @@ async function callBuiltin(
             : undefined;
       return buildGitCommit({ message: String(args.message ?? ""), paths });
     }
+    case "research_deep":
+      return researchDeep({ query: String(args.query ?? "") });
+    case "research_connector_read":
+      return researchConnectorRead({
+        source: String(args.source ?? ""),
+        page_id: typeof args.page_id === "string" ? args.page_id : undefined,
+        ownerId: deps.ownerId,
+      });
+    case "research_fetch_url":
+      return researchFetchAllowlistedUrl({ url: String(args.url ?? "") });
     default:
       return { ok: false, status: "error", text: `Unknown built-in tool “${name}”. Nothing was called.` };
   }

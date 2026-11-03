@@ -12,6 +12,11 @@ function notionTokenFromEnv(env: NodeJS.ProcessEnv = process.env): string | unde
   return token || undefined;
 }
 
+function parseSitesAllowlistForHealth(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean).slice(0, 64);
+}
+
 export type JsonSchemaProperty = {
   type?: string;
   description?: string;
@@ -214,6 +219,53 @@ export const BUILTIN_TOOL_CATALOG: readonly BuiltinToolCatalogEntry[] = [
       additionalProperties: false,
     },
   },
+  {
+    id: "research_deep",
+    name: "research_deep",
+    description:
+      "Deep research via MIND_SEARCH_ENDPOINT (multi-query). Citations filtered by MIND_RESEARCH_SITES_ALLOWLIST when set. Read-only; never invents URLs.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Research question" },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "research_connector_read",
+    name: "research_connector_read",
+    description:
+      "Read-only connector corpus for research. Supported source: notion (page_id). Missing connector refuses honestly; never writes.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", description: "Connector id (notion)" },
+        page_id: { type: "string", description: "Notion page id or URL" },
+      },
+      required: ["source", "page_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "research_fetch_url",
+    name: "research_fetch_url",
+    description:
+      "Fetch one allowlisted https URL for research (DNS-pinned SSRF guards). Requires MIND_RESEARCH_SITES_ALLOWLIST.",
+    builtin: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "https URL on the Sites allowlist" },
+      },
+      required: ["url"],
+      additionalProperties: false,
+    },
+  },
+
 ] as const;
 
 export type BuiltinCatalogToolName = (typeof BUILTIN_TOOL_CATALOG)[number]["name"];
@@ -298,6 +350,18 @@ export function computeBuiltinToolHealth(input: HealthComputeInput): ToolHealth 
   ) {
     const root = (input.env ?? process.env).MIND_BUILD_WORKSPACE_ROOT?.trim();
     return root ? "ok" : "needs-config";
+  }
+  if (name === "research_deep") {
+    const env = input.env ?? process.env;
+    return env.MIND_SEARCH_ENDPOINT?.trim() && env.MIND_SEARCH_KEY?.trim() ? "ok" : "needs-config";
+  }
+  if (name === "research_connector_read") {
+    // Same gate as notion tools
+    return notionConfigured(input.ownerId, input.env ?? process.env) ? "ok" : "needs-config";
+  }
+  if (name === "research_fetch_url") {
+    const env = input.env ?? process.env;
+    return parseSitesAllowlistForHealth(env.MIND_RESEARCH_SITES_ALLOWLIST).length ? "ok" : "needs-config";
   }
   return "error";
 }
