@@ -17,7 +17,7 @@ const env = {
   NOTION_OAUTH_CLIENT_ID: "client-id",
   NOTION_OAUTH_CLIENT_SECRET: "client-secret",
   NOTION_OAUTH_REDIRECT_URI: "http://127.0.0.1:8099/api/mind/oauth/notion/callback",
-  NOTION_OAUTH_TOKEN_URL: "http://127.0.0.1:9/token",
+  NOTION_OAUTH_TOKEN_URL: "https://api.notion.com/v1/oauth/token",
 };
 
 describe("notion oauth", () => {
@@ -46,7 +46,7 @@ describe("notion oauth", () => {
   it("exchanges a code via mock token endpoint and never returns the token", async () => {
     setConnectorDirectory(mkdtempSync(join(tmpdir(), "mind-oauth-")));
     process.env.CONNECTOR_TOKEN_SECRET = "test-secret-for-unit";
-    const oauthEnv = readNotionOAuthEnv({ ...env, NOTION_OAUTH_TOKEN_URL: "http://mock/token" });
+    const oauthEnv = readNotionOAuthEnv({ ...env, NOTION_OAUTH_TOKEN_URL: "https://api.notion.com/v1/oauth/token" });
     const started = buildNotionAuthorizeUrl({ ownerId: "owner", env: oauthEnv });
     assert.equal(started.ok, true);
     if (!started.ok) return;
@@ -102,7 +102,7 @@ describe("notion oauth", () => {
   it("disconnect clears the record and returns not_connected", async () => {
     setConnectorDirectory(mkdtempSync(join(tmpdir(), "mind-oauth-")));
     process.env.CONNECTOR_TOKEN_SECRET = "test-secret-for-unit";
-    const oauthEnv = readNotionOAuthEnv({ ...env, NOTION_OAUTH_TOKEN_URL: "http://mock/token" });
+    const oauthEnv = readNotionOAuthEnv({ ...env, NOTION_OAUTH_TOKEN_URL: "https://api.notion.com/v1/oauth/token" });
     const started = buildNotionAuthorizeUrl({ ownerId: "owner", env: oauthEnv });
     if (!started.ok) return;
     await exchangeNotionCode({

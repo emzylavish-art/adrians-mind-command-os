@@ -152,6 +152,8 @@ describe("pCloud storage provider", () => {
     assert.equal(resolvePcloudApiHost({}), "api.pcloud.com");
     assert.equal(resolvePcloudApiHost({ MIND_PCLOUD_API_HOST: "eapi.pcloud.com" }), "eapi.pcloud.com");
     assert.equal(resolvePcloudApiHost({ MIND_PCLOUD_API_HOST: "evil.example.com" }), "api.pcloud.com");
+    assert.equal(resolvePcloudApiHost({ MIND_PCLOUD_API_HOST: "evil.pcloud.com" }), "api.pcloud.com");
+    assert.equal(resolvePcloudApiHost({ MIND_PCLOUD_API_HOST: "pcloud.com" }), "api.pcloud.com");
     assert.equal(resolvePcloudApiHost({ MIND_PCLOUD_API_HOST: "https://api.pcloud.com/hack" }), "api.pcloud.com");
   });
 });

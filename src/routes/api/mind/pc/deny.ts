@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
+import { assertAllowedRequestHost } from "@/lib/mind/mcp/request-host";
 import { denyPcApproval } from "@/lib/mind/pc-pairing/approvals";
 
 function json(body: unknown, status = 200) {
@@ -12,6 +13,8 @@ export const Route = createFileRoute("/api/mind/pc/deny")({
     handlers: {
       POST: async ({ request }) => {
         try {
+          const hostCheck = assertAllowedRequestHost(request);
+          if (!hostCheck.ok) return json({ ok: false, error: hostCheck.error }, 403);
           const originCheck = assertSameOrigin(request);
           if (!originCheck.ok) return json({ ok: false, error: originCheck.error }, 403);
           const authorization = request.headers.get("authorization");

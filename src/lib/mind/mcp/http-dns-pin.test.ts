@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   isPrivateAddressLiteral,
+  parseEncodedIpv4,
   resolveAndPinMcpHostname,
   type DnsLookupFn,
 } from "./http-dns-pin.ts";
@@ -114,5 +115,30 @@ describe("MCP DNS rebinding guard (resolve + pin)", () => {
     assert.equal(second.ok, false);
     assert.equal(first.pinnedAddress, "203.0.113.50");
     assert.equal(calls, 2);
+  });
+});
+
+
+describe("encoded IPv4 private forms (decimal/octal/hex)", () => {
+  it("classifies classic encodings of 127.0.0.1 / 10.0.0.1 as private", () => {
+    for (const address of ["2130706433", "0x7f000001", "0177.0.0.1", "0x7f.0.0.1", "0x0a.0.0.1", "10.0.0.1"]) {
+      assert.equal(isPrivateAddressLiteral(address), true, address);
+      const octets = parseEncodedIpv4(address);
+      assert.ok(octets, address);
+    }
+  });
+
+  it("refuses registration-style resolve when DNS returns encoded private", async () => {
+    // resolve path uses address strings from DNS which are normally canonical,
+    // but isPrivateAddressLiteral must still catch smuggled hostname literals.
+    for (const host of ["2130706433", "0x7f.0.0.1", "0177.0.0.1"]) {
+      const result = await resolveAndPinMcpHostname(host);
+      assert.equal(result.ok, false, host);
+    }
+  });
+
+  it("still allows public dotted-decimal", () => {
+    assert.equal(isPrivateAddressLiteral("8.8.8.8"), false);
+    assert.equal(isPrivateAddressLiteral("203.0.113.10"), false);
   });
 });

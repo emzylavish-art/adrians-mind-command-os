@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
+import { assertAllowedRequestHost } from "@/lib/mind/mcp/request-host";
 import { listRegistryTools } from "@/lib/mind/mcp/registry";
 
 function json(body: unknown, status = 200) {
@@ -14,6 +15,8 @@ export const Route = createFileRoute("/api/mind/mcp/tools")({
     handlers: {
       GET: async ({ request }) => {
         try {
+          const hostCheck = assertAllowedRequestHost(request);
+          if (!hostCheck.ok) return json({ ok: false, error: hostCheck.error }, 403);
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);

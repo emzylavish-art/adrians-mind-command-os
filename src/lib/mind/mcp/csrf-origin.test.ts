@@ -91,3 +91,23 @@ describe("MCP state-changing POST routes wire assertSameOrigin", () => {
     }
   });
 });
+
+
+describe("MCP routes wire assertAllowedRequestHost (DNS rebinding)", () => {
+  const root = join(import.meta.dirname, "../../../routes/api/mind");
+  const files = [
+    "mcp/servers.ts",
+    "mcp/call.ts",
+    "mcp/builtin.ts",
+    "mcp/tools.ts",
+    "pc/approve.ts",
+    "pc/deny.ts",
+  ];
+  for (const rel of files) {
+    it(`${rel} imports and calls assertAllowedRequestHost`, () => {
+      const source = readFileSync(join(root, rel), "utf8");
+      assert.match(source, /assertAllowedRequestHost/);
+      assert.match(source, /hostCheck/);
+    });
+  }
+});

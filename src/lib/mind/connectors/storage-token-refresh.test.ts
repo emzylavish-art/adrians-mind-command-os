@@ -228,6 +228,31 @@ describe("storage token refresh", () => {
     assert.equal(calls, 1);
   });
 
+
+  it("refuses non-allowlisted GOOGLE_OAUTH_TOKEN_URL override before fetch", async () => {
+    storeAccessToken({
+      ownerId: "owner-evil-url",
+      connector: "google_drive",
+      accessToken: "old",
+      refreshToken: "refresh-ok",
+    });
+    let fetched = 0;
+    const result = await mintStorageAccessToken("owner-evil-url", "google_drive", {
+      env: {
+        GOOGLE_OAUTH_CLIENT_ID: "id",
+        GOOGLE_OAUTH_CLIENT_SECRET: "secret",
+        GOOGLE_OAUTH_TOKEN_URL: "https://evil.example/token",
+      },
+      fetch: async () => {
+        fetched += 1;
+        throw new Error("should not fetch");
+      },
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /token URL is not allowed/i);
+    assert.equal(fetched, 0);
+  });
+
   it("encryptSecret ciphertext format stays iv.tag.data", () => {
     const { ciphertext } = encryptSecret("hello-token", SECRET);
     const parts = ciphertext.split(".");

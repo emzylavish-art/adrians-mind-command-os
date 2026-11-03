@@ -6,6 +6,10 @@
  */
 import { decryptSecret } from "./crypto.ts";
 import {
+  OAUTH_TOKEN_FETCH_TIMEOUT_MS,
+  validateOAuthTokenUrl,
+} from "./oauth-provider.ts";
+import {
   getRefreshToken,
   readConnection,
   storeAccessToken,
@@ -229,6 +233,13 @@ export async function mintStorageAccessToken(
 
   const cfg = PROVIDERS[service];
   const tokenUrl = trimEnv(env, cfg.tokenUrlEnv) || cfg.tokenUrl;
+  const tokenCheck = validateOAuthTokenUrl(service, tokenUrl);
+  if (!tokenCheck.ok) {
+    return {
+      ok: false,
+      error: `${service} token URL is not allowed. Use the official provider host over https.`,
+    };
+  }
 
   const body = new URLSearchParams({
     grant_type: "refresh_token",
@@ -243,16 +254,27 @@ export async function mintStorageAccessToken(
   const fetchImpl = opts.fetch ?? (globalThis.fetch as FetchLike);
   let response: Awaited<ReturnType<FetchLike>>;
   try {
-    response = await fetchImpl(tokenUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body,
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OAUTH_TOKEN_FETCH_TIMEOUT_MS);
+    try {
+      response = await fetchImpl(tokenCheck.url.toString(), {
+        method: "POST",
+        redirect: "manual",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     return { ok: false, error: `${service} token refresh could not reach the provider.` };
+  }
+  if (response.status >= 300 && response.status < 400) {
+    return { ok: false, error: `${service} token endpoint tried to redirect.` };
   }
 
   let json: Record<string, unknown> = {};

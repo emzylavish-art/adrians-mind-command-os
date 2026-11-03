@@ -14,14 +14,16 @@ function asBody(bytes: Uint8Array): BodyInit {
   return Buffer.from(bytes) as unknown as BodyInit;
 }
 
-/** Only allow pCloud API hosts (SSRF guard). */
+/** Exact pCloud API hosts only (SSRF / DNS-rebinding guard). No suffix match. */
+export const PCLOUD_API_HOSTS = ["api.pcloud.com", "eapi.pcloud.com"] as const;
+
 export function resolvePcloudApiHost(env: Record<string, string | undefined> = process.env): string {
   const raw = (env.MIND_PCLOUD_API_HOST || "api.pcloud.com").trim().toLowerCase();
-  // hostname only — no scheme, path, or userinfo
+  // hostname only — no scheme, path, userinfo, port, or IP literal
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(raw)) {
     return "api.pcloud.com";
   }
-  if (!raw.endsWith(".pcloud.com") && raw !== "pcloud.com") {
+  if (!(PCLOUD_API_HOSTS as readonly string[]).includes(raw)) {
     return "api.pcloud.com";
   }
   return raw;
