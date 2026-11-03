@@ -30,15 +30,19 @@ export function DictationPill(props: {
     <div className={`inline-flex flex-wrap items-center gap-2 ${props.className ?? ""}`} data-dictation-root={props.state}>
       <button
         type="button"
-        className={`grid size-11 place-items-center rounded-panel border border-line ${recording || transcribing ? "bg-accent text-accent-ink" : "text-muted"}`}
+        className={`voice-action-dictate inline-flex min-h-11 items-center gap-1.5 rounded-panel border border-line px-2.5 ${recording || transcribing ? "bg-accent text-accent-ink" : "text-muted"}`}
         data-testid="mic-button"
+        data-voice-action="dictate"
         data-dictation={props.state}
         aria-label={recording ? "Stop dictation" : transcribing ? "Transcribing dictation" : "Dictate into composer"}
         aria-pressed={recording || transcribing}
         onClick={props.onMicClick}
         disabled={props.disabled || transcribing}
       >
-        {recording || transcribing ? <Square className="size-4" /> : <Mic className="size-4" />}
+        {recording || transcribing ? <Square className="size-4 shrink-0" aria-hidden="true" /> : <Mic className="size-4 shrink-0" aria-hidden="true" />}
+        <span className="voice-action-dictate__label text-[10px] font-semibold uppercase tracking-wide">
+          {recording ? "Stop" : transcribing ? "…" : "Dictate"}
+        </span>
       </button>
 
       {props.state !== "idle" ? (

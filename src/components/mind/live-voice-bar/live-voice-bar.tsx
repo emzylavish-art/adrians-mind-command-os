@@ -592,6 +592,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                     data-testid="composer-mic-dictate"
                     data-state={dictationState}
                     aria-label="Dictate"
+                    title="Dictate — insert speech as text (not live Speak)"
                     aria-pressed={dictationState === "recording"}
                     onClick={onDictate}
                   >
@@ -610,6 +611,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                     data-live-voice={uiAttr}
                     data-state={uiAttr}
                     aria-label="Start voice conversation"
+                    title="Speak — live two-way voice (not dictation)"
                     aria-pressed={false}
                     onClick={startSpeak}
                   >
