@@ -2053,25 +2053,34 @@ export function CommandApp() {
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()} data-media="attach">
                       <Paperclip className="size-4" /> Attach
                     </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()} data-media="attach-image">
                       <Image className="size-4" /> Image
                     </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)} data-media="camera">
                       <Camera className="size-4" /> Camera
                     </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                      onClick={() => setCloudPickerOpen(true)}
+                      title="Browse connected Drive / cloud files (honest status if not connected)"
+                      aria-label="Browse Drive"
+                      data-media="drive"
+                    >
                       Drive
                     </button>
                     <button
                       type="button"
                       data-testid="imagine-generate"
+                      data-media="imagine"
                       aria-label="Imagine"
                       aria-busy={imagineBusy}
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
                       disabled={busy || imagineBusy || ws.halted}
+                      title={busy || imagineBusy || ws.halted ? "Imagine is busy or halted" : "Generate an image with Grok Imagine from the composer prompt"}
                       onClick={() => {
                         const viaCmd = parseImagineCommand(draft);
                         const prompt = viaCmd !== null ? viaCmd : draft.trim();
@@ -2192,8 +2201,32 @@ export function CommandApp() {
                 <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
                 <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
                 <Quick label="Research" icon={Search} tone="text-ok" onClick={() => { setView("research"); if (staged) void inspectWithRea(staged, "research"); else void checkRea(); }} />
-                <Quick label="Generate Image" icon={Image} tone="text-warn" onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
-                <Quick label="Generate Video" icon={Video} tone="text-accent" onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
+                <Quick
+                  label="Generate Image"
+                  icon={Image}
+                  tone="text-warn"
+                  title="Runs Grok Imagine with the composer prompt (or /imagine <prompt>)"
+                  dataMedia="generate-image"
+                  onClick={() => {
+                    const viaCmd = parseImagineCommand(draft);
+                    const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                    if (!(prompt || "").trim()) {
+                      setError("Write a prompt for Imagine, or use /imagine <prompt>, then press Generate Image.");
+                      setNotice("Imagine is ready in the composer above — type a prompt, then Generate Image or Imagine.");
+                      return;
+                    }
+                    void runImagine(prompt, null);
+                  }}
+                />
+                <Quick
+                  label="Generate Video"
+                  icon={Video}
+                  tone="text-accent"
+                  disabled
+                  title="Coming soon: xAI video generation is not wired in this app yet"
+                  dataMedia="generate-video"
+                  onClick={() => undefined}
+                />
                 <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
                 <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
               </div>
@@ -2206,6 +2239,11 @@ export function CommandApp() {
                   ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
                   : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
                 onSetup={(message) => setNotice(message)}
+                onImageVideoSetup={() => {
+                  setView("command");
+                  setNotice("Image: use Imagine or /imagine in the composer (paid xAI image API). Drive opens the cloud picker when a connector exists. Video generation is not wired yet.");
+                  setToolsOpen(true);
+                }}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
                     setNotion(status);
@@ -2730,6 +2768,11 @@ export function CommandApp() {
                   ? { state: "Connected", detail: `${mcpServers.filter((server) => server.state === "connected").length} MCP server answered. Tools are only the ones it returned.` }
                   : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." }}
                 onSetup={(message) => setNotice(message)}
+                onImageVideoSetup={() => {
+                  setView("command");
+                  setNotice("Image: use Imagine or /imagine in the composer (paid xAI image API). Drive opens the cloud picker when a connector exists. Video generation is not wired yet.");
+                  setToolsOpen(true);
+                }}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
                     setNotion(status);
@@ -2913,7 +2956,7 @@ export function CommandApp() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)} title="Opens the cloud picker (shows honest Not connected when Drive OAuth is missing)" aria-label="Browse Drive" data-media="browse-drive">Browse Drive</button>
                 </div>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
@@ -3240,9 +3283,33 @@ export function CommandApp() {
   );
 }
 
-function Quick({ label, icon: Icon, tone, onClick }: { label: string; icon: typeof Folder; tone: string; onClick: () => void }) {
+function Quick({
+  label,
+  icon: Icon,
+  tone,
+  onClick,
+  disabled,
+  title,
+  dataMedia,
+}: {
+  label: string;
+  icon: typeof Folder;
+  tone: string;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+  dataMedia?: string;
+}) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
+      title={title}
+      data-media={dataMedia}
+      className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-panel border border-line bg-surface px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+    >
       <Icon className={`size-4 ${tone}`} />
       {label}
     </button>
@@ -3665,19 +3732,35 @@ function ChatPane({
             </div>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttach}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttach} data-media="attach">
               <Paperclip className="size-4" /> Attach
             </button>
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttachImage}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onAttachImage} data-media="attach-image">
               <Image className="size-4" /> Image
             </button>
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCamera}>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCamera} data-media="camera">
               <Camera className="size-4" /> Camera
             </button>
-            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={onOpenCloud}>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+              onClick={onOpenCloud}
+              title="Browse connected Drive / cloud files (honest status if not connected)"
+              aria-label="Browse Drive"
+              data-media="drive"
+            >
               Drive
             </button>
-            <button type="button" data-testid="imagine-generate" aria-label="Imagine" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
+            <button
+              type="button"
+              data-testid="imagine-generate"
+              data-media="imagine"
+              aria-label="Imagine"
+              className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+              disabled={busy || halted}
+              title={busy || halted ? "Imagine is busy or halted" : "Generate an image with Grok Imagine from the composer prompt"}
+              onClick={onImagine}
+            >
               Imagine
             </button>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" aria-pressed={imagineModel === GROK_IMAGINE_QUALITY_MODEL} onClick={onToggleImagineQuality}>

@@ -17,7 +17,7 @@ const SERVICES: Service[] = [
   { name: "Gemini", state: "Not configured", detail: "No API key. Nothing is sent to Google." },
   { name: "OpenRouter", state: "Not configured", detail: "No API key." },
   { name: "Web search", state: "Not configured", detail: "No search endpoint. No citations are created." },
-  { name: "Image and video", state: "Not called", detail: "Paid generation is not run from this app." },
+  { name: "Image and video", state: "Imagine ready", detail: "Grok Imagine generates and edits images from the composer (/imagine). Video generation is not wired yet." },
   { name: "Voice", state: "Not realtime", detail: "Browser speech when this browser has it. Not a live call." },
   { name: "MCP", state: "Not connected", detail: "No MCP server has answered a handshake. Nothing is called." },
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
@@ -29,12 +29,15 @@ export function ServiceBoard({
   notion,
   mcp,
   onDisconnect,
+  onImageVideoSetup,
 }: {
   grokConfigured: boolean;
   onSetup: (message: string) => void;
   notion?: { state: string; detail: string } | null;
   mcp?: { state: string; detail: string } | null;
   onDisconnect?: () => void;
+  /** Media lane: open real Imagine/Drive affordances instead of a no-op Setup notice. */
+  onImageVideoSetup?: () => void;
 }) {
   const grok: Service = grokConfigured
     ? { name: "Grok", state: "Key present", detail: "Grok 4.5 can answer when you press Send. That is not a live-verified integration." }
@@ -59,6 +62,16 @@ export function ServiceBoard({
           {service.name === "Notion" && notion?.state === "connected" && onDisconnect ? (
             <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
               Disconnect
+            </button>
+          ) : service.name === "Image and video" && onImageVideoSetup ? (
+            <button
+              type="button"
+              className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm"
+              data-testid="image-video-setup" data-media="image-video-setup"
+              onClick={onImageVideoSetup}
+              title="Open Imagine and Drive controls"
+            >
+              Open media
             </button>
           ) : (
             <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>

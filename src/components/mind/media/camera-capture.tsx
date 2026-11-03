@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { dataUrlToDownscaled } from "./downscale";
+import { applyCameraMirrorTransform } from "./media-ui-helpers";
+
+export { applyCameraMirrorTransform } from "./media-ui-helpers";
 
 type Facing = "user" | "environment";
 
@@ -20,6 +23,7 @@ export function CameraCapture({
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [facing, setFacing] = useState<Facing>("environment");
+  const [mirror, setMirror] = useState(false);
   const [burstCount, setBurstCount] = useState(0);
   const [busySnap, setBusySnap] = useState(false);
 
@@ -126,6 +130,7 @@ export function CameraCapture({
       setBusySnap(false);
       return;
     }
+    applyCameraMirrorTransform(ctx, width, mirror);
     ctx.drawImage(video, 0, 0, width, height);
     const raw = canvas.toDataURL("image/jpeg", 0.92);
     try {
@@ -141,7 +146,7 @@ export function CameraCapture({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Camera capture">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Camera capture" data-media="camera-dialog">
       <div className="w-full max-w-lg rounded-panel border border-line bg-surface p-4">
         <h3 className="font-display text-xl font-bold">Camera</h3>
         <p className="mt-1 text-sm text-muted">
@@ -151,7 +156,13 @@ export function CameraCapture({
         {error ? (
           <p className="mt-3 text-sm text-danger">{error}</p>
         ) : (
-          <video ref={videoRef} className="mt-3 aspect-video w-full rounded-panel bg-bg object-cover" playsInline muted />
+          <video
+            ref={videoRef}
+            className="mt-3 aspect-video w-full rounded-panel bg-bg object-cover"
+            style={mirror ? { transform: "scaleX(-1)" } : undefined}
+            playsInline
+            muted
+          />
         )}
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={onClose}>
@@ -163,6 +174,16 @@ export function CameraCapture({
             onClick={() => setFacing((current) => (current === "user" ? "environment" : "user"))}
           >
             {facing === "user" ? "Switch to back" : "Switch to front"}
+          </button>
+          <button
+            type="button"
+            className="min-h-11 flex-1 rounded-panel border border-line"
+            data-testid="camera-mirror-toggle" data-media="camera-mirror"
+            aria-pressed={mirror}
+            title={mirror ? "Mirror preview and capture on" : "Mirror preview and capture off"}
+            onClick={() => setMirror((current) => !current)}
+          >
+            {mirror ? "Mirror on" : "Mirror off"}
           </button>
           <button
             type="button"

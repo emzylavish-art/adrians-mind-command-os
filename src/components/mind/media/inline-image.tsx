@@ -1,7 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isSafeImageSrc, sanitizeMediaLabel } from "@/lib/mind/media";
+import { nextLightboxZoom, prevLightboxZoom } from "./media-ui-helpers";
 
 export const AMCOS_IMAGE_DRAG_TYPE = "application/x-amcos-image";
+export { nextLightboxZoom, prevLightboxZoom } from "./media-ui-helpers";
+
+function downloadFallback(src: string, alt: string) {
+  const link = document.createElement("a");
+  link.href = src;
+  link.download = sanitizeMediaLabel(alt) || "image.jpg";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 export function InlineImage({
   src,
@@ -19,11 +31,23 @@ export function InlineImage({
   onUseAsAgentInput?: (src: string, alt: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [zoom, setZoom] = useState<number>(1);
   const safeSrc = isSafeImageSrc(src) ? src : null;
   const safeAlt = sanitizeMediaLabel(alt) || "image";
+
+  useEffect(() => {
+    if (!open) setZoom(1);
+  }, [open]);
+
   if (!safeSrc) {
     return <p className="my-2 text-xs text-muted">Blocked unsafe image source.</p>;
   }
+
+  function handleDownload() {
+    if (onDownload) onDownload(safeSrc!, safeAlt);
+    else downloadFallback(safeSrc!, safeAlt);
+  }
+
   return (
     <>
       <div className="my-2 space-y-2">
@@ -71,12 +95,74 @@ export function InlineImage({
           role="dialog"
           aria-modal="true"
           aria-label={safeAlt}
+          data-testid="image-lightbox" data-media="lightbox"
           onClick={() => setOpen(false)}
           onKeyDown={(event) => {
             if (event.key === "Escape") setOpen(false);
+            if (event.key === "+" || event.key === "=") {
+              event.preventDefault();
+              setZoom((current) => nextLightboxZoom(current));
+            }
+            if (event.key === "-") {
+              event.preventDefault();
+              setZoom((current) => prevLightboxZoom(current));
+            }
           }}
         >
-          <img src={safeSrc} alt={safeAlt} className="max-h-[90vh] max-w-[90vw] object-contain" />
+          <div
+            className="flex max-h-[95vh] w-full max-w-[95vw] flex-col items-center gap-3"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="overflow-auto rounded-panel border border-line bg-black/40 p-2">
+              <img
+                src={safeSrc}
+                alt={safeAlt}
+                data-testid="image-lightbox-img"
+                style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+                className="max-h-[75vh] max-w-[90vw] object-contain transition-transform"
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                data-testid="image-lightbox-zoom-out" data-media="lightbox-zoom-out"
+                className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
+                onClick={() => setZoom((current) => prevLightboxZoom(current))}
+                title="Zoom out"
+              >
+                Zoom out
+              </button>
+              <span className="min-w-16 text-center text-sm text-white" aria-live="polite">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                data-testid="image-lightbox-zoom-in" data-media="lightbox-zoom-in"
+                className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
+                onClick={() => setZoom((current) => nextLightboxZoom(current))}
+                title="Zoom in"
+              >
+                Zoom in
+              </button>
+              <button
+                type="button"
+                data-testid="image-lightbox-download" data-media="lightbox-download"
+                className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
+                onClick={handleDownload}
+                title="Download image"
+              >
+                Download
+              </button>
+              <button
+                type="button"
+                data-testid="image-lightbox-close"
+                className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
+                onClick={() => setOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

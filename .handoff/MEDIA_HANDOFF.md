@@ -214,3 +214,31 @@ See `/workspace/locks/media-integration.lock`.
 3. Multi-select chips for edit subset
 4. Quality/resolution picker beyond on/off
 5. Camera burst countdown / timed interval
+
+## Evolve: dead controls + lightbox zoom + camera mirror — 2026-11-02T20:20:00-06:00 (America/Chicago)
+
+**Branch tip (after push):** see git log on `media-integration`.
+
+### Dead controls (Visual Polish a11y audit)
+- **Generate Image** Quick → real `runImagine` from composer prompt / `/imagine`.
+- **Generate Video** Quick → honestly `disabled` + `aria-disabled` + title `Coming soon: xAI video generation is not wired…`.
+- **Image and video Setup** (ServiceBoard home + Connected) → `Open media` calls `onImageVideoSetup` (nav to command, notice about Imagine/Drive; video not wired).
+- **Imagine / Drive / Browse Drive** already did real work; added honest `title` / `aria-label` / `data-media` hooks.
+
+### Evolve (2)
+1. Inline image lightbox: zoom in/out (100/150/200/300%) + Download + Close (`media-ui-helpers` zoom steps).
+2. Camera **Mirror on/off** (preview `scaleX(-1)` + capture canvas flip) — facingMode switch already existed.
+
+### Visual Polish hooks (`data-media`)
+`generate-image`, `generate-video`, `attach`, `attach-image`, `camera`, `drive`, `imagine`, `browse-drive`, `image-video-setup`, `camera-dialog`, `camera-mirror`, `lightbox`, `lightbox-zoom-in`, `lightbox-zoom-out`, `lightbox-download`. No CSS written.
+
+### Tests
+- `tsc --noEmit`: pass
+- Src unit suite (package.json mind/media list + media-ui-helpers): **340/340**
+- Full `npm test` still hits known-red `scripts/**` (`.grok/skills/og` missing) — not this lane
+
+### Next
+- Multi-select chips / reorder tray
+- Client downscale-quality toggle
+- Video gen only if Zack approves spend + endpoint
+- Parent: SendToAgent Visual Polish with SHA + hooks (executor lacks SendToAgent tool)
