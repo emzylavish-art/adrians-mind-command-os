@@ -8,3 +8,5 @@ export * from "./client.ts";
 export * from "./refine.ts";
 export * from "./commands.ts";
 export * from "./session.ts";
+export * from "./llm-refine.ts";
+export * from "./stt-client-errors.ts";

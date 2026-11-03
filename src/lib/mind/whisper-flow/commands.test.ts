@@ -23,11 +23,13 @@ describe("whisper-flow voice commands", () => {
     assert.equal(stop.text, "please");
   });
 
-  it("maps delete that / scratch that to control commands", () => {
+  it("maps delete that / scratch that / undo that to control commands", () => {
     const r = parseVoiceCommands("scratch that");
     assert.equal(r.commands[0]?.kind, "scratch_that");
     assert.equal(r.text, "");
     assert.equal(commandToInsert("scratch_that"), null);
+    const undo = parseVoiceCommands("UNDO THAT");
+    assert.equal(undo.commands[0]?.kind, "delete_that");
   });
 
   it("does not treat send or submit as commands", () => {
@@ -44,5 +46,41 @@ describe("whisper-flow voice commands", () => {
       ["comma", "question_mark"],
     );
     assert.equal(r.text, "ready set");
+  });
+
+  it("accepts homophone / compound punctuation forms and casing variance", () => {
+    const a = parseVoiceCommands("Hello FULLSTOP next");
+    assert.equal(a.commands.some((c) => c.kind === "period"), true);
+    const b = parseVoiceCommands("say questionmark now");
+    assert.equal(b.commands.some((c) => c.kind === "question_mark"), true);
+    const c = parseVoiceCommands("one New-Line two");
+    assert.equal(c.commands.some((c) => c.kind === "new_line"), true);
+  });
+
+  it("parses punctuation commands mid-sentence", () => {
+    const r = parseVoiceCommands("Hello period World comma ok");
+    assert.deepEqual(
+      r.commands.map((c) => c.kind),
+      ["period", "comma"],
+    );
+    assert.equal(r.text, "Hello World ok");
+  });
+
+  it("does not treat bare pause inside a sentence as a command", () => {
+    const r = parseVoiceCommands("please pause the video");
+    assert.equal(r.commands.some((c) => c.kind === "pause"), false);
+    assert.match(r.text, /pause the video/i);
+  });
+
+  it("treats trailing bare pause as a command", () => {
+    const r = parseVoiceCommands("okay pause");
+    assert.equal(r.commands.some((c) => c.kind === "pause"), true);
+    assert.equal(r.text, "okay");
+  });
+
+  it("tucks punctuation without breaking non-Latin letters", () => {
+    const r = parseVoiceCommands("こんにちは period мир");
+    assert.equal(r.commands[0]?.kind, "period");
+    assert.equal(r.text, "こんにちは мир");
   });
 });

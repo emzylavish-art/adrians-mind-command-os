@@ -452,13 +452,13 @@ export const transcribeDictation = createServerFn({ method: "POST" })
     return { ok: true as const, text: result.text, provider: result.provider ?? "xai" };
   });
 
-/** Optional non-blocking LLM polish for Whisper Flow. Client must insert local refine first; this never blocks. */
+/** Optional non-blocking LLM polish for Whisper Flow via xAI chat. Client must insert local refine first. */
 export const refineDictationOptional = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { text: string; enabled?: boolean }) => input)
   .handler(async ({ data, context }) => {
     if (data.enabled === false) {
-      return { ok: false as const, skipped: true as const, error: "Optional LLM refinement is turned off." };
+      return { ok: false as const, skipped: true as const, error: "Optional LLM refinement is turned off. Local refinement was kept." };
     }
     const text = typeof data.text === "string" ? data.text.trim().slice(0, 2000) : "";
     if (!text) return { ok: false as const, skipped: true as const, error: "Nothing to refine." };
@@ -473,13 +473,12 @@ export const refineDictationOptional = createServerFn({ method: "POST" })
         error: "No chat model key is configured for optional refinement. Local refinement was kept.",
       };
     }
-    // Honest stub: we do not call the model from this lane unless a dedicated polish path is required.
-    // Returning skipped keeps insertion non-blocking and avoids inventing polished text.
-    return {
-      ok: false as const,
-      skipped: true as const,
-      error: "Optional LLM refinement is not wired to a polish call yet. Local refinement was kept. Nothing was invented.",
-    };
+    const { polishDictationWithXai } = await import("./whisper-flow/llm-refine");
+    const polished = await polishDictationWithXai({ text, apiKey: key.key });
+    if (!polished.ok) {
+      return { ok: false as const, skipped: true as const, error: polished.error };
+    }
+    return { ok: true as const, text: polished.text, skipped: false as const };
   });
 
 
