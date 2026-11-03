@@ -238,15 +238,17 @@ export const BUILTIN_TOOL_CATALOG: readonly BuiltinToolCatalogEntry[] = [
     id: "research_connector_read",
     name: "research_connector_read",
     description:
-      "Read-only connector corpus for research. Supported source: notion (page_id). Missing connector refuses honestly; never writes.",
+      "Read-only connector corpus for research. Supported: notion (page_id), gdrive (file_id). Lane-aware Drive OAuth (default gdrive-emzylavish). Missing connector refuses honestly; never writes.",
     builtin: true,
     inputSchema: {
       type: "object",
       properties: {
-        source: { type: "string", description: "Connector id (notion)" },
-        page_id: { type: "string", description: "Notion page id or URL" },
+        source: { type: "string", description: "Connector id (notion | gdrive)" },
+        page_id: { type: "string", description: "Notion page id or URL (source=notion)" },
+        file_id: { type: "string", description: "Google Drive file id (source=gdrive)" },
+        lane_id: { type: "string", description: "Optional Drive lane id (default gdrive-emzylavish)" },
       },
-      required: ["source", "page_id"],
+      required: ["source"],
       additionalProperties: false,
     },
   },
@@ -356,8 +358,12 @@ export function computeBuiltinToolHealth(input: HealthComputeInput): ToolHealth 
     return env.MIND_SEARCH_ENDPOINT?.trim() && env.MIND_SEARCH_KEY?.trim() ? "ok" : "needs-config";
   }
   if (name === "research_connector_read") {
-    // Same gate as notion tools
-    return notionConfigured(input.ownerId, input.env ?? process.env) ? "ok" : "needs-config";
+    // Ok when Notion is configured OR Drive OAuth secret is present (lane resolve happens at call time).
+    const env = input.env ?? process.env;
+    if (notionConfigured(input.ownerId, env)) return "ok";
+    if ((env.CONNECTOR_TOKEN_SECRET ?? "").trim().length >= 16) return "ok";
+    if ((env.MIND_GOOGLE_DRIVE_TOKEN ?? "").trim()) return "ok";
+    return "needs-config";
   }
   if (name === "research_fetch_url") {
     const env = input.env ?? process.env;

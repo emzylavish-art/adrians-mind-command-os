@@ -70,12 +70,106 @@ describe("research_connector_read", () => {
     const bad = await researchConnectorRead({ source: "gmail", page_id: "x" });
     assert.equal(bad.ok, false);
     assert.match(bad.text, /not available/);
+    assert.match(bad.text, /gdrive/);
     const notion = await researchConnectorRead({
       source: "notion",
       page_id: "40b1aa27632381768d58cde0731f142a",
       env: {},
     });
     assert.equal(notion.status, "needs-config");
+  });
+
+  it("gdrive refuses missing file_id and invalid ids", async () => {
+    const missing = await researchConnectorRead({ source: "gdrive", env: {} });
+    assert.equal(missing.ok, false);
+    assert.match(missing.text, /file_id/);
+    const badId = await researchConnectorRead({ source: "gdrive", file_id: "../etc/passwd", env: {} });
+    assert.equal(badId.ok, false);
+    assert.match(badId.text, /not a valid/);
+  });
+
+  it("gdrive reports needs-config for unknown lane", async () => {
+    const result = await researchConnectorRead({
+      source: "gdrive",
+      file_id: "1AbCdefghijkLMNOPqrstuvwxYZ012345",
+      lane_id: "gdrive-does-not-exist",
+      env: {},
+      configPath: "/tmp/mind-no-such-accounts.json",
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.status === "needs-config" || result.status === "needs-reconnect");
+    assert.match(result.text, /gdrive-does-not-exist|not configured|Unknown storage lane/i);
+  });
+
+  it("gdrive exports plain text via mocked Drive API", async () => {
+    const fileId = "1AbCdefghijkLMNOPqrstuvwxYZ012345";
+    const fetchImpl = async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes("/files/" + fileId) && !u.includes("alt=media") && !u.includes("/export")) {
+        return new Response(
+          JSON.stringify({
+            id: fileId,
+            name: "notes.txt",
+            mimeType: "text/plain",
+            size: "11",
+            trashed: false,
+          }),
+          { status: 200 },
+        );
+      }
+      if (u.includes("alt=media")) {
+        return new Response("hello world", { status: 200 });
+      }
+      return new Response("unexpected", { status: 500 });
+    };
+    const result = await researchConnectorRead({
+      source: "gdrive",
+      file_id: fileId,
+      lane_id: "gdrive-emzylavish",
+      env: { MIND_STORAGE_LANE_GDRIVE_EMZYLAVISH_TOKEN: "test-token" },
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      configPath: new URL("../media/storage/media-storage-accounts.example.json", import.meta.url).pathname,
+    });
+    assert.equal(result.ok, true, result.text);
+    assert.match(result.text, /hello world/);
+    assert.equal((result.data as { via?: string })?.via, "download");
+  });
+
+  it("gdrive refuses binary mime types", async () => {
+    const fileId = "1AbCdefghijkLMNOPqrstuvwxYZ012345";
+    const fetchImpl = async () =>
+      new Response(
+        JSON.stringify({
+          id: fileId,
+          name: "photo.png",
+          mimeType: "image/png",
+          size: "100",
+          trashed: false,
+        }),
+        { status: 200 },
+      );
+    const result = await researchConnectorRead({
+      source: "gdrive",
+      file_id: fileId,
+      env: { MIND_STORAGE_LANE_GDRIVE_EMZYLAVISH_TOKEN: "t" },
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      configPath: new URL("../media/storage/media-storage-accounts.example.json", import.meta.url).pathname,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.text, /not a supported text/);
+  });
+
+  it("gdrive maps 401 on files.get to needs-reconnect", async () => {
+    const fileId = "1AbCdefghijkLMNOPqrstuvwxYZ012345";
+    const fetchImpl = async () => new Response("nope", { status: 401 });
+    const result = await researchConnectorRead({
+      source: "gdrive",
+      file_id: fileId,
+      env: { MIND_STORAGE_LANE_GDRIVE_EMZYLAVISH_TOKEN: "stale" },
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      configPath: new URL("../media/storage/media-storage-accounts.example.json", import.meta.url).pathname,
+    });
+    assert.equal(result.status, "needs-reconnect");
   });
 });
 

@@ -62,7 +62,7 @@ export type RegistryServer = {
 
 export type RegistryServerPublic = Omit<RegistryServer, "token" | "env"> & { hasToken: boolean; envKeys?: string[] };
 
-export type ToolCallStatus = "running" | "ok" | "error" | "timeout" | "needs-config" | "needs-pairing";
+export type ToolCallStatus = "running" | "ok" | "error" | "timeout" | "needs-config" | "needs-pairing" | "needs-reconnect";
 
 export type RegistryToolCallResult = {
   status: ToolCallStatus;
@@ -659,6 +659,8 @@ async function callBuiltin(
       return researchConnectorRead({
         source: String(args.source ?? ""),
         page_id: typeof args.page_id === "string" ? args.page_id : undefined,
+        file_id: typeof args.file_id === "string" ? args.file_id : undefined,
+        lane_id: typeof args.lane_id === "string" ? args.lane_id : undefined,
         ownerId: deps.ownerId,
       });
     case "research_fetch_url":

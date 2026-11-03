@@ -1,7 +1,7 @@
 /**
  * Research-layer helpers for Adrian's Mind MCP:
  * - Sites allowlist (ChatGPT Sites pattern) enforced server-side on citations
- * - Read-only connector corpus reads (Notion page only; never write tools)
+ * - Read-only connector corpus reads (Notion page + Google Drive file_id; never write tools)
  * - research_deep MCP wrapper around performDeepResearch
  *
  * SSRF: citation URLs must be http(s); optional page fetch uses DNS pin + private IP refuse.
@@ -16,9 +16,27 @@ import {
   resolveAndPinMcpHostname,
   type DnsLookupFn,
 } from "./http-dns-pin.ts";
+import { resolveStorageLaneAccessToken } from "../media/storage/lanes.ts";
+import { loadStorageAccountsConfig } from "../media/storage/config.ts";
 
 const MAX_ALLOWLIST = 64;
 const MAX_FETCH_BYTES = 200_000;
+const MAX_GDRIVE_READ_BYTES = 200_000;
+const DEFAULT_GDRIVE_LANE = "gdrive-emzylavish";
+const GDRIVE_FILE_ID_RE = /^[a-zA-Z0-9_-]{10,128}$/;
+
+const GDRIVE_EXPORT_MIME: Record<string, string> = {
+  "application/vnd.google-apps.document": "text/plain",
+  "application/vnd.google-apps.spreadsheet": "text/csv",
+  "application/vnd.google-apps.presentation": "text/plain",
+  "application/vnd.google-apps.drawing": "image/svg+xml",
+};
+
+function isPlainTextMime(mime: string): boolean {
+  const m = mime.toLowerCase().split(";")[0]!.trim();
+  if (m.startsWith("text/")) return true;
+  return m === "application/json" || m === "application/xml" || m === "application/javascript" || m === "image/svg+xml";
+}
 
 /** Parse MIND_RESEARCH_SITES_ALLOWLIST = "example.com,*.wikipedia.org,docs.github.com" */
 export function parseSitesAllowlist(raw: string | undefined): string[] {
@@ -166,42 +184,251 @@ export async function researchDeep(input: {
 }
 
 /**
- * Read-only connector corpus for research. Only Notion page read is wired today.
- * Missing connector → clear refuse (no fake cites).
+ * Read-only connector corpus for research.
+ * Supported: notion (page_id), gdrive (file_id) via lane-aware OAuth.
+ * Missing / invalid tokens → needs-config or needs-reconnect. Never writes.
  */
 export async function researchConnectorRead(input: {
   source: string;
   page_id?: string;
+  file_id?: string;
+  lane_id?: string;
   ownerId?: string;
   env?: NodeJS.ProcessEnv;
+  fetchImpl?: typeof fetch;
+  configPath?: string;
 }): Promise<ToolResult> {
   const source = (input.source || "").trim().toLowerCase();
-  if (source !== "notion") {
+  if (source === "notion") {
+    const pageId = (input.page_id || "").trim();
+    if (!pageId) {
+      return { ok: false, status: "error", text: "page_id is required for notion research reads. Nothing was read." };
+    }
+    const read = await notionReadPage({ pageIdOrUrl: pageId, ownerId: input.ownerId });
+    if (!read.ok) {
+      return {
+        ok: false,
+        status: read.status,
+        text: read.text.includes("not configured")
+          ? "Notion is not connected for research. Connect Notion OAuth or set NOTION_TOKEN. No citations were invented."
+          : read.text,
+      };
+    }
+    return {
+      ok: true,
+      status: "ok",
+      text: read.text.slice(0, 8000),
+      data: { source: "notion", pageId: (read.data as { pageId?: string } | undefined)?.pageId ?? null },
+    };
+  }
+
+  if (source === "gdrive" || source === "google_drive") {
+    return researchGdriveRead(input);
+  }
+
+  return {
+    ok: false,
+    status: "error",
+    text: `Research connector “${source || "(empty)"}” is not available as a read-only source. Supported: notion, gdrive. Nothing was read.`,
+  };
+}
+
+export async function researchGdriveRead(input: {
+  file_id?: string;
+  lane_id?: string;
+  ownerId?: string;
+  env?: NodeJS.ProcessEnv;
+  fetchImpl?: typeof fetch;
+  configPath?: string;
+}): Promise<ToolResult> {
+  const fileId = (input.file_id || "").trim();
+  if (!fileId) {
+    return { ok: false, status: "error", text: "file_id is required for gdrive research reads. Nothing was read." };
+  }
+  if (!GDRIVE_FILE_ID_RE.test(fileId)) {
+    return { ok: false, status: "error", text: "file_id is not a valid Google Drive file id. Nothing was read." };
+  }
+
+  const laneId = (input.lane_id || "").trim() || DEFAULT_GDRIVE_LANE;
+  const env = input.env ?? process.env;
+  const fetchImpl = input.fetchImpl ?? fetch;
+
+  const tokenResult = await resolveStorageLaneAccessToken(laneId, {
+    env,
+    fetch: fetchImpl,
+    fallbackOwnerId: input.ownerId,
+    configPath: input.configPath,
+  });
+
+  if (!tokenResult.ok) {
+    const detail = tokenResult.detail || "Google Drive is not connected.";
+    if (
+      tokenResult.reason === "encrypted_only" ||
+      /CONNECTOR_TOKEN_SECRET|could not be decrypted|missing.*client|needs-config/i.test(detail)
+    ) {
+      return {
+        ok: false,
+        status: "needs-config",
+        text: `Google Drive lane “${laneId}” needs config: ${detail} Nothing was read.`,
+        data: { source: "gdrive", laneId, statusKind: "needs-config" },
+      };
+    }
+    if (
+      tokenResult.reason === "refresh_failed" ||
+      tokenResult.reason === "incomplete" ||
+      /reconnect|expired|invalid|revoked|unauthorized/i.test(detail)
+    ) {
+      return {
+        ok: false,
+        status: "needs-reconnect",
+        text: `Google Drive lane “${laneId}” needs reconnect: ${detail} Nothing was read.`,
+        data: { source: "gdrive", laneId, statusKind: "needs-reconnect" },
+      };
+    }
+    // Unknown lane / not_connected — still report honestly (config if lane missing from accounts).
+    const config = loadStorageAccountsConfig(input.configPath);
+    const hasLane = (config.accounts || []).some((a) => a.laneId === laneId);
+    if (!hasLane) {
+      return {
+        ok: false,
+        status: "needs-config",
+        text: `Google Drive lane “${laneId}” is not configured in media-storage-accounts.json. Nothing was read.`,
+        data: { source: "gdrive", laneId, statusKind: "needs-config" },
+      };
+    }
+    return {
+      ok: false,
+      status: "needs-reconnect",
+      text: `Google Drive lane “${laneId}” is not connected: ${detail} Nothing was read.`,
+      data: { source: "gdrive", laneId, statusKind: "needs-reconnect" },
+    };
+  }
+
+  const token = tokenResult.token;
+  const metaUrl = new URL("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(fileId));
+  metaUrl.searchParams.set("fields", "id,name,mimeType,size,trashed");
+  metaUrl.searchParams.set("supportsAllDrives", "true");
+
+  let metaRes: Response;
+  try {
+    metaRes = await fetchImpl(metaUrl.toString(), {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Drive metadata request failed";
+    return { ok: false, status: "error", text: `${message}. Nothing was read.` };
+  }
+
+  if (metaRes.status === 401 || metaRes.status === 403) {
+    return {
+      ok: false,
+      status: "needs-reconnect",
+      text: `Google Drive refused the token for lane “${laneId}” (HTTP ${metaRes.status}). Reconnect on ServiceBoard. Nothing was read.`,
+      data: { source: "gdrive", laneId, statusKind: "needs-reconnect" },
+    };
+  }
+  if (metaRes.status === 404) {
+    return { ok: false, status: "error", text: "That Drive file was not found (or is outside this app's access). Nothing was read." };
+  }
+  if (!metaRes.ok) {
+    return { ok: false, status: "error", text: `Google Drive files.get returned ${metaRes.status}. Nothing was read.` };
+  }
+
+  const meta = (await metaRes.json()) as {
+    id?: string;
+    name?: string;
+    mimeType?: string;
+    size?: string;
+    trashed?: boolean;
+  };
+  if (meta.trashed) {
+    return { ok: false, status: "error", text: "That Drive file is in trash. Nothing was read." };
+  }
+  const mime = (meta.mimeType || "application/octet-stream").toLowerCase();
+  const name = meta.name || fileId;
+  const sizeNum = meta.size != null ? Number(meta.size) : NaN;
+
+  const exportMime = GDRIVE_EXPORT_MIME[mime];
+  let bodyUrl: string;
+  let via: "export" | "download";
+  if (exportMime) {
+    const u = new URL("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(fileId) + "/export");
+    u.searchParams.set("mimeType", exportMime);
+    bodyUrl = u.toString();
+    via = "export";
+  } else if (isPlainTextMime(mime)) {
+    if (Number.isFinite(sizeNum) && sizeNum > MAX_GDRIVE_READ_BYTES) {
+      return {
+        ok: false,
+        status: "error",
+        text: `Drive file “${name}” is ${sizeNum} bytes; research reads cap at ${MAX_GDRIVE_READ_BYTES} bytes. Nothing was read.`,
+        data: { source: "gdrive", fileId, name, mimeType: mime, size: sizeNum },
+      };
+    }
+    const u = new URL("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(fileId));
+    u.searchParams.set("alt", "media");
+    u.searchParams.set("supportsAllDrives", "true");
+    bodyUrl = u.toString();
+    via = "download";
+  } else {
     return {
       ok: false,
       status: "error",
-      text: `Research connector “${source || "(empty)"}” is not available as a read-only source. Supported: notion. Nothing was read.`,
+      text: `Drive file “${name}” has mimeType ${mime}, which is not a supported text export/download for research. Nothing was read.`,
+      data: { source: "gdrive", fileId, name, mimeType: mime },
     };
   }
-  const pageId = (input.page_id || "").trim();
-  if (!pageId) {
-    return { ok: false, status: "error", text: "page_id is required for notion research reads. Nothing was read." };
+
+  let bodyRes: Response;
+  try {
+    bodyRes = await fetchImpl(bodyUrl, {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}`, accept: "text/plain,text/*,*/*" },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Drive content request failed";
+    return { ok: false, status: "error", text: `${message}. Nothing was read.` };
   }
-  const read = await notionReadPage({ pageIdOrUrl: pageId, ownerId: input.ownerId });
-  if (!read.ok) {
+
+  if (bodyRes.status === 401 || bodyRes.status === 403) {
     return {
       ok: false,
-      status: read.status,
-      text: read.text.includes("not configured")
-        ? "Notion is not connected for research. Connect Notion OAuth or set NOTION_TOKEN. No citations were invented."
-        : read.text,
+      status: "needs-reconnect",
+      text: `Google Drive refused content access for lane “${laneId}” (HTTP ${bodyRes.status}). Reconnect on ServiceBoard. Nothing was read.`,
+      data: { source: "gdrive", laneId, statusKind: "needs-reconnect" },
     };
   }
+  if (!bodyRes.ok) {
+    return { ok: false, status: "error", text: `Google Drive ${via} returned ${bodyRes.status}. Nothing was read.` };
+  }
+
+  // Cap by reading at most MAX+1 bytes
+  const buf = new Uint8Array(await bodyRes.arrayBuffer());
+  if (buf.byteLength > MAX_GDRIVE_READ_BYTES) {
+    return {
+      ok: false,
+      status: "error",
+      text: `Drive ${via} for “${name}” exceeded the ${MAX_GDRIVE_READ_BYTES}-byte research cap (${buf.byteLength} bytes). Nothing was kept.`,
+      data: { source: "gdrive", fileId, name, mimeType: mime, bytes: buf.byteLength },
+    };
+  }
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+  const preview = text.slice(0, 8000);
   return {
     ok: true,
     status: "ok",
-    text: read.text.slice(0, 8000),
-    data: { source: "notion", pageId: (read.data as { pageId?: string } | undefined)?.pageId ?? null },
+    text: preview || "(empty file)",
+    data: {
+      source: "gdrive",
+      fileId: meta.id || fileId,
+      name,
+      mimeType: mime,
+      via,
+      bytes: buf.byteLength,
+      laneId,
+      truncated: text.length > 8000,
+    },
   };
 }
 

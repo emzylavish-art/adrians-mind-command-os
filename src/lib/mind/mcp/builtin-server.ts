@@ -197,13 +197,16 @@ export function createBuiltinMcpServer(getSql: BuiltinSqlProvider = defaultGetSq
   server.registerTool(
     "research_connector_read",
     {
-      description: "Read-only research connector (notion + page_id).",
+      description: "Read-only research connector (notion page_id | gdrive file_id).",
       inputSchema: {
-        source: z.string().describe("notion"),
-        page_id: z.string().describe("Notion page id or URL"),
+        source: z.string().describe("notion | gdrive"),
+        page_id: z.string().optional().describe("Notion page id or URL"),
+        file_id: z.string().optional().describe("Google Drive file id"),
+        lane_id: z.string().optional().describe("Drive lane id (default gdrive-emzylavish)"),
       },
     },
-    async ({ source, page_id }) => asContent(await researchConnectorRead({ source, page_id, ownerId })),
+    async ({ source, page_id, file_id, lane_id }) =>
+      asContent(await researchConnectorRead({ source, page_id, file_id, lane_id, ownerId })),
   );
   server.registerTool(
     "research_fetch_url",
