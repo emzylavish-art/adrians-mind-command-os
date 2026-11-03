@@ -4914,6 +4914,10 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 setActivityQuery("");
                 setNavOpen(false);
               }}
+              onOpenSettings={() => {
+                setView("settings");
+                setNavOpen(false);
+              }}
             />
           )}
 
@@ -6249,6 +6253,7 @@ function ChatPane({
   connectedServices,
   systemStatus,
   onViewAudit,
+  onOpenSettings,
 }: {
   active: Chat | null;
   chats: Chat[];
@@ -6329,6 +6334,7 @@ function ChatPane({
   connectedServices: ReturnType<typeof connectedServicesRail>;
   systemStatus: ReturnType<typeof systemStatusRail>;
   onViewAudit: (auditId: string) => void;
+  onOpenSettings: () => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -6339,7 +6345,7 @@ function ChatPane({
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [chromeNote, setChromeNote] = useState(
-    "Voice chrome preview. Dictate uses this chat’s microphone. Speak, the live bar, and voice mode do not connect a provider.",
+    "Voice chrome: Attach/Ask/Settings/Speak are live. Screen share and speaker need a realtime provider (honest needs-config).",
   );
   const [dictationTick, setDictationTick] = useState(0);
   const [previewModelOpen, setPreviewModelOpen] = useState(false);
@@ -6355,8 +6361,33 @@ function ChatPane({
     const id = window.setInterval(() => setDictationTick((n) => n + 1), 1000);
     return () => window.clearInterval(id);
   }, [voiceListening]);
-  const markPreview = (control: string) => {
-    setChromeNote(`${control} is preview only. No voice provider is connected.`);
+  const markNeedsConfig = (control: string, missing: string) => {
+    setChromeNote(`${control}: needs config — ${missing}`);
+  };
+  const focusComposerInput = () => {
+    const node = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      '[data-composer="floating"] input, [data-composer="floating"] textarea, [data-testid="composer-input"]',
+    );
+    node?.focus();
+    setChromeNote("Focused the composer. Type here to send; this is not a live voice ask slot.");
+  };
+  const attachFromChrome = (kind: "files" | "photo" | "camera" | "video" | "plus" = "plus") => {
+    if (kind === "camera") {
+      onOpenCamera();
+      setChromeNote("Camera opened from the voice chrome.");
+      return;
+    }
+    if (kind === "photo") {
+      onAttachImage();
+      setChromeNote("Image picker opened from the voice chrome.");
+      return;
+    }
+    if (kind === "video") {
+      markNeedsConfig("Add video", "Video attach is not configured on this chrome. Use Attach or Imagine instead.");
+      return;
+    }
+    onAttach();
+    setChromeNote("File picker opened from the voice chrome.");
   };
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
@@ -6694,7 +6725,7 @@ function ChatPane({
                 level={voiceListening ? voiceLevel : 0}
                 placeholder="Preview only — not a second composer"
                 askSlot={<span className="text-xs text-muted">Preview only — does not send. The model chip sets this chat’s Mode for the next send.</span>}
-                onPlus={() => markPreview("Add attachment")}
+                onPlus={() => attachFromChrome("plus")}
                 onModelToggle={() => setPreviewModelOpen((open) => !open)}
                 onModelSelect={(id) => {
                   setPreviewModelOpen(false);
@@ -6707,40 +6738,71 @@ function ChatPane({
                   setChromeNote("Dictate uses this chat’s microphone. Speak on this chrome does not start a provider.");
                   onListen();
                 }}
-                onSpeak={() => markPreview("Speak")}
+                onSpeak={() => {
+                  if (lastReply) {
+                    onSpeak(lastReply.content);
+                    setChromeNote("Speaking the last reply with this browser (same as Speak above).");
+                    return;
+                  }
+                  markNeedsConfig("Speak", "No assistant reply yet. Send a message first, or open Voice Mode from the header.");
+                }}
               />
               <LiveSpeakControl
-                state="off"
-                level={0}
-                label="Not connected"
-                onToggle={() => markPreview("Live speak")}
-                onMute={() => markPreview("Live speak mute")}
-                onEnd={() => markPreview("Live speak end")}
+                state={voiceListening || speaking ? "listening" : "off"}
+                level={voiceLevel}
+                label={voiceListening || speaking ? "Live" : "Not connected"}
+                onToggle={() => {
+                  onOpenVoiceMode();
+                  setChromeNote("Opened Voice Mode from the live-speak control.");
+                }}
+                onMute={() => {
+                  onToggleMute();
+                  setChromeNote(voiceMuted ? "Unmute requested." : "Mute requested.");
+                }}
+                onEnd={() => {
+                  onToggleVoiceMode();
+                  setChromeNote("Voice mode toggle from live-speak end.");
+                }}
               />
             </div>
             <VoiceModeStage
               open
               overlay={false}
-              state="idle"
-              level={0}
-              modeLabel="Preview only — no voice provider is connected."
-              muted={false}
-              onMute={() => markPreview("Voice mode mute")}
-              onEnd={() => markPreview("Voice mode end")}
+              state={voiceListening ? "listening" : speaking ? "speaking" : "idle"}
+              level={voiceLevel}
+              modeLabel={voiceListening || speaking ? "Voice session active on this device." : "Idle — open Voice Mode to connect a provider."}
+              muted={voiceMuted}
+              onMute={() => {
+                onToggleMute();
+                setChromeNote(voiceMuted ? "Unmute requested." : "Mute requested.");
+              }}
+              onEnd={() => {
+                onToggleVoiceMode();
+                setChromeNote("Voice mode toggle from stage end.");
+              }}
             />
             <PresentationalLiveVoiceBar
-              state="off"
-              level={0}
-              placeholder="Preview only — not a live call"
-              askSlot={<span className="text-xs text-muted">Preview only. Not a connected voice session. Type in the composer above.</span>}
-              onMute={() => markPreview("Live bar mute")}
-              onEnd={() => markPreview("Live bar end")}
-              onSpeaker={() => markPreview("Speaker")}
-              onScreenShare={() => markPreview("Screen share")}
-              onSettings={() => markPreview("Voice settings")}
-              onPlus={() => markPreview("Add attachment")}
-              onPlusItem={(id) => markPreview(`Add ${id}`)}
-              onAskFocus={() => markPreview("Live bar ask")}
+              state={voiceListening || speaking ? "listening" : "off"}
+              level={voiceLevel}
+              placeholder="Ask in the composer — this bar mirrors mute/attach/settings"
+              askSlot={<span className="text-xs text-muted">Ask focuses the composer above. Not a separate live call slot.</span>}
+              onMute={() => {
+                onToggleMute();
+                setChromeNote(voiceMuted ? "Unmute requested." : "Mute requested.");
+              }}
+              onEnd={() => {
+                onToggleVoiceMode();
+                setChromeNote("Voice mode toggle from live bar end.");
+              }}
+              onSpeaker={() => markNeedsConfig("Speaker", "No separate speaker device picker. Browser speech uses the default output.")}
+              onScreenShare={() => markNeedsConfig("Screen share", "Needs a realtime voice/session provider. Not configured on this host.")}
+              onSettings={() => {
+                onOpenSettings();
+                setChromeNote("Opened Settings for voice preferences.");
+              }}
+              onPlus={() => attachFromChrome("plus")}
+              onPlusItem={(id) => attachFromChrome(id)}
+              onAskFocus={() => focusComposerInput()}
             />
           </div>
         </form>
