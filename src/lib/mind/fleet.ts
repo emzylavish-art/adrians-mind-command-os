@@ -515,6 +515,25 @@ export function gmailConnectAttempt(): { ok: false; error: string } {
   return { ok: false, error: "Google OAuth is not configured. No mailbox was connected and no message was read or sent." };
 }
 
+/** Path the Connected-apps "Connect Google" button starts (same as ServiceBoard Gmail). */
+export function gmailOauthStartPath(): string {
+  return "/api/mind/oauth/gmail/start?format=json";
+}
+
+/** Interpret a Gmail OAuth start JSON response so the fleet button can redirect or show an honest error. */
+export function interpretGmailOauthStart(input: {
+  httpOk: boolean;
+  body: { ok?: boolean; url?: string; error?: string } | null;
+}): { ok: true; url: string } | { ok: false; error: string } {
+  const url = input.body?.url?.trim();
+  if (input.httpOk && input.body?.ok && url) {
+    return { ok: true, url };
+  }
+  const fromBody = input.body?.error?.trim();
+  if (fromBody) return { ok: false, error: fromBody };
+  return gmailConnectAttempt();
+}
+
 export function addSchedule(ws: Workspace, name: string, agentId: string | null, intervalMinutes: number, now?: string, timeZone = "UTC", clockHour: number | null = null, clockMinute = 0): { ok: true; ws: Workspace } | { ok: false; error: string } {
   const title = name.trim().slice(0, 80);
   if (!title) return { ok: false, error: "Name the schedule." };

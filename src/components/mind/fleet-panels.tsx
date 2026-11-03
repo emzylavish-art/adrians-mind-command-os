@@ -14,6 +14,8 @@ import {
   deployAgent,
   enqueueRun,
   gmailConnectAttempt,
+  gmailOauthStartPath,
+  interpretGmailOauthStart,
   pauseRun,
   resumeRun,
   runDueSchedules,
@@ -96,6 +98,7 @@ export function FleetPanel({
   onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
+  const [gmailBusy, setGmailBusy] = useState(false);
   const [goal, setGoal] = useState("");
   const [agentId, setAgentId] = useState("");
   const [mailLabel, setMailLabel] = useState("");
@@ -499,7 +502,7 @@ export function FleetPanel({
       <section className="page-shell">
         <div className="page-hero mb-4">
           <h2 className="font-display text-3xl font-bold">Connected apps</h2>
-          <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Gmail stays not connected until Google OAuth is configured.</p>
+          <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Connect Google starts the same Gmail OAuth flow as ServiceBoard when credentials are configured.</p>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <select aria-label="Connection provider" value={provider} onChange={(event) => setProvider(event.target.value as ProviderConnection["provider"])} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
@@ -522,7 +525,37 @@ export function FleetPanel({
           <input value={mailLabel} onChange={(event) => setMailLabel(event.target.value)} placeholder="Mailbox label" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={mailAddress} onChange={(event) => setMailAddress(event.target.value)} placeholder="name@example.com" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addMailbox(ws, mailLabel, mailAddress))}>Add mailbox record</button>
-          <button type="button" className="is-coming-soon min-h-11 rounded-panel border border-line px-3 text-sm" title="Coming soon — Google OAuth is not started from this button" aria-disabled={true} onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
+          <button
+            type="button"
+            className="min-h-11 rounded-panel border border-line px-3 text-sm"
+            title="Start Google OAuth for Gmail (same path as ServiceBoard)"
+            disabled={gmailBusy}
+            onClick={() => {
+              void (async () => {
+                setGmailBusy(true);
+                setNote(null);
+                try {
+                  const res = await fetch(gmailOauthStartPath(), {
+                    credentials: "include",
+                    headers: { accept: "application/json" },
+                  });
+                  const body = (await res.json().catch(() => null)) as { ok?: boolean; url?: string; error?: string } | null;
+                  const interpreted = interpretGmailOauthStart({ httpOk: res.ok, body });
+                  if (!interpreted.ok) {
+                    setNote(interpreted.error);
+                    setGmailBusy(false);
+                    return;
+                  }
+                  window.location.assign(interpreted.url);
+                } catch {
+                  setNote(gmailConnectAttempt().error);
+                  setGmailBusy(false);
+                }
+              })();
+            }}
+          >
+            {gmailBusy ? "Starting Google…" : "Connect Google"}
+          </button>
         </div>
         <ul className="mt-3 space-y-2">
           {ws.mailboxes.map((item) => (

@@ -13,6 +13,8 @@ import {
   deployAgent,
   enqueueRun,
   gmailConnectAttempt,
+  gmailOauthStartPath,
+  interpretGmailOauthStart,
   haltFleet,
   pauseRun,
   runDueSchedules,
@@ -243,5 +245,35 @@ describe("local agent worker", () => {
     });
     assert.equal(hits.some((hit) => hit.meta === "Agent" && hit.label === "Documents"), true);
     assert.equal(JSON.stringify(hits).includes("sk-"), false);
+  });
+});
+
+describe("Connect Google OAuth start wiring", () => {
+  it("exposes the ServiceBoard Gmail start path", () => {
+    assert.equal(gmailOauthStartPath(), "/api/mind/oauth/gmail/start?format=json");
+  });
+
+  it("redirects when start returns ok+url", () => {
+    const got = interpretGmailOauthStart({
+      httpOk: true,
+      body: { ok: true, url: "https://accounts.google.com/o/oauth2/v2/auth?x=1" },
+    });
+    assert.equal(got.ok, true);
+    if (got.ok) assert.match(got.url, /accounts\.google\.com/);
+  });
+
+  it("surfaces server error copy when start fails", () => {
+    const got = interpretGmailOauthStart({
+      httpOk: false,
+      body: { ok: false, error: "Sign in required before Gmail OAuth can start." },
+    });
+    assert.equal(got.ok, false);
+    if (!got.ok) assert.match(got.error, /Sign in required/);
+  });
+
+  it("falls back to honest stub when body is empty", () => {
+    const got = interpretGmailOauthStart({ httpOk: false, body: null });
+    assert.equal(got.ok, false);
+    if (!got.ok) assert.match(got.error, /not configured/);
   });
 });
