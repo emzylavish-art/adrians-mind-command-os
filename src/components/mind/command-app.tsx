@@ -57,7 +57,7 @@ import {
   type DownscaleQuality,
 } from "@/components/mind/media/downscale-quality";
 import { safeImageDownloadName } from "@/components/mind/media/media-ui-helpers";
-import { GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, collectClipboardImageFiles, createImagineTabLock, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
+import { BATCH_EDIT_MAX, GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL, clampBatchEditCount, collectClipboardImageFiles, createImagineTabLock, estimateImagineBatchCostUsd, extractSafeImageSrcFromHtml, historyTextForImages, imagesForExport, parseImagineCommand, resolveImagineModel, sanitizeComposerPasteText, sanitizePastedImageCandidate, toImageAttachments, tryCreateIndexedDbBlobStore, type GrokImagineModel, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
@@ -310,6 +310,9 @@ export function CommandApp() {
   const [imagineModel, setImagineModel] = useState<GrokImagineModel>(GROK_IMAGINE_MODEL);
   const [imagineBusy, setImagineBusy] = useState(false);
   const imagineTabLockRef = useRef(createImagineTabLock("composer"));
+  const batchEditAbortRef = useRef<AbortController | null>(null);
+  const [batchEditPreview, setBatchEditPreview] = useState<null | { urls: string[]; prompt: string; model: GrokImagineModel; costUsd: number }>(null);
+  const [batchEditProgress, setBatchEditProgress] = useState<null | { done: number; total: number }>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1363,7 +1366,7 @@ export function CommandApp() {
   }
 
   async function runImagineEdit(imageDataUrl: string, promptRaw?: string, extraImages: string[] = []) {
-    if (busy || imagineBusy || ws.halted) return;
+    if (busy || imagineBusy || ws.halted || batchEditPreview) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
       setError("Write an edit instruction in the composer, then press Edit with Imagine.");
@@ -1374,9 +1377,14 @@ export function CommandApp() {
       setError("Edit with Imagine only works on images kept as data URLs in this chat.");
       return;
     }
+    if (!imagineTabLockRef.current.tryAcquire()) {
+      setError("Imagine is already running in another tab. Wait for it to finish.");
+      return;
+    }
     setDraft("");
     setError(null);
     setBusy(true);
+    setImagineBusy(true);
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     try {
@@ -1443,6 +1451,140 @@ export function CommandApp() {
     } catch (caught) {
       setError(caught instanceof Error ? (/abort|timeout/i.test(caught.name + caught.message) ? "Edit with Imagine timed out. Nothing was saved as a success." : caught.message) : "Edit with Imagine could not be reached.");
     } finally {
+      setImagineBusy(false);
+      imagineTabLockRef.current.release();
+      setBusy(false);
+    }
+  }
+
+  function requestImagineBatchEdit(urlsRaw?: string[], promptRaw?: string) {
+    if (busy || imagineBusy || ws.halted) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write one edit instruction in the composer, then start Batch edit.");
+      return;
+    }
+    const urls = (urlsRaw ?? pendingImages.map((image) => image.dataUrl))
+      .filter((url, index, all) => typeof url === "string" && url.startsWith("data:image/") && all.indexOf(url) === index);
+    const total = clampBatchEditCount(urls.length);
+    if (total < 2) {
+      setError(`Batch edit needs 2–${BATCH_EDIT_MAX} attached images (data URLs).`);
+      return;
+    }
+    const model = resolveImagineModel(imagineModel);
+    const costUsd = estimateImagineBatchCostUsd(model, total);
+    setBatchEditPreview({ urls: urls.slice(0, total), prompt, model, costUsd });
+    setNotice(`Batch edit preview: ${total} sequential edits via ${model} (~$${costUsd.toFixed(2)} est.). Confirm or cancel.`);
+  }
+
+  function cancelImagineBatchEdit() {
+    batchEditAbortRef.current?.abort();
+    batchEditAbortRef.current = null;
+    setBatchEditPreview(null);
+    setBatchEditProgress(null);
+    setNotice("Batch edit cancelled. Partial results already staged were kept.");
+  }
+
+  async function confirmImagineBatchEdit() {
+    if (!batchEditPreview || busy || imagineBusy || ws.halted) return;
+    if (!imagineTabLockRef.current.tryAcquire()) {
+      setError("Imagine is already running in another tab. Wait for it to finish.");
+      return;
+    }
+    const { urls, prompt, model } = batchEditPreview;
+    setBatchEditPreview(null);
+    setError(null);
+    setBusy(true);
+    setImagineBusy(true);
+    setBatchEditProgress({ done: 0, total: urls.length });
+    const controller = new AbortController();
+    batchEditAbortRef.current = controller;
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    const produced: ImageAttachment[] = [];
+    try {
+      for (let index = 0; index < urls.length; index++) {
+        if (controller.signal.aborted) break;
+        const image = urls[index]!;
+        const response = await fetch(`${prefix}/api/mind/media/generate`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ prompt, image, mode: "edit", n: 1, model }),
+          signal: controller.signal,
+        });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          model?: string;
+          images?: { dataUrl: string; mime?: string; name?: string }[];
+        };
+        if (!response.ok || !payload.ok || !payload.images?.length) {
+          setError(payload.error || `Batch edit stopped at ${index + 1}/${urls.length} (HTTP ${response.status}).`);
+          break;
+        }
+        const out = payload.images[0]!;
+        produced.push({
+          dataUrl: out.dataUrl,
+          name: out.name || `imagine-batch-${index + 1}.jpg`,
+          mime: out.mime,
+        });
+        setBatchEditProgress({ done: index + 1, total: urls.length });
+        setPendingImages((prev) => {
+          const withoutDup = prev.filter((item) => item.dataUrl !== image);
+          return [...withoutDup, { dataUrl: out.dataUrl, name: out.name || `imagine-batch-${index + 1}.jpg`, mime: out.mime }].slice(-4);
+        });
+      }
+      if (produced.length) {
+        setNotice(
+          controller.signal.aborted
+            ? `Batch edit cancelled after ${produced.length}/${urls.length}. Partial results staged.`
+            : `Batch edited ${produced.length}/${urls.length} via ${model}. Staged for Send / Agent.`,
+        );
+        if (active && produced.length) {
+          const chatId = active.id;
+          setWs((prev) => ({
+            ...prev,
+            chats: prev.chats.map((item) =>
+              item.id === chatId
+                ? {
+                    ...item,
+                    messages: [
+                      ...item.messages,
+                      {
+                        id: crypto.randomUUID(),
+                        role: "user" as const,
+                        content: `Batch Edit with Imagine (${produced.length} images): ${prompt}`,
+                        at: new Date().toISOString(),
+                      },
+                      {
+                        id: crypto.randomUUID(),
+                        role: "assistant" as const,
+                        content: `Batch edited ${produced.length} image(s) with ${model}.`,
+                        at: new Date().toISOString(),
+                        model,
+                        images: produced.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                      },
+                    ],
+                  }
+                : item,
+            ),
+          }));
+        }
+      }
+    } catch (caught) {
+      if (controller.signal.aborted) {
+        setNotice(`Batch edit cancelled after ${produced.length}/${urls.length}.`);
+      } else {
+        setError(caught instanceof Error ? caught.message : "Batch edit could not be reached.");
+      }
+    } finally {
+      batchEditAbortRef.current = null;
+      setBatchEditProgress(null);
+      setImagineBusy(false);
+      imagineTabLockRef.current.release();
       setBusy(false);
     }
   }
@@ -2139,18 +2281,36 @@ export function CommandApp() {
                       <button
                         type="button"
                         className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                        disabled={busy || ws.halted}
-                        onClick={() => {
-                          const urls = pendingImages.map((image) => image.dataUrl).filter((url) => url.startsWith("data:image/"));
-                          if (urls.length < 2) {
-                            setError("Attach at least two images to edit them together.");
-                            return;
-                          }
-                          void runImagineEdit(urls[0]!, undefined, urls.slice(1));
-                        }}
+                        data-media="imagine-batch-edit"
+                        disabled={busy || imagineBusy || ws.halted || Boolean(batchEditPreview)}
+                        onClick={() => requestImagineBatchEdit()}
                       >
-                        Edit all with Imagine
+                        Batch edit…
                       </button>
+                    )}
+                    {batchEditPreview && (
+                      <div className="w-full rounded-panel border border-line bg-bg p-3 text-sm" data-media="imagine-batch-preview">
+                        <p>
+                          Edit {batchEditPreview.urls.length} images sequentially with “{batchEditPreview.prompt.slice(0, 80)}”
+                          via {batchEditPreview.model}. Est. ~${batchEditPreview.costUsd.toFixed(2)} (cap {BATCH_EDIT_MAX}/batch). Each call hits the spend ledger.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button type="button" className="min-h-11 rounded-panel bg-accent px-3 font-semibold text-accent-ink" data-media="imagine-batch-confirm" onClick={() => void confirmImagineBatchEdit()}>
+                            Confirm batch
+                          </button>
+                          <button type="button" className="min-h-11 rounded-panel border border-line px-3" data-media="imagine-batch-cancel" onClick={cancelImagineBatchEdit}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {batchEditProgress && (
+                      <p className="w-full text-xs text-muted" data-media="imagine-batch-progress" aria-live="polite">
+                        Batch edit {batchEditProgress.done}/{batchEditProgress.total}…
+                        <button type="button" className="ml-2 underline" data-media="imagine-batch-abort" onClick={cancelImagineBatchEdit}>
+                          Stop
+                        </button>
+                      </p>
                     )}
                     <AttachmentChips images={pendingImages} onChange={setPendingImages} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
                     <button
@@ -3257,11 +3417,21 @@ export function CommandApp() {
         }}
       />
       <CameraCapture
+        downscaleQuality={downscaleQuality}
         open={cameraOpen}
+        remainingSlots={Math.max(0, 4 - pendingImages.length)}
         onClose={() => setCameraOpen(false)}
         onCapture={(dataUrl, name) => {
           setPendingImages((prev) => (prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]));
           setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
+        }}
+        onCaptureMany={(items) => {
+          setPendingImages((prev) => {
+            const room = Math.max(0, 4 - prev.length);
+            const add = items.slice(0, room).map((item) => ({ dataUrl: item.dataUrl, name: item.name, mime: "image/jpeg" as const }));
+            return add.length ? [...prev, ...add] : prev;
+          });
+          setNotice(`Attached ${Math.min(items.length, Math.max(0, 4 - pendingImages.length))} burst frame(s). Send includes them for the model.`);
         }}
       />
       <CloudPicker

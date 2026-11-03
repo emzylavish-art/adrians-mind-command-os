@@ -35,3 +35,24 @@ export function parseImagineCommand(draft: string): string | null {
   if (!match) return null;
   return match[1]!.trim();
 }
+
+
+/** Client-side cost preview (mirrors spend-ledger estimates; not billed truth). */
+export const CLIENT_IMAGINE_COST_USD: Record<GrokImagineModel, number> = {
+  [GROK_IMAGINE_MODEL]: 0.07,
+  [GROK_IMAGINE_QUALITY_MODEL]: 0.14,
+};
+
+/** Hard cap on sequential batch edits in one user action (cost + rate-limit friendly). */
+export const BATCH_EDIT_MAX = 4;
+
+export function estimateImagineBatchCostUsd(model: GrokImagineModel, count: number): number {
+  const unit = CLIENT_IMAGINE_COST_USD[model] ?? CLIENT_IMAGINE_COST_USD[GROK_IMAGINE_MODEL];
+  const n = Math.max(0, Math.min(BATCH_EDIT_MAX, Math.floor(count)));
+  return Math.round(unit * n * 1000) / 1000;
+}
+
+export function clampBatchEditCount(count: number): number {
+  if (!Number.isFinite(count) || count < 1) return 0;
+  return Math.min(BATCH_EDIT_MAX, Math.floor(count));
+}

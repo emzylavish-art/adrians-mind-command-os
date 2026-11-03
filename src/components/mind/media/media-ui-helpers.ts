@@ -78,3 +78,46 @@ export function safeImageDownloadName(src: string, label?: string | null): strin
   const base = allowed ? stem : `amcos-image-${Date.now().toString(36)}`;
   return `${base}.${ext}`;
 }
+
+/** Camera burst: take this many frames in one auto-burst action (inclusive range). */
+export const BURST_MIN = 3;
+export const BURST_MAX = 5;
+/** Absolute candidate tray size (cannot exceed BURST_MAX). */
+export const BURST_CANDIDATE_CAP = BURST_MAX;
+/** Soft total data-URL char budget for one Attach-selected action. */
+export const BURST_ATTACH_CHAR_BUDGET = 4_500_000;
+
+export type BurstCandidate = { id: string; dataUrl: string; name: string };
+
+export function clampBurstCount(requested: number): number {
+  if (!Number.isFinite(requested)) return BURST_MIN;
+  return Math.min(BURST_MAX, Math.max(BURST_MIN, Math.floor(requested)));
+}
+
+/** Pick selected candidates without exceeding slot/char budgets. */
+export function selectBurstAttachments(
+  candidates: readonly BurstCandidate[],
+  selectedIds: ReadonlySet<string>,
+  options: { remainingSlots: number; charBudget?: number } = { remainingSlots: 4 },
+): { ok: true; items: BurstCandidate[] } | { ok: false; error: string } {
+  const budget = options.charBudget ?? BURST_ATTACH_CHAR_BUDGET;
+  const slots = Math.max(0, Math.floor(options.remainingSlots));
+  if (slots <= 0) return { ok: false, error: "Composer already has 4 images. Remove one before attaching a burst." };
+  const picked: BurstCandidate[] = [];
+  let chars = 0;
+  for (const candidate of candidates) {
+    if (!selectedIds.has(candidate.id)) continue;
+    if (picked.length >= slots) break;
+    const next = chars + candidate.dataUrl.length;
+    if (next > budget) {
+      if (picked.length === 0) {
+        return { ok: false, error: "That burst frame is too large to attach after compression." };
+      }
+      break;
+    }
+    picked.push(candidate);
+    chars = next;
+  }
+  if (picked.length === 0) return { ok: false, error: "Select at least one burst frame to attach." };
+  return { ok: true, items: picked };
+}

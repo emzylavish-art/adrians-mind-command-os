@@ -253,3 +253,21 @@ See `/workspace/locks/media-integration.lock`.
 
 ### Tests
 - tsc pass; src suite **344/344**; `npm run build` pass
+
+## Evolve: camera burst pick + batch Imagine edit — 2026-11-02T20:35:00-06:00 (America/Chicago)
+
+### Camera burst
+- Run burst ×3–5 into a tray (EXIF-strip/downscale path). Pick frames, **Attach selected** (respects 4-chip + char budget). Discard / Stop burst. No immediate attach spam.
+- Hooks: `camera-burst-tray`, `camera-burst-candidate`, `camera-burst-attach`, `camera-burst-discard`, `camera-burst-cancel`, `camera-burst-size`, `camera-burst-run`.
+
+### Batch Imagine edit
+- Replaces multi-image single-call “Edit all” with **sequential** per-image edits through `/api/mind/media/generate` (spend ledger + rate limit each call).
+- Cost preview + hard cap `BATCH_EDIT_MAX=4`, Confirm/Cancel, in-flight Stop via AbortController.
+- Tab lock + `imagineBusy` guard double-submit / multi-tab.
+
+### Attack fixes
+- Burst candidates are data-URLs only (no object URL leaks); cleared on close; MediaStream tracks still stopped.
+- Batch/single edit both acquire Imagine tab lock; no auto-retry; abort cancels remaining spend.
+
+### Tests
+- tsc pass; src **346/346**; build pass
