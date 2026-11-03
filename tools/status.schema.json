@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mind Command OS Tool Status",
+  "type": "object",
+  "required": [
+    "name",
+    "status",
+    "install",
+    "live"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "source-resolution-required",
+        "identified",
+        "reviewed",
+        "scaffolded",
+        "implemented",
+        "tested",
+        "live-verified",
+        "blocked",
+        "restricted",
+        "identity-unconfirmed",
+        "source-verified"
+      ]
+    },
+    "install": {
+      "enum": [
+        "not-installed",
+        "installed",
+        "blocked",
+        "bootstrap-script-ready",
+        "repo-code-present"
+      ]
+    },
+    "live": {
+      "enum": [
+        "not-connected",
+        "connected",
+        "blocked",
+        "callable-cli-and-ci",
+        "callable-cli-runner-and-mcp",
+        "callable-cli-and-runner",
+        "callable-cli-runner",
+        "callable-runner-and-mcp",
+        "script-present-not-yet-run-on-user-pc"
+      ]
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "guardrail": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "team_agent": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

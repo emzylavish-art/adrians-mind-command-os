@@ -12,3 +12,6 @@ dist/
 *.pem
 .DS_Store
 .data/
+.venv-tools/
+__pycache__/
+*.pyc
