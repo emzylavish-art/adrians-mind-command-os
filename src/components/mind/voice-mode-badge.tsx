@@ -83,7 +83,7 @@ export function VoiceModeBadge(props: {
         aria-label={`Switch voice mode (currently ${label})`}
         data-testid="voice-mode-toggle"
       >
-        Switch to {props.mode === "direct" ? "Orchestrator" : "Direct"}
+        {props.mode === "direct" ? "Orchestrator" : "Direct"}
       </button>
     </div>
   );

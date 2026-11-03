@@ -13991,3 +13991,417 @@ div.shell > div.composer-bar.is-fixed {
     color: #0a0a0b !important;
   }
 }
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r5 — tablet topbar one-row / no Orchestrator overlap;
+ * dock clearance at 768+; drawer nav gap; Research full-width; 375 fit.
+ * Do not touch styles-visual-p11.css (parallel job).
+ * ============================================================================ */
+
+/* (1) Tablet topbar: compact Direct|Orchestrator toggle, no wrap overlap */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .topbar {
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.45rem !important;
+  }
+  /* Drop meter/waveform/transcript/picker — badge toggle is enough */
+  .topbar [data-testid="voice-controls"] > :not([data-testid="voice-mode-badge"]) {
+    display: none !important;
+  }
+  .topbar [data-testid="voice-mode-badge"],
+  .topbar [data-testid="voice-controls"] [data-testid="voice-mode-badge"] {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    max-height: 2.25rem !important;
+    overflow: visible !important;
+  }
+  .topbar [data-testid="voice-mode-badge"] > span.font-semibold,
+  .topbar [data-testid="voice-mode-badge"] > [data-testid="voice-mode-badge-status"],
+  .topbar [data-testid="voice-mode-badge"] > [data-testid="voice-mode-badge-detail"] {
+    display: none !important;
+  }
+  .topbar [data-testid="voice-mode-toggle"],
+  .topbar button[data-testid="voice-mode-toggle"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 2.25rem !important;
+    height: 2.25rem !important;
+    max-height: 2.25rem !important;
+    min-width: 6.75rem !important;
+    max-width: 7.5rem !important;
+    padding: 0 0.75rem !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1 !important;
+    border-radius: 999px !important;
+    border: 1px solid rgb(255 255 255 / 0.18) !important;
+    background: rgb(255 255 255 / 0.06) !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em !important;
+  }
+  /* Keep Auto + avatar on same band without colliding the toggle */
+  .topbar .model-chip,
+  .topbar button.model-chip,
+  .topbar button.flex.h-11.items-center.gap-2.rounded-full {
+    align-self: center !important;
+    margin-top: 0 !important;
+  }
+}
+
+/* (2) Dock clearance at tablet widths (was phone-only) */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  :root,
+  .shell,
+  body {
+    --am-composer-h: 5.5rem;
+    --am-tabbar-h: 0px; /* no phone Primary tab bar on tablet shell */
+    --am-dock-clearance: calc(var(--am-composer-h) + 1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  body:has(.composer-bar.is-fixed) .main-stage > .min-h-0.flex-1.overflow-auto,
+  body:has(.composer-bar.is-fixed) .min-h-0.flex-1.overflow-auto,
+  body:has(section.composer-dock) .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: var(--am-dock-clearance) !important;
+    scroll-padding-bottom: var(--am-dock-clearance) !important;
+  }
+  body:has(.composer-bar.is-fixed) .main-stage.page-enter,
+  body:has(.composer-bar.is-fixed) .main-stage {
+    padding-bottom: calc(var(--am-dock-clearance) + 1rem) !important;
+  }
+  /* Content chips / setup rows clear the fixed composer */
+  body:has(.composer-bar.is-fixed) .main-stage .flex.flex-wrap.items-center.gap-2,
+  body:has(.composer-bar.is-fixed) .main-stage .flex.gap-2.overflow-x-auto,
+  body:has(.composer-bar.is-fixed) .main-stage section .mt-3.flex.flex-wrap.gap-2,
+  body:has(.composer-bar.is-fixed) .main-stage [data-testid="connected-actions"],
+  body:has(.composer-bar.is-fixed) .main-stage button.min-h-11 {
+    scroll-margin-bottom: calc(var(--am-dock-clearance) + 0.75rem) !important;
+  }
+}
+
+/* Desktop-wide: still keep a modest composer clearance */
+@media (min-width: 1280px) {
+  body:has(.composer-bar.is-fixed) .main-stage > .min-h-0.flex-1.overflow-auto {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* (3) Drawer / rail nav — real gap so AABB isn't a 1px kiss */
+aside.rail nav,
+aside.rail nav.flex,
+aside.rail .flex.flex-col {
+  gap: 6px !important;
+  row-gap: 6px !important;
+}
+aside.rail nav > button,
+aside.rail nav > a,
+aside.rail nav button,
+aside.fixed nav button {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+/* Mobile drawer list */
+@media (max-width: 767.98px) {
+  aside.fixed.inset-0 nav,
+  aside.fixed.inset-0 .flex.flex-col.gap-1,
+  aside.fixed.inset-0 .flex.flex-col {
+    gap: 6px !important;
+    row-gap: 6px !important;
+  }
+}
+
+/* (4) Research half-row → full width on phone (3rd quick-action) */
+@media (max-width: 767.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto > button:nth-child(3),
+  body:has(nav.fixed[aria-label="Primary"]) .main-stage .flex.gap-2.overflow-x-auto.pb-1 > button:nth-child(3) {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+/* (5) 375: reclaim the last ~5px form overflow */
+@media (max-width: 379.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .model-chip,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"],
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed button.model-chip {
+    flex: 0 0 42px !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    padding: 0 4px !important;
+    font-size: 10.5px !important;
+  }
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed form,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__row,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__left,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-voice-btns {
+    gap: 2px !important;
+    column-gap: 2px !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r5b — beat min-height:44 on Orchestrator toggle;
+ * real margins on rail/drawer buttons; stronger tablet topbar single-band.
+ * ============================================================================ */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  html body .topbar {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    overflow: visible !important;
+  }
+  /* Search can shrink so voice + Auto + avatar stay one row */
+  html body .topbar > .relative.min-w-0.flex-1 {
+    flex: 1 1 auto !important;
+    min-width: 6rem !important;
+    max-width: none !important;
+  }
+  html body .topbar [data-testid="voice-controls"] {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+  html body .topbar [data-testid="voice-mode-badge"],
+  html body .topbar [data-testid="voice-controls"] [data-testid="voice-mode-badge"] {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    height: 36px !important;
+    max-height: 36px !important;
+    overflow: hidden !important;
+  }
+  html body .topbar [data-testid="voice-mode-toggle"],
+  html body .topbar button[data-testid="voice-mode-toggle"],
+  html body .topbar [data-testid="voice-mode-badge"] > button[data-testid="voice-mode-toggle"] {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 6.5rem !important;
+    max-width: 7.25rem !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    max-height: 36px !important;
+    padding: 0 0.7rem !important;
+    box-sizing: border-box !important;
+  }
+  /* Title can hide on mid tablet to free space */
+  html body .topbar > p.hidden.md\:block {
+    display: none !important;
+  }
+  /* Compact account chip */
+  html body .topbar > button.flex.h-11.items-center.gap-2.rounded-full {
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    padding-left: 0.35rem !important;
+    padding-right: 0.55rem !important;
+  }
+  html body .topbar .model-chip,
+  html body .topbar button.model-chip {
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+  }
+}
+
+/* Rail + drawer nav: margin on the buttons themselves (parents often display:contents) */
+aside.rail button,
+aside.rail a,
+aside.rail nav button,
+aside.rail nav a {
+  margin-bottom: 6px !important;
+}
+aside.rail button:last-child,
+aside.rail a:last-child {
+  margin-bottom: 0 !important;
+}
+@media (max-width: 767.98px) {
+  aside.fixed button,
+  aside.fixed a,
+  aside.fixed nav button,
+  aside.fixed [role="navigation"] button {
+    margin-bottom: 6px !important;
+  }
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r5c — hide Grok status pill on tablet; icon-only
+ * account; ultra-specific 36px Orchestrator; keep one topbar row.
+ * ============================================================================ */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  /* Status pill steals the row that avatar needs */
+  html body .main-stage header.topbar > span.hidden.h-11.items-center,
+  html body .main-stage header.topbar > span.glass-panel,
+  html body .main-stage header.topbar > span.inline-flex {
+    display: none !important;
+  }
+  /* Icon-only account */
+  html body .main-stage header.topbar > button.flex.items-center.gap-2.rounded-full > span.hidden.md\:inline,
+  html body .main-stage header.topbar > button.flex.items-center.gap-2.rounded-full > span.text-sm {
+    display: none !important;
+  }
+  html body .main-stage header.topbar > button.flex.items-center.gap-2.rounded-full {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+  /* Compact voice-controls to the pill only */
+  html body .main-stage header.topbar [data-testid="voice-controls"] {
+    width: auto !important;
+    max-width: 7.5rem !important;
+    min-width: 0 !important;
+  }
+  html body .main-stage header.topbar div[data-testid="voice-controls"] div[data-testid="voice-mode-badge"] button[data-testid="voice-mode-toggle"] {
+    min-height: 36px !important;
+    height: 36px !important;
+    max-height: 36px !important;
+    line-height: 36px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  html body .main-stage header.topbar {
+    flex-wrap: nowrap !important;
+  }
+  /* Search shares remaining space without forcing a wrap */
+  html body .main-stage header.topbar > .relative.min-w-0.flex-1 {
+    flex: 1 1 8rem !important;
+    min-width: 5rem !important;
+  }
+}
+
+/* Mid-desktop 1024–1279: still compact toggle, allow mild wrap with row-gap */
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  html body .main-stage header.topbar {
+    row-gap: 0.75rem !important;
+  }
+  html body .main-stage header.topbar div[data-testid="voice-controls"] div[data-testid="voice-mode-badge"] button[data-testid="voice-mode-toggle"] {
+    min-height: 36px !important;
+    height: 36px !important;
+    max-height: 36px !important;
+  }
+}
+
+/* Rail gaps that still read 0: pad every nav button including nested */
+aside.rail .mb-4 button,
+aside.rail .mb-4 a,
+aside.rail nav button,
+aside.rail button[aria-current],
+aside.rail button {
+  margin-bottom: 6px !important;
+}
+aside.rail .mb-4 {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+aside.rail .mb-4 button {
+  margin-bottom: 0 !important; /* gap owns spacing inside flex col */
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r5d — rail .space-y-1 → flex column gap 6px
+ * (buttons sat flush; space-y margins were zeroed elsewhere).
+ * ============================================================================ */
+aside.rail .space-y-1,
+aside.fixed .space-y-1 {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  row-gap: 6px !important;
+}
+aside.rail .space-y-1 > :not([hidden]) ~ :not([hidden]),
+aside.fixed .space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0 !important;
+}
+aside.rail .space-y-1 .contents,
+aside.fixed .space-y-1 .contents {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+aside.rail button.nav-item,
+aside.rail a.nav-item,
+aside.fixed button.nav-item,
+aside.fixed a.nav-item {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r5e — finish 375 formOverflow (Auto 42).
+ * ============================================================================ */
+@media (max-width: 379.98px) {
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card form .model-chip,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__card button.model-chip,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__model-wrap .model-chip,
+  html body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-model"] {
+    flex: 0 0 42px !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+    font-size: 10px !important;
+  }
+}
+
+
+/* Search / Shortcuts pair above Workspace — same 6px gap */
+aside.rail .flex.flex-col.gap-1,
+aside.rail .flex.flex-col.gap-2,
+aside.rail > .flex.flex-col,
+aside.rail .p-3 > .flex.flex-col,
+aside.rail button[aria-label="Search"],
+aside.rail a[aria-label="Search"] {
+}
+aside.rail button[aria-label="Search"],
+aside.rail button[title="Search"],
+aside.rail a[title="Search"],
+aside.rail button:has(img[alt=""]),
+aside.fixed button[aria-label="Search"] {
+  margin-bottom: 6px !important;
+}
+/* Safer: any two stacked full-width rail controls before Workspace */
+aside.rail .px-3.pb-2 + .flex,
+aside.rail .flex.w-full.flex-col > button,
+aside.rail .flex.w-full.flex-col {
+  row-gap: 6px;
+}
+aside.rail .flex.w-full.flex-col {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+
+aside.rail .px-3.pb-2,
+aside.fixed .px-3.pb-2 {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+aside.rail .px-3.pb-2 > button,
+aside.rail .px-3.pb-2 > a {
+  margin-bottom: 0 !important;
+}
