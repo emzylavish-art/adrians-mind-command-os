@@ -31,3 +31,20 @@ export function createSingleFlight(): SingleFlight {
     },
   };
 }
+
+/**
+ * Run `work` only if the gate is free. Refused runs never call `work`; the gate is
+ * always released, even when `work` throws (the error is rethrown).
+ */
+export async function runInFlight<T>(
+  flight: SingleFlight,
+  work: (token: number) => Promise<T>,
+): Promise<{ ran: true; value: T } | { ran: false }> {
+  const token = flight.begin();
+  if (token === null) return { ran: false };
+  try {
+    return { ran: true, value: await work(token) };
+  } finally {
+    flight.end(token);
+  }
+}

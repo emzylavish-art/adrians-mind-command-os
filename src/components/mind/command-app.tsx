@@ -1340,6 +1340,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   }
 
   async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
+    // Same single-flight gate as the Research page: both write researchCitations, so a chat
+    // research turn must not interleave with (or be overwritten by) a Check research run.
+    const token = researchFlight.current.begin();
+    if (token === null) {
+      recordToolTurn(chat, query, "Research is already running. Wait for it to finish, then ask again. Nothing new was searched.");
+      return;
+    }
+    setResearchBusy(true);
     setBusy(true);
     setError(null);
     try {
@@ -1360,9 +1368,13 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       setNotice(`Research kept ${result.citations.length} http(s) citation${result.citations.length === 1 ? "" : "s"}.`);
     } catch {
       setBusy(false);
+      setResearchCitations([]);
       const message = "The search provider could not be reached. No citations were created.";
       recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
       setResearchNote(message);
+    } finally {
+      researchFlight.current.end(token);
+      setResearchBusy(false);
     }
   }
 
