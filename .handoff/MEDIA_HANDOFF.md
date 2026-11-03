@@ -335,3 +335,19 @@ Minimal hooks only (clear-on-chat-switch effect, gallery mount, owner-scope bind
 
 - Cherry-picked VP commit `9aaac47` (`visual(media-r2): style burst/batch/gallery/chips/drop/downscale hooks`) as-is onto media-integration (clean; no patch fallback). CSS untouched by media lane.
 - Hook request: `data-drag="over"` on `[data-media="composer-drop"]` (home + chat) during dragenter/dragover; cleared on dragleave/drop. Child flicker avoided with depth counter (`composerDragEnter`/`Leave`/`Reset` in `media-ui-helpers.ts`) + unit test.
+
+## Hardening: Imagine spend-cap race + billed-failure undercount — 2026-11-02T22:32:55-06:00 (America/Chicago)
+
+**Base tip:** `c123b2e` · **Fix:** `64028c2` · **Branch:** `media-integration`
+
+### Fixed
+- Daily cap was check-then-act: 8 parallel generates at cap-1 → 8 fetches. Now `reserveImagineSpend` (rate limit + `ledger.reserve`) runs in one synchronous step before any await; `settle` on success/ambiguous failure, `refund` only when upstream definitely did not bill (never sent / 4xx incl. 429, except 408).
+- Billed-but-failed responses (download failure, SSRF-refused URL, bad JSON 2xx, timeout after send, 5xx) are now counted.
+- File ledger + rate-limit store: lock file + temp/rename atomic writes; corrupt JSON fails CLOSED (503, remaining 0) and is never overwritten.
+- Ledger stays pluggable via `ImagineSpendLedgerBackend`; rate store via optional `update`.
+
+### Verify
+- tsc clean · src suite 384/385 in the full run (`store.test.ts` PGlite timeout under memory pressure; 5/5 alone) · `spend-race.test.ts` 21/21 · build green · $0 live spend
+
+### Cross-lane
+- None required. Multi-host needs a shared backend (infra/integration).
