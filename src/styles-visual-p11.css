@@ -388,15 +388,24 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  box-sizing: border-box;
+  height: 2.5rem;
   min-height: 2.5rem;
+  max-height: 2.5rem;
+  width: fit-content;
+  max-width: 100%;
   padding: 0 0.875rem;
   border-radius: 999px;
   border: 1px solid var(--p11-line);
   background: rgb(0 0 0 / 0.35);
   color: var(--p11-ink);
   font-variant-numeric: tabular-nums;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bsp-timer[data-empty="true"] {
   color: var(--p11-ink-3);
