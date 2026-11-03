@@ -59,7 +59,6 @@ import { IntentPredictionChip } from "@/components/mind/intent-prediction-chip";
 import { pushComposerText, pushVoiceChunk } from "@/lib/intent";
 import {
   ComposerBar,
-  type ComposerModelId,
   DictationPill as PreviewDictationPill,
   LiveSpeakControl,
   LiveVoiceBar as PresentationalLiveVoiceBar,
@@ -197,6 +196,7 @@ import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers"
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import { composerChipModelForTier, modelTierForComposerChip } from "@/lib/mind/composer-chip-sync";
 import { COMPOSER_MODES, composerModeToModelTier, loadComposerEffort, modelTierToComposerMode, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
@@ -6291,7 +6291,6 @@ function ChatPane({
     "Voice chrome preview. Dictate uses this chat’s microphone. Speak, the live bar, and voice mode do not connect a provider.",
   );
   const [dictationTick, setDictationTick] = useState(0);
-  const [previewModel, setPreviewModel] = useState<ComposerModelId>("heavy");
   const [previewModelOpen, setPreviewModelOpen] = useState(false);
   useEffect(() => {
     setRenaming(false);
@@ -6636,19 +6635,22 @@ function ChatPane({
               />
               <ComposerBar
                 className="composer-voice-chrome__bar"
-                model={previewModel}
+                model={composerChipModelForTier(modelTier)}
+                modelLabel={composerChipModelForTier(modelTier) ? undefined : modelTier}
                 modelMenuOpen={previewModelOpen}
                 dictationState={voiceListening ? "recording" : "idle"}
                 speakState="off"
                 level={voiceListening ? voiceLevel : 0}
                 placeholder="Preview only — not a second composer"
-                askSlot={<span className="text-xs text-muted">Preview only. This chip does not change the chat model or send a message.</span>}
+                askSlot={<span className="text-xs text-muted">Preview only — does not send. The model chip sets this chat’s Mode for the next send.</span>}
                 onPlus={() => markPreview("Add attachment")}
                 onModelToggle={() => setPreviewModelOpen((open) => !open)}
                 onModelSelect={(id) => {
-                  setPreviewModel(id);
                   setPreviewModelOpen(false);
-                  markPreview("Model chip");
+                  const tier = modelTierForComposerChip(id);
+                  if (!tier) return;
+                  onModelTier(tier);
+                  setChromeNote(`Mode set to ${tier} for the next send (same as the Mode picker).`);
                 }}
                 onDictate={() => {
                   setChromeNote("Dictate uses this chat’s microphone. Speak on this chrome does not start a provider.");

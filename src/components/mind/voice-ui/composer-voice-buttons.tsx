@@ -101,7 +101,10 @@ export type ComposerBarProps = {
   dictationState?: ComposerDictationState;
   speakState?: LiveSpeakState;
   level?: number;
-  model?: ComposerModelId;
+  /** null = current mode has no chip option (e.g. Orchestrator); show modelLabel, select nothing. */
+  model?: ComposerModelId | null;
+  /** Label override when model is null. */
+  modelLabel?: string;
   modelMenuOpen?: boolean;
   askSlot?: ReactNode;
   placeholder?: string;
@@ -117,9 +120,11 @@ export type ComposerBarProps = {
 
 /** Full Grok-like bottom-anchored composer card. */
 export function ComposerBar(props: ComposerBarProps) {
-  const model = props.model ?? "heavy";
+  const model = props.model === null ? null : props.model ?? "heavy";
   const modelMeta =
-    COMPOSER_MODEL_OPTIONS.find((o) => o.id === model) ?? COMPOSER_MODEL_OPTIONS[1];
+    model === null
+      ? { id: null, label: props.modelLabel || "Mode", subtitle: "" }
+      : COMPOSER_MODEL_OPTIONS.find((o) => o.id === model) ?? COMPOSER_MODEL_OPTIONS[1];
   const level = clampLevel(props.level);
   const style = { ["--live-level" as string]: String(level) };
 
