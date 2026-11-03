@@ -13708,3 +13708,26 @@ div.shell > div.composer-bar.is-fixed {
     min-width: 140px !important;
   }
 }
+
+
+/* ============================================================================
+ * Pass-10 phone-t85u r4b — Ask wrapper owns width; input min-width:0 so it
+ * cannot paint over Auto (AABB overlap was ~19px).
+ * ============================================================================ */
+@media (max-width: 429.98px) {
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="composer-bar-ask"] {
+    flex: 1 1 140px !important;
+    min-width: 140px !important;
+    max-width: none !important;
+    overflow: hidden !important;
+  }
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed .composer-bar__ask-input,
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed [data-testid="live-voice-bar-input"],
+  body:has(nav.fixed[aria-label="Primary"]) .composer-bar.is-fixed.fixed input[placeholder="Ask Anything"] {
+    min-width: 0 !important; /* override prior 140px on the input itself */
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
