@@ -8678,3 +8678,464 @@ img[src*="avatar-email"] { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16); filter
     0 0 0 4px rgb(255 255 255 / 0.12),
     0 0 28px rgb(255 255 255 / 0.08) !important;
 }
+
+/* —— Pass-9 / batch2: model picker glass + composer spring + nav rhythm ——
+   CSS-only. B/W shell (purple on .logo-mark only). z: nav48 > model47 > composer46.
+   Model menu blur CAP blur(8px) saturate(1.05) over WebGL. Animate transform/opacity. */
+
+/* 1) Model picker — glass depth over canvas */
+.composer-bar__model-menu,
+.composer-bar__model-wrap > .composer-bar__model-menu,
+.composer-bar.is-fixed .composer-bar__model-menu,
+.model-chip + [role="listbox"],
+.model-chip [role="listbox"],
+.floating-menu.model-menu {
+  position: absolute;
+  z-index: 47 !important;
+  border-radius: 1rem !important;
+  /* 1px gradient border via border + layered fill */
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 42%),
+    linear-gradient(180deg, rgb(18 18 22 / 0.92), rgb(10 10 12 / 0.94)) padding-box,
+    linear-gradient(135deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.08) 40%, rgb(255 255 255 / 0.22)) border-box !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  /* layered shadow + soft inner highlight */
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.35),
+    0 12px 32px rgb(0 0 0 / 0.55),
+    0 28px 64px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 0 24px rgb(255 255 255 / 0.04) !important;
+  /* CAP over WebGL */
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  transform-origin: bottom left !important;
+  animation: pass9b2-menu-in 220ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+html[data-theme="light"] .composer-bar__model-menu,
+html[data-theme="light"] .composer-bar__model-wrap > .composer-bar__model-menu,
+html[data-theme="light"] .floating-menu.model-menu {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.95), rgb(248 250 252 / 0.92)) padding-box,
+    linear-gradient(135deg, rgb(15 23 42 / 0.22), rgb(15 23 42 / 0.06) 45%, rgb(15 23 42 / 0.16)) border-box !important;
+  box-shadow:
+    0 2px 4px rgb(15 23 42 / 0.06),
+    0 14px 36px rgb(15 23 42 / 0.14),
+    0 28px 56px rgb(15 23 42 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.9) !important;
+  color: #0a0d14 !important;
+}
+@keyframes pass9b2-menu-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Active / selected model option — clear highlight */
+.composer-bar__model-option.is-selected,
+.composer-bar__model-option[aria-selected="true"],
+.composer-bar__model-option[aria-checked="true"],
+.model-option-active,
+[role="listbox"] [role="option"][aria-selected="true"],
+[role="menu"] [role="menuitem"][aria-current="true"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.08)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.28),
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 0 20px rgb(255 255 255 / 0.06) !important;
+  color: #fafafa !important;
+  font-weight: 650 !important;
+}
+html[data-theme="light"] .composer-bar__model-option.is-selected,
+html[data-theme="light"] .composer-bar__model-option[aria-selected="true"],
+html[data-theme="light"] .model-option-active {
+  background:
+    linear-gradient(180deg, rgb(15 23 42 / 0.1), rgb(15 23 42 / 0.05)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(15 23 42 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.6) !important;
+  color: #0a0d14 !important;
+}
+.composer-bar__model-option {
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 140ms ease !important;
+}
+.composer-bar__model-option:hover:not(:disabled):not(.is-selected) {
+  background: rgb(255 255 255 / 0.07) !important;
+  transform: translateX(2px);
+}
+
+/* Model chip stays above composer */
+.topbar .model-chip,
+.model-chip,
+.composer-bar.is-fixed .composer-bar__model,
+.composer-bar__model,
+.composer-bar__model-wrap {
+  position: relative;
+  z-index: 47 !important;
+}
+
+/* 2) Composer — spring-like height expand + focus glow (prefer transform/opacity) */
+.composer-dock,
+.floating-composer,
+section.command-card.composer-dock,
+[data-composer="floating"],
+.composer-bar__card,
+.composer-bar.is-fixed .composer-bar__card {
+  transition:
+    max-height 320ms cubic-bezier(0.22, 1.2, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1.2, 0.36, 1),
+    opacity 200ms ease,
+    box-shadow 200ms ease,
+    border-color 200ms ease !important;
+  will-change: transform, opacity;
+}
+.composer-dock:focus-within,
+.floating-composer:focus-within,
+section.command-card.composer-dock:focus-within,
+[data-composer="floating"]:focus-within,
+.composer-dock[data-expanded="true"],
+.floating-composer[data-expanded="true"],
+.composer-bar__card:focus-within {
+  transform: translateY(-2px);
+  border-color: rgb(255 255 255 / 0.28) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.35),
+    0 0 0 4px rgb(255 255 255 / 0.1),
+    0 0 32px rgb(255 255 255 / 0.08),
+    0 22px 56px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.14) !important;
+}
+html[data-theme="light"] .composer-dock:focus-within,
+html[data-theme="light"] .floating-composer:focus-within,
+html[data-theme="light"] section.command-card.composer-dock:focus-within,
+html[data-theme="light"] .composer-bar__card:focus-within {
+  border-color: rgb(15 23 42 / 0.28) !important;
+  box-shadow:
+    0 0 0 1px rgb(15 23 42 / 0.28),
+    0 0 0 4px rgb(15 23 42 / 0.08),
+    0 18px 40px rgb(15 23 42 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.85) !important;
+}
+.composer-dock textarea,
+.floating-composer textarea,
+.composer-bar__ask-input,
+.main-stage textarea.input-glow {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1.2, 0.36, 1),
+    opacity 180ms ease !important;
+}
+.composer-dock:focus-within textarea,
+.floating-composer:focus-within textarea,
+.composer-bar__ask-input:focus-visible {
+  outline: none !important;
+}
+/* Growing composer: expand via max-height spring when focused / expanded */
+@media (min-width: 768px) {
+  .composer-dock:not(:focus-within):not([data-expanded="true"]),
+  .floating-composer:not(:focus-within):not([data-expanded="true"]),
+  section.command-card.composer-dock:not(:focus-within):not([data-expanded="true"]) {
+    /* keep prior collapsed ceilings; spring handled on focus path */
+  }
+  .composer-dock:focus-within,
+  .floating-composer:focus-within,
+  section.command-card.composer-dock:focus-within,
+  .composer-dock[data-expanded="true"],
+  .floating-composer[data-expanded="true"] {
+    max-height: min(58vh, 28rem) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-dock,
+  .floating-composer,
+  section.command-card.composer-dock,
+  [data-composer="floating"],
+  .composer-bar__card,
+  .composer-bar__model-menu,
+  .composer-bar__model-option {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* 3) Nav rhythm — 4/8px scale, icon→label gaps, tonal rail/stage, bright active */
+aside.rail,
+.rail,
+aside.rail.fixed {
+  /* clearer tonal separation from stage */
+  background:
+    linear-gradient(180deg, rgb(12 14 18 / 0.98), rgb(6 8 12 / 0.99)),
+    rgb(8 8 10) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.1) !important;
+  box-shadow:
+    inset -1px 0 0 rgb(255 255 255 / 0.04),
+    8px 0 28px rgb(0 0 0 / 0.4) !important;
+}
+.shell > .main-stage,
+.main-stage {
+  /* slight lift vs rail */
+  background:
+    linear-gradient(180deg, rgb(14 16 22 / 0.45), transparent 32%),
+    transparent !important;
+  box-shadow: inset 8px 0 24px rgb(0 0 0 / 0.18);
+}
+aside.rail nav,
+.rail nav,
+aside.rail > nav {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important; /* 8px scale */
+  padding: 8px !important;
+}
+aside.rail nav button,
+aside.rail nav a,
+.rail nav button,
+aside nav button.nav-item,
+.nav-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important; /* icon-to-label */
+  padding: 8px 12px !important; /* 4/8 rhythm */
+  min-height: 44px !important;
+  border-radius: 12px !important;
+  margin: 0 !important;
+}
+aside.rail nav button svg,
+aside.rail nav a svg,
+.nav-item svg {
+  flex: 0 0 auto;
+  width: 1.125rem !important;
+  height: 1.125rem !important;
+}
+/* Brighter active tile + inner glow (mono, not purple) */
+aside.rail nav button[aria-current="page"],
+aside.rail nav a[aria-current="page"],
+aside.rail nav button.bg-accent,
+aside.rail nav button.nav-item-active,
+aside nav button.tile-active,
+.nav-item-active,
+aside.rail nav button[class*="124_92_255"] {
+  background:
+    linear-gradient(180deg, #f8fafc, #e4e4e7) !important;
+  color: #09090b !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.85),
+    inset 0 0 20px rgb(255 255 255 / 0.35),
+    inset 0 0 0 1px rgb(255 255 255 / 0.4),
+    0 0 24px rgb(255 255 255 / 0.12),
+    0 8px 20px rgb(0 0 0 / 0.35) !important;
+  filter: none !important;
+}
+aside.rail nav button[aria-current="page"] *,
+aside.rail nav button[aria-current="page"] svg,
+aside.rail nav button[aria-current="page"] svg *,
+aside.rail nav button.bg-accent *,
+aside.rail nav button.bg-accent svg * {
+  color: #09090b !important;
+  stroke: #09090b !important;
+  fill: #09090b !important;
+}
+html[data-theme="light"] aside.rail,
+html[data-theme="light"] .rail {
+  background:
+    linear-gradient(180deg, #fafafa, #f4f4f5),
+    #f4f4f5 !important;
+  border-right: 1px solid rgb(15 23 42 / 0.1) !important;
+  box-shadow: inset -1px 0 0 rgb(15 23 42 / 0.04), 8px 0 24px rgb(15 23 42 / 0.06) !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"],
+html[data-theme="light"] aside.rail nav button.bg-accent,
+html[data-theme="light"] .nav-item-active {
+  background: linear-gradient(180deg, #18181b, #09090b) !important;
+  color: #fafafa !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 0 18px rgb(255 255 255 / 0.06),
+    0 0 20px rgb(0 0 0 / 0.12),
+    0 8px 18px rgb(0 0 0 / 0.1) !important;
+}
+html[data-theme="light"] aside.rail nav button[aria-current="page"] *,
+html[data-theme="light"] aside.rail nav button.bg-accent * {
+  color: #fafafa !important;
+  stroke: #fafafa !important;
+  fill: #fafafa !important;
+}
+
+/* Bottom primary nav — even 4/8 rhythm */
+nav.fixed[aria-label="Primary"],
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+  z-index: 48 !important;
+  gap: 4px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+nav.fixed[aria-label="Primary"] > button,
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button {
+  gap: 4px !important;
+  padding: 8px 4px !important;
+  min-height: 44px !important;
+  border-radius: 12px !important;
+}
+nav.fixed[aria-label="Primary"] > button[aria-current="page"],
+nav.fixed[aria-label="Primary"] > button.text-accent,
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] > button[aria-current="page"] {
+  background: rgb(255 255 255 / 0.12) !important;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.22),
+    inset 0 0 16px rgb(255 255 255 / 0.08) !important;
+  color: #fafafa !important;
+}
+
+/* z-order reassert */
+nav.fixed[aria-label="Primary"],
+nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] {
+  z-index: 48 !important;
+}
+.composer-bar.is-fixed,
+.shell > .composer-bar.is-fixed,
+.shell > [data-testid="composer-bar"].composer-bar {
+  z-index: 46 !important;
+}
+
+/* Logo purple only — reassert after mono rail rules */
+.logo-mark,
+.logo-badge,
+aside span.grid.size-11.rounded-2xl.logo-mark {
+  color: #fff !important;
+  background: #7c5cff !important;
+  box-shadow: 0 0 22px rgb(124 92 255 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
+
+/* —— Pass-9 / batch2b: ModelTierChip floating menu (topbar Auto) ——
+   Markup: button.model-chip ~ [role=menu].absolute (no composer-bar__model-menu class).
+   Glass CAP blur(8px) saturate(1.05); z47; mono active. */
+button.model-chip ~ [role="menu"],
+.relative:has(> .model-chip) > [role="menu"],
+div.relative > [role="menu"].absolute.right-0 {
+  z-index: 47 !important;
+  border-radius: 1rem !important;
+  border: 1px solid transparent !important;
+  padding: 0.5rem !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 40%),
+    linear-gradient(180deg, rgb(16 16 20 / 0.92), rgb(10 10 12 / 0.95)) padding-box,
+    linear-gradient(145deg, rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.08) 42%, rgb(255 255 255 / 0.24)) border-box !important;
+  background-origin: border-box !important;
+  background-clip: padding-box, padding-box, border-box !important;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.4),
+    0 14px 36px rgb(0 0 0 / 0.55),
+    0 32px 72px rgb(0 0 0 / 0.42),
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    inset 0 0 28px rgb(255 255 255 / 0.045) !important;
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+  transform-origin: top right !important;
+  animation: pass9b2-menu-in 220ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  color: #f4f4f5 !important;
+}
+html[data-theme="light"] button.model-chip ~ [role="menu"],
+html[data-theme="light"] .relative:has(> .model-chip) > [role="menu"] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.98), rgb(248 250 252 / 0.94)) padding-box,
+    linear-gradient(145deg, rgb(15 23 42 / 0.2), rgb(15 23 42 / 0.06) 45%, rgb(15 23 42 / 0.14)) border-box !important;
+  box-shadow:
+    0 2px 4px rgb(15 23 42 / 0.06),
+    0 16px 40px rgb(15 23 42 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.92) !important;
+  color: #0a0d14 !important;
+}
+
+/* Active tier in ModelTierChip — bright mono, not purple accent */
+button.model-chip ~ [role="menu"] [role="menuitemradio"][aria-checked="true"],
+.relative:has(> .model-chip) > [role="menu"] [role="menuitemradio"][aria-checked="true"],
+button.model-chip ~ [role="menu"] button.bg-accent,
+button.model-chip ~ [role="menu"] .bg-accent {
+  background:
+    linear-gradient(180deg, #f8fafc, #e4e4e7) !important;
+  color: #09090b !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.85),
+    inset 0 0 0 1px rgb(255 255 255 / 0.35),
+    inset 0 0 18px rgb(255 255 255 / 0.2) !important;
+  font-weight: 650 !important;
+}
+html[data-theme="light"] button.model-chip ~ [role="menu"] [role="menuitemradio"][aria-checked="true"],
+html[data-theme="light"] button.model-chip ~ [role="menu"] .bg-accent {
+  background: linear-gradient(180deg, #18181b, #09090b) !important;
+  color: #fafafa !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 0 0 1px rgb(255 255 255 / 0.08) !important;
+}
+button.model-chip ~ [role="menu"] [role="menuitemradio"]:not([aria-checked="true"]):hover {
+  background: rgb(255 255 255 / 0.08) !important;
+  color: #fafafa !important;
+}
+button.model-chip ~ [role="menu"] [role="menuitemradio"] {
+  border-radius: 0.75rem !important;
+  min-height: 2.75rem !important;
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease !important;
+}
+button.model-chip ~ [role="menu"] > p.text-muted,
+button.model-chip ~ [role="menu"] .text-muted {
+  color: rgb(228 228 231 / 0.72) !important; /* ~secondary contrast */
+}
+
+/* model-chip itself above composer */
+.model-chip,
+button.model-chip {
+  z-index: 47 !important;
+  position: relative;
+}
+
+/* —— Pass-9 / batch2c: beat .main-stage .rounded-panel… blur(28) specificity —— */
+button.model-chip ~ [role="menu"].absolute.rounded-panel.border.border-line.bg-surface,
+button.model-chip ~ [role="menu"].absolute.right-0.z-40.mt-2.w-56.rounded-panel.border.border-line.bg-surface.shadow-lg,
+.relative:has(> button.model-chip) > [role="menu"].rounded-panel.border.border-line.bg-surface,
+.topbar .relative > [role="menu"].rounded-panel.border.border-line.bg-surface,
+.shell .topbar [role="menu"].rounded-panel.border.border-line.bg-surface {
+  z-index: 47 !important;
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 40%),
+    linear-gradient(180deg, rgb(16 16 20 / 0.92), rgb(10 10 12 / 0.95)) padding-box,
+    linear-gradient(145deg, rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.08) 42%, rgb(255 255 255 / 0.24)) border-box !important;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 40%),
+    linear-gradient(180deg, rgb(16 16 20 / 0.92), rgb(10 10 12 / 0.95)) !important;
+  background-color: rgb(12 12 14 / 0.88) !important;
+  background-blend-mode: normal !important;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.4),
+    0 14px 36px rgb(0 0 0 / 0.55),
+    0 32px 72px rgb(0 0 0 / 0.42),
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    inset 0 0 28px rgb(255 255 255 / 0.045) !important;
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+}
+/* Also CAP composer-bar model menu against glass recipe */
+.composer-bar__model-menu.composer-bar__model-menu,
+ul.composer-bar__model-menu,
+.composer-bar .composer-bar__model-menu {
+  backdrop-filter: blur(8px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
+}
+
+/* —— Pass-9 / batch2d: active model option fill must beat bg-accent utilities —— */
+button.model-chip ~ [role="menu"] [role="menuitemradio"][aria-checked="true"].bg-accent,
+button.model-chip ~ [role="menu"] [role="menuitemradio"][aria-checked="true"].text-accent-ink,
+button.model-chip ~ [role="menu"] button[role="menuitemradio"][aria-checked="true"],
+.relative:has(> button.model-chip) > [role="menu"] [aria-checked="true"] {
+  background-color: #e8ecf5 !important;
+  background-image: linear-gradient(180deg, #f8fafc, #e4e4e7) !important;
+  color: #09090b !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    inset 0 0 0 1px rgb(255 255 255 / 0.4),
+    inset 0 0 22px rgb(255 255 255 / 0.28),
+    0 0 18px rgb(255 255 255 / 0.1) !important;
+}
