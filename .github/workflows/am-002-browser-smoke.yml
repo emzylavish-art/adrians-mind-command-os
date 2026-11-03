@@ -12,6 +12,11 @@ on:
       - "scripts/browser-smoke-verdict.test.mjs"
       - "scripts/browser-smoke-verdict.mjs"
       - "scripts/browser-interactions.mjs"
+      - "src/routes/login.tsx"
+      - "src/lib/auth/**"
+      - "src/lib/supabase/first-party-oauth.ts"
+      - "src/lib/supabase/first-party-authorize-url.ts"
+      - "src/lib/supabase/oauth-redirect.ts"
   workflow_dispatch:
 
 permissions:
@@ -91,6 +96,9 @@ jobs:
 
       - name: Check TypeScript without modifying app
         run: npm run typecheck
+
+      - name: Verify production build (no deploy)
+        run: npm run build
 
       - name: Upload read-only browser evidence
         if: always()
