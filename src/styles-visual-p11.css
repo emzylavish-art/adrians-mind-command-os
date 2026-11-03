@@ -321,11 +321,19 @@
   border-color: transparent !important;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 0 14px rgb(255 255 255 / 0.06);
 }
-.agents-grok-header__compose svg,
-.bots-shell-header .agents-grok-header__compose svg {
+/* Beat .main-stage svg:not(.logo-mark svg) { color/stroke !important } (0,2,2) */
+.main-stage .agents-grok-header__compose svg,
+.main-stage .bots-shell-header .agents-grok-header__compose svg,
+.agents-page .agents-grok-header__compose svg,
+.bots-shell-page .agents-grok-header__compose svg {
   color: #0a0a0b !important;
   stroke: #0a0a0b !important;
-  fill: none;
+  fill: none !important;
+}
+.main-stage .agents-grok-header__compose svg path,
+.main-stage .bots-shell-header .agents-grok-header__compose svg path {
+  stroke: #0a0a0b !important;
+  color: #0a0a0b !important;
 }
 .agents-grok-header__compose:hover:not([aria-disabled="true"]):not(:disabled) {
   filter: brightness(1.04);
