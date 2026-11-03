@@ -1,5 +1,5 @@
 import { orderedEnabledAccounts, loadStorageAccountsConfig } from "./config.ts";
-import { resolveStorageAccessTokenAsync, isStorageAccountConnected } from "./credentials.ts";
+import { resolveStorageAccessTokenForAccount } from "./lanes.ts";
 import { appendStorageAudit } from "./audit.ts";
 import { bumpLedgerUsed, readLedgerUsed, setLedgerUsed } from "./ledger.ts";
 import { createDefaultProviders } from "./providers/index.ts";
@@ -84,7 +84,11 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
   let anyConnected = false;
 
   for (const account of accounts) {
-    const tokenResult = await resolveStorageAccessTokenAsync(input.ownerId, account.service, { env, fetch: deps.fetch, nowMs: deps.nowMs });
+    const tokenResult = await resolveStorageAccessTokenForAccount(input.ownerId, account, {
+      env,
+      fetch: deps.fetch,
+      nowMs: deps.nowMs,
+    });
     if (!tokenResult.ok) {
       continue;
     }
@@ -200,7 +204,11 @@ export async function storageStatusForOwner(
   const out: AccountPublicStatus[] = [];
 
   for (const account of accounts) {
-    const tokenResult = await resolveStorageAccessTokenAsync(ownerId, account.service, { env, fetch: deps.fetch, nowMs: deps.nowMs });
+    const tokenResult = await resolveStorageAccessTokenForAccount(ownerId, account, {
+      env,
+      fetch: deps.fetch,
+      nowMs: deps.nowMs,
+    });
     const connected = tokenResult.ok;
     let used = readLedgerUsed(account.service, account.accountEmail, deps.ledgerPath);
     let quotaSource: StorageQuota["source"] = "ledger";
@@ -235,7 +243,9 @@ export async function storageStatusForOwner(
       accountEmail: account.accountEmail,
       enabled: account.enabled,
       order: account.order,
-      connected: isStorageAccountConnected(ownerId, account.service, env) && connected,
+      connected,
+      laneId: account.laneId,
+      credentialOwnerId: account.credentialOwnerId,
       detail,
       usedBytes: used,
       capBytes: account.capBytes,

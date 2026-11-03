@@ -4,23 +4,52 @@
   "accounts": [
     {
       "service": "google_drive",
-      "accountEmail": "drive-placeholder@example.com",
+      "accountEmail": "emzylavish@gmail.com",
       "capBytes": 16106127360,
       "order": 1,
-      "enabled": true
+      "enabled": true,
+      "laneId": "gdrive-emzylavish",
+      "credentialOwnerId": "emzylavish@gmail.com"
+    },
+    {
+      "service": "google_drive",
+      "accountEmail": "emmanuelohilebo4@gmail.com",
+      "capBytes": 16106127360,
+      "order": 2,
+      "enabled": true,
+      "laneId": "gdrive-emmanuelohilebo4",
+      "credentialOwnerId": "emmanuelohilebo4@gmail.com"
     },
     {
       "service": "dropbox",
       "accountEmail": "dropbox-placeholder@example.com",
       "capBytes": 2147483648,
-      "order": 2,
+      "order": 3,
       "enabled": true
     },
     {
       "service": "onedrive",
-      "accountEmail": "onedrive-placeholder@example.com",
+      "accountEmail": "emzylavish@gmail.com",
       "capBytes": 5368709120,
-      "order": 3,
+      "order": 4,
+      "enabled": true,
+      "laneId": "onedrive-emzylavish",
+      "credentialOwnerId": "emzylavish@gmail.com"
+    },
+    {
+      "service": "onedrive",
+      "accountEmail": "emmanuelohilebo4@gmail.com",
+      "capBytes": 5368709120,
+      "order": 5,
+      "enabled": true,
+      "laneId": "onedrive-emmanuelohilebo4",
+      "credentialOwnerId": "emmanuelohilebo4@gmail.com"
+    },
+    {
+      "service": "pcloud",
+      "accountEmail": "pcloud-placeholder@example.com",
+      "capBytes": 10737418240,
+      "order": 6,
       "enabled": true
     }
   ]

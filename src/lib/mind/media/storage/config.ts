@@ -74,7 +74,33 @@ function normalizeAccount(raw: unknown, index: number): StorageAccountConfig | n
   const order =
     typeof row.order === "number" && Number.isFinite(row.order) ? Math.floor(row.order) : index + 1;
   const enabled = row.enabled !== false;
-  return { service: row.service, accountEmail: email, capBytes: cap, order, enabled };
+  let laneId: string | undefined;
+  if (typeof row.laneId === "string" && row.laneId.trim()) {
+    const raw = row.laneId.trim();
+    // Soft path-safe check (full assert lives in lanes.ts — avoid circular import).
+    if (
+      raw.length <= 64 &&
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(raw) &&
+      !raw.includes("..") &&
+      !raw.includes("/") &&
+      !raw.includes("\\")
+    ) {
+      laneId = raw;
+    }
+  }
+  const credentialOwnerId =
+    typeof row.credentialOwnerId === "string" && row.credentialOwnerId.trim()
+      ? row.credentialOwnerId.trim()
+      : undefined;
+  return {
+    service: row.service,
+    accountEmail: email,
+    capBytes: cap,
+    order,
+    enabled,
+    ...(laneId ? { laneId } : {}),
+    ...(credentialOwnerId ? { credentialOwnerId } : {}),
+  };
 }
 
 export function loadStorageAccountsConfig(path = configPath): StorageAccountsFile {

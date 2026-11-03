@@ -6,6 +6,7 @@
 export * from "./types.ts";
 export * from "./config.ts";
 export * from "./credentials.ts";
+export * from "./lanes.ts";
 export * from "./ledger.ts";
 export * from "./audit.ts";
 export * from "./safe-name.ts";

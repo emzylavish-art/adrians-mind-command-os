@@ -12,6 +12,17 @@ export type StorageAccountConfig = {
   /** Lower order uploads first (1 = Drive default). */
   order: number;
   enabled: boolean;
+  /**
+   * Optional Media Storage Fleet lane id (e.g. gdrive-emmanuelohilebo4).
+   * When set, credentials resolve for this lane only (lane-scoped env + credentialOwnerId).
+   */
+  laneId?: string;
+  /**
+   * Owner id whose encrypted StoredConnection holds tokens for this account.
+   * Defaults to the signed-in owner. Use when the storage Google/Microsoft account
+   * differs from the app session owner (multi-lane).
+   */
+  credentialOwnerId?: string;
 };
 
 export type StorageAccountsFile = {
@@ -95,6 +106,8 @@ export type AccountPublicStatus = {
   remainingBytes: number;
   nearCap: boolean;
   quotaSource: StorageQuota["source"];
+  laneId?: string;
+  credentialOwnerId?: string;
 };
 
 /** Default free-tier caps (bytes). */
