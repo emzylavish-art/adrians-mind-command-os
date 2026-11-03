@@ -1,7 +1,8 @@
 /**
  * Voice Cloning Studio — separate from Whisper Flow / dictation.
  * Playback reuses SharedAudioOutput (existing speaker path).
- * Scoped utility classes only — does not edit src/styles.css.
+ * Presentational classNames only; glass/contrast skin lives in styles.css
+ * under [data-testid="voice-cloning-studio"] (visual polish lane).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -332,7 +333,7 @@ export function VoiceCloningStudioPage() {
         </p>
 
         <section
-          className="mt-4 rounded-panel border border-line bg-surface-2/40 p-4"
+          className="mt-4 rounded-panel border border-line bg-surface-2/40 p-4 glass-panel"
           data-testid="vcs-provider-banner"
           data-can-clone={status?.canClone ? "true" : "false"}
         >
@@ -341,9 +342,9 @@ export function VoiceCloningStudioPage() {
             {status?.banner || "Checking provider…"}
           </p>
           {!status?.canClone ? (
-            <p className="mt-2 text-xs uppercase tracking-wide text-amber-400/90">Provider not configured</p>
+            <p className="vcs-badge" data-tone="warn">Provider not configured</p>
           ) : (
-            <p className="mt-2 text-xs uppercase tracking-wide text-emerald-400/90">Cloning available</p>
+            <p className="vcs-badge" data-tone="ready">Cloning available</p>
           )}
         </section>
 
@@ -357,7 +358,7 @@ export function VoiceCloningStudioPage() {
           </div>
         ) : null}
 
-        <section className="mt-6 space-y-4 rounded-panel border border-line p-4" data-testid="vcs-create">
+        <section className="mt-6 space-y-4 rounded-panel border border-line p-4 glass-panel" data-testid="vcs-create">
           <h2 className="text-base font-semibold">Create voice profile</h2>
           <label className="block text-sm">
             Profile name
@@ -395,8 +396,8 @@ export function VoiceCloningStudioPage() {
             </label>
           </fieldset>
 
-          <div className="rounded-panel border border-line/70 bg-bg/50 p-3 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="vcs-subpanel rounded-panel border border-line/70 bg-bg/50 p-3 text-sm">
+            <div className="vcs-actions flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 className="inline-flex min-h-11 items-center rounded-panel border border-line px-3"
@@ -419,7 +420,7 @@ export function VoiceCloningStudioPage() {
             ) : (
               <p className="mt-2 text-muted">A random confirmation code is required before any sample is used.</p>
             )}
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="vcs-actions mt-3 flex flex-wrap gap-2">
               {recordingTarget === "consent" ? (
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={stopRecording} data-testid="vcs-stop-consent-rec">
                   Stop consent recording
@@ -439,9 +440,9 @@ export function VoiceCloningStudioPage() {
             </div>
           </div>
 
-          <div className="rounded-panel border border-line/70 bg-bg/50 p-3 text-sm">
+          <div className="vcs-subpanel rounded-panel border border-line/70 bg-bg/50 p-3 text-sm">
             <p className="font-medium">Voice sample (browser record or upload)</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="vcs-actions mt-2 flex flex-wrap gap-2">
               {recordingTarget === "sample" ? (
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={stopRecording} data-testid="vcs-stop-sample-rec">
                   Stop sample recording
@@ -463,7 +464,7 @@ export function VoiceCloningStudioPage() {
 
           <button
             type="button"
-            className="inline-flex min-h-11 items-center rounded-2xl bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50"
+            className="mt-2 inline-flex min-h-11 items-center rounded-2xl bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50"
             disabled={busy}
             onClick={() => void createProfile()}
             data-testid="vcs-create-submit"
@@ -472,7 +473,7 @@ export function VoiceCloningStudioPage() {
           </button>
         </section>
 
-        <section className="mt-6 space-y-3 rounded-panel border border-line p-4" data-testid="vcs-profiles">
+        <section className="mt-6 space-y-3 rounded-panel border border-line p-4 glass-panel" data-testid="vcs-profiles">
           <h2 className="text-base font-semibold">Your profiles</h2>
           {profiles.length === 0 ? (
             <p className="text-sm text-muted">No voice profiles yet.</p>
@@ -483,7 +484,7 @@ export function VoiceCloningStudioPage() {
                   <button
                     type="button"
                     className={`flex w-full min-h-11 items-center justify-between rounded-panel border px-3 text-left text-sm ${
-                      selectedId === p.id ? "border-accent bg-accent/10" : "border-line"
+                      selectedId === p.id ? "vcs-profile-active border-accent bg-accent/10" : "border-line"
                     }`}
                     onClick={() => setSelectedId(p.id)}
                     data-testid={`vcs-profile-${p.id}`}
@@ -501,7 +502,7 @@ export function VoiceCloningStudioPage() {
         </section>
 
         {selected ? (
-          <section className="mt-6 space-y-3 rounded-panel border border-line p-4" data-testid="vcs-generate">
+          <section className="mt-6 space-y-3 rounded-panel border border-line p-4 glass-panel" data-testid="vcs-generate">
             <h2 className="text-base font-semibold">Generate / preview / export</h2>
             <p className="text-xs text-muted">
               Uses the existing xAI TTS endpoint and SharedAudioOutput speaker path. Generate requires a provider-side cloned voice.
@@ -513,7 +514,7 @@ export function VoiceCloningStudioPage() {
               onChange={(e) => setGenerateText(e.target.value)}
               data-testid="vcs-generate-text"
             />
-            <div className="flex flex-wrap gap-2">
+            <div className="vcs-actions flex flex-wrap gap-2">
               <button
                 type="button"
                 className="min-h-11 rounded-2xl bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50"
