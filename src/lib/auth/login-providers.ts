@@ -112,14 +112,61 @@ export function emailPasswordGate(supabaseConfigured: boolean): {
 }
 
 /**
- * Red danger banner must never appear from a URL query alone (stale links,
- * session restore, or a bounce that left ?error=). Only in-page failed attempts
- * set the danger banner.
+ * Allowlisted /login?error= codes → app-owned copy.
+ * Callbacks set a short code (never free-form attacker text). Unknown / spoofed
+ * query values map to a generic message so raw query text is never rendered.
+ */
+export const LOGIN_ERROR_COPY = {
+  oauth_denied: "Sign-in was cancelled. You can try again when you’re ready.",
+  oauth_state: "That sign-in link expired. Start again from this page.",
+  oauth_config: "Sign-in isn’t configured yet. Ask the owner to finish setup.",
+  oauth_exchange: "Could not complete provider sign-in. Try again.",
+  missing_code: "Sign-in didn’t finish (missing authorization). Start again.",
+  provider_failed: "Could not complete provider sign-in. Try again.",
+  signin_failed: "Sign-in failed. Check your details and try again.",
+} as const;
+
+export type LoginErrorCode = keyof typeof LOGIN_ERROR_COPY;
+
+const LOGIN_ERROR_CODE_SET = new Set<string>(Object.keys(LOGIN_ERROR_COPY));
+
+/** Map a provider / server failure into a stable ?error= code. */
+export function toLoginErrorCode(raw: string | undefined | null): LoginErrorCode {
+  const msg = String(raw ?? "").trim().toLowerCase();
+  if (!msg) return "signin_failed";
+  if (LOGIN_ERROR_CODE_SET.has(msg)) return msg as LoginErrorCode;
+  if (
+    /access_denied|user_cancelled|user_canceled|consent_required|cancelled|canceled/.test(
+      msg,
+    )
+  ) {
+    return "oauth_denied";
+  }
+  if (/state|expired|mismatch|invalid/.test(msg) && /oauth|state|sign-?in/.test(msg)) {
+    return "oauth_state";
+  }
+  if (/not configured|configured yet|missing.*secret|missing.*client/.test(msg)) {
+    return "oauth_config";
+  }
+  if (/missing authorization code|missing.*code/.test(msg)) {
+    return "missing_code";
+  }
+  if (/token|exchange|provider|google|github|could not complete/.test(msg)) {
+    return "oauth_exchange";
+  }
+  return "signin_failed";
+}
+
+/**
+ * Seed the red banner from ?error= only via allowlisted codes / mapped copy.
+ * Never renders raw query text (content-spoofing defense).
  */
 export function loginErrorBannerFromSearch(
-  _error: string | undefined,
+  error: string | undefined,
 ): string | null {
-  return null;
+  if (!error?.trim()) return null;
+  const code = toLoginErrorCode(error);
+  return LOGIN_ERROR_COPY[code];
 }
 
 /** /dashboard → /login search params. Never append error. */

@@ -9139,3 +9139,50 @@ button.model-chip ~ [role="menu"] button[role="menuitemradio"][aria-checked="tru
     inset 0 0 22px rgb(255 255 255 / 0.28),
     0 0 18px rgb(255 255 255 / 0.1) !important;
 }
+
+/* —— fix/login-ui: beat global .font-semibold → --text-primary white-on-white ——
+   Active Sign in / Sign up tab used bg-fg + text-bg + font-semibold; the c122
+   rule html:not([data-theme="light"]) .font-semibold { color: var(--text-primary) }
+   overrode text-bg, so the pill was a blank white rectangle on phone. */
+html:not([data-theme="light"]) main.grid.min-h-screen.place-items-center [role="tab"][aria-selected="true"],
+html:not([data-theme="light"]) main.grid.min-h-screen.place-items-center [role="tab"][aria-selected="true"].font-semibold,
+main.grid.min-h-screen.place-items-center [role="tab"][aria-selected="true"],
+main.grid.min-h-screen.place-items-center button.login-mode-tab--active {
+  background-color: #f4f4f5 !important;
+  background-image: none !important;
+  color: #0a0a0b !important;
+}
+html[data-theme="light"] main.grid.min-h-screen.place-items-center [role="tab"][aria-selected="true"],
+html[data-theme="light"] main.grid.min-h-screen.place-items-center button.login-mode-tab--active {
+  background-color: #0a0a0b !important;
+  color: #f4f4f5 !important;
+}
+/* Inactive mode tabs stay muted (do not inherit primary from siblings) */
+main.grid.min-h-screen.place-items-center [role="tab"][aria-selected="false"] {
+  background-color: transparent !important;
+  color: #a1a1aa !important;
+}
+/* Submit + OAuth pills: keep ink/fg readable under the same .font-semibold sweep */
+html:not([data-theme="light"]) main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"].font-semibold,
+html:not([data-theme="light"]) main.grid.min-h-screen.place-items-center [data-testid="login-password-submit"] {
+  background-color: #e8ecf5 !important;
+  color: #0a0d14 !important;
+}
+html:not([data-theme="light"]) main.grid.min-h-screen.place-items-center [data-testid^="login-oauth-"].font-semibold {
+  color: #f4f4f5 !important;
+}
+/* Phone: login card scrolls; nothing trapped under browser chrome / home indicator */
+main.grid.min-h-screen.place-items-center.login-page-shell {
+  min-height: 100dvh !important;
+  align-items: start !important;
+  justify-items: center !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  padding-top: max(2.5rem, env(safe-area-inset-top, 0px)) !important;
+  padding-bottom: max(2.5rem, env(safe-area-inset-bottom, 0px)) !important;
+}
+@media (min-width: 640px) {
+  main.grid.min-h-screen.place-items-center.login-page-shell {
+    align-items: center !important;
+  }
+}

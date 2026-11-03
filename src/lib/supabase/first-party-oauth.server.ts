@@ -17,6 +17,7 @@ import {
   oauthStateCookieName,
   type FirstPartyOAuthProvider,
 } from "./first-party-oauth";
+import { toLoginErrorCode } from "@/lib/auth/login-providers";
 import { safeRedirectPath } from "./safe-redirect";
 import { createSupabaseServerClient, readSupabaseEnv } from "./server";
 
@@ -129,7 +130,8 @@ function loginErrorRedirect(
   clearStateCookie();
   const target = new URL("/login", origin);
   target.searchParams.set("next", safeRedirectPath(next));
-  target.searchParams.set("error", message.slice(0, 240));
+  // Allowlisted code only — /login maps it to app-owned copy (no raw query text).
+  target.searchParams.set("error", toLoginErrorCode(message));
   return oauthCallbackRedirect(target.toString());
 }
 

@@ -7,7 +7,9 @@ import {
   formatLoginThrownError,
   isOwnerBrokerConfigured,
   loginErrorBannerFromSearch,
+  LOGIN_ERROR_COPY,
   parseSupabaseOAuthProviders,
+  toLoginErrorCode,
   resolveEmailPasswordBackend,
   resolveLoginProviderAction,
   serverFnRedirectHref,
@@ -80,10 +82,48 @@ describe("emailPasswordGate", () => {
 });
 
 describe("loginErrorBannerFromSearch", () => {
-  it("never seeds a red banner from an error query param alone", () => {
+  it("returns null when error is absent", () => {
     assert.equal(loginErrorBannerFromSearch(undefined), null);
-    assert.equal(loginErrorBannerFromSearch("Sign-in failed"), null);
-    assert.equal(loginErrorBannerFromSearch("anything"), null);
+    assert.equal(loginErrorBannerFromSearch(""), null);
+  });
+
+  it("maps allowlisted codes to app-owned copy", () => {
+    assert.equal(
+      loginErrorBannerFromSearch("oauth_denied"),
+      LOGIN_ERROR_COPY.oauth_denied,
+    );
+    assert.equal(
+      loginErrorBannerFromSearch("oauth_state"),
+      LOGIN_ERROR_COPY.oauth_state,
+    );
+    assert.equal(
+      loginErrorBannerFromSearch("missing_code"),
+      LOGIN_ERROR_COPY.missing_code,
+    );
+  });
+
+  it("never renders raw / spoofed query text", () => {
+    const spoof = "Your account is compromised — send bitcoin to 1Evil";
+    const banner = loginErrorBannerFromSearch(spoof);
+    assert.equal(banner, LOGIN_ERROR_COPY.signin_failed);
+    assert.equal(banner?.includes("bitcoin"), false);
+    assert.equal(banner?.includes("1Evil"), false);
+  });
+});
+
+describe("toLoginErrorCode", () => {
+  it("keeps known codes and maps provider failures", () => {
+    assert.equal(toLoginErrorCode("oauth_denied"), "oauth_denied");
+    assert.equal(toLoginErrorCode("access_denied"), "oauth_denied");
+    assert.equal(toLoginErrorCode("Missing authorization code."), "missing_code");
+    assert.equal(
+      toLoginErrorCode("OAuth state mismatch. Start sign-in again."),
+      "oauth_state",
+    );
+    assert.equal(
+      toLoginErrorCode("Google sign-in isn’t configured yet (needs GOOGLE_OAUTH_CLIENT_ID)."),
+      "oauth_config",
+    );
   });
 });
 

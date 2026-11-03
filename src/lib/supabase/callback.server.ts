@@ -1,6 +1,7 @@
 /**
  * OAuth PKCE callback — exchange code server-side, set HttpOnly cookies, redirect.
  */
+import { toLoginErrorCode } from "@/lib/auth/login-providers";
 import { safeRedirectPath } from "./safe-redirect";
 import { oauthCallbackRedirect } from "./oauth-callback-response";
 
@@ -18,7 +19,7 @@ export async function handleAuthCallback(request: Request): Promise<Response> {
   const loginError = (message: string) => {
     const target = new URL("/login", url.origin);
     target.searchParams.set("next", next);
-    target.searchParams.set("error", message.slice(0, 240));
+    target.searchParams.set("error", toLoginErrorCode(message));
     return oauthCallbackRedirect(target.toString());
   };
 

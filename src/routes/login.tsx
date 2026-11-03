@@ -147,37 +147,16 @@ function GitHubIcon() {
   );
 }
 
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M16.365 1.43c0 1.14-.47 2.2-1.23 2.98-.8.83-2.12 1.47-3.25 1.38-.14-1.1.43-2.27 1.17-3.05.8-.85 2.2-1.47 3.31-1.31zM20.8 17.36c-.55 1.26-.82 1.82-1.53 2.94-1 1.52-2.4 3.41-4.15 3.43-1.55.02-1.95-1.01-4.06-1-2.1.01-2.55 1.02-4.1 1-1.74-.03-3.08-1.72-4.08-3.24C1.04 17.3.1 13.1 1.96 10.3c.93-1.4 2.4-2.28 3.8-2.28 1.5 0 2.45.99 3.69.99 1.2 0 1.93-1 3.72-1 1.27 0 2.61.69 3.54 1.88-3.11 1.7-2.6 6.14.09 7.47z"
-      />
-    </svg>
-  );
-}
 
-function XIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
-      />
-    </svg>
-  );
-}
 
+/** Only email + Google + GitHub are offered. Unconfigured providers are hidden, not listed disabled. */
 const oauthButtons: {
-  id: LoginProviderId;
+  id: Extract<LoginProviderId, "google" | "github">;
   label: string;
   icon: () => ReactNode;
 }[] = [
   { id: "google", label: "Continue with Google", icon: GoogleIcon },
   { id: "github", label: "Continue with GitHub", icon: GitHubIcon },
-  { id: "apple", label: "Continue with Apple", icon: AppleIcon },
-  { id: "x", label: "Continue with X", icon: XIcon },
 ];
 
 function Login() {
@@ -192,7 +171,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Never seed the red banner from ?error= (stale restore / bounce). Only in-page failures.
+  // Seed from allowlisted ?error= codes (callbacks); never raw query text.
   const [banner, setBanner] = useState<string | null>(
     () => loginErrorBannerFromSearch(search.error),
   );
@@ -319,7 +298,7 @@ function Login() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-bg px-4 py-10 text-fg sm:px-6">
+    <main className="login-page-shell grid min-h-screen place-items-center bg-bg px-4 py-10 text-fg sm:px-6">
       <AuthCard>
         <AuthBrand
           title={mode === "sign-in" ? "Sign in" : "Create account"}
@@ -334,8 +313,8 @@ function Login() {
           >
             <p className="font-medium text-fg">Supabase email sign-in isn&apos;t configured yet</p>
             <p className="mt-1.5">
-              Google and X below still use the owner broker when those env vars
-              are set. Connect Supabase for email/password, GitHub, and Apple.
+              Google below still uses the owner broker when those env vars are
+              set. Connect Supabase for email/password and GitHub.
             </p>
           </div>
         ) : null}
@@ -361,8 +340,8 @@ function Login() {
                 disabled={busy}
                 className={
                   active
-                    ? "min-h-10 rounded-[calc(var(--radius-panel)-0.15rem)] bg-fg px-3 text-sm font-semibold text-bg transition-colors disabled:opacity-60"
-                    : "min-h-10 rounded-[calc(var(--radius-panel)-0.15rem)] px-3 text-sm font-medium text-muted transition-colors hover:text-fg disabled:opacity-60"
+                    ? "login-mode-tab login-mode-tab--active min-h-10 rounded-[calc(var(--radius-panel)-0.15rem)] bg-[#f4f4f5] px-3 text-sm font-semibold text-[#0a0a0b] transition-colors disabled:opacity-60"
+                    : "login-mode-tab min-h-10 rounded-[calc(var(--radius-panel)-0.15rem)] px-3 text-sm font-medium text-muted transition-colors hover:text-fg disabled:opacity-60"
                 }
                 onClick={() => {
                   setMode(value);
@@ -487,22 +466,24 @@ function Login() {
         </div>
 
         <div className="flex flex-col gap-2">
-          {oauthButtons.map((item) => {
-            const Icon = item.icon;
-            const action = resolveLoginProviderAction(item.id, {
-              supabaseConfigured,
-              betterAuthEnabled: brokerConfigured && authEnabled,
-              supabaseOAuthProviders,
-            });
-            const disabled = busy || action.kind === "not_configured";
-            const note = action.kind === "not_configured" ? action.message : undefined;
-            return (
-              <div key={item.id} className="flex flex-col gap-1">
+          {oauthButtons
+            .map((item) => {
+              const action = resolveLoginProviderAction(item.id, {
+                supabaseConfigured,
+                betterAuthEnabled: brokerConfigured && authEnabled,
+                supabaseOAuthProviders,
+              });
+              return { item, action };
+            })
+            .filter(({ action }) => action.kind !== "not_configured")
+            .map(({ item }) => {
+              const Icon = item.icon;
+              return (
                 <button
+                  key={item.id}
                   type="button"
-                  disabled={disabled}
-                  title={note}
-                  aria-label={note ? `${item.label} (${note})` : item.label}
+                  disabled={busy}
+                  aria-label={item.label}
                   data-testid={`login-oauth-${item.id}`}
                   onClick={() => void onProvider(item.id)}
                   className="inline-flex min-h-11 items-center justify-center gap-2.5 rounded-panel border border-line bg-surface-2 px-4 text-sm font-semibold text-fg transition-colors hover:border-fg/25 hover:bg-bg disabled:cursor-not-allowed disabled:opacity-55"
@@ -510,14 +491,8 @@ function Login() {
                   <Icon />
                   {item.label}
                 </button>
-                {note ? (
-                  <p className="px-1 text-xs text-muted" data-testid={`login-oauth-${item.id}-note`}>
-                    {note}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
 
         <div className="mt-6 flex flex-col gap-1 text-sm">
