@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { subscribePrefersReducedMotion } from "./motion";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
@@ -42,9 +43,19 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
     () => cityLayout ?? buildCityLayout(state.status === "ready" ? state.data.projects : null),
     [cityLayout, state],
   );
-  const reducedMotion = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // SSR and the first client paint agree on false. matchMedia is read after mount
+  // and kept live so a system setting change parks or resumes the scene.
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [narrow, setNarrow] = useState(false);
+  const [sceneInteract, setSceneInteract] = useState(false);
+  useEffect(() => subscribePrefersReducedMotion(setReducedMotion), []);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(max-width: 720px)");
+    const apply = () => setNarrow(Boolean(mq.matches));
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
   }, []);
 
   const soundRef = useRef<ReturnType<typeof createHealthSound> | null>(null);
@@ -170,6 +181,10 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   return (
     <main
       className={`dash3d-root dash3d-universe${embedded ? " is-embedded" : ""}`}
+      data-testid="dash3d-root"
+      data-reduced-motion={reducedMotion ? "1" : "0"}
+      data-narrow={narrow ? "1" : "0"}
+      data-scene-interact={!narrow || sceneInteract ? "1" : "0"}
       data-fly-level={fly.level}
       data-labels={operatorPrefs.layers.labels ? "1" : "0"}
       data-health-filter={operatorPrefs.healthFilter}
@@ -241,6 +256,17 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
 
       {state.status === "ready" ? (
         <div className="dash3d-skybar" aria-live="polite">
+          {narrow ? (
+            <button
+              type="button"
+              className="dash3d-glass dash3d-zoomout dash3d-orbit-toggle"
+              data-testid="scene-interact"
+              aria-pressed={sceneInteract}
+              onClick={() => setSceneInteract((value) => !value)}
+            >
+              {sceneInteract ? "Orbit on" : "Orbit off"}
+            </button>
+          ) : null}
           {state.stale ? (
             <div className="dash3d-glass dash3d-skybar-card dash3d-stale" role="status" data-testid="status-stale">
               <h2>Status stale</h2>
@@ -321,6 +347,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
           <button
             type="button"
             className="dash3d-glass dash3d-zoomout"
+            data-testid="zoom-sky"
             onClick={() => {
               unlockSound();
               setSelected(null);
@@ -332,6 +359,26 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             Zoom to sky
           </button>
         </div>
+      ) : null}
+
+      {state.status === "ready" && narrow ? (
+        <section className="dash3d-glass dash3d-plain-fallback" data-testid="dash3d-plain-fallback" aria-label="Universe list">
+          <h2>Universe list</h2>
+          <p className="dash3d-muted" style={{ fontSize: "0.75rem" }}>
+            Narrow-screen list of the same status payload as the scene. {state.data.weather.label}: {state.data.weather.summary}
+          </p>
+          <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
+            {state.data.bots.map((b) => (
+              <li key={b.id}>
+                <button type="button" className="dash3d-pill" onClick={() => setSelected(b)}>
+                  <span className={`dash3d-dot ${b.health}`} />
+                  {b.name}
+                  <span className="dash3d-muted"> — {b.health}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {state.status === "ready" && !webglError ? <FlyoverHud fly={fly} layout={layoutForHud} /> : null}

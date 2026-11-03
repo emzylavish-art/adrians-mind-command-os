@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -44,6 +44,9 @@ import {
   sampleStarPulse,
   sanitizeDt,
   sharedMotionClock,
+  shouldScheduleUniverseFrame,
+  shouldSoftSyncScene,
+  universeMotionSignature,
 } from "./motion";
 import { isDocumentHidden } from "./particles/motion-lod";
 import { createCommitComets, createDustField } from "./particles";
@@ -232,12 +235,29 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   return tex;
 }
 
+function signatureFromStatus(data: DashboardStatus): string {
+  const projects = data.projects?.projects ?? [];
+  return universeMotionSignature({
+    bots: data.bots.map((b) => ({ id: b.id, health: b.health, reason: b.reason })),
+    commitShas: data.commits.map((c) => c.sha),
+    feedIds: (data.skyFeed?.list ?? data.skyFeed?.events ?? []).map((event) => event.id),
+    pageCount: data.notionGraph?.stats?.pages ?? 0,
+    edgeCount: data.notionGraph?.stats?.edges ?? 0,
+    projectKey: projects.map((project) => `${project.id}:${project.health}:${project.progressKnown ? project.progress : "u"}`).join(","),
+  });
+}
+
 export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const dataRef = useRef(data);
   const cbs = useRef({ onSelectBot, onSelectNotion, onSkyView, onFlyoverChange });
+  const wakeDataRef = useRef<(() => void) | null>(null);
   dataRef.current = data;
   cbs.current = { onSelectBot, onSelectNotion, onSkyView, onFlyoverChange };
+  const motionSig = useMemo(() => signatureFromStatus(data), [data]);
+  useEffect(() => {
+    wakeDataRef.current?.();
+  }, [motionSig]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -839,6 +859,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     };
 
 
+    let interacting = false;
+    let renderDirty = true;
+    let dataDirty = true;
+    let raf = 0;
+    let lastMotionSig = "";
+    let tick: (now: number) => void = () => {};
+    const arm = (kind: "render" | "data" = "render") => {
+      if (kind === "data") dataDirty = true;
+      else renderDirty = true;
+      if (raf === 0) raf = requestAnimationFrame(tick);
+    };
+    wakeDataRef.current = () => arm("data");
+
     function setFly(next: FlyState, fly2camera: boolean) {
       fly = next;
       city.setInterior(fly.level === "interior" ? fly.buildingId : null);
@@ -850,6 +883,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
           [camera.position.x, camera.position.y, camera.position.z],
           [lookAt.x, lookAt.y, lookAt.z],
         );
+        arm("render");
       }
       cbs.current.onFlyoverChange?.(fly, layout);
     }
@@ -897,6 +931,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       camera.position.copy(freePos);
       spherical.setFromVector3(freePos.clone().sub(lookAt));
       rig = { ...rig, t: 1, to: { position: next, lookAt: [lookAt.x, lookAt.y, lookAt.z] }, from: { position: next, lookAt: [lookAt.x, lookAt.y, lookAt.z] } };
+      arm("render");
     };
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
@@ -922,6 +957,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         pinchDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
       }
       dragging = true;
+      interacting = true;
+      arm("render");
       lastX = ev.clientX;
       lastY = ev.clientY;
       dragStartX = ev.clientX;
@@ -936,6 +973,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const dy = Math.abs(ev.clientY - dragStartY);
       const wasDrag = dx > 4 || dy > 4;
       dragging = false;
+      interacting = pinchPointers.size > 0;
+      arm("render");
       if (wasDrag) return;
       // Hacker: ignore star/city picks while a camera glide is in flight
       if (!acceptPointerPick(rig)) return;
@@ -1067,7 +1106,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointermove", onPointerHoverNotion);
-    renderer.domElement.addEventListener("pointerleave", () => { dragging = false; });
+    renderer.domElement.addEventListener("pointerleave", () => {
+      dragging = false;
+      interacting = false;
+      arm("render");
+    });
 
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
       layoutSig = ""; // force GPU resources to re-upload after restore
@@ -1075,18 +1118,39 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     });
 
     let last = performance.now();
-    let raf = 0;
     let sync = 0;
     const travelOut = { x: 0, y: 0, z: 0 };
+    const refreshSceneData = () => {
+      rebuildAll();
+      syncCity();
+      comets.dispose();
+      comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
+      feedGlyphs.dispose();
+      feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+    };
     const onVisibility = () => {
       // Animation #3: pause the loop while hidden; MotionClock absorbs the resume gap.
-      if (!isDocumentHidden()) last = performance.now();
+      if (!isDocumentHidden()) {
+        last = performance.now();
+        arm("render");
+      }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
-      if (kit.contextLost || postfxRecovery.lost) return; // WebGL context lost: pause (painter kit + light #13)
-      if (isDocumentHidden()) {
+    tick = (now: number) => {
+      const hidden = isDocumentHidden();
+      const lost = kit.contextLost || postfxRecovery.lost;
+      const schedule = shouldScheduleUniverseFrame({
+        reducedMotion,
+        rigSettled: rig.t >= 1,
+        interacting,
+        dirty: renderDirty || dataDirty,
+        documentHidden: hidden,
+        contextLost: lost,
+      });
+      raf = schedule ? requestAnimationFrame(tick) : 0;
+      mount.dataset.frameParked = schedule ? "0" : "1";
+      mount.dataset.reducedMotion = reducedMotion ? "1" : "0";
+      if (lost || hidden) {
         last = now;
         return;
       }
@@ -1171,15 +1235,19 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       else renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
 
-      if (now - sync > 5000) {
-        sync = now;
-        rebuildAll();
-        syncCity();
-        comets.dispose();
-        comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
-        feedGlyphs.dispose();
-        feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
+      const sig = signatureFromStatus(dataRef.current);
+      if (sig !== lastMotionSig) {
+        lastMotionSig = sig;
+        dataDirty = true;
       }
+      if (shouldSoftSyncScene(reducedMotion, now - sync)) {
+        sync = now;
+        refreshSceneData();
+      } else if (reducedMotion && dataDirty) {
+        refreshSceneData();
+      }
+      dataDirty = false;
+      renderDirty = false;
     };
     tick(performance.now());
 
@@ -1195,6 +1263,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (raysHandle && composer?.readBuffer?.depthTexture) {
         raysHandle.setDepthTexture(composer.readBuffer.depthTexture, camera);
       }
+      arm("render");
     };
     
     const onSkyEvent = () => {
@@ -1209,6 +1278,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         [lookAt.x, lookAt.y, lookAt.z],
       );
       cbs.current.onSkyView();
+      arm("render");
     };
 
     const onFocusBot = (ev: Event) => {
@@ -1229,6 +1299,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         [lookAt.x, lookAt.y, lookAt.z],
       );
       cbs.current.onSelectBot(bot);
+      arm("render");
     };
     document.addEventListener("dash3d-focus-bot", onFocusBot);
     const onLayers = (ev: Event) => {
@@ -1238,6 +1309,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         city.setLabelsVisible(labelsOn && fly.level === "city");
       }
       if (typeof d.healthFilter === "string") starHealthFilter = d.healthFilter;
+      arm("render");
     };
     document.addEventListener("dash3d-layers", onLayers);
 
@@ -1247,6 +1319,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     window.addEventListener("resize", onResize);
 
     return () => {
+      wakeDataRef.current = null;
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);

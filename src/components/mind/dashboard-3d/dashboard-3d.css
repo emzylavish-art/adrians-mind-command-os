@@ -681,3 +681,76 @@
   grid-template-columns: 1fr;
   gap: 0.65rem;
 }
+
+/* Narrow screens: keep the scene, and put status plus controls in a scroll column.
+   Essential buttons stay in normal flow — they are not removed. */
+@media (max-width: 720px) {
+  .dash3d-universe {
+    overflow: auto;
+    height: 100vh;
+    min-height: 100vh;
+  }
+  .dash3d-universe.is-embedded {
+    height: 100%;
+    min-height: 0;
+  }
+  .dash3d-universe .dash3d-canvas-wrap {
+    position: relative;
+    inset: auto;
+    height: 46vh;
+    min-height: 220px;
+  }
+  .dash3d-universe .dash3d-skybar,
+  .dash3d-universe .dash3d-flyhud,
+  .dash3d-universe .dash3d-feed-panel,
+  .dash3d-universe .dash3d-charts-panel,
+  .dash3d-universe .dash3d-mirror-panel,
+  .dash3d-universe .dash3d-plain-fallback {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    margin: 0.65rem 0.75rem;
+  }
+  .dash3d-universe .dash3d-skybar-card,
+  .dash3d-universe .dash3d-zoomout {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .dash3d-universe .dash3d-side {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(100vw - 0.5rem, 420px);
+    height: auto;
+    z-index: 30;
+  }
+  /* Scroll the page until Orbit is explicitly on. Drag stays off by default. */
+  .dash3d-universe[data-scene-interact="0"] .dash3d-canvas-wrap {
+    pointer-events: none;
+  }
+  .dash3d-universe[data-scene-interact="0"] .dash3d-canvas-wrap canvas {
+    touch-action: pan-y;
+  }
+  .dash3d-universe[data-scene-interact="1"] .dash3d-canvas-wrap,
+  .dash3d-universe[data-scene-interact="1"] .dash3d-canvas-wrap canvas {
+    pointer-events: auto;
+    touch-action: none;
+  }
+  .dash3d-orbit-toggle[aria-pressed="true"] {
+    background: rgb(124 92 255 / 0.22);
+    border-color: var(--dash3d-accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash3d-universe .dash3d-side,
+  .dash3d-universe .dash3d-plain-fallback {
+    transition: none;
+  }
+}

@@ -19,7 +19,15 @@ export {
   type OrbitDriftOpts,
   type Xyz,
 } from "./orbit-drift.ts";
-export { motionScale, prefersReducedMotion } from "./reduced-motion.ts";
+export {
+  motionScale,
+  prefersReducedMotion,
+  shouldScheduleUniverseFrame,
+  shouldSoftSyncScene,
+  subscribePrefersReducedMotion,
+  universeMotionSignature,
+} from "./reduced-motion.ts";
+export type { UniverseFrameSchedule, UniverseMotionSignatureInput } from "./reduced-motion.ts";
 export {
   clampInt,
   finiteOr,
