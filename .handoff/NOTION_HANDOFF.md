@@ -622,6 +622,7 @@ command on Zack's PC.
   - Tests: failure-states + markup + research-failure-action (focused suite green).
 - Skipped / BLOCKED (not this lane): `command-app.tsx` startResearch/runWebResearch mount (Grok Build / Merge Gate) — startResearch already `reportFailure`; classifiers now map kinds on that path. Chat `runWebResearch` still muted note until mount. Voice/media/mcp/server.ts/styles untouched.
 - Gates: typecheck PASS · focused H32 suite 55/55 · lint touched 0 errors
-- Tip: (pending commit)
-- Notion: (pending)
+- Tip: `7784fe89b5c993afafe0be699d777d3e93b7a5cb` (short `7784fe8`)
+- Notion: https://app.notion.com/p/40db95f33e428194a22dc24ece801564
 - STATE: /workspace/fleet/error-banners/STATE.json
+- Lock releasing.
