@@ -365,7 +365,7 @@ export function FleetPanel({
             </button>
           ))}
         </div>
-        <div className="mt-4 rounded-panel border border-line p-3">
+        <div id="agents-custom-form" className="mt-4 rounded-panel border border-line p-3" data-testid="agents-custom-form">
           <p className="font-semibold">Custom agent</p>
           <p className="mt-1 text-sm text-muted">Selected tools that are not configured wait. They do not report success.</p>
           <input value={customName} onChange={(event) => setCustomName(event.target.value)} placeholder="Agent name" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
