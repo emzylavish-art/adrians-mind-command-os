@@ -1,4 +1,4 @@
-import { dimensionsLookLikeBomb, fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE, sanitizeMediaLabel } from "@/lib/mind/media";
+import { dimensionsLookLikeBomb, fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE, sanitizeMediaLabel, sniffImageMimeFromBase64 } from "@/lib/mind/media";
 import {
   downscaleOptionsFor,
   type DownscaleQuality,
@@ -84,8 +84,15 @@ export async function fileToDownscaledDataUrl(
     throw new Error("HEIC/AVIF is not supported here. Convert to JPEG or PNG first.");
   }
   const source = await readFileAsDataUrl(file);
+  const comma = source.indexOf(",");
+  const b64 = comma >= 0 ? source.slice(comma + 1) : "";
+  const sniffed = sniffImageMimeFromBase64(b64);
+  if (!sniffed) {
+    throw new Error("That file is not a real PNG/JPEG/GIF/WebP image (bytes did not match).");
+  }
   const resolved = resolveOptions(options);
-  return dataUrlToDownscaled(source, sanitizeMediaLabel(file.name) || "image.jpg", resolved);
+  const safeName = sanitizeMediaLabel(file.name) || (sniffed === "image/png" ? "image.png" : sniffed === "image/webp" ? "image.webp" : sniffed === "image/gif" ? "image.gif" : "image.jpg");
+  return dataUrlToDownscaled(`data:${sniffed};base64,${b64}`, safeName, resolved);
 }
 
 export async function dataUrlToDownscaled(
@@ -96,6 +103,14 @@ export async function dataUrlToDownscaled(
   const resolved = resolveOptions(options);
   const maxEdge = resolved.maxEdge;
   const qualities = resolved.jpegQualities.length ? resolved.jpegQualities : [0.85, 0.72, 0.58, 0.45];
+
+  if (dataUrl.startsWith("data:image/")) {
+    const comma = dataUrl.indexOf(",");
+    const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : "";
+    if (!sniffImageMimeFromBase64(b64)) {
+      throw new Error("That image data is not a real PNG/JPEG/GIF/WebP payload.");
+    }
+  }
 
   const image = await loadImageBitmap(dataUrl);
   const { width: naturalW, height: naturalH } = bitmapSize(image);

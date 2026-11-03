@@ -271,3 +271,22 @@ See `/workspace/locks/media-integration.lock`.
 
 ### Tests
 - tsc pass; src **346/346**; build pass
+
+## Evolve: Use in composer + composer DnD harden (V4 INFO) — 2026-11-02T21:00:00-06:00 (America/Chicago)
+
+### V4 INFO UX
+- Image picker is **multiple**.
+- Burst default-selects only the **first 2** new frames (pick-2 friendlier).
+
+### Use in composer
+- Inline/generated **Use in composer** re-attaches via `dataUrlToDownscaled` (EXIF strip + quality preset), for vision follow-up or Imagine edit. Hook `data-media="use-in-composer"`.
+
+### Composer drag-drop
+- Home + chat composers: `data-media="composer-drop"`; shared `accept-image-files` + queued attach. Clear reject text for SVG/HTML/HEIC/non-image (existing `setError`/`setNotice` only).
+
+### Attack
+- Magic-byte sniff before canvas in `downscale.ts`.
+- SVG/HTML rejected up front; decompression bomb still blocked; rapid drops serialized via attach queue.
+
+### Tests
+- tsc pass; src **349/349**; build pass

@@ -48,7 +48,12 @@ import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { AMCOS_IMAGE_DRAG_TYPE, InlineImage } from "@/components/mind/media/inline-image";
-import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
+import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/components/mind/media/downscale";
+import {
+  filterAcceptableImageFiles,
+  formatImageRejectNotice,
+  MAX_ATTACH_IMAGES,
+} from "@/components/mind/media/accept-image-files";
 import {
   cycleDownscaleQuality,
   downscaleQualityLabel,
@@ -316,6 +321,8 @@ export function CommandApp() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachQueueRef = useRef<File[]>([]);
+  const attachBusyRef = useRef(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -903,19 +910,28 @@ export function CommandApp() {
     link.click();
   }
 
-  function saveImageToComposer(src: string, alt: string) {
+  async function useImageInComposer(src: string, alt: string) {
     if (!src.startsWith("data:image/")) {
-      setError("Only in-chat data URLs can be saved back into the composer.");
+      setError("Only in-chat data URLs can be used in the composer.");
       return;
     }
-    setPendingImages((prev) => {
-      if (prev.length >= 4) {
-        setError("You can attach up to 4 images per message.");
-        return prev;
-      }
-      return [...prev, { dataUrl: src, name: /^(camera|saved|generated|image|attachment|amcos)/i.test(alt || "") ? (alt || `saved-${prev.length + 1}.jpg`) : `saved-${prev.length + 1}.jpg` }];
-    });
-    setNotice("Image saved into the composer for a follow-up turn.");
+    try {
+      const safeName = /^(camera|saved|generated|image|attachment|amcos)/i.test(alt || "")
+        ? alt || "composer-image.jpg"
+        : `composer-${Date.now()}.jpg`;
+      const scaled = await dataUrlToDownscaled(src, safeName, { quality: downscaleQuality });
+      setPendingImages((prev) => {
+        if (prev.length >= MAX_ATTACH_IMAGES) {
+          setError(`You can attach up to ${MAX_ATTACH_IMAGES} images per message.`);
+          return prev;
+        }
+        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
+      });
+      setError(null);
+      setNotice(`Image in composer${scaled.scaled ? " (re-encoded)" : ""} — ask a vision question or Edit with Imagine.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "That image could not be prepared for the composer.");
+    }
   }
 
   function editMessage(messageId: string, text: string) {
@@ -952,37 +968,10 @@ export function CommandApp() {
   }
 
   function onComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const imageFiles = collectClipboardImageFiles(event.clipboardData, 4);
-    if (imageFiles.length) {
-      event.preventDefault();
-      for (const file of imageFiles) void addImageAttachment(file);
-      return;
-    }
-    const html = event.clipboardData?.getData("text/html") || "";
-    const text = event.clipboardData?.getData("text/plain") || "";
-    const safeImg = extractSafeImageSrcFromHtml(html) || sanitizePastedImageCandidate(text);
-    if (html && /<img/i.test(html) && !safeImg) {
-      event.preventDefault();
-      setError("That paste included an unsafe image link (javascript/data HTML). It was blocked.");
-      return;
-    }
-    if (/^(javascript|vbscript):/i.test(text.trim())) {
-      event.preventDefault();
-      setError("That paste looked like a script URL. It was blocked.");
-      return;
-    }
-    if (html && !safeImg) {
-      // Prefer sanitized plain text over raw HTML blobs in the composer.
-      const cleaned = sanitizeComposerPasteText(html || text);
-      if (cleaned !== text) {
-        event.preventDefault();
-        const target = event.currentTarget;
-        const start = target.selectionStart ?? draft.length;
-        const end = target.selectionEnd ?? draft.length;
-        const next = draft.slice(0, start) + cleaned + draft.slice(end);
-        setDraft(next);
-      }
-    }
+    const imageFiles = collectClipboardImageFiles(event.clipboardData, MAX_ATTACH_IMAGES);
+    if (imageFiles.length === 0) return;
+    event.preventDefault();
+    enqueueImageFiles(imageFiles);
   }
 
     async function exportActive() {
@@ -1641,25 +1630,63 @@ export function CommandApp() {
   }
 
   async function addImageAttachment(file: File) {
+    const scaled = await fileToDownscaledDataUrl(file, { quality: downscaleQuality });
+    let attached = false;
+    setPendingImages((prev) => {
+      if (prev.length >= MAX_ATTACH_IMAGES) return prev;
+      attached = true;
+      return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
+    });
+    if (!attached) throw new Error(`You can attach up to ${MAX_ATTACH_IMAGES} images per message.`);
+    return scaled;
+  }
+
+  async function drainImageAttachQueue() {
+    if (attachBusyRef.current) return;
+    attachBusyRef.current = true;
+    let accepted = 0;
+    const rejects: string[] = [];
     try {
-      const scaled = await fileToDownscaledDataUrl(file, { quality: downscaleQuality });
-      setPendingImages((prev) => {
-        if (prev.length >= 4) {
-          setError("You can attach up to 4 images per message.");
-          return prev;
+      while (attachQueueRef.current.length) {
+        const file = attachQueueRef.current.shift()!;
+        try {
+          const scaled = await addImageAttachment(file);
+          accepted += 1;
+          setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`);
+          setError(null);
+        } catch (caught) {
+          rejects.push(caught instanceof Error ? caught.message : `“${file.name}” could not be prepared.`);
         }
-        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
-      });
-      setError(null);
-      setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`);
-    } catch {
-      setError("That image could not be prepared.");
+      }
+    } finally {
+      attachBusyRef.current = false;
+      if (attachQueueRef.current.length) void drainImageAttachQueue();
     }
+    if (rejects.length) setError(formatImageRejectNotice(rejects, accepted));
+  }
+
+  function enqueueImageFiles(files: Iterable<File>) {
+    const { accepted, rejects } = filterAcceptableImageFiles(files, MAX_ATTACH_IMAGES);
+    for (const file of accepted) attachQueueRef.current.push(file);
+    if (rejects.length && accepted.length === 0) {
+      setError(formatImageRejectNotice(rejects, 0));
+      return;
+    }
+    if (rejects.length) setError(formatImageRejectNotice(rejects, accepted.length));
+    void drainImageAttachQueue();
+  }
+
+  function onComposerImageDrop(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    if (files.length === 0) return;
+    enqueueImageFiles(files);
   }
 
   async function onPicked(file: File) {
-    if (/\.(png|jpe?g|gif|webp)$/i.test(file.name) || (file.type || "").startsWith("image/")) {
-      await addImageAttachment(file);
+    if (/\.(png|jpe?g|gif|webp)$/i.test(file.name) || ((file.type || "").startsWith("image/") && !(file.type || "").includes("svg"))) {
+      enqueueImageFiles([file]);
       return;
     }
     if (file.size > 400_000) {
@@ -2195,6 +2222,17 @@ export function CommandApp() {
                       </button>
                     ))}
                   </div>
+                  <div
+                    data-media="composer-drop"
+                    className="rounded-panel"
+                    onDragOver={(event) => {
+                      if (event.dataTransfer?.types?.includes("Files")) {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "copy";
+                      }
+                    }}
+                    onDrop={onComposerImageDrop}
+                  >
                   <textarea
                     value={draft}
                     onPaste={onComposerPaste}
@@ -2345,6 +2383,7 @@ export function CommandApp() {
                     <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
+                  </div>
                   </div>
                 </form>
                 {contextOpen && (
@@ -2620,10 +2659,10 @@ export function CommandApp() {
                   current === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_MODEL : GROK_IMAGINE_QUALITY_MODEL,
                 )
               }
-              onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
+              onSaveImage={(src, alt) => useImageInComposer(src, alt)}
               onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
               onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)}
-              onAddImageFile={(file) => void addImageAttachment(file)}
+              onAddImageFile={(file) => enqueueImageFiles([file])}
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
                 else {
@@ -2941,7 +2980,7 @@ export function CommandApp() {
               {agentImages.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {agentImages.map((image, index) => (
-                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)} />
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => useImageInComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} onUseAsAgentInput={(src, alt) => useImageAsAgentInput(src, alt)} />
                   ))}
                 </div>
               )}
@@ -3409,11 +3448,13 @@ export function CommandApp() {
         ref={imageInputRef}
         type="file"
         accept="image/png,image/jpeg,image/gif,image/webp"
+        multiple
         className="hidden"
+        data-media="attach-image-input"
         onChange={(event) => {
-          const file = event.target.files?.[0];
+          const files = Array.from(event.target.files ?? []);
           event.target.value = "";
-          if (file) void addImageAttachment(file);
+          if (files.length) enqueueImageFiles(files);
         }}
       />
       <CameraCapture
@@ -3912,13 +3953,19 @@ function ChatPane({
             event.preventDefault();
             onSend();
           }}
+          data-media="composer-drop"
           onDragOver={(event) => {
-            if (event.dataTransfer?.types?.includes("Files")) event.preventDefault();
+            if (event.dataTransfer?.types?.includes("Files")) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }
           }}
           onDrop={(event) => {
             event.preventDefault();
-            const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => (file.type || "").startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name));
-            for (const file of files.slice(0, 4)) onAddImageFile(file);
+            const files = Array.from(event.dataTransfer?.files ?? []);
+            if (files.length === 0) return;
+            // Parent wires onAddImageFile through the same hardened queue via wrapper below.
+            for (const file of files) onAddImageFile(file);
           }}
         >
           <input

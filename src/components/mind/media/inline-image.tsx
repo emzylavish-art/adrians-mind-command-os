@@ -92,8 +92,15 @@ export function InlineImage({
             </button>
           )}
           {onSave && (
-            <button type="button" data-testid="image-save" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onSave(safeSrc, safeAlt)}>
-              Save
+            <button
+              type="button"
+              data-testid="image-save"
+              data-media="use-in-composer"
+              className="min-h-11 rounded-panel border border-line px-3 text-xs"
+              title="Re-attach into the composer (re-encoded, EXIF stripped) for vision or Imagine edit"
+              onClick={() => onSave(safeSrc, safeAlt)}
+            >
+              Use in composer
             </button>
           )}
           {onDownload && (

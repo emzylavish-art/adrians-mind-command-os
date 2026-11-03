@@ -203,9 +203,10 @@ export function CameraCapture({
           const next = [...prev, ...taken].slice(0, BURST_CANDIDATE_CAP);
           return next;
         });
+        // Default-select only the first two new frames (V4 INFO: easier pick-2 UX).
         setSelected((prev) => {
           const next = new Set(prev);
-          for (const frame of taken) next.add(frame.id);
+          for (const frame of taken.slice(0, 2)) next.add(frame.id);
           return next;
         });
       }
