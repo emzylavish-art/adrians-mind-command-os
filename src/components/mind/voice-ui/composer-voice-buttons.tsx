@@ -11,6 +11,7 @@
 
 import type { ReactNode } from "react";
 import type { LiveSpeakState } from "./live-speak-control";
+import { composerTierSubtitle } from "@/lib/mind/model-tiers";
 
 export type ComposerDictationState = "idle" | "recording";
 
@@ -23,11 +24,11 @@ export type ComposerModelOption = {
 };
 
 export const COMPOSER_MODEL_OPTIONS: ComposerModelOption[] = [
-  { id: "build", label: "Build", subtitle: "Build apps and sites · Grok 4.7" },
-  { id: "heavy", label: "Heavy", subtitle: "Team of Experts · Grok 4.7" },
-  { id: "expert", label: "Expert", subtitle: "Thinks hard · Grok 4.7" },
-  { id: "fast", label: "Fast", subtitle: "Quick responses · Grok 4.7" },
-  { id: "auto", label: "Auto", subtitle: "Chooses Fast or Expert" },
+  { id: "build", label: "Build", subtitle: composerTierSubtitle("Build") },
+  { id: "heavy", label: "Heavy", subtitle: composerTierSubtitle("Heavy") },
+  { id: "expert", label: "Expert", subtitle: composerTierSubtitle("Expert") },
+  { id: "fast", label: "Fast", subtitle: composerTierSubtitle("Fast") },
+  { id: "auto", label: "Auto", subtitle: composerTierSubtitle("Auto") },
 ];
 
 export type ComposerVoiceButtonsProps = {

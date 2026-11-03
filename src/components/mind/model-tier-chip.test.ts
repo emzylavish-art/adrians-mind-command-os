@@ -52,3 +52,25 @@ describe("ModelTierChip Auto residue", () => {
     assert.equal(label.includes("Auto"), false);
   });
 });
+
+describe("Composer model menu subtitles are honest (catalog-derived)", () => {
+  it("names each tier's real default model and Auto's real routing set", async () => {
+    const { composerTierSubtitle, modelTierCatalog } = await import("../../lib/mind/model-tiers.ts");
+    const cat = modelTierCatalog();
+    for (const tier of ["Fast", "Expert", "Heavy", "Build"] as const) {
+      const model = cat.find((c) => c.id === tier)!.model!;
+      assert.ok(composerTierSubtitle(tier).includes(model), `${tier} subtitle must name ${model}`);
+    }
+    const auto = composerTierSubtitle("Auto");
+    for (const t of ["Fast", "Expert", "Heavy", "Build"]) assert.ok(auto.includes(t), `Auto subtitle must list ${t}`);
+    assert.ok(!/Grok 4\.7/.test(composerTierSubtitle("Fast")), "Fast is not Grok 4.7");
+  });
+
+  it("composer menu derives subtitles from the catalog, not hard-coded strings", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./voice-ui/composer-voice-buttons.tsx", import.meta.url), "utf8");
+    assert.ok(!/Chooses Fast or Expert/.test(src), "stale Auto subtitle removed");
+    assert.ok(!/·\s*Grok 4\.7"/.test(src), "no hard-coded Grok 4.7 subtitles");
+    assert.ok(/composerTierSubtitle\(/.test(src), "uses composerTierSubtitle");
+  });
+});

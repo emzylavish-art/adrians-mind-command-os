@@ -258,3 +258,20 @@ export function chipLabelForTier(input: {
 export function selectModelTier(next: ModelTier): ModelTier {
   return isModelTier(next) ? next : "Auto";
 }
+
+const COMPOSER_TIER_BLURB: Record<"Auto" | "Fast" | "Expert" | "Heavy" | "Build", string> = {
+  Auto: "",
+  Fast: "Quick responses",
+  Expert: "Thinks hard",
+  Heavy: "Deep reasoning",
+  Build: "Build apps and sites",
+};
+
+/**
+ * Composer model-menu subtitle derived from the tier catalog (client-safe defaults;
+ * server env overrides are reported on the chip after a turn). Never hard-code model names.
+ */
+export function composerTierSubtitle(tier: "Auto" | "Fast" | "Expert" | "Heavy" | "Build"): string {
+  if (tier === "Auto") return "Routes to Fast, Expert, Heavy, or Build";
+  return `${COMPOSER_TIER_BLURB[tier]} · ${DEFAULTS[tier].model}`;
+}
