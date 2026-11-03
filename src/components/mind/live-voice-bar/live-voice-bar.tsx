@@ -36,6 +36,7 @@ import {
   type FrameStreamHandle,
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape } from "./settings-popover";
+import "./mobile-nav-clearance.css";
 
 export type LiveVoiceBarProps = {
   isOverlayMicOpen: () => boolean;
@@ -412,7 +413,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   if (!inCall) {
     return (
       <div
-        className="composer-bar is-fixed"
+        className="composer-bar is-fixed composer-bar--clear-nav"
         data-testid="composer-bar"
         data-model-menu="closed"
         role="region"

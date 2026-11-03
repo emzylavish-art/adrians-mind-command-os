@@ -1,0 +1,29 @@
+/*
+ * SPV-F1 — mobile clearance for the fixed speak/composer bar.
+ *
+ * styles.css (shared) pins `.composer-bar.is-fixed` to
+ * `bottom: calc(2.9rem + safe-area)` inside max-width 767.98px.
+ * On a 390×844 shell that is 46.4px, short of the primary nav (top ~792)
+ * and the raised New chat control (top ~783). The bar's bottom edge lands
+ * near y=798, so the centre control covers Dictate / Speak.
+ *
+ * This file is owned by live-voice-bar. It does not edit src/styles.css.
+ * Selectors outrank the shared !important rules. Desktop (≥768px) and short
+ * landscape phones keep the shared positions.
+ *
+ * Clearance numbers were measured on this branch at 390×844 (signed-out):
+ * New chat top is 61px from the viewport bottom. 4.75rem (76px) leaves a gap.
+ * The floating command/thread dock stays above the bar (dock bottom 9.75rem
+ * vs a ~4.5rem bar sitting at 4.75rem).
+ */
+
+@media (max-width: 767.98px) and (min-height: 481px) {
+  body:has(nav[aria-label="Primary"]) .shell > .composer-bar.composer-bar--clear-nav.is-fixed[data-testid="composer-bar"] {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  body:has(.shell > .composer-bar--clear-nav) .main-stage section.floating-composer.command-card.composer-dock.rounded-panel[data-composer="floating"],
+  body:has(.shell > .composer-bar--clear-nav) .main-stage form.floating-composer.command-card.composer-dock[data-composer="floating"] {
+    bottom: calc(4.75rem + 5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
