@@ -61,7 +61,7 @@ jobs:
       - name: Verify schedule dispatch regressions
         run: node --experimental-strip-types --test src/lib/mind/worker-pass.test.ts
 
-      - name: Verify transactional persistence rollback with parameterized SQL
+      - name: Verify rollback with literal numbered SQL bind parameters
         run: node --experimental-strip-types --test src/lib/mind/store.test.ts
 
       - name: Verify complete local unit test suite (no paid provider calls)
