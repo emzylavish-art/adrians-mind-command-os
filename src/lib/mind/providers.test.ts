@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { assertLiveProvider, chosenProvider, failover, providerChoices, resolveProvider } from "./providers.ts";
+import { assertLiveProvider, chosenProvider, providerChoices, resolveProvider } from "./providers.ts";
+import { readFailoverPolicy } from "./failover.ts";
 
 describe("provider routing", () => {
   it("keeps Grok when it is the explicit choice", () => {
@@ -33,13 +34,10 @@ describe("provider routing", () => {
   });
 
   it("does not switch providers unless the owner allowed that switch", () => {
-    const refused = failover("openai", true, "none");
-    assert.equal(refused.provider, null);
-    assert.equal(refused.switched, false);
-    const allowed = failover("openai", true, "grok");
-    assert.equal(allowed.provider, "grok");
-    assert.equal(allowed.switched, true);
-    assert.match(allowed.note, /switch to Grok/);
-    assert.equal(failover("grok", true, "none").switched, false);
+    // The old client-side pre-check is gone; only an explicit stored "on" opts in, server decides.
+    assert.equal(readFailoverPolicy(null), "off");
+    assert.equal(readFailoverPolicy("grok"), "off");
+    assert.equal(readFailoverPolicy("none"), "off");
+    assert.equal(readFailoverPolicy("on"), "on");
   });
 });

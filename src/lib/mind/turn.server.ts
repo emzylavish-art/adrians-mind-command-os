@@ -14,6 +14,7 @@ import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { readModelPayload } from "./stream";
+import { extractProviderText, parseFailoverField, runFallback, sanitizeProviderError } from "./failover";
 import { resolveDatabaseUrl } from "../env.server.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
@@ -36,6 +37,8 @@ export type TurnBody = {
   images?: unknown;
   /** Optional explicit note to persist with this turn (owner-scoped). */
   saveMemory?: unknown;
+  /** Provider failover opt-in. Only literal `true` enables it. */
+  failover?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryInputMessage {
@@ -215,6 +218,8 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       provider: requestedProvider,
     });
   }
+  const failoverOn = parseFailoverField(body.failover);
+  let failedOverFrom: { id: string; reason: string } | null = null;
   const selected = selectProvider(body.provider, process.env);
   if (!selected.ok) {
     // If images somehow accompany a failed non-Grok selection, still prefer cannot-see copy.
@@ -225,9 +230,13 @@ export async function handleMindTurn(request: Request): Promise<Response> {
         provider: requestedProvider,
       });
     }
-    return json(selected);
+    if (failoverOn && typeof requestedProvider === "string" && /not configured/i.test(selected.error)) {
+      failedOverFrom = { id: requestedProvider, reason: `${requestedProvider} failed: ${sanitizeProviderError(selected.error)}` };
+    } else {
+      return json(selected, httpStatusForProviderSelection(selected.error));
+    }
   }
-  if (selected.id !== "grok") {
+  if (selected.ok && selected.id !== "grok") {
     if (pendingImages.length > 0) {
       return json({
         ok: false,
@@ -241,12 +250,24 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const limited = consumeMindRateLimit("chat", userId, 12);
     if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
-    const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: globalThis.fetch });
-    // Provider failure is never a 200: upstream rate limit → 429, other upstream failure → 502.
-    const failStatus = /rate limited/i.test(called.error) ? 429 : /not configured/i.test(called.error) ? 503 : 502;
-    return json({ ...called, provider: selected.id }, called.ok ? 200 : failStatus);
+    const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: signalledFetch(request.signal) });
+    const answer = called.ok ? extractProviderText(selected.id, called.text) : "";
+    if (answer) {
+      return sseReply({ text: answer, model: selected.model, provider: selected.id, usage: null, usedIds: [], requestId: null });
+    }
+    const primaryError = sanitizeProviderError(called.ok ? `${selected.id} returned an empty reply.` : called.error, [key]);
+    if (!failoverOn || request.signal.aborted) {
+      // Provider failure is never a 200: upstream rate limit → 429, other upstream failure → 502.
+      const failStatus = /rate limited/i.test(primaryError) ? 429 : /not configured/i.test(primaryError) ? 503 : 502;
+      return json({ ok: false, text: "", error: primaryError, provider: selected.id }, failStatus);
+    }
+    // Failover on: retry once on Grok through the real streaming path; the done event names who answered.
+    failedOverFrom = { id: selected.id, reason: `${selected.id} failed: ${primaryError}` };
   }
-  const prepared = await prepareMindTurn(userId, body);
+  const prepared = await prepareMindTurn(userId, failedOverFrom ? { ...body, provider: "grok" } : body);
+  if (!prepared.ok && failedOverFrom && !("rateLimited" in prepared && prepared.rateLimited) && !/emergency stop/i.test(prepared.error)) {
+    return json({ ok: false, error: `${failedOverFrom.reason} Failover to Grok also failed: ${prepared.error}` }, 502);
+  }
   if (!prepared.ok) {
     if ("rateLimited" in prepared && prepared.rateLimited) {
       return jsonRateLimited(prepared.error, prepared.retryAfterSec);
@@ -257,7 +278,10 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." }, 503);
   }
   const keyed = resolveXaiInferenceApiKey(process.env);
-  if (!keyed.ok) return json({ ok: false, error: keyed.error });
+  if (!keyed.ok) {
+    if (failedOverFrom) return json({ ok: false, error: `${failedOverFrom.reason} Failover to Grok also failed: ${keyed.error}` }, 502);
+    return json({ ok: false, error: keyed.error });
+  }
   const apiKey = keyed.key;
   let memorySaved = false;
   let savedMemoryId: string | null = null;
@@ -295,8 +319,35 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       images: prepared.images.length,
       memorySaved,
       savedMemoryId,
+      ...(failedOverFrom ? { failedOverFrom: failedOverFrom.id, failoverReason: failedOverFrom.reason } : {}),
     },
+    // Failover on (and not already a failover turn): a pre-stream Grok failure retries once elsewhere.
+    onUpstreamFailure:
+      failoverOn && !failedOverFrom
+        ? (error, signal) =>
+            runFallback({
+              primary: "grok",
+              primaryError: error,
+              prompt: typeof body.text === "string" ? body.text : "",
+              env: process.env,
+              fetch: signalledFetch(signal),
+              signal,
+              secrets: [apiKey],
+            })
+        : undefined,
   });
+}
+
+/** Bind a request's abort signal to provider calls so Stop/timeout cancels a fallback too. */
+function signalledFetch(signal: AbortSignal) {
+  return (url: string, init?: RequestInit) => globalThis.fetch(url, { ...init, signal });
+}
+
+/** One-shot SSE reply (non-streaming provider) in the same delta/done contract the client reads. */
+function sseReply(done: Record<string, unknown>): Response {
+  const text = typeof done.text === "string" ? done.text : "";
+  const body = `event: delta\ndata: ${JSON.stringify({ text })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
+  return new Response(body, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
 }
 
 /** Exported for scripts/tests that build a multimodal Direct turn without the HTTP handler. */

@@ -2,6 +2,7 @@ import { createSseFeed, pushSse, type ModelUsage } from "./stream.ts";
 import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
 export { CHAT_DISCONNECT_REPLY };
 import type { ChatContent } from "./media/types.ts";
+import type { FallbackOutcome } from "./failover.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 const PROVIDER_URL = "https://api.x.ai/v1/chat/completions";
@@ -68,11 +69,17 @@ export function relayModelStream(input: {
   params?: RelayModelParams;
   /** Optional metadata echoed on the done event (e.g. selected/resolved tier). */
   meta?: Record<string, unknown>;
+  /**
+   * Failover hook. Called only when the primary failed before any reply text streamed and
+   * the turn was not stopped. null/undefined = failover off: the primary error is surfaced.
+   */
+  onUpstreamFailure?: (error: string, signal: AbortSignal) => Promise<FallbackOutcome>;
 }): Response {
   const linked = combineAbort(input.requestSignal, input.timeoutMs ?? chatTurnTimeoutMs());
   const encoder = new TextEncoder();
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let closed = false;
+  let streamed = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -116,6 +123,48 @@ export function relayModelStream(input: {
         void reader?.cancel().catch(() => undefined);
       };
       linked.signal.addEventListener("abort", onAbort);
+      /** Surface the primary error, or (failover on, nothing streamed yet) retry on another provider. */
+      const failOrFallback = async (error: string) => {
+        if (streamed || !input.onUpstreamFailure || linked.signal.aborted) {
+          if (linked.signal.aborted) await stopped();
+          else {
+            send("error", { error });
+            finish();
+          }
+          return;
+        }
+        let outcome: FallbackOutcome;
+        try {
+          outcome = await input.onUpstreamFailure(error, linked.signal);
+        } catch {
+          outcome = { ok: false, error: `${error} Failover also failed. Nothing was saved as a success.` };
+        }
+        if (linked.signal.aborted) {
+          await stopped();
+          return;
+        }
+        if (!outcome.ok) {
+          send("error", { error: outcome.error });
+          finish();
+          return;
+        }
+        const meta = input.meta ?? {};
+        send("delta", { text: outcome.text });
+        send("done", {
+          text: outcome.text,
+          model: outcome.model,
+          provider: outcome.provider,
+          failedOverFrom: outcome.failedOverFrom,
+          failoverReason: outcome.failoverReason,
+          usage: null,
+          usedIds: input.usedIds,
+          requestId: null,
+          // The selected tier is echoed, but no tier "resolved": the fallback model answered.
+          ...(typeof meta.modelTier === "string" ? { modelTier: meta.modelTier } : {}),
+          ...(meta.memorySaved === true ? { memorySaved: true, savedMemoryId: meta.savedMemoryId ?? null } : {}),
+        });
+        finish();
+      };
       try {
         if (linked.signal.aborted) {
           await stopped();
@@ -139,8 +188,7 @@ export function relayModelStream(input: {
             res.status === 404
               ? "That model is not available. Nothing was saved as a success."
               : `Grok returned ${res.status}. Nothing was saved as a success.`;
-          send("error", { error });
-          finish();
+          await failOrFallback(error);
           return;
         }
         reader = res.body.getReader();
@@ -161,7 +209,10 @@ export function relayModelStream(input: {
             finish();
             return;
           }
-          for (const text of pushed.deltas) send("delta", { text });
+          for (const text of pushed.deltas) {
+            streamed = true;
+            send("delta", { text });
+          }
         }
         if (linked.signal.aborted) {
           await stopped();
@@ -169,10 +220,7 @@ export function relayModelStream(input: {
         }
         const tail = pushSse(feed, "\n");
         if (tail.bad || !feed.text.trim()) {
-          send("error", {
-            error: tail.bad ? "Grok returned a broken stream. Nothing was saved as a success." : "Grok returned an empty reply.",
-          });
-          finish();
+          await failOrFallback(tail.bad ? "Grok returned a broken stream. Nothing was saved as a success." : "Grok returned an empty reply.");
           return;
         }
         if (!feed.finished) {
@@ -185,6 +233,7 @@ export function relayModelStream(input: {
         send("done", {
           text: feed.text.trim(),
           model: input.model,
+          provider: "grok",
           usage,
           usedIds: input.usedIds,
           requestId: res.headers.get("x-request-id"),
@@ -197,8 +246,7 @@ export function relayModelStream(input: {
           // Network / mid-stream drop — never mislabel as a turn timeout.
           const msg = caught instanceof Error ? caught.message : "";
           void msg;
-          send("error", { error: CHAT_DISCONNECT_REPLY });
-          finish();
+          await failOrFallback(CHAT_DISCONNECT_REPLY);
         }
       } finally {
         linked.signal.removeEventListener("abort", onAbort);

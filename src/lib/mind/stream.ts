@@ -74,9 +74,15 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null }
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; failedOverFrom?: string; failoverReason?: string }
   | { event: "error"; error: string }
   | { event: "canceled"; error: string };
+
+const KNOWN_PROVIDERS = new Set(["grok", "openai", "anthropic", "gemini", "openrouter"]);
+/** Only known provider ids survive; anything forged is dropped (UI then says "unreported"). */
+function answeringProvider(value: unknown): string | undefined {
+  return typeof value === "string" && KNOWN_PROVIDERS.has(value) ? value : undefined;
+}
 
 export function pullMindEvents(buffer: string): { events: MindClientEvent[]; rest: string } {
   const complete = buffer.endsWith("\n\n");
@@ -118,6 +124,9 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         tierReason: typeof record.tierReason === "string" ? record.tierReason : undefined,
         memorySaved: record.memorySaved === true,
         savedMemoryId: typeof record.savedMemoryId === "string" ? record.savedMemoryId : null,
+        provider: answeringProvider(record.provider),
+        failedOverFrom: answeringProvider(record.failedOverFrom),
+        failoverReason: typeof record.failoverReason === "string" ? record.failoverReason.slice(0, 300) : undefined,
       });
     }
   }

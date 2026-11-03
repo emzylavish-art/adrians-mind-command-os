@@ -98,7 +98,10 @@ describe("handleMindTurn wiring (static; handler imports auth so is not unit-run
     assert.equal(/json\(prepared\)\s*;/.test(handler), false);
   });
   it("non-Grok provider failure is not returned as 200", () => {
-    assert.match(handler, /called\.ok \? 200 : failStatus/);
+    // Success is an SSE reply naming the provider; failure is JSON with a non-200 status.
+    assert.match(handler, /error: primaryError, provider: selected\.id \}, failStatus\)/);
+    assert.match(handler, /return sseReply\(\{ text: answer, model: selected\.model, provider: selected\.id/);
+    assert.match(handler, /json\(selected, httpStatusForProviderSelection\(selected\.error\)\)/);
   });
   it("model-not-allowed and halt carry explicit non-200 status", () => {
     assert.match(handler, /not substituted\." \}, 503\)/);

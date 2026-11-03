@@ -192,7 +192,8 @@ import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { createSingleFlight } from "@/lib/mind/research-flight";
 import { MODEL_TIERS, type ModelTier } from "@/lib/mind/model-tiers";
 import { chipPropsForSelection, forgetTierOutcome, tierRunFromResult, type ChipTierRun } from "@/lib/mind/model-tier-memory";
-import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
+import { chosenProvider, providerChoices } from "@/lib/mind/providers";
+import { describeAnswer, FAILOVER_STORAGE_KEY, readFailoverPolicy, type FailoverPolicy } from "@/lib/mind/failover";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
@@ -597,7 +598,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   // Last finished turn for the header chip; described only while the same tier stays selected.
   const [lastTierRun, setLastTierRun] = useState<ChipTierRun | null>(null);
   const { lastResolved: lastResolvedTier, lastModel: lastModelUsed } = chipPropsForSelection(lastTierRun, modelTier);
-  const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
+  const [failoverPolicy, setFailoverPolicy] = useState<FailoverPolicy>("off");
   const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const researchFlight = useRef(createSingleFlight());
   const [researchBusy, setResearchBusy] = useState(false);
@@ -1005,8 +1006,8 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       setComposerEffort(stored.mode);
       // Repair a drifted Effort key so the next reload / other tabs agree with the Mode.
       if (loadComposerEffort(localStorage) !== stored.mode) saveComposerEffort(localStorage, stored.mode);
-      const fail = localStorage.getItem("amcos.failover.v1");
-      if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
+      // v1 ("grok"/"none") was a client-side pre-check; it never retried a failed request. Ignored.
+      setFailoverPolicy(readFailoverPolicy(localStorage.getItem(FAILOVER_STORAGE_KEY)));
     } catch {
       /* a private browser can refuse storage */
     }
@@ -1024,7 +1025,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
   useEffect(() => {
     try {
       localStorage.setItem(MODEL_TIER_KEY, modelTier);
-      localStorage.setItem("amcos.failover.v1", failoverPolicy);
+      localStorage.setItem(FAILOVER_STORAGE_KEY, failoverPolicy);
     } catch {
       /* a private browser can refuse storage */
     }
@@ -1487,14 +1488,9 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
       });
       return null;
     }
-    let routed = chosenProvider(providerChoice, grokConfigured);
-    if (!routed.ok) {
-      const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
-      if (switched.provider === "grok") {
-        routed = chosenProvider("grok", grokConfigured);
-        if (routed.ok) setNotice(switched.note);
-      }
-    }
+    const routed = chosenProvider(providerChoice, grokConfigured);
+    // Failover is decided by the server on the real request; snapshot the toggle for this send.
+    const failoverForTurn = failoverPolicy === "on";
     if (!routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
         void deliver(chat, text, wsRef.current, resume, snapped);
@@ -1564,6 +1560,7 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
           })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
           provider: routed.id,
+          failover: failoverForTurn,
           modelTier,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         },
@@ -1619,13 +1616,14 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
             ? `→${result.resolvedTier}`
             : "";
         const tierLabel = result.model
-          ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
+          ? `${result.model}${!result.failedOverFrom && (result.resolvedTier || result.modelTier) ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
           : result.model;
         const tierRun = tierRunFromResult(result, modelTier);
         // Always replace: Orchestrator turns and missing/forged resolvedTier must not leave stale Auto→Fast.
         setLastTierRun(tierRun);
         if (!tierRun.resolved) forgetTierOutcome();
-        setNotice(`Ran ${tierLabel}.`);
+        // Name who ACTUALLY answered (server done event), including a failover hop.
+        setNotice(`Ran ${tierLabel}. ${describeAnswer(result)}`);
         return pushAudit(
           pushUsage(next, {
             id: crypto.randomUUID(),
@@ -5624,37 +5622,33 @@ export function CommandApp(props: { serverWorkspace?: import("@/lib/mind/types")
                 <div className="settings-row">
                   <div>
                     <p className="font-semibold">Provider failover</p>
-                    <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
+                    <p className="text-muted">
+                      {failoverPolicy === "on"
+                        ? "On. If the provider fails before replying, the server retries once on another configured provider. The reply names the provider that answered."
+                        : "Off. A failed provider shows its error. No other provider is substituted."}
+                    </p>
                   </div>
-                  <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Provider failover"
+                    aria-checked={failoverPolicy === "on"}
+                    disabled={busy}
+                    aria-disabled={busy}
+                    title={busy ? "Applies to the next send. The in-flight reply keeps its provider." : undefined}
+                    className={`flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 disabled:opacity-50 ${failoverPolicy === "on" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
+                    onClick={() => {
+                      if (busy || turnInFlight.current) {
+                        setNotice("Failover change applies to the next send. The in-flight reply keeps its provider.");
+                        return;
+                      }
+                      setFailoverPolicy((current) => (current === "on" ? "off" : "on"));
+                    }}
+                  >
+                    {failoverPolicy === "on" ? "On" : "Off"}
+                    <span className={`h-6 w-11 rounded-full ${failoverPolicy === "on" ? "bg-accent-ink/30" : "bg-line"}`} />
+                  </button>
                 </div>
-              </div>
-              <div className="settings-card rounded-panel p-4 text-sm hidden">
-                <p className="font-semibold">Provider failover</p>
-                <p className="mt-1 text-muted">
-                  {failoverPolicy === "none"
-                    ? "Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present."
-                    : "On. If the selected provider cannot run, chat may switch to Grok when that key is present. The switch is recorded in the notice."}
-                </p>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={failoverPolicy === "grok"}
-                  disabled={busy}
-                  aria-disabled={busy}
-                  title={busy ? "Applies to the next send. The in-flight reply keeps its provider." : undefined}
-                  className={`mt-3 flex min-h-11 w-full items-center justify-between rounded-panel border border-line px-3 disabled:opacity-50 ${failoverPolicy === "grok" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
-                  onClick={() => {
-                    if (busy || turnInFlight.current) {
-                      setNotice("Failover change applies to the next send. The in-flight reply keeps its provider.");
-                      return;
-                    }
-                    setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"));
-                  }}
-                >
-                  Allow switch to Grok
-                  <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
-                </button>
               </div>
               <VoiceSettingsBlock />
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>

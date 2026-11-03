@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { chipLabelForTier, resolveModelTier, selectModelTier, type ModelTier } from "./model-tiers.ts";
-import { chosenProvider, failover } from "./providers.ts";
+import { chosenProvider } from "./providers.ts";
+import { parseFailoverField } from "./failover.ts";
 
 describe("chip ↔ Mode picker sync", () => {
   it("selectModelTier is the shared source of truth for both controls", () => {
@@ -40,17 +41,11 @@ describe("chip ↔ Mode picker sync", () => {
   });
 });
 
-describe("Settings Allow switch to Grok failover", () => {
-  it("off policy does not switch; grok policy switches when provider refused", () => {
-    const off = failover("openai", true, "none");
-    assert.equal(off.provider, null);
-    assert.equal(off.switched, false);
-    const on = failover("openai", true, "grok");
-    assert.equal(on.provider, "grok");
-    assert.equal(on.switched, true);
-    // deliver() then re-resolves via chosenProvider("grok", ...)
-    const routed = chosenProvider("grok", true);
-    assert.equal(routed.ok, true);
+describe("Settings provider failover toggle", () => {
+  it("only a literal true on the request body enables server failover", () => {
+    assert.equal(parseFailoverField(true), true);
+    for (const v of [false, "true", 1, "grok", {}, null, undefined]) assert.equal(parseFailoverField(v), false);
+    assert.equal(chosenProvider("grok", true).ok, true);
   });
 });
 
