@@ -59,4 +59,4 @@ Under `/workspace/audit/layout-scatter/shots/`:
 
 ## Stop point
 
-SHA: `b72779ae49034653aff34ae92d09da2d3bab1ec2`. Next: Visual Polish pass on density; Merge Gate when ready. Do **not** deploy prod from this branch.
+SHA: `bb013f034ed9cebb2bbcc14b1d8dc99ba4b6961e`. Next: Visual Polish pass on density; Merge Gate when ready. Do **not** deploy prod from this branch.
