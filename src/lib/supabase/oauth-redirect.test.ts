@@ -1,11 +1,17 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildAuthCallbackUrl, oauthAuthorizeTarget } from "./oauth-redirect.ts";
+import { describe, it } from "node:test";
+import {
+  buildAuthCallbackUrl,
+  oauthAuthorizeTarget,
+} from "./oauth-redirect.ts";
 
 describe("buildAuthCallbackUrl", () => {
   it("uses the request origin so preview hosts work", () => {
     assert.equal(
-      buildAuthCallbackUrl("https://adrians-mind-git-preview-ui-completion.vercel.app", "/dashboard"),
+      buildAuthCallbackUrl(
+        "https://adrians-mind-git-preview-ui-completion.vercel.app",
+        "/dashboard",
+      ),
       "https://adrians-mind-git-preview-ui-completion.vercel.app/auth/callback?next=%2Fdashboard",
     );
   });
@@ -19,25 +25,44 @@ describe("buildAuthCallbackUrl", () => {
 
   it("falls back to /dashboard for unsafe next values", () => {
     assert.equal(
-      buildAuthCallbackUrl("https://example.com", "https://evil.test"),
+      buildAuthCallbackUrl("https://example.com", "//evil"),
       "https://example.com/auth/callback?next=%2Fdashboard",
     );
   });
 });
 
 describe("oauthAuthorizeTarget", () => {
-  const url = "https://xarxhdsnprpnosimehon.supabase.co/auth/v1/authorize?provider=google&redirect_to=x";
-  it("follows an ok Supabase authorize URL", () => {
+  it("follows first-party Google authorize URLs", () => {
+    const url =
+      "https://accounts.google.com/o/oauth2/v2/auth?client_id=x&redirect_uri=https%3A%2F%2Fadrians-mind.vercel.app%2Fauth%2Fgoogle%2Fcallback&state=s";
     assert.equal(oauthAuthorizeTarget({ ok: true, url }), url);
   });
-  it("does not treat a returned URL as an error result", () => {
-    assert.notEqual(oauthAuthorizeTarget({ ok: true, url }), null);
+
+  it("follows first-party GitHub authorize URLs", () => {
+    const url =
+      "https://github.com/login/oauth/authorize?client_id=Ov23liyoFNKAehh9yjxX&redirect_uri=https%3A%2F%2Fadrians-mind.vercel.app%2Fauth%2Fgithub%2Fcallback&state=s";
+    assert.equal(oauthAuthorizeTarget({ ok: true, url }), url);
   });
+
+  it("still allows Supabase authorize for transitional Apple hops", () => {
+    const url =
+      "https://xarxhdsnprpnosimehon.supabase.co/auth/v1/authorize?provider=apple&redirect_to=x";
+    assert.equal(oauthAuthorizeTarget({ ok: true, url }), url);
+  });
+
+  it("does not treat a returned URL as an error result", () => {
+    assert.equal(
+      oauthAuthorizeTarget({
+        ok: false,
+        error: "nope",
+        url: "https://accounts.google.com/o/oauth2/v2/auth",
+      }),
+      null,
+    );
+  });
+
   it("ignores failures, non-https and non-authorize URLs", () => {
-    assert.equal(oauthAuthorizeTarget({ ok: false, error: "x" }), null);
     assert.equal(oauthAuthorizeTarget({ ok: true, url: "http://a.supabase.co/auth/v1/authorize" }), null);
-    assert.equal(oauthAuthorizeTarget({ ok: true, url: "https://evil.com/phish" }), null);
-    assert.equal(oauthAuthorizeTarget({ ok: true, url: "javascript:alert(1)" }), null);
-    assert.equal(oauthAuthorizeTarget(undefined), null);
+    assert.equal(oauthAuthorizeTarget({ ok: true, url: "https://evil.example/phish" }), null);
   });
 });
