@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   OAUTH_STATUS_FETCH_TIMEOUT_MS,
+  STATUS_UNAVAILABLE_SIGNIN_DETAIL,
   fetchOauthStatusPayload,
   isStatusUnavailable,
   type OauthStatusPayload,
 } from "@/lib/mind/service-board-status";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 type Service = {
   name: string;
@@ -97,10 +99,22 @@ export function ServiceBoard({
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
   const inFlight = useRef<Set<string>>(new Set());
+  const { user, isPending } = useCurrentUserState();
+  const sessionActive = !isPending && Boolean(user);
+  const sessionActiveRef = useRef(sessionActive);
+  sessionActiveRef.current = sessionActive;
 
   const refreshOne = useCallback((name: string) => {
     const meta = OAUTH_BOARD[name];
     if (!meta) return;
+    // Do not probe OAuth status while signed out (avoids 401 spam on home).
+    if (!sessionActiveRef.current) {
+      setOauthByName((prev) => ({
+        ...prev,
+        [name]: { state: "not_connected", detail: STATUS_UNAVAILABLE_SIGNIN_DETAIL },
+      }));
+      return;
+    }
     if (inFlight.current.has(name)) return;
     inFlight.current.add(name);
     setRefreshing(name);
@@ -122,6 +136,20 @@ export function ServiceBoard({
   }, [refreshOne]);
 
   useEffect(() => {
+    // Signed-out home was firing six /api/mind/oauth/*/status GETs that 401'd.
+    // Only probe when a session is active (or auth-off DEV_USER).
+    if (!sessionActive) {
+      const signedOut: OauthStatus = {
+        state: "not_connected",
+        detail: STATUS_UNAVAILABLE_SIGNIN_DETAIL,
+      };
+      setOauthByName((prev) => {
+        const next: Record<string, OauthStatus | null | undefined> = { ...prev };
+        for (const name of Object.keys(OAUTH_BOARD)) next[name] = signedOut;
+        return next;
+      });
+      return;
+    }
     refreshAll();
     const onMsg = (event: MessageEvent) => {
       if (!event.data || typeof event.data !== "object") return;
@@ -133,7 +161,7 @@ export function ServiceBoard({
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [refreshAll, refreshOne]);
+  }, [sessionActive, refreshAll, refreshOne]);
 
   const grok: Service = grokConfigured
     ? { name: "Grok", state: "Key present", detail: "Grok 4.5 can answer when you press Send. That is not a live-verified integration." }

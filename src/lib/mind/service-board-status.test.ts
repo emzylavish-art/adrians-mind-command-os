@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 import {
   OAUTH_STATUS_FETCH_TIMEOUT_MS,
   STATUS_UNAVAILABLE_DETAIL,
@@ -156,5 +161,46 @@ describe("service-board oauth status resolution", () => {
     assert.match(html, /data-testid="connector-status-retry"/);
     assert.match(html, />Retry</);
     assert.match(html, /Connection status could not be read/);
+  });
+});
+
+describe("service-board session gate + security headers (rea-hardening)", () => {
+  it("ServiceBoard gates oauth/*/status probes on an active session", () => {
+    const src = readFileSync(join(root, "src/components/mind/service-board.tsx"), "utf8");
+    assert.match(src, /useCurrentUserState/);
+    assert.match(src, /sessionActive/);
+    assert.match(src, /sessionActiveRef/);
+    assert.match(src, /STATUS_UNAVAILABLE_SIGNIN_DETAIL/);
+    assert.match(src, /Only probe when a session is active/);
+    // Must not call refreshAll unconditionally on mount anymore.
+    assert.doesNotMatch(src, /useEffect\(\(\) => \{\s*refreshAll\(\);/);
+  });
+
+  it("vercel.json ships browser security headers + CSP Report-Only (not enforced)", () => {
+    const raw = readFileSync(join(root, "vercel.json"), "utf8");
+    const cfg = JSON.parse(raw) as {
+      headers?: { source?: string; headers?: { key: string; value: string }[] }[];
+      git?: { deploymentEnabled?: Record<string, boolean> };
+      ignoreCommand?: string;
+    };
+    const global = (cfg.headers ?? []).find((h) => h.source === "/(.*)");
+    assert.ok(global, "expected catch-all /(.*) header rule");
+    const map = Object.fromEntries((global?.headers ?? []).map((h) => [h.key, h.value]));
+    assert.equal(map["X-Content-Type-Options"], "nosniff");
+    assert.equal(map["Referrer-Policy"], "strict-origin-when-cross-origin");
+    assert.equal(map["X-Frame-Options"], "DENY");
+    assert.match(map["Permissions-Policy"] ?? "", /microphone=\(self\)/);
+    assert.match(map["Permissions-Policy"] ?? "", /camera=\(self\)/);
+    const csp = map["Content-Security-Policy-Report-Only"] ?? "";
+    assert.ok(csp.length > 40, "CSP Report-Only must be present");
+    assert.match(csp, /frame-ancestors 'none'/);
+    assert.match(csp, /https:\/\/grok\.com/);
+    assert.match(csp, /xarxhdsnprpnosimehon\.supabase\.co/);
+    assert.match(csp, /accounts\.google\.com/);
+    assert.match(csp, /github\.com/);
+    assert.match(csp, /api\.x\.ai/);
+    assert.equal(map["Content-Security-Policy"], undefined, "CSP must stay report-only until preview check");
+    assert.equal(cfg.git?.deploymentEnabled?.["fix/rea-hardening"], false);
+    assert.match(cfg.ignoreCommand ?? "", /fix\/rea-hardening/);
   });
 });
