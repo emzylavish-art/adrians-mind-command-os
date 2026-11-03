@@ -1,11 +1,11 @@
 import type { Sql } from "../db.ts";
-import { enqueueRun, type ScheduleJob } from "./fleet.ts";
+import { enqueueRun, tickFleet, type ScheduleJob } from "./fleet.ts";
 import { nextClock } from "./schedule-clock.ts";
 import { writeSnapshot } from "./store.ts";
 import type { AuditEntry } from "./types.ts";
 import { normalizeWorkspace } from "./workspace.ts";
 
-export type WorkerPass = { owners: number; ran: number; skipped: number; failed: number; recovered: number };
+export type WorkerPass = { owners: number; ran: number; skipped: number; failed: number; recovered: number; agentPasses: number };
 
 export type Claim = { jobs: ScheduleJob[]; claimed: string[]; skipped: string[]; recovered: string[] };
 
@@ -54,7 +54,7 @@ export async function runWorkerPass(
   run?: (job: ScheduleJob) => { ok: boolean; detail: string },
 ): Promise<WorkerPass> {
   const rows = await sql<{ user_id: string; payload: unknown }>`select user_id, payload from mind_snapshot`;
-  const summary: WorkerPass = { owners: rows.length, ran: 0, skipped: 0, failed: 0, recovered: 0 };
+  const summary: WorkerPass = { owners: rows.length, ran: 0, skipped: 0, failed: 0, recovered: 0, agentPasses: 0 };
   for (const row of rows) {
     const payload = typeof row.payload === "string" ? JSON.parse(row.payload) as unknown : row.payload;
     const ws = normalizeWorkspace(payload);
@@ -66,7 +66,23 @@ export async function runWorkerPass(
     const claim = claimSchedules(ws.schedules, now, workerId);
     summary.skipped += claim.skipped.length;
     summary.recovered += claim.recovered.length;
-    if (claim.claimed.length === 0) continue;
+    if (claim.claimed.length === 0) {
+      // The schedule runner is also the local agent worker. Queued runs must
+      // progress even when there are no schedules due in this minute.
+      // With no browser/search driver supplied, remote actions fail closed.
+      const runnable = ws.runs.some(
+        (item) => item.state === "queued" ||
+          (item.state === "running" && (!item.leaseUntil || item.leaseUntil <= now)),
+      );
+      if (runnable) {
+        const progressed = tickFleet(ws, { now, workerId });
+        if (JSON.stringify(progressed) !== JSON.stringify(ws)) {
+          await writeSnapshot(sql, row.user_id, progressed);
+          summary.agentPasses += 1;
+        }
+      }
+      continue;
+    }
     let nextWs = { ...ws, schedules: claim.jobs };
     // Persist the short-lived lease before dispatching a task.
     await writeSnapshot(sql, row.user_id, nextWs);
