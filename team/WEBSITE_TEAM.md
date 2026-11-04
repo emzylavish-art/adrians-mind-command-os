@@ -10,7 +10,6 @@ The crew below is what stops the site looking like every other generated templat
 | Hallmark | Anti-slop design skill | Use on a new page so it looks made, not generated. Skill: `upstream/hallmark/skills/hallmark/SKILL.md`. Version 2. |
 | Impeccable | Polish and redesign | CLI `impeccable` 4.8.0. Use when a page exists and needs hierarchy, type, color, and finish. Project skill: `.grok/skills/impeccable`. Source: `upstream/impeccable`. |
 | UI UX Pro Max | Style, palette, and type database | Search it before picking colors and fonts. |
-| 21st | Interface library | Component search and logos. The source and `magic` command are installed. Live search stays off until the owner sets `API_KEY_21ST` from https://21st.dev/mcp. A key shown in a video is someone else's key. Do not use it. |
 | GSAP | Professional animation | Timelines, transforms, and sequenced motion. Package `gsap` 3.15.1. |
 | Lenis | Smooth scroll | The scroll feels finished instead of default. Package `lenis` 1.3.27. Use it with GSAP, not instead of it. |
 | Motion | React section animation | Package `motion` 14.9.1 in `tools/website`. This is the package the clip calls Framer Motion. GSAP still owns sequenced timelines. |

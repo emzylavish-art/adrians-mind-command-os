@@ -158,10 +158,10 @@
         "interface_components",
         "component_search"
       ],
-      "status": "partial",
+      "status": "removed",
       "entrypoint": "team/agents/interfaces.md",
       "requires": [
-        "owner_21st_api_key"
+        "not_on_website_pass"
       ]
     },
     {

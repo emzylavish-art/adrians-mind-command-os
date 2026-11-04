@@ -20,7 +20,6 @@ MEMBERS = [
     {"id": "hallmark", "job": "Anti-slop design for a new page."},
     {"id": "ui-ux-pro-max", "job": "Type, color, and style. Search before picking them."},
     {"id": "impeccable", "job": "Polish and redesign. Run impeccable detect on the surface."},
-    {"id": "21st", "job": "Interface components. Live search stays off until the owner sets API_KEY_21ST."},
     {"id": "gsap", "job": "Sequenced motion. Do not invent a CSS timeline."},
     {"id": "lenis", "job": "Smooth scroll, when the surface scrolls."},
     {"id": "motion", "job": "React section animation. Do not double it with a GSAP timeline."},

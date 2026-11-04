@@ -25,9 +25,10 @@ class WebsitePassTests(unittest.TestCase):
             ledger = str(Path(directory) / "ledger.json")
             report = run(ledger, "plan", "--surface", "Login screen")
             self.assertEqual(report["pass"], "first")
-            self.assertEqual(len(report["use"]), 12)
+            self.assertEqual(len(report["use"]), 11)
             self.assertEqual(report["skip"], [])
             self.assertIn("gods-eye-view", [item["id"] for item in report["use"]])
+            self.assertNotIn("21st", [item["id"] for item in report["use"]])
 
     def test_satisfied_tool_is_skipped_and_the_rest_stay(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -38,7 +39,7 @@ class WebsitePassTests(unittest.TestCase):
             self.assertEqual(report["pass"], "follow-up")
             self.assertEqual([item["id"] for item in report["skip"]], ["gsap"])
             self.assertNotIn("gsap", [item["id"] for item in report["use"]])
-            self.assertEqual(len(report["use"]), 11)
+            self.assertEqual(len(report["use"]), 10)
 
     def test_other_surface_still_requires_the_satisfied_tool(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1,5 +1,7 @@
 # 21st interfaces
 
+Removed from the website team. Do not use 21st on a website pass. The source remains at `upstream/21st-magic`, but there is no usable key, so it is not part of analysis.
+
 ## Role
 Real interface components for the website team. Search and adapt a component instead of drawing a generic card row.
 

@@ -48,11 +48,6 @@ def locate() -> dict:
             "package": None,
             "job": "Copy the one animated component the page needs. Do not paste the whole gallery.",
         },
-        "21st": {
-            "source": ROOT / "upstream" / "21st-magic",
-            "package": None,
-            "job": "Interface components. Live search stays off until the owner sets API_KEY_21ST. Do not use a key from a video.",
-        },
         "scrapling": {
             "source": ROOT / "upstream" / "scrapling" / "agent-skill" / "Scrapling-Skill" / "SKILL.md",
             "package": None,
@@ -85,7 +80,6 @@ def locate() -> dict:
         "missing": missing,
         "limitations": [
             "React Bits is a source library. Copy one component into the site being built.",
-            "21st live search needs the owner's own API key. A key from a video is not usable.",
             "Motion animates sections. GSAP still owns sequenced timelines. Lenis owns scroll.",
             "Scrapling and PixelRAG only read pages you are allowed to read. They are not design systems.",
             "Installing these packages does not design the page. Taste or Hallmark still directs the look.",
