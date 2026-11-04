@@ -184,7 +184,7 @@
         "agent": "impeccable"
       },
       "live": "not-verified",
-      "notes": "Polish and redesign skill for the website team."
+      "notes": "Polish and redesign skill for the website team. CLI 4.8.0 is installed. impeccable detect ran on a local fixture. Project skill is .grok/skills/impeccable."
     },
     {
       "id": "motion",
@@ -211,7 +211,7 @@
         "agent": "scrapling"
       },
       "live": "not-verified",
-      "notes": "Research helper for pages you are allowed to read. Not a design system. Core library scrapling 0.5 is in .tools/venvs/website-research. Browser extras are not installed."
+      "notes": "Research helper for pages you are allowed to read. Not a design system. scrapling 0.5 with the shell extra is in .tools/venvs/website-research. CLI --version and a local HTML parse both passed. Do not bypass a login or a paywall."
     },
     {
       "id": "pixelrag",
@@ -224,7 +224,7 @@
         "agent": "pixelrag"
       },
       "live": "not-verified",
-      "notes": "Research helper. Source and skill only. Core package requires Python 3.12. No Wikipedia index and no model weights."
+      "notes": "Research helper. pixelrag 0.4.0 is installed in .tools/venvs/pixelrag (Python 3.12). pixelshot rendered a local HTML file. No Wikipedia index and no model weights."
     },
     {
       "id": "heretic",

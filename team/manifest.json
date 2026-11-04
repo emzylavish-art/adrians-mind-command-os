@@ -395,6 +395,23 @@
       "safety": "offline check that the website crew sources are installed; does not build or publish a site"
     },
     {
+      "id": "website.pass",
+      "agent": "website",
+      "capabilities": [
+        "website_build",
+        "analysis_rotation"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/website/passes.py",
+      "input_schema": {
+        "action": "plan|record|satisfy|status",
+        "surface": "string",
+        "tool": "string",
+        "evidence": "string"
+      },
+      "safety": "Picks which installed website tools the next analysis must use. Does not fetch pages, copy branding, or run security tools."
+    },
+    {
       "id": "gods-eyes",
       "agent": "gods-eyes",
       "capabilities": [

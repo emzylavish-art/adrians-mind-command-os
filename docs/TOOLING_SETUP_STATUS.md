@@ -10,8 +10,8 @@ The previous stop was pinned submodule metadata only. This pass checked out ever
 
 - All 24 pinned `upstream/` submodules initialized at their recorded commits, including nested Frida and x64dbg submodules. Missing nested checkouts after recursive init: 0.
 - Python: `frida-tools` 14.11.0 (`frida` 17.25.1) and `lightrag-hku` 1.5.7 import and the Frida CLI responds to `--version`.
-- Website motion crew: GSAP 3.15.1, Lenis 1.3.27, and Motion 14.9.1 are installed in `tools/website`. Hallmark, Impeccable, and React Bits are checked out under `upstream/`. The charter any AI should read is `team/WEBSITE_TEAM.md`.
-- `h4cker` is checked out in full at `security-repos/h4cker`. Heretic is source only at `security-repos/heretic` and is not executed. Neither is a website team agent.
+- Website motion crew: GSAP 3.15.1, Lenis 1.3.27, and Motion 14.9.1 are installed in `tools/website`. Hallmark, Impeccable, and React Bits are checked out under `upstream/`. Impeccable CLI 4.8.0 answers `impeccable detect`. Scrapling 0.5 answers `scrapling --version`. PixelRAG 0.4.0 `pixelshot` rendered a local HTML file. The charter any AI should read is `team/WEBSITE_TEAM.md`.
+- `h4cker` is checked out in full at `security-repos/h4cker`. Heretic stays source only at `security-repos/heretic` and is not executed, because its default action removes a model's refusals. Neither is a website team agent.
 - Release runtimes extracted under the gitignored `.tools/apps` directory: JADX 1.5.6 (`jadx --version`), OWASP ZAP 2.17.0 (`zap.sh -version` printed 2.17.0 on Java 17), Ghidra 12.2 public. Temurin JDK 25.0.5 is under `.tools/jdk`. With `JAVA_HOME` set and `/dev/fd` linked to `/proc/self/fd`, `analyzeHeadless` prints its usage text.
 - Native team tests: `python3 -m unittest discover -s team -p 'test_*.py'` — 57 tests, OK. `python3 team/health.py` reported health ok. `python3 tools/bootstrap/validate_bootstrap.py` passed.
 
@@ -20,7 +20,7 @@ The previous stop was pinned submodule metadata only. This pass checked out ever
 | Item | Result |
 | --- | --- |
 | BlackEye | Not installed. Phishing and credential-harvesting setup stays excluded. No separate repository was created. |
-| God's Eyes, Arrow EA, Blackbox, VoiceStudio, OpenSEO | Not installed. Exact source identity is still unconfirmed in the registry. |
+| God's Eyes, Arrow EA, Blackbox, VoiceStudio, OpenSEO | God's Eye View, VoiceStudio, and OpenSEO have candidate checkouts. Arrow EA and Blackbox still have no confirmed official repository, so nothing was substituted. |
 | Zapia | Not configured. Needs an owner-authorized endpoint and credentials. |
 | Burp Suite Community | Not installed here. The committed installer uses Windows `winget` (`PortSwigger.BurpSuite.Community`). This Linux workspace has no winget. |
 | x64dbg binary | Source and nested deps are checked out. The Windows GUI binary is not runnable on Linux. |

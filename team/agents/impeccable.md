@@ -5,8 +5,9 @@ Polish, critique, and redesign of a website interface. Hierarchy, type, color, m
 
 ## Installed
 - Source: `upstream/impeccable` (pbakaus/impeccable)
-- Skill source: `upstream/impeccable/skill/SKILL.src.md`
-- Reference notes: `upstream/impeccable/.veto/skills/impeccable/reference/`
+- CLI: `impeccable` 4.8.0 on PATH after sourcing `.tools/env.sh`
+- Project skill: `.grok/skills/impeccable` (this folder is gitignored; the source checkout is the copy that stays in git)
+- Check that passed: `impeccable detect` on a local HTML fixture
 
 ## Limits
 The brief wins. Refinement keeps the current identity. A redesign replaces the look and keeps the product facts. Do not load this for backend work.

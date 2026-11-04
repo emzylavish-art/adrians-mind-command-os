@@ -15,6 +15,8 @@ Build Adrian's websites so they are not generic templates. Read `team/WEBSITE_TE
 - Scrapling or PixelRAG only to read a page you are allowed to read. They do not design the page.
 
 ## Check
-`python3 tools/website/kit.py`
+`python3 tools/website/kit.py` confirms the crew is on disk.
 
-A passing check means the crew is on disk. It does not mean the page is designed.
+`python3 tools/website/passes.py plan --surface "<name>"` is the analysis. The first plan must be followed in full. A later plan skips only the tools the owner already marked satisfied on that same surface.
+
+A passing kit check does not mean the page is designed.
