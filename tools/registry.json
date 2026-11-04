@@ -40,6 +40,66 @@
       "source_url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill"
     },
     {
+      "name": "21st Magic",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "source-checkout+npm-cli",
+      "live": "blocked-on-owner-api-key",
+      "team_agent": "interfaces",
+      "source_url": "https://github.com/21st-dev/magic-mcp",
+      "note": "Component search, logo search, and paid UI generation for the website. Not a security tool. Requires the owner's own 21st.dev key."
+    },
+    {
+      "name": "gsap",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "source-checkout+npm",
+      "live": "not-connected",
+      "team_agent": "gsap",
+      "source_url": "https://github.com/greensock/GSAP",
+      "note": "Website team motion. npm package gsap is installed in tools/website."
+    },
+    {
+      "name": "lenis",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "source-checkout+npm",
+      "live": "not-connected",
+      "team_agent": "lenis",
+      "source_url": "https://github.com/darkroomengineering/lenis",
+      "note": "Website team smooth scroll. npm package lenis is installed in tools/website."
+    },
+    {
+      "name": "react-bits",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "source-checkout",
+      "live": "not-connected",
+      "team_agent": "react-bits",
+      "source_url": "https://github.com/DavidHDev/react-bits",
+      "note": "Website team animated components. Copy one component. Do not resell the library."
+    },
+    {
+      "name": "taste-skill",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "source-checkout",
+      "live": "not-connected",
+      "team_agent": "taste",
+      "source_url": "https://github.com/Leonxlnx/taste-skill",
+      "note": "Website art direction. Frontier products are studied as craft, not copied."
+    },
+    {
+      "name": "h4cker",
+      "category": "authorized-defensive-analysis",
+      "status": "source-verified",
+      "install": "isolated-security-repo",
+      "live": "not-connected",
+      "team_agent": "unmapped",
+      "source_url": "https://github.com/The-Art-of-Hacking/h4cker",
+      "note": "Own repo for server-security study. Not on the website team. Reference only."
+    },
+    {
       "name": "n8n-MCP",
       "category": "agent-workflow",
       "status": "source-verified",

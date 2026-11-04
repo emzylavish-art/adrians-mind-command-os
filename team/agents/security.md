@@ -12,6 +12,11 @@ access, credential collection, exploitation, or phishing workflows.
 - Redacts likely hardcoded secret values in displayed excerpts.
 - Reports limitations and requires human review.
 
+## Adjacent library, not this agent
+The h4cker checkout in `security-repos/h4cker` is a separate server-security
+library. It is not dispatched with the website team and this agent does not
+execute it.
+
 ## Current scope
 This is a starter static scan, not a complete SAST or penetration-testing engine.
 The specialist may only claim a scan was performed when the tool's actual output

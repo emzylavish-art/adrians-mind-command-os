@@ -91,6 +91,89 @@
       "notes": "Needs an authorized n8n endpoint and integration-specific setup; source/package presence is not a live connection."
     },
     {
+      "id": "21st-magic",
+      "name": "21st Magic MCP",
+      "kind": "upstream-source-and-package",
+      "status": "installed-awaiting-owner-key",
+      "source": "https://github.com/21st-dev/magic-mcp",
+      "activation": {
+        "codespaces_setup": "tools/bootstrap/install-github-workspace.sh",
+        "npm_package": "@21st-dev/magic",
+        "endpoint": "https://21st.dev/api/mcp",
+        "credential_env": "API_KEY_21ST",
+        "config": "team/remote_mcp.json"
+      },
+      "live": "not-verified",
+      "notes": "Source and npm proxy are present. Stays disabled until the owner sets API_KEY_21ST from https://21st.dev/mcp. Keys shown in videos are not usable."
+    },
+    {
+      "id": "gsap",
+      "name": "GSAP",
+      "kind": "website-team",
+      "status": "installed",
+      "source": "https://github.com/greensock/GSAP",
+      "activation": {
+        "npm_package": "gsap",
+        "package_version": "3.15.1",
+        "agent": "gsap"
+      },
+      "live": "not-verified",
+      "notes": "Animation timelines for the website team."
+    },
+    {
+      "id": "lenis",
+      "name": "Lenis",
+      "kind": "website-team",
+      "status": "installed",
+      "source": "https://github.com/darkroomengineering/lenis",
+      "activation": {
+        "npm_package": "lenis",
+        "package_version": "1.3.27",
+        "agent": "lenis"
+      },
+      "live": "not-verified",
+      "notes": "Smooth scroll for the website team. Used with GSAP."
+    },
+    {
+      "id": "react-bits",
+      "name": "React Bits",
+      "kind": "website-team",
+      "status": "installed",
+      "source": "https://github.com/DavidHDev/react-bits",
+      "activation": {
+        "checkout": "upstream/react-bits",
+        "agent": "react-bits"
+      },
+      "live": "not-verified",
+      "notes": "Copy one animated component. MIT plus Commons Clause. Do not resell the library."
+    },
+    {
+      "id": "taste-skill",
+      "name": "taste-skill",
+      "kind": "upstream-source",
+      "status": "installed",
+      "source": "https://github.com/Leonxlnx/taste-skill",
+      "activation": {
+        "skill": "upstream/taste-skill/skills/taste-skill/SKILL.md",
+        "agent": "taste"
+      },
+      "live": "not-verified",
+      "notes": "Design skill for the website team. Does not copy Manus, GPT, Grok, or any other product."
+    },
+    {
+      "id": "h4cker",
+      "name": "h4cker",
+      "kind": "isolated-security-repo",
+      "status": "installed",
+      "source": "https://github.com/The-Art-of-Hacking/h4cker",
+      "activation": {
+        "checkout": "security-repos/h4cker",
+        "team": false
+      },
+      "live": "not-verified",
+      "notes": "Full ethical-hacking reference library for server security. Kept out of the website team. Do not run exploit material."
+    },
+    {
       "id": "lightrag",
       "name": "LightRAG",
       "kind": "upstream-source-and-package",

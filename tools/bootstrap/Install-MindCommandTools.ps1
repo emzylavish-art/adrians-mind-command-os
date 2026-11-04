@@ -113,6 +113,12 @@ if (-not $SkipSourceClones) {
         @("superpowers", "https://github.com/obra/superpowers.git"),
         @("gsd-core", "https://github.com/gsd-build/get-shit-done.git"),
         @("ui-ux-pro-max", "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git"),
+        @("21st-magic", "https://github.com/21st-dev/magic-mcp.git"),
+        @("gsap", "https://github.com/greensock/GSAP.git"),
+        @("lenis", "https://github.com/darkroomengineering/lenis.git"),
+        @("react-bits", "https://github.com/DavidHDev/react-bits.git"),
+        @("taste-skill", "https://github.com/Leonxlnx/taste-skill.git"),
+        @("h4cker", "https://github.com/The-Art-of-Hacking/h4cker.git"),
         @("n8n-mcp", "https://github.com/czlonkowski/n8n-mcp.git"),
         @("lightrag", "https://github.com/HKUDS/LightRAG.git"),
         @("claude-mem", "https://github.com/thedotmack/claude-mem.git"),
@@ -133,7 +139,7 @@ if (-not $SkipSourceClones) {
 if (-not $SkipNpmPackages) {
     Write-Step "Node.js tools"
     if (Get-Command npm -ErrorAction SilentlyContinue) {
-        & npm install --global n8n-mcp ui-ux-pro-max-cli
+        & npm install --global n8n-mcp ui-ux-pro-max-cli "@21st-dev/magic"
         if ($LASTEXITCODE -ne 0) { Write-Warn "One or more npm packages did not install; check Node.js/npm and rerun." }
     } else {
         Write-Warn "npm is unavailable; n8n-MCP and UI UX Pro Max CLI were not installed."

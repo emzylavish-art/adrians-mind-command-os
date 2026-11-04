@@ -29,6 +29,51 @@
       "npm_package": "ui-ux-pro-max-cli"
     },
     {
+      "id": "21st-magic",
+      "name": "21st Magic MCP",
+      "url": "https://github.com/21st-dev/magic-mcp.git",
+      "install_kind": "source-and-npm-cli",
+      "npm_package": "@21st-dev/magic",
+      "note": "Compatibility proxy for the 21st MCP at https://21st.dev/api/mcp. Live use needs the owner's API_KEY_21ST. Do not store third-party keys from videos."
+    },
+    {
+      "id": "gsap",
+      "name": "gsap",
+      "url": "https://github.com/greensock/GSAP.git",
+      "install_kind": "source-and-npm",
+      "npm_package": "gsap",
+      "note": "Website motion team. Professional animation timelines."
+    },
+    {
+      "id": "lenis",
+      "name": "lenis",
+      "url": "https://github.com/darkroomengineering/lenis.git",
+      "install_kind": "source-and-npm",
+      "npm_package": "lenis",
+      "note": "Website motion team. Smooth scroll, used with GSAP."
+    },
+    {
+      "id": "react-bits",
+      "name": "react-bits",
+      "url": "https://github.com/DavidHDev/react-bits.git",
+      "install_kind": "source-checkout",
+      "note": "Website motion team. Copy one animated component. MIT plus Commons Clause. Do not resell the library."
+    },
+    {
+      "id": "taste-skill",
+      "name": "taste-skill",
+      "url": "https://github.com/Leonxlnx/taste-skill.git",
+      "install_kind": "source-checkout",
+      "note": "Website design skill. Studies craft. Does not copy another product's interface."
+    },
+    {
+      "id": "h4cker",
+      "name": "h4cker",
+      "url": "https://github.com/The-Art-of-Hacking/h4cker.git",
+      "install_kind": "isolated-security-repo",
+      "note": "Server-security reference library in its own checkout. Not a website team agent. Owned or authorized systems only. Do not execute exploit material."
+    },
+    {
       "id": "n8n-mcp",
       "name": "n8n-MCP",
       "url": "https://github.com/czlonkowski/n8n-mcp.git",

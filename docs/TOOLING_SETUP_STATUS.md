@@ -10,7 +10,8 @@ The previous stop was pinned submodule metadata only. This pass checked out ever
 
 - All 24 pinned `upstream/` submodules initialized at their recorded commits, including nested Frida and x64dbg submodules. Missing nested checkouts after recursive init: 0.
 - Python: `frida-tools` 14.11.0 (`frida` 17.25.1) and `lightrag-hku` 1.5.7 import and the Frida CLI responds to `--version`.
-- npm: `n8n-mcp` 2.96.1 (`n8n-mcp` on PATH) and `ui-ux-pro-max-cli` 2.15.0 (binary name is `uipro`, not `ui-ux-pro-max`). `uipro --help` runs.
+- Website motion crew: GSAP 3.15.1 and Lenis 1.3.27 are installed in `tools/website`. React Bits is checked out at `upstream/react-bits`. The charter any AI should read is `team/WEBSITE_TEAM.md`.
+- `h4cker` is checked out in full at `security-repos/h4cker` (747 files). It is a server-security reference library and is not a website team agent.
 - Release runtimes extracted under the gitignored `.tools/apps` directory: JADX 1.5.6 (`jadx --version`), OWASP ZAP 2.17.0 (`zap.sh -version` printed 2.17.0 on Java 17), Ghidra 12.2 public. Temurin JDK 25.0.5 is under `.tools/jdk`. With `JAVA_HOME` set and `/dev/fd` linked to `/proc/self/fd`, `analyzeHeadless` prints its usage text.
 - Native team tests: `python3 -m unittest discover -s team -p 'test_*.py'` — 57 tests, OK. `python3 team/health.py` reported health ok. `python3 tools/bootstrap/validate_bootstrap.py` passed.
 

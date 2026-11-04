@@ -93,3 +93,18 @@
 [submodule "upstream/cap"]
 	path = upstream/cap
 	url = https://github.com/CapSoftware/Cap.git
+[submodule "upstream/gsap"]
+	path = upstream/gsap
+	url = https://github.com/greensock/GSAP.git
+[submodule "upstream/lenis"]
+	path = upstream/lenis
+	url = https://github.com/darkroomengineering/lenis.git
+[submodule "upstream/react-bits"]
+	path = upstream/react-bits
+	url = https://github.com/DavidHDev/react-bits.git
+[submodule "upstream/21st-magic"]
+	path = upstream/21st-magic
+	url = https://github.com/21st-dev/magic-mcp.git
+[submodule "upstream/taste-skill"]
+	path = upstream/taste-skill
+	url = https://github.com/Leonxlnx/taste-skill.git

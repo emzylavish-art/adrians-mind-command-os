@@ -85,6 +85,86 @@
       ]
     },
     {
+      "id": "taste",
+      "role": "Website Taste Specialist",
+      "capabilities": [
+        "art_direction",
+        "frontend_design",
+        "reference_study",
+        "visual_qa"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/taste.md",
+      "requires": [
+        "taste_skill_checkout",
+        "authorized_design_scope"
+      ]
+    },
+    {
+      "id": "website",
+      "role": "Website Crew",
+      "capabilities": [
+        "website_build",
+        "landing_page",
+        "app_screen"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/website.md",
+      "requires": [
+        "website_team_charter"
+      ]
+    },
+    {
+      "id": "gsap",
+      "role": "GSAP Motion",
+      "capabilities": [
+        "timeline_animation",
+        "motion_design"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/gsap.md",
+      "requires": [
+        "gsap_package"
+      ]
+    },
+    {
+      "id": "lenis",
+      "role": "Lenis Smooth Scroll",
+      "capabilities": [
+        "smooth_scroll"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/lenis.md",
+      "requires": [
+        "lenis_package"
+      ]
+    },
+    {
+      "id": "react-bits",
+      "role": "React Bits Components",
+      "capabilities": [
+        "animated_components"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/react-bits.md",
+      "requires": [
+        "react_bits_checkout"
+      ]
+    },
+    {
+      "id": "interfaces",
+      "role": "21st Interface Library",
+      "capabilities": [
+        "interface_components",
+        "component_search"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/interfaces.md",
+      "requires": [
+        "owner_21st_api_key"
+      ]
+    },
+    {
       "id": "rea",
       "role": "Reverse Engineering Specialist",
       "capabilities": [
@@ -225,6 +305,33 @@
         "out": "string"
       },
       "safety": "offline; does not execute scanned code"
+    },
+    {
+      "id": "taste.locate",
+      "agent": "taste",
+      "capabilities": [
+        "art_direction",
+        "reference_study"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/taste/taste.py",
+      "input_schema": {
+        "json": "boolean"
+      },
+      "safety": "offline locator for the installed taste skill; does not copy another product and does not fetch images"
+    },
+    {
+      "id": "website.kit",
+      "agent": "website",
+      "capabilities": [
+        "website_build"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/website/kit.py",
+      "input_schema": {
+        "json": "boolean"
+      },
+      "safety": "offline check that the website crew sources are installed; does not build or publish a site"
     },
     {
       "id": "gods-eyes",
