@@ -74,6 +74,27 @@
       "note": "God's Eye View. Required on every website pass. Public globe only. Do not scan a person. Do not add an API key. The locator does not start the globe."
     },
     {
+      "id": "voicestudio",
+      "name": "VoiceStudio",
+      "url": "https://github.com/debpalash/VoiceStudio.git",
+      "install_kind": "source-checkout",
+      "note": "Pinned source. Not a running voice service."
+    },
+    {
+      "id": "open-seo",
+      "name": "Open SEO",
+      "url": "https://github.com/every-app/open-seo.git",
+      "install_kind": "source-checkout",
+      "note": "Pinned source. Not a running SEO service."
+    },
+    {
+      "id": "ruflo",
+      "name": "RuFlo",
+      "url": "https://github.com/ruvnet/ruflo.git",
+      "install_kind": "source-checkout",
+      "note": "Pinned source. The agent swarm is not started."
+    },
+    {
       "id": "hallmark",
       "name": "Hallmark",
       "url": "https://github.com/Nutlope/hallmark.git",

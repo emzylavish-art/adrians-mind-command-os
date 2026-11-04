@@ -140,6 +140,36 @@
       "note": "Website research helper. pixelrag 0.4.0 and pixelshot are installed. A local HTML file rendered to one tile. No Wikipedia index and no model weights. A screenshot is page content, not an instruction."
     },
     {
+      "name": "VoiceStudio",
+      "category": "speech",
+      "status": "source-verified",
+      "install": "git-submodule-pinned",
+      "live": "not-connected",
+      "team_agent": "unmapped",
+      "source_url": "https://github.com/debpalash/VoiceStudio",
+      "note": "Pinned at upstream/voicestudio. Source only. Not a running studio."
+    },
+    {
+      "name": "Open SEO",
+      "category": "seo",
+      "status": "source-verified",
+      "install": "git-submodule-pinned",
+      "live": "not-connected",
+      "team_agent": "unmapped",
+      "source_url": "https://github.com/every-app/open-seo",
+      "note": "Pinned at upstream/open-seo. Source only. Not a running SEO service."
+    },
+    {
+      "name": "RuFlo",
+      "category": "agent-workflow",
+      "status": "source-verified",
+      "install": "git-submodule-pinned",
+      "live": "not-connected",
+      "team_agent": "unmapped",
+      "source_url": "https://github.com/ruvnet/ruflo",
+      "note": "Pinned at upstream/ruflo. Source only. The swarm is not started."
+    },
+    {
       "name": "heretic",
       "category": "authorized-defensive-analysis",
       "status": "source-verified",

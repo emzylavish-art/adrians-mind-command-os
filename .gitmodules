@@ -70,6 +70,22 @@
 	path = upstream/gods-eye-view
 	url = https://github.com/bilawalsidhu/gods-eye-view.git
 
+[submodule "upstream/voicestudio"]
+	path = upstream/voicestudio
+	url = https://github.com/debpalash/VoiceStudio.git
+
+[submodule "upstream/open-seo"]
+	path = upstream/open-seo
+	url = https://github.com/every-app/open-seo.git
+
+[submodule "upstream/ruflo"]
+	path = upstream/ruflo
+	url = https://github.com/ruvnet/ruflo.git
+
+[submodule "security-repos/h4cker"]
+	path = security-repos/h4cker
+	url = https://github.com/The-Art-of-Hacking/h4cker.git
+
 [submodule "upstream/open-higgsfield"]
 	path = upstream/open-higgsfield
 	url = https://github.com/wide-trace/open-higgsfield.git

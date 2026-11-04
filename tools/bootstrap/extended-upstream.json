@@ -86,13 +86,13 @@
   "unresolved": [
     {
       "name": "VoiceStudio",
-      "status": "identity-unconfirmed",
-      "note": "Exact intended repository not established; do not substitute a similarly named project."
+      "status": "source-verified",
+      "note": "Pinned at upstream/voicestudio from debpalash/VoiceStudio. Source only."
     },
     {
-      "name": "OpenSEO",
-      "status": "identity-unconfirmed",
-      "note": "Several unrelated projects use this name; exact source not established."
+      "name": "Open SEO",
+      "status": "source-verified",
+      "note": "Pinned at upstream/open-seo from every-app/open-seo. Source only."
     },
     {
       "name": "Zapia",

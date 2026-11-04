@@ -21,7 +21,7 @@ The previous stop was pinned submodule metadata only. This pass checked out ever
 | --- | --- |
 | BlackEye | Not installed. Phishing and credential-harvesting setup stays excluded. No separate repository was created. |
 | God's Eye View | Pinned at `upstream/gods-eye-view` from `bilawalsidhu/gods-eye-view`. Locator `python3 tools/gods_eye/gods_eye.py`. Required on every website pass. The globe itself is not running. |
-| Arrow EA, Blackbox, VoiceStudio, OpenSEO | Arrow EA and Blackbox still have no confirmed official repository, so nothing was substituted. VoiceStudio and OpenSEO have candidate checkouts. |
+| VoiceStudio, OpenSEO, RuFlo, h4cker | Pinned into the repo. VoiceStudio `upstream/voicestudio`, Open SEO `upstream/open-seo`, RuFlo `upstream/ruflo`, h4cker `security-repos/h4cker`. Source only. None of them is a running service, and none of them is on the 12-tool website pass. |
 | Zapia | Not configured. Needs an owner-authorized endpoint and credentials. |
 | Burp Suite Community | Not installed here. The committed installer uses Windows `winget` (`PortSwigger.BurpSuite.Community`). This Linux workspace has no winget. |
 | x64dbg binary | Source and nested deps are checked out. The Windows GUI binary is not runnable on Linux. |
