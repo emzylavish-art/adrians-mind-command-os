@@ -29,16 +29,21 @@ o/bKiIz+Fq8=
 -----END CERTIFICATE-----
 `;
 
+function withoutSslMode(connectionString: string): string {
+  return connectionString
+    .replace(/([?&])sslmode=[^&]*/g, "$1")
+    .replace(/([?&])sslrootcert=[^&]*/g, "$1")
+    .replace(/[?&]$/, "");
+}
+
 /**
  * Open the deployed Postgres pool and trust the Supabase CA.
  * `sslmode` in the URL makes `pg` ignore a separate ssl object, so it is removed.
+ * The string is not parsed as a URL, so a password character cannot crash startup.
  */
 export function postgresPool(connectionString: string): Pool {
-  const url = new URL(connectionString);
-  url.searchParams.delete("sslmode");
-  url.searchParams.delete("sslrootcert");
   return new Pool({
-    connectionString: url.toString(),
+    connectionString: withoutSslMode(connectionString),
     ssl: { ca: SUPABASE_ROOT_2021, rejectUnauthorized: true },
   });
 }
