@@ -1,15 +1,15 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   PERSONA_CATEGORIES,
   buildPersonaDirectory,
   emptyStateForCategory,
   filterPersonaDirectory,
   selectPersona,
-  writePersonaSelection,
   type PersonaCard,
   type PersonaCategoryId,
 } from "@/lib/mind/personas";
 import type { Workspace } from "@/lib/mind/types";
+import { persistPersonaOpen } from "@/lib/mind/personas/selection";
 
 function botAvatarSrc(name: string) {
   const lower = name.toLowerCase();
@@ -38,6 +38,8 @@ export function PersonaDirectoryView({
   const [category, setCategory] = useState<PersonaCategoryId | "all">("official");
   const [query, setQuery] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  const latestWorkspace = useRef(ws);
+  latestWorkspace.current = ws;
 
   const directory = useMemo(
     () => buildPersonaDirectory({ agents: ws.agents, deployments: ws.deployments }),
@@ -50,22 +52,38 @@ export function PersonaDirectoryView({
   const empty = emptyStateForCategory(category, visible.length);
 
   function openCard(card: PersonaCard) {
-    const result = selectPersona(ws, card);
+    const result = selectPersona(latestWorkspace.current, card);
     if (!result.ok) {
       setNote(result.error);
       return;
     }
-    setWs(() => result.ws);
+    let persisted: ReturnType<typeof persistPersonaOpen>;
     try {
-      writePersonaSelection(localStorage, result.selection);
+      persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection);
     } catch {
-      /* storage may be unavailable in locked-down contexts */
+      setNote("Could not access local storage. Nothing was opened.");
+      return;
     }
+    if (!persisted.ok) {
+      if (persisted.workspacePersisted) {
+        latestWorkspace.current = result.ws;
+        setWs(() => result.ws);
+      }
+      setNote(
+        persisted.workspacePersisted
+          ? "The persona was saved, but its selection could not be saved. Nothing was opened."
+          : "Could not save this persona. Nothing was opened.",
+      );
+      return;
+    }
+    latestWorkspace.current = result.ws;
+    setWs(() => result.ws);
     setNote(
-      `Opened ${result.selection.agentName} through agent mode. Chat uses the existing orchestrator path. CommandApp URL/localStorage mount is pending if the main shell does not read the selection yet.`,
+      `Saved ${result.selection.agentName} locally. Opening Chat; the selected-agent handoff is not yet verified.`,
     );
-    onOpened?.(result.href, card);
-    if (typeof window !== "undefined") {
+    if (onOpened) {
+      onOpened(result.href, card);
+    } else if (typeof window !== "undefined") {
       window.location.assign(result.href);
     }
   }
@@ -82,7 +100,7 @@ export function PersonaDirectoryView({
         </div>
         <p className="text-sm text-muted">
           Browse local agent templates and saved bots. Cards are never presented as live remote Poe or Character.AI
-          personas. Selecting one routes into Chat in agent mode through the existing orchestrator path.
+          personas. Selecting one saves a local agent and opens Chat; the selected-agent handoff is not yet verified.
         </p>
       </div>
 
@@ -168,7 +186,7 @@ export function PersonaDirectoryView({
                 onClick={() => openCard(card)}
                 data-testid={`persona-open-${card.id}`}
               >
-                Open in Chat (agent mode)
+                Save and open Chat
               </button>
             </li>
           ))}
