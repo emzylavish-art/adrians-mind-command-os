@@ -108,3 +108,19 @@
 [submodule "upstream/taste-skill"]
 	path = upstream/taste-skill
 	url = https://github.com/Leonxlnx/taste-skill.git
+[submodule "upstream/hallmark"]
+	path = upstream/hallmark
+	url = https://github.com/Nutlope/hallmark.git
+[submodule "upstream/impeccable"]
+	path = upstream/impeccable
+	url = https://github.com/pbakaus/impeccable.git
+[submodule "upstream/scrapling"]
+	path = upstream/scrapling
+	url = https://github.com/D4Vinci/Scrapling.git
+[submodule "upstream/pixelrag"]
+	path = upstream/pixelrag
+	url = https://github.com/StarTrail-org/PixelRAG.git
+[submodule "security-repos/heretic"]
+	path = security-repos/heretic
+	url = https://github.com/p-e-w/heretic.git
+

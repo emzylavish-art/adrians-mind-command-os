@@ -18,6 +18,16 @@ def version(path: Path) -> str | None:
 
 def locate() -> dict:
     members = {
+        "hallmark": {
+            "source": ROOT / "upstream" / "hallmark" / "skills" / "hallmark" / "SKILL.md",
+            "package": None,
+            "job": "Anti-slop design for a new page. Do not copy another product.",
+        },
+        "impeccable": {
+            "source": ROOT / "upstream" / "impeccable" / "skill" / "SKILL.src.md",
+            "package": None,
+            "job": "Polish and redesign. The brief wins.",
+        },
         "gsap": {
             "source": ROOT / "upstream" / "gsap",
             "package": version(KIT / "node_modules" / "gsap" / "package.json"),
@@ -28,6 +38,11 @@ def locate() -> dict:
             "package": version(KIT / "node_modules" / "lenis" / "package.json"),
             "job": "Smooth scroll. Pair it with GSAP when the scroll itself is the motion.",
         },
+        "motion": {
+            "source": KIT / "node_modules" / "motion" / "package.json",
+            "package": version(KIT / "node_modules" / "motion" / "package.json"),
+            "job": "React section animation. Package motion. GSAP still owns sequenced timelines.",
+        },
         "react-bits": {
             "source": ROOT / "upstream" / "react-bits",
             "package": None,
@@ -36,13 +51,23 @@ def locate() -> dict:
         "21st": {
             "source": ROOT / "upstream" / "21st-magic",
             "package": None,
-            "job": "Interface components. Live search stays off until the owner sets API_KEY_21ST.",
+            "job": "Interface components. Live search stays off until the owner sets API_KEY_21ST. Do not use a key from a video.",
+        },
+        "scrapling": {
+            "source": ROOT / "upstream" / "scrapling" / "agent-skill" / "Scrapling-Skill" / "SKILL.md",
+            "package": None,
+            "job": "Research helper. Read a page you are allowed to read. Not a design system.",
+        },
+        "pixelrag": {
+            "source": ROOT / "upstream" / "pixelrag" / "plugin" / "skills" / "pixelbrowse" / "SKILL.md",
+            "package": None,
+            "job": "Research helper. See an authorized page as pictures. No model weights.",
         },
     }
     ready = []
     missing = []
     for name, item in members.items():
-        present = item["source"].is_dir()
+        present = item["source"].exists()
         (ready if present else missing).append(name)
         item["source"] = str(item["source"])
         item["present"] = present
@@ -55,8 +80,10 @@ def locate() -> dict:
         "missing": missing,
         "limitations": [
             "React Bits is a source library. Copy one component into the site being built.",
-            "21st live search needs the owner's own API key.",
-            "Installing these packages does not design the page. Taste still directs the look.",
+            "21st live search needs the owner's own API key. A key from a video is not usable.",
+            "Motion animates sections. GSAP still owns sequenced timelines. Lenis owns scroll.",
+            "Scrapling and PixelRAG only read pages you are allowed to read. They are not design systems.",
+            "Installing these packages does not design the page. Taste or Hallmark still directs the look.",
         ],
     }
 

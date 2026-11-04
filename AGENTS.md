@@ -18,7 +18,7 @@ This repository is the implementation source for Adrian's Mind Command OS and it
 2. Read `tools/registry.json` for upstream tool identity, source, and integration state.
 3. Prefer ready tools and invoke through `team/runner.py` or the MCP server. Do not bypass the declared adapter and safety checks.
 4. For specialist instructions, call `team.agent.resolve` with an `agent_id`, or with a task plus explicit capabilities. The resolver returns a prompt; the host AI is responsible for actual model execution.
-5. For a website, landing page, or app screen, read `team/WEBSITE_TEAM.md` first. The crew is Taste, UI UX Pro Max, 21st, GSAP, Lenis, and React Bits. Do not build a generic page from scratch. Confirm the crew with `python3 tools/website/kit.py`.
+5. For a website, landing page, or app screen, read `team/WEBSITE_TEAM.md` first. The crew is Taste, Hallmark, Impeccable, UI UX Pro Max, 21st, GSAP, Lenis, Motion, and React Bits. Scrapling and PixelRAG are research helpers on that same page, not design systems. Do not build a generic page from scratch. Confirm the crew with `python3 tools/website/kit.py`. Do not use a 21st.dev key copied from a video.
 6. Use `team.queue` for durable job records and `team.worker` only for the explicit allowlist. A queue record is not an instruction to execute arbitrary shell, code, or external side effects.
 7. Validate the result with evidence, relevant tests, and a clear limitation list.
 

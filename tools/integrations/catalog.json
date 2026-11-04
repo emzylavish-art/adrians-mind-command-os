@@ -161,6 +161,85 @@
       "notes": "Design skill for the website team. Does not copy Manus, GPT, Grok, or any other product."
     },
     {
+      "id": "hallmark",
+      "name": "Hallmark",
+      "kind": "website-team",
+      "status": "installed",
+      "source": "https://github.com/Nutlope/hallmark",
+      "activation": {
+        "skill": "upstream/hallmark/skills/hallmark/SKILL.md",
+        "agent": "hallmark"
+      },
+      "live": "not-verified",
+      "notes": "Anti-slop design skill for a new page. Version 2. Does not copy another product."
+    },
+    {
+      "id": "impeccable",
+      "name": "Impeccable",
+      "kind": "website-team",
+      "status": "installed",
+      "source": "https://github.com/pbakaus/impeccable",
+      "activation": {
+        "skill": "upstream/impeccable/skill/SKILL.src.md",
+        "agent": "impeccable"
+      },
+      "live": "not-verified",
+      "notes": "Polish and redesign skill for the website team."
+    },
+    {
+      "id": "motion",
+      "name": "Motion",
+      "kind": "website-team",
+      "status": "installed",
+      "source": "https://github.com/motiondivision/motion",
+      "activation": {
+        "npm_package": "motion",
+        "package_version": "14.9.1",
+        "agent": "motion"
+      },
+      "live": "not-verified",
+      "notes": "React section animation in tools/website. The clip calls this Framer Motion."
+    },
+    {
+      "id": "scrapling",
+      "name": "Scrapling",
+      "kind": "website-research",
+      "status": "installed",
+      "source": "https://github.com/D4Vinci/Scrapling",
+      "activation": {
+        "skill": "upstream/scrapling/agent-skill/Scrapling-Skill/SKILL.md",
+        "agent": "scrapling"
+      },
+      "live": "not-verified",
+      "notes": "Research helper for pages you are allowed to read. Not a design system. Core library scrapling 0.5 is in .tools/venvs/website-research. Browser extras are not installed."
+    },
+    {
+      "id": "pixelrag",
+      "name": "PixelRAG",
+      "kind": "website-research",
+      "status": "installed",
+      "source": "https://github.com/StarTrail-org/PixelRAG",
+      "activation": {
+        "skill": "upstream/pixelrag/plugin/skills/pixelbrowse/SKILL.md",
+        "agent": "pixelrag"
+      },
+      "live": "not-verified",
+      "notes": "Research helper. Source and skill only. Core package requires Python 3.12. No Wikipedia index and no model weights."
+    },
+    {
+      "id": "heretic",
+      "name": "Heretic",
+      "kind": "isolated-security-repo",
+      "status": "source-only",
+      "source": "https://github.com/p-e-w/heretic",
+      "activation": {
+        "checkout": "security-repos/heretic",
+        "team": false
+      },
+      "live": "not-verified",
+      "notes": "Source only. Do not run it and do not remove a model's refusals. Not a website tool."
+    },
+    {
       "id": "h4cker",
       "name": "h4cker",
       "kind": "isolated-security-repo",

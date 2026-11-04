@@ -58,8 +58,9 @@ check_cmd 21st-Magic magic
 check_cmd JADX jadx
 check_found_file "Ghidra headless" analyzeHeadless
 check_found_file "OWASP ZAP launcher" zap.sh
-for id in l1b3rt4s everything-claude-code superpowers gsd-core ui-ux-pro-max 21st-magic taste-skill gsap lenis react-bits n8n-mcp lightrag claude-mem obsidian-skills awesome-claude-code ghidra jadx frida owasp-zap gdb x64dbg comfyui open-higgsfield weknora openwhispr openproject cal-diy chatwoot cap; do
+for id in l1b3rt4s everything-claude-code superpowers gsd-core ui-ux-pro-max 21st-magic taste-skill gsap lenis react-bits hallmark impeccable scrapling pixelrag n8n-mcp lightrag claude-mem obsidian-skills awesome-claude-code ghidra jadx frida owasp-zap gdb x64dbg comfyui open-higgsfield weknora openwhispr openproject cal-diy chatwoot cap; do
   check_dir "$id source" "$UPSTREAM_ROOT/$id"
 done
 check_dir "h4cker source" "$ROOT/security-repos/h4cker"
+check_dir "heretic source" "$ROOT/security-repos/heretic"
 printf '\nDetected %d of %d checks. Presence is not proof of runtime configuration or successful provider connection.\n' "$found" "$total"

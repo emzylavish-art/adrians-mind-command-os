@@ -67,6 +67,41 @@
       "note": "Website design skill. Studies craft. Does not copy another product's interface."
     },
     {
+      "id": "hallmark",
+      "name": "Hallmark",
+      "url": "https://github.com/Nutlope/hallmark.git",
+      "install_kind": "source-checkout",
+      "note": "Website team. Anti-slop design skill for a new page."
+    },
+    {
+      "id": "impeccable",
+      "name": "Impeccable",
+      "url": "https://github.com/pbakaus/impeccable.git",
+      "install_kind": "source-checkout",
+      "note": "Website team. Polish and redesign skill."
+    },
+    {
+      "id": "scrapling",
+      "name": "Scrapling",
+      "url": "https://github.com/D4Vinci/Scrapling.git",
+      "install_kind": "source-checkout",
+      "note": "Website research helper. Authorized pages only. Not a design system. Do not bypass a login or a paywall."
+    },
+    {
+      "id": "pixelrag",
+      "name": "PixelRAG",
+      "url": "https://github.com/StarTrail-org/PixelRAG.git",
+      "install_kind": "source-checkout",
+      "note": "Website research helper. Screenshot skill source. Do not download the Wikipedia index or model weights."
+    },
+    {
+      "id": "heretic",
+      "name": "Heretic",
+      "url": "https://github.com/p-e-w/heretic.git",
+      "install_kind": "isolated-security-repo",
+      "note": "Security source only, not the website team. Do not run it. Do not remove a model's refusals."
+    },
+    {
       "id": "h4cker",
       "name": "h4cker",
       "url": "https://github.com/The-Art-of-Hacking/h4cker.git",

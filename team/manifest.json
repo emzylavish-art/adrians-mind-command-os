@@ -165,6 +165,67 @@
       ]
     },
     {
+      "id": "hallmark",
+      "role": "Hallmark Anti-Slop Design",
+      "capabilities": [
+        "anti_slop_design"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/hallmark.md",
+      "requires": [
+        "hallmark_skill"
+      ]
+    },
+    {
+      "id": "impeccable",
+      "role": "Impeccable Interface Polish",
+      "capabilities": [
+        "interface_polish"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/impeccable.md",
+      "requires": [
+        "impeccable_skill"
+      ]
+    },
+    {
+      "id": "motion",
+      "role": "Motion Section Animation",
+      "capabilities": [
+        "react_motion"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/motion.md",
+      "requires": [
+        "motion_package"
+      ]
+    },
+    {
+      "id": "scrapling",
+      "role": "Authorized Page Reader",
+      "capabilities": [
+        "authorized_page_read"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/scrapling.md",
+      "requires": [
+        "owned_or_permitted_target"
+      ]
+    },
+    {
+      "id": "pixelrag",
+      "role": "Visual Page Reader",
+      "capabilities": [
+        "visual_page_read"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/pixelrag.md",
+      "requires": [
+        "owned_or_permitted_target",
+        "no_model_weights"
+      ]
+    },
+    {
       "id": "rea",
       "role": "Reverse Engineering Specialist",
       "capabilities": [
