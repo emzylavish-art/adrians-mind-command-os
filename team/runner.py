@@ -271,6 +271,27 @@ def invoke(tool_id, payload, manifest):
         return envelope("ready", report, ["tools/knowledge/knowledge_search.py"],
                         report.get("limitations", []))
 
+    if tool_id == "gods-eyes":
+        command = [sys.executable, str(ROOT / "tools" / "gods_eye" / "gods_eye.py"), "--json"]
+        try:
+            completed = subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True,
+                timeout=int(payload.get("timeout_seconds", 30)), check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"God's Eye locator failed: {exc}"])
+        if completed.returncode:
+            return envelope("blocked", result=completed.stdout.strip() or None,
+                            evidence=["tools/gods_eye/gods_eye.py"],
+                            limitations=[completed.stderr.strip() or "God's Eye View checkout is missing."])
+        try:
+            report = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope("blocked", result=completed.stdout,
+                            evidence=["tools/gods_eye/gods_eye.py"],
+                            limitations=["God's Eye locator returned non-JSON output."])
+        return envelope("ready", report, ["tools/gods_eye/gods_eye.py", "upstream/gods-eye-view"],
+                        report.get("limitations", []))
 
     if tool_id == "mcp.remote":
         action = payload.get("action")

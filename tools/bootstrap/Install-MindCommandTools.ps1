@@ -118,6 +118,7 @@ if (-not $SkipSourceClones) {
         @("lenis", "https://github.com/darkroomengineering/lenis.git"),
         @("react-bits", "https://github.com/DavidHDev/react-bits.git"),
         @("taste-skill", "https://github.com/Leonxlnx/taste-skill.git"),
+        @("gods-eye-view", "https://github.com/bilawalsidhu/gods-eye-view.git"),
         @("hallmark", "https://github.com/Nutlope/hallmark.git"),
         @("impeccable", "https://github.com/pbakaus/impeccable.git"),
         @("scrapling", "https://github.com/D4Vinci/Scrapling.git"),
@@ -190,7 +191,7 @@ Write-Host "Downloaded application archives: $InstallRoot\apps"
 Write-Host "Installed Node/Python/security apps depend on the package-manager output above."
 Write-Host "LightRAG still needs a model/embedding provider and secure local configuration."
 Write-Host "Claude-oriented skills/plugins may need explicit activation in the relevant client; this script does not overwrite your Codex/Claude settings."
-Write-Host "God's Eyes and Arrow EA are excluded until their exact official projects are identified."
+Write-Host "God's Eye View is pinned from bilawalsidhu/gods-eye-view. The locator does not start the globe. Arrow EA stays excluded until its exact official project is identified."
 Write-Host "BlackEye remains excluded because phishing/credential-harvesting deployment is not integrated."
 Write-Host "For a rerun, execute this same script again; source checkouts use fast-forward-only updates."
 

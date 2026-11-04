@@ -36,7 +36,7 @@ The check reports command and source-folder presence only. A detected folder doe
 - Claude Mem and the skill repositories are checked out, but activation must follow each project's current instructions.
 - LightRAG needs a model/embedding provider and secure local configuration before it can serve queries.
 - Burp Suite is Community Edition. PortSwigger's license terms apply.
-- God's Eyes and Arrow EA remain excluded because their exact project identities are not confirmed.
+- God's Eye View is pinned from `bilawalsidhu/gods-eye-view`. Arrow EA remains excluded because its exact project identity is not confirmed.
 - BlackEye remains blocked; phishing and credential collection are not integrated.
 
 Use reverse-engineering and security tools only on software, devices, and applications you own or have explicit permission to assess.

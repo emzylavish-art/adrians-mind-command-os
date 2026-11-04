@@ -145,19 +145,20 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["result"]["agent_id"], "rea")
 
-    def test_unmapped_agent_prompt_is_not_fabricated(self):
+    def test_gods_eye_prompt_is_the_pinned_project(self):
         code, result = call({
             "operation": "invoke", "tool_id": "team.agent.resolve",
             "input": {"agent_id": "gods-eyes"},
         })
         self.assertEqual(code, 0)
-        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["status"], "ready")
+        self.assertIn("bilawalsidhu/gods-eye-view", result["result"]["prompt"])
 
-    def test_unavailable_tool_is_not_claimed_ready(self):
+    def test_gods_eye_locator_is_ready(self):
         code, result = call({"operation": "invoke", "tool_id": "gods-eyes", "input": {}})
         self.assertEqual(code, 0)
-        self.assertEqual(result["status"], "blocked")
-        self.assertIn("source_unmapped", result["limitations"][0])
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["result"]["repo"], "https://github.com/bilawalsidhu/gods-eye-view")
 
     def test_routes_capability(self):
         code, result = call({"operation": "route", "task": "inspect source", "capabilities": ["source_inventory"]})

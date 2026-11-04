@@ -142,12 +142,14 @@ class MCPServerTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertIn("Orchestrator", result["result"]["prompt"])
 
-    def test_unavailable_tool_is_error_not_simulated(self):
+    def test_gods_eye_locator_is_not_simulated(self):
         responses = rpc([{
             "jsonrpc": "2.0", "id": 8, "method": "tools/call",
             "params": {"name": "gods-eyes", "arguments": {}},
         }])
-        self.assertTrue(responses[0]["result"]["isError"])
+        self.assertFalse(responses[0]["result"]["isError"])
+        body = json.loads(responses[0]["result"]["content"][0]["text"])
+        self.assertEqual(body["result"]["repo"], "https://github.com/bilawalsidhu/gods-eye-view")
 
 
 if __name__ == "__main__":

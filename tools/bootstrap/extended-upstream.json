@@ -100,9 +100,9 @@
       "note": "Requires exact service identity and owner-authorized endpoint/credentials."
     },
     {
-      "name": "God's Eyes",
-      "status": "identity-unconfirmed",
-      "note": "Exact source identity not established."
+      "name": "Gods Eye View",
+      "status": "source-verified",
+      "note": "Pinned at upstream/gods-eye-view from bilawalsidhu/gods-eye-view. Locator only. Not a running globe."
     },
     {
       "name": "Arrow EA",

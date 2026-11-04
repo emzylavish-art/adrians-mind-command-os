@@ -63,6 +63,11 @@ def locate() -> dict:
             "package": None,
             "job": "Research helper. See an authorized page as pictures. No model weights.",
         },
+        "gods-eye-view": {
+            "source": ROOT / "upstream" / "gods-eye-view" / "README.md",
+            "package": None,
+            "job": "God's Eye View. Required on every website pass. Place, map, or live public world data only. Do not scan a person.",
+        },
     }
     ready = []
     missing = []

@@ -67,6 +67,13 @@
       "note": "Website design skill. Studies craft. Does not copy another product's interface."
     },
     {
+      "id": "gods-eye-view",
+      "name": "Gods Eye View",
+      "url": "https://github.com/bilawalsidhu/gods-eye-view.git",
+      "install_kind": "source-checkout",
+      "note": "God's Eye View. Required on every website pass. Public globe only. Do not scan a person. Do not add an API key. The locator does not start the globe."
+    },
+    {
       "id": "hallmark",
       "name": "Hallmark",
       "url": "https://github.com/Nutlope/hallmark.git",
@@ -206,10 +213,6 @@
     {
       "id": "blackeye",
       "reason": "Phishing and credential-harvesting functionality is excluded."
-    },
-    {
-      "id": "gods-eyes",
-      "reason": "Exact project identity and official source have not been established."
     },
     {
       "id": "arrow-ea",

@@ -66,6 +66,10 @@
 	path = upstream/comfyui
 	url = https://github.com/Comfy-Org/ComfyUI.git
 
+[submodule "upstream/gods-eye-view"]
+	path = upstream/gods-eye-view
+	url = https://github.com/bilawalsidhu/gods-eye-view.git
+
 [submodule "upstream/open-higgsfield"]
 	path = upstream/open-higgsfield
 	url = https://github.com/wide-trace/open-higgsfield.git

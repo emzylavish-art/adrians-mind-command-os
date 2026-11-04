@@ -53,6 +53,9 @@ def tool_specs(manifest):
                 "required": ["query"],
                 "additionalProperties": False,
             }
+        elif name == "gods-eyes":
+            description = "Locate the pinned God's Eye View checkout and the rule that every website pass must use it. Does not start the globe or call a live feed."
+            schema = {"type": "object", "properties": {}, "additionalProperties": False}
         elif name == "team.health":
             description = "Return offline readiness for manifest entries and tool entrypoints. Does not test external services or credentials."
             schema = {"type": "object", "properties": {}, "additionalProperties": False}

@@ -35,7 +35,7 @@ being simulated. External actions and deployment remain gated by explicit author
 - **Engineering / Codex** — coding, refactoring, tests, CI.
 - **REA** — offline source inventory and static reconnaissance.
 - **Security** — defensive checks on owned or authorized systems.
-- **God's Eyes / Arrow EA** — identity/source not verified; no fabricated implementation.
+- **God's Eye View** — pinned at `upstream/gods-eye-view` (`bilawalsidhu/gods-eye-view`). Required on every website pass. Locator only. Arrow EA is still unresolved.
 - **Knowledge** — retrieval/organization; knowledge-store adapter required.
 - **Browser / Workflow** — browser tasks; authorized runtime and connector required.
 - **QA / Release** — tests and validation; no automatic merge/deploy by default.

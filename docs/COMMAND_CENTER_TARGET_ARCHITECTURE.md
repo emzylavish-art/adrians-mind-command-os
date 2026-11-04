@@ -90,7 +90,7 @@ A prompt-only “be careful” rule is not technical enforcement. Protected acti
 | n8n-MCP / workflow execution | Expose approved automation workflows | Upstream catalog entry only until endpoint/auth/schema/permissions are configured |
 | UI UX Pro Max, Superpowers, GSD, ECC, Claude Mem, Obsidian Skills | AI coding/workflow skill integrations | Catalog/source/bootstrap metadata exists; not equivalent to ready repo-native tools |
 | Ghidra, JADX, Frida, Burp, ZAP, GDB, x64dbg | Authorized reverse engineering and defensive analysis | Upstream catalog/source metadata; not all are callable MCP adapters in this repository |
-| God's Eyes | Requested specialist/tool | Identity and exact source unresolved; do not fabricate |
+| God's Eye View | Pinned specialist | `bilawalsidhu/gods-eye-view` at `upstream/gods-eye-view`. Required on every website pass. Locator only. |
 | Arrow EA | Requested specialist/tool | Identity and exact source unresolved; do not fabricate |
 | BlackEye | Requested tool | Phishing/credential collection functionality excluded |
 | Google Drive scheduled backup | Backup and recovery | Target; not connected until a verified scheduled backup implementation exists |

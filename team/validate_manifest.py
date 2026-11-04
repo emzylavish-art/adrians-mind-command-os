@@ -82,8 +82,8 @@ def validate():
     excluded_ids = {item.get("id") for item in bootstrap.get("not_auto_integrated", [])}
     if excluded_ids & set(source_ids):
         errors.append("An excluded or unresolved tool was accidentally added to the bootstrap source list.")
-    if not {"blackeye", "gods-eyes", "arrow-ea"}.issubset(excluded_ids):
-        errors.append("BlackEye, God's Eyes, and Arrow EA must remain explicitly excluded.")
+    if not {"blackeye", "arrow-ea"}.issubset(excluded_ids):
+        errors.append("BlackEye and Arrow EA must remain explicitly excluded.")
 
     if errors:
         return False, errors

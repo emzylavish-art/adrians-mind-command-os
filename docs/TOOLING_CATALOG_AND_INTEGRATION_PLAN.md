@@ -32,7 +32,7 @@ This is a **candidate catalog and integration plan**, not a statement that every
 
 ## Names requiring identification from source material
 
-- **God's Eyes** — exact project, upstream URL, and intended function not verified.
+- **God's Eye View** — pinned from https://github.com/bilawalsidhu/gods-eye-view. Required on every website pass. Public globe only. The locator does not start it.
 - **Arrow EA** — exact project, upstream URL, and intended function not verified.
 
 Do not guess. Capture source URL or recording timestamp when resolved.

@@ -25,6 +25,6 @@ The original 16 source repositories plus eight additional owner-requested upstre
 
 Third-party code is downloaded from its declared upstream URL and is not executed by the installer beyond package-manager setup commands. Review each upstream project's license, security posture, and setup instructions before activating plugins or running tool code.
 
-God's Eyes and Arrow EA are not fetched until their exact official repositories are established. BlackEye phishing/credential-harvesting capability remains excluded. Defensive security and reverse-engineering tools must only be used against systems and software owned by the user or explicitly authorized for assessment.
+God's Eye View is pinned from `bilawalsidhu/gods-eye-view` and is required on every website pass. The locator does not start the globe. Arrow EA is not fetched until its exact official repository is established. BlackEye phishing/credential-harvesting capability remains excluded. Defensive security and reverse-engineering tools must only be used against systems and software owned by the user or explicitly authorized for assessment.
 
 No external service credentials are stored by this setup. Provider activation (Grok/xAI, OpenRouter, Ollama, Notion, n8n instance, etc.) remains separately configured using secret environment variables and integration adapters.

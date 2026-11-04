@@ -293,12 +293,14 @@
       "team_agent": "security"
     },
     {
-      "name": "God's Eyes",
-      "category": "unresolved",
-      "status": "identity-unconfirmed",
-      "install": "not-installed",
-      "live": "not-connected",
-      "team_agent": "gods-eyes"
+      "name": "Gods Eye View",
+      "category": "spatial-intelligence",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "locator-only",
+      "guardrail": "Public data only. Do not scan a person. Do not add an API key. The locator does not start the globe.",
+      "team_agent": "gods-eyes",
+      "source_url": "https://github.com/bilawalsidhu/gods-eye-view"
     },
     {
       "name": "Arrow EA",

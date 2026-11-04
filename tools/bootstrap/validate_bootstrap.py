@@ -42,14 +42,14 @@ def validate() -> list[str]:
         errors.append("Duplicate tool names in registry.")
 
     restricted = {entry["id"] for entry in sources["not_auto_integrated"]}
-    if not {"blackeye", "gods-eyes", "arrow-ea"}.issubset(restricted):
+    if not {"blackeye", "arrow-ea"}.issubset(restricted):
         errors.append("BlackEye and unresolved identities must remain excluded.")
 
     blackeye = next((x for x in registry["tools"] if x["name"] == "BlackEye"), None)
     if not blackeye or blackeye.get("install") != "blocked":
         errors.append("BlackEye must remain marked blocked in registry.")
 
-    for identity in ("God's Eyes", "Arrow EA"):
+    for identity in ("Arrow EA",):
         item = next((x for x in registry["tools"] if x["name"] == identity), None)
         if not item or item.get("status") != "identity-unconfirmed":
             errors.append(f"{identity} must remain identity-unconfirmed.")

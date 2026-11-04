@@ -363,13 +363,13 @@
       "notes": "No exact repository URL was established in the available project record. Similar names are not treated as interchangeable."
     },
     {
-      "id": "gods-eyes",
-      "name": "God's Eyes",
-      "kind": "unresolved",
-      "status": "identity-unconfirmed",
-      "entrypoint": null,
-      "live": "not-connected",
-      "notes": "Exact source identity remains unverified."
+      "id": "gods-eye-view",
+      "name": "Gods Eye View",
+      "kind": "spatial-intelligence",
+      "status": "source-verified",
+      "entrypoint": "python3 tools/gods_eye/gods_eye.py",
+      "live": "locator-only",
+      "notes": "Pinned from https://github.com/bilawalsidhu/gods-eye-view. Required on every website pass. Public data only. The locator does not start the globe or call a live feed."
     },
     {
       "id": "arrow-ea",

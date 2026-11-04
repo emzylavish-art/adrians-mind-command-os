@@ -256,14 +256,16 @@
     },
     {
       "id": "gods-eyes",
-      "role": "God's Eyes",
+      "role": "God's Eye View",
       "capabilities": [
-        "capability_name_reserved"
+        "spatial_context",
+        "website_place_check"
       ],
-      "status": "source_unmapped",
-      "entrypoint": null,
+      "status": "partial",
+      "entrypoint": "team/agents/gods-eyes.md",
       "requires": [
-        "identify_exact_project_and_source"
+        "gods_eye_view_checkout",
+        "public_data_only"
       ]
     },
     {
@@ -415,12 +417,15 @@
       "id": "gods-eyes",
       "agent": "gods-eyes",
       "capabilities": [
-        "capability_name_reserved"
+        "spatial_context",
+        "website_place_check"
       ],
-      "status": "source_unmapped",
-      "entrypoint": null,
-      "input_schema": null,
-      "safety": "Do not fabricate source or executable behavior"
+      "status": "ready",
+      "entrypoint": "python3 tools/gods_eye/gods_eye.py",
+      "input_schema": {
+        "json": "boolean"
+      },
+      "safety": "Offline locator for the pinned God's Eye View checkout. Does not start the globe, call a live feed, scan a person, or store a key."
     },
     {
       "id": "blackeye",
@@ -775,14 +780,14 @@
       "guardrail": "No phishing or credential-collection deployment."
     },
     {
-      "id": "god-s-eyes",
-      "name": "God's Eyes",
-      "category": "unresolved",
+      "id": "gods-eye-view",
+      "name": "Gods Eye View",
+      "category": "spatial-intelligence",
       "agent": "gods-eyes",
-      "status": "identity-unconfirmed",
-      "install": "not-installed",
-      "live": "not-connected",
-      "guardrail": null
+      "status": "source-verified",
+      "install": "git-submodule-pinned",
+      "live": "locator-only",
+      "guardrail": "Public data only. Do not scan a person. Do not add an API key. The globe is not started by the locator."
     },
     {
       "id": "arrow-ea",
