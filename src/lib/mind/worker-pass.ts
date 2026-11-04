@@ -44,7 +44,7 @@ export async function runWorkerPass(
   sql: Sql,
   now: string,
   workerId: string,
-  run: (job: ScheduleJob) => { ok: boolean; detail: string } = () => ({ ok: true, detail: "Queued. No model was called." }),
+  run: (job: ScheduleJob) => { ok: boolean; detail: string } = () => ({ ok: false, detail: "No schedule executor is configured. This job was not run." }),
 ): Promise<WorkerPass> {
   const rows = await sql<{ user_id: string; payload: unknown }>`select user_id, payload from mind_snapshot`;
   const summary: WorkerPass = { owners: rows.length, ran: 0, skipped: 0, failed: 0, recovered: 0 };

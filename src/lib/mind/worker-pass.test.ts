@@ -42,7 +42,7 @@ describe("worker pass", () => {
     const later = emptyWorkspace();
     later.schedules.push(job({ id: "job-2", name: "Later", nextRunAt: "2026-04-02T12:00:00.000Z" }));
     const { sql, snaps } = db([{ userId: "owner-a", ws: due }, { userId: "owner-b", ws: later }]);
-    const first = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-a");
+    const first = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-a", () => ({ ok: true, detail: "Test executor completed the job." }));
     assert.equal(first.ran, 1);
     const savedA = JSON.parse(snaps.get("owner-a") ?? "{}") as Workspace;
     const savedB = JSON.parse(snaps.get("owner-b") ?? "{}") as Workspace;
@@ -67,6 +67,19 @@ describe("worker pass", () => {
     assert.deepEqual(recovered.claimed, ["job-1"]);
     const off = claimSchedules([job({ id: "job-3", name: "Off", nextRunAt: "2026-04-01T12:00:00.000Z", enabled: false })], "2026-04-01T12:00:00.000Z", "worker-a");
     assert.equal(off.claimed.length, 0);
+  });
+
+  it("marks an unconfigured executor as failed instead of claiming the job ran", async () => {
+    const due = emptyWorkspace();
+    due.schedules.push(job({ id: "job-no-executor", name: "No executor", nextRunAt: "2026-04-01T12:00:00.000Z" }));
+    const { sql, snaps } = db([{ userId: "owner-a", ws: due }]);
+    const result = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-a");
+    assert.equal(result.ran, 0);
+    assert.equal(result.failed, 1);
+    const saved = JSON.parse(snaps.get("owner-a") ?? "{}") as Workspace;
+    assert.equal(saved.schedules[0]?.lastStatus, "failed");
+    assert.equal(saved.schedules[0]?.lastError, "No schedule executor is configured. This job was not run.");
+    assert.equal(saved.audit[0]?.action, "schedule_failed");
   });
 
   it("records a failure and does not mark the job completed", async () => {
