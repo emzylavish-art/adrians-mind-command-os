@@ -11,9 +11,11 @@ describe("mobile workspace drawer", () => {
   it("labels the open navigation as a modal and restores focus to its trigger", () => {
     assert.match(app, /role=\{navOpen \? "dialog" : undefined\}/);
     assert.match(app, /aria-modal=\{navOpen \? true : undefined\}/);
-    assert.match(app, /if \(navWasOpenRef\.current\) navTriggerRef\.current\?\.focus\(\)/);
+    assert.match(app, /if \(navWasOpenRef\.current\)[\s\S]{0,160}trigger\?\.isConnected && trigger\.getClientRects\(\)\.length > 0/);
+    assert.match(app, /visibleItem\?\.focus\(\)/);
     assert.match(app, /navTriggerRef\.current = event\.currentTarget/);
   });
+
 
   it("closes on Escape and traps keyboard focus while the drawer is open", () => {
     assert.match(app, /if \(event\.key === "Escape"\)[\s\S]{0,180}setNavOpen\(false\)/);
@@ -55,3 +57,4 @@ describe("composer send guards", () => {
     assert.match(app, /disabled=\{busy \|\| halted \|\| !active \|\| \(!draft\.trim\(\) && pendingImages\.length === 0 && !stagedName\)\}/);
   });
 });
+

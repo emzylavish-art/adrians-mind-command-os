@@ -489,7 +489,19 @@ export function CommandApp() {
   const [voiceSignInNotice, setVoiceSignInNotice] = useState(false);
   useEffect(() => {
     if (!navOpen) {
-      if (navWasOpenRef.current) navTriggerRef.current?.focus();
+      if (navWasOpenRef.current) {
+        const trigger = navTriggerRef.current;
+        if (trigger?.isConnected && trigger.getClientRects().length > 0) {
+          trigger.focus();
+        } else {
+          // The mobile trigger is hidden at desktop breakpoints. Keep focus
+          // inside the now non-modal sidebar rather than on a hidden control.
+          const visibleItem = Array.from(navDrawerRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ) ?? []).find((item) => item.getClientRects().length > 0);
+          visibleItem?.focus();
+        }
+      }
       navWasOpenRef.current = false;
       return;
     }
@@ -6272,3 +6284,4 @@ function chatStamp(chat: Chat) {
   if (!iso) return "New";
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
+
