@@ -226,7 +226,7 @@ import {
   reviseMemory,
   unpackWorkspace,
 } from "@/lib/mind/workspace";
-import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
+import { SIDEBAR_WORKSPACE_NAV_IDS, WORKSPACE_ROUTE_LINKS, isSidebarWorkspaceRoute } from "@/lib/mind/workspace-nav";
 
 type View =
   | "command"
@@ -3435,14 +3435,15 @@ export function CommandApp() {
           </button>
         </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-4">
-              {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
-              <div className="space-y-1">
-              {group.items.map((item, itemIndex) => {
+          <div className="mb-4">
+            {!railCollapsed && <p className="meta-label px-3 pb-2">Workspace</p>}
+            <div className="space-y-1">
+              {SIDEBAR_WORKSPACE_NAV_IDS.map((id) => {
+                const item = NAV.find((candidate) => candidate.id === id);
+                if (!item) return null;
                 const Icon = item.icon;
                 const on = view === item.id;
-                const button = (
+                return (
                   <button
                     key={item.id}
                     type="button"
@@ -3460,35 +3461,26 @@ export function CommandApp() {
                     {!railCollapsed && item.label}
                   </button>
                 );
-                if (group.label === "Workspace" && itemIndex === 0) {
-                  return (
-                    <div key={`workspace-head-${item.id}`} className="contents">
-                      {button}
-                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => (
-                        <Link
-                          key={routeItem.id}
-                          to={routeItem.href}
-                          title={routeItem.label}
-                          aria-label={routeItem.label}
-                          data-testid={`nav-route-${routeItem.id}`}
-                          onClick={() => {
-                            setNavOpen(false);
-                            closeMenus();
-                          }}
-                          className={`nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
-                        >
-                          <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
-                          {!railCollapsed && routeItem.label}
-                        </Link>
-                      ))}
-                    </div>
-                  );
-                }
-                return button;
               })}
-              </div>
+              {WORKSPACE_ROUTE_LINKS.filter((routeItem) => isSidebarWorkspaceRoute(routeItem.id)).map((routeItem) => (
+                <Link
+                  key={routeItem.id}
+                  to={routeItem.href}
+                  title={routeItem.label}
+                  aria-label={routeItem.label}
+                  data-testid={`nav-route-${routeItem.id}`}
+                  onClick={() => {
+                    setNavOpen(false);
+                    closeMenus();
+                  }}
+                  className={`nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
+                >
+                  <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
+                  {!railCollapsed && routeItem.label}
+                </Link>
+              ))}
             </div>
-          ))}
+          </div>
           {ws.pins.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</p>
@@ -3558,11 +3550,23 @@ export function CommandApp() {
             <Plus className="size-4" />
             {!railCollapsed && "New"}
           </button>
+          <button
+            type="button"
+            className={`mt-3 flex min-h-11 w-full items-center gap-3 rounded-2xl px-2 text-left hover:bg-white/5 ${railCollapsed ? "justify-center" : ""}`}
+            aria-label="Open Settings"
+            title="Settings"
+            onClick={() => {
+              setView("settings");
+              setNavOpen(false);
+              closeMenus();
+            }}
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-bold text-accent-ink">A</span>
+            {!railCollapsed && <span className="min-w-0"><span className="block text-sm font-semibold">Adrian (Personal)</span><span className="block text-xs text-muted">Settings · this device</span></span>}
+          </button>
           {!railCollapsed && (
-            <div className="mt-3">
-              <p className="text-sm font-semibold">Adrian (Personal)</p>
-              <p className="text-xs text-muted">Only workspace on this device.</p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+            <div className="mt-3 px-1">
+              <div className="h-1.5 overflow-hidden rounded-full bg-line">
                 <div className="h-full rounded-full bg-glow" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
               </div>
               <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
@@ -4951,6 +4955,29 @@ export function CommandApp() {
               <div className="page-hero">
                 <h2 className="font-display text-3xl font-bold">Settings</h2>
                 <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+              </div>
+              <div className="settings-card rounded-panel p-4">
+                <h3 className="text-sm font-semibold">Workspace navigation</h3>
+                <p className="mt-1 text-xs text-muted">Open any workspace here; the sidebar stays focused on Library, Projects, Scheduled, and Explore.</p>
+                <div className="mt-4 space-y-4">
+                  {NAV_GROUPS.map((group) => {
+                    const items = group.items.filter((item) => !["files", "projects", "scheduled", "chat"].includes(item.id));
+                    if (!items.length) return null;
+                    return (
+                      <div key={group.label}>
+                        <p className="meta-label px-1 pb-2">{group.label}</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {items.map((item) => {
+                            const Icon = item.icon;
+                            return <button key={item.id} type="button" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-left text-sm hover:bg-white/5" aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}><Icon className="size-4 shrink-0" />{item.label}</button>;
+                          })}
+                          {group.label === "Workspace" && <Link to="/dashboard" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm hover:bg-white/5"><img src="/icons/dashboard.svg" alt="" className="nav-icon-img" />Dashboard</Link>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  </div>
+                </div>
               </div>
               <div className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
