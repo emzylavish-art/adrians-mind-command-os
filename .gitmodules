@@ -93,3 +93,24 @@
 [submodule "upstream/cap"]
 	path = upstream/cap
 	url = https://github.com/CapSoftware/Cap.git
+[submodule "upstream/pipecat"]
+	path = upstream/pipecat
+	url = https://github.com/pipecat-ai/pipecat.git
+[submodule "upstream/whisper-loop"]
+	path = upstream/whisper-loop
+	url = https://github.com/aryeo0908/whisper-loop.git
+[submodule "upstream/voice-agent-starter"]
+	path = upstream/voice-agent-starter
+	url = https://github.com/livekit-examples/agent-starter-python.git
+[submodule "upstream/api-health"]
+	path = upstream/api-health
+	url = https://github.com/lxgicstudios/api-health.git
+[submodule "upstream/healthy-api"]
+	path = upstream/healthy-api
+	url = https://github.com/mosishon/healthy-api.git
+[submodule "upstream/omniprobe"]
+	path = upstream/omniprobe
+	url = https://github.com/ssrsgaga/API-Check.git
+[submodule "upstream/coval-benchmarks"]
+	path = upstream/coval-benchmarks
+	url = https://github.com/coval-ai/benchmarks.git

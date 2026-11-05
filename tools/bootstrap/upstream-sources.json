@@ -120,6 +120,62 @@
       "url": "https://github.com/elder-plinius/L1B3RT4S.git",
       "install_kind": "source-checkout",
       "note": "Prompt-injection/LLM red-team research corpus. Source checkout only; do not automatically execute attacks or bypass service safeguards."
+    },
+    {
+      "id": "pipecat",
+      "name": "Pipecat",
+      "url": "https://github.com/pipecat-ai/pipecat.git",
+      "install_kind": "source-checkout",
+      "pinned_commit": "de8998789d5690073ddd1dafcec7268839af8153",
+      "note": "Voice pipeline pin. Checkout only. Do not start a live session from the bootstrap."
+    },
+    {
+      "id": "whisper-loop",
+      "name": "whisper-loop",
+      "url": "https://github.com/aryeo0908/whisper-loop.git",
+      "install_kind": "source-checkout",
+      "pinned_commit": "810e1d5d410557038d1379cd709e3fb979422bde",
+      "note": "Streaming STT/LLM/TTS loop with barge-in. Checkout only."
+    },
+    {
+      "id": "voice-agent-starter",
+      "name": "voice-agent-starter",
+      "url": "https://github.com/livekit-examples/agent-starter-python.git",
+      "install_kind": "source-checkout",
+      "pinned_commit": "228095c442fcb259c80e9786fc0d7c5534e6af46",
+      "note": "LiveKit Agents Python starter used as the latency-stage reference. Checkout only."
+    },
+    {
+      "id": "api-health",
+      "name": "api-health",
+      "url": "https://github.com/lxgicstudios/api-health.git",
+      "install_kind": "source-checkout",
+      "pinned_commit": "4376ac6091ba93d9cce6f614a50861b99d689150",
+      "note": "Zero-dependency Node health CLI. Run from the pin. Do not npm-publish."
+    },
+    {
+      "id": "healthy-api",
+      "name": "healthy-api",
+      "url": "https://github.com/mosishon/healthy-api.git",
+      "install_kind": "source-checkout",
+      "pinned_commit": "23fbfbb444f41c7f9bcfdc4a3a6958487baddbe8",
+      "note": "Go concurrent health checker. Checkout only. Do not commit a filled config.yaml."
+    },
+    {
+      "id": "omniprobe",
+      "name": "OmniProbe",
+      "url": "https://github.com/ssrsgaga/API-Check.git",
+      "install_kind": "source-checkout",
+      "pinned_commit": "292a011be478a3fdb348dd672c75d6bc0a6f114d",
+      "note": "Pure-frontend LLM connectivity tester, including function calling. Do not copy upstream .env.local."
+    },
+    {
+      "id": "coval-benchmarks",
+      "name": "Coval benchmarks",
+      "url": "https://github.com/coval-ai/benchmarks.git",
+      "install_kind": "source-checkout",
+      "pinned_commit": "7b4e5583fb720f503c467222c2ff447e48138a50",
+      "note": "Voice latency and accuracy benchmarks. Public leaderboard needs no key. Do not commit .env."
     }
   ],
   "not_auto_integrated": [

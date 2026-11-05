@@ -85,7 +85,7 @@
       "source_url": "https://github.com/subinium/awesome-claude-code"
     },
     {
-      "name": "REA — Reverse Engineer Anything",
+      "name": "REA \u2014 Reverse Engineer Anything",
       "category": "agent-workflow",
       "status": "implemented",
       "install": "repo-code-present",
@@ -268,6 +268,94 @@
       "live": "not-connected",
       "team_agent": "security",
       "guardrail": "No exact repository URL was supplied/verified. Do not substitute a similarly named project; phishing/credential-collection workflows are not integrated."
+    },
+    {
+      "name": "Pipecat",
+      "category": "voice-pipeline",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "voice-stream",
+      "source_url": "https://github.com/pipecat-ai/pipecat",
+      "pinned_commit": "de8998789d5690073ddd1dafcec7268839af8153",
+      "path": "upstream/pipecat",
+      "invoke": "tools/voice/pipecat/README.md"
+    },
+    {
+      "name": "whisper-loop",
+      "category": "voice-pipeline",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "voice-stream",
+      "source_url": "https://github.com/aryeo0908/whisper-loop",
+      "pinned_commit": "810e1d5d410557038d1379cd709e3fb979422bde",
+      "path": "upstream/whisper-loop",
+      "invoke": "tools/voice/whisper-loop/README.md"
+    },
+    {
+      "name": "voice-agent-starter",
+      "category": "voice-pipeline",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "latency-guard",
+      "source_url": "https://github.com/livekit-examples/agent-starter-python",
+      "pinned_commit": "228095c442fcb259c80e9786fc0d7c5534e6af46",
+      "path": "upstream/voice-agent-starter",
+      "invoke": "tools/voice/voice-agent-starter/README.md",
+      "guardrail": "Reference starter for per-stage latency fields. Not a production voice deployment."
+    },
+    {
+      "name": "api-health",
+      "category": "connection-health",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "connection-sentinel",
+      "source_url": "https://github.com/lxgicstudios/api-health",
+      "pinned_commit": "4376ac6091ba93d9cce6f614a50861b99d689150",
+      "path": "upstream/api-health",
+      "invoke": "tools/connection/api-health/README.md"
+    },
+    {
+      "name": "healthy-api",
+      "category": "connection-health",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "connection-sentinel",
+      "source_url": "https://github.com/mosishon/healthy-api",
+      "pinned_commit": "23fbfbb444f41c7f9bcfdc4a3a6958487baddbe8",
+      "path": "upstream/healthy-api",
+      "invoke": "tools/connection/healthy-api/README.md",
+      "guardrail": "Do not commit SMTP passwords, SMS credentials, or webhook URLs."
+    },
+    {
+      "name": "OmniProbe",
+      "category": "connection-health",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "integration-verifier",
+      "source_url": "https://github.com/ssrsgaga/API-Check",
+      "pinned_commit": "292a011be478a3fdb348dd672c75d6bc0a6f114d",
+      "path": "upstream/omniprobe",
+      "invoke": "tools/connection/omniprobe/README.md",
+      "guardrail": "Pure frontend. Keys stay in the browser. Do not copy upstream .env.local."
+    },
+    {
+      "name": "Coval benchmarks",
+      "category": "voice-latency",
+      "status": "source-verified",
+      "install": "git-submodule-pinned+codespaces-bootstrap",
+      "live": "not-connected",
+      "team_agent": "latency-guard",
+      "source_url": "https://github.com/coval-ai/benchmarks",
+      "pinned_commit": "7b4e5583fb720f503c467222c2ff447e48138a50",
+      "path": "upstream/coval-benchmarks",
+      "invoke": "tools/voice/coval-benchmarks/README.md",
+      "guardrail": "Read the public leaderboard with no key. Do not commit a filled .env."
     }
   ]
 }

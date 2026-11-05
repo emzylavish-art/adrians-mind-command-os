@@ -103,3 +103,8 @@ prompt content.
 See [CLIENTS.md](CLIENTS.md) for MCP client configuration examples and the distinction
 between stdio and hosted HTTP transports. See [REMOTE_MCP.md](REMOTE_MCP.md) for
 container setup, authentication requirements, and hosting limitations.
+
+
+## Voice and connection
+
+The voice and connection pins are a separate charter from the website crew. Read [VOICE_AND_CONNECTION.md](VOICE_AND_CONNECTION.md). The fleet bots named there may use the pinned tools. They may not deploy, may not merge to `main`, and may not commit secrets.
