@@ -4,6 +4,7 @@ import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
 import { getBearerToken } from "@/lib/auth/client";
+import { getRecentChats } from "@/lib/mind/recent-chats";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
 import {
@@ -3514,7 +3515,7 @@ export function CommandApp() {
           {ws.chats.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT</p>
-              {ws.chats.slice(0, 5).map((chat) => (
+              {getRecentChats(ws.chats, 5).map((chat) => (
                 <button
                   key={chat.id}
                   type="button"
