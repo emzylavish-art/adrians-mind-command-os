@@ -46,3 +46,44 @@ Before any merge to `main` or any deploy to production, the merger must complete
 8. Only after items one through seven are written down does a human or Astra make the final go-live decision. No bot may self-approve a production deploy.
 
 The checklist lives in this file so every bot and every future merger reads the same gate. If the checklist and a bot's contract ever disagree, the checklist wins for anything touching `main` or production.
+
+═══════════════════════════════════════
+SECURITY ENFORCEMENT STRUCTURE
+AUTO-EXECUTED BY EVERY AI WORKING ON THIS REPO
+NO HUMAN APPROVAL REQUIRED TO FOLLOW THESE RULES
+VIOLATION IS A P0 THE ENFORCER FLAGS IMMEDIATELY
+═══════════════════════════════════════
+
+## 1. SECRET HANDLING (NON-NEGOTIABLE)
+
+- Real credential values never appear in any committed file. Not in code, not in docs, not in handoff notes, not in commit messages, not in PR bodies, not in comments.
+- Only variable names are allowed in the repo. Values live exclusively in Vercel project env settings, in /home/box/.secrets/ on the host, or in a secrets manager.
+- .env.example is the only env file that may be committed, and it must contain blank values only.
+- .gitignore must always contain: .env, .env.*, .pem, .sqlite3, .data/, attachments/, artifacts/. If any AI modifies .gitignore and removes these lines, that is a P0.
+- Connection records in the database must never store a secret field. readFleet forces secretStored false. Any code path that writes a secret into a DB row is a P0.
+- Logs, reports, handoff files, and error traces must redact tokens before writing. If a stack trace or error message contains a key-looking string, it is stripped before persistence.
+- OAuth client secrets, service-role keys, management keys, and pairing secrets follow the same rule. Names in repo, values outside repo.
+- Forks and clones given to other people receive code only. No env values, no connection credentials, no API keys travel with the code. The recipient fills their own values in their own Vercel project.
+
+## 2. WHAT EVERY AI MUST DO BEFORE COMMITTING
+
+Before any push or commit, the AI runs this checklist against its own diff:
+
+1. Scan the diff for patterns: sk-, eyJ, xai-, sb_, Bearer, password=, secret=, token=, api_key, api-key, PEM headers, long base64 blobs.
+2. If any match appears, the AI stops, redacts or removes it, and does not commit until clean.
+3. If a secret was already committed in a prior turn, the AI treats it as a P0: it does not just delete the line — it rotates the exposed credential through the provider dashboard and documents the rotation in the handoff.
+4. The AI writes one line to the commit or PR body stating: secret scan performed, zero matches, or the exact match found and removed.
+
+## 3. WHAT THE ENFORCER CHECKS
+
+- Every bot run must show evidence of the pre-commit scan. No scan evidence means the run is rejected.
+- Any file in git containing a real-looking credential is a P0, regardless of which bot wrote it.
+- Any .gitignore modification that removes a protected line is a P0.
+- Any code path that persists a secret into the database or a log is a P0.
+- The Enforcer does not fix these. It flags them, writes the evidence, and halts the offending bot's lane until a human or Astra resolves it.
+
+## 4. REDACTION STANDARD
+
+When a secret-looking string appears in any output the bot produces — error, log, report, handoff — the bot replaces it with [REDACTED] before writing. The original value is never echoed back to Adrian, never stored in git, and never passed to another bot.
+
+END OF SECURITY ENFORCEMENT STRUCTURE
