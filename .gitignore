@@ -1,21 +1,14 @@
-node_modules/
-.vercel/
-.grok/
-.tanstack/
-screenshots/
-attachments/
-artifacts/
-dist/
-*.log
 .env
 .env.*
 !.env.example
 *.pem
-.DS_Store
-.data/
-
-# Local durable worker queue database
 *.sqlite3
-
-# Third-party source checkouts and package state created inside GitHub Codespaces
-.tools/
+.data/
+attachments/
+artifacts/
+node_modules/
+.next/
+.vercel/
+coverage/
+*.log
+.DS_Store

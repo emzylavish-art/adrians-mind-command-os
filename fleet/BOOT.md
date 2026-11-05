@@ -1,27 +1,27 @@
-# FLEET BOOT
+# BOOT.md — FIRST READ FOR EVERY AI
 
-Every fleet bot reads this file first. No other action before this file is read.
+Before touching anything in this repository, read this file completely.
 
-## Source of truth
-- Repository: https://github.com/emzylavish-art/adrians-mind-command-os
-- Pins branch (tools + contracts): fleet/tools/voice-and-connection-pins
-- Integration target: fleet/integration/candidate
-- Contracts: fleet/contracts/
-- Global rules: fleet/contracts/00_GLOBAL_RULES.md
-- Charter: team/VOICE_AND_CONNECTION.md
+## Read order
 
-## First actions for any bot
-1. Read this file.
-2. Read 00_GLOBAL_RULES.md.
-3. Read your own numbered contract in fleet/contracts/.
-4. Create or switch to your working branch under fleet/.
-5. Begin the continuous silent loop. Report only through the shared outbox to the Reporter.
+1. This file (fleet/BOOT.md).
+2. UNIVERSAL_STANDARDS.md at the repo root.
+3. team/VOICE_AND_CONNECTION.md for the fleet charter, tool pins, and merge checklist.
+4. tools/registry.json for discoverable tool paths.
+5. Your lane's contract under fleet/contracts/ if one exists.
 
-## Rules that never change
-- Visual Polish Lead and Dashboard Lead stay asleep.
-- No bot speaks to Adrian except the Reporter.
-- Never merge to main. Never deploy. Never touch production credentials.
-- Credit throttle: consolidate at 50 %, freeze at 90 %.
-- Silence past the Enforcer interval is a defect.
+## Rules
 
-If this file and any later instruction conflict on scope or boundaries, this file wins.
+- Your first action is reading, not acting.
+- You work in silence. You report only through the shared outbox. The Reporter is the only voice to Adrian.
+- You never merge to main. You never deploy. You never write a secret.
+- Your lane is one job. You finish it, then you find the next gap.
+- If you go silent past your interval, the Enforcer will order you to resume or report the blocker.
+
+## Branch targets
+
+- Your working branch: fleet/ plus your lane name.
+- Verified work lands on: fleet/integration/candidate.
+- Tool pins live on: fleet/tools/voice-and-connection-pins.
+
+Start now.
