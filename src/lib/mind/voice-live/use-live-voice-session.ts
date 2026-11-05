@@ -8,6 +8,7 @@ import { getVoiceMode } from "../voice/mode-store.ts";
 import { readStoredVoiceChoice } from "../voice/voices.ts";
 import { formatVoiceClientError } from "../voice/errors.ts";
 import { LiveVoiceSession, type LiveSessionDeps, type MintSecretResult } from "./live-session.ts";
+import type { SessionReason } from "../voice/speak-state/index.ts";
 import { phaseToLabel, phaseToUiAttr, type LiveVoicePublicState } from "./types.ts";
 import { isLiveVoiceOccupied } from "./occupancy.ts";
 import { readStoredVolume } from "./speaker-gain.ts";
@@ -92,11 +93,16 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     void ensureSession().start();
   }, [ensureSession]);
 
-  const end = useCallback(() => {
-    sessionRef.current?.end("Live voice ended.");
+  const finish = useCallback((reason: SessionReason, notice?: string) => {
+    if (reason === "esc") sessionRef.current?.requestBargeIn("esc");
+    sessionRef.current?.end(notice, reason);
     setSpeakerMuted(false);
     setState((prev) => ({ ...OFF_STATE, modeBadge: prev.modeBadge, error: null }));
   }, []);
+
+  const end = useCallback(() => {
+    finish("user", "Live voice ended.");
+  }, [finish]);
 
   const toggleMute = useCallback(() => {
     ensureSession().toggleMute();
@@ -136,22 +142,22 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
       const target = event.target as HTMLElement | null;
       if (target?.closest?.('[role="dialog"], [aria-modal="true"], dialog')) return;
       event.preventDefault();
-      end();
+      finish("esc", "Live voice ended.");
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [end]);
+  }, [finish]);
 
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "hidden" && isLiveVoiceOccupied()) {
-        sessionRef.current?.end();
+        sessionRef.current?.end(undefined, "reload");
       }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
-      sessionRef.current?.end();
+      sessionRef.current?.end(undefined, "reload");
       sessionRef.current = null;
     };
   }, []);
@@ -171,6 +177,9 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     toggle,
     start,
     end,
+    bargeIn: (source: "manual" | "esc") => {
+      ensureSession().requestBargeIn(source);
+    },
     toggleMute,
     toggleSpeaker,
     setOutputVolume,
