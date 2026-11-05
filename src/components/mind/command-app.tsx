@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
 import { getBearerToken } from "@/lib/auth/client";
+import { getRecentChats } from "@/lib/mind/recent-chats";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
 import {
@@ -46,7 +47,7 @@ import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
-import { VoiceModeBadge } from "@/components/mind/voice-mode-badge";
+import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
@@ -178,6 +179,7 @@ import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
+import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
@@ -226,7 +228,7 @@ import {
   reviseMemory,
   unpackWorkspace,
 } from "@/lib/mind/workspace";
-import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
+import { SIDEBAR_WORKSPACE_NAV_IDS, WORKSPACE_ROUTE_LINKS, isSidebarWorkspaceRoute } from "@/lib/mind/workspace-nav";
 
 type View =
   | "command"
@@ -476,12 +478,91 @@ function browserSpeechCtor(): (new () => BrowserSpeechRec) | null {
   return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
 }
 
+function isEnabledSkillMap(value: unknown): value is Record<string, boolean> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) &&
+    Object.values(value as Record<string, unknown>).every((entry) => typeof entry === "boolean");
+}
+
 export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const navDrawerRef = useRef<HTMLElement>(null);
+  const navCloseRef = useRef<HTMLButtonElement>(null);
+  const navTriggerRef = useRef<HTMLButtonElement>(null);
+  const navWasOpenRef = useRef(false);
+  const [voiceSignInNotice, setVoiceSignInNotice] = useState(false);
+  useEffect(() => {
+    if (!navOpen) {
+      if (navWasOpenRef.current) {
+        const trigger = navTriggerRef.current;
+        if (trigger?.isConnected && trigger.getClientRects().length > 0) {
+          trigger.focus();
+        } else {
+          // The mobile trigger is hidden at desktop breakpoints. Keep focus
+          // inside the now non-modal sidebar rather than on a hidden control.
+          const visibleItem = Array.from(navDrawerRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ) ?? []).find((item) => item.getClientRects().length > 0);
+          visibleItem?.focus();
+        }
+      }
+      navWasOpenRef.current = false;
+      return;
+    }
+    navWasOpenRef.current = true;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    navCloseRef.current?.focus();
+    const onDrawerKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const drawer = navDrawerRef.current;
+      if (!drawer) return;
+      const items = Array.from(drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((item) => item.getAttribute("aria-hidden") !== "true" && item.offsetParent !== null);
+      if (!items.length) {
+        event.preventDefault();
+        navCloseRef.current?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const closeAtDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setNavOpen(false);
+    };
+    desktop.addEventListener("change", closeAtDesktop);
+    document.addEventListener("keydown", onDrawerKeyDown, true);
+    return () => {
+      document.body.style.overflow = previous;
+      desktop.removeEventListener("change", closeAtDesktop);
+      document.removeEventListener("keydown", onDrawerKeyDown, true);
+    };
+  }, [navOpen]);
+  const openNav = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    navTriggerRef.current = event.currentTarget;
+    setNavOpen(true);
+  };
+  const closeNavFromBackdrop = (event: ReactMouseEvent<HTMLElement>) => {
+    if (event.target === event.currentTarget) setNavOpen(false);
+  };
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
@@ -804,6 +885,7 @@ export function CommandApp() {
   const [mcpToken, setMcpToken] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
   const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
+  const [skillStorageError, setSkillStorageError] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectNext = useRef<View | null>(null);
@@ -905,9 +987,13 @@ export function CommandApp() {
     loadMcpLists();
     try {
       const saved = localStorage.getItem("amcos.skills.v1");
-      if (saved) setEnabledSkills(JSON.parse(saved) as Record<string, boolean>);
+      if (saved !== null) {
+        const parsed: unknown = JSON.parse(saved);
+        if (isEnabledSkillMap(parsed)) setEnabledSkills(parsed);
+        else setSkillStorageError("Saved skill settings are invalid. The original data is preserved; skills use their default enabled state until this is repaired.");
+      }
     } catch {
-      /* a private browser can refuse storage */
+      setSkillStorageError("Skill settings could not be read from browser storage. Existing data was not changed.");
     }
   }, [ready, setWs]);
 
@@ -2814,7 +2900,14 @@ export function CommandApp() {
     }, 220);
   }
 
+  function voiceCanStart() {
+    if (wsRef.current.halted) { setError("Emergency stop is on. Voice was not started."); return false; }
+    if (statusSignedIn !== true) { setVoiceSignInNotice(true); return false; }
+    return true;
+  }
+
   function startBrowserDictation() {
+    if (!voiceCanStart()) return;
     // Browser SpeechRecognition only. Recorder capture in dictation.ts and server stt.ts stay unwired:
     // no transcribe server fn exists, and a new xAI STT call would be a live provider call.
     if (wsRef.current.halted) {
@@ -2928,6 +3021,7 @@ export function CommandApp() {
   }
 
   async function openVoiceOverlay() {
+    if (!voiceCanStart()) return;
     if (isLiveVoiceOccupied()) {
       setNotice(LIVE_VOICE_BUSY_MESSAGE);
       return;
@@ -2954,6 +3048,7 @@ export function CommandApp() {
   }
 
   async function retryVoiceOverlay() {
+    if (!voiceCanStart()) return;
     if (!allowCancel(voiceCancelBudgetRef.current)) {
       setOverlayNotice("Too many voice retries. Wait a moment.");
       return;
@@ -2996,6 +3091,7 @@ export function CommandApp() {
       }
       return;
     }
+    if (action === "start" && !voiceCanStart()) return;
     if (action === "ignore") {
       // Already listening or minting — do not toggle-stop (fixes reconnect/PTT race).
       return;
@@ -3317,7 +3413,7 @@ export function CommandApp() {
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside ref={navDrawerRef} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
           <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
             <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
@@ -3328,7 +3424,7 @@ export function CommandApp() {
               <p className="text-[10px] tracking-[0.22em] text-muted">COMMAND OS</p>
             </div>
           )}
-          <button type="button" className="grid size-11 place-items-center rounded-panel border border-line md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
+          <button ref={navCloseRef} type="button" className="grid size-11 place-items-center rounded-panel border border-line md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
             <span className="text-lg">×</span>
           </button>
           <button type="button" className="hidden size-11 place-items-center rounded-panel border border-line md:grid" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setRailCollapsed((value) => !value)}>
@@ -3351,14 +3447,15 @@ export function CommandApp() {
           </button>
         </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-4">
-              {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
-              <div className="space-y-1">
-              {group.items.map((item, itemIndex) => {
+          <div className="mb-4">
+            {!railCollapsed && <p className="meta-label px-3 pb-2">Workspace</p>}
+            <div className="space-y-1">
+              {SIDEBAR_WORKSPACE_NAV_IDS.map((id) => {
+                const item = NAV.find((candidate) => candidate.id === id);
+                if (!item) return null;
                 const Icon = item.icon;
                 const on = view === item.id;
-                const button = (
+                return (
                   <button
                     key={item.id}
                     type="button"
@@ -3376,35 +3473,26 @@ export function CommandApp() {
                     {!railCollapsed && item.label}
                   </button>
                 );
-                if (group.label === "Workspace" && itemIndex === 0) {
-                  return (
-                    <div key={`workspace-head-${item.id}`} className="contents">
-                      {button}
-                      {WORKSPACE_ROUTE_LINKS.map((routeItem) => (
-                        <Link
-                          key={routeItem.id}
-                          to={routeItem.href}
-                          title={routeItem.label}
-                          aria-label={routeItem.label}
-                          data-testid={`nav-route-${routeItem.id}`}
-                          onClick={() => {
-                            setNavOpen(false);
-                            closeMenus();
-                          }}
-                          className={`nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
-                        >
-                          <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
-                          {!railCollapsed && routeItem.label}
-                        </Link>
-                      ))}
-                    </div>
-                  );
-                }
-                return button;
               })}
-              </div>
+              {WORKSPACE_ROUTE_LINKS.filter((routeItem) => isSidebarWorkspaceRoute(routeItem.id)).map((routeItem) => (
+                <Link
+                  key={routeItem.id}
+                  to={routeItem.href}
+                  title={routeItem.label}
+                  aria-label={routeItem.label}
+                  data-testid={`nav-route-${routeItem.id}`}
+                  onClick={() => {
+                    setNavOpen(false);
+                    closeMenus();
+                  }}
+                  className={`nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
+                >
+                  <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
+                  {!railCollapsed && routeItem.label}
+                </Link>
+              ))}
             </div>
-          ))}
+          </div>
           {ws.pins.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</p>
@@ -3443,7 +3531,7 @@ export function CommandApp() {
           {ws.chats.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT</p>
-              {ws.chats.slice(0, 5).map((chat) => (
+              {getRecentChats(ws.chats, 5, new Set(ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref))).map((chat) => (
                 <button
                   key={chat.id}
                   type="button"
@@ -3474,11 +3562,23 @@ export function CommandApp() {
             <Plus className="size-4" />
             {!railCollapsed && "New"}
           </button>
+          <button
+            type="button"
+            className={`mt-3 flex min-h-11 w-full items-center gap-3 rounded-2xl px-2 text-left hover:bg-white/5 ${railCollapsed ? "justify-center" : ""}`}
+            aria-label="Open Settings"
+            title="Settings"
+            onClick={() => {
+              setView("settings");
+              setNavOpen(false);
+              closeMenus();
+            }}
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-bold text-accent-ink">A</span>
+            {!railCollapsed && <span className="min-w-0"><span className="block text-sm font-semibold">Adrian (Personal)</span><span className="block text-xs text-muted">Settings · this device</span></span>}
+          </button>
           {!railCollapsed && (
-            <div className="mt-3">
-              <p className="text-sm font-semibold">Adrian (Personal)</p>
-              <p className="text-xs text-muted">Only workspace on this device.</p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+            <div className="mt-3 px-1">
+              <div className="h-1.5 overflow-hidden rounded-full bg-line">
                 <div className="h-full rounded-full bg-glow" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
               </div>
               <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
@@ -3488,45 +3588,15 @@ export function CommandApp() {
         </div>
       </aside>
 
-      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36">
+      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
         <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
-          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
+          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
             <Menu className="size-4" />
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
-          <div className="hidden shrink-0 md:block">
-            <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
-              <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-              <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
-              <button
-                type="button"
-                className="grid size-9 place-items-center rounded-panel border border-line text-muted"
-                onClick={toggleVoiceMute}
-                aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
-                aria-pressed={voiceMuted}
-                data-testid="voice-mute"
-                disabled={!voiceListening}
-              >
-                {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-              </button>
-              <VoiceLiveTranscript text={voiceLiveTranscript} />
-              <VoicePicker value={voiceChoice} onChange={applyVoiceChoice} disabled={voiceListening} />
-            </div>
-
-          </div>
-          <div className="command-voice-mode">
-            <VoiceModeBadge
-              placement="header"
-              mode={voiceMode}
-              listening={voiceListening}
-              hint={
-                voiceMode === "orchestrator"
-                  ? "Orchestrator needs Ollama on this computer. Switch to Direct if it is not running."
-                  : null
-              }
-              onToggle={() => applyVoiceMode(toggleVoiceMode(voiceMode))}
-            />
-          </div>
+          <button type="button" className="header-voice-mode" onClick={() => applyVoiceMode(toggleVoiceMode(voiceMode))} aria-label={`Switch voice mode (currently ${voiceMode})`}>
+            {voiceMode === "direct" ? "Direct" : "Orchestrator"}
+          </button>
           <div className="command-search relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -3592,34 +3662,7 @@ export function CommandApp() {
               lastModel={lastModelUsed}
             />
           </div>
-          <div className={`voice-zone ${dictation.phase === "recording" || speaking ? "is-live" : ""}`} aria-label="Voice controls">
-            <BrowserDictationControl
-              compact
-              state={dictation.phase}
-              level={dictationLevel}
-              elapsedSec={dictationElapsed}
-              disabled={dictationDisabled}
-              onMicClick={onDictationMic}
-              onStop={stopBrowserDictation}
-              onCancel={() => cancelBrowserDictation(true)}
-            />
-            <VoiceModeButton compact pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
-            <span className="waveform" aria-hidden="true">
-              <span /><span /><span /><span /><span /><span /><span />
-            </span>
-            <button
-              type="button"
-              className="focus-ring grid size-9 place-items-center rounded-full text-muted"
-              aria-label="Speak last reply"
-              disabled={speaking}
-              onClick={() => {
-                const last = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
-                if (last) void speak(last.content);
-              }}
-            >
-              <Volume2 className="size-4" />
-            </button>
-          </div>
+
           <button
             type="button"
             className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
@@ -3898,8 +3941,7 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
-                    <VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" />
-                    <BrowserDictationControl
+                    <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
                       state={dictation.phase}
                       level={dictationLevel}
                       elapsedSec={dictationElapsed}
@@ -3912,8 +3954,9 @@ export function CommandApp() {
                     <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
                     <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : "text-muted"}`} onClick={() => void listen()} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
-                    </button>
-                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                    </button></div>
+
+                    <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
                   </div>
@@ -3995,55 +4038,6 @@ export function CommandApp() {
                 <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
                 <button type="button" className="suggestion-chip" onClick={() => setView("connected")}>Review connected services</button>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <Quick label="Create Project" icon={Folder} tone="text-accent" onClick={() => setProjectOpen(true)} />
-                <Quick label="Run Agent" icon={Bot} tone="text-info" onClick={() => { setView("agents"); void checkRea(); }} />
-                <Quick label="Research" icon={Search} tone="text-ok" onClick={() => { setView("research"); if (staged) void inspectWithRea(staged, "research"); else void checkRea(); }} />
-                <Quick label="Generate Image" icon={Image} tone="text-warn" comingSoon title="Coming soon — image generation is a paid API and is not called from this app." onClick={() => explain("Image generation is a paid API and is not called from this app.")} />
-                <Quick label="Generate Video" icon={Video} tone="text-accent" comingSoon title="Coming soon — video generation is a paid API and is not called from this app." onClick={() => explain("Video generation is a paid API and is not called from this app.")} />
-                <Quick label="Analyze File" icon={FileText} tone="text-info" onClick={() => { if (staged) void inspectWithRea(staged, "research"); else { inspectNext.current = "research"; fileRef.current?.click(); } }} />
-                <Quick label="More Tools" icon={Wrench} tone="text-muted" onClick={() => setToolsOpen(true)} />
-              </div>
-              <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
-                <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-                <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} />
-                <button
-                  type="button"
-                  className="grid size-9 place-items-center rounded-panel border border-line text-muted"
-                  onClick={toggleVoiceMute}
-                  aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"}
-                  aria-pressed={voiceMuted}
-                  data-testid="voice-mute"
-                  disabled={!voiceListening}
-                >
-                  {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-                </button>
-                <BrowserDictationControl
-                  state={dictation.phase}
-                  level={dictationLevel}
-                  elapsedSec={dictationElapsed}
-                  disabled={dictationDisabled}
-                  onMicClick={onDictationMic}
-                  onStop={stopBrowserDictation}
-                  onCancel={() => cancelBrowserDictation(true)}
-                />
-                <VoiceModeButton pressed={voiceOverlayOpen} onClick={() => void openVoiceOverlay()} />
-              </div>
-
-              {notice && <p className="banner-notice voice-copy px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
-              {error && <p className="banner-error voice-copy px-3 py-2 text-sm text-danger" role="alert">{presentVoiceCopy(error)}</p>}
-              <ServiceBoard
-                grokConfigured={grokConfigured === true}
-                notion={notion}
-                mcp={mcpBoard}
-                onSetup={(message) => setNotice(message)}
-                onDisconnect={() => {
-                  void notionDisconnect().then((status) => {
-                    setNotion(status);
-                    setNotice(status.detail);
-                  });
-                }}
-              />
 
               <div className="grid gap-3 xl:grid-cols-3">
                 <Panel title="Active Projects" action="View all" onAction={() => setView("projects")}>
@@ -4560,7 +4554,7 @@ export function CommandApp() {
           {view === "connected" && (
             <section className="page-shell">
               <div className="page-hero mb-4 flex items-center gap-3"><img src="/icons/systems.svg" alt="" className="size-8" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
-              <ServiceBoard
+              {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login">Sign in</Link></div> : <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
                 mcp={mcpBoard}
@@ -4571,7 +4565,7 @@ export function CommandApp() {
                     setNotice(status.detail);
                   });
                 }}
-              />
+              />}
               <form
                 className="rounded-panel border border-line bg-surface p-3"
                 onSubmit={(event) => {
@@ -4773,8 +4767,7 @@ export function CommandApp() {
               </div>
             </section>
           )}
-          {view === "skills" && (
-            <section className="page-shell space-y-4">
+          <section className={view === "skills" ? "page-shell space-y-4" : "hidden"}>
               <div className="page-hero"><h2 className="font-display text-3xl font-bold">Skills</h2>
               <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p></div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
@@ -4799,8 +4792,9 @@ export function CommandApp() {
                               setEnabledSkills(next);
                               try {
                                 localStorage.setItem("amcos.skills.v1", JSON.stringify(next));
+                                setSkillStorageError("");
                               } catch {
-                                /* storage can refuse */
+                                setSkillStorageError("Skill setting changed in this tab but could not be saved to browser storage.");
                               }
                             }}
                           >
@@ -4819,9 +4813,10 @@ export function CommandApp() {
                   );
                 })}
               </div>
+              {skillStorageError && <p className="rounded-panel border border-danger/40 p-3 text-sm text-danger" role="alert">{skillStorageError}</p>}
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
-            </section>
-          )}
+              <LocalSkillsTools skills={SKILLS} enabledSkills={Object.fromEntries(SKILLS.map((skill) => [skill.id, skill.kind === "built-in" && enabledSkills[skill.id] !== false]))} />
+          </section>
           {view === "files" && (
             <section className="page-shell">
               <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -4962,7 +4957,7 @@ export function CommandApp() {
               <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
               <ul className="space-y-2 text-sm">
                 <li className="dense-card p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
-                <li className="dense-card p-3"><span className="font-semibold">Bots & Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
+                <li className="dense-card p-3"><span className="font-semibold">Bots &amp; Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
                 <li className="dense-card p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
                 <li className="dense-card p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
               </ul>
@@ -4974,6 +4969,28 @@ export function CommandApp() {
                 <h2 className="font-display text-3xl font-bold">Settings</h2>
                 <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
               </div>
+              <div className="settings-card rounded-panel p-4">
+                <h3 className="text-sm font-semibold">Workspace navigation</h3>
+                <p className="mt-1 text-xs text-muted">Open any workspace here; the sidebar stays focused on Library, Projects, Scheduled, and Explore.</p>
+                <div className="mt-4 space-y-4">
+                  {NAV_GROUPS.map((group) => {
+                    const items = group.items.filter((item) => !["files", "projects", "scheduled", "chat"].includes(item.id));
+                    if (!items.length) return null;
+                    return (
+                      <div key={group.label}>
+                        <p className="meta-label px-1 pb-2">{group.label}</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {items.map((item) => {
+                            const Icon = item.icon;
+                            return <button key={item.id} type="button" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-left text-sm hover:bg-white/5" aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}><Icon className="size-4 shrink-0" />{item.label}</button>;
+                          })}
+                          {group.label === "Workspace" && <Link to="/dashboard" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm hover:bg-white/5"><img src="/icons/dashboard.svg" alt="" className="nav-icon-img" />Dashboard</Link>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  </div>
+                </div>
               <div className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
@@ -5014,6 +5031,7 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
+              <SafeKeysPanel />
               <VoiceSettingsBlock />
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
@@ -5152,8 +5170,8 @@ export function CommandApp() {
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onCapture={(dataUrl, name) => {
-          setPendingImages((prev) => (prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]));
-          setNotice(`Camera snapshot “${name}” staged. Send includes it for the model.`);
+          setPendingImages((prev) => prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]);
+          setNotice(`Camera snapshot “${name}” attached to the composer. Press Send to include it.`);
         }}
       />
       <CloudPicker
@@ -5163,6 +5181,16 @@ export function CommandApp() {
         onNotice={(message) => setNotice(message)}
       />
 
+      {voiceSignInNotice && (
+        <Overlay>
+          <h3 className="font-display text-xl font-bold">Sign in to use Speak</h3>
+          <p className="mt-2 text-sm text-muted">Voice starts only after you sign in and press Speak. Your microphone has not been requested.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setVoiceSignInNotice(false)}>Cancel</button>
+            <Link to="/login" className="min-h-11 flex-1 rounded-panel bg-accent text-center leading-[2.75rem] font-semibold text-accent-ink">Sign in</Link>
+          </div>
+        </Overlay>
+      )}
       {projectOpen && (
         <Overlay>
           <h3 className="font-display text-2xl font-bold">Create project</h3>
@@ -5195,7 +5223,13 @@ export function CommandApp() {
           </div>
         </Overlay>
       )}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
+      {statusSignedIn !== true && (
+        <div className="signed-out-entry" data-testid="signed-out-entry" role="status">
+          <span>Sign in to use voice and connected services.</span>
+          <Link to="/login" className="signed-out-entry__link">Sign in</Link>
+        </div>
+      )}
+      <nav inert={navOpen} className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
         {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
@@ -5224,7 +5258,7 @@ export function CommandApp() {
             </button>
           );
         })}
-        <button type="button" className="flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] text-muted" onClick={() => setNavOpen(true)}>
+        <button type="button" className="flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] text-muted" onClick={openNav}>
           <Menu className="size-4" />
           More
         </button>
@@ -5245,6 +5279,13 @@ export function CommandApp() {
         onRetry={() => void retryVoiceOverlay()}
       />
       <LiveVoiceBar
+        compactIdle
+        authReady={statusSignedIn === true}
+        authSignedIn={statusSignedIn === true}
+        onSignInRequired={() => setVoiceSignInNotice(true)}
+        onCompactSpeak={() => void openVoiceOverlay()}
+        onChatAttachImage={(image) => setPendingImages((prev) => prev.length >= 4 ? prev : [...prev, image])}
+        onDictateToggle={() => startBrowserDictation()}
         isOverlayMicOpen={() =>
           Boolean(
             overlayOpenRef.current ||
@@ -5312,7 +5353,7 @@ function BrowserDictationControl(props: {
 
 function presentVoiceCopy(text: string): string {
   if (/127\.0\.0\.1|localhost:\d+|0\.0\.0\.0:\d+|not reachable at https?:\/\//i.test(text)) {
-    return "Orchestrator needs Ollama running on this computer. Switch to Direct, or start Ollama and try again.";
+    return "Orchestrator needs Ollama on a paired computer. Switch to Direct if it is unavailable.";
   }
   return text;
 }
@@ -5393,7 +5434,7 @@ function StatusRow({
 
 function Overlay({ children }: { children: ReactNode }) {
   return (
-    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center">
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="true">
       <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
     </div>
   );
@@ -5746,7 +5787,7 @@ function ChatPane({
                 </button>
                 {msg.role === "assistant" && (
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content)} disabled={speaking}>
-                    {speaking ? "Speaking" : "Speak"}
+                    {speaking ? "Speaking" : "Read aloud"}
                   </button>
                 )}
                 {msg.role === "assistant" && last?.id === msg.id && (
@@ -5902,7 +5943,7 @@ function ChatPane({
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-            <VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
+            <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
             <BrowserDictationControl
               state={dictationState}
               level={dictationLevel}
@@ -5921,11 +5962,12 @@ function ChatPane({
               {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             </button>
             <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
-              {speaking ? "Speaking" : "Speak"}
-            </button>
-            <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+              {speaking ? "Reading" : "Read aloud"}
+            </button></div>
+            
+            <button type="submit" disabled={busy || halted || !active || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
-          <div className="composer-voice-chrome" data-testid="composer-voice-chrome">
+          <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
             <p className="text-xs text-muted" role="status">{chromeNote}</p>
             <div className="composer-voice-chrome__row">
               <PreviewDictationPill
@@ -5961,10 +6003,7 @@ function ChatPane({
                   setPreviewModelOpen(false);
                   markPreview("Model chip");
                 }}
-                onDictate={() => {
-                  setChromeNote("Dictate uses this chat’s microphone. Speak on this chrome does not start a provider.");
-                  onListen();
-                }}
+                onDictate={() => setChromeNote("Use the single Speak control for a realtime conversation.")}
                 onSpeak={() => markPreview("Speak")}
               />
               <LiveSpeakControl
@@ -6285,3 +6324,4 @@ function chatStamp(chat: Chat) {
   if (!iso) return "New";
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
+

@@ -6600,3 +6600,72 @@ aside .max-w-\[14rem\].truncate {
 [data-testid="login-password-submit"] {
   min-height: 2.75rem !important;
 }
+
+/* Preview phone layout: keep modal layers above all dock and navigation chrome. */
+.shell .overlay-backdrop,
+.shell [role="dialog"][aria-modal="true"] {
+  z-index: 1000 !important;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+  padding-top: max(1rem, env(safe-area-inset-top)) !important;
+}
+.shell .overlay-panel { max-height: calc(100dvh - 2rem - env(safe-area-inset-bottom)); overflow-y: auto; }
+.sign-in-summary { border: 1px solid var(--color-line); background: var(--color-surface); border-radius: 1rem; padding: 1rem; color: var(--color-muted); }
+.sign-in-summary a { color: var(--color-fg); font-weight: 700; margin-left: .4rem; }
+.legacy-composer-voice { display: none; }
+.mind-speak-button { min-height: 44px; padding: 0 1.1rem; border-radius: 999px; border: 1px solid var(--color-line); background: var(--color-accent); color: var(--color-accent-ink); font-weight: 700; }
+@media (max-width: 767.98px) {
+  .shell { overflow-x: hidden; }
+  .shell .rail.nav-drawer-open { z-index: 200 !important; height: 100dvh; overflow: hidden; padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .shell .rail.nav-drawer-open > nav { min-height: 0; overscroll-behavior: contain; }
+  .shell .topbar .voice-zone, .shell .topbar .command-voice-mode { display: none !important; }
+  .shell [data-testid="voice-controls"] { display: none !important; }
+  .shell .composer-voice-chrome { display: none !important; }
+  .shell .main-stage { padding-bottom: calc(4rem + env(safe-area-inset-bottom)) !important; }
+  .shell .main-stage section.command-card.composer-dock,
+  .shell .main-stage form.command-card.composer-dock {
+    position: relative !important; inset: auto !important; max-height: none !important; overflow: visible !important;
+    margin: 0 !important; width: 100% !important; box-sizing: border-box; z-index: auto !important;
+  }
+  .shell .main-stage .min-h-0.flex-1.overflow-auto { padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; }
+  .shell .topbar { max-width: 100%; overflow: visible; }
+  .shell .composer-dock form > div, .shell .composer-dock > div { min-width: 0; max-width: 100%; }
+  .shell .mind-speak-button { display: inline-flex; align-items: center; justify-content: center; }
+  .shell .live-voice-bar { bottom: calc(4rem + env(safe-area-inset-bottom)) !important; max-height: calc(100dvh - 5rem); overflow-y: auto; }
+}
+
+/* Single intentional Speak launcher; all placeholder voice demo chrome is hidden. */
+.live-voice-compact-entry { position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom)); z-index: 46; }
+.live-voice-compact-entry__button { min-height: 44px; border-radius: 999px; padding: 0 1.25rem; background: var(--color-accent); color: var(--color-accent-ink); font-weight: 700; box-shadow: 0 10px 26px rgb(0 0 0 / .35); }
+.composer-voice-chrome.hidden { display: none !important; }
+@media (max-width: 767.98px) { .live-voice-compact-entry { right: .75rem; bottom: calc(4rem + env(safe-area-inset-bottom)); } .mind-speak-button { min-height: 44px; } }
+
+/* One composer. Compact desktop/mobile header; no second idle voice composer. */
+.shell .header-voice-mode { min-height: 36px; flex: 0 0 auto; padding: 0 .65rem; border: 1px solid var(--color-line); border-radius: 999px; background: var(--color-surface); color: var(--color-muted); font-size: .72rem; }
+.shell .legacy-composer-voice { display: none !important; }
+.shell [data-testid="composer-voice-chrome"] { display: none !important; }
+.shell .composer-voice-chrome { display: none !important; }
+.shell .live-voice-compact-entry__button { min-height: 44px; padding: .6rem 1.1rem; border: 1px solid rgb(255 255 255 / .2); border-radius: 999px; background: #efedf5; color: #11121a; font-weight: 700; box-shadow: 0 10px 26px rgb(0 0 0 / .36); }
+.shell .live-voice-compact-entry { position: fixed; right: 1rem; bottom: 1rem; z-index: 45; }
+.shell .mind-speak-button { min-height: 44px; padding: 0 1rem; border-radius: 999px; background: #efedf5; color: #11121a; font-weight: 700; }
+@media (max-width: 767.98px) {
+  .shell { overflow-x: clip; }
+  .shell .topbar .voice-zone, .shell .topbar .command-voice-mode, .shell .topbar .header-voice-mode { display: none !important; }
+  .shell [data-testid="voice-controls"] { display: none !important; }
+  .shell .main-stage { min-height: 0; padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important; }
+  .shell .main-stage > .min-h-0.flex-1 { padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; }
+  .shell .main-stage section.command-card.composer-dock,
+  .shell .main-stage form.command-card.composer-dock,
+  .shell .main-stage section.floating-composer.command-card.composer-dock {
+    position: relative !important; inset: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
+    max-height: none !important; overflow: visible !important; width: 100% !important; margin: 0 !important; z-index: auto !important;
+  }
+  .shell .composer-dock > form > div:last-of-type { max-height: 9rem; overflow: auto; overscroll-behavior: contain; }
+  .shell .live-voice-compact-entry { right: .75rem; bottom: calc(4.5rem + env(safe-area-inset-bottom)); z-index: 46; }
+  .shell .rail.nav-drawer-open { z-index: 200 !important; height: 100dvh; padding-bottom: max(1rem, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+  .shell .rail.nav-drawer-open > nav { min-height: 0; overscroll-behavior: contain; }
+  .shell .overlay-backdrop, .shell [role="dialog"][aria-modal="true"] { z-index: 1000 !important; }
+}
+
+.signed-out-entry { position: fixed; z-index: 49; left: 1rem; bottom: 1rem; display:flex; align-items:center; gap:.75rem; border:1px solid var(--color-line); border-radius:1rem; background:var(--color-surface); color:var(--color-fg); padding:.5rem .75rem; box-shadow:0 8px 24px #0006; font-size:.75rem; }
+.signed-out-entry__link { display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:70px; padding:0 .75rem; border-radius:.75rem; background:#efedf5; color:#11121a; font-weight:700; }
+@media(max-width:767.98px) { .signed-out-entry { left:.75rem; bottom:calc(4.5rem + env(safe-area-inset-bottom)); max-width:calc(100vw - 8rem); } }

@@ -82,6 +82,7 @@ def tool_specs(manifest):
                     "worker_id": {"type": "string"},
                     "id": {"type": "string"},
                     "job_id": {"type": "string"},
+                    "claim_token": {"type": "string", "minLength": 1},
                     "result": {"type": "object"},
                     "error": {"type": "string"},
                     "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},

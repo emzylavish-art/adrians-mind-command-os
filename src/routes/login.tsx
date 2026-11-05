@@ -24,12 +24,14 @@ const LazyMonoMotion = lazy(() =>
 type LoginSearch = {
   next?: string;
   error?: string;
+  mode?: Mode;
 };
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     next: typeof search.next === "string" ? search.next : undefined,
     error: typeof search.error === "string" ? search.error : undefined,
+    mode: search.mode === "sign-up" ? "sign-up" : undefined,
   }),
   loader: async () => {
     try {
@@ -182,7 +184,7 @@ function Login() {
   const supabaseConfigured = Boolean(data.configured);
   const brokerConfigured = Boolean(data.brokerConfigured);
   const supabaseOAuthProviders = data.supabaseOAuthProviders ?? [];
-  const [mode, setMode] = useState<Mode>("sign-in");
+  const [mode, setMode] = useState<Mode>(search.mode ?? "sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -213,7 +215,7 @@ function Login() {
         if (result.error) {
           const message = result.error.message || "Sign-in failed.";
           setBanner(
-            mode === "sign-in" && /invalid|credential|password/i.test(message)
+            mode === "sign-in" && /^(INVALID_EMAIL_OR_PASSWORD|INVALID_CREDENTIALS|INVALID_PASSWORD)$/.test(result.error.code ?? "")
               ? "That email and password do not match. If this is your first time, switch to Sign up."
               : message,
           );
@@ -304,10 +306,9 @@ function Login() {
             role="status"
             data-testid="auth-not-configured"
           >
-            <p className="font-medium text-fg">Supabase email sign-in isn&apos;t configured yet</p>
+            <p className="font-medium text-fg">Supabase sign-in is not configured</p>
             <p className="mt-1.5">
-              Google and X below still use the owner broker when those env vars
-              are set. Connect Supabase for email/password, GitHub, and Apple.
+              {emailAndPasswordEnabled ? "Email and password use Better Auth, a separate sign-in service." : "Email and password require a configured sign-in service."} GitHub and Apple require their own configuration. Google and X require the owner broker when available.
             </p>
           </div>
         ) : null}

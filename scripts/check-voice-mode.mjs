@@ -71,7 +71,7 @@ try {
         assert.equal(landed.includes("currently Orchestrator"), mode === "orchestrator", landed);
         if (mode === "orchestrator") {
           const text = await page.locator('[data-testid="voice-mode-badge-header"]').innerText();
-          assert.match(text, /this computer/i);
+          assert.match(text, /paired computer/i);
           assert.doesNotMatch(text, /127\.0\.0\.1|localhost:\d+/);
         }
         const found = await controls(page);

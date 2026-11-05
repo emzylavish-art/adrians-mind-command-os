@@ -10,8 +10,6 @@ import { isLiveVoiceOccupied } from "@/lib/mind/voice-live/occupancy";
 import {
   MAX_TEXT_FILE_CHARS,
   MAX_VIDEO_FRAMES,
-  REALTIME_NATIVE_INPUT_IMAGE,
-  SCREEN_FRAME_INTERVAL_MS,
   validateAttachment,
 } from "@/lib/mind/voice-live/attachments";
 import { barRootStyle } from "@/lib/mind/voice-live/bar-state";
@@ -32,8 +30,6 @@ import {
   openScreenStream,
   readTextFile,
   sampleVideoFrames,
-  startMediaFrameStream,
-  type FrameStreamHandle,
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape } from "./settings-popover";
 import "./mobile-nav-clearance.css";
@@ -47,12 +43,18 @@ export type LiveVoiceBarProps = {
   onNotice?: (message: string) => void;
   onChatSend?: (text: string) => void;
   onChatAttachText?: (text: string, name: string) => void;
+  onChatAttachImage?: (image: { dataUrl: string; name: string; mime: string }) => void;
   dictating?: boolean;
   onDictateToggle?: () => void;
   askValue?: string;
   onAskChange?: (value: string) => void;
   /** Existing model picker (Logic-owned) — wrapped in .composer-bar__model. */
   modelPickerSlot?: ReactNode;
+  compactIdle?: boolean;
+  authReady?: boolean;
+  authSignedIn?: boolean;
+  onSignInRequired?: () => void;
+  onCompactSpeak?: () => void;
 };
 
 function speakAttr(ui: LiveVoiceUiAttr): LiveVoiceUiAttr {
@@ -82,23 +84,17 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const [attachOpen, setAttachOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [attachMsg, setAttachMsg] = useState<string | null>(null);
-  const [screenOn, setScreenOn] = useState(false);
   const [voiceMode, setVoiceMode] = useState<VoiceRoutingMode>(() => getVoiceMode());
   const [voiceChoice, setVoiceChoice] = useState<XaiBuiltinVoice>(() =>
     readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage),
   );
 
-  const screenRef = useRef<FrameStreamHandle | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
 
-  const stopScreen = useCallback(() => {
-    screenRef.current?.stop();
-    screenRef.current = null;
-    setScreenOn(false);
-  }, []);
+  const stopScreen = useCallback(() => {}, []);
 
   const endEverything = useCallback(() => {
     stopScreen();
@@ -148,62 +144,21 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     };
   }, [settingsOpen]);
 
-  const ensureLive = useCallback(async () => {
-    if (live.active) return true;
-    if (props.isOverlayMicOpen()) props.stopOverlayMic();
-    live.pressMic();
-    await new Promise((r) => setTimeout(r, 50));
-    return true;
+  const pushVisionFallback = useCallback(async (jpegBase64: string, caption: string, name = "live-attach.jpg") => {
+    if (live.active) {
+      const text = [caption.trim(), "(image was not sent through the realtime channel; attach it in Chat after the call.)"].filter(Boolean).join(" ");
+      live.sendText(text);
+      props.onNotice?.("The image itself is not available to realtime voice. Attach it in Chat to analyze it.");
+      return;
+    }
+    if (!props.onChatAttachImage) {
+      props.onNotice?.("Image attachment could not be staged. Nothing was sent.");
+      return;
+    }
+    const dataUrl = jpegBase64.startsWith("data:") ? jpegBase64 : `data:image/jpeg;base64,${jpegBase64}`;
+    props.onChatAttachImage({ dataUrl, name, mime: "image/jpeg" });
+    props.onNotice?.("Image attached to the Chat composer. Press Send to analyze it.");
   }, [live, props]);
-
-  const pushVisionFallback = useCallback(
-    async (jpegBase64: string, caption: string) => {
-      if (!live.active) {
-        props.onNotice?.(
-          "Not live yet — starting live voice, then attaching via chat/vision fallback (realtime has no native input_image).",
-        );
-        await ensureLive();
-      } else if (!REALTIME_NATIVE_INPUT_IMAGE) {
-        props.onNotice?.(
-          "Realtime ignores input_image — using chat/vision fallback and speaking the reply on the same output.",
-        );
-      }
-
-      let analysis = "";
-      try {
-        const result = await analyzeImageFile({
-          data: {
-            name: "live-attach.jpg",
-            bytes: Math.ceil((jpegBase64.length * 3) / 4),
-            imageBase64: jpegBase64.slice(0, 180_000),
-          },
-        });
-        if (result && typeof result === "object" && "text" in result && result.text) {
-          analysis = String(result.text).slice(0, 1500);
-        } else if (result && typeof result === "object" && "error" in result && result.error) {
-          analysis = `Vision note: ${String(result.error)}`;
-        }
-      } catch {
-        analysis = "Vision analysis was unavailable.";
-      }
-
-      const prompt = [
-        caption.trim() || "Describe this attached image briefly for the live conversation.",
-        analysis ? `Vision summary: ${analysis}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      const sent = live.sendText(prompt);
-      if (!sent) {
-        props.onChatAttachText?.(prompt, "live-attach.jpg");
-        props.onNotice?.("Attached to normal chat (live session was not open).");
-      } else {
-        live.sessionRef.current?.attachImageContext(jpegBase64, caption);
-      }
-    },
-    [ensureLive, live, props],
-  );
 
   const onAskSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -229,13 +184,18 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   };
 
   const startSpeak = () => {
+    if (props.authSignedIn === false) { props.onSignInRequired?.(); return; }
+    if (!props.authReady) { props.onSignInRequired?.(); return; }
     if (props.dictating) props.stopOverlayMic();
     if (props.isOverlayMicOpen()) props.stopOverlayMic();
     if (live.state.phase === "connecting" || live.state.phase === "reconnecting") {
       live.pressMic();
       return;
     }
-    if (!live.active) live.pressMic();
+    if (!live.active) {
+      if (props.isOverlayMicOpen()) props.stopOverlayMic();
+      live.pressMic();
+    }
   };
 
   const onDictate = () => {
@@ -247,36 +207,14 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   };
 
   const toggleScreen = async () => {
-    if (screenOn) {
-      stopScreen();
-      return;
-    }
-    const opened = await openScreenStream();
-    if (!opened.ok) {
-      const msg = opened.error || "Screen share was cancelled or isn't available.";
-      setAttachMsg(msg);
-      props.onError?.(msg);
-      props.onNotice?.(msg);
-      return;
-    }
-    if (!live.active) {
-      props.onNotice?.("Starting live voice for screen share…");
-      await ensureLive();
-    }
-    const handle = await startMediaFrameStream(
-      opened.stream,
-      async (b64) => {
-        void b64;
-        if (live.active) live.sendText("(Live screen frame received — describe if relevant.)");
-      },
-      SCREEN_FRAME_INTERVAL_MS,
-    );
-    screenRef.current = handle;
-    setScreenOn(true);
-    opened.stream.getVideoTracks()[0]?.addEventListener("ended", () => stopScreen());
+    if (!props.authReady) { props.onSignInRequired?.(); return; }
+    setAttachMsg("Screen sharing is not enabled in this preview. Nothing was captured.");
+    props.onNotice?.("Screen sharing is not enabled in this preview.");
+
   };
 
   const onPlusItem = async (id: "camera" | "photo" | "video" | "files") => {
+    if (!props.authReady) { props.onSignInRequired?.(); return; }
     setAttachOpen(false);
     if (id === "camera") {
       const snap = await captureCameraJpeg();
@@ -302,7 +240,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       return;
     }
     try {
-      await pushVisionFallback(await fileToBase64(file), `Photo: ${file.name}`);
+      await pushVisionFallback(await fileToBase64(file), `Photo: ${file.name}`, file.name);
     } catch {
       setAttachMsg("Could not read that photo.");
     } finally {
@@ -442,6 +380,10 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
       />
     </>
   );
+
+  if (!inCall && props.compactIdle) {
+    return <div className="live-voice-compact-entry" data-testid="live-voice-compact-entry"><button type="button" onClick={props.onCompactSpeak} className="live-voice-compact-entry__button">Speak</button></div>;
+  }
 
   if (!inCall) {
     return (
@@ -589,7 +531,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
           className="live-voice-bar__round live-call-pill"
           data-testid="live-voice-bar-screen"
           aria-label="Screen share"
-          aria-pressed={screenOn}
+          aria-pressed={false}
           onClick={() => void toggleScreen()}
         >
           <span className="lvb-ico lvb-ico--screen" aria-hidden="true" />

@@ -50,7 +50,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   // and kept live so a system setting change parks or resumes the scene.
   const [reducedMotion, setReducedMotion] = useState(false);
   const [narrow, setNarrow] = useState(false);
-  const [sceneInteract, setSceneInteract] = useState(false);
+  const [sceneInteract, setSceneInteract] = useState(true);
   const { focused: panelFocus, setFocused: setPanelFocus, clear: clearPanelFocus } = useMobilePanelFocus();
   useEffect(() => subscribePrefersReducedMotion(setReducedMotion), []);
   useEffect(() => {

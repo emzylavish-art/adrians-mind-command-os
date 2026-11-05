@@ -803,10 +803,11 @@
   }
   .dash3d-mobile-nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.35rem;
-    overflow-x: auto;
+    min-width: 0;
+    overflow: visible;
   }
-  .dash3d-mobile-nav::-webkit-scrollbar { display: none; }
   .dash3d-mobile-nav-link {
     color: #f3f5ff;
     text-decoration: none;

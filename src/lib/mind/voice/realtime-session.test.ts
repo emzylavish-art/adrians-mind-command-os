@@ -95,4 +95,56 @@ describe("RealtimeVoiceSession", () => {
     assert.equal(session.isMuted, false);
     session.close();
   });
+
+  it("stops microphone tracks granted after the user ends capture", async () => {
+    let created: FakeSocket | undefined;
+    const grants: Array<(stream: MediaStream) => void> = [];
+    let stopped = 0;
+    const session = new RealtimeVoiceSession(
+      {},
+      new SharedAudioOutput(),
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created;
+      },
+      {},
+      () => new Promise<MediaStream>((resolve) => { grants.push(resolve); }),
+    );
+    await session.connect("ephemeral-test");
+    const capture = session.startCapture();
+    assert.equal(grants.length, 1);
+    session.stopCapture();
+    const secondCapture = session.startCapture();
+    assert.equal(grants.length, 2, "stop should allow a fresh explicit capture request");
+    session.close();
+    for (const grant of grants) {
+      grant({ getTracks: () => [{ stop: () => { stopped += 1; } }] } as unknown as MediaStream);
+    }
+    await Promise.all([capture, secondCapture]);
+    assert.equal(stopped, 2);
+    assert.equal(session.isCapturing, false);
+  });
+
+  it("ignores a permission rejection after the user has ended capture", async () => {
+    let created: FakeSocket | undefined;
+    let rejectMic: ((error: Error) => void) | undefined;
+    const session = new RealtimeVoiceSession(
+      {},
+      new SharedAudioOutput(),
+      () => {
+        created = new FakeSocket();
+        queueMicrotask(() => created?.openNow());
+        return created;
+      },
+      {},
+      () => new Promise<MediaStream>((_resolve, reject) => { rejectMic = reject; }),
+    );
+    await session.connect("ephemeral-test");
+    const capture = session.startCapture();
+    session.close();
+    rejectMic!(new DOMException("Permission denied", "NotAllowedError"));
+    await assert.doesNotReject(capture);
+    assert.equal(session.isCapturing, false);
+  });
 });
