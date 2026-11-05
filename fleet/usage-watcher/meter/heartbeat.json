@@ -1,0 +1,16 @@
+{
+  "bot": "usage-watcher",
+  "ts": "2026-11-05T09:37:30+00:00",
+  "status": "FLEET-HALT-90",
+  "meter_id": "UW-METER-013",
+  "shared_weekly_pct": 94.5,
+  "grokbot_share_pct": 51.7,
+  "at_50": true,
+  "at_90": true,
+  "newly_crossed": [
+    "at_90"
+  ],
+  "heaviest": "Connection Orchestrator",
+  "routine_paused": true,
+  "commit_message": "FLEET-HALT-90: state save before credit reset"
+}
