@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -481,13 +481,62 @@ export function CommandApp() {
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const navDrawerRef = useRef<HTMLElement>(null);
+  const navCloseRef = useRef<HTMLButtonElement>(null);
+  const navTriggerRef = useRef<HTMLButtonElement>(null);
+  const navWasOpenRef = useRef(false);
   const [voiceSignInNotice, setVoiceSignInNotice] = useState(false);
   useEffect(() => {
-    if (!navOpen) return;
+    if (!navOpen) {
+      if (navWasOpenRef.current) navTriggerRef.current?.focus();
+      navWasOpenRef.current = false;
+      return;
+    }
+    navWasOpenRef.current = true;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
+    navCloseRef.current?.focus();
+    const onDrawerKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const drawer = navDrawerRef.current;
+      if (!drawer) return;
+      const items = Array.from(drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((item) => item.getAttribute("aria-hidden") !== "true" && item.offsetParent !== null);
+      if (!items.length) {
+        event.preventDefault();
+        navCloseRef.current?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onDrawerKeyDown, true);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onDrawerKeyDown, true);
+    };
   }, [navOpen]);
+  const openNav = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    navTriggerRef.current = event.currentTarget;
+    setNavOpen(true);
+  };
+  const closeNavFromBackdrop = (event: ReactMouseEvent<HTMLElement>) => {
+    if (event.target === event.currentTarget) setNavOpen(false);
+  };
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
@@ -3333,7 +3382,7 @@ export function CommandApp() {
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside className={`rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside ref={navDrawerRef} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="flex items-center gap-3 px-4 py-4">
           <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
             <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
@@ -3344,7 +3393,7 @@ export function CommandApp() {
               <p className="text-[10px] tracking-[0.22em] text-muted">COMMAND OS</p>
             </div>
           )}
-          <button type="button" className="grid size-11 place-items-center rounded-panel border border-line md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
+          <button ref={navCloseRef} type="button" className="grid size-11 place-items-center rounded-panel border border-line md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
             <span className="text-lg">×</span>
           </button>
           <button type="button" className="hidden size-11 place-items-center rounded-panel border border-line md:grid" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setRailCollapsed((value) => !value)}>
@@ -3504,9 +3553,9 @@ export function CommandApp() {
         </div>
       </aside>
 
-      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36">
+      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
         <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
-          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={() => setNavOpen(true)}>
+          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
             <Menu className="size-4" />
           </button>
           <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
@@ -5121,7 +5170,7 @@ export function CommandApp() {
           <Link to="/login" className="signed-out-entry__link">Sign in</Link>
         </div>
       )}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
+      <nav inert={navOpen} className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
         {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
@@ -5150,7 +5199,7 @@ export function CommandApp() {
             </button>
           );
         })}
-        <button type="button" className="flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] text-muted" onClick={() => setNavOpen(true)}>
+        <button type="button" className="flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] text-muted" onClick={openNav}>
           <Menu className="size-4" />
           More
         </button>

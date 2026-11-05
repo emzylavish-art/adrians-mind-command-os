@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const app = readFileSync(join(here, "../src/components/mind/command-app.tsx"), "utf8");
+
+describe("mobile workspace drawer", () => {
+  it("labels the open navigation as a modal and restores focus to its trigger", () => {
+    assert.match(app, /role=\{navOpen \? "dialog" : undefined\}/);
+    assert.match(app, /aria-modal=\{navOpen \? true : undefined\}/);
+    assert.match(app, /if \(navWasOpenRef\.current\) navTriggerRef\.current\?\.focus\(\)/);
+    assert.match(app, /navTriggerRef\.current = event\.currentTarget/);
+  });
+
+  it("closes on Escape and traps keyboard focus while the drawer is open", () => {
+    assert.match(app, /if \(event\.key === "Escape"\)[\s\S]{0,180}setNavOpen\(false\)/);
+    assert.match(app, /if \(event\.key !== "Tab"\) return/);
+    assert.match(app, /event\.shiftKey[\s\S]{0,240}last\.focus\(\)/);
+    assert.match(app, /!event\.shiftKey[\s\S]{0,240}first\.focus\(\)/);
+  });
+
+  it("focuses close control, locks background scrolling, and closes on backdrop", () => {
+    assert.match(app, /navCloseRef\.current\?\.focus\(\)/);
+    assert.match(app, /document\.body\.style\.overflow = "hidden"/);
+    assert.match(app, /document\.body\.style\.overflow = previous/);
+    assert.match(app, /event\.target === event\.currentTarget\) setNavOpen\(false\)/);
+    assert.match(app, /onMouseDown=\{closeNavFromBackdrop\}/);
+  });
+
+  it("makes the background shell and mobile navigation inert while modal is open", () => {
+    assert.match(app, /<div className="main-stage[^>]*inert=\{navOpen\}/);
+    assert.match(app, /<nav inert=\{navOpen\}[^>]*aria-label="Primary"/);
+    assert.match(app, /aria-modal=\{navOpen \? true : undefined\}/);
+  });
+
+  it("removes the key handler and restores body scrolling on every effect cleanup", () => {
+    assert.match(app, /document\.removeEventListener\("keydown", onDrawerKeyDown, true\)/);
+    assert.match(app, /return \(\) => \{\s*document\.body\.style\.overflow = previous;/);
+  });
+});
