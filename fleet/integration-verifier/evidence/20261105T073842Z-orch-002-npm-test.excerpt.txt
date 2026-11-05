@@ -1,0 +1,50 @@
+# truncated npm test log — orch-002 candidate @ 6a5b40f8fc4b2a4cc965f93e8ed827df47faff53
+# source: npm test TAP (49143 bytes). Failures and summary only.
+# Saved as .txt because *.log is gitignored. The npm script stopped after
+# scripts/**/*.test.mjs (exit 1). src *.test.ts did not run.
+
+# Subtest: opens a local html document without a network page
+not ok 139 - opens a local html document without a network page
+  location: '/workspace/scripts/mind-browser.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+
+# Subtest: verify-xai missing-key path runs without a live call
+not ok 182 - verify-xai missing-key path runs without a live call
+  location: '/workspace/scripts/verify-xai.test.mjs:5:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@electric-sql/pglite' imported from /workspace/scripts/verify-xai.mjs
+    1 !== 0
+  code: 'ERR_ASSERTION'
+  expected: 0
+  actual: 1
+
+# Subtest: verify-xai with key unset still exits cleanly when live is off
+not ok 183 - verify-xai with key unset still exits cleanly when live is off
+  location: '/workspace/scripts/verify-xai.test.mjs:19:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@electric-sql/pglite' imported from /workspace/scripts/verify-xai.mjs
+    1 !== 0
+  code: 'ERR_ASSERTION'
+  expected: 0
+  actual: 1
+
+# tests 206
+# suites 0
+# pass 199
+# fail 3
+# cancelled 0
+# skipped 4
+# todo 0
+# duration_ms 611.326267
