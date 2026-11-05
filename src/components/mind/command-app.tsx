@@ -47,6 +47,7 @@ import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
@@ -5019,6 +5020,7 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
+              <SafeKeysPanel />
               <VoiceSettingsBlock />
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
