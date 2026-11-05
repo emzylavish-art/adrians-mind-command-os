@@ -1,92 +1,31 @@
 {
-  "bot": "Usage Watcher",
-  "task_id": "UW-METER-003",
-  "order": "orch-001-route-meter-branch",
-  "timestamp_denver": "2026-11-05T00:16:57-07:00",
-  "timestamp_utc": "2026-11-05T07:16:57Z",
-  "zone": "America/Denver",
-  "cycle": "continuous_15min",
-  "routine": "uw-meter-heartbeat",
-  "source": "grok_bot_subscription_usage",
+  "id": "UW-METER-013",
+  "ts": "2026-11-05T09:37:30+00:00",
+  "shared_weekly_pct": 94.5,
+  "prior_pct": 89.3,
+  "grokbot_share_pct": 51.7,
+  "heaviest": {
+    "bot": "Connection Orchestrator",
+    "share_pct": 12
+  },
+  "next": [
+    "Voice Stream 12%",
+    "Merge Bot 10%"
+  ],
+  "at_50": true,
+  "at_90": true,
+  "pp_to_90": 0,
+  "newly_crossed": [
+    "at_90"
+  ],
+  "reset": "2026-11-11T04:38 MT",
+  "mode": "FLEET-HALT-90",
+  "order": "orch-008",
+  "spike_tag": "candidate_runs_iv_merge",
   "plan": "Premium",
-  "weekly_usage_limit_used_pct": 29.0,
-  "weekly_limit_shared_with_other_apps": true,
-  "grok_bot_share_of_weekly_limit_pct": 8.4,
-  "weekly_reset_local": "2026-11-11T04:38:00-07:00",
-  "baseline_orch001": {
-    "timestamp_denver": "2026-11-05T00:07:00-07:00",
-    "weekly_usage_limit_used_pct": 19.8,
-    "grok_bot_share_of_weekly_limit_pct": 0.6,
-    "source": "Connection Orchestrator orch-001"
-  },
-  "burn_rate": {
-    "weekly_shared_delta_pp": 9.2,
-    "grok_bot_share_delta_pp": 7.8,
-    "window": "since_orch001_baseline_00:07_MT"
-  },
-  "credit_thresholds": {
-    "at_50": false,
-    "at_90": false,
-    "flagged_to_orchestrator": false,
-    "flagged_to_reporter": false,
-    "note": "Interim meter = Grok Bot Premium shared weekly limit. Fleet OpenAI/xAI monthly pool not polled."
-  },
-  "active_brain": {
-    "value": "unknown",
-    "note": "Await Provider Router runtime brain report."
-  },
-  "heaviest_bots": [
-    {
-      "bot": "Integration Verifier",
-      "share_of_grok_bot_pct": 15
-    },
-    {
-      "bot": "Voice Stream",
-      "share_of_grok_bot_pct": 13
-    },
-    {
-      "bot": "Tool Installer",
-      "share_of_grok_bot_pct": 10
-    },
-    {
-      "bot": "Merge Bot",
-      "share_of_grok_bot_pct": 10
-    },
-    {
-      "bot": "Connection Orchestrator",
-      "share_of_grok_bot_pct": 8
-    }
-  ],
-  "heaviest": "Integration Verifier",
-  "per_bot_spend_shares_pct": {
-    "Integration Verifier": 15,
-    "Voice Stream": 13,
-    "Tool Installer": 10,
-    "Merge Bot": 10,
-    "Connection Orchestrator": 8,
-    "Enforcer": 7,
-    "Reporter": 6,
-    "Usage Watcher": 6,
-    "Dashboard Lead": 5,
-    "Revert Sentinel": 5,
-    "Provider Router": 5,
-    "Speak State": 4,
-    "Connection Sentinel": 3,
-    "Error Bot": 3
-  },
-  "tagged_calls_this_wake": [
-    {
-      "call": "CheckSubscriptionUsage",
-      "purpose": "meter_refresh",
-      "order": "orch-001"
-    }
-  ],
-  "write_branch": "fleet/usage-watcher/meter",
-  "write_branch_exists": true,
-  "push_hold": false,
-  "openai_dashboard": {
-    "polled": false,
-    "reason": "held_pending_credentials_route"
-  },
-  "note_burn": "Weekly shared rose 19.8%\u219229% in ~10 min after orch-001 baseline; watching for 50%."
+  "note": "NEWLY CROSSED at_90; shared 94.5% (prior 89.3%); FREEZE fan-out + halt-save; heartbeat paused",
+  "tagged_calls": [
+    "CheckSubscriptionUsage",
+    "CheckSubscriptionUsage breakdown=bot"
+  ]
 }
