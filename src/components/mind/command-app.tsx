@@ -3515,7 +3515,7 @@ export function CommandApp() {
           {ws.chats.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT</p>
-              {getRecentChats(ws.chats, 5).map((chat) => (
+              {getRecentChats(ws.chats, 5, new Set(ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref))).map((chat) => (
                 <button
                   key={chat.id}
                   type="button"

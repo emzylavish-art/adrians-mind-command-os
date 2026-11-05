@@ -28,6 +28,11 @@ describe("getRecentChats", () => {
     assert.deepEqual(getRecentChats(source).map(({ id }) => id), ["multi", "invalid"]);
   });
 
+  it("omits pinned chats so they are not duplicated in the recent list", () => {
+    const source = [chat("pinned", ["2026-11-05T12:00:00Z"]), chat("recent", ["2026-11-05T11:00:00Z"]), chat("older", ["2026-11-05T10:00:00Z"])];
+    assert.deepEqual(getRecentChats(source, 5, new Set(["pinned"])).map(({ id }) => id), ["recent", "older"]);
+  });
+
   it("honors a finite positive limit and returns none for invalid limits", () => {
     const source = [chat("a"), chat("b"), chat("c")];
     assert.deepEqual(getRecentChats(source, 2).map(({ id }) => id), ["a", "b"]);
