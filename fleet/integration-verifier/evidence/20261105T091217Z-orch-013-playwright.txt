@@ -1,0 +1,9 @@
+npx playwright test exit 0 (one run). Chromium was already installed by npm test pretest; it was not reinstalled.
+
+Running 1 test using 1 worker
+
+(node:4937) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/config-loads.spec.mjs:3:1 › playwright config loads (5ms)
+
+  1 passed (366ms)
