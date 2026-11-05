@@ -1,9 +1,12 @@
-/** Server credentials are deliberately not exposed in the browser settings UI. */
-export const SAFE_KEY_PROVIDERS = [
-  { id: "grok", name: "Grok", environment: "XAI_API_KEY" },
-  { id: "openai", name: "OpenAI", environment: "OPENAI_API_KEY" },
-  { id: "anthropic", name: "Anthropic", environment: "ANTHROPIC_API_KEY" },
-  { id: "gemini", name: "Gemini", environment: "GEMINI_API_KEY" },
-  { id: "openrouter", name: "OpenRouter", environment: "OPENROUTER_API_KEY" },
-  { id: "notion", name: "Notion", environment: "NOTION_TOKEN / NOTION_API_KEY" },
-] as const;
+/** Capability-scoped Safe Keys inventory. No provider credentials or secret values are represented here. */
+export const SAFE_KEY_CAPABILITIES = [
+  { id: "voice", name: "Voice" },
+  { id: "chat", name: "Chat" },
+  { id: "image", name: "Image" },
+  { id: "video", name: "Video" },
+  { id: "code", name: "Code" },
+  { id: "gpt", name: "GPT" },
+];
+
+/** No authenticated secure-storage status API has been verified, so do not imply configured state. */
+export const SAFE_KEY_STATUS = "Not connected — configuration unavailable";
