@@ -15,6 +15,7 @@ import {
 import { createHealthAtmosphere, deriveFleetTone, type HealthAtmosphereHandle } from "./atmosphere";
 import { createTunedBloomPass, createColorGradePass, createGodRayPass, createExposureRide, createContextLossRecovery, bloomTier } from "./postfx";
 import { filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
+import { africaLagosHour } from "@/lib/mind/dashboard/wat-clock";
 import { cullLabelIds } from "@/lib/mind/dashboard/label-cull";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
@@ -1257,7 +1258,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       const tone = dataRef.current.weather?.tone ?? deriveFleetTone(botsNow.map((b) => b.health));
       const healthy = botsNow.filter((b) => b.health === "healthy").length;
       const total = botsNow.length;
-      const localHour = new Date().getHours(); // box clock = Africa/Lagos
+      const localHour = africaLagosHour();
       exposureRide.setTarget({ tone, hour: localHour, reducedMotion });
       exposureRide.tick(dt * 1000);
       const liveBloom = postfxRecovery.bundle.bloom ?? bloomHandle;
