@@ -1,0 +1,21 @@
+{
+  "order": "orch-011",
+  "utc": "20261105T090056Z",
+  "candidate": "143a9d9b107a9c3fb9a96a01e5307211cdbc4613",
+  "openai": {
+    "models_http": 200,
+    "models_count": 96,
+    "chat_http": 200,
+    "chat_model": "gpt-4o-mini-2024-07-18",
+    "chat_content_preview": "Pong.",
+    "result": "pass",
+    "key_source": "OPENAI_API_KEY env (value not logged)"
+  },
+  "xai": {
+    "http": 402,
+    "error_preview": "You have run out of credits or need a Grok subscription",
+    "result": "blocked",
+    "key_source": "/home/box/.secrets/xai/integration-verifier.key (value not logged)",
+    "note": "Recorded blocked, not passed, per orch-009/011"
+  }
+}

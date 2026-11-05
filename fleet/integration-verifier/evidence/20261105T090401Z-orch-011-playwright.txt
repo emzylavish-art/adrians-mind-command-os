@@ -1,0 +1,15 @@
+npx playwright install chromium — exit 0
+Downloaded Chrome for Testing 156.0.8078.4 (playwright chromium v1248),
+FFmpeg (playwright ffmpeg v1013), and Chrome Headless Shell 156.0.8078.4
+(playwright chromium-headless-shell v1248).
+
+npx playwright test — one run on detached HEAD 143a9d9b107a9c3fb9a96a01e5307211cdbc4613
+command exit: 0
+
+Running 1 test using 1 worker
+
+(node:3538) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/config-loads.spec.mjs:3:1 › playwright config loads (4ms)
+
+  1 passed (375ms)

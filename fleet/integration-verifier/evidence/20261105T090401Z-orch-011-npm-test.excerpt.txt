@@ -1,0 +1,67 @@
+npm test — one run on detached HEAD 143a9d9b107a9c3fb9a96a01e5307211cdbc4613
+command exit: 1
+TypeScript lane did not start (scripts lane failed first).
+
+# Subtest: opens a local html document without a network page
+not ok 139 - opens a local html document without a network page
+  ---
+  duration_ms: 374.807854
+  type: 'test'
+  location: '/workspace/scripts/mind-browser.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scripts/mind-browser.test.mjs:16:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+
+# tests 206
+# suites 0
+# pass 201
+# fail 1
+# cancelled 0
+# skipped 4
+# todo 0
+# duration_ms 4604.929471
+
+Skips (not failures):
+ok 27 - SKILL.md and AGENTS.md name the marker path and bound this script uses # SKIP skipping: gitignored .grok/skills/og is absent in this worktree
+ok 28 - the sections that own the brand-task prohibition never affirm a wait # SKIP skipping: gitignored .grok/skills/og is absent in this worktree
+ok 29 - SKILL.md tells the pass to self-check with the flag this CLI accepts # SKIP skipping: gitignored .grok/skills/og is absent in this worktree
+ok 205 - every hand-over the og skill prints is one this script accepts # SKIP skipping: gitignored .grok/skills/og is absent in this worktree
+
+Separate child capture (not a second npm test), before playwright install chromium.
+Command: MIND_BROWSER_ALLOW_DATA=1 node scripts/mind-browser.mjs 'data:text/html,<title>Pier</title><p>Water is low.</p>'
+MIND_BROWSER_ALLOW_EXIT=1
+stderr:
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+browserType.launch: Executable doesn't exist at /home/ubuntu/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     npx playwright install                                 ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+    at /workspace/scripts/mind-browser.mjs:16:32 {
+  log: [],
+  name: 'Error'
+}
+
+Node.js v22.23.4
