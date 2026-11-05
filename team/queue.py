@@ -107,13 +107,20 @@ def claim(db_path, worker_id, lease_seconds=120):
 
 
 def finish(db_path, job_id, worker_id, result):
+    """Finish a job only while this worker's lease is still valid.
+
+    A lease is expired strictly before its deadline (the same boundary used by
+    claim()), so an operation at exactly lease_until remains valid.
+    """
     now = time.time()
     with connect(db_path) as conn:
         cursor = conn.execute(
             """UPDATE jobs SET status='succeeded',result_json=?,updated_at=?,
                worker_id=NULL,lease_until=NULL,error=NULL
-               WHERE id=? AND status='claimed' AND worker_id=?""",
-            (json.dumps(result), now, job_id, worker_id),
+               WHERE id=? AND status='claimed' AND worker_id=?
+                 AND lease_until >= ? AND attempts >= 1
+                 AND attempts <= max_attempts""",
+            (json.dumps(result), now, job_id, worker_id, now),
         )
         if cursor.rowcount != 1:
             raise ValueError("job is not claimed by this worker")
@@ -121,18 +128,23 @@ def finish(db_path, job_id, worker_id, result):
 
 
 def fail(db_path, job_id, worker_id, error):
+    """Fail/requeue a job in one conditional, lease-checked SQL update."""
     now = time.time()
     with connect(db_path) as conn:
-        row = conn.execute("SELECT attempts,max_attempts,status,worker_id FROM jobs WHERE id=?",
-                           (job_id,)).fetchone()
-        if row is None or row["status"] != "claimed" or row["worker_id"] != worker_id:
-            raise ValueError("job is not claimed by this worker")
-        next_status = "queued" if row["attempts"] < row["max_attempts"] else "failed"
-        conn.execute(
-            """UPDATE jobs SET status=?,error=?,updated_at=?,worker_id=NULL,lease_until=NULL
-               WHERE id=?""",
-            (next_status, str(error)[:2000], now, job_id),
+        cursor = conn.execute(
+            """UPDATE jobs
+               SET status=CASE
+                     WHEN attempts < max_attempts THEN 'queued'
+                     ELSE 'failed'
+                   END,
+                   error=?,updated_at=?,worker_id=NULL,lease_until=NULL
+               WHERE id=? AND status='claimed' AND worker_id=?
+                 AND lease_until >= ? AND attempts >= 1
+                 AND attempts <= max_attempts""",
+            (str(error)[:2000], now, job_id, worker_id, now),
         )
+        if cursor.rowcount != 1:
+            raise ValueError("job is not claimed by this worker")
     return get_job(db_path, job_id)
 
 
