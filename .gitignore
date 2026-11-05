@@ -19,3 +19,8 @@ dist/
 
 # Third-party source checkouts and package state created inside GitHub Codespaces
 .tools/
+
+# Playwright runner output
+/test-results/
+/playwright-report/
+/blob-report/
