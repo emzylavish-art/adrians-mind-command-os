@@ -524,9 +524,15 @@ export function CommandApp() {
         first.focus();
       }
     };
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const closeAtDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setNavOpen(false);
+    };
+    desktop.addEventListener("change", closeAtDesktop);
     document.addEventListener("keydown", onDrawerKeyDown, true);
     return () => {
       document.body.style.overflow = previous;
+      desktop.removeEventListener("change", closeAtDesktop);
       document.removeEventListener("keydown", onDrawerKeyDown, true);
     };
   }, [navOpen]);

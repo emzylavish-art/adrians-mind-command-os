@@ -36,8 +36,11 @@ describe("mobile workspace drawer", () => {
     assert.match(app, /aria-modal=\{navOpen \? true : undefined\}/);
   });
 
-  it("removes the key handler and restores body scrolling on every effect cleanup", () => {
+  it("removes key and breakpoint listeners and restores body scrolling on cleanup", () => {
     assert.match(app, /document\.removeEventListener\("keydown", onDrawerKeyDown, true\)/);
+    assert.match(app, /desktop\.addEventListener\("change", closeAtDesktop\)/);
+    assert.match(app, /desktop\.removeEventListener\("change", closeAtDesktop\)/);
+    assert.match(app, /if \(event\.matches\) setNavOpen\(false\)/);
     assert.match(app, /return \(\) => \{\s*document\.body\.style\.overflow = previous;/);
   });
 });
