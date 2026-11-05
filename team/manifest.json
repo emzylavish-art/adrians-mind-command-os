@@ -207,6 +207,62 @@
         "local_sqlite_database",
         "explicit_worker_process"
       ]
+    },
+    {
+      "id": "voice-stream",
+      "role": "Voice Stream",
+      "capabilities": [
+        "voice_pipeline",
+        "barge_in"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/voice-stream.md",
+      "requires": [
+        "pinned_pipecat_source",
+        "pinned_whisper_loop_source"
+      ]
+    },
+    {
+      "id": "latency-guard",
+      "role": "Latency Guard",
+      "capabilities": [
+        "voice_latency",
+        "stage_latency"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/latency-guard.md",
+      "requires": [
+        "pinned_voice_agent_starter_source",
+        "pinned_coval_benchmarks_source"
+      ]
+    },
+    {
+      "id": "connection-sentinel",
+      "role": "Connection Sentinel",
+      "capabilities": [
+        "connection_probes",
+        "external_connection_health"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/connection-sentinel.md",
+      "requires": [
+        "pinned_api_health_source",
+        "pinned_healthy_api_source"
+      ]
+    },
+    {
+      "id": "integration-verifier",
+      "role": "Integration Verifier",
+      "capabilities": [
+        "integration_evidence",
+        "end_to_end_provider_checks"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/integration-verifier.md",
+      "requires": [
+        "pinned_omniprobe_source",
+        "candidate_branch_checks"
+      ]
     }
   ],
   "tools": [
