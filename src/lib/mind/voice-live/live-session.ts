@@ -5,10 +5,7 @@
 
 import type { SharedAudioOutput } from "../voice/audio-output.ts";
 import { LiveSpeakerGain, readStoredVolume } from "./speaker-gain.ts";
-import {
-  REALTIME_ENDPOINT,
-  REALTIME_SAMPLE_RATE,
-} from "../voice/realtime-session.ts";
+import { REALTIME_ENDPOINT, REALTIME_SAMPLE_RATE } from "../voice/realtime-session.ts";
 import { resolveXaiVoiceId } from "../voice/voices.ts";
 import { formatMicCaptureError, formatVoiceClientError } from "../voice/errors.ts";
 import { OLLAMA_UNREACHABLE, runOllamaConductor } from "../voice/ollama-conductor.ts";
@@ -38,8 +35,15 @@ import {
   type FlightGate,
   type TranscriptDedupe,
 } from "./spam-guard.ts";
-import { decideBargeInCutoff } from "./barge-in.ts";
+import { decideSpeakBargeIn } from "./barge-in.ts";
 import { bufferToBase64, LiveMicStream } from "./mic-stream.ts";
+import {
+  createMemoryStorage,
+  SpeakState,
+  type SessionReason,
+  type SpeakEvent,
+  type SpeakSessionStorage,
+} from "../voice/speak-state/index.ts";
 import { createLivePlayback, type LivePlayback } from "./playback.ts";
 import {
   isLiveVoiceOccupied,
@@ -58,8 +62,7 @@ import {
 } from "./connect-timeout.ts";
 
 export type MintSecretResult =
-  | { ok: true; value: string; expiresAt: number }
-  | { ok: false; error: string };
+  { ok: true; value: string; expiresAt: number } | { ok: false; error: string };
 
 export type LiveSessionHandlers = {
   onState?: (state: LiveVoicePublicState) => void;
@@ -84,6 +87,9 @@ export type LiveSessionDeps = {
   probeMic?: () => Promise<{ ok: true } | { ok: false; error: string }>;
   /** Skip opening getUserMedia (tests driving WS only). */
   skipMic?: boolean;
+  /** Speak-state bus. Defaults to one persisted in localStorage in the browser. */
+  speakState?: SpeakState;
+  speakStorage?: SpeakSessionStorage | null;
 };
 
 type WsLike = {
@@ -101,10 +107,7 @@ const INTERRUPTED_FLASH_MS = 350;
 
 export class LiveVoiceSession {
   private handlers: LiveSessionHandlers;
-  private deps: Required<
-    Pick<LiveSessionDeps, "mintSecret">
-  > &
-    LiveSessionDeps;
+  private deps: Required<Pick<LiveSessionDeps, "mintSecret">> & LiveSessionDeps;
   private phase: LiveVoicePhase = "off";
   private error: string | null = null;
   private muted = false;
@@ -128,6 +131,12 @@ export class LiveVoiceSession {
   private lastUserTranscript = "";
   private open = false;
   private generation = 0;
+  private ending = false;
+  private applyingServerBarge = false;
+  private speakStartReason: SessionReason = "speak_button";
+  private ttsUtteranceId: string | null = null;
+  private userSpeechAtMs: number | null = null;
+  readonly speakState: SpeakState;
 
   constructor(handlers: LiveSessionHandlers = {}, deps: LiveSessionDeps) {
     this.handlers = handlers;
@@ -138,6 +147,19 @@ export class LiveVoiceSession {
           readStoredVolume(typeof localStorage === "undefined" ? null : localStorage),
         ),
     );
+    const speakStorage =
+      deps.speakStorage !== undefined
+        ? deps.speakStorage
+        : typeof localStorage === "undefined"
+          ? createMemoryStorage()
+          : localStorage;
+    this.speakState =
+      deps.speakState ??
+      new SpeakState({
+        storage: speakStorage,
+        now: deps.now,
+      });
+    this.speakState.bus.subscribe((event) => this.onSpeakEvent(event));
   }
 
   get state(): LiveVoicePublicState {
@@ -180,6 +202,8 @@ export class LiveVoiceSession {
     this.error = message;
     this.handlers.onError?.(message);
     this.teardownMedia(false);
+    if (this.speakState.isActive) this.speakState.end("error", { resumeEligible: true });
+    this.ttsUtteranceId = null;
     this.setPhase("error");
     // Settle to off so the button can restart; keep error text visible via handlers.
     setTimeout(() => {
@@ -234,6 +258,9 @@ export class LiveVoiceSession {
       }
       if (this.intentionalClose || connectAbort.signal.aborted) return;
       if (!probe.ok) {
+        if (/denied|not allowed|permission/i.test(probe.error)) {
+          this.speakState.setPermission("denied", null);
+        }
         this.fail(probe.error);
         return;
       }
@@ -311,7 +338,10 @@ export class LiveVoiceSession {
     };
   }
 
-  end(notice?: string) {
+  end(notice?: string, reason: SessionReason = "user") {
+    if (this.ending) return;
+    if (this.phase === "off" && !this.speakState.isActive && this.intentionalClose) return;
+    this.ending = true;
     this.intentionalClose = true;
     this.generation += 1;
     this.clearReconnect();
@@ -329,8 +359,29 @@ export class LiveVoiceSession {
     this.error = null;
     this.level = 0;
     this.open = false;
+    if (this.ttsUtteranceId) {
+      const utterance = this.ttsUtteranceId;
+      this.ttsUtteranceId = null;
+      this.speakState.ingest({ type: "tts.end", utterance_id: utterance });
+    }
+    this.userSpeechAtMs = null;
+    if (this.speakState.isActive) {
+      const resumeEligible =
+        reason === "reload" ||
+        reason === "reconnect" ||
+        reason === "permission_revoked" ||
+        reason === "device_change" ||
+        reason === "error";
+      this.speakState.end(reason, { resumeEligible });
+    }
     this.setPhase("off");
+    this.ending = false;
     if (notice) this.handlers.onNotice?.(notice);
+  }
+
+  /** Manual or Esc barge-in. Always publishes, including during the TTS echo guard. */
+  requestBargeIn(source: "manual" | "esc") {
+    this.speakState.bargeIn(source);
   }
 
   setMuted(next: boolean) {
@@ -427,7 +478,10 @@ export class LiveVoiceSession {
             resolve();
           };
           const onError = () => reject(new Error("Live voice connection failed."));
-          const onAbort = () => reject(Object.assign(new Error("Live voice start was canceled."), { name: "AbortError" }));
+          const onAbort = () =>
+            reject(
+              Object.assign(new Error("Live voice start was canceled."), { name: "AbortError" }),
+            );
           ws.addEventListener("open", onOpen);
           ws.addEventListener("error", onError);
           ws.addEventListener("message", (event) => this.onMessage(event as MessageEvent));
@@ -444,7 +498,12 @@ export class LiveVoiceSession {
         outerSignal ?? mintAbort.signal,
       );
     } catch (caught) {
-      if (this.intentionalClose || isAbortError(caught) || mintAbort.signal.aborted || outerSignal?.aborted) {
+      if (
+        this.intentionalClose ||
+        isAbortError(caught) ||
+        mintAbort.signal.aborted ||
+        outerSignal?.aborted
+      ) {
         this.teardownMedia(true);
         return;
       }
@@ -482,6 +541,9 @@ export class LiveVoiceSession {
       },
     });
 
+    this.speakState.begin(this.speakStartReason);
+    this.speakStartReason = "speak_button";
+
     if (!this.deps.skipMic) {
       this.mic = new LiveMicStream(
         {
@@ -503,7 +565,7 @@ export class LiveVoiceSession {
             this.fail(mic || formatVoiceClientError(err));
           },
         },
-        { sampleRate: REALTIME_SAMPLE_RATE },
+        { sampleRate: REALTIME_SAMPLE_RATE, speakState: this.speakState },
       );
 
       try {
@@ -543,8 +605,12 @@ export class LiveVoiceSession {
     this.playback.interrupt();
     this.mic?.stop();
     this.mic = null;
+    this.speakStartReason = "reconnect";
+    this.speakState.armResume("reconnect");
     if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
-      this.fail("Live voice connection dropped after 3 reconnect attempts. Press the speak button to try again.");
+      this.fail(
+        "Live voice connection dropped after 3 reconnect attempts. Press the speak button to try again.",
+      );
       return;
     }
     this.reconnectAttempt += 1;
@@ -583,23 +649,67 @@ export class LiveVoiceSession {
 
   private bargeIn() {
     const now = this.deps.now?.() ?? Date.now();
-    const decision = decideBargeInCutoff({
+    const decision = decideSpeakBargeIn({
+      source: "vad",
       assistantPlaying: this.assistantPlaying || this.playback.isPlaying,
       speakingStartedAtMs: this.speakingStartedAtMs,
       nowMs: now,
       cancelAllowed: allowCancel(this.cancelBudget, now),
     });
-    if (!decision.cut) return;
+    if (!decision.fire) return;
+    this.applyingServerBarge = true;
+    try {
+      this.speakState.noteServerBargeIn();
+    } finally {
+      this.applyingServerBarge = false;
+    }
+    this.cutAssistant(true);
+  }
+
+  /** Hard-stop local TTS. response.cancel is still budget-gated by the caller. */
+  private cutAssistant(sendCancel: boolean) {
+    const utterance = this.ttsUtteranceId;
     this.playback.interrupt();
-    if (decision.sendCancel) this.send({ type: "response.cancel" });
+    if (sendCancel) this.send({ type: "response.cancel" });
     this.assistantPlaying = false;
     this.speakingStartedAtMs = null;
     this.pendingAssistantText = "";
+    if (utterance) {
+      this.ttsUtteranceId = null;
+      this.speakState.ingest({ type: "tts.end", utterance_id: utterance });
+    }
+    if (this.phase === "off" || this.phase === "error") return;
     this.setPhase("interrupted");
     if (this.interruptTimer) clearTimeout(this.interruptTimer);
     this.interruptTimer = setTimeout(() => {
       if (this.phase === "interrupted") this.setPhase(this.muted ? "muted" : "user_speaking");
     }, INTERRUPTED_FLASH_MS);
+  }
+
+  private onSpeakEvent(event: SpeakEvent) {
+    if (event.type === "bargein") {
+      if (this.applyingServerBarge) return;
+      const now = this.deps.now?.() ?? Date.now();
+      this.cutAssistant(allowCancel(this.cancelBudget, now));
+      return;
+    }
+    if (
+      event.type === "session.end" &&
+      (event.reason === "permission_revoked" || event.reason === "device_change") &&
+      !this.ending &&
+      this.phase !== "off"
+    ) {
+      const notice =
+        event.reason === "permission_revoked"
+          ? "Microphone permission was revoked. Live voice stopped."
+          : "The microphone changed or was removed. Live voice stopped.";
+      this.end(notice, event.reason);
+    }
+  }
+
+  private sttLatency(now: number): number {
+    if (this.userSpeechAtMs == null) return 0;
+    return Math.max(0, now - this.userSpeechAtMs);
   }
 
   private onMessage(event: MessageEvent) {
@@ -623,6 +733,7 @@ export class LiveVoiceSession {
       return;
     }
     if (type === "input_audio_buffer.speech_started") {
+      this.userSpeechAtMs = this.deps.now?.() ?? Date.now();
       this.bargeIn();
       if (this.phase !== "interrupted") this.setPhase(this.muted ? "muted" : "user_speaking");
       return;
@@ -639,6 +750,14 @@ export class LiveVoiceSession {
       type === "conversation.item.input_audio_transcription.updated" ||
       type === "input_audio_transcription.delta"
     ) {
+      const partial = (msg.delta || msg.transcript || msg.text || "").trim();
+      if (partial) {
+        this.speakState.ingest({
+          type: "stt.partial",
+          text: partial,
+          latency_ms: this.sttLatency(this.deps.now?.() ?? Date.now()),
+        });
+      }
       return;
     }
     if (type === "conversation.item.input_audio_transcription.completed") {
@@ -648,8 +767,14 @@ export class LiveVoiceSession {
     }
     if (type === "response.output_audio.delta" || type === "response.audio.delta") {
       if (msg.delta) {
+        const now = this.deps.now?.() ?? Date.now();
         this.assistantPlaying = true;
-        if (this.speakingStartedAtMs == null) this.speakingStartedAtMs = this.deps.now?.() ?? Date.now();
+        if (this.speakingStartedAtMs == null) this.speakingStartedAtMs = now;
+        if (!this.ttsUtteranceId) {
+          this.ttsUtteranceId = `utt_${now.toString(36)}_${this.generation.toString(36)}`;
+          this.speakState.ingest({ type: "tts.start", utterance_id: this.ttsUtteranceId });
+        }
+        this.speakState.ingest({ type: "tts.chunk_played", utterance_id: this.ttsUtteranceId });
         this.setPhase("assistant_speaking");
         void this.playback.playDeltaBase64(msg.delta).catch(() => undefined);
       }
@@ -677,6 +802,11 @@ export class LiveVoiceSession {
       const leftover = this.pendingAssistantText.trim();
       this.pendingAssistantText = "";
       if (leftover) this.handlers.onAssistantTranscript?.(leftover);
+      if (this.ttsUtteranceId) {
+        const utterance = this.ttsUtteranceId;
+        this.ttsUtteranceId = null;
+        this.speakState.ingest({ type: "tts.end", utterance_id: utterance });
+      }
       this.assistantPlaying = false;
       this.speakingStartedAtMs = null;
       if (this.phase !== "off" && this.phase !== "error") {
@@ -692,6 +822,7 @@ export class LiveVoiceSession {
     if (!sanitized.ok) return;
     const clean = sanitized.text;
     this.lastUserTranscript = clean;
+    this.speakState.ingest({ type: "stt.final", text: clean, latency_ms: this.sttLatency(now) });
     this.handlers.onUserTranscript?.(clean);
 
     const mode = this.deps.getMode?.() ?? getVoiceMode();
@@ -708,9 +839,11 @@ export class LiveVoiceSession {
     const conduct = this.deps.runConductor ?? runOllamaConductor;
     const result = await conduct(clean, {
       baseUrl:
-        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) ||
+        undefined,
       model:
-        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+        (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) ||
+        undefined,
     });
     if (this.intentionalClose || this.phase === "off") return;
     if (!result.ok) {

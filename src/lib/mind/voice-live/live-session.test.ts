@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { LiveVoiceSession } from "./live-session.ts";
+import type { SpeakEvent } from "../voice/speak-state/index.ts";
 import { SharedAudioOutput } from "../voice/audio-output.ts";
 import { isLiveVoiceOccupied, setLiveVoiceOccupied } from "./occupancy.ts";
 import { REALTIME_ENDPOINT } from "../voice/realtime-session.ts";
@@ -100,7 +101,11 @@ describe("LiveVoiceSession", () => {
     now += 1000; // past BARGE_IN_ECHO_GUARD_MS
     created!.emitMessage({ type: "input_audio_buffer.speech_started" });
     assert.ok(created!.sent.some((line) => line.includes("response.cancel")));
-    assert.ok(phases.includes("interrupted") || phases.includes("user_speaking") || phases.includes("assistant_speaking"));
+    assert.ok(
+      phases.includes("interrupted") ||
+        phases.includes("user_speaking") ||
+        phases.includes("assistant_speaking"),
+    );
     session.end();
     setLiveVoiceOccupied(false);
   });
@@ -291,11 +296,108 @@ describe("LiveVoiceSession", () => {
       },
     );
     await session.start();
-    created!.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "   " });
-    created!.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "hello live" });
-    created!.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "hello live" });
+    created!.emitMessage({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "   ",
+    });
+    created!.emitMessage({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "hello live",
+    });
+    created!.emitMessage({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "hello live",
+    });
     await new Promise((r) => setTimeout(r, 10));
     assert.deepEqual(users, ["hello live"]);
+    session.end();
+    setLiveVoiceOccupied(false);
+  });
+
+  it("publishes speak-state session, xai_realtime mode, and vad barge-in", async () => {
+    setLiveVoiceOccupied(false);
+    let created: FakeSocket | undefined;
+    let now = 20_000;
+    const events: SpeakEvent[] = [];
+    const session = new LiveVoiceSession(
+      {},
+      {
+        mintSecret: async () => ({ ok: true, value: "ephemeral", expiresAt: Date.now() + 60_000 }),
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        now: () => now,
+        socketFactory: () => {
+          created = new FakeSocket();
+          queueMicrotask(() => created?.openNow());
+          return created!;
+        },
+      },
+    );
+    session.speakState.bus.subscribe((event) => events.push(event));
+    await session.start();
+    const silent = Buffer.alloc(320).toString("base64");
+    created!.emitMessage({ type: "response.output_audio.delta", delta: silent });
+    now += 1_000;
+    created!.emitMessage({ type: "input_audio_buffer.speech_started" });
+    session.requestBargeIn("manual");
+    session.requestBargeIn("esc");
+    assert.ok(
+      events.some((event) => event.type === "session.start" || event.type === "session.resume"),
+    );
+    assert.ok(
+      events.some((event) => event.type === "pipeline.mode" && event.mode === "xai_realtime"),
+    );
+    assert.ok(events.some((event) => event.type === "tts.start"));
+    const vad = events.find((event) => event.type === "bargein" && event.source === "vad");
+    assert.ok(vad && vad.type === "bargein" && vad.tts_utterance_id);
+    assert.equal(vad.session_id.length > 0, true);
+    assert.ok(events.some((event) => event.type === "bargein" && event.source === "manual"));
+    assert.ok(events.some((event) => event.type === "bargein" && event.source === "esc"));
+    assert.ok(created!.sent.some((line) => line.includes("response.cancel")));
+    session.end();
+    assert.ok(events.some((event) => event.type === "session.end" && event.reason === "user"));
+    setLiveVoiceOccupied(false);
+  });
+
+  it("does not emit vad barge-in inside the 400ms echo guard", async () => {
+    setLiveVoiceOccupied(false);
+    let created: FakeSocket | undefined;
+    let now = 8_000;
+    const events: SpeakEvent[] = [];
+    const session = new LiveVoiceSession(
+      {},
+      {
+        mintSecret: async () => ({ ok: true, value: "ephemeral", expiresAt: Date.now() + 60_000 }),
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        now: () => now,
+        socketFactory: () => {
+          created = new FakeSocket();
+          queueMicrotask(() => created?.openNow());
+          return created!;
+        },
+      },
+    );
+    session.speakState.bus.subscribe((event) => events.push(event));
+    await session.start();
+    const silent = Buffer.alloc(320).toString("base64");
+    created!.emitMessage({ type: "response.output_audio.delta", delta: silent });
+    now += 100;
+    created!.emitMessage({ type: "input_audio_buffer.speech_started" });
+    assert.equal(
+      events.some((event) => event.type === "bargein"),
+      false,
+    );
+    assert.equal(
+      created!.sent.some((line) => line.includes("response.cancel")),
+      false,
+    );
     session.end();
     setLiveVoiceOccupied(false);
   });
