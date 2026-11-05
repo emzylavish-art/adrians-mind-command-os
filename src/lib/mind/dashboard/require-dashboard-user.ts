@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
 import { dashboardLoginSearch } from "@/lib/auth/login-providers";
+import { isMindOwnerId } from "@/lib/mind/dashboard/owner.server";
 
 export const requireDashboardUser = createServerFn({ method: "GET" }).handler(async () => {
   const { getSessionUser } = await import("@/lib/auth/verify.server");
@@ -14,6 +15,9 @@ export const requireDashboardUser = createServerFn({ method: "GET" }).handler(as
       to: "/login",
       search: dashboardLoginSearch(),
     });
+  }
+  if (!isMindOwnerId(user.id)) {
+    throw new Response("Forbidden", { status: 403 });
   }
   return { sessionUser: { id: user.id, email: user.email } };
 });

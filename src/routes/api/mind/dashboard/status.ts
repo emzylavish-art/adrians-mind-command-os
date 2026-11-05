@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { buildDashboardStatus } from "@/lib/mind/dashboard/status";
+import { isMindOwnerId } from "@/lib/mind/dashboard/owner.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -24,7 +25,10 @@ export const Route = createFileRoute("/api/mind/dashboard/status")({
           const bearer = authorization?.toLowerCase().startsWith("bearer ")
             ? authorization.slice(7).trim()
             : undefined;
-          await requireUserId(bearer);
+          const userId = await requireUserId(bearer);
+          if (!isMindOwnerId(userId)) {
+            return json({ ok: false, error: "Forbidden." }, 403);
+          }
         } catch (error) {
           const unauthorized = error instanceof Error && error.message === "Unauthorized";
           return json(
