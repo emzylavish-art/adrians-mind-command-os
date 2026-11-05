@@ -1,1 +1,64 @@
-ZXhwb3J0IGludGVyZmFjZSBTa2lsbCB7CiAgcmVhZG9ubHkgaWQ6IHN0cmluZzsKICByZWFkb25seSBuYW1lOiBzdHJpbmc7CiAgcmVhZG9ubHkgZGVzY3JpcHRpb246IHN0cmluZzsKICByZWFkb25seSBraW5kOiBzdHJpbmc7Cn0KCmV4cG9ydCB0eXBlIEVuYWJsZWRTa2lsbHMgPSBSZWFkb25seTxQYXJ0aWFsPFJlY29yZDxzdHJpbmcsIGJvb2xlYW4+Pj47CgpleHBvcnQgdHlwZSBEZWNpc2lvbiA9CiAgfCB7IHR5cGU6ICJzdWdnZXN0aW9uIjsgc2tpbGxJZDogc3RyaW5nIH0KICB8IHsKICAgICAgdHlwZTogImFic3RhaW4iOwogICAgICByZWFzb246ICJlbXB0eSIgfCAib3ZlcnNpemVkIiB8ICJub19tYXRjaCIgfCAiYW1iaWd1b3VzIjsKICAgIH07Cgpjb25zdCBydWxlcyA9IHsKICBwcm9qZWN0czogL1xicHJvamVjdHM/XGIvaSwKICBjaGF0czogL1xiKGNoYXRzP3xjb252ZXJzYXRpb25zPylcYi9pLAogIG5vdGVzOiAvXGJub3Rlcz9cYi9pLAp9IGFzIGNvbnN0OwoKdHlwZSBSb3V0ZSA9IGtleW9mIHR5cGVvZiBydWxlczsKCmZ1bmN0aW9uIGlzUm91dGUodmFsdWU6IHN0cmluZyk6IHZhbHVlIGlzIFJvdXRlIHsKICByZXR1cm4gT2JqZWN0Lmhhc093bihydWxlcywgdmFsdWUpOwp9CgovKioKICogQ2Fub25pY2FsIGJ1aWx0aW4gSURzIG9yIGRpc3BsYXkgbmFtZXM6IHByb2plY3RzLCBjaGF0cywgbm90ZXMuCiAqIERlc2NyaXB0aW9ucyBuZXZlciBpbmZsdWVuY2Ugcm91dGluZy4gTm8gaW5wdXQgdGV4dCBpcyByZXR1cm5lZCBvciByZXRhaW5lZC4KICovCmV4cG9ydCBmdW5jdGlvbiBkZWNpZGUoCiAgdGV4dDogc3RyaW5nLAogIHNraWxsczogcmVhZG9ubHkgU2tpbGxbXSwKICBlbmFibGVkOiBFbmFibGVkU2tpbGxzLAopOiBEZWNpc2lvbiB7CiAgaWYgKHRleHQubGVuZ3RoID4gMjAwMCkgcmV0dXJuIHsgdHlwZTogImFic3RhaW4iLCByZWFzb246ICJvdmVyc2l6ZWQiIH07CiAgaWYgKCF0ZXh0LnRyaW0oKSkgcmV0dXJuIHsgdHlwZTogImFic3RhaW4iLCByZWFzb246ICJlbXB0eSIgfTsKCiAgY29uc3QgbWF0Y2hlcyA9IG5ldyBTZXQ8c3RyaW5nPigpOwogIGZvciAoY29uc3Qgc2tpbGwgb2Ygc2tpbGxzKSB7CiAgICBpZiAoCiAgICAgIHNraWxsLmtpbmQgIT09ICJidWlsdC1pbiIgfHwKICAgICAgZW5hYmxlZFtza2lsbC5pZF0gPT09IGZhbHNlCiAgICApIGNvbnRpbnVlOwoKICAgIGNvbnN0IGlkZW50aXRpZXMgPSBbCiAgICAgIHNraWxsLmlkLnRyaW0oKS50b0xvd2VyQ2FzZSgpLAogICAgICBza2lsbC5uYW1lLnRyaW0oKS50b0xvd2VyQ2FzZSgpLAogICAgXTsKICAgIGlmIChpZGVudGl0aWVzLnNvbWUoa2V5ID0+IGlzUm91dGUoa2V5KSAmJiBydWxlc1trZXldLnRlc3QodGV4dCkpKSB7CiAgICAgIG1hdGNoZXMuYWRkKHNraWxsLmlkKTsKICAgIH0KICB9CgogIGlmIChtYXRjaGVzLnNpemUgPT09IDEpIHsKICAgIHJldHVybiB7IHR5cGU6ICJzdWdnZXN0aW9uIiwgc2tpbGxJZDogWy4uLm1hdGNoZXNdWzBdISB9OwogIH0KICByZXR1cm4gewogICAgdHlwZTogImFic3RhaW4iLAogICAgcmVhc29uOiBtYXRjaGVzLnNpemUgPyAiYW1iaWd1b3VzIiA6ICJub19tYXRjaCIsCiAgfTsKfQo=
+export interface Skill {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly kind: string;
+}
+
+export type EnabledSkills = Readonly<Partial<Record<string, boolean>>>;
+
+export type Decision =
+  | { type: "suggestion"; skillId: string }
+  | {
+      type: "abstain";
+      reason: "empty" | "oversized" | "no_match" | "ambiguous";
+    };
+
+const rules = {
+  projects: /\bprojects?\b/i,
+  chats: /\b(chats?|conversations?)\b/i,
+  notes: /\bnotes?\b/i,
+} as const;
+
+type Route = keyof typeof rules;
+
+function isRoute(value: string): value is Route {
+  return Object.hasOwn(rules, value);
+}
+
+/**
+ * Canonical builtin IDs or display names: projects, chats, notes.
+ * Descriptions never influence routing. No input text is returned or retained.
+ */
+export function decide(
+  text: string,
+  skills: readonly Skill[],
+  enabled: EnabledSkills,
+): Decision {
+  if (text.length > 2000) return { type: "abstain", reason: "oversized" };
+  if (!text.trim()) return { type: "abstain", reason: "empty" };
+
+  const matches = new Set<string>();
+  for (const skill of skills) {
+    if (
+      skill.kind !== "built-in" ||
+      enabled[skill.id] === false
+    ) continue;
+
+    const identities = [
+      skill.id.trim().toLowerCase(),
+      skill.name.trim().toLowerCase(),
+    ];
+    if (identities.some(key => isRoute(key) && rules[key].test(text))) {
+      matches.add(skill.id);
+    }
+  }
+
+  if (matches.size === 1) {
+    return { type: "suggestion", skillId: [...matches][0]! };
+  }
+  return {
+    type: "abstain",
+    reason: matches.size ? "ambiguous" : "no_match",
+  };
+}

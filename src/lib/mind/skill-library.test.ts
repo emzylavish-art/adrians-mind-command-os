@@ -1,1 +1,56 @@
-aW1wb3J0IGFzc2VydCBmcm9tICJub2RlOmFzc2VydC9zdHJpY3QiOwppbXBvcnQgeyB0ZXN0IH0gZnJvbSAibm9kZTp0ZXN0IjsKaW1wb3J0IHsgY3JlYXRlRHJhZnQsIGVtcHR5TGlicmFyeSwgbGF0ZXN0VmVyc2lvbiwgbG9hZExpYnJhcnksIHJldmlld0RyYWZ0LCByZXZpc2VEcmFmdCwgc2VyaWFsaXplTGlicmFyeSwgc3VnZ2VzdEN1cmF0aW9uIH0gZnJvbSAiLi9za2lsbC1saWJyYXJ5LnRzIjsKCmNvbnN0IGNvbnRlbnQgPSB7IHRpdGxlOiAiV2Vla2x5IHJldmlldyIsIHN1bW1hcnk6ICJSZXZpZXciLCBib2R5OiAiUmVhZCBhbmQgbGlzdCB3b3JrOyB0aGlzIGlzIGluZXJ0IHRleHQuIiB9OwoKdGVzdCgiZHJhZnQgbGlicmFyeSByb3VuZC10cmlwcyBhbmQgcmVtYWlucyBzZXBhcmF0ZSBmcm9tIGV4ZWN1dGFibGUgc2tpbGxzIiwgKCkgPT4gewogIGNvbnN0IGRyYWZ0ID0gY3JlYXRlRHJhZnQoZW1wdHlMaWJyYXJ5KCksIGNvbnRlbnQpOwogIGNvbnN0IGxvYWRlZCA9IGxvYWRMaWJyYXJ5KHNlcmlhbGl6ZUxpYnJhcnkoZHJhZnQpKTsKICBhc3NlcnQuZXF1YWwobG9hZGVkLm9rLCB0cnVlKTsKICBpZiAoIWxvYWRlZC5vaykgcmV0dXJuOwogIGFzc2VydC5kZWVwRXF1YWwobG9hZGVkLmxpYnJhcnksIGRyYWZ0KTsKICBhc3NlcnQuZXF1YWwobG9hZGVkLmxpYnJhcnkuZHJhZnRzWzBdPy52ZXJzaW9uc1swXT8uc3RhdHVzLCAiZHJhZnQiKTsKfSk7Cgp0ZXN0KCJyZXZpZXcgaXMgYW4gaW1tdXRhYmxlIHJldmlld2VkLWluYWN0aXZlIHZlcnNpb247IGVkaXRzIGFwcGVuZCIsICgpID0+IHsKICBjb25zdCBpbml0aWFsID0gY3JlYXRlRHJhZnQoZW1wdHlMaWJyYXJ5KCksIGNvbnRlbnQpOwogIGNvbnN0IHJldmlld2VkID0gcmV2aWV3RHJhZnQoaW5pdGlhbCwgImRyYWZ0LTEiKTsKICBjb25zdCByZXZpc2VkID0gcmV2aXNlRHJhZnQocmV2aWV3ZWQsICJkcmFmdC0xIiwgeyAuLi5jb250ZW50LCBib2R5OiAiQ2hhbmdlZCIgfSk7CiAgYXNzZXJ0LmVxdWFsKGluaXRpYWwuZHJhZnRzWzBdPy52ZXJzaW9ucy5sZW5ndGgsIDEpOwogIGFzc2VydC5lcXVhbChyZXZpZXdlZC5kcmFmdHNbMF0/LnZlcnNpb25zLmxlbmd0aCwgMik7CiAgYXNzZXJ0LmVxdWFsKHJldmlld2VkLmRyYWZ0c1swXT8udmVyc2lvbnNbMV0/LnN0YXR1cywgInJldmlld2VkLWluYWN0aXZlIik7CiAgYXNzZXJ0LmVxdWFsKHJldmlzZWQuZHJhZnRzWzBdPy52ZXJzaW9ucy5sZW5ndGgsIDMpOwogIGFzc2VydC5lcXVhbChsYXRlc3RWZXJzaW9uKHJldmlzZWQuZHJhZnRzWzBdISkuY29udGVudC5ib2R5LCAiQ2hhbmdlZCIpOwogIGFzc2VydC5lcXVhbChpbml0aWFsLmRyYWZ0c1swXT8udmVyc2lvbnNbMF0/LmNvbnRlbnQuYm9keSwgY29udGVudC5ib2R5KTsKfSk7Cgp0ZXN0KCJpbnZhbGlkIG9yIG92ZXJzaXplZCBzdG9yZWQgY29udGVudCBmYWlscyBjbG9zZWQiLCAoKSA9PiB7CiAgYXNzZXJ0LmVxdWFsKGxvYWRMaWJyYXJ5KCJ7Iikub2ssIGZhbHNlKTsKICBhc3NlcnQuZXF1YWwobG9hZExpYnJhcnkoSlNPTi5zdHJpbmdpZnkoeyBzY2hlbWFWZXJzaW9uOiAyLCBkcmFmdHM6IFtdIH0pKS5vaywgZmFsc2UpOwogIGFzc2VydC5lcXVhbChsb2FkTGlicmFyeSgieCIucmVwZWF0KDFfMDAwXzAwMSkpLm9rLCBmYWxzZSk7CiAgYXNzZXJ0LnRocm93cygoKSA9PiBjcmVhdGVEcmFmdChlbXB0eUxpYnJhcnkoKSwgeyAuLi5jb250ZW50LCB0aXRsZTogIiIgfSkpOwogIGNvbnN0IGR1cGxpY2F0ZSA9IHsgc2NoZW1hVmVyc2lvbjogMSwgZHJhZnRzOiBbCiAgICB7IGlkOiAiZHJhZnQtMSIsIHZlcnNpb25zOiBbeyB2ZXJzaW9uOiAxLCBzdGF0dXM6ICJkcmFmdCIsIGNvbnRlbnQgfV0gfSwKICAgIHsgaWQ6ICJkcmFmdC0xIiwgdmVyc2lvbnM6IFt7IHZlcnNpb246IDEsIHN0YXR1czogImRyYWZ0IiwgY29udGVudCB9XSB9LAogIF0gfTsKICBhc3NlcnQuZXF1YWwobG9hZExpYnJhcnkoSlNPTi5zdHJpbmdpZnkoZHVwbGljYXRlKSkub2ssIGZhbHNlKTsKICBjb25zdCBjaGFuZ2VkUmV2aWV3ID0geyBzY2hlbWFWZXJzaW9uOiAxLCBkcmFmdHM6IFt7IGlkOiAiZHJhZnQtMSIsIHZlcnNpb25zOiBbCiAgICB7IHZlcnNpb246IDEsIHN0YXR1czogImRyYWZ0IiwgY29udGVudCB9LAogICAgeyB2ZXJzaW9uOiAyLCBzdGF0dXM6ICJyZXZpZXdlZC1pbmFjdGl2ZSIsIGNvbnRlbnQ6IHsgLi4uY29udGVudCwgYm9keTogImNoYW5nZWQiIH0gfSwKICBdIH1dIH07CiAgYXNzZXJ0LmVxdWFsKGxvYWRMaWJyYXJ5KEpTT04uc3RyaW5naWZ5KGNoYW5nZWRSZXZpZXcpKS5vaywgZmFsc2UpOwogIGNvbnN0IGdhcCA9IHsgc2NoZW1hVmVyc2lvbjogMSwgZHJhZnRzOiBbeyBpZDogImRyYWZ0LTEiLCB2ZXJzaW9uczogWwogICAgeyB2ZXJzaW9uOiAyLCBzdGF0dXM6ICJkcmFmdCIsIGNvbnRlbnQgfSwKICBdIH1dIH07CiAgYXNzZXJ0LmVxdWFsKGxvYWRMaWJyYXJ5KEpTT04uc3RyaW5naWZ5KGdhcCkpLm9rLCBmYWxzZSk7CiAgYXNzZXJ0LmVxdWFsKGxvYWRMaWJyYXJ5KEpTT04uc3RyaW5naWZ5KHsgc2NoZW1hVmVyc2lvbjogMSwgZHJhZnRzOiBbXSwgZXh0cmE6IHRydWUgfSkpLm9rLCBmYWxzZSk7Cn0pOwoKdGVzdCgiY3VyYXRpb24gcmV0dXJucyBkZXRlcm1pbmlzdGljIHN1Z2dlc3Rpb25zIHdpdGhvdXQgbXV0YXRpbmcgZHJhZnRzIiwgKCkgPT4gewogIGNvbnN0IGRyYWZ0ID0gY3JlYXRlRHJhZnQoZW1wdHlMaWJyYXJ5KCksIGNvbnRlbnQpOwogIGNvbnN0IGJlZm9yZSA9IHNlcmlhbGl6ZUxpYnJhcnkoZHJhZnQpOwogIGFzc2VydC5kZWVwRXF1YWwoc3VnZ2VzdEN1cmF0aW9uKGRyYWZ0KSwgc3VnZ2VzdEN1cmF0aW9uKGRyYWZ0KSk7CiAgYXNzZXJ0LmVxdWFsKHNlcmlhbGl6ZUxpYnJhcnkoZHJhZnQpLCBiZWZvcmUpOwogIGFzc2VydC5lcXVhbChkcmFmdC5kcmFmdHNbMF0/LnZlcnNpb25zWzBdPy5zdGF0dXMsICJkcmFmdCIpOwp9KTsK
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createDraft, emptyLibrary, latestVersion, loadLibrary, reviewDraft, reviseDraft, serializeLibrary, suggestCuration } from "./skill-library.ts";
+
+const content = { title: "Weekly review", summary: "Review", body: "Read and list work; this is inert text." };
+
+test("draft library round-trips and remains separate from executable skills", () => {
+  const draft = createDraft(emptyLibrary(), content);
+  const loaded = loadLibrary(serializeLibrary(draft));
+  assert.equal(loaded.ok, true);
+  if (!loaded.ok) return;
+  assert.deepEqual(loaded.library, draft);
+  assert.equal(loaded.library.drafts[0]?.versions[0]?.status, "draft");
+});
+
+test("review is an immutable reviewed-inactive version; edits append", () => {
+  const initial = createDraft(emptyLibrary(), content);
+  const reviewed = reviewDraft(initial, "draft-1");
+  const revised = reviseDraft(reviewed, "draft-1", { ...content, body: "Changed" });
+  assert.equal(initial.drafts[0]?.versions.length, 1);
+  assert.equal(reviewed.drafts[0]?.versions.length, 2);
+  assert.equal(reviewed.drafts[0]?.versions[1]?.status, "reviewed-inactive");
+  assert.equal(revised.drafts[0]?.versions.length, 3);
+  assert.equal(latestVersion(revised.drafts[0]!).content.body, "Changed");
+  assert.equal(initial.drafts[0]?.versions[0]?.content.body, content.body);
+});
+
+test("invalid or oversized stored content fails closed", () => {
+  assert.equal(loadLibrary("{").ok, false);
+  assert.equal(loadLibrary(JSON.stringify({ schemaVersion: 2, drafts: [] })).ok, false);
+  assert.equal(loadLibrary("x".repeat(1_000_001)).ok, false);
+  assert.throws(() => createDraft(emptyLibrary(), { ...content, title: "" }));
+  const duplicate = { schemaVersion: 1, drafts: [
+    { id: "draft-1", versions: [{ version: 1, status: "draft", content }] },
+    { id: "draft-1", versions: [{ version: 1, status: "draft", content }] },
+  ] };
+  assert.equal(loadLibrary(JSON.stringify(duplicate)).ok, false);
+  const changedReview = { schemaVersion: 1, drafts: [{ id: "draft-1", versions: [
+    { version: 1, status: "draft", content },
+    { version: 2, status: "reviewed-inactive", content: { ...content, body: "changed" } },
+  ] }] };
+  assert.equal(loadLibrary(JSON.stringify(changedReview)).ok, false);
+  const gap = { schemaVersion: 1, drafts: [{ id: "draft-1", versions: [
+    { version: 2, status: "draft", content },
+  ] }] };
+  assert.equal(loadLibrary(JSON.stringify(gap)).ok, false);
+  assert.equal(loadLibrary(JSON.stringify({ schemaVersion: 1, drafts: [], extra: true })).ok, false);
+});
+
+test("curation returns deterministic suggestions without mutating drafts", () => {
+  const draft = createDraft(emptyLibrary(), content);
+  const before = serializeLibrary(draft);
+  assert.deepEqual(suggestCuration(draft), suggestCuration(draft));
+  assert.equal(serializeLibrary(draft), before);
+  assert.equal(draft.drafts[0]?.versions[0]?.status, "draft");
+});

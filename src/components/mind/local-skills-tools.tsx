@@ -1,1 +1,283 @@
-aW1wb3J0IHsgdXNlRWZmZWN0LCB1c2VSZWYsIHVzZVN0YXRlIH0gZnJvbSAicmVhY3QiOwppbXBvcnQgewogIFNUT1JBR0VfS0VZLCBMSU1JVFMsIGVtcHR5TGlicmFyeSwgbG9hZExpYnJhcnksIHNlcmlhbGl6ZUxpYnJhcnksCiAgY3JlYXRlRHJhZnQsIHJldmlzZURyYWZ0LCByZXZpZXdEcmFmdCwgc3VnZ2VzdEN1cmF0aW9uLAp9IGZyb20gIkAvbGliL21pbmQvc2tpbGwtbGlicmFyeSI7CmltcG9ydCB0eXBlIHsgRHJhZnRDb250ZW50LCBTa2lsbExpYnJhcnkgfSBmcm9tICJAL2xpYi9taW5kL3NraWxsLWxpYnJhcnkiOwppbXBvcnQgeyBkZWNpZGUgfSBmcm9tICJAL2xpYi9taW5kL2RlY2lzaW9uLXJvdXRlciI7CmltcG9ydCB0eXBlIHsgU2tpbGwsIERlY2lzaW9uIH0gZnJvbSAiQC9saWIvbWluZC9kZWNpc2lvbi1yb3V0ZXIiOwoKdHlwZSBQcm9wcyA9IHsKICBza2lsbHM6IHJlYWRvbmx5IFNraWxsW107CiAgZW5hYmxlZFNraWxsczogUmVjb3JkPHN0cmluZywgYm9vbGVhbj47Cn07Cgpjb25zdCBibGFuazogRHJhZnRDb250ZW50ID0geyB0aXRsZTogIiIsIHN1bW1hcnk6ICIiLCBib2R5OiAiIiB9Owpjb25zdCBtZXNzYWdlID0gKGVycm9yOiB1bmtub3duKSA9PgogIGVycm9yIGluc3RhbmNlb2YgRXJyb3IgPyBlcnJvci5tZXNzYWdlIDogIk9wZXJhdGlvbiBmYWlsZWQiOwoKZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gTG9jYWxTa2lsbHNUb29scyh7IHNraWxscywgZW5hYmxlZFNraWxscyB9OiBQcm9wcykgewogIGNvbnN0IFtkZWNpc2lvbiwgc2V0RGVjaXNpb25dID0gdXNlU3RhdGU8RGVjaXNpb24gfCBudWxsPihudWxsKTsKICBjb25zdCBbZGVjaXNpb25LZXksIHNldERlY2lzaW9uS2V5XSA9IHVzZVN0YXRlPHN0cmluZyB8IG51bGw+KG51bGwpOwogIGNvbnN0IFtyZXF1ZXN0LCBzZXRSZXF1ZXN0XSA9IHVzZVN0YXRlKCIiKTsKICBjb25zdCBbbGlicmFyeSwgc2V0TGlicmFyeV0gPSB1c2VTdGF0ZTxTa2lsbExpYnJhcnk+KGVtcHR5TGlicmFyeSk7CiAgY29uc3QgW2xvYWRlZFJhdywgc2V0TG9hZGVkUmF3XSA9IHVzZVN0YXRlPHN0cmluZyB8IG51bGwgfCB1bmRlZmluZWQ+KCk7CiAgY29uc3QgW2xvY2tlZCwgc2V0TG9ja2VkXSA9IHVzZVN0YXRlKHRydWUpOwogIGNvbnN0IFtjb25mbGljdCwgc2V0Q29uZmxpY3RdID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtlcnJvciwgc2V0RXJyb3JdID0gdXNlU3RhdGUoIiIpOwogIGNvbnN0IFtub3RpY2UsIHNldE5vdGljZV0gPSB1c2VTdGF0ZSgiIik7CiAgY29uc3QgW3NlbGVjdGVkLCBzZXRTZWxlY3RlZF0gPSB1c2VTdGF0ZSgiIik7CiAgY29uc3QgW2NvbnRlbnQsIHNldENvbnRlbnRdID0gdXNlU3RhdGU8RHJhZnRDb250ZW50PihibGFuayk7CiAgY29uc3QgW2VkaXRvckJhc2VsaW5lLCBzZXRFZGl0b3JCYXNlbGluZV0gPSB1c2VTdGF0ZTxEcmFmdENvbnRlbnQ+KGJsYW5rKTsKICBjb25zdCBbbGlicmFyeURpcnR5LCBzZXRMaWJyYXJ5RGlydHldID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtzYXZpbmcsIHNldFNhdmluZ10gPSB1c2VTdGF0ZShmYWxzZSk7CiAgY29uc3Qgc2F2aW5nUmVmID0gdXNlUmVmKGZhbHNlKTsKICBjb25zdCBlZGl0b3JEaXJ0eSA9IChPYmplY3Qua2V5cyhibGFuaykgYXMgKGtleW9mIERyYWZ0Q29udGVudClbXSkKICAgIC5zb21lKGZpZWxkID0+IGNvbnRlbnRbZmllbGRdICE9PSBlZGl0b3JCYXNlbGluZVtmaWVsZF0pOwogIGNvbnN0IHJvdXRpbmdLZXkgPSBKU09OLnN0cmluZ2lmeShbCiAgICBza2lsbHMubWFwKCh7IGlkLCBuYW1lLCBraW5kIH0pID0+IFtpZCwgbmFtZSwga2luZF0pLAogICAgT2JqZWN0LmtleXMoZW5hYmxlZFNraWxscykuZmlsdGVyKGlkID0+IGVuYWJsZWRTa2lsbHNbaWRdID09PSBmYWxzZSkuc29ydCgpLAogIF0pOwogIHVzZUVmZmVjdCgoKSA9PiB7IHNldERlY2lzaW9uKG51bGwpOyBzZXREZWNpc2lvbktleShudWxsKTsgfSwgW3JvdXRpbmdLZXldKTsKICBjb25zdCBbY3VyYXRpb24sIHNldEN1cmF0aW9uXSA9CiAgICB1c2VTdGF0ZTxSZXR1cm5UeXBlPHR5cGVvZiBzdWdnZXN0Q3VyYXRpb24+IHwgbnVsbD4obnVsbCk7CgogIHVzZUVmZmVjdCgoKSA9PiB7CiAgICB0cnkgewogICAgICBjb25zdCByYXcgPSB3aW5kb3cubG9jYWxTdG9yYWdlLmdldEl0ZW0oU1RPUkFHRV9LRVkpOwogICAgICBzZXRMb2FkZWRSYXcocmF3KTsKICAgICAgY29uc3QgcmVzdWx0ID0gbG9hZExpYnJhcnkocmF3KTsKICAgICAgaWYgKCFyZXN1bHQub2spIHsKICAgICAgICBzZXRFcnJvcihgRHJhZnQgc3RvcmFnZSBpcyBpbnZhbGlkOiAke3Jlc3VsdC5lcnJvcn0uIFJhdyBkYXRhIHByZXNlcnZlZC5gKTsKICAgICAgICByZXR1cm47CiAgICAgIH0KICAgICAgc2V0TGlicmFyeShyZXN1bHQubGlicmFyeSk7CiAgICAgIHNldExvY2tlZChmYWxzZSk7CiAgICB9IGNhdGNoIChjYXVzZSkgewogICAgICBzZXRFcnJvcihgU3RvcmFnZSB1bmF2YWlsYWJsZTogJHttZXNzYWdlKGNhdXNlKX1gKTsKICAgIH0KICB9LCBbXSk7CgogIGZ1bmN0aW9uIGNoYW5nZShvcGVyYXRpb246ICgpID0+IFNraWxsTGlicmFyeSwgc3VjY2Vzc05vdGljZSA9ICJEcmFmdCBsaWJyYXJ5IGNoYW5nZWQgaW4gbWVtb3J5OyBzZWxlY3QgU2F2ZSBsb2NhbGx5IHRvIHBlcnNpc3QgaXQuIikgewogICAgaWYgKGxvY2tlZCkgcmV0dXJuOwogICAgdHJ5IHsKICAgICAgc2V0TGlicmFyeShvcGVyYXRpb24oKSk7CiAgICAgIHNldExpYnJhcnlEaXJ0eSh0cnVlKTsKICAgICAgc2V0Q3VyYXRpb24obnVsbCk7CiAgICAgIHNldE5vdGljZShzdWNjZXNzTm90aWNlKTsKICAgICAgc2V0RXJyb3IoIiIpOwogICAgfSBjYXRjaCAoY2F1c2UpIHsKICAgICAgc2V0RXJyb3IobWVzc2FnZShjYXVzZSkpOwogICAgfQogIH0KCiAgYXN5bmMgZnVuY3Rpb24gc2F2ZSgpIHsKICAgIGlmIChsb2NrZWQgfHwgbG9hZGVkUmF3ID09PSB1bmRlZmluZWQgfHwgc2F2aW5nUmVmLmN1cnJlbnQpIHJldHVybjsKICAgIGlmICghbmF2aWdhdG9yLmxvY2tzPy5yZXF1ZXN0KSB7CiAgICAgIHNldEVycm9yKCJUaGlzIGJyb3dzZXIgY2Fubm90IHNhZmVseSBjb29yZGluYXRlIGRyYWZ0IHNhdmVzIGFjcm9zcyB0YWJzLiBZb3VyIGluLW1lbW9yeSBjaGFuZ2VzIGFyZSBwcmVzZXJ2ZWQ7IGV4cG9ydCBvciBrZWVwIHRoaXMgdGFiIG9wZW4uIik7CiAgICAgIHJldHVybjsKICAgIH0KICAgIHNhdmluZ1JlZi5jdXJyZW50ID0gdHJ1ZTsKICAgIHNldFNhdmluZyh0cnVlKTsKICAgIHRyeSB7CiAgICAgIGF3YWl0IG5hdmlnYXRvci5sb2Nrcy5yZXF1ZXN0KGB6YXBpYToke1NUT1JBR0VfS0VZfWAsIGFzeW5jICgpID0+IHsKICAgICAgICBjb25zdCBjdXJyZW50ID0gd2luZG93LmxvY2FsU3RvcmFnZS5nZXRJdGVtKFNUT1JBR0VfS0VZKTsKICAgICAgICBpZiAoY3VycmVudCAhPT0gbG9hZGVkUmF3KSB7CiAgICAgICAgICBzZXRDb25mbGljdCh0cnVlKTsKICAgICAgICAgIHNldEVycm9yKCJEcmFmdCBzdG9yYWdlIGNoYW5nZWQgaW4gYW5vdGhlciB0YWIuIE5vdGhpbmcgd2FzIG92ZXJ3cml0dGVuOyB5b3VyIGNoYW5nZXMgcmVtYWluIGhlcmUuIERvd25sb2FkIHRoZXNlIGxvY2FsIGNoYW5nZXMgYmVmb3JlIHJlY29uY2lsaW5nLiIpOwogICAgICAgICAgcmV0dXJuOwogICAgICAgIH0KICAgICAgICBjb25zdCBzZXJpYWxpemVkID0gc2VyaWFsaXplTGlicmFyeShsaWJyYXJ5KTsKICAgICAgICB3aW5kb3cubG9jYWxTdG9yYWdlLnNldEl0ZW0oU1RPUkFHRV9LRVksIHNlcmlhbGl6ZWQpOwogICAgICAgIHNldExvYWRlZFJhdyhzZXJpYWxpemVkKTsKICAgICAgICBzZXRDb25mbGljdChmYWxzZSk7CiAgICAgICAgc2V0TGlicmFyeURpcnR5KGZhbHNlKTsKICAgICAgICBzZXROb3RpY2UoZWRpdG9yRGlydHkKICAgICAgICAgID8gIkRyYWZ0IGxpYnJhcnkgc2F2ZWQuIEVkaXRvciB0ZXh0IGlzIHN0aWxsIHVuYXBwZW5kZWQgYW5kIHdhcyBub3Qgc2F2ZWQuIgogICAgICAgICAgOiAiRHJhZnQgbGlicmFyeSBzYXZlZCBsb2NhbGx5LiIpOwogICAgICAgIHNldEVycm9yKCIiKTsKICAgICAgfSk7CiAgICB9IGNhdGNoIChjYXVzZSkgewogICAgICBzZXRFcnJvcihgTm90IHNhdmVkOiAke21lc3NhZ2UoY2F1c2UpfS4gSW4tbWVtb3J5IGNoYW5nZXMgcmVtYWluIGluIHRoaXMgdGFiLmApOwogICAgfSBmaW5hbGx5IHsKICAgICAgc2F2aW5nUmVmLmN1cnJlbnQgPSBmYWxzZTsKICAgICAgc2V0U2F2aW5nKGZhbHNlKTsKICAgIH0KICB9CgogIGNvbnN0IHRhcmdldCA9IGxpYnJhcnkuZHJhZnRzLmZpbmQoZHJhZnQgPT4gZHJhZnQuaWQgPT09IHNlbGVjdGVkKTsKICBjb25zdCBmdWxsID0gISF0YXJnZXQgJiYgdGFyZ2V0LnZlcnNpb25zLmxlbmd0aCA+PSBMSU1JVFMudmVyc2lvbnM7CiAgY29uc3QgZmllbGRDbGFzcyA9ICJ3LWZ1bGwgcm91bmRlZC1wYW5lbCBib3JkZXIgYm9yZGVyLWxpbmUgYmctYmcgcC0yIjsKCiAgcmV0dXJuICgKICAgIDxzZWN0aW9uIGNsYXNzTmFtZT0iZGVuc2UtY2FyZCBzcGFjZS15LTQiPgogICAgICA8aGVhZGVyPgogICAgICAgIDxoMiBjbGFzc05hbWU9ImZvbnQtc2VtaWJvbGQiPkxvY2FsIHNraWxscyB0b29sczwvaDI+CiAgICAgICAgPHAgY2xhc3NOYW1lPSJ0ZXh0LXNtIHRleHQtbXV0ZWQiPgogICAgICAgICAgU3VnZ2VzdGlvbnMgYW5kIGluZXJ0IGRyYWZ0cyBvbmx5LiBOb3RoaW5nIHJ1bnMgb3IgYmVjb21lcyBhY3RpdmUuCiAgICAgICAgPC9wPgogICAgICA8L2hlYWRlcj4KCiAgICAgIDxmb3JtCiAgICAgICAgY2xhc3NOYW1lPSJzcGFjZS15LTIgcm91bmRlZC1wYW5lbCBib3JkZXIgYm9yZGVyLWxpbmUgYmctYmcgcC0zIgogICAgICAgIG9uU3VibWl0PXtldmVudCA9PiB7CiAgICAgICAgICBldmVudC5wcmV2ZW50RGVmYXVsdCgpOwogICAgICAgICAgY29uc3QgZm9ybSA9IGV2ZW50LmN1cnJlbnRUYXJnZXQ7CiAgICAgICAgICBjb25zdCB0ZXh0ID0gbmV3IEZvcm1EYXRhKGZvcm0pLmdldCgicmVxdWVzdCIpOwogICAgICAgICAgc2V0RGVjaXNpb24oZGVjaWRlKHR5cGVvZiB0ZXh0ID09PSAic3RyaW5nIiA/IHRleHQgOiAiIiwgc2tpbGxzLCBlbmFibGVkU2tpbGxzKSk7CiAgICAgICAgICBzZXREZWNpc2lvbktleShyb3V0aW5nS2V5KTsKICAgICAgICAgIHNldFJlcXVlc3QoIiIpOwogICAgICAgIH19CiAgICAgID4KICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPSJibG9jayI+CiAgICAgICAgICBSZXF1ZXN0IChsb2NhbCBjbGFzc2lmaWNhdGlvbiBvbmx5KQogICAgICAgICAgPHRleHRhcmVhIG5hbWU9InJlcXVlc3QiIGNsYXNzTmFtZT17ZmllbGRDbGFzc30gcm93cz17M30gbWF4TGVuZ3RoPXsyMDAwfSB2YWx1ZT17cmVxdWVzdH0gb25DaGFuZ2U9eyhldmVudCkgPT4gc2V0UmVxdWVzdChldmVudC50YXJnZXQudmFsdWUpfSAvPgogICAgICAgIDwvbGFiZWw+CiAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggZ2FwLTMiPgogICAgICAgICAgPGJ1dHRvbiB0eXBlPSJzdWJtaXQiPkNsYXNzaWZ5IGxvY2FsbHk8L2J1dHRvbj4KICAgICAgICAgIDxidXR0b24gdHlwZT0iYnV0dG9uIiBvbkNsaWNrPXsoKSA9PiB7IHNldFJlcXVlc3QoIiIpOyBzZXREZWNpc2lvbihudWxsKTsgfX0+Q2xlYXI8L2J1dHRvbj4KICAgICAgICA8L2Rpdj4KICAgICAgICA8cCBjbGFzc05hbWU9InRleHQtc20gdGV4dC1tdXRlZCI+CiAgICAgICAgICBSZXF1ZXN0IHRleHQgaXMgbm90IHNhdmVkIGFuZCBpcyBjbGVhcmVkIGFmdGVyIGNsYXNzaWZpY2F0aW9uLgogICAgICAgIDwvcD4KICAgICAgICB7ZGVjaXNpb24gJiYgZGVjaXNpb25LZXkgPT09IHJvdXRpbmdLZXkgJiYgKAogICAgICAgICAgPHAgcm9sZT0ic3RhdHVzIj4KICAgICAgICAgICAge2RlY2lzaW9uLnR5cGUgPT09ICJzdWdnZXN0aW9uIgogICAgICAgICAgICAgID8gYFN1Z2dlc3Rpb24gb25seTogJHtza2lsbHMuZmluZChzID0+IHMuaWQgPT09IGRlY2lzaW9uLnNraWxsSWQpPy5uYW1lID8/IGRlY2lzaW9uLnNraWxsSWR9YAogICAgICAgICAgICAgIDogYE5vIHN1Z2dlc3Rpb246ICR7ZGVjaXNpb24ucmVhc29ufWB9CiAgICAgICAgICA8L3A+CiAgICAgICAgKX0KICAgICAgPC9mb3JtPgoKICAgICAgPGRpdiBjbGFzc05hbWU9InNwYWNlLXktMyByb3VuZGVkLXBhbmVsIGJvcmRlciBib3JkZXItbGluZSBiZy1iZyBwLTMiPgogICAgICAgIDxoMyBjbGFzc05hbWU9ImZvbnQtc2VtaWJvbGQiPkRyYWZ0IGxpYnJhcnk8L2gzPgogICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC1zbSB0ZXh0LW11dGVkIj4KICAgICAgICAgIEVkaXRzIHJlbWFpbiBpbiBtZW1vcnkgdW50aWwgU2F2ZS4gUmV2aWV3ZWQgZHJhZnRzIGFyZSByZXZpZXdlZC1pbmFjdGl2ZSwKICAgICAgICAgIG5ldmVyIGV4ZWN1dGFibGUuCiAgICAgICAgPC9wPgogICAgICAgIHtlcnJvciAmJiA8cCByb2xlPSJhbGVydCI+e2Vycm9yfTwvcD59CiAgICAgICAge25vdGljZSAmJiA8cCByb2xlPSJzdGF0dXMiPntub3RpY2V9PC9wPn0KICAgICAgICB7bG9ja2VkICYmIDxwIGNsYXNzTmFtZT0idGV4dC1tdXRlZCI+RHJhZnQgZWRpdGluZyBhbmQgc2F2aW5nIGFyZSBsb2NrZWQuPC9wPn0KCiAgICAgICAgPGZpZWxkc2V0IGRpc2FibGVkPXtsb2NrZWQgfHwgc2F2aW5nfSBjbGFzc05hbWU9InNwYWNlLXktMyI+CiAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPSJibG9jayI+CiAgICAgICAgICAgIERyYWZ0CiAgICAgICAgICAgIDxzZWxlY3QKICAgICAgICAgICAgICBjbGFzc05hbWU9e2ZpZWxkQ2xhc3N9CiAgICAgICAgICAgICAgdmFsdWU9e3NlbGVjdGVkfQogICAgICAgICAgICAgIG9uQ2hhbmdlPXtldmVudCA9PiB7CiAgICAgICAgICAgICAgICBjb25zdCBpZCA9IGV2ZW50LnRhcmdldC52YWx1ZTsKICAgICAgICAgICAgICAgIGlmIChlZGl0b3JEaXJ0eSAmJiAhd2luZG93LmNvbmZpcm0oIkRpc2NhcmQgdW5hcHBlbmRlZCBlZGl0b3IgdGV4dD8iKSkgcmV0dXJuOwogICAgICAgICAgICAgICAgY29uc3QgZHJhZnQgPSBsaWJyYXJ5LmRyYWZ0cy5maW5kKGl0ZW0gPT4gaXRlbS5pZCA9PT0gaWQpOwogICAgICAgICAgICAgICAgY29uc3QgbmV4dENvbnRlbnQgPSBkcmFmdCA/IGRyYWZ0LnZlcnNpb25zW2RyYWZ0LnZlcnNpb25zLmxlbmd0aCAtIDFdLmNvbnRlbnQgOiBibGFuazsKICAgICAgICAgICAgICAgIHNldFNlbGVjdGVkKGlkKTsKICAgICAgICAgICAgICAgIHNldENvbnRlbnQobmV4dENvbnRlbnQpOwogICAgICAgICAgICAgICAgc2V0RWRpdG9yQmFzZWxpbmUobmV4dENvbnRlbnQpOwogICAgICAgICAgICAgIH19CiAgICAgICAgICAgID4KICAgICAgICAgICAgICA8b3B0aW9uIHZhbHVlPSIiPk5ldyBkcmFmdDwvb3B0aW9uPgogICAgICAgICAgICAgIHtsaWJyYXJ5LmRyYWZ0cy5tYXAoZHJhZnQgPT4gewogICAgICAgICAgICAgICAgY29uc3QgbGF0ZXN0ID0gZHJhZnQudmVyc2lvbnNbZHJhZnQudmVyc2lvbnMubGVuZ3RoIC0gMV07CiAgICAgICAgICAgICAgICByZXR1cm4gKAogICAgICAgICAgICAgICAgICA8b3B0aW9uIGtleT17ZHJhZnQuaWR9IHZhbHVlPXtkcmFmdC5pZH0+CiAgICAgICAgICAgICAgICAgICAge2xhdGVzdC5jb250ZW50LnRpdGxlfSDCtyB2e2xhdGVzdC52ZXJzaW9ufSDCtyB7bGF0ZXN0LnN0YXR1c30KICAgICAgICAgICAgICAgICAgPC9vcHRpb24+CiAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgIH0pfQogICAgICAgICAgICA8L3NlbGVjdD4KICAgICAgICAgIDwvbGFiZWw+CgogICAgICAgICAgeyhbInRpdGxlIiwgInN1bW1hcnkiLCAiYm9keSJdIGFzIGNvbnN0KS5tYXAoZmllbGQgPT4gKAogICAgICAgICAgICA8bGFiZWwga2V5PXtmaWVsZH0gY2xhc3NOYW1lPSJibG9jayI+CiAgICAgICAgICAgICAge2ZpZWxkfSAoe2NvbnRlbnRbZmllbGRdLmxlbmd0aH0ve0xJTUlUU1tmaWVsZF19KQogICAgICAgICAgICAgIDx0ZXh0YXJlYQogICAgICAgICAgICAgICAgY2xhc3NOYW1lPXtmaWVsZENsYXNzfQogICAgICAgICAgICAgICAgcm93cz17ZmllbGQgPT09ICJib2R5IiA/IDUgOiAyfQogICAgICAgICAgICAgICAgbWF4TGVuZ3RoPXtMSU1JVFNbZmllbGRdfQogICAgICAgICAgICAgICAgdmFsdWU9e2NvbnRlbnRbZmllbGRdfQogICAgICAgICAgICAgICAgb25DaGFuZ2U9e2V2ZW50ID0+CiAgICAgICAgICAgICAgICAgIHNldENvbnRlbnQoeyAuLi5jb250ZW50LCBbZmllbGRdOiBldmVudC50YXJnZXQudmFsdWUgfSkKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAvPgogICAgICAgICAgICA8L2xhYmVsPgogICAgICAgICAgKSl9CgogICAgICAgICAge2VkaXRvckRpcnR5ICYmIDxwIHJvbGU9InN0YXR1cyI+RWRpdG9yIHRleHQgaGFzIG5vdCBiZWVuIGFwcGVuZGVkIHRvIHRoZSBsaWJyYXJ5LiBTYXZpbmcgbm93IHdpbGwgc2F2ZSBvbmx5IGxpYnJhcnkgdmVyc2lvbnMuPC9wPn0KICAgICAgICAgIHtsaWJyYXJ5RGlydHkgJiYgPHAgcm9sZT0ic3RhdHVzIj5MaWJyYXJ5IGNoYW5nZXMgYXJlIGluIG1lbW9yeSBhbmQgbmVlZCBhbiBleHBsaWNpdCBzYXZlLjwvcD59CiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBmbGV4LXdyYXAgZ2FwLTMiPgogICAgICAgICAgICA8YnV0dG9uCiAgICAgICAgICAgICAgdHlwZT0iYnV0dG9uIgogICAgICAgICAgICAgIGRpc2FibGVkPXshY29udGVudC50aXRsZS50cmltKCkgfHwgKHNlbGVjdGVkID8gZnVsbCA6IGxpYnJhcnkuZHJhZnRzLmxlbmd0aCA+PSBMSU1JVFMuZHJhZnRzKX0KICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiBjaGFuZ2UoKCkgPT4gewogICAgICAgICAgICAgICAgY29uc3QgbmV4dCA9IHNlbGVjdGVkCiAgICAgICAgICAgICAgICAgID8gcmV2aXNlRHJhZnQobGlicmFyeSwgc2VsZWN0ZWQsIGNvbnRlbnQpCiAgICAgICAgICAgICAgICAgIDogY3JlYXRlRHJhZnQobGlicmFyeSwgY29udGVudCk7CiAgICAgICAgICAgICAgICBpZiAoIXNlbGVjdGVkKSB7CiAgICAgICAgICAgICAgICAgIGNvbnN0IGlkID0gbmV4dC5kcmFmdHNbbmV4dC5kcmFmdHMubGVuZ3RoIC0gMV0uaWQ7CiAgICAgICAgICAgICAgICAgIHNldFNlbGVjdGVkKGlkKTsKICAgICAgICAgICAgICAgICAgc2V0RWRpdG9yQmFzZWxpbmUoeyAuLi5jb250ZW50IH0pOwogICAgICAgICAgICAgICAgfSBlbHNlIHNldEVkaXRvckJhc2VsaW5lKHsgLi4uY29udGVudCB9KTsKICAgICAgICAgICAgICAgIHJldHVybiBuZXh0OwogICAgICAgICAgICAgIH0pfQogICAgICAgICAgICA+CiAgICAgICAgICAgICAge3NlbGVjdGVkID8gIkFwcGVuZCByZXZpc2lvbiIgOiAiQ3JlYXRlIGRyYWZ0In0KICAgICAgICAgICAgPC9idXR0b24+CiAgICAgICAgICAgIDxidXR0b24KICAgICAgICAgICAgICB0eXBlPSJidXR0b24iCiAgICAgICAgICAgICAgZGlzYWJsZWQ9eyF0YXJnZXQgfHwgZnVsbH0KICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB7CiAgICAgICAgICAgICAgICBjb25zdCB2ZXJzaW9uID0gdGFyZ2V0ID8gdGFyZ2V0LnZlcnNpb25zW3RhcmdldC52ZXJzaW9ucy5sZW5ndGggLSAxXS52ZXJzaW9uIDogMDsKICAgICAgICAgICAgICAgIGNoYW5nZSgoKSA9PiByZXZpZXdEcmFmdChsaWJyYXJ5LCBzZWxlY3RlZCksIGBSZXZpZXdlZCBzdG9yZWQgdmVyc2lvbiAke3ZlcnNpb259OyBhcHBlbmRlZCBhIHJldmlld2VkLWluYWN0aXZlIHZlcnNpb24uIEVkaXRvciB0ZXh0IHdhcyBub3QgcmV2aWV3ZWQuYCk7CiAgICAgICAgICAgICAgfX0KICAgICAgICAgICAgPgogICAgICAgICAgICAgIFJldmlldyBsYXRlc3Qgc3RvcmVkIHZlcnNpb24KICAgICAgICAgICAgPC9idXR0b24+CiAgICAgICAgICAgIDxidXR0b24gdHlwZT0iYnV0dG9uIiBkaXNhYmxlZD17c2F2aW5nIHx8ICghbGlicmFyeURpcnR5ICYmIGxvYWRlZFJhdyAhPT0gbnVsbCl9IG9uQ2xpY2s9eygpID0+IHZvaWQgc2F2ZSgpfT57c2F2aW5nID8gIlNhdmluZ+KApiIgOiAiU2F2ZSBsb2NhbGx5In08L2J1dHRvbj4KICAgICAgICAgICAgPGJ1dHRvbgogICAgICAgICAgICAgIHR5cGU9ImJ1dHRvbiIKICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB7CiAgICAgICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICAgICBzZXRDdXJhdGlvbihzdWdnZXN0Q3VyYXRpb24obGlicmFyeSkpOwogICAgICAgICAgICAgICAgfSBjYXRjaCAoY2F1c2UpIHsKICAgICAgICAgICAgICAgICAgc2V0RXJyb3IobWVzc2FnZShjYXVzZSkpOwogICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgIH19CiAgICAgICAgICAgID4KICAgICAgICAgICAgICBTdWdnZXN0IGN1cmF0aW9uCiAgICAgICAgICAgIDwvYnV0dG9uPgogICAgICAgICAgPC9kaXY+CiAgICAgICAgPC9maWVsZHNldD4KCiAgICAgICAgPHAgY2xhc3NOYW1lPSJ0ZXh0LXNtIHRleHQtbXV0ZWQiPgogICAgICAgICAgUmV2aWV3IHByZXNlcnZlcyB0aGUgbGF0ZXN0IGxpYnJhcnkgY29udGVudCwgbm90IHVuYXBwZW5kZWQgZWRpdG9yIGNoYW5nZXMuCiAgICAgICAgPC9wPgogICAgICAgIHtjb25mbGljdCAmJiA8YnV0dG9uIHR5cGU9ImJ1dHRvbiIgb25DbGljaz17KCkgPT4gewogICAgICAgICAgdHJ5IHsKICAgICAgICAgICAgY29uc3QgcmVjb3ZlcnkgPSB7IGxpYnJhcnk6IEpTT04ucGFyc2Uoc2VyaWFsaXplTGlicmFyeShsaWJyYXJ5KSksIHVuYXBwZW5kZWRFZGl0b3I6IGVkaXRvckRpcnR5ID8gY29udGVudCA6IG51bGwgfTsKICAgICAgICAgICAgY29uc3QgYmxvYiA9IG5ldyBCbG9iKFtKU09OLnN0cmluZ2lmeShyZWNvdmVyeSwgbnVsbCwgMildLCB7IHR5cGU6ICJhcHBsaWNhdGlvbi9qc29uIiB9KTsKICAgICAgICAgICAgY29uc3QgdXJsID0gVVJMLmNyZWF0ZU9iamVjdFVSTChibG9iKTsKICAgICAgICAgICAgY29uc3QgYW5jaG9yID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgiYSIpOwogICAgICAgICAgICBhbmNob3IuaHJlZiA9IHVybDsKICAgICAgICAgICAgYW5jaG9yLmRvd25sb2FkID0gIm1pbmQtc2tpbGwtZHJhZnRzLXJlY292ZXJ5Lmpzb24iOwogICAgICAgICAgICBhbmNob3IuY2xpY2soKTsKICAgICAgICAgICAgVVJMLnJldm9rZU9iamVjdFVSTCh1cmwpOwogICAgICAgICAgfSBjYXRjaCAoY2F1c2UpIHsgc2V0RXJyb3IoYENvdWxkIG5vdCBleHBvcnQgbG9jYWwgcmVjb3Zlcnk6ICR7bWVzc2FnZShjYXVzZSl9YCk7IH0KICAgICAgICB9fT5Eb3dubG9hZCBsb2NhbCBjaGFuZ2VzPC9idXR0b24+fQogICAgICAgIHtjdXJhdGlvbiAhPT0gbnVsbCAmJiAoCiAgICAgICAgICA8ZGl2IHJvbGU9InN0YXR1cyI+CiAgICAgICAgICAgIDxwPkN1cmF0aW9uIHN1Z2dlc3Rpb25zIG9ubHk7IG5vIGNoYW5nZXMgYXBwbGllZC48L3A+CiAgICAgICAgICAgIHtjdXJhdGlvbi5sZW5ndGggPT09IDAgPyA8cD5ObyBzdWdnZXN0aW9ucy48L3A+IDogKAogICAgICAgICAgICAgIDx1bD4KICAgICAgICAgICAgICAgIHtjdXJhdGlvbi5tYXAoaXRlbSA9PiAoCiAgICAgICAgICAgICAgICAgIDxsaSBrZXk9e2l0ZW0uZHJhZnRJZH0+CiAgICAgICAgICAgICAgICAgICAge2l0ZW0uZHJhZnRJZH0gwrcgdntpdGVtLnZlcnNpb259OiB7aXRlbS5hY3Rpb259CiAgICAgICAgICAgICAgICAgIDwvbGk+CiAgICAgICAgICAgICAgICApKX0KICAgICAgICAgICAgICA8L3VsPgogICAgICAgICAgICApfQogICAgICAgICAgPC9kaXY+CiAgICAgICAgKX0KICAgICAgPC9kaXY+CiAgICA8L3NlY3Rpb24+CiAgKTsKfQo=
+import { useEffect, useRef, useState } from "react";
+import {
+  STORAGE_KEY, LIMITS, emptyLibrary, loadLibrary, serializeLibrary,
+  createDraft, reviseDraft, reviewDraft, suggestCuration,
+} from "@/lib/mind/skill-library";
+import type { DraftContent, SkillLibrary } from "@/lib/mind/skill-library";
+import { decide } from "@/lib/mind/decision-router";
+import type { Skill, Decision } from "@/lib/mind/decision-router";
+
+type Props = {
+  skills: readonly Skill[];
+  enabledSkills: Record<string, boolean>;
+};
+
+const blank: DraftContent = { title: "", summary: "", body: "" };
+const message = (error: unknown) =>
+  error instanceof Error ? error.message : "Operation failed";
+
+export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
+  const [decision, setDecision] = useState<Decision | null>(null);
+  const [decisionKey, setDecisionKey] = useState<string | null>(null);
+  const [request, setRequest] = useState("");
+  const [library, setLibrary] = useState<SkillLibrary>(emptyLibrary);
+  const [loadedRaw, setLoadedRaw] = useState<string | null | undefined>();
+  const [locked, setLocked] = useState(true);
+  const [conflict, setConflict] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [selected, setSelected] = useState("");
+  const [content, setContent] = useState<DraftContent>(blank);
+  const [editorBaseline, setEditorBaseline] = useState<DraftContent>(blank);
+  const [libraryDirty, setLibraryDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const editorDirty = (Object.keys(blank) as (keyof DraftContent)[])
+    .some(field => content[field] !== editorBaseline[field]);
+  const routingKey = JSON.stringify([
+    skills.map(({ id, name, kind }) => [id, name, kind]),
+    Object.keys(enabledSkills).filter(id => enabledSkills[id] === false).sort(),
+  ]);
+  useEffect(() => { setDecision(null); setDecisionKey(null); }, [routingKey]);
+  const [curation, setCuration] =
+    useState<ReturnType<typeof suggestCuration> | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      setLoadedRaw(raw);
+      const result = loadLibrary(raw);
+      if (!result.ok) {
+        setError(`Draft storage is invalid: ${result.error}. Raw data preserved.`);
+        return;
+      }
+      setLibrary(result.library);
+      setLocked(false);
+    } catch (cause) {
+      setError(`Storage unavailable: ${message(cause)}`);
+    }
+  }, []);
+
+  function change(operation: () => SkillLibrary, successNotice = "Draft library changed in memory; select Save locally to persist it.") {
+    if (locked) return;
+    try {
+      setLibrary(operation());
+      setLibraryDirty(true);
+      setCuration(null);
+      setNotice(successNotice);
+      setError("");
+    } catch (cause) {
+      setError(message(cause));
+    }
+  }
+
+  async function save() {
+    if (locked || loadedRaw === undefined || savingRef.current) return;
+    if (!navigator.locks?.request) {
+      setError("This browser cannot safely coordinate draft saves across tabs. Your in-memory changes are preserved; export or keep this tab open.");
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await navigator.locks.request(`zapia:${STORAGE_KEY}`, async () => {
+        const current = window.localStorage.getItem(STORAGE_KEY);
+        if (current !== loadedRaw) {
+          setConflict(true);
+          setError("Draft storage changed in another tab. Nothing was overwritten; your changes remain here. Download these local changes before reconciling.");
+          return;
+        }
+        const serialized = serializeLibrary(library);
+        window.localStorage.setItem(STORAGE_KEY, serialized);
+        setLoadedRaw(serialized);
+        setConflict(false);
+        setLibraryDirty(false);
+        setNotice(editorDirty
+          ? "Draft library saved. Editor text is still unappended and was not saved."
+          : "Draft library saved locally.");
+        setError("");
+      });
+    } catch (cause) {
+      setError(`Not saved: ${message(cause)}. In-memory changes remain in this tab.`);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  const target = library.drafts.find(draft => draft.id === selected);
+  const full = !!target && target.versions.length >= LIMITS.versions;
+  const fieldClass = "w-full rounded-panel border border-line bg-bg p-2";
+
+  return (
+    <section className="dense-card space-y-4">
+      <header>
+        <h2 className="font-semibold">Local skills tools</h2>
+        <p className="text-sm text-muted">
+          Suggestions and inert drafts only. Nothing runs or becomes active.
+        </p>
+      </header>
+
+      <form
+        className="space-y-2 rounded-panel border border-line bg-bg p-3"
+        onSubmit={event => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          const text = new FormData(form).get("request");
+          setDecision(decide(typeof text === "string" ? text : "", skills, enabledSkills));
+          setDecisionKey(routingKey);
+          setRequest("");
+        }}
+      >
+        <label className="block">
+          Request (local classification only)
+          <textarea name="request" className={fieldClass} rows={3} maxLength={2000} value={request} onChange={(event) => setRequest(event.target.value)} />
+        </label>
+        <div className="flex gap-3">
+          <button type="submit">Classify locally</button>
+          <button type="button" onClick={() => { setRequest(""); setDecision(null); }}>Clear</button>
+        </div>
+        <p className="text-sm text-muted">
+          Request text is not saved and is cleared after classification.
+        </p>
+        {decision && decisionKey === routingKey && (
+          <p role="status">
+            {decision.type === "suggestion"
+              ? `Suggestion only: ${skills.find(s => s.id === decision.skillId)?.name ?? decision.skillId}`
+              : `No suggestion: ${decision.reason}`}
+          </p>
+        )}
+      </form>
+
+      <div className="space-y-3 rounded-panel border border-line bg-bg p-3">
+        <h3 className="font-semibold">Draft library</h3>
+        <p className="text-sm text-muted">
+          Edits remain in memory until Save. Reviewed drafts are reviewed-inactive,
+          never executable.
+        </p>
+        {error && <p role="alert">{error}</p>}
+        {notice && <p role="status">{notice}</p>}
+        {locked && <p className="text-muted">Draft editing and saving are locked.</p>}
+
+        <fieldset disabled={locked || saving} className="space-y-3">
+          <label className="block">
+            Draft
+            <select
+              className={fieldClass}
+              value={selected}
+              onChange={event => {
+                const id = event.target.value;
+                if (editorDirty && !window.confirm("Discard unappended editor text?")) return;
+                const draft = library.drafts.find(item => item.id === id);
+                const nextContent = draft ? draft.versions[draft.versions.length - 1].content : blank;
+                setSelected(id);
+                setContent(nextContent);
+                setEditorBaseline(nextContent);
+              }}
+            >
+              <option value="">New draft</option>
+              {library.drafts.map(draft => {
+                const latest = draft.versions[draft.versions.length - 1];
+                return (
+                  <option key={draft.id} value={draft.id}>
+                    {latest.content.title} · v{latest.version} · {latest.status}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+
+          {(["title", "summary", "body"] as const).map(field => (
+            <label key={field} className="block">
+              {field} ({content[field].length}/{LIMITS[field]})
+              <textarea
+                className={fieldClass}
+                rows={field === "body" ? 5 : 2}
+                maxLength={LIMITS[field]}
+                value={content[field]}
+                onChange={event =>
+                  setContent({ ...content, [field]: event.target.value })
+                }
+              />
+            </label>
+          ))}
+
+          {editorDirty && <p role="status">Editor text has not been appended to the library. Saving now will save only library versions.</p>}
+          {libraryDirty && <p role="status">Library changes are in memory and need an explicit save.</p>}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={!content.title.trim() || (selected ? full : library.drafts.length >= LIMITS.drafts)}
+              onClick={() => change(() => {
+                const next = selected
+                  ? reviseDraft(library, selected, content)
+                  : createDraft(library, content);
+                if (!selected) {
+                  const id = next.drafts[next.drafts.length - 1].id;
+                  setSelected(id);
+                  setEditorBaseline({ ...content });
+                } else setEditorBaseline({ ...content });
+                return next;
+              })}
+            >
+              {selected ? "Append revision" : "Create draft"}
+            </button>
+            <button
+              type="button"
+              disabled={!target || full}
+              onClick={() => {
+                const version = target ? target.versions[target.versions.length - 1].version : 0;
+                change(() => reviewDraft(library, selected), `Reviewed stored version ${version}; appended a reviewed-inactive version. Editor text was not reviewed.`);
+              }}
+            >
+              Review latest stored version
+            </button>
+            <button type="button" disabled={saving || (!libraryDirty && loadedRaw !== null)} onClick={() => void save()}>{saving ? "Saving…" : "Save locally"}</button>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  setCuration(suggestCuration(library));
+                } catch (cause) {
+                  setError(message(cause));
+                }
+              }}
+            >
+              Suggest curation
+            </button>
+          </div>
+        </fieldset>
+
+        <p className="text-sm text-muted">
+          Review preserves the latest library content, not unappended editor changes.
+        </p>
+        {conflict && <button type="button" onClick={() => {
+          try {
+            const recovery = { library: JSON.parse(serializeLibrary(library)), unappendedEditor: editorDirty ? content : null };
+            const blob = new Blob([JSON.stringify(recovery, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = "mind-skill-drafts-recovery.json";
+            anchor.click();
+            URL.revokeObjectURL(url);
+          } catch (cause) { setError(`Could not export local recovery: ${message(cause)}`); }
+        }}>Download local changes</button>}
+        {curation !== null && (
+          <div role="status">
+            <p>Curation suggestions only; no changes applied.</p>
+            {curation.length === 0 ? <p>No suggestions.</p> : (
+              <ul>
+                {curation.map(item => (
+                  <li key={item.draftId}>
+                    {item.draftId} · v{item.version}: {item.action}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

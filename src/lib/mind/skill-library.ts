@@ -1,1 +1,217 @@
-LyoqIEluZXJ0IGF1dGhvcmluZyBkYXRhIG9ubHk7IHRoaXMgbW9kdWxlIG5ldmVyIGV4ZWN1dGVzIG9yIGFjdGl2YXRlcyBza2lsbHMuICovCmV4cG9ydCBjb25zdCBTVE9SQUdFX0tFWSA9ICJhbWNvcy5za2lsbC1kcmFmdHMudjEiOwoKZXhwb3J0IHR5cGUgRHJhZnRDb250ZW50ID0gUmVhZG9ubHk8ewogIHRpdGxlOiBzdHJpbmc7CiAgc3VtbWFyeTogc3RyaW5nOwogIGJvZHk6IHN0cmluZzsKfT47CmV4cG9ydCB0eXBlIERyYWZ0VmVyc2lvbiA9IFJlYWRvbmx5PHsKICB2ZXJzaW9uOiBudW1iZXI7CiAgc3RhdHVzOiAiZHJhZnQiIHwgInJldmlld2VkLWluYWN0aXZlIjsKICBjb250ZW50OiBEcmFmdENvbnRlbnQ7Cn0+OwpleHBvcnQgdHlwZSBTa2lsbERyYWZ0ID0gUmVhZG9ubHk8ewogIGlkOiBzdHJpbmc7CiAgdmVyc2lvbnM6IHJlYWRvbmx5IERyYWZ0VmVyc2lvbltdOwp9PjsKZXhwb3J0IHR5cGUgU2tpbGxMaWJyYXJ5ID0gUmVhZG9ubHk8ewogIHNjaGVtYVZlcnNpb246IDE7CiAgZHJhZnRzOiByZWFkb25seSBTa2lsbERyYWZ0W107Cn0+OwpleHBvcnQgdHlwZSBMb2FkUmVzdWx0ID0KICB8IHsgb2s6IHRydWU7IGxpYnJhcnk6IFNraWxsTGlicmFyeSB9CiAgfCB7IG9rOiBmYWxzZTsgZXJyb3I6IHN0cmluZyB9OwoKZXhwb3J0IGNvbnN0IExJTUlUUyA9IE9iamVjdC5mcmVlemUoewogIHNlcmlhbGl6ZWRMZW5ndGg6IDFfMDAwXzAwMCwgLy8gVVRGLTE2IGNvZGUgdW5pdHMKICBkcmFmdHM6IDI1NiwKICB2ZXJzaW9uczogMTI4LAogIHRpdGxlOiAxNjAsCiAgc3VtbWFyeTogMl8wMDAsCiAgYm9keTogMjBfMDAwLAogIGlkSW5kZXg6IDFfMDAwXzAwMF8wMDAsCn0pOwoKZnVuY3Rpb24gZmFpbChtZXNzYWdlOiBzdHJpbmcpOiBuZXZlciB7CiAgdGhyb3cgbmV3IEVycm9yKG1lc3NhZ2UpOwp9CmZ1bmN0aW9uIHJlY29yZCh2YWx1ZTogdW5rbm93biwga2V5czogc3RyaW5nW10pOiBSZWNvcmQ8c3RyaW5nLCB1bmtub3duPiB7CiAgaWYgKCF2YWx1ZSB8fCB0eXBlb2YgdmFsdWUgIT09ICJvYmplY3QiIHx8IEFycmF5LmlzQXJyYXkodmFsdWUpKQogICAgcmV0dXJuIGZhaWwoIkV4cGVjdGVkIGFuIG9iamVjdCIpOwogIGNvbnN0IG9iamVjdCA9IHZhbHVlIGFzIFJlY29yZDxzdHJpbmcsIHVua25vd24+OwogIGNvbnN0IGFjdHVhbCA9IFJlZmxlY3Qub3duS2V5cyhvYmplY3QpOwogIGlmIChhY3R1YWwubGVuZ3RoICE9PSBrZXlzLmxlbmd0aCB8fAogICAgICBhY3R1YWwuc29tZShrZXkgPT4gdHlwZW9mIGtleSAhPT0gInN0cmluZyIgfHwgIWtleXMuaW5jbHVkZXMoa2V5KSkpCiAgICByZXR1cm4gZmFpbCgiVW5leHBlY3RlZCBvciBtaXNzaW5nIGZpZWxkcyIpOwogIHJldHVybiBvYmplY3Q7Cn0KZnVuY3Rpb24gdGV4dCh2YWx1ZTogdW5rbm93biwgbWF4OiBudW1iZXIsIHJlcXVpcmVkID0gZmFsc2UpOiB2b2lkIHsKICBpZiAodHlwZW9mIHZhbHVlICE9PSAic3RyaW5nIiB8fCB2YWx1ZS5sZW5ndGggPiBtYXggfHwKICAgICAgKHJlcXVpcmVkICYmICF2YWx1ZS50cmltKCkpKQogICAgZmFpbCgiSW52YWxpZCB0ZXh0IGxlbmd0aCBvciB0eXBlIik7Cn0KZnVuY3Rpb24gY2hlY2tDb250ZW50KHZhbHVlOiB1bmtub3duKTogdm9pZCB7CiAgY29uc3QgYyA9IHJlY29yZCh2YWx1ZSwgWyJ0aXRsZSIsICJzdW1tYXJ5IiwgImJvZHkiXSk7CiAgdGV4dChjLnRpdGxlLCBMSU1JVFMudGl0bGUsIHRydWUpOwogIHRleHQoYy5zdW1tYXJ5LCBMSU1JVFMuc3VtbWFyeSk7CiAgdGV4dChjLmJvZHksIExJTUlUUy5ib2R5KTsKfQpmdW5jdGlvbiBzYW1lQ29udGVudChhOiBEcmFmdENvbnRlbnQsIGI6IERyYWZ0Q29udGVudCk6IGJvb2xlYW4gewogIHJldHVybiBhLnRpdGxlID09PSBiLnRpdGxlICYmIGEuc3VtbWFyeSA9PT0gYi5zdW1tYXJ5ICYmIGEuYm9keSA9PT0gYi5ib2R5Owp9CmZ1bmN0aW9uIGNoZWNrTGlicmFyeSh2YWx1ZTogdW5rbm93bik6IGFzc2VydHMgdmFsdWUgaXMgU2tpbGxMaWJyYXJ5IHsKICBjb25zdCBsID0gcmVjb3JkKHZhbHVlLCBbInNjaGVtYVZlcnNpb24iLCAiZHJhZnRzIl0pOwogIGlmIChsLnNjaGVtYVZlcnNpb24gIT09IDEgfHwgIUFycmF5LmlzQXJyYXkobC5kcmFmdHMpIHx8CiAgICAgIGwuZHJhZnRzLmxlbmd0aCA+IExJTUlUUy5kcmFmdHMpCiAgICBmYWlsKCJJbnZhbGlkIGxpYnJhcnkgc2NoZW1hIG9yIGRyYWZ0IGNvdW50Iik7CiAgY29uc3QgaWRzID0gbmV3IFNldDxzdHJpbmc+KCk7CiAgZm9yIChjb25zdCBpdGVtIG9mIGwuZHJhZnRzKSB7CiAgICBjb25zdCBkID0gcmVjb3JkKGl0ZW0sIFsiaWQiLCAidmVyc2lvbnMiXSk7CiAgICBpZiAodHlwZW9mIGQuaWQgIT09ICJzdHJpbmciIHx8ICEvXmRyYWZ0LVsxLTldXGR7MCw5fSQvLnRlc3QoZC5pZCkgfHwKICAgICAgICBOdW1iZXIoZC5pZC5zbGljZSg2KSkgPiBMSU1JVFMuaWRJbmRleCB8fCBpZHMuaGFzKGQuaWQpKQogICAgICBmYWlsKCJJbnZhbGlkIG9yIGR1cGxpY2F0ZSBkcmFmdCBpZCIpOwogICAgaWRzLmFkZChkLmlkKTsKICAgIGlmICghQXJyYXkuaXNBcnJheShkLnZlcnNpb25zKSB8fCAhZC52ZXJzaW9ucy5sZW5ndGggfHwKICAgICAgICBkLnZlcnNpb25zLmxlbmd0aCA+IExJTUlUUy52ZXJzaW9ucykKICAgICAgZmFpbCgiSW52YWxpZCB2ZXJzaW9uIGNvdW50Iik7CiAgICBsZXQgcHJldmlvdXM6IERyYWZ0Q29udGVudCB8IHVuZGVmaW5lZDsKICAgIGZvciAobGV0IGkgPSAwOyBpIDwgZC52ZXJzaW9ucy5sZW5ndGg7IGkrKykgewogICAgICBjb25zdCB2ID0gcmVjb3JkKGQudmVyc2lvbnNbaV0sIFsidmVyc2lvbiIsICJzdGF0dXMiLCAiY29udGVudCJdKTsKICAgICAgaWYgKHYudmVyc2lvbiAhPT0gaSArIDEgfHwKICAgICAgICAgICh2LnN0YXR1cyAhPT0gImRyYWZ0IiAmJiB2LnN0YXR1cyAhPT0gInJldmlld2VkLWluYWN0aXZlIikpCiAgICAgICAgZmFpbCgiSW52YWxpZCB2ZXJzaW9uIG9yIHN0YXR1cyIpOwogICAgICBjaGVja0NvbnRlbnQodi5jb250ZW50KTsKICAgICAgY29uc3QgY29udGVudCA9IHYuY29udGVudCBhcyBEcmFmdENvbnRlbnQ7CiAgICAgIGlmICh2LnN0YXR1cyA9PT0gInJldmlld2VkLWluYWN0aXZlIiAmJgogICAgICAgICAgKCFwcmV2aW91cyB8fCAhc2FtZUNvbnRlbnQocHJldmlvdXMsIGNvbnRlbnQpKSkKICAgICAgICBmYWlsKCJBIHJldmlldyBtdXN0IHByZXNlcnZlIHRoZSBwcmVjZWRpbmcgY29udGVudCIpOwogICAgICBwcmV2aW91cyA9IGNvbnRlbnQ7CiAgICB9CiAgfQp9CmZ1bmN0aW9uIGZyZWV6ZShsaWJyYXJ5OiBTa2lsbExpYnJhcnkpOiBTa2lsbExpYnJhcnkgewogIGZvciAoY29uc3QgZHJhZnQgb2YgbGlicmFyeS5kcmFmdHMpIHsKICAgIGZvciAoY29uc3QgdmVyc2lvbiBvZiBkcmFmdC52ZXJzaW9ucykgewogICAgICBPYmplY3QuZnJlZXplKHZlcnNpb24uY29udGVudCk7CiAgICAgIE9iamVjdC5mcmVlemUodmVyc2lvbik7CiAgICB9CiAgICBPYmplY3QuZnJlZXplKGRyYWZ0LnZlcnNpb25zKTsKICAgIE9iamVjdC5mcmVlemUoZHJhZnQpOwogIH0KICBPYmplY3QuZnJlZXplKGxpYnJhcnkuZHJhZnRzKTsKICByZXR1cm4gT2JqZWN0LmZyZWV6ZShsaWJyYXJ5KTsKfQpleHBvcnQgZnVuY3Rpb24gZW1wdHlMaWJyYXJ5KCk6IFNraWxsTGlicmFyeSB7CiAgcmV0dXJuIGZyZWV6ZSh7IHNjaGVtYVZlcnNpb246IDEsIGRyYWZ0czogW10gfSk7Cn0KZXhwb3J0IGZ1bmN0aW9uIGxvYWRMaWJyYXJ5KHNlcmlhbGl6ZWQ6IHN0cmluZyB8IG51bGwpOiBMb2FkUmVzdWx0IHsKICBpZiAoc2VyaWFsaXplZCA9PT0gbnVsbCkgcmV0dXJuIHsgb2s6IHRydWUsIGxpYnJhcnk6IGVtcHR5TGlicmFyeSgpIH07CiAgaWYgKHR5cGVvZiBzZXJpYWxpemVkICE9PSAic3RyaW5nIiB8fAogICAgICBzZXJpYWxpemVkLmxlbmd0aCA+IExJTUlUUy5zZXJpYWxpemVkTGVuZ3RoKQogICAgcmV0dXJuIHsgb2s6IGZhbHNlLCBlcnJvcjogIlNlcmlhbGl6ZWQgbGlicmFyeSBleGNlZWRzIHRoZSBzaXplIGxpbWl0IiB9OwogIHRyeSB7CiAgICBjb25zdCBwYXJzZWQ6IHVua25vd24gPSBKU09OLnBhcnNlKHNlcmlhbGl6ZWQpOwogICAgY2hlY2tMaWJyYXJ5KHBhcnNlZCk7CiAgICByZXR1cm4geyBvazogdHJ1ZSwgbGlicmFyeTogZnJlZXplKHBhcnNlZCkgfTsKICB9IGNhdGNoIChlcnJvcikgewogICAgcmV0dXJuIHsKICAgICAgb2s6IGZhbHNlLAogICAgICBlcnJvcjogZXJyb3IgaW5zdGFuY2VvZiBFcnJvciA/IGVycm9yLm1lc3NhZ2UgOiAiSW52YWxpZCBsaWJyYXJ5IiwKICAgIH07CiAgfQp9CmV4cG9ydCBmdW5jdGlvbiBzZXJpYWxpemVMaWJyYXJ5KGxpYnJhcnk6IFNraWxsTGlicmFyeSk6IHN0cmluZyB7CiAgY2hlY2tMaWJyYXJ5KGxpYnJhcnkpOwogIGNvbnN0IHNlcmlhbGl6ZWQgPSBKU09OLnN0cmluZ2lmeShsaWJyYXJ5KTsKICBpZiAoc2VyaWFsaXplZC5sZW5ndGggPiBMSU1JVFMuc2VyaWFsaXplZExlbmd0aCkKICAgIGZhaWwoIlNlcmlhbGl6ZWQgbGlicmFyeSBleGNlZWRzIHRoZSBzaXplIGxpbWl0Iik7CiAgcmV0dXJuIHNlcmlhbGl6ZWQ7Cn0KLyoqIENvcGllcyBpbnB1dHMgc28gcmV0dXJuZWQgc3RhdGUgbmV2ZXIgYWxpYXNlcyBtdXRhYmxlIGNhbGxlciBjb250ZW50LiAqLwpmdW5jdGlvbiBzbmFwc2hvdChsaWJyYXJ5OiBTa2lsbExpYnJhcnkpOiBTa2lsbExpYnJhcnkgewogIGNvbnN0IHJlc3VsdCA9IGxvYWRMaWJyYXJ5KHNlcmlhbGl6ZUxpYnJhcnkobGlicmFyeSkpOwogIGlmICghcmVzdWx0Lm9rKSByZXR1cm4gZmFpbChyZXN1bHQuZXJyb3IpOwogIHJldHVybiByZXN1bHQubGlicmFyeTsKfQpleHBvcnQgZnVuY3Rpb24gbGF0ZXN0VmVyc2lvbihkcmFmdDogU2tpbGxEcmFmdCk6IERyYWZ0VmVyc2lvbiB7CiAgY29uc3QgbGlicmFyeSA9IHNuYXBzaG90KHsgc2NoZW1hVmVyc2lvbjogMSwgZHJhZnRzOiBbZHJhZnRdIH0pOwogIGNvbnN0IHZlcnNpb25zID0gbGlicmFyeS5kcmFmdHNbMF0udmVyc2lvbnM7CiAgcmV0dXJuIHZlcnNpb25zW3ZlcnNpb25zLmxlbmd0aCAtIDFdOwp9CmV4cG9ydCBmdW5jdGlvbiBjcmVhdGVEcmFmdCgKICBsaWJyYXJ5OiBTa2lsbExpYnJhcnksCiAgY29udGVudDogRHJhZnRDb250ZW50LAopOiBTa2lsbExpYnJhcnkgewogIGNoZWNrTGlicmFyeShsaWJyYXJ5KTsKICBjaGVja0NvbnRlbnQoY29udGVudCk7CiAgY29uc3QgaW5kZXggPSBsaWJyYXJ5LmRyYWZ0cy5yZWR1Y2UoCiAgICAobWF4LCBkcmFmdCkgPT4gTWF0aC5tYXgobWF4LCBOdW1iZXIoZHJhZnQuaWQuc2xpY2UoNikpKSwgMCwKICApICsgMTsKICBpZiAoaW5kZXggPiBMSU1JVFMuaWRJbmRleCkgZmFpbCgiRHJhZnQgaWRzIGV4aGF1c3RlZCIpOwogIHJldHVybiBzbmFwc2hvdCh7CiAgICBzY2hlbWFWZXJzaW9uOiAxLAogICAgZHJhZnRzOiBbLi4ubGlicmFyeS5kcmFmdHMsIHsKICAgICAgaWQ6IGBkcmFmdC0ke2luZGV4fWAsCiAgICAgIHZlcnNpb25zOiBbeyB2ZXJzaW9uOiAxLCBzdGF0dXM6ICJkcmFmdCIsIGNvbnRlbnQgfV0sCiAgICB9XSwKICB9KTsKfQpmdW5jdGlvbiBhcHBlbmQoCiAgbGlicmFyeTogU2tpbGxMaWJyYXJ5LAogIGlkOiBzdHJpbmcsCiAgc3RhdHVzOiBEcmFmdFZlcnNpb25bInN0YXR1cyJdLAogIGNvbnRlbnQ/OiBEcmFmdENvbnRlbnQsCik6IFNraWxsTGlicmFyeSB7CiAgY2hlY2tMaWJyYXJ5KGxpYnJhcnkpOwogIGNvbnN0IHRhcmdldCA9IGxpYnJhcnkuZHJhZnRzLmZpbmQoZHJhZnQgPT4gZHJhZnQuaWQgPT09IGlkKTsKICBpZiAoIXRhcmdldCkgcmV0dXJuIGZhaWwoIlVua25vd24gZHJhZnQgaWQiKTsKICBjb25zdCBwcmV2aW91cyA9IHRhcmdldC52ZXJzaW9uc1t0YXJnZXQudmVyc2lvbnMubGVuZ3RoIC0gMV07CiAgY29uc3QgbmV4dCA9IGNvbnRlbnQgPT09IHVuZGVmaW5lZCA/IHByZXZpb3VzLmNvbnRlbnQgOiBjb250ZW50OwogIGNoZWNrQ29udGVudChuZXh0KTsKICByZXR1cm4gc25hcHNob3QoewogICAgc2NoZW1hVmVyc2lvbjogMSwKICAgIGRyYWZ0czogbGlicmFyeS5kcmFmdHMubWFwKGRyYWZ0ID0+IGRyYWZ0LmlkICE9PSBpZCA/IGRyYWZ0IDogewogICAgICBpZCwKICAgICAgdmVyc2lvbnM6IFsuLi5kcmFmdC52ZXJzaW9ucywgewogICAgICAgIHZlcnNpb246IGRyYWZ0LnZlcnNpb25zLmxlbmd0aCArIDEsCiAgICAgICAgc3RhdHVzLAogICAgICAgIGNvbnRlbnQ6IG5leHQsCiAgICAgIH1dLAogICAgfSksCiAgfSk7Cn0KZXhwb3J0IGZ1bmN0aW9uIHJldmlzZURyYWZ0KAogIGxpYnJhcnk6IFNraWxsTGlicmFyeSwKICBpZDogc3RyaW5nLAogIGNvbnRlbnQ6IERyYWZ0Q29udGVudCwKKTogU2tpbGxMaWJyYXJ5IHsKICBjaGVja0NvbnRlbnQoY29udGVudCk7CiAgcmV0dXJuIGFwcGVuZChsaWJyYXJ5LCBpZCwgImRyYWZ0IiwgY29udGVudCk7Cn0KZXhwb3J0IGZ1bmN0aW9uIHJldmlld0RyYWZ0KGxpYnJhcnk6IFNraWxsTGlicmFyeSwgaWQ6IHN0cmluZyk6IFNraWxsTGlicmFyeSB7CiAgcmV0dXJuIGFwcGVuZChsaWJyYXJ5LCBpZCwgInJldmlld2VkLWluYWN0aXZlIik7Cn0KZXhwb3J0IHR5cGUgQ3VyYXRpb25TdWdnZXN0aW9uID0gUmVhZG9ubHk8ewogIGRyYWZ0SWQ6IHN0cmluZzsKICB2ZXJzaW9uOiBudW1iZXI7CiAgYWN0aW9uOiAicmV2aWV3IjsKfT47Ci8qKiBQdXJlLCBkZXRlcm1pbmlzdGljLCBvbi1kZW1hbmQgc3VnZ2VzdGlvbnM7IGRvZXMgbm90IGNoYW5nZSBhbnkgc3RhdHVzLiAqLwpleHBvcnQgZnVuY3Rpb24gc3VnZ2VzdEN1cmF0aW9uKAogIGxpYnJhcnk6IFNraWxsTGlicmFyeSwKKTogcmVhZG9ubHkgQ3VyYXRpb25TdWdnZXN0aW9uW10gewogIGNoZWNrTGlicmFyeShsaWJyYXJ5KTsKICBjb25zdCBzdWdnZXN0aW9uczogQ3VyYXRpb25TdWdnZXN0aW9uW10gPSBbXTsKICBmb3IgKGNvbnN0IGRyYWZ0IG9mIGxpYnJhcnkuZHJhZnRzKSB7CiAgICBjb25zdCBsYXRlc3QgPSBkcmFmdC52ZXJzaW9uc1tkcmFmdC52ZXJzaW9ucy5sZW5ndGggLSAxXTsKICAgIGlmIChsYXRlc3Quc3RhdHVzID09PSAiZHJhZnQiKSB7CiAgICAgIHN1Z2dlc3Rpb25zLnB1c2goT2JqZWN0LmZyZWV6ZSh7CiAgICAgICAgZHJhZnRJZDogZHJhZnQuaWQsCiAgICAgICAgdmVyc2lvbjogbGF0ZXN0LnZlcnNpb24sCiAgICAgICAgYWN0aW9uOiAicmV2aWV3IiBhcyBjb25zdCwKICAgICAgfSkpOwogICAgfQogIH0KICByZXR1cm4gT2JqZWN0LmZyZWV6ZShzdWdnZXN0aW9ucyk7Cn0K
+/** Inert authoring data only; this module never executes or activates skills. */
+export const STORAGE_KEY = "amcos.skill-drafts.v1";
+
+export type DraftContent = Readonly<{
+  title: string;
+  summary: string;
+  body: string;
+}>;
+export type DraftVersion = Readonly<{
+  version: number;
+  status: "draft" | "reviewed-inactive";
+  content: DraftContent;
+}>;
+export type SkillDraft = Readonly<{
+  id: string;
+  versions: readonly DraftVersion[];
+}>;
+export type SkillLibrary = Readonly<{
+  schemaVersion: 1;
+  drafts: readonly SkillDraft[];
+}>;
+export type LoadResult =
+  | { ok: true; library: SkillLibrary }
+  | { ok: false; error: string };
+
+export const LIMITS = Object.freeze({
+  serializedLength: 1_000_000, // UTF-16 code units
+  drafts: 256,
+  versions: 128,
+  title: 160,
+  summary: 2_000,
+  body: 20_000,
+  idIndex: 1_000_000_000,
+});
+
+function fail(message: string): never {
+  throw new Error(message);
+}
+function record(value: unknown, keys: string[]): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return fail("Expected an object");
+  const object = value as Record<string, unknown>;
+  const actual = Reflect.ownKeys(object);
+  if (actual.length !== keys.length ||
+      actual.some(key => typeof key !== "string" || !keys.includes(key)))
+    return fail("Unexpected or missing fields");
+  return object;
+}
+function text(value: unknown, max: number, required = false): void {
+  if (typeof value !== "string" || value.length > max ||
+      (required && !value.trim()))
+    fail("Invalid text length or type");
+}
+function checkContent(value: unknown): void {
+  const c = record(value, ["title", "summary", "body"]);
+  text(c.title, LIMITS.title, true);
+  text(c.summary, LIMITS.summary);
+  text(c.body, LIMITS.body);
+}
+function sameContent(a: DraftContent, b: DraftContent): boolean {
+  return a.title === b.title && a.summary === b.summary && a.body === b.body;
+}
+function checkLibrary(value: unknown): asserts value is SkillLibrary {
+  const l = record(value, ["schemaVersion", "drafts"]);
+  if (l.schemaVersion !== 1 || !Array.isArray(l.drafts) ||
+      l.drafts.length > LIMITS.drafts)
+    fail("Invalid library schema or draft count");
+  const ids = new Set<string>();
+  for (const item of l.drafts) {
+    const d = record(item, ["id", "versions"]);
+    if (typeof d.id !== "string" || !/^draft-[1-9]\d{0,9}$/.test(d.id) ||
+        Number(d.id.slice(6)) > LIMITS.idIndex || ids.has(d.id))
+      fail("Invalid or duplicate draft id");
+    ids.add(d.id);
+    if (!Array.isArray(d.versions) || !d.versions.length ||
+        d.versions.length > LIMITS.versions)
+      fail("Invalid version count");
+    let previous: DraftContent | undefined;
+    for (let i = 0; i < d.versions.length; i++) {
+      const v = record(d.versions[i], ["version", "status", "content"]);
+      if (v.version !== i + 1 ||
+          (v.status !== "draft" && v.status !== "reviewed-inactive"))
+        fail("Invalid version or status");
+      checkContent(v.content);
+      const content = v.content as DraftContent;
+      if (v.status === "reviewed-inactive" &&
+          (!previous || !sameContent(previous, content)))
+        fail("A review must preserve the preceding content");
+      previous = content;
+    }
+  }
+}
+function freeze(library: SkillLibrary): SkillLibrary {
+  for (const draft of library.drafts) {
+    for (const version of draft.versions) {
+      Object.freeze(version.content);
+      Object.freeze(version);
+    }
+    Object.freeze(draft.versions);
+    Object.freeze(draft);
+  }
+  Object.freeze(library.drafts);
+  return Object.freeze(library);
+}
+export function emptyLibrary(): SkillLibrary {
+  return freeze({ schemaVersion: 1, drafts: [] });
+}
+export function loadLibrary(serialized: string | null): LoadResult {
+  if (serialized === null) return { ok: true, library: emptyLibrary() };
+  if (typeof serialized !== "string" ||
+      serialized.length > LIMITS.serializedLength)
+    return { ok: false, error: "Serialized library exceeds the size limit" };
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    checkLibrary(parsed);
+    return { ok: true, library: freeze(parsed) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Invalid library",
+    };
+  }
+}
+export function serializeLibrary(library: SkillLibrary): string {
+  checkLibrary(library);
+  const serialized = JSON.stringify(library);
+  if (serialized.length > LIMITS.serializedLength)
+    fail("Serialized library exceeds the size limit");
+  return serialized;
+}
+/** Copies inputs so returned state never aliases mutable caller content. */
+function snapshot(library: SkillLibrary): SkillLibrary {
+  const result = loadLibrary(serializeLibrary(library));
+  if (!result.ok) return fail(result.error);
+  return result.library;
+}
+export function latestVersion(draft: SkillDraft): DraftVersion {
+  const library = snapshot({ schemaVersion: 1, drafts: [draft] });
+  const versions = library.drafts[0].versions;
+  return versions[versions.length - 1];
+}
+export function createDraft(
+  library: SkillLibrary,
+  content: DraftContent,
+): SkillLibrary {
+  checkLibrary(library);
+  checkContent(content);
+  const index = library.drafts.reduce(
+    (max, draft) => Math.max(max, Number(draft.id.slice(6))), 0,
+  ) + 1;
+  if (index > LIMITS.idIndex) fail("Draft ids exhausted");
+  return snapshot({
+    schemaVersion: 1,
+    drafts: [...library.drafts, {
+      id: `draft-${index}`,
+      versions: [{ version: 1, status: "draft", content }],
+    }],
+  });
+}
+function append(
+  library: SkillLibrary,
+  id: string,
+  status: DraftVersion["status"],
+  content?: DraftContent,
+): SkillLibrary {
+  checkLibrary(library);
+  const target = library.drafts.find(draft => draft.id === id);
+  if (!target) return fail("Unknown draft id");
+  const previous = target.versions[target.versions.length - 1];
+  const next = content === undefined ? previous.content : content;
+  checkContent(next);
+  return snapshot({
+    schemaVersion: 1,
+    drafts: library.drafts.map(draft => draft.id !== id ? draft : {
+      id,
+      versions: [...draft.versions, {
+        version: draft.versions.length + 1,
+        status,
+        content: next,
+      }],
+    }),
+  });
+}
+export function reviseDraft(
+  library: SkillLibrary,
+  id: string,
+  content: DraftContent,
+): SkillLibrary {
+  checkContent(content);
+  return append(library, id, "draft", content);
+}
+export function reviewDraft(library: SkillLibrary, id: string): SkillLibrary {
+  return append(library, id, "reviewed-inactive");
+}
+export type CurationSuggestion = Readonly<{
+  draftId: string;
+  version: number;
+  action: "review";
+}>;
+/** Pure, deterministic, on-demand suggestions; does not change any status. */
+export function suggestCuration(
+  library: SkillLibrary,
+): readonly CurationSuggestion[] {
+  checkLibrary(library);
+  const suggestions: CurationSuggestion[] = [];
+  for (const draft of library.drafts) {
+    const latest = draft.versions[draft.versions.length - 1];
+    if (latest.status === "draft") {
+      suggestions.push(Object.freeze({
+        draftId: draft.id,
+        version: latest.version,
+        action: "review" as const,
+      }));
+    }
+  }
+  return Object.freeze(suggestions);
+}

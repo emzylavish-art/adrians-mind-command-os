@@ -1,1 +1,67 @@
-aW1wb3J0IHsgdGVzdCB9IGZyb20gIm5vZGU6dGVzdCI7CmltcG9ydCB7IGRlZXBTdHJpY3RFcXVhbCBhcyBlcSB9IGZyb20gIm5vZGU6YXNzZXJ0L3N0cmljdCI7CmltcG9ydCB7IGRlY2lkZSwgdHlwZSBTa2lsbCB9IGZyb20gIi4vZGVjaXNpb24tcm91dGVyLnRzIjsKCmNvbnN0IHNraWxsID0gKGlkOiBzdHJpbmcsIG5hbWUgPSBpZCwga2luZCA9ICJidWlsdC1pbiIsCiAgZGVzY3JpcHRpb24gPSAiIik6IFNraWxsID0+ICh7IGlkLCBuYW1lLCBraW5kLCBkZXNjcmlwdGlvbiB9KTsKY29uc3Qgc2tpbGxzID0gWyJwcm9qZWN0cyIsICJjaGF0cyIsICJub3RlcyJdLm1hcChpZCA9PiBza2lsbChpZCkpOwpjb25zdCBhYnN0YWluID0gKHJlYXNvbjogc3RyaW5nKSA9PiAoeyB0eXBlOiAiYWJzdGFpbiIsIHJlYXNvbiB9KTsKY29uc3Qgc3VnZ2VzdGlvbiA9IChza2lsbElkOiBzdHJpbmcpID0+ICh7IHR5cGU6ICJzdWdnZXN0aW9uIiwgc2tpbGxJZCB9KTsKCnRlc3QoInNpbmdsZSBzdWdnZXN0aW9ucyBmb3IgYWxsIHRocmVlIHJvdXRlcyIsICgpID0+IHsKICBmb3IgKGNvbnN0IFt0ZXh0LCBpZF0gb2YgWwogICAgWyJQUk9KRUNUIiwgInByb2plY3RzIl0sIFsiY29udmVyc2F0aW9uIiwgImNoYXRzIl0sIFsibm90ZSIsICJub3RlcyJdLAogIF0pIGVxKGRlY2lkZSh0ZXh0ISwgc2tpbGxzLCB7fSksIHN1Z2dlc3Rpb24oaWQhKSk7Cn0pOwoKdGVzdCgibWlzc2luZyBlbmFibGVkIGVudHJpZXMgbWVhbiBlbmFibGVkIiwgKCkgPT4gewogIGVxKGRlY2lkZSgicHJvamVjdHMiLCBza2lsbHMsIHsgbm90ZXM6IGZhbHNlIH0pLCBzdWdnZXN0aW9uKCJwcm9qZWN0cyIpKTsKfSk7Cgp0ZXN0KCJleHBsaWNpdCBmYWxzZSBkaXNhYmxlcyIsICgpID0+IHsKICBlcShkZWNpZGUoInByb2plY3RzIiwgc2tpbGxzLCB7IHByb2plY3RzOiBmYWxzZSB9KSwgYWJzdGFpbigibm9fbWF0Y2giKSk7Cn0pOwoKdGVzdCgiZXh0ZXJuYWwgc2tpbGxzIGFyZSBleGNsdWRlZCIsICgpID0+IHsKICBlcShkZWNpZGUoInByb2plY3RzIiwgW3NraWxsKCJwcm9qZWN0cyIsICJwcm9qZWN0cyIsICJleHRlcm5hbCIpXSwge30pLAogICAgYWJzdGFpbigibm9fbWF0Y2giKSk7Cn0pOwoKdGVzdCgidW5rbm93biBpZGVudGl0aWVzIGFyZSBleGNsdWRlZCIsICgpID0+IHsKICBlcShkZWNpZGUoInByb2plY3RzIiwgW3NraWxsKCJ1bmtub3duIildLCB7fSksIGFic3RhaW4oIm5vX21hdGNoIikpOwp9KTsKCnRlc3QoInR3byBwcm9qZWN0IGlkZW50aXRpZXMgYXJlIGFtYmlndW91cyIsICgpID0+IHsKICBlcShkZWNpZGUoInByb2plY3RzIiwgW3NraWxsKCJwcm9qZWN0cyIpLCBza2lsbCgib3RoZXIiLCAiUHJvamVjdHMiKV0sIHt9KSwKICAgIGFic3RhaW4oImFtYmlndW91cyIpKTsKfSk7Cgp0ZXN0KCJtdWx0aXBsZSB0b3BpY3MgYXJlIGFtYmlndW91cyIsICgpID0+IHsKICBlcShkZWNpZGUoInByb2plY3RzLCBub3RlcyBhbmQgY2hhdHMiLCBza2lsbHMsIHt9KSwgYWJzdGFpbigiYW1iaWd1b3VzIikpOwp9KTsKCnRlc3QoInN1YnN0cmluZ3MgZG8gbm90IHNhdGlzZnkgd29yZCBib3VuZGFyaWVzIiwgKCkgPT4gewogIGVxKGRlY2lkZSgibWljcm9wcm9qZWN0cyBjaGF0c3BhY2Ugbm90ZXdvcnRoeSIsIHNraWxscywge30pLAogICAgYWJzdGFpbigibm9fbWF0Y2giKSk7Cn0pOwoKdGVzdCgiZW1wdHksIG92ZXJzaXplZCBhbmQgZXhhY3Qgc2l6ZSBib3VuZGFyeSIsICgpID0+IHsKICBmb3IgKGNvbnN0IHRleHQgb2YgWyIiLCAiIFxuXHQiXSkgewogICAgZXEoZGVjaWRlKHRleHQsIHNraWxscywge30pLCBhYnN0YWluKCJlbXB0eSIpKTsKICB9CiAgZXEoZGVjaWRlKCIgIi5yZXBlYXQoMjAwMSksIHNraWxscywge30pLCBhYnN0YWluKCJvdmVyc2l6ZWQiKSk7CiAgZXEoZGVjaWRlKCJwcm9qZWN0cyIgKyAiICIucmVwZWF0KDE5OTIpLCBza2lsbHMsIHt9KSwKICAgIHN1Z2dlc3Rpb24oInByb2plY3RzIikpOwp9KTsKCnRlc3QoImlkZW50aXR5IG1ldGFkYXRhIG9ubHksIG5vcm1hbGl6ZWQgbmFtZXMsIGRldGVybWluaXN0aWMgb3V0cHV0IiwgKCkgPT4gewogIGNvbnN0IG1ldGFkYXRhID0gWwogICAgc2tpbGwoImN1c3RvbSIsICIgTm90ZXMgIiwgImJ1aWx0LWluIiwgInByb2plY3RzIGNoYXRzIiksCiAgICBza2lsbCgidW5rbm93biIsICJ1bmtub3duIiwgImJ1aWx0LWluIiwgInByb2plY3RzIiksCiAgXTsKICBlcShkZWNpZGUoInByb2plY3RzIiwgbWV0YWRhdGEsIHt9KSwgYWJzdGFpbigibm9fbWF0Y2giKSk7CiAgY29uc3QgdGV4dCA9ICJwcml2YXRlIHRleHQ6IG5vdGUiOwogIGZvciAobGV0IGkgPSAwOyBpIDwgNTsgaSsrKSB7CiAgICBlcShkZWNpZGUodGV4dCwgbWV0YWRhdGEsIHt9KSwgc3VnZ2VzdGlvbigiY3VzdG9tIikpOwogIH0KfSk7Cg==
+import { test } from "node:test";
+import { deepStrictEqual as eq } from "node:assert/strict";
+import { decide, type Skill } from "./decision-router.ts";
+
+const skill = (id: string, name = id, kind = "built-in",
+  description = ""): Skill => ({ id, name, kind, description });
+const skills = ["projects", "chats", "notes"].map(id => skill(id));
+const abstain = (reason: string) => ({ type: "abstain", reason });
+const suggestion = (skillId: string) => ({ type: "suggestion", skillId });
+
+test("single suggestions for all three routes", () => {
+  for (const [text, id] of [
+    ["PROJECT", "projects"], ["conversation", "chats"], ["note", "notes"],
+  ]) eq(decide(text!, skills, {}), suggestion(id!));
+});
+
+test("missing enabled entries mean enabled", () => {
+  eq(decide("projects", skills, { notes: false }), suggestion("projects"));
+});
+
+test("explicit false disables", () => {
+  eq(decide("projects", skills, { projects: false }), abstain("no_match"));
+});
+
+test("external skills are excluded", () => {
+  eq(decide("projects", [skill("projects", "projects", "external")], {}),
+    abstain("no_match"));
+});
+
+test("unknown identities are excluded", () => {
+  eq(decide("projects", [skill("unknown")], {}), abstain("no_match"));
+});
+
+test("two project identities are ambiguous", () => {
+  eq(decide("projects", [skill("projects"), skill("other", "Projects")], {}),
+    abstain("ambiguous"));
+});
+
+test("multiple topics are ambiguous", () => {
+  eq(decide("projects, notes and chats", skills, {}), abstain("ambiguous"));
+});
+
+test("substrings do not satisfy word boundaries", () => {
+  eq(decide("microprojects chatspace noteworthy", skills, {}),
+    abstain("no_match"));
+});
+
+test("empty, oversized and exact size boundary", () => {
+  for (const text of ["", " \n\t"]) {
+    eq(decide(text, skills, {}), abstain("empty"));
+  }
+  eq(decide(" ".repeat(2001), skills, {}), abstain("oversized"));
+  eq(decide("projects" + " ".repeat(1992), skills, {}),
+    suggestion("projects"));
+});
+
+test("identity metadata only, normalized names, deterministic output", () => {
+  const metadata = [
+    skill("custom", " Notes ", "built-in", "projects chats"),
+    skill("unknown", "unknown", "built-in", "projects"),
+  ];
+  eq(decide("projects", metadata, {}), abstain("no_match"));
+  const text = "private text: note";
+  for (let i = 0; i < 5; i++) {
+    eq(decide(text, metadata, {}), suggestion("custom"));
+  }
+});
