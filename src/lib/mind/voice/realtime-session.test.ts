@@ -98,7 +98,7 @@ describe("RealtimeVoiceSession", () => {
 
   it("stops microphone tracks granted after the user ends capture", async () => {
     let created: FakeSocket | undefined;
-    let grantMic: ((stream: MediaStream) => void) | undefined;
+    const grants: Array<(stream: MediaStream) => void> = [];
     let stopped = 0;
     const session = new RealtimeVoiceSession(
       {},
@@ -109,15 +109,20 @@ describe("RealtimeVoiceSession", () => {
         return created;
       },
       {},
-      () => new Promise<MediaStream>((resolve) => { grantMic = resolve; }),
+      () => new Promise<MediaStream>((resolve) => { grants.push(resolve); }),
     );
     await session.connect("ephemeral-test");
     const capture = session.startCapture();
-    assert.equal(typeof grantMic, "function");
+    assert.equal(grants.length, 1);
+    session.stopCapture();
+    const secondCapture = session.startCapture();
+    assert.equal(grants.length, 2, "stop should allow a fresh explicit capture request");
     session.close();
-    grantMic!({ getTracks: () => [{ stop: () => { stopped += 1; } }] } as unknown as MediaStream);
-    await capture;
-    assert.equal(stopped, 1);
+    for (const grant of grants) {
+      grant({ getTracks: () => [{ stop: () => { stopped += 1; } }] } as unknown as MediaStream);
+    }
+    await Promise.all([capture, secondCapture]);
+    assert.equal(stopped, 2);
     assert.equal(session.isCapturing, false);
   });
 

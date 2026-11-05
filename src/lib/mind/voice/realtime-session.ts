@@ -76,6 +76,7 @@ export class RealtimeVoiceSession {
   private analyser: AnalyserNode | null = null;
   private levelRaf = 0;
   private captureRequestId = 0;
+  private capturePending = false;
 
   private voiceId: string;
   private captureMedia: () => Promise<MediaStream>;
@@ -238,14 +239,15 @@ export class RealtimeVoiceSession {
 
   async startCapture() {
     if (!this.open) throw new Error("Voice session is not connected.");
-    if (this.capturing || this.captureRequestId) return;
+    if (this.capturing || this.capturePending) return;
     const requestId = ++this.captureRequestId;
+    this.capturePending = true;
     let media: MediaStream;
     try {
       media = await this.captureMedia();
     } catch (err) {
       const stillCurrent = this.captureRequestId === requestId && this.open;
-      if (this.captureRequestId === requestId) this.captureRequestId = 0;
+      if (this.captureRequestId === requestId) this.capturePending = false;
       if (!stillCurrent) return;
       // Preserve DOMException name (NotAllowedError / NotFoundError) for UI mapping.
       throw err;
@@ -256,7 +258,7 @@ export class RealtimeVoiceSession {
       media.getTracks().forEach((track) => track.stop());
       return;
     }
-    this.captureRequestId = 0;
+    this.capturePending = false;
     this.media = media;
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioCtx = new Ctx({ sampleRate: REALTIME_SAMPLE_RATE });
@@ -295,6 +297,7 @@ export class RealtimeVoiceSession {
 
   stopCapture() {
     this.captureRequestId += 1;
+    this.capturePending = false;
     this.capturing = false;
     if (this.levelRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.levelRaf);
     this.levelRaf = 0;
