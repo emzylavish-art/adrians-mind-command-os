@@ -16,7 +16,10 @@ export async function handleAuthCallback(request: Request): Promise<Response> {
     const target = new URL("/login", url.origin);
     target.searchParams.set("next", next);
     target.searchParams.set("error", message.slice(0, 240));
-    return Response.redirect(target.toString(), 302);
+    return new Response(null, {
+      status: 302,
+      headers: { Location: target.toString(), "Cache-Control": "no-store" },
+    });
   };
 
   if (errDescription) {
@@ -39,5 +42,9 @@ export async function handleAuthCallback(request: Request): Promise<Response> {
     return loginError(error.message || "Could not complete sign-in.");
   }
 
-  return Response.redirect(new URL(next, url.origin).toString(), 302);
+  return new Response(null, {
+    status: 302,
+    headers: { Location: new URL(next, url.origin).toString(), "Cache-Control": "no-store" },
+  });
 }
+
