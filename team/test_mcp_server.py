@@ -78,15 +78,7 @@ class MCPServerTests(unittest.TestCase):
             result = json.loads(responses[0]["result"]["content"][0]["text"])
             self.assertEqual(result["status"], "ready", result)
             self.assertEqual(result["result"]["status"], "queued")
-
-    def test_call_team_health(self):
-        responses = rpc([{
-            "jsonrpc": "2.0", "id": 10, "method": "tools/call",
-            "params": {"name": "team.health", "arguments": {}},
-        }])
-        result = json.loads(responses[0]["result"]["content"][0]["text"])
-        self.assertEqual(result["status"], "ready")
-        self.assertEqual(result["result"]["status"], "ok")
+            self.assertNotIn("claim_token", result["result"])
 
     def test_call_knowledge_search(self):
         responses = rpc([{

@@ -177,7 +177,10 @@ def invoke(tool_id, payload, manifest):
             job_id, worker = payload.get("id", payload.get("job_id")), payload.get("worker", payload.get("worker_id"))
             if not all(isinstance(value, str) and value.strip() for value in (job_id, worker)):
                 return envelope("blocked", limitations=[f"{operation} requires job_id and worker_id."])
-            command.extend(["--id", job_id, "--worker", worker])
+            claim_token = payload.get("claim_token")
+            if not isinstance(claim_token, str) or not claim_token:
+                return envelope("blocked", limitations=[f"{operation} requires claim_token."])
+            command.extend(["--id", job_id, "--worker", worker, "--claim-token", claim_token])
             if operation == "complete":
                 result_data = payload.get("result", {})
                 if not isinstance(result_data, dict):

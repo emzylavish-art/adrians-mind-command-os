@@ -309,6 +309,7 @@
         "payload": "object",
         "worker": "string",
         "id": "string",
+        "claim_token": "string (required for complete/fail)",
         "result": "object",
         "error": "string",
         "db": "string"

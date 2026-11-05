@@ -103,7 +103,8 @@ class RunnerTests(unittest.TestCase):
             code, completed = call({
                 "operation": "invoke", "tool_id": "team.queue",
                 "input": {"operation": "complete", "db": db, "job_id": job_id,
-                          "worker_id": "runner-test", "result": {"ok": True}},
+                          "worker_id": "runner-test", "claim_token": claimed["result"]["claim_token"],
+                          "result": {"ok": True}},
             })
             self.assertEqual(code, 0)
             self.assertEqual(completed["result"]["status"], "succeeded")

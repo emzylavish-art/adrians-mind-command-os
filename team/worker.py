@@ -77,13 +77,19 @@ def process_one(db, worker_id, lease_seconds):
         request = normalize_request(payload)
         result = execute(request)
         done = queue_call(db, "complete", [
-            "--id", job["id"], "--worker", worker_id, "--result", json.dumps(result)
+            "--id", job["id"], "--worker", worker_id,
+            "--claim-token", job["claim_token"], "--result", json.dumps(result)
         ])
         return {"status": "succeeded", "job_id": job["id"], "result": done.get("result")}
     except Exception as exc:
-        failed = queue_call(db, "fail", [
-            "--id", job["id"], "--worker", worker_id, "--error", str(exc)[:1800]
-        ])
+        try:
+            failed = queue_call(db, "fail", [
+                "--id", job["id"], "--worker", worker_id,
+                "--claim-token", job["claim_token"], "--error", str(exc)[:1800]
+            ])
+        except Exception:
+            # Ownership may have expired or been reclaimed; never mutate a newer claim.
+            return {"status": "lease_lost", "job_id": job["id"], "error": "Worker lease lost; outcome requires reconciliation."}
         return {"status": failed.get("status", "failed"), "job_id": job["id"], "error": str(exc)}
 
 
