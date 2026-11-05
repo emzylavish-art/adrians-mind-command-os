@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "team" / "manifest.json"
 REGISTRY_PATH = ROOT / "tools" / "registry.json"
 BOOTSTRAP_CATALOG_PATH = ROOT / "tools" / "bootstrap" / "upstream-sources.json"
+EXTENDED_UPSTREAM_PATH = ROOT / "tools" / "bootstrap" / "extended-upstream.json"
 BOOTSTRAP_SCRIPT_PATH = ROOT / "tools" / "bootstrap" / "Install-MindCommandTools.ps1"
 
 
@@ -21,6 +22,10 @@ def validate():
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     bootstrap = json.loads(BOOTSTRAP_CATALOG_PATH.read_text(encoding="utf-8"))
+    extended_ids = []
+    if EXTENDED_UPSTREAM_PATH.is_file():
+        extended = json.loads(EXTENDED_UPSTREAM_PATH.read_text(encoding="utf-8"))
+        extended_ids = [item.get("id") for item in extended.get("sources", [])]
     errors = []
 
     agent_ids = {agent.get("id") for agent in manifest.get("agents", [])}
@@ -56,6 +61,8 @@ def validate():
     source_ids = [item.get("id") for item in repositories]
     if len(source_ids) != len(set(source_ids)):
         errors.append("Duplicate IDs in Windows bootstrap source catalogue.")
+    if len(extended_ids) != len(set(extended_ids)):
+        errors.append("Duplicate IDs in extended upstream catalogue.")
     for item in repositories:
         url = item.get("url", "")
         if item.get("id") == "burp-suite":
@@ -72,10 +79,10 @@ def validate():
         for item in registry_items
         if item.get("status") == "source-verified"
     }
-    expected_verified_ids = set(source_ids) | {"burp-suite"}
+    expected_verified_ids = set(source_ids) | set(extended_ids) | {"burp-suite"}
     if verified_registry_ids != expected_verified_ids:
         errors.append(
-            "Source-verified registry entries do not match bootstrap catalogue: "
+            "Source-verified registry entries do not match bootstrap and extended upstream catalogues: "
             f"registry={sorted(verified_registry_ids)}, catalogue={sorted(expected_verified_ids)}"
         )
 
