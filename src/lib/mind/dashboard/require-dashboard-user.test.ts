@@ -1,1 +1,28 @@
-aW1wb3J0IGFzc2VydCBmcm9tICJub2RlOmFzc2VydC9zdHJpY3QiOwppbXBvcnQgeyByZWFkRmlsZVN5bmMgfSBmcm9tICJub2RlOmZzIjsKaW1wb3J0IHsgZGVzY3JpYmUsIGl0IH0gZnJvbSAibm9kZTp0ZXN0IjsKCmRlc2NyaWJlKCJkYXNoYm9hcmQgc2Vzc2lvbiBnYXRlIiwgKCkgPT4gewogIGl0KCJrZWVwcyB2ZXJpZmljYXRpb24gc2VydmVyLW9ubHksIHJlZGlyZWN0cyBzaWduZWQtb3V0IHZpc2l0b3JzLCBhbmQgc2VyaWFsaXplcyBhdXRoZW50aWNhdGVkIGFjY2VzcyIsICgpID0+IHsKICAgIGNvbnN0IHJvdXRlID0gcmVhZEZpbGVTeW5jKG5ldyBVUkwoIi4uLy4uLy4uL3JvdXRlcy9kYXNoYm9hcmQudHN4IiwgaW1wb3J0Lm1ldGEudXJsKSwgInV0ZjgiKTsKICAgIGNvbnN0IGdhdGUgPSByZWFkRmlsZVN5bmMobmV3IFVSTCgiLi9yZXF1aXJlLWRhc2hib2FyZC11c2VyLnRzIiwgaW1wb3J0Lm1ldGEudXJsKSwgInV0ZjgiKTsKICAgIGFzc2VydC5lcXVhbCgvZnJvbSBbIiddQFwvbGliXC9hdXRoXC92ZXJpZnlcLnNlcnZlclsiJ10vLnRlc3Qocm91dGUpLCBmYWxzZSk7CiAgICBhc3NlcnQubWF0Y2gocm91dGUsIC9yZXF1aXJlRGFzaGJvYXJkVXNlci8pOwogICAgYXNzZXJ0Lm1hdGNoKGdhdGUsIC9nZXRTZXNzaW9uVXNlci8pOwogICAgYXNzZXJ0Lm1hdGNoKGdhdGUsIC90bzpccyoiXC9sb2dpbiIvKTsKICAgIGFzc2VydC5tYXRjaChnYXRlLCAvZGFzaGJvYXJkTG9naW5TZWFyY2gvKTsKICAgIGFzc2VydC5lcXVhbChnYXRlLmluY2x1ZGVzKCJyZXF1aXJlVXNlcklkIiksIGZhbHNlKTsKICAgIGFzc2VydC5tYXRjaChnYXRlLCAvZXhwb3J0IHR5cGUgRGFzaGJvYXJkQWNjZXNzLyk7CiAgICBhc3NlcnQubWF0Y2goZ2F0ZSwgL3JldHVybiBceyBmb3JiaWRkZW46IHRydWUgXH0vKTsKICAgIGFzc2VydC5tYXRjaChnYXRlLCAvZm9yYmlkZGVuOiBmYWxzZS8pOwogICAgYXNzZXJ0LmRvZXNOb3RNYXRjaChnYXRlLCAvdGhyb3cgbmV3IFJlc3BvbnNlXCgiRm9yYmlkZGVuIi8pOwogICAgYXNzZXJ0Lm1hdGNoKHJvdXRlLCAvYWNjZXNzOiBhd2FpdCByZXF1aXJlRGFzaGJvYXJkVXNlclwoXCkvKTsKICAgIGFzc2VydC5tYXRjaChyb3V0ZSwgL2lmIFwoYWNjZXNzXC5mb3JiaWRkZW5cKS8pOwogICAgYXNzZXJ0Lm1hdGNoKHJvdXRlLCAvQWNjZXNzIGRlbmllZC8pOwogICAgYXNzZXJ0Lm1hdGNoKHJvdXRlLCAvcmV0dXJuIDxEYXNoYm9hcmRBcHAgXC8+Lyk7CiAgfSk7Cn0pOwo=
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { describe, it } from "node:test";
+
+describe("dashboard session gate", () => {
+  it("keeps verification server-only, redirects signed-out visitors, and serializes authenticated access", () => {
+    const route = readFileSync(new URL("../../../routes/dashboard.tsx", import.meta.url), "utf8");
+    const component = readFileSync(new URL("../../../components/mind/dashboard-3d/dashboard-page.tsx", import.meta.url), "utf8");
+    const gate = readFileSync(new URL("./require-dashboard-user.ts", import.meta.url), "utf8");
+    assert.equal(/from ["']@\/lib\/auth\/verify\.server["']/.test(route), false);
+    assert.match(route, /requireDashboardUser/);
+    assert.match(gate, /getSessionUser/);
+    assert.match(gate, /to:\s*"\/login"/);
+    assert.match(gate, /dashboardLoginSearch/);
+    assert.equal(gate.includes("requireUserId"), false);
+    assert.match(gate, /export type DashboardAccess/);
+    assert.match(gate, /return \{ forbidden: true \}/);
+    assert.match(gate, /forbidden: false/);
+    assert.doesNotMatch(gate, /throw new Response\("Forbidden"/);
+    assert.match(route, /access: await requireDashboardUser\(\)/);
+    assert.match(route, /import \{ DashboardPage \} from "@\/components\/mind\/dashboard-3d\/dashboard-page"/);
+    assert.match(route, /component: DashboardPage/);
+    assert.match(component, /getRouteApi\("\/dashboard"\)/);
+    assert.match(component, /if \(access\.forbidden\)/);
+    assert.match(component, /Access denied/);
+    assert.match(component, /return <DashboardApp \/>/);
+  });
+});
