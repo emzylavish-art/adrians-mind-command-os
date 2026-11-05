@@ -3927,7 +3927,7 @@ export function CommandApp() {
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button></div>
 
-                    <button type="submit" disabled={busy || ws.halted} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                    <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
                   </div>
@@ -5912,7 +5912,7 @@ function ChatPane({
               {speaking ? "Reading" : "Read aloud"}
             </button></div>
             
-            <button type="submit" disabled={busy || halted || !active} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+            <button type="submit" disabled={busy || halted || !active || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
           <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
             <p className="text-xs text-muted" role="status">{chromeNote}</p>

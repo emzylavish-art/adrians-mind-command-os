@@ -44,3 +44,14 @@ describe("mobile workspace drawer", () => {
     assert.match(app, /return \(\) => \{\s*document\.body\.style\.overflow = previous;/);
   });
 });
+
+
+describe("composer send guards", () => {
+  it("disables Command send with no text or attachments", () => {
+    assert.match(app, /disabled=\{busy \|\| ws\.halted \|\| \(!draft\.trim\(\) && pendingImages\.length === 0 && !staged\)\}/);
+  });
+
+  it("disables Chat send with no text or attachments", () => {
+    assert.match(app, /disabled=\{busy \|\| halted \|\| !active \|\| \(!draft\.trim\(\) && pendingImages\.length === 0 && !stagedName\)\}/);
+  });
+});
