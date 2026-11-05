@@ -24,12 +24,14 @@ const LazyMonoMotion = lazy(() =>
 type LoginSearch = {
   next?: string;
   error?: string;
+  mode?: Mode;
 };
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     next: typeof search.next === "string" ? search.next : undefined,
     error: typeof search.error === "string" ? search.error : undefined,
+    mode: search.mode === "sign-up" ? "sign-up" : undefined,
   }),
   loader: async () => {
     try {
@@ -182,7 +184,7 @@ function Login() {
   const supabaseConfigured = Boolean(data.configured);
   const brokerConfigured = Boolean(data.brokerConfigured);
   const supabaseOAuthProviders = data.supabaseOAuthProviders ?? [];
-  const [mode, setMode] = useState<Mode>("sign-in");
+  const [mode, setMode] = useState<Mode>(search.mode ?? "sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
