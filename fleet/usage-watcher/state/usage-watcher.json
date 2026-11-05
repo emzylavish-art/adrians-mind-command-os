@@ -1,0 +1,14 @@
+{
+  "bot": "Usage Watcher",
+  "status": "cycle-running",
+  "order": "orch-001-route-meter-branch",
+  "last_heartbeat": "2026-11-05 07:16 UTC",
+  "write_branch": "fleet/usage-watcher/meter",
+  "thresholds": {
+    "at_50": false,
+    "at_90": false
+  },
+  "heaviest": "Integration Verifier",
+  "weekly_shared_used_pct": 29.0,
+  "openai_dashboard_polled": false
+}

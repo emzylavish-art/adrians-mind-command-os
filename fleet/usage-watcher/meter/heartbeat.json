@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-11-05T00:16:57-07:00",
+  "zone": "America/Denver",
+  "status": "cycle-running",
+  "order": "orch-001-route-meter-branch",
+  "routine": "uw-meter-heartbeat",
+  "interval_min": 15,
+  "thresholds": {
+    "at_50": false,
+    "at_90": false
+  },
+  "heaviest": "Integration Verifier",
+  "weekly_shared_used_pct": 29.0,
+  "burn_note": "19.8%\u219229% shared weekly ~10min after orch-001 baseline"
+}
