@@ -40,6 +40,38 @@ export type FetchOauthStatusDeps = {
 };
 
 /**
+ * Timeout that stays on the event loop until it fires or is cleared.
+ * AbortSignal.timeout() unrefs its timer. Under node:test that looks like an
+ * idle loop while the hung fetch is still pending, so the runner cancels the
+ * hang case and every later case in the file.
+ */
+function hangTimeoutSignal(
+  timeoutMs: number,
+  parent?: AbortSignal,
+): { signal: AbortSignal; cancel: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    if (!controller.signal.aborted) {
+      controller.abort(new DOMException("The operation timed out", "TimeoutError"));
+    }
+  }, timeoutMs);
+  const onParentAbort = () => {
+    if (!controller.signal.aborted) controller.abort(parent?.reason);
+  };
+  if (parent) {
+    if (parent.aborted) onParentAbort();
+    else parent.addEventListener("abort", onParentAbort, { once: true });
+  }
+  return {
+    signal: controller.signal,
+    cancel: () => {
+      clearTimeout(timer);
+      parent?.removeEventListener("abort", onParentAbort);
+    },
+  };
+}
+
+/**
  * Fetch one connector /status. Always resolves to a terminal OauthStatusPayload
  * (never throws): success body, not_configured, or unavailable after 401/403/5xx,
  * network rejection, hang/timeout, or non-JSON body.
@@ -50,9 +82,8 @@ export async function fetchOauthStatusPayload(
 ): Promise<OauthStatusPayload> {
   const fetchFn = deps.fetchFn ?? fetch;
   const timeoutMs = deps.timeoutMs ?? OAUTH_STATUS_FETCH_TIMEOUT_MS;
-  const timeout = AbortSignal.timeout(timeoutMs);
-  const signal =
-    deps.signal && typeof AbortSignal.any === "function" ? AbortSignal.any([deps.signal, timeout]) : timeout;
+  const timeout = hangTimeoutSignal(timeoutMs, deps.signal);
+  const signal = timeout.signal;
 
   try {
     const res = await fetchFn(url, { credentials: "include", signal });
@@ -80,5 +111,7 @@ export async function fetchOauthStatusPayload(
     return status;
   } catch {
     return unavailableStatus();
+  } finally {
+    timeout.cancel();
   }
 }
