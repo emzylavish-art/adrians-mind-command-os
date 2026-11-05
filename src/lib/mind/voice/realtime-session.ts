@@ -75,19 +75,29 @@ export class RealtimeVoiceSession {
   private muted = false;
   private analyser: AnalyserNode | null = null;
   private levelRaf = 0;
+  private captureRequestId = 0;
 
   private voiceId: string;
+  private captureMedia: () => Promise<MediaStream>;
 
   constructor(
     handlers: RealtimeHandlers = {},
     output: SharedAudioOutput = sharedAudioOutput,
     socketFactory: RealtimeSocketFactory = defaultSocketFactory,
     options: RealtimeSessionOptions = {},
+    captureMedia: () => Promise<MediaStream> = () => navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    }),
   ) {
     this.handlers = handlers;
     this.output = output;
     this.socketFactory = socketFactory;
     this.voiceId = resolveXaiVoiceId(options.voice);
+    this.captureMedia = captureMedia;
   }
 
   setVoice(voice: string) {
@@ -228,20 +238,25 @@ export class RealtimeVoiceSession {
 
   async startCapture() {
     if (!this.open) throw new Error("Voice session is not connected.");
-    if (this.capturing) return;
+    if (this.capturing || this.captureRequestId) return;
+    const requestId = ++this.captureRequestId;
     let media: MediaStream;
     try {
-      media = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
+      media = await this.captureMedia();
     } catch (err) {
+      const stillCurrent = this.captureRequestId === requestId && this.open;
+      if (this.captureRequestId === requestId) this.captureRequestId = 0;
+      if (!stillCurrent) return;
       // Preserve DOMException name (NotAllowedError / NotFoundError) for UI mapping.
       throw err;
     }
+    // Closing/stopping while the browser permission prompt is open invalidates this request.
+    // A late grant must never revive a session after the user has ended it.
+    if (this.captureRequestId !== requestId || !this.open) {
+      media.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    this.captureRequestId = 0;
     this.media = media;
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioCtx = new Ctx({ sampleRate: REALTIME_SAMPLE_RATE });
@@ -279,6 +294,7 @@ export class RealtimeVoiceSession {
   }
 
   stopCapture() {
+    this.captureRequestId += 1;
     this.capturing = false;
     if (this.levelRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.levelRaf);
     this.levelRaf = 0;
