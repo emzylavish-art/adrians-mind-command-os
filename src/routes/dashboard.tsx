@@ -1,1 +1,18 @@
-aW1wb3J0IHsgY3JlYXRlRmlsZVJvdXRlIH0gZnJvbSAiQHRhbnN0YWNrL3JlYWN0LXJvdXRlciI7CmltcG9ydCB7IERhc2hib2FyZEFwcCB9IGZyb20gIkAvY29tcG9uZW50cy9taW5kL2Rhc2hib2FyZC0zZC9kYXNoYm9hcmQtYXBwIjsKaW1wb3J0IHsgcmVxdWlyZURhc2hib2FyZFVzZXIgfSBmcm9tICJAL2xpYi9taW5kL2Rhc2hib2FyZC9yZXF1aXJlLWRhc2hib2FyZC11c2VyIjsKaW1wb3J0IHR5cGUgeyBEYXNoYm9hcmRBY2Nlc3MgfSBmcm9tICJAL2xpYi9taW5kL2Rhc2hib2FyZC9yZXF1aXJlLWRhc2hib2FyZC11c2VyIjsKCi8qKgogKiBVbml2ZXJzZSBkYXNoYm9hcmQuIEEgQmV0dGVyIEF1dGggb3IgU3VwYWJhc2Ugc2Vzc2lvbiBtYXkgZW50ZXIuCiAqIE5vIHNlc3Npb24gZ29lcyB0byBzaWduLWluLiBUaGUgY2hlY2sgcnVucyBpbiBhIHNlcnZlciBmdW5jdGlvbi4KICovCmV4cG9ydCBjb25zdCBSb3V0ZSA9IGNyZWF0ZUZpbGVSb3V0ZSgiL2Rhc2hib2FyZCIpKHsKICBiZWZvcmVMb2FkOiBhc3luYyAoKSA9PiAoeyBhY2Nlc3M6IGF3YWl0IHJlcXVpcmVEYXNoYm9hcmRVc2VyKCkgfSksCiAgY29tcG9uZW50OiBEYXNoYm9hcmRQYWdlLAogIGhlYWQ6ICgpID0+ICh7CiAgICBtZXRhOiBbCiAgICAgIHsgdGl0bGU6ICJBZHJpYW4ncyBNaW5kIMK3IFVuaXZlcnNlIiB9LAogICAgICB7IG5hbWU6ICJ0aGVtZS1jb2xvciIsIGNvbnRlbnQ6ICIjMDcwYjE2IiB9LAogICAgXSwKICB9KSwKfSk7CgpmdW5jdGlvbiBEYXNoYm9hcmRQYWdlKCkgewogIGNvbnN0IHsgYWNjZXNzIH0gPSBSb3V0ZS51c2VSb3V0ZUNvbnRleHQoKSBhcyB7IGFjY2VzczogRGFzaGJvYXJkQWNjZXNzIH07CiAgaWYgKGFjY2Vzcy5mb3JiaWRkZW4pIHsKICAgIHJldHVybiAoCiAgICAgIDxtYWluIGNsYXNzTmFtZT0ibWluLWgtZHZoIGJnLWJnIHAtOCB0ZXh0LWZnIj4KICAgICAgICA8aDEgY2xhc3NOYW1lPSJ0ZXh0LTJ4bCBmb250LWJvbGQiPkFjY2VzcyBkZW5pZWQ8L2gxPgogICAgICAgIDxwIGNsYXNzTmFtZT0ibXQtMiB0ZXh0LW11dGVkIj5Zb3UgZG8gbm90IGhhdmUgcGVybWlzc2lvbiB0byBhY2Nlc3MgdGhpcyBkYXNoYm9hcmQuPC9wPgogICAgICA8L21haW4+CiAgICApOwogIH0KICByZXR1cm4gPERhc2hib2FyZEFwcCAvPjsKfQo=
+import { createFileRoute } from "@tanstack/react-router";
+import { DashboardPage } from "@/components/mind/dashboard-3d/dashboard-page";
+import { requireDashboardUser } from "@/lib/mind/dashboard/require-dashboard-user";
+
+/**
+ * Universe dashboard. A Better Auth or Supabase session may enter.
+ * No session goes to sign-in. The check runs in a server function.
+ */
+export const Route = createFileRoute("/dashboard")({
+  beforeLoad: async () => ({ access: await requireDashboardUser() }),
+  component: DashboardPage,
+  head: () => ({
+    meta: [
+      { title: "Adrian's Mind · Universe" },
+      { name: "theme-color", content: "#070b16" },
+    ],
+  }),
+});
