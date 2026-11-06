@@ -36,7 +36,14 @@ class MCPServerTests(unittest.TestCase):
         self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("knowledge.search", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.worker", [tool["name"] for tool in responses[1]["result"]["tools"]])
-        self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        names = [tool["name"] for tool in responses[1]["result"]["tools"]]
+        self.assertIn("model.generate", names)
+        self.assertIn("notion.controller", names)
+        schemas = {tool["name"]: tool["inputSchema"] for tool in responses[1]["result"]["tools"]}
+        self.assertEqual(schemas["model.generate"]["properties"]["provider"]["enum"], ["grok", "openrouter", "ollama"])
+        self.assertEqual(schemas["notion.controller"]["properties"]["action"]["enum"],
+                         ["search", "retrieve-page", "retrieve-children", "append-text"])
+        self.assertIn("team.queue", names)
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
 
     def test_call_rea_scan(self):
