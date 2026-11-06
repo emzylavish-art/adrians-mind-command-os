@@ -1,0 +1,34 @@
+=== date ===
+2026-11-06T17:50:41-06:00
+=== / ===
+200 redirect=
+=== /login ===
+200 redirect=
+=== /dashboard ===
+307 redirect=https://adrians-mind.vercel.app/login?next=%2Fdashboard
+=== /memory ===
+200 redirect=
+=== /explore ===
+200 redirect=
+=== /tools === 404
+=== /voice === 404
+=== /artifacts === 404
+=== /settings === 404
+=== /activity === 404
+=== /scheduled === 404
+=== oauth status ===
+/api/mind/oauth/github/status 401
+/api/mind/oauth/gmail/status 401
+/api/mind/oauth/google_calendar/status 401
+/api/mind/oauth/google_drive/status 401
+/api/mind/oauth/notion/status 401
+/api/mind/oauth/slack/status 401
+=== security headers on / ===
+HTTP/2 200 
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+=== live JS bundle ===
+grep: (standard input): binary file matches
+/assets/index-qV1VC2j2.js

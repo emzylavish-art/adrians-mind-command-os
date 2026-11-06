@@ -229,3 +229,12 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - **NEW findings needing fix:** none.
 - Full report: `/workspace/rea-captures/internal-audit-2026-11-07b.md` + `pass-2026-11-07b/`
 - Zack-message conditions: **not met**.
+
+## 2026-11-06 17:54 CST — REA pass 2026-11-07c → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **STATUS CHANGE:** Browser `/dashboard` stuck on **Painting the universe…** (no canvas). Same tip/bundle as 07a where Universe painted — routed once to Dashboard Bot + Cosmos Motion. Not claimed as a new deploy.
+- **Visual:** Memory + Explore OK; Activity `forbidden_cross_site`; Scheduled worker checking; explore handoff unverified; Safe Keys NOT CONNECTED; password fill unavailable.
+- **NEW findings needing fix:** Universe paint hang (above).
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07c.md` + `pass-2026-11-07c/`
+- Zack-message conditions: **not met**.

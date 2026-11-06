@@ -1,0 +1,23 @@
+=== gh api deployments Production ===
+{"created":"2026-11-06T04:38:15Z","desc":null,"env":"Production","sha":"e3ccc51f568ffb4942f155515041d8da469e298c"}
+{"created":"2026-11-05T22:18:59Z","desc":null,"env":"Production","sha":"532ed14293997bcb6e96f501901dc1ef071fdafc"}
+{"created":"2026-11-05T22:16:26Z","desc":null,"env":"Production","sha":"6e66e6f6ed4f50f7fdae59264a03535409a657c4"}
+=== main tip ===
+{"date":"2026-11-05T22:58:49Z","msg":"Add GPT MCP proxy server so Claude, Grok, and ChatGPT can call your OpenAI API","sha":"e4ed639"}
+=== preview/integration tip ===
+{"date":"2026-11-03T06:18:24Z","msg":"Phase 5: harness MODEL_PROVIDER xai/openai with one-token readiness probe","sha":"aa53aa0"}
+=== whisper-flow tip ===
+{"msg":"test(whisper-flow): wait for hydration after integration drawer UI","sha":"5ab07d0"}
+=== voice-cloning-studio tip ===
+{"msg":"visual(vcs): polish engine-down empty card + error alert cards","sha":"55d12ec"}
+=== rea-features tip ===
+From https://github.com/emzylavish-art/adrians-mind-command-os
+ * branch            rea-features -> FETCH_HEAD
+ * branch            main       -> FETCH_HEAD
+ * branch            preview/integration -> FETCH_HEAD
+a8102a3
+a8102a3 docs(rea): internal audit pass 2026-11-07b
+{"ahead_by":85,"behind_by":311,"status":"diverged","total_commits":85}
+{"created":"2026-11-06T04:38:15Z","ref":"e3ccc51f568ffb4942f155515041d8da469e298c","sha":"e3ccc51"}
+{"created":"2026-11-05T22:18:59Z","ref":"532ed14293997bcb6e96f501901dc1ef071fdafc","sha":"532ed14"}
+{"ahead_by":24,"behind_by":0,"status":"ahead"}
