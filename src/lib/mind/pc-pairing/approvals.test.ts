@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, before, after } from "node:test";
@@ -9,6 +9,7 @@ import {
   denyPcApproval,
   listPendingApprovals,
   PC_APPROVAL_TTL_MS,
+  PcApprovalStorageUnavailableError,
   setPcApprovalDirectory,
 } from "./approvals.ts";
 import { pcRunShell } from "../mcp/tools.ts";
@@ -25,6 +26,29 @@ describe("pc shell human approvals (H9)", () => {
     } catch {
       /* ignore */
     }
+  });
+
+  it("sanitizes file-store I/O failures instead of returning an empty list", () => {
+    const notDirectory = join(dir, "not-a-directory");
+    writeFileSync(notDirectory, "x");
+    try {
+      setPcApprovalDirectory(join(notDirectory, "approvals"));
+      assert.throws(() => listPendingApprovals("owner-storage"), (error: unknown) => {
+        assert.ok(error instanceof PcApprovalStorageUnavailableError);
+        assert.equal(error.message, "PC approval storage is unavailable.");
+        assert.doesNotMatch(error.message, /ENOTDIR|not-a-directory/);
+        return true;
+      });
+    } finally {
+      setPcApprovalDirectory(dir);
+    }
+  });
+
+  it("treats corrupt approval records as storage failure, never empty success", () => {
+    const corrupt = join(dir, "corrupt.json");
+    writeFileSync(corrupt, "not-json");
+    assert.throws(() => listPendingApprovals("owner-corrupt"), PcApprovalStorageUnavailableError);
+    rmSync(corrupt, { force: true });
   });
 
   it("rejects confirm:true from tool args and creates a pending approval instead", async () => {
