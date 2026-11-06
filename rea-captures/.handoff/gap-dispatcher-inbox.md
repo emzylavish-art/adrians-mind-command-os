@@ -221,3 +221,11 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - **NEW findings needing fix:** none.
 - Full report: `/workspace/rea-captures/internal-audit-2026-11-07a.md` + `pass-2026-11-07a/`
 - Zack-message conditions: **not met**.
+
+## 2026-11-06 17:42 CST — REA pass 2026-11-07b → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Reused 07a (Universe paints under Adrian session; curl 307→login; Activity `forbidden_cross_site`; Scheduled no worker; explore handoff unverified; empty Universe panels). Password fill unavailable this run.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07b.md` + `pass-2026-11-07b/`
+- Zack-message conditions: **not met**.
