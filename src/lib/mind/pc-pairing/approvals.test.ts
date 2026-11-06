@@ -45,10 +45,14 @@ describe("pc shell human approvals (H9)", () => {
   });
 
   it("treats corrupt approval records as storage failure, never empty success", () => {
-    const corrupt = join(dir, "corrupt.json");
+    const record = createPcApproval({ ownerId: "owner-corrupt", command: "pwd", agentId: "agent", agentLabel: "PC" });
+    const corrupt = join(dir, `${record.id}.json`);
     writeFileSync(corrupt, "not-json");
-    assert.throws(() => listPendingApprovals("owner-corrupt"), PcApprovalStorageUnavailableError);
-    rmSync(corrupt, { force: true });
+    try {
+      assert.throws(() => listPendingApprovals("owner-corrupt"), PcApprovalStorageUnavailableError);
+    } finally {
+      rmSync(corrupt, { force: true });
+    }
   });
 
   it("fails closed if a stored command is changed without updating its approval hash", () => {
