@@ -1,0 +1,15 @@
+{
+  // Free workers.dev only. Do not attach routes to existing Workers
+  // (adrians-mind, gpt-mcp-proxy, operation-beat-magnus-trigger).
+  // Parent deploys. No KV, D1, R2, AI, Queues, or Durable Objects.
+  "name": "adrians-mind-mcp-tools",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-06",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  }
+}
