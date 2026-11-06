@@ -379,13 +379,14 @@
       "status": "ready",
       "entrypoint": "python3 team/runner.py",
       "input_schema": {
-        "provider": "grok|openrouter|ollama",
+        "provider": "astra|sol|luna|openai|auto|grok|openrouter|ollama",
         "prompt": "string",
         "messages": "object[] (optional)",
         "model": "string (optional)",
+        "stream": "boolean (optional)",
         "timeout_seconds": "integer (optional)"
       },
-      "safety": "Makes a provider request only when explicitly invoked. xAI/OpenRouter keys are read from environment variables; Ollama uses localhost. No credentials are logged or persisted. Provider usage may incur charges; select route explicitly."
+      "safety": "Makes a provider request only when explicitly invoked. Astra/Sol/Luna endpoints, model identifiers, and keys are environment-only; auto routes Astra then Sol then Luna and records the selected provider. OpenAI-compatible streaming is requested only when stream=true. xAI/OpenRouter keys are read from environment variables; Ollama uses localhost. No credentials are logged or persisted. Provider usage may incur charges; select route explicitly."
     },
     {
       "id": "notion.controller",

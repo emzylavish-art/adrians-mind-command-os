@@ -3,6 +3,8 @@ import json
 import sys
 import threading
 import unittest
+import hashlib
+import base64
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 
@@ -10,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "team"))
 import mcp_http  # noqa: E402
 import runner  # noqa: E402
+from oauth import OAuthManager  # noqa: E402
 
 
 class MCPHTTPTests(unittest.TestCase):
@@ -79,6 +82,40 @@ class MCPHTTPTests(unittest.TestCase):
             {"Content-Type": "application/json", "Authorization": f"Bearer {self.token}"},
         )
         self.assertEqual(status, 404)
+
+    def test_invalid_jsonrpc_is_rejected(self):
+        status, body = self.request(
+            "POST", "/mcp", {"jsonrpc": "1.0", "id": 3, "method": "ping"},
+            {"Content-Type": "application/json", "Authorization": f"Bearer {self.token}"},
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], -32600)
+
+    def test_oauth_discovery_and_bearer_token(self):
+        manager = OAuthManager("https://mcp.example.test", audience="https://mcp.example.test/mcp", secret="test")
+        manager.register_client("client", ["https://client.example.test/callback"])
+        verifier = "verifier"
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        location = manager.authorize({"response_type": "code", "client_id": "client", "redirect_uri": "https://client.example.test/callback", "scope": "mind.tools", "code_challenge": challenge, "code_challenge_method": "S256"}, subject="owner")
+        code = location.split("code=", 1)[1]
+        token = manager.exchange({"code": code, "client_id": "client", "redirect_uri": "https://client.example.test/callback", "code_verifier": verifier})
+        server = ThreadingHTTPServer(("127.0.0.1", 0), mcp_http.make_handler("", runner.load_manifest(), oauth=manager))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            port = server.server_address[1]
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request("GET", "/.well-known/oauth-authorization-server")
+            response = conn.getresponse(); metadata = json.loads(response.read()); conn.close()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(metadata["code_challenge_methods_supported"], ["S256"])
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request("POST", "/mcp", json.dumps({"jsonrpc": "2.0", "id": 4, "method": "ping"}), {"Content-Type": "application/json", "Authorization": f"Bearer {token['access_token']}"})
+            response = conn.getresponse(); body = json.loads(response.read()); conn.close()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(body["result"], {})
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=3)
 
 
 if __name__ == "__main__":
