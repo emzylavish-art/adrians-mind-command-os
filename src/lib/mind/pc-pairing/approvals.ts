@@ -97,8 +97,26 @@ function readRecord(id: string): PcApprovalRecord | null {
     catch (error) { if (fsCode(error) === "ENOENT") return null; throw error; }
   });
   if (contents === null) return null;
-  try { return JSON.parse(contents) as PcApprovalRecord; }
+  let parsed: unknown;
+  try { parsed = JSON.parse(contents); }
   catch (error) { if (error instanceof SyntaxError) throw new PcApprovalStorageUnavailableError(); throw error; }
+  if (!isValidApprovalRecord(parsed, id)) throw new PcApprovalStorageUnavailableError();
+  return parsed;
+}
+
+function isValidApprovalRecord(value: unknown, expectedId: string): value is PcApprovalRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Partial<PcApprovalRecord>;
+  if (
+    record.id !== expectedId || typeof record.token !== "string" || typeof record.ownerId !== "string" ||
+    typeof record.command !== "string" || typeof record.commandHash !== "string" || !/^[a-f0-9]{64}$/.test(record.commandHash) ||
+    typeof record.agentId !== "string" || typeof record.agentLabel !== "string" ||
+    typeof record.createdAt !== "string" || !Number.isFinite(Date.parse(record.createdAt)) ||
+    typeof record.expiresAt !== "string" || !Number.isFinite(Date.parse(record.expiresAt)) ||
+    !["pending", "used", "denied", "expired"].includes(record.status as string) ||
+    (record.usedAt !== undefined && (typeof record.usedAt !== "string" || !Number.isFinite(Date.parse(record.usedAt))))
+  ) return false;
+  return hashCommand(record.command) === record.commandHash;
 }
 
 export function pruneExpiredApprovals(nowMs = Date.now()): number {
@@ -156,7 +174,8 @@ export function listPendingApprovals(ownerId: string, nowMs = Date.now()): PcApp
     const record = readRecord(name.slice(0, -".json".length));
     if (!record || record.ownerId !== ownerId) continue;
     const exp = Date.parse(record.expiresAt);
-    if (record.status === "pending" && Number.isFinite(exp) && nowMs > exp) {
+    if (!Number.isFinite(exp)) throw new PcApprovalStorageUnavailableError();
+    if (record.status === "pending" && nowMs > exp) {
       record.status = "expired";
       writeRecord(record);
       continue;
