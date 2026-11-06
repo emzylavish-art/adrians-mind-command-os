@@ -33,6 +33,7 @@ describe("PC approve/deny action failures", () => {
     for (const [body, expected] of [
       [{ error: "Forbidden: cross-site request blocked", code: "FORBIDDEN_CROSS_SITE" }, "forbidden_cross_site"],
       [{ error: "ENOENT: mkdir /var/task/.data/mind-pc-approvals" }, "network_failure"],
+      [{ error: "Forbidden: cross-site request blocked" }, "network_failure"],
     ] as const) {
       const result = await runPcApprovalAction({ action: "approve", approvalId: "a1", token: "t1", command: "pwd" }, async () => jsonResponse(403, body));
       assert.equal(result.ok, false);
