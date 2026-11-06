@@ -3493,60 +3493,85 @@ export function CommandApp() {
               ))}
             </div>
           </div>
-          {ws.pins.length > 0 && !railCollapsed && (
-            <div className="mb-3">
-              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</p>
-              {ws.pins.map((pin) => {
-                const label =
-                  pin.kind === "agent"
-                    ? ws.agents.find((agent) => agent.id === pin.ref)?.name
-                    : pin.kind === "chat"
-                      ? ws.chats.find((chat) => chat.id === pin.ref)?.title
-                      : pin.kind === "project"
-                        ? ws.projects.find((project) => project.id === pin.ref)?.name
-                        : ws.files.find((file) => file.id === pin.ref)?.name;
-                if (!label) return null;
-                return (
-                  <button
-                    key={pin.id}
-                    type="button"
-                    className="flex min-h-11 w-full items-center gap-2 rounded-2xl px-3 text-left text-sm text-muted"
-                    onClick={() => {
-                      if (pin.kind === "chat") {
-                        setActiveId(pin.ref);
-                        setView("chat");
-                      } else if (pin.kind === "agent") setView("agents");
-                      else if (pin.kind === "project") setView("projects");
-                      else setView("files");
-                      setNavOpen(false);
-                    }}
-                  >
-                    <Pin className="size-4 shrink-0" />
-                    <span className="truncate">{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {ws.chats.length > 0 && !railCollapsed && (
-            <div className="mb-3">
-              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT</p>
-              {getRecentChats(ws.chats, 5, new Set(ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref))).map((chat) => (
-                <button
-                  key={chat.id}
-                  type="button"
-                  className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm text-muted"
-                  onClick={() => {
-                    setActiveId(chat.id);
-                    setView("chat");
-                    setNavOpen(false);
-                  }}
-                >
-                  <span className="truncate">{chat.title}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {(() => {
+            const collapsed = railCollapsed && !navOpen;
+            const pinnedChatIds = new Set(ws.pins.filter((pin) => pin.kind === "chat" && ws.chats.some((chat) => chat.id === pin.ref)).map((pin) => pin.ref));
+            const recentChats = getRecentChats(ws.chats, 5, pinnedChatIds);
+            const seenPinKeys = new Set<string>();
+            const validPins = ws.pins.flatMap((pin) => {
+              const key = JSON.stringify([pin.kind, pin.ref]);
+              if (seenPinKeys.has(key)) return [];
+              seenPinKeys.add(key);
+              const label = pin.kind === "agent"
+                ? ws.agents.find((agent) => agent.id === pin.ref)?.name
+                : pin.kind === "chat"
+                  ? (() => { const chat = ws.chats.find((item) => item.id === pin.ref); return chat ? (chat.title.trim() || "Untitled chat") : undefined; })()
+                  : pin.kind === "project"
+                    ? ws.projects.find((project) => project.id === pin.ref)?.name
+                    : ws.files.find((file) => file.id === pin.ref)?.name;
+              return label ? [{ pin, label }] : [];
+            });
+            const recentEmptyMessage = ws.chats.length === 0
+              ? "No chats yet. Start a new chat to see it here."
+              : ws.chats.every((chat) => pinnedChatIds.has(chat.id))
+                ? "All chats are pinned above."
+                : "No recent unpinned chats.";
+            const expandSidebar = () => setRailCollapsed(false);
+            return (
+              <>
+                <section className="mb-3" aria-label="Pinned">
+                  {collapsed ? (
+                    <button type="button" aria-label="Expand sidebar to show pinned items" title="Pinned" onClick={expandSidebar} className="min-h-11 w-full rounded-2xl text-xs text-muted hover:bg-white/5">Pinned</button>
+                  ) : (
+                    <>
+                      <h2 className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</h2>
+                      {ready ? validPins.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted">No pinned items yet.</p>
+                      ) : validPins.map(({ pin, label }) => (
+                        <div key={pin.id} className="flex items-center gap-1">
+                          <button type="button" aria-label={`Open ${pin.kind}: ${label}`} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-2xl px-3 text-left text-sm text-muted hover:bg-white/5" onClick={() => {
+                            if (pin.kind === "chat") { setActiveId(pin.ref); setView("chat"); }
+                            else if (pin.kind === "agent") setView("agents");
+                            else if (pin.kind === "project") setView("projects");
+                            else setView("files");
+                            setNavOpen(false);
+                            closeMenus();
+                          }}>
+                            {pin.kind === "chat" && <Pin aria-hidden="true" className="size-4 shrink-0" />}
+                            <span className="truncate">{label}</span>
+                          </button>
+                          {pin.kind === "chat" && <button type="button" aria-label={`Unpin chat: ${label}`} title={`Unpin chat: ${label}`} className="min-h-11 shrink-0 rounded-2xl px-2 text-xs text-muted hover:bg-white/5" onClick={() => setWs((prev) => prev.chats.some((chat) => chat.id === pin.ref) ? togglePin(prev, "chat", pin.ref) : prev)}>Unpin</button>}
+                        </div>
+                      )) : <p role="status" className="px-3 py-2 text-sm text-muted">Loading pinned items…</p>}
+                    </>
+                  )}
+                </section>
+                <section className="mb-3" aria-label="Recent chats">
+                  {collapsed ? (
+                    <button type="button" aria-label="Expand sidebar to show recent chats" title="Recent chats" onClick={expandSidebar} className="min-h-11 w-full rounded-2xl text-xs text-muted hover:bg-white/5">Recent</button>
+                  ) : (
+                    <>
+                      <h2 className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT CHATS</h2>
+                      {!ready ? <p role="status" className="px-3 py-2 text-sm text-muted">Loading recent chats…</p> : recentChats.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted">{recentEmptyMessage}</p>
+                      ) : recentChats.map((chat) => (
+                        <div key={chat.id} className="flex items-center gap-1">
+                          <button type="button" aria-label={`Open chat: ${chat.title || "Untitled chat"}`} className="flex min-h-11 min-w-0 flex-1 items-center rounded-2xl px-3 text-left text-sm text-muted hover:bg-white/5" onClick={() => {
+                            setActiveId(chat.id);
+                            setView("chat");
+                            setChatProjectId(null);
+                            setNavOpen(false);
+                            closeMenus();
+                          }}><span className="truncate">{chat.title || "Untitled chat"}</span></button>
+                          <button type="button" aria-label={`Pin chat: ${chat.title || "Untitled chat"}`} title={`Pin chat: ${chat.title || "Untitled chat"}`} className="min-h-11 shrink-0 rounded-2xl px-2 text-xs text-muted hover:bg-white/5" onClick={() => setWs((prev) => prev.chats.some((item) => item.id === chat.id) ? togglePin(prev, "chat", chat.id) : prev)}>Pin</button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </section>
+              </>
+            );
+          })()}
         </nav>
         <div className={`border-t border-line/70 p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
           <button
@@ -4105,6 +4130,12 @@ export function CommandApp() {
             <ChatPane
               active={active}
               chats={ws.chats}
+              pinned={!!active && ws.pins.some((pin) => pin.kind === "chat" && pin.ref === active.id)}
+              onTogglePin={() => {
+                if (!active) return;
+                const chatId = active.id;
+                setWs((prev) => prev.chats.some((chat) => chat.id === chatId) ? togglePin(prev, "chat", chatId) : prev);
+              }}
               projectId={chatProjectId}
               projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
               onClearProject={() => setChatProjectId(null)}
@@ -5489,6 +5520,8 @@ function ReaPanel({
 function ChatPane({
   active,
   chats,
+  pinned,
+  onTogglePin,
   projectId,
   projectName,
   onClearProject,
@@ -5565,6 +5598,8 @@ function ChatPane({
 }: {
   active: Chat | null;
   chats: Chat[];
+  pinned: boolean;
+  onTogglePin: () => void;
   projectId: string | null;
   projectName: string | null;
   onClearProject: () => void;
@@ -5711,6 +5746,17 @@ function ChatPane({
         <div className="masthead px-4 pt-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
+            {active && (
+              <button
+                type="button"
+                aria-label={pinned ? `Unpin chat: ${active.title}` : `Pin chat: ${active.title}`}
+                aria-pressed={pinned}
+                className="min-h-11 rounded-panel px-3 text-sm text-accent hover:bg-white/5"
+                onClick={onTogglePin}
+              >
+                {pinned ? "Unpin chat" : "Pin chat"}
+              </button>
+            )}
             {active && !renaming && (
               <div className="flex gap-3">
                 <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Export chat</button>
