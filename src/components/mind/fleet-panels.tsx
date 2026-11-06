@@ -38,6 +38,7 @@ import {
   loadWorkerHealthStatus,
   nextListGeneration,
   onceListRetry,
+  parsePcApprovalsResponse,
   type FleetListState,
   type McpListState,
   type McpToolRow,
@@ -183,10 +184,7 @@ export function FleetPanel({
     setPcApprovalsState({ status: "loading" });
     void loadPcApprovalsList(async () => {
       const res = await fetch("/api/mind/pc/approvals", { credentials: "include" });
-      if (!res.ok) {
-        throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
-      }
-      return res.json();
+      return parsePcApprovalsResponse(res);
     }, { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
       .then((next) => {
         if (!isCurrentListGeneration(generation, pcApprovalsGeneration.current)) return;
