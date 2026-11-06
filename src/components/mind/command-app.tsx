@@ -3759,7 +3759,7 @@ export function CommandApp() {
             ))}
           </div>
         )}
-        {accountOpen && (
+        {accountOpen && view !== "settings" && (
           <div className="border-b border-line bg-surface px-4 py-3 text-sm">
             <p className="font-semibold">Adrian (Personal)</p>
             <UserButton />
@@ -3771,7 +3771,7 @@ export function CommandApp() {
             </SignedOut>
             <p className="text-muted">This menu is not an account switcher. No second workspace exists.</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("settings")}>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setAccountOpen(false); setView("settings"); }}>
                 Settings
               </button>
               <button
@@ -5027,154 +5027,204 @@ export function CommandApp() {
                 <h2 className="font-display text-3xl font-bold">Settings</h2>
                 <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
               </div>
-              <div className="settings-card card-texture rounded-panel p-4 text-sm">
-                <div className="settings-row">
-                  <div>
-                    <p className="font-semibold">Appearance</p>
-                    <p className="text-muted">Theme for the app UI. Saved in this browser only.</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(["dark", "light", "system"] as const).map((choice) => (
-                      <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
-                        {choice}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="settings-row">
-                  <div>
-                    <p className="font-semibold">Provider failover</p>
-                    <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
-                  </div>
-                  <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
-                </div>
-              </div>
-              <div className="settings-card rounded-panel p-4 text-sm hidden">
-                <p className="font-semibold">Provider failover</p>
-                <p className="mt-1 text-muted">
-                  {failoverPolicy === "none"
-                    ? "Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present."
-                    : "On. If the selected provider cannot run, chat may switch to Grok when that key is present. The switch is recorded in the notice."}
-                </p>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={failoverPolicy === "grok"}
-                  className={`mt-3 flex min-h-11 w-full items-center justify-between rounded-panel border border-line px-3 ${failoverPolicy === "grok" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
-                  onClick={() => setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"))}
-                >
-                  Allow switch to Grok
-                  <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
-                </button>
-              </div>
-              <SafeKeysPanel />
-              <VoiceSettingsBlock />
-              <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
-              {serverHeld && (
-                <button
-                  type="button"
-                  className="min-h-11 rounded-panel border border-line px-3 text-sm"
-                  onClick={() => {
-                    const run = () => {
-                      void retrySave()
-                        .then((result) => {
-                          const message = saveFailureMessage(result);
-                          if (message) {
-                            reportFailure(message, "database_write_failed", "server-copy", run);
-                            return;
-                          }
-                          clearFailure();
-                        })
-                        .catch(() => {
-                          const message = saveFailureMessage({ ok: false });
-                          if (message) reportFailure(message, "database_write_failed", "server-copy", run);
-                        });
-                    };
-                    run();
-                  }}
-                >
-                  Save this browser copy over the server copy
-                </button>
-              )}
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
-                <p className="font-semibold">How to use this</p>
-                <ul className="mt-2 space-y-2 text-muted">
-                  <li>Command is home. Ask is the default. Automatic still asks before a delete or a replace.</li>
-                  <li>Memory is off until you confirm it. A memory-off chat cannot read or save notes.</li>
-                  <li>Open chats on a project shows only that project’s chats. Show all chats clears the filter.</li>
-                  <li>Research runs only when a search endpoint and key are set. A missing provider refuses and creates no citations. Links are only URLs the provider returned.</li>
-                  <li>Workspace lookup is three local reads. The bounded planner can ask Grok to use those same reads. It is not a general agent, and Stop this run is not Emergency stop.</li>
-                  <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
-                  <li>Stop this reply cancels only the current answer. It is not Emergency stop. The unfinished answer is not saved. The provider may still charge for text it generated before it saw the cancel.</li>
-                  <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart on this machine. It is not durable on a serverless disk. Without a database URL the server copy is a file on this machine, not cloud backup. Your phone keeps its own copy.</li>
-                  <li>Replies appear as Grok writes them. A stopped, empty, or broken reply is not saved.</li>
-                  <li>If this browser and the server both already have a copy, this page keeps the browser copy until you choose to replace the server copy.</li>
-                  <li>Grok, voice, REA, and saving a server copy require a signed-in owner. A refused sign-in does not spend the model.</li>
-                  <li>Oak Bridge and BridgePoint are external labels. This app does not open them.</li>
-                  <li>A dedicated database needs a new Supabase organization. The current free organization is already full.</li>
-                </ul>
-              </div>
-              <button
-                type="button"
-                className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                onClick={() => void toggleStop()}
-              >
-                <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
-              </button>
-              <div className="rounded-panel border border-line bg-surface p-4">
-                <p className="font-semibold">Archive</p>
-                <label className="mt-2 flex items-start gap-2 text-sm">
-                  <input type="checkbox" checked={includeTemporary} onChange={(event) => setIncludeTemporary(event.target.checked)} />
-                  Include temporary chats
-                </label>
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void downloadArchive()}>
-                  Export archive
-                </button>
-                <label className="mt-3 block text-sm">
-                  Import archive
-                  <input
-                    type="file"
-                    accept="application/json"
-                    className="mt-1 block w-full text-sm"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void onImportFile(file);
-                    }}
-                  />
-                </label>
-                {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
-                {importPreview && (
-                  <div className="mt-3 text-sm">
-                    <p>{importPreview.chats} chats · {importPreview.memories} notes · {importPreview.projects} projects. Hash matched.</p>
-                    <div className="mt-2 flex gap-2">
-                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); }}>
-                        Merge
-                      </button>
-                      <button
-                        type="button"
-                        className="min-h-11 rounded-panel border border-line px-3"
-                        onClick={() =>
-                          requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
-                            setWs(() => pushAudit(importPreview.workspace, "import_replace", "archive", "replaced"));
-                            setImportPreview(null);
-                          })
-                        }
-                      >
-                        Replace
-                      </button>
+
+              <section className="space-y-3">
+                <h3 className="font-display text-lg font-semibold">Account</h3>
+                <SupabaseAccountControls />
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-display text-lg font-semibold">App</h3>
+                <div className="settings-card card-texture rounded-panel p-4 text-sm">
+                  <div className="settings-row">
+                    <div>
+                      <p className="font-semibold">Appearance</p>
+                      <p className="text-muted">Theme for the app UI. Saved in this browser only.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(["dark", "light", "system"] as const).map((choice) => (
+                        <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
+                          {choice}
+                        </button>
+                      ))}
                     </div>
                   </div>
+                  <div className="settings-row">
+                    <div>
+                      <p className="font-semibold">Provider failover</p>
+                      <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
+                    </div>
+                    <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
+                  </div>
+                </div>
+                <div className="settings-card rounded-panel p-4 text-sm hidden">
+                  <p className="font-semibold">Provider failover</p>
+                  <p className="mt-1 text-muted">
+                    {failoverPolicy === "none"
+                      ? "Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present."
+                      : "On. If the selected provider cannot run, chat may switch to Grok when that key is present. The switch is recorded in the notice."}
+                  </p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={failoverPolicy === "grok"}
+                    className={`mt-3 flex min-h-11 w-full items-center justify-between rounded-panel border border-line px-3 ${failoverPolicy === "grok" ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted"}`}
+                    onClick={() => setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"))}
+                  >
+                    Allow switch to Grok
+                    <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
+                  </button>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-display text-lg font-semibold">AI &amp; Connections</h3>
+                <div className="settings-card card-texture rounded-panel p-4 text-sm">
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("connected")}>
+                      Manage connectors
+                    </button>
+                    <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("agents")}>
+                      Manage bots
+                    </button>
+                    <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("skills")}>
+                      Manage skills
+                    </button>
+                    <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("memory")}>
+                      Manage memory
+                    </button>
+                  </div>
+                </div>
+                <SafeKeysPanel />
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-display text-lg font-semibold">Voice</h3>
+                <VoiceSettingsBlock />
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-display text-lg font-semibold">Data &amp; Information</h3>
+                <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
+                {serverHeld && (
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-panel border border-line px-3 text-sm"
+                    onClick={() => {
+                      const run = () => {
+                        void retrySave()
+                          .then((result) => {
+                            const message = saveFailureMessage(result);
+                            if (message) {
+                              reportFailure(message, "database_write_failed", "server-copy", run);
+                              return;
+                            }
+                            clearFailure();
+                          })
+                          .catch(() => {
+                            const message = saveFailureMessage({ ok: false });
+                            if (message) reportFailure(message, "database_write_failed", "server-copy", run);
+                          });
+                      };
+                      run();
+                    }}
+                  >
+                    Save this browser copy over the server copy
+                  </button>
                 )}
-              </div>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
-                <p className="font-semibold">Requirement record</p>
-                <p className="mt-1 text-muted">Verified {counts.verified} · In the app {counts.implemented} · Blocked {counts.blocked} · Planned {counts.planned} · Deferred {counts.deferred}</p>
-                <ul className="mt-2 space-y-1 text-muted">
-                  {REQUIREMENTS.filter((row) => row.status === "blocked" || row.status === "deferred").map((row) => (
-                    <li key={row.id}>{row.text} — {row.note}</li>
-                  ))}
-                </ul>
-              </div>
+                <div className="rounded-panel border border-line bg-surface p-4">
+                  <p className="font-semibold">Archive</p>
+                  <label className="mt-2 flex items-start gap-2 text-sm">
+                    <input type="checkbox" checked={includeTemporary} onChange={(event) => setIncludeTemporary(event.target.checked)} />
+                    Include temporary chats
+                  </label>
+                  <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void downloadArchive()}>
+                    Export archive
+                  </button>
+                  <label className="mt-3 block text-sm">
+                    Import archive
+                    <input
+                      type="file"
+                      accept="application/json"
+                      className="mt-1 block w-full text-sm"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void onImportFile(file);
+                      }}
+                    />
+                  </label>
+                  {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
+                  {importPreview && (
+                    <div className="mt-3 text-sm">
+                      <p>{importPreview.chats} chats · {importPreview.memories} notes · {importPreview.projects} projects. Hash matched.</p>
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); }}>
+                          Merge
+                        </button>
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-panel border border-line px-3"
+                          onClick={() =>
+                            requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
+                              setWs(() => pushAudit(importPreview.workspace, "import_replace", "archive", "replaced"));
+                              setImportPreview(null);
+                            })
+                          }
+                        >
+                          Replace
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <details className="rounded-panel border border-line bg-surface p-4 text-sm">
+                  <summary className="cursor-pointer font-semibold">How to use this</summary>
+                  <ul className="mt-2 space-y-2 text-muted">
+                    <li>Command is home. Ask is the default. Automatic still asks before a delete or a replace.</li>
+                    <li>Memory is off until you confirm it. A memory-off chat cannot read or save notes.</li>
+                    <li>Open chats on a project shows only that project’s chats. Show all chats clears the filter.</li>
+                    <li>Research runs only when a search endpoint and key are set. A missing provider refuses and creates no citations. Links are only URLs the provider returned.</li>
+                    <li>Workspace lookup is three local reads. The bounded planner can ask Grok to use those same reads. It is not a general agent, and Stop this run is not Emergency stop.</li>
+                    <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
+                    <li>Stop this reply cancels only the current answer. It is not Emergency stop. The unfinished answer is not saved. The provider may still charge for text it generated before it saw the cancel.</li>
+                    <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart on this machine. It is not durable on a serverless disk. Without a database URL the server copy is a file on this machine, not cloud backup. Your phone keeps its own copy.</li>
+                    <li>Replies appear as Grok writes them. A stopped, empty, or broken reply is not saved.</li>
+                    <li>If this browser and the server both already have a copy, this page keeps the browser copy until you choose to replace the server copy.</li>
+                    <li>Grok, voice, REA, and saving a server copy require a signed-in owner. A refused sign-in does not spend the model.</li>
+                    <li>Oak Bridge and BridgePoint are external labels. This app does not open them.</li>
+                    <li>A dedicated database needs a new Supabase organization. The current free organization is already full.</li>
+                  </ul>
+                </details>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-display text-lg font-semibold">Support</h3>
+                <div className="settings-card card-texture rounded-panel p-4 text-sm">
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("help")}>
+                    Help
+                  </button>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-display text-lg font-semibold">Safety and status</h3>
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => void toggleStop()}
+                >
+                  <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
+                </button>
+                <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+                  <p className="font-semibold">Requirement record</p>
+                  <p className="mt-1 text-muted">Verified {counts.verified} · In the app {counts.implemented} · Blocked {counts.blocked} · Planned {counts.planned} · Deferred {counts.deferred}</p>
+                  <ul className="mt-2 space-y-1 text-muted">
+                    {REQUIREMENTS.filter((row) => row.status === "blocked" || row.status === "deferred").map((row) => (
+                      <li key={row.id}>{row.text} — {row.note}</li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
             </section>
           )}
         </div>
