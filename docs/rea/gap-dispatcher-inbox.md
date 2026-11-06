@@ -135,3 +135,11 @@ No new gaps. No branch movement except rea-features. main 014b36d unchanged; pil
 - Pillars unchanged rollup: Whisper partial; VCS branch-only; Tool Registry partial; Continuous evolution partial (drafts on main).
 - Full report: `/workspace/rea-captures/internal-audit-2026-11-06a.md` + `pass-2026-11-06a/summary.md`
 - Zack-message conditions: not met.
+
+## 2026-11-06 16:05 CST — REA pass 2026-11-06b → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24).
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same.
+- **DOUBLE FAILURE:** Audit account sign-in rejected again on live (“email and password do not match”) — same as 06a. Authenticated walk blocked. Zack notified via WakeParent.
+- **Branch-only noise (not live):** rea-features `fefb966`; codex/mcp-oauth-mvp `46d2d24`.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-06b.md` + `pass-2026-11-06b/analysis.md`
+- New owner routes: none. Zack-message conditions: **met (double failure)**.

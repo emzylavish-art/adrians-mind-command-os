@@ -28,3 +28,8 @@
 - Grok Build (8939df01): audit login reject; /dashboard Access denied unsigned/browser; prod tip e3ccc51 ahead of main; residual CSP+Permissions-Policy
 - Logic Bot (d77a5e43): explore persona handoff not verified
 - Gap Dispatcher (d42953dc): full gap list for this pass
+
+## 2026-11-06 16:05 CST — pass 2026-11-06b routed
+- Gap Dispatcher (d42953dc): full gap list for this pass (no new owner fixes)
+- Zack via parent: double failure — audit login reject consecutive (06a+06b)
+- Nothing re-routed to Grok Build / Logic Bot (status unchanged since 06a)
