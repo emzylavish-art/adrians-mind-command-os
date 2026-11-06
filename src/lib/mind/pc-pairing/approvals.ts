@@ -57,6 +57,11 @@ export function hashCommand(command: string): string {
 }
 
 function ensure() {
+  // The Vercel filesystem is not a durable, shared single-use approval store.
+  // Local multi-process consumption also remains concurrency-unsafe.
+  if (process.env.VERCEL === "1") {
+    throw new PcApprovalStorageUnavailableError();
+  }
   storageIo(() => mkdirSync(directory, { recursive: true }));
 }
 
@@ -89,9 +94,9 @@ function writeRecord(record: PcApprovalRecord) {
 }
 
 function readRecord(id: string): PcApprovalRecord | null {
+  ensure();
   const path = approvalPath(id);
   if (!path) return null;
-  ensure();
   const contents = storageIo(() => {
     try { return readFileSync(path, "utf8"); }
     catch (error) { if (fsCode(error) === "ENOENT") return null; throw error; }

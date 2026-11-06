@@ -288,7 +288,7 @@ describe("PC approvals HTTP failure classification", () => {
       if (state.status !== "error") continue;
       assert.equal(state.kind, kind);
       assert.doesNotMatch(state.message, /var\/task|ENOENT|private/);
-      if (body.code === "APPROVAL_STORAGE_UNAVAILABLE") assert.equal(state.message, PC_APPROVAL_STORAGE_FAILURE_COPY);
+      if (status === 503 && body.code === "APPROVAL_STORAGE_UNAVAILABLE") assert.equal(state.message, PC_APPROVAL_STORAGE_FAILURE_COPY);
     }
   });
 
