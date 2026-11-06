@@ -275,9 +275,11 @@ describe("PC approvals HTTP failure classification", () => {
   it("keeps auth, cross-site, storage, and generic forbidden distinct", async () => {
     const cases = [
       [401, { error: "Sign in is required." }, "auth_required"],
+      [401, { code: "APPROVAL_STORAGE_UNAVAILABLE" }, "auth_required"],
       [403, { code: "FORBIDDEN_CROSS_SITE" }, "forbidden_cross_site"],
       [503, { code: "APPROVAL_STORAGE_UNAVAILABLE", error: "/var/task/private" }, "network_failure"],
       [403, { error: "ENOENT /var/task/private" }, "network_failure"],
+      [403, { error: "Forbidden: cross-site request blocked" }, "network_failure"],
       [403, {}, "network_failure"],
     ] as const;
     for (const [status, body, kind] of cases) {
