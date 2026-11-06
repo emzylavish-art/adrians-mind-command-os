@@ -53,8 +53,17 @@ export function classifyPcApprovalActionFailure(
   if (status === 401 || raw === "Unauthorized" || /sign in is required/i.test(raw)) {
     return { kind: "auth_required", message: `${failed} ${HONEST_FAILURE_MESSAGES.auth_required}` };
   }
-  if (status === 403 || /cross-site request blocked|^Forbidden/i.test(raw)) {
+  const code = caught && typeof caught === "object" && "code" in caught
+    ? (caught as { code?: unknown }).code
+    : undefined;
+  if (code === "FORBIDDEN_CROSS_SITE") {
     return { kind: "forbidden_cross_site", message: HONEST_FAILURE_MESSAGES.forbidden_cross_site };
+  }
+  if (code === "APPROVAL_STORAGE_UNAVAILABLE") {
+    return { kind: "network_failure", message: `${failed} (PC approval storage is unavailable)` };
+  }
+  if (status === 403) {
+    return { kind: "network_failure", message: `${failed} (HTTP 403: forbidden)` };
   }
   if (status !== null && status >= 500) {
     return { kind: "network_failure", message: `${failed} (HTTP ${status})` };
@@ -109,15 +118,21 @@ export async function runPcApprovalAction(
     });
     const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; error?: string } | null;
     if (!res.ok) {
+      const code = body && (body as { code?: unknown }).code;
+      const knownCode = code === "FORBIDDEN_CROSS_SITE" || code === "APPROVAL_STORAGE_UNAVAILABLE" ? code : undefined;
       const classified = classifyPcApprovalActionFailure(
         params.action,
-        Object.assign(new Error(body?.error || `HTTP ${res.status}`), { status: res.status }),
+        Object.assign(new Error(knownCode === "APPROVAL_STORAGE_UNAVAILABLE"
+          ? "PC approval storage is unavailable"
+          : `HTTP ${res.status}`), { status: res.status, code: knownCode }),
       );
       return { ok: false, ...classified, params };
     }
     if (!body || body.ok !== true) {
-      const detail = body?.error?.trim() || `HTTP ${res.status}`;
-      const classified = classifyPcApprovalActionFailure(params.action, detail);
+      const code = body && (body as { code?: unknown }).code;
+      const knownCode = code === "FORBIDDEN_CROSS_SITE" || code === "APPROVAL_STORAGE_UNAVAILABLE" ? code : undefined;
+      const detail = knownCode === "APPROVAL_STORAGE_UNAVAILABLE" ? "PC approval storage is unavailable" : `HTTP ${res.status}`;
+      const classified = classifyPcApprovalActionFailure(params.action, Object.assign(new Error(detail), { status: res.status, code: knownCode }));
       return { ok: false, ...classified, params };
     }
     if (params.action === "approve") {
