@@ -5749,7 +5749,7 @@ function ChatPane({
             {active && (
               <button
                 type="button"
-                aria-label={pinned ? `Unpin chat: ${active.title}` : `Pin chat: ${active.title}`}
+                aria-label={pinned ? `Unpin chat: ${active.title.trim() || "Untitled chat"}` : `Pin chat: ${active.title.trim() || "Untitled chat"}`}
                 aria-pressed={pinned}
                 className="min-h-11 rounded-panel px-3 text-sm text-accent hover:bg-white/5"
                 onClick={onTogglePin}
