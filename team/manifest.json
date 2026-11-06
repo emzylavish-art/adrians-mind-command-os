@@ -379,13 +379,13 @@
       "status": "ready",
       "entrypoint": "python3 team/runner.py",
       "input_schema": {
-        "provider": "grok|openrouter|ollama",
+        "provider": "openai|grok|openrouter|ollama",
         "prompt": "string",
         "messages": "object[] (optional)",
         "model": "string (optional)",
         "timeout_seconds": "integer (optional)"
       },
-      "safety": "Makes a provider request only when explicitly invoked. xAI/OpenRouter keys are read from environment variables; Ollama uses localhost. No credentials are logged or persisted. Provider usage may incur charges; select route explicitly."
+      "safety": "Makes a provider request only when explicitly invoked. OpenAI, xAI, and OpenRouter keys are read from environment variables; Ollama uses localhost. OpenAI aliases resolve against the live /v1/models list and return the actual model and usage when available. No credentials are logged or persisted. Provider usage may incur charges; select route explicitly."
     },
     {
       "id": "notion.controller",

@@ -123,11 +123,11 @@ def tool_specs(manifest):
                 "additionalProperties": False,
             }
         elif name == "model.generate":
-            description = "Generate text using an explicitly selected Grok, OpenRouter, or local Ollama provider. Provider credentials are read from the host environment; provider availability and billing depend on configuration."
+            description = "Generate text using an explicitly selected OpenAI, Grok, OpenRouter, or local Ollama provider. OpenAI Astra/Sol aliases resolve against the live model catalog and the result reports the actual model and usage when supplied. Provider credentials are read from the host environment; provider availability and billing depend on configuration."
             schema = {
                 "type": "object",
                 "properties": {
-                    "provider": {"type": "string", "enum": ["grok", "openrouter", "ollama"]},
+                    "provider": {"type": "string", "enum": ["openai", "grok", "openrouter", "ollama"]},
                     "prompt": {"type": "string"},
                     "messages": {"type": "array", "items": {"type": "object"}},
                     "model": {"type": "string"},

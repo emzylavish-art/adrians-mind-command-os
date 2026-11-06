@@ -40,7 +40,7 @@ class MCPServerTests(unittest.TestCase):
         self.assertIn("model.generate", names)
         self.assertIn("notion.controller", names)
         schemas = {tool["name"]: tool["inputSchema"] for tool in responses[1]["result"]["tools"]}
-        self.assertEqual(schemas["model.generate"]["properties"]["provider"]["enum"], ["grok", "openrouter", "ollama"])
+        self.assertEqual(schemas["model.generate"]["properties"]["provider"]["enum"], ["openai", "grok", "openrouter", "ollama"])
         self.assertEqual(schemas["notion.controller"]["properties"]["action"]["enum"],
                          ["search", "retrieve-page", "retrieve-children", "append-text"])
         self.assertIn("team.queue", names)
