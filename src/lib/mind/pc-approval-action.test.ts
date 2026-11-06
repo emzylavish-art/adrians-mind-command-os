@@ -29,6 +29,31 @@ describe("PC approve/deny action failures", () => {
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_deny_failed), "network_failure");
   });
 
+  it("classifies only explicitly coded cross-site failures as cross-site", async () => {
+    for (const [body, expected] of [
+      [{ error: "Forbidden: cross-site request blocked", code: "FORBIDDEN_CROSS_SITE" }, "forbidden_cross_site"],
+      [{ error: "ENOENT: mkdir /var/task/.data/mind-pc-approvals" }, "network_failure"],
+    ] as const) {
+      const result = await runPcApprovalAction({ action: "approve", approvalId: "a1", token: "t1", command: "pwd" }, async () => jsonResponse(403, body));
+      assert.equal(result.ok, false);
+      if (result.ok) continue;
+      assert.equal(result.kind, expected);
+      assert.doesNotMatch(result.message, /var\/task|ENOENT/);
+    }
+  });
+
+  it("reports coded storage outages distinctly without exposing body text", async () => {
+    const result = await runPcApprovalAction({ action: "deny", approvalId: "a1", token: "t1" }, async () => jsonResponse(503, {
+      ok: false, code: "APPROVAL_STORAGE_UNAVAILABLE", error: "/var/task/private",
+    }));
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.kind, "network_failure");
+      assert.match(result.message, /storage is unavailable/i);
+      assert.doesNotMatch(result.message, /var\/task|private/);
+    }
+  });
+
   it("snapshots approve params so Retry keeps identical id/token/command", () => {
     const params: PcApprovalActionParams = {
       action: "approve",
