@@ -143,3 +143,11 @@ No new gaps. No branch movement except rea-features. main 014b36d unchanged; pil
 - **Branch-only noise (not live):** rea-features `fefb966`; codex/mcp-oauth-mvp `46d2d24`.
 - Full report: `/workspace/rea-captures/internal-audit-2026-11-06b.md` + `pass-2026-11-06b/analysis.md`
 - New owner routes: none. Zack-message conditions: **met (double failure)**.
+
+## 2026-11-06 16:17 CST — REA pass 2026-11-06c → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24).
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same.
+- **Visual:** Browser /dashboard → Access denied (no login form). Auth walk blocked. Same family as 06a Access denied / 06b login reject — already routed; not re-sent to Grok Build.
+- **Branch-only noise (not live):** rea-features `b00f448` (docs 06b).
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-06c.md` + `pass-2026-11-06c/analysis.md`
+- New owner routes: none. Zack-message conditions: **not met**.
