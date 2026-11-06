@@ -19,6 +19,9 @@ import {
   WORKER_HEALTH_LOADING_COPY,
   WorkerHealthStatusRows,
   classifyMcpListFailure,
+  classifyListFailure,
+  parsePcApprovalsResponse,
+  PC_APPROVAL_STORAGE_FAILURE_COPY,
   isCurrentListGeneration,
   loadMcpList,
   loadMcpToolsList,
@@ -265,6 +268,42 @@ describe("MCP tools list: empty vs error", () => {
   it("ready with tools renders no status row", async () => {
     const state = await loadMcpToolsList(async () => ({ tools: [sampleTool] }));
     assert.equal(renderTools(state), "");
+  });
+});
+
+describe("PC approvals HTTP failure classification", () => {
+  it("keeps auth, cross-site, storage, and generic forbidden distinct", async () => {
+    const cases = [
+      [401, { error: "Sign in is required." }, "auth_required"],
+      [403, { code: "FORBIDDEN_CROSS_SITE" }, "forbidden_cross_site"],
+      [503, { code: "APPROVAL_STORAGE_UNAVAILABLE", error: "/var/task/private" }, "network_failure"],
+      [403, { error: "ENOENT /var/task/private" }, "network_failure"],
+      [403, {}, "network_failure"],
+    ] as const;
+    for (const [status, body, kind] of cases) {
+      const state = await loadPcApprovalsList(() => parsePcApprovalsResponse(new Response(JSON.stringify(body), { status })));
+      assert.equal(state.status, "error");
+      if (state.status !== "error") continue;
+      assert.equal(state.kind, kind);
+      assert.doesNotMatch(state.message, /var\/task|ENOENT|private/);
+      if (body.code === "APPROVAL_STORAGE_UNAVAILABLE") assert.equal(state.message, PC_APPROVAL_STORAGE_FAILURE_COPY);
+    }
+  });
+
+  it("malformed bodies are generic failures, never cross-site or empty success", async () => {
+    for (const status of [200, 403, 503]) {
+      const state = await loadPcApprovalsList(() => parsePcApprovalsResponse(new Response("<html>/var/task</html>", { status })));
+      assert.equal(state.status, "error");
+      if (state.status === "error") { assert.equal(state.kind, "network_failure"); assert.doesNotMatch(state.message, /var\/task|cross-site/i); }
+    }
+  });
+
+  it("status-only and legacy filesystem errors do not imply cross-site", () => {
+    for (const error of [httpError(403), httpError(403, "ENOENT: mkdir /var/task/.data")]) {
+      const result = classifyListFailure(error, "pc_approvals");
+      assert.equal(result.kind, "network_failure");
+      assert.doesNotMatch(result.message, /cross-site|ENOENT|var\/task/i);
+    }
   });
 });
 
