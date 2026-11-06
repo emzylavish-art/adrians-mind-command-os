@@ -122,6 +122,34 @@ def tool_specs(manifest):
                 "required": ["worker_id"],
                 "additionalProperties": False,
             }
+        elif name == "model.generate":
+            description = "Generate text using an explicitly selected Grok, OpenRouter, or local Ollama provider. Provider credentials are read from the host environment; provider availability and billing depend on configuration."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "provider": {"type": "string", "enum": ["grok", "openrouter", "ollama"]},
+                    "prompt": {"type": "string"},
+                    "messages": {"type": "array", "items": {"type": "object"}},
+                    "model": {"type": "string"},
+                    "timeout_seconds": {"type": "integer"},
+                },
+                "required": ["provider"],
+                "anyOf": [{"required": ["prompt"]}, {"required": ["messages"]}],
+            }
+        elif name == "notion.controller":
+            description = "Search or retrieve Notion pages and blocks; append text only when the explicit action is append-text. Requires NOTION_API_KEY in the host environment and appropriate Notion sharing."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["search", "retrieve-page", "retrieve-children", "append-text"]},
+                    "query": {"type": "string"},
+                    "id": {"type": "string"},
+                    "text": {"type": "string"},
+                    "page_size": {"type": "integer"},
+                    "timeout_seconds": {"type": "integer"},
+                },
+                "required": ["action"],
+            }
         else:
             continue
         specs.append({"name": name, "description": description, "inputSchema": schema})
