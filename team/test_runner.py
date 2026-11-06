@@ -3,6 +3,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,26 @@ def call(payload):
 
 
 class RunnerTests(unittest.TestCase):
+
+    def test_model_generate_routes_openai_through_shared_runner(self):
+        sys.path.insert(0, str(ROOT / "team"))
+        import runner
+
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=json.dumps({"text": "ok"}), stderr=""
+        )
+        with patch.object(runner.subprocess, "run", return_value=completed) as run:
+            result = runner.invoke(
+                "model.generate", {"provider": "openai", "prompt": "hello"},
+                runner.load_manifest(),
+            )
+
+        self.assertEqual(result["status"], "ready", result)
+        command = run.call_args.args[0]
+        self.assertIn("--provider", command)
+        provider_index = command.index("--provider")
+        self.assertEqual(command[provider_index + 1], "openai")
+
     def test_list_tools_returns_catalog(self):
         code, result = call({"operation": "list-tools"})
         self.assertEqual(code, 0)

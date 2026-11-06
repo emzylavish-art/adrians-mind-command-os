@@ -89,8 +89,8 @@ def invoke(tool_id, payload, manifest):
             messages = [{"role": "user", "content": prompt}]
         if not isinstance(messages, list) or not messages:
             return envelope("blocked", limitations=["messages must be a non-empty list."])
-        if provider not in {"grok", "openrouter", "ollama"}:
-            return envelope("blocked", limitations=["provider must be grok, openrouter, or ollama."])
+        if provider not in {"openai", "grok", "openrouter", "ollama"}:
+            return envelope("blocked", limitations=["provider must be openai, grok, openrouter, or ollama."])
         command = [sys.executable, str(ROOT / "team" / "provider_router.py"),
                    "--provider", provider, "--prompt", json.dumps(messages)]
         if payload.get("model"):
