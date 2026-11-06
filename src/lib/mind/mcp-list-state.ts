@@ -98,6 +98,18 @@ export function isListAuthRequiredNotice(kind: HonestFailureKind): boolean {
   return kind === "auth_required";
 }
 
+export const PC_APPROVAL_STORAGE_FAILURE_COPY = "PC approval storage is unavailable. Pending approvals could not be loaded.";
+/** Parse only stable PC-approval failure codes; never expose arbitrary server error text. */
+export async function parsePcApprovalsResponse(response: Response): Promise<unknown> {
+  if (response.ok) return response.json();
+  const body: unknown = await response.json().catch(() => null);
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : null;
+  const code = record?.code === "APPROVAL_STORAGE_UNAVAILABLE" || record?.code === "FORBIDDEN_CROSS_SITE" ? record.code : undefined;
+  const message = code === "APPROVAL_STORAGE_UNAVAILABLE" ? PC_APPROVAL_STORAGE_FAILURE_COPY :
+    code === "FORBIDDEN_CROSS_SITE" ? HONEST_FAILURE_MESSAGES.forbidden_cross_site : `HTTP ${response.status}`;
+  throw Object.assign(new Error(message), { status: response.status, code });
+}
+
 /** Map a rejected list load to one honest banner message + failure-states kind. */
 export function classifyListFailure(
   caught: unknown,
@@ -106,6 +118,15 @@ export function classifyListFailure(
   const failed = LIST_FAILED_COPY[scope];
   const status = statusOf(caught);
   const raw = caught instanceof Error ? caught.message : typeof caught === "string" ? caught : "";
+  if (scope === "pc_approvals") {
+    const code = caught && typeof caught === "object" ? (caught as { code?: unknown }).code : undefined;
+    if (status === 401 || raw === "Unauthorized" || /sign in is required/i.test(raw)) return { kind: "auth_required", message: LIST_AUTH_NOTICE_COPY.pc_approvals };
+    if (code === "APPROVAL_STORAGE_UNAVAILABLE") return { kind: "network_failure", message: PC_APPROVAL_STORAGE_FAILURE_COPY };
+    if (code === "FORBIDDEN_CROSS_SITE") return { kind: "forbidden_cross_site", message: HONEST_FAILURE_MESSAGES.forbidden_cross_site };
+    if (isTimeoutFailure(caught, raw)) return { kind: "network_failure", message: `${failed} (timed out)` };
+    if (status !== null) return { kind: "network_failure", message: `${failed} (HTTP ${status}${status === 403 ? ": forbidden" : ""})` };
+    return { kind: "network_failure", message: `${failed} ${HONEST_FAILURE_MESSAGES.network_failure}` };
+  }
   if (isTimeoutFailure(caught, raw)) {
     return { kind: "network_failure", message: `${failed} (timed out)` };
   }
