@@ -151,7 +151,7 @@ export function listPendingApprovals(ownerId: string, nowMs = Date.now()): PcApp
   pruneExpiredApprovals(nowMs);
   ensure();
   const out: PcApprovalPublic[] = [];
-  for (const name of readdirSync(directory)) {
+  for (const name of storageIo(() => readdirSync(directory))) {
     if (!name.endsWith(".json")) continue;
     const record = readRecord(name.slice(0, -".json".length));
     if (!record || record.ownerId !== ownerId) continue;
