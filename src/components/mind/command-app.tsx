@@ -3493,6 +3493,64 @@ export function CommandApp() {
               ))}
             </div>
           </div>
+          <details className="mb-4">
+            <summary
+              tabIndex={0}
+              onClick={() => {
+                if (railCollapsed) setRailCollapsed(false);
+              }}
+              className="nav-item flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              <ListTree aria-hidden="true" className="size-4 shrink-0 opacity-90" />
+              <span className={`${railCollapsed ? "md:sr-only" : ""}`}>All workspaces</span>
+            </summary>
+            <div className={`mt-3 space-y-4 ${railCollapsed ? "md:hidden" : ""}`}>
+              {NAV_GROUPS.map((group) => {
+                const items = group.items.filter((item) => item.id !== "chat");
+                return (
+                  <div key={group.label}>
+                    <p className="meta-label px-3 pb-2">{group.label}</p>
+                    <div className="space-y-1">
+                      {items.map((item) => {
+                        const Icon = item.icon;
+                        const on = view === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            aria-current={on ? "page" : undefined}
+                            onClick={() => {
+                              setView(item.id);
+                              setNavOpen(false);
+                              closeMenus();
+                            }}
+                            className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"}`}
+                          >
+                            <Icon aria-hidden="true" className="size-4 shrink-0 opacity-90" />
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                      {group.label === "Workspace" && WORKSPACE_ROUTE_LINKS.filter((routeItem) => routeItem.id === "explore" || routeItem.id === "dashboard").map((routeItem) => (
+                        <Link
+                          key={routeItem.id}
+                          to={routeItem.href}
+                          onClick={() => {
+                            setNavOpen(false);
+                            closeMenus();
+                          }}
+                          className="nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5"
+                        >
+                          <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
+                          {routeItem.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
           {ws.pins.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</p>
@@ -4969,28 +5027,6 @@ export function CommandApp() {
                 <h2 className="font-display text-3xl font-bold">Settings</h2>
                 <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
               </div>
-              <div className="settings-card rounded-panel p-4">
-                <h3 className="text-sm font-semibold">Workspace navigation</h3>
-                <p className="mt-1 text-xs text-muted">Open any workspace here; the sidebar stays focused on Library, Projects, Scheduled, and Explore.</p>
-                <div className="mt-4 space-y-4">
-                  {NAV_GROUPS.map((group) => {
-                    const items = group.items.filter((item) => !["files", "projects", "scheduled", "chat"].includes(item.id));
-                    if (!items.length) return null;
-                    return (
-                      <div key={group.label}>
-                        <p className="meta-label px-1 pb-2">{group.label}</p>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {items.map((item) => {
-                            const Icon = item.icon;
-                            return <button key={item.id} type="button" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-left text-sm hover:bg-white/5" aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}><Icon className="size-4 shrink-0" />{item.label}</button>;
-                          })}
-                          {group.label === "Workspace" && <Link to="/dashboard" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm hover:bg-white/5"><img src="/icons/dashboard.svg" alt="" className="nav-icon-img" />Dashboard</Link>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  </div>
-                </div>
               <div className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
