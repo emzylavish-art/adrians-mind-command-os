@@ -181,3 +181,11 @@ No new gaps. No branch movement except rea-features. main 014b36d unchanged; pil
 
 ### Gap Dispatcher auth clarification — 2026-11-06 23:45 WAT
 Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /dashboard rendered Universe canvas. This is a session change, NOT evidence of a new deployment or code fix. Unsigned curl redirects to login remain expected. Audit password account is retired for Gap Dispatcher. See /workspace/locks/conductor/gap-dispatcher.md and capture-loop-state.json for verified evidence. Six authenticated fresh loads showed no hydration mismatch; #52 resize remains untested.
+
+## 2026-11-06 16:55 CST — REA pass 2026-11-06g → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking auth walks.
+- **Visual:** Universe paints on /dashboard (no Access denied); curl still 307→login; Activity `forbidden_cross_site`; Scheduled no worker; explore handoff unverified; empty Universe panels (Notion/Money/Fleet/commits).
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-06g.md` + `pass-2026-11-06g/`
+- Zack-message conditions: **not met**.
