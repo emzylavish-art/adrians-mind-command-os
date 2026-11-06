@@ -37,3 +37,8 @@
 ## 2026-11-06 16:17 CST — pass 2026-11-06c routed
 - Gap Dispatcher (d42953dc): full gap list for this pass (no new owner fixes)
 - Nothing re-routed to Grok Build / Logic Bot (Access denied / audit auth unchanged since 06a; Zack already notified double-failure on 06b)
+
+## 2026-11-06 16:26 CST — pass 2026-11-06d routed
+- Grok Build (8939df01): NEW root cause — REA_AUDIT_EMAIL in /home/box/.secrets/rea-audit-login.env uses placeholder domain example.com; provision real audit user + replace secret so authenticated REA walks work (login currently "email and password do not match"; /dashboard Access denied).
+- Gap Dispatcher (d42953dc): full gap list for this pass
+- Nothing re-routed for CSP/OAuth/sidebar/VCS (status unchanged). Zack not messaged (double-failure already on 06b).
