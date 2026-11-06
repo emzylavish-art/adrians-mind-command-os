@@ -8,6 +8,7 @@ Uses OPENAI_API_KEY from environment.
 import os
 import json
 import asyncio
+import sys
 from typing import Any
 
 try:
@@ -24,7 +25,8 @@ server = Server("gpt-proxy")
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 if not openai.api_key:
-    print("Warning: OPENAI_API_KEY not set")
+    # MCP stdio is a JSON-RPC byte stream; diagnostics must never corrupt it.
+    print("Warning: OPENAI_API_KEY not set", file=sys.stderr)
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:

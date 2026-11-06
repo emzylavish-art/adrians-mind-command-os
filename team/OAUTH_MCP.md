@@ -6,6 +6,12 @@ code endpoints when `MCP_OAUTH_ISSUER` is configured. The transport accepts
 JSON-RPC `initialize`, `notifications/initialized`, `tools/list`, and
 `tools/call`; malformed JSON-RPC is rejected before the runner is called.
 
+The original Grokbot MCP remains at `mcp/gpt_proxy_server.py` and is registered
+as `gpt-proxy` in `.mcp.json`. It preserves its existing `ask_gpt` and
+`generate_image` tools and inherits credentials from the host. The earlier
+Cloudflare API MCP profile is preserved there as `cloudflare-api`; Adrian’s
+Mind does not replace either existing server.
+
 ## Local development
 
 ```bash

@@ -19,6 +19,16 @@ Lets Claude Desktop, Grok, ChatGPT, or Astra call your OpenAI API (chat + image 
    python mcp/gpt_proxy_server.py
    ```
 
+The repository `.mcp.json` already registers this original `gpt-proxy` server
+alongside Adrian’s Mind tools. It is intentionally kept as a separate existing
+server: the Mind runner and its allowlisted tools are not duplicated or
+replaced. The process inherits `OPENAI_API_KEY` from the host environment; no
+key belongs in the repository configuration.
+
+The requirements pin MCP to the 1.x Server decorator API used by this original
+implementation. MCP 2.x removes that API and will prevent the server from
+starting.
+
 ## Connect to Claude Desktop
 
 Add to `claude_desktop_config.json`:
