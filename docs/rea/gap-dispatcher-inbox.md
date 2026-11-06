@@ -159,3 +159,11 @@ No new gaps. No branch movement except rea-features. main 014b36d unchanged; pil
 - **Visual:** Access denied on /dashboard; login reject on audit account; /memory /explore unsigned OK.
 - Full report: `/workspace/rea-captures/internal-audit-2026-11-06d.md` + `pass-2026-11-06d/analysis.md`
 - Zack-message conditions: **not met**.
+
+## 2026-11-06 16:35 CST — REA pass 2026-11-06e → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking auth walks.
+- **Visual:** Access denied on /dashboard; login reject on audit account; unsigned /memory|/explore OK; Skills/Memory/Activity `forbidden_cross_site`; Scheduled worker check stuck.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-06e.md` + `pass-2026-11-06e/`
+- Zack-message conditions: **not met**.
