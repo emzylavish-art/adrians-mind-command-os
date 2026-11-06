@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from "node:fs";
 import { join, resolve, relative, sep, isAbsolute } from "node:path";
 
 export const PC_APPROVAL_TTL_MS = 3 * 60 * 1000;
@@ -21,6 +21,19 @@ export type PcApprovalRecord = {
   status: PcApprovalStatus;
   usedAt?: string;
 };
+
+export class PcApprovalStorageUnavailableError extends Error {
+  constructor() { super("PC approval storage is unavailable."); this.name = "PcApprovalStorageUnavailableError"; }
+}
+const STORAGE_IO_CODES = new Set(["ENOENT", "ENOTDIR", "EACCES", "EPERM", "EROFS", "ENOSPC", "EDQUOT", "EIO", "EBUSY", "EMFILE", "ENFILE"]);
+function fsCode(error: unknown): unknown { return error && typeof error === "object" ? (error as { code?: unknown }).code : undefined; }
+function storageIo<T>(operation: () => T): T {
+  try { return operation(); } catch (error) {
+    const code = fsCode(error);
+    if (typeof code === "string" && STORAGE_IO_CODES.has(code)) throw new PcApprovalStorageUnavailableError();
+    throw error;
+  }
+}
 
 export type PcApprovalPublic = {
   id: string;
@@ -44,7 +57,7 @@ export function hashCommand(command: string): string {
 }
 
 function ensure() {
-  mkdirSync(directory, { recursive: true });
+  storageIo(() => mkdirSync(directory, { recursive: true }));
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -72,52 +85,37 @@ function writeRecord(record: PcApprovalRecord) {
   ensure();
   const path = approvalPath(record.id);
   if (!path) throw new Error("Invalid approval id.");
-  writeFileSync(path, JSON.stringify(record));
+  storageIo(() => writeFileSync(path, JSON.stringify(record)));
 }
 
 function readRecord(id: string): PcApprovalRecord | null {
   const path = approvalPath(id);
-  if (!path || !existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as PcApprovalRecord;
-  } catch {
-    return null;
-  }
+  if (!path) return null;
+  const contents = storageIo(() => {
+    try { return readFileSync(path, "utf8"); }
+    catch (error) { if (fsCode(error) === "ENOENT") return null; throw error; }
+  });
+  if (contents === null) return null;
+  try { return JSON.parse(contents) as PcApprovalRecord; }
+  catch (error) { if (error instanceof SyntaxError) throw new PcApprovalStorageUnavailableError(); throw error; }
 }
 
 export function pruneExpiredApprovals(nowMs = Date.now()): number {
   ensure();
   let touched = 0;
-  for (const name of readdirSync(directory)) {
+  for (const name of storageIo(() => readdirSync(directory))) {
     if (!name.endsWith(".json")) continue;
     const id = name.slice(0, -".json".length);
     const path = approvalPath(id);
     if (!path) continue;
-    try {
-      const record = JSON.parse(readFileSync(path, "utf8")) as PcApprovalRecord;
-      const exp = Date.parse(record.expiresAt);
-      if (!Number.isFinite(exp)) {
-        unlinkSync(path);
-        touched += 1;
-        continue;
-      }
-      if (nowMs > exp && record.status === "pending") {
-        record.status = "expired";
-        writeFileSync(path, JSON.stringify(record));
-        touched += 1;
-      }
-      if (nowMs - exp > PC_APPROVAL_TTL_MS) {
-        unlinkSync(path);
-        touched += 1;
-      }
-    } catch {
-      try {
-        unlinkSync(path);
-        touched += 1;
-      } catch {
-        /* ignore */
-      }
+    const record = readRecord(id);
+    if (!record) continue;
+    const exp = Date.parse(record.expiresAt);
+    if (!Number.isFinite(exp)) { storageIo(() => unlinkSync(path)); touched += 1; continue; }
+    if (nowMs > exp && record.status === "pending") {
+      record.status = "expired"; writeRecord(record); touched += 1;
     }
+    if (nowMs - exp > PC_APPROVAL_TTL_MS) { storageIo(() => unlinkSync(path)); touched += 1; }
   }
   return touched;
 }
