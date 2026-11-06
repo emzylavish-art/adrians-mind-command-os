@@ -130,7 +130,7 @@ export function pruneExpiredApprovals(nowMs = Date.now()): number {
     const record = readRecord(id);
     if (!record) continue;
     const exp = Date.parse(record.expiresAt);
-    if (!Number.isFinite(exp)) { storageIo(() => unlinkSync(path)); touched += 1; continue; }
+    if (!Number.isFinite(exp)) throw new PcApprovalStorageUnavailableError();
     if (nowMs > exp && record.status === "pending") {
       record.status = "expired"; writeRecord(record); touched += 1;
     }
