@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, before, after } from "node:test";
@@ -49,6 +49,19 @@ describe("pc shell human approvals (H9)", () => {
     writeFileSync(corrupt, "not-json");
     assert.throws(() => listPendingApprovals("owner-corrupt"), PcApprovalStorageUnavailableError);
     rmSync(corrupt, { force: true });
+  });
+
+  it("fails closed if a stored command is changed without updating its approval hash", () => {
+    const record = createPcApproval({ ownerId: "owner-tamper", command: "pwd", agentId: "agent", agentLabel: "PC" });
+    const path = join(dir, `${record.id}.json`);
+    const stored = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    stored.command = "rm -rf /";
+    writeFileSync(path, JSON.stringify(stored));
+    try {
+      assert.throws(() => consumePcApproval({ ownerId: record.ownerId, approvalId: record.id, token: record.token, expectedCommand: "pwd" }), PcApprovalStorageUnavailableError);
+    } finally {
+      rmSync(path, { force: true });
+    }
   });
 
   it("rejects confirm:true from tool args and creates a pending approval instead", async () => {
