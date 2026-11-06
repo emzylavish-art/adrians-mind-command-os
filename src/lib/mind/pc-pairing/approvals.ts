@@ -91,6 +91,7 @@ function writeRecord(record: PcApprovalRecord) {
 function readRecord(id: string): PcApprovalRecord | null {
   const path = approvalPath(id);
   if (!path) return null;
+  ensure();
   const contents = storageIo(() => {
     try { return readFileSync(path, "utf8"); }
     catch (error) { if (fsCode(error) === "ENOENT") return null; throw error; }
