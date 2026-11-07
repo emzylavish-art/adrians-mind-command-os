@@ -1,0 +1,26 @@
+# Live probe raw — pass 2026-11-07ag
+HEAD 200  GET 200|  /
+HEAD 200  GET 200|  /login
+HEAD 307  GET 307|https://adrians-mind.vercel.app/login?next=%2Fdashboard  /dashboard
+HEAD 200  GET 200|  /memory
+HEAD 200  GET 200|  /explore
+HEAD 404  GET 404|  /tools
+HEAD 404  GET 404|  /voice
+HEAD 404  GET 404|  /chat
+HEAD 404  GET 404|  /activity
+HEAD 404  GET 404|  /library
+HEAD 404  GET 404|  /projects
+HEAD 404  GET 404|  /scheduled
+HEAD 404  GET 404|  /whisper-flow
+HEAD 404  GET 404|  /voice-cloning
+HEAD 404  GET 404|  /voice-cloning-studio
+HEAD 404  GET 404|  /registry
+HEAD 404  GET 404|  /evolution
+
+# OAuth status
+OAuth 401  /api/mind/oauth/github/status
+OAuth 401  /api/mind/oauth/gmail/status
+OAuth 401  /api/mind/oauth/google_calendar/status
+OAuth 401  /api/mind/oauth/google_drive/status
+OAuth 401  /api/mind/oauth/notion/status
+OAuth 401  /api/mind/oauth/slack/status
