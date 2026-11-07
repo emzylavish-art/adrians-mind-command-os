@@ -1,0 +1,19 @@
+/ 200 
+/login 200 
+/dashboard 307 https://adrians-mind.vercel.app/login?next=%2Fdashboard
+/memory 200 
+/explore 200 
+/tools 404 
+/voice 404 
+/chat 404 
+/activity 404 
+/library 404 
+/projects 404 
+/scheduled 404 
+oauth/github 401
+oauth/gmail 401
+oauth/google_calendar 401
+oauth/google_drive 401
+oauth/notion 401
+oauth/slack 401
+dashboard -L: 200 https://adrians-mind.vercel.app/login?next=%2Fdashboard

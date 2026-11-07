@@ -1,0 +1,7 @@
+/voice-cloning-studio 404
+/voice-cloning 404
+/whisper-flow 404
+/tools 404
+/registry 404
+/evolution 404
+/login 200
