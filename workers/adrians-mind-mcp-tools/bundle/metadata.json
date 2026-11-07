@@ -21,6 +21,21 @@
       "type": "plain_text",
       "name": "MCP_TRUST_ACCESS_IDENTITY",
       "text": "1"
+    },
+    {
+      "type": "plain_text",
+      "name": "CF_ACCESS_TEAM_DOMAIN",
+      "text": "adriansmind.cloudflareaccess.com"
+    },
+    {
+      "type": "plain_text",
+      "name": "CF_ACCESS_AUD",
+      "text": "f3d3c26edffe9b02e90616706ed7622c3b96f80e7b1b43ef111eecbb72fdcd37"
+    },
+    {
+      "type": "plain_text",
+      "name": "CF_ACCESS_ALLOWED_EMAIL",
+      "text": "emzylavish@gmail.com"
     }
   ]
 }

@@ -4,6 +4,55 @@ import { describe, it } from "node:test";
 import { budgetDecision, handleRequest, pkceChallenge, publicStatus } from "./index.js";
 
 const ORIGIN = "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev";
+const TEAM = "adriansmind.cloudflareaccess.com";
+const AUD = "f3d3c26edffe9b02e90616706ed7622c3b96f80e7b1b43ef111eecbb72fdcd37";
+const CERTS = `https://${TEAM}/cdn-cgi/access/certs`;
+
+function b64urlBytes(bytes) {
+  let bin = "";
+  for (const byte of bytes) bin += String.fromCharCode(byte);
+  return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+async function accessSigner() {
+  const pair = await crypto.subtle.generateKey(
+    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  jwk.kid = "test-key";
+  jwk.alg = "RS256";
+  async function sign(payload, header = { alg: "RS256", kid: "test-key", typ: "JWT" }) {
+    const encodedHeader = b64urlBytes(new TextEncoder().encode(JSON.stringify(header)));
+    const encodedPayload = b64urlBytes(new TextEncoder().encode(JSON.stringify(payload)));
+    const signature = new Uint8Array(await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      pair.privateKey,
+      new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
+    ));
+    return `${encodedHeader}.${encodedPayload}.${b64urlBytes(signature)}`;
+  }
+  return { jwk, sign };
+}
+
+function certFetch(jwk, next) {
+  return async (url, init) => {
+    if (url === CERTS) return new Response(JSON.stringify({ keys: [jwk] }), { status: 200 });
+    if (next) return next(url, init);
+    return new Response("unexpected", { status: 404 });
+  };
+}
+
+function ownerClaims(extra = {}) {
+  return {
+    iss: `https://${TEAM}`,
+    aud: AUD,
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    email: "emzylavish@gmail.com",
+    ...extra,
+  };
+}
 
 function memoryKv() {
   const store = new Map();
@@ -20,9 +69,10 @@ function env(extra = {}) {
     MCP_OAUTH_ISSUER: ORIGIN,
     MCP_OAUTH_AUDIENCE: `${ORIGIN}/mcp`,
     MCP_OAUTH_SECRET: "oauth-secret",
-    MCP_OAUTH_CLIENT_ID: "codex-test",
-    MCP_OAUTH_REDIRECT_URIS: "https://client.example.test/callback",
     MCP_TRUST_ACCESS_IDENTITY: "1",
+    CF_ACCESS_TEAM_DOMAIN: TEAM,
+    CF_ACCESS_AUD: AUD,
+    CF_ACCESS_ALLOWED_EMAIL: "emzylavish@gmail.com",
     OPENAI_API_KEY: "sk-test-secret",
     MIND_COMMAND_BUDGET_OWNER_OVERRIDE: "1",
     ...extra,
@@ -30,12 +80,15 @@ function env(extra = {}) {
 }
 
 async function login(runtime = env()) {
+  const signer = await accessSigner();
   const verifier = "verifier-value-which-is-long-enough";
   const challenge = await pkceChallenge(verifier);
+  const jwt = await signer.sign(ownerClaims());
+  const redirect = encodeURIComponent(`${ORIGIN}/oauth/test-callback`);
   const authorize = await handleRequest(new Request(
-    `${ORIGIN}/oauth/authorize?response_type=code&client_id=codex-test&redirect_uri=https://client.example.test/callback&scope=mind.tools&code_challenge_method=S256&code_challenge=${challenge}&state=state-1`,
-    { headers: { "cf-access-authenticated-user-email": "owner@example.test" } },
-  ), runtime);
+    `${ORIGIN}/oauth/authorize?response_type=code&client_id=adrians-mind-mcp-test&redirect_uri=${redirect}&scope=mind.tools&code_challenge_method=S256&code_challenge=${challenge}&state=state-1-is-long-enough-ok`,
+    { headers: { "cf-access-jwt-assertion": jwt, "cf-access-authenticated-user-email": "forged@example.test" } },
+  ), runtime, { fetchImpl: certFetch(signer.jwk) });
   assert.equal(authorize.status, 302);
   const code = new URL(authorize.headers.get("location")).searchParams.get("code");
   const token = await handleRequest(new Request(`${ORIGIN}/oauth/token`, {
@@ -44,8 +97,8 @@ async function login(runtime = env()) {
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      client_id: "codex-test",
-      redirect_uri: "https://client.example.test/callback",
+      client_id: "adrians-mind-mcp-test",
+      redirect_uri: `${ORIGIN}/oauth/test-callback`,
       code_verifier: verifier,
     }),
   }), runtime);
@@ -85,15 +138,68 @@ describe("adrians-mind-mcp-test oauth edge", () => {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
     }), runtime);
     assert.equal(missing.status, 401);
+    let fetched = 0;
     const spoofed = await handleRequest(new Request(
-      `${ORIGIN}/oauth/authorize?response_type=code&client_id=codex-test&redirect_uri=https://client.example.test/callback&scope=mind.tools&code_challenge_method=S256&code_challenge=abc`,
-      { headers: { "x-authenticated-user": "owner@example.test" } },
-    ), runtime);
+      `${ORIGIN}/oauth/authorize?response_type=code&client_id=adrians-mind-mcp-test&redirect_uri=${encodeURIComponent(`${ORIGIN}/oauth/test-callback`)}&scope=mind.tools&code_challenge_method=S256&code_challenge=abc`,
+      { headers: { "cf-access-authenticated-user-email": "emzylavish@gmail.com", "x-authenticated-user": "emzylavish@gmail.com" } },
+    ), runtime, { fetchImpl: async () => { fetched += 1; return new Response("no"); } });
     assert.equal(spoofed.status, 401);
-    const dev = await handleRequest(new Request(
-      `${ORIGIN}/oauth/authorize?response_type=code&client_id=codex-test&redirect_uri=https://client.example.test/callback&scope=mind.tools&code_challenge_method=S256&code_challenge=abc`,
-    ), env({ MCP_OAUTH_DEV_SUBJECT: "owner@example.test" }));
+    assert.equal(fetched, 0);
+    const dev = await handleRequest(new Request(`${ORIGIN}/oauth/authorize?response_type=code&client_id=adrians-mind-mcp-test`), env({
+      MCP_TRUST_ACCESS_IDENTITY: "0",
+      MCP_OAUTH_DEV_SUBJECT: "emzylavish@gmail.com",
+    }));
+    const devBody = await dev.json();
     assert.equal(dev.status, 401);
+    assert.match(devBody.error_description, /not enabled/);
+  });
+
+  it("rejects a JWT when Access audience config is missing and accepts a signed owner token", async () => {
+    const signer = await accessSigner();
+    const jwt = await signer.sign(ownerClaims());
+    const missing = await handleRequest(new Request(`${ORIGIN}/oauth/authorize`, { headers: { "cf-access-jwt-assertion": jwt } }), env({ CF_ACCESS_AUD: "" }), { fetchImpl: certFetch(signer.jwk) });
+    const missingBody = await missing.json();
+    assert.equal(missing.status, 401);
+    assert.match(missingBody.error_description, /not configured/);
+    const other = await handleRequest(new Request(
+      `${ORIGIN}/oauth/authorize?response_type=code&client_id=adrians-mind-mcp-test&redirect_uri=${encodeURIComponent(`${ORIGIN}/oauth/test-callback`)}&scope=mind.tools&code_challenge_method=S256&code_challenge=abc`,
+      { headers: { "cf-access-jwt-assertion": await signer.sign(ownerClaims({ email: "other@example.test" })) } },
+    ), env(), { fetchImpl: certFetch(signer.jwk) });
+    assert.equal(other.status, 401);
+  });
+
+  it("stores the harness verifier privately and returns redacted MCP evidence", async () => {
+    const runtime = env();
+    const signer = await accessSigner();
+    const start = await handleRequest(new Request(`${ORIGIN}/oauth/test-start`), runtime);
+    assert.equal(start.status, 302);
+    const startUrl = new URL(start.headers.get("location"));
+    assert.equal(startUrl.origin + startUrl.pathname, `${ORIGIN}/oauth/authorize`);
+    assert.equal(startUrl.searchParams.get("code_verifier"), null);
+    const jwt = await signer.sign(ownerClaims());
+    const authorize = await handleRequest(new Request(startUrl, {
+      headers: { "cf-access-jwt-assertion": jwt, "cf-access-authenticated-user-email": "forged@example.test" },
+    }), runtime, { fetchImpl: certFetch(signer.jwk) });
+    assert.equal(authorize.status, 302);
+    const callbackUrl = new URL(authorize.headers.get("location"));
+    const code = callbackUrl.searchParams.get("code");
+    const callback = await handleRequest(new Request(callbackUrl), runtime);
+    const callbackText = await callback.text();
+    assert.equal(callback.status, 302);
+    assert.equal(callbackText.includes(code), false);
+    const resultUrl = new URL(callback.headers.get("location"), ORIGIN);
+    const result = await handleRequest(new Request(resultUrl), runtime);
+    const evidence = await result.json();
+    const serialized = JSON.stringify(evidence);
+    assert.equal(evidence.ok, true);
+    assert.equal(evidence.subject_matches_owner, true);
+    assert.equal(evidence.upstream_called, false);
+    assert.ok(evidence.tools.includes("provider.status"));
+    assert.equal(serialized.includes(code), false);
+    assert.equal(serialized.includes("access_token"), false);
+    assert.equal(serialized.includes("sk-test-secret"), false);
+    const replay = await handleRequest(new Request(resultUrl), runtime);
+    assert.equal(replay.status, 404);
   });
 
   it("completes PKCE and calls provider.status without an upstream request", async () => {
@@ -205,6 +311,10 @@ describe("adrians-mind-mcp-test oauth edge", () => {
     const metadata = JSON.parse(readFileSync(new URL("../bundle/metadata.json", import.meta.url), "utf8"));
     assert.equal(wrangler.name, "adrians-mind-mcp-test");
     assert.equal(wrangler.vars.MCP_OAUTH_ISSUER, ORIGIN);
+    assert.equal(wrangler.vars.CF_ACCESS_TEAM_DOMAIN, TEAM);
+    assert.equal(wrangler.vars.CF_ACCESS_AUD, AUD);
+    assert.equal(wrangler.vars.MCP_TRUST_ACCESS_IDENTITY, "1");
+    assert.equal(wrangler.vars.CF_ACCESS_ALLOWED_EMAIL, "emzylavish@gmail.com");
     assert.equal(wrangler.kv_namespaces[0].binding, "OAUTH_KV");
     assert.equal(metadata.main_module, "index.js");
     assert.equal(JSON.stringify(metadata).includes("adrians-mind-mcp-oauth"), false);

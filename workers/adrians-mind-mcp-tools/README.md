@@ -20,20 +20,26 @@ Set these in the Cloudflare secret store. Do not commit values.
 - Optional `MIND_COMMAND_BUDGET_LIMIT_USD` and `MIND_COMMAND_BUDGET_SPENT_USD` (unset uses baseline 500 and 0)
 - `MIND_COMMAND_BUDGET_OWNER_OVERRIDE=1` keeps the app cap from pausing
 
-Issuer and audience are non-secret vars in `wrangler.jsonc`. `MCP_TRUST_ACCESS_IDENTITY=1` requires `Cf-Access-Authenticated-User-Email`. `X-Authenticated-User` is ignored. `MCP_OAUTH_DEV_SUBJECT` is ignored unless `MCP_ENV=development`, which this config does not set.
+Non-secret Access vars in `wrangler.jsonc`:
+
+- `MCP_TRUST_ACCESS_IDENTITY=1` enables verification. It does not trust `Cf-Access-Authenticated-User-Email`.
+- `CF_ACCESS_TEAM_DOMAIN=adriansmind.cloudflareaccess.com`
+- `CF_ACCESS_AUD=f3d3c26edffe9b02e90616706ed7622c3b96f80e7b1b43ef111eecbb72fdcd37`
+- `CF_ACCESS_ALLOWED_EMAIL=emzylavish@gmail.com`
+
+The JWT in `Cf-Access-Jwt-Assertion` must match issuer `https://adriansmind.cloudflareaccess.com`, that audience, expiry, and the RS256 signature from `https://adriansmind.cloudflareaccess.com/cdn-cgi/access/certs`. The email claim must be the allowed owner. A forged email header, `X-Authenticated-User`, or `MCP_OAUTH_DEV_SUBJECT` does not issue a code. Access application `0758718a-6b44-4414-b3e2-07ae13659679` is the verified gate in front of `/oauth/authorize`.
+
+Public client id is `adrians-mind-mcp-test`. The redirect is this host's `/oauth/test-callback`, so `MCP_OAUTH_REDIRECT_URIS` is not required. `MCP_OAUTH_SECRET` and `OAUTH_KV` still are.
 
 This worker only calls `https://api.openai.com/v1/chat/completions`. Other base URLs are not configured.
 
-## Auth test without skipping OAuth
+## Harness
 
-Put Cloudflare Access in front of the hostname, then:
+Start URL:
 
-1. `GET /.well-known/oauth-protected-resource`
-2. `GET /oauth/authorize` with the Access email header, `response_type=code`, the registered client and redirect, `scope=mind.tools`, and PKCE S256.
-3. `POST /oauth/token` as `application/x-www-form-urlencoded` with the code and verifier.
-4. `POST /mcp` with `Authorization: Bearer <access_token>` and `tools/call` name `provider.status`.
+`https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev/oauth/test-start`
 
-`provider.status` does not call OpenAI. Without the Access email, authorize returns 401 `login_required`. A wrong bearer on `/mcp` returns 401. Missing KV or OAuth secrets return 503 `oauth_unconfigured`.
+That request stores the PKCE verifier in `OAUTH_KV` and redirects to `/oauth/authorize`. After the real Access OTP login, the callback exchanges the code with the stored verifier, runs `initialize`, `tools/list`, and `provider.status`, revokes the issued token, and redirects to a one-time result. The result JSON has no authorization code, access token, or API key. `provider.status` does not call OpenAI.
 
 ## Upload
 

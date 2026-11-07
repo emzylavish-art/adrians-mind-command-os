@@ -99,17 +99,28 @@ function safeRedirect(uri) {
   }
 }
 
+const TEST_CLIENT_ID = "adrians-mind-mcp-test";
+
 export function oauthReadiness(env) {
   const missing = [];
   if (!env.OAUTH_KV) missing.push("OAUTH_KV");
-  const issuer = String(env.MCP_OAUTH_ISSUER || "");
+  const issuer = String(env.MCP_OAUTH_ISSUER || "").replace(/\/$/, "");
   if (!issuer.startsWith("https://")) missing.push("MCP_OAUTH_ISSUER");
   if (!String(env.MCP_OAUTH_SECRET || "")) missing.push("MCP_OAUTH_SECRET");
-  if (!String(env.MCP_OAUTH_CLIENT_ID || "")) missing.push("MCP_OAUTH_CLIENT_ID");
-  const redirects = String(env.MCP_OAUTH_REDIRECT_URIS || "").split(",").map((item) => item.trim()).filter(Boolean);
-  if (!redirects.length || redirects.some((uri) => !safeRedirect(uri))) missing.push("MCP_OAUTH_REDIRECT_URIS");
-  const audience = String(env.MCP_OAUTH_AUDIENCE || (issuer ? `${issuer.replace(/\/$/, "")}/mcp` : ""));
-  return { ok: missing.length === 0, missing, issuer: issuer.replace(/\/$/, ""), audience, redirects, clientId: String(env.MCP_OAUTH_CLIENT_ID || "") };
+  const testCallback = issuer.startsWith("https://") ? `${issuer}/oauth/test-callback` : "";
+  const extra = String(env.MCP_OAUTH_REDIRECT_URIS || "").split(",").map((item) => item.trim()).filter(Boolean);
+  if (extra.some((uri) => !safeRedirect(uri))) missing.push("MCP_OAUTH_REDIRECT_URIS");
+  const redirects = testCallback && safeRedirect(testCallback) ? [testCallback, ...extra.filter((uri) => uri !== testCallback)] : [];
+  const audience = String(env.MCP_OAUTH_AUDIENCE || (issuer ? `${issuer}/mcp` : ""));
+  return {
+    ok: missing.length === 0,
+    missing,
+    issuer,
+    audience,
+    redirects,
+    clientId: String(env.MCP_OAUTH_CLIENT_ID || TEST_CLIENT_ID),
+    testCallback,
+  };
 }
 
 function metadata(ready) {
@@ -140,12 +151,92 @@ function scopesOk(raw) {
   return scopes.length > 0 && scopes.every((scope) => scope === SCOPE);
 }
 
-function subjectFor(request, env) {
-  if (env.MCP_TRUST_ACCESS_IDENTITY === "1") {
-    return request.headers.get("Cf-Access-Authenticated-User-Email") || "";
+const ACCESS_TEAM = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.cloudflareaccess\.com$/;
+
+function accessSettings(env) {
+  const trust = env.MCP_TRUST_ACCESS_IDENTITY === "1";
+  const team = String(env.CF_ACCESS_TEAM_DOMAIN || "").trim().toLowerCase();
+  const aud = String(env.CF_ACCESS_AUD || "").trim();
+  const allowed = String(env.CF_ACCESS_ALLOWED_EMAIL || "").trim().toLowerCase();
+  const audOk = /^[A-Za-z0-9_-]{16,128}$/.test(aud);
+  const emailOk = /^[^\s@]+@[^\s@]+$/.test(allowed);
+  return { trust, team, aud, allowed, ready: trust && ACCESS_TEAM.test(team) && audOk && emailOk };
+}
+
+function decodePart(part) {
+  try {
+    const pad = "=".repeat((4 - (part.length % 4)) % 4);
+    const bin = atob(part.replaceAll("-", "+").replaceAll("_", "/") + pad);
+    const bytes = Uint8Array.from(bin, (char) => char.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
   }
-  if (env.MCP_ENV === "development") return String(env.MCP_OAUTH_DEV_SUBJECT || "");
-  return "";
+}
+
+async function verifyAccessJwt(jwt, settings, deps) {
+  const parts = String(jwt || "").split(".");
+  if (parts.length !== 3) return "";
+  const header = decodePart(parts[0]);
+  const payload = decodePart(parts[1]);
+  if (!header || header.alg !== "RS256" || typeof header.kid !== "string" || !payload) return "";
+  const certUrl = `https://${settings.team}/cdn-cgi/access/certs`;
+  let response;
+  try {
+    response = await (deps.fetchImpl || fetch)(certUrl, { signal: AbortSignal.timeout(5000) });
+  } catch {
+    return "";
+  }
+  if (!response.ok) return "";
+  let keys = [];
+  try {
+    keys = (await response.json()).keys || [];
+  } catch {
+    return "";
+  }
+  const jwk = keys.find((key) => key && key.kid === header.kid && key.kty === "RSA" && key.n && key.e);
+  if (!jwk) return "";
+  let signature;
+  try {
+    const pad = "=".repeat((4 - (parts[2].length % 4)) % 4);
+    const bin = atob(parts[2].replaceAll("-", "+").replaceAll("_", "/") + pad);
+    signature = Uint8Array.from(bin, (char) => char.charCodeAt(0));
+    const key = await crypto.subtle.importKey(
+      "jwk",
+      { kty: "RSA", n: jwk.n, e: jwk.e, alg: "RS256", ext: true },
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      signature,
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+    if (!valid) return "";
+  } catch {
+    return "";
+  }
+  const now = nowSec(deps);
+  const aud = payload.aud;
+  const audOk = aud === settings.aud || (Array.isArray(aud) && aud.includes(settings.aud));
+  if (payload.iss !== `https://${settings.team}` || !audOk) return "";
+  if (typeof payload.exp !== "number" || payload.exp <= now) return "";
+  if (typeof payload.email !== "string" || !payload.email.includes("@") || payload.email.length > 200) return "";
+  return payload.email;
+}
+
+async function accessIdentity(request, env, deps) {
+  const settings = accessSettings(env);
+  if (!settings.trust) return { email: "", reason: "access_trust_disabled" };
+  if (!settings.ready) return { email: "", reason: "access_unconfigured" };
+  const jwt = request.headers.get("Cf-Access-Jwt-Assertion") || "";
+  if (!jwt) return { email: "", reason: "login_required" };
+  const email = await verifyAccessJwt(jwt, settings, deps);
+  if (!email) return { email: "", reason: "login_required" };
+  if (email.toLowerCase() !== settings.allowed) return { email: "", reason: "owner_mismatch" };
+  return { email, reason: "ok" };
 }
 
 async function kvGet(kv, key) {
@@ -439,8 +530,18 @@ async function issueToken(kv, ready, record, now) {
 async function authorize(request, env, ready, deps) {
   const url = new URL(request.url);
   const params = Object.fromEntries(url.searchParams.entries());
-  const subject = subjectFor(request, env);
-  if (!subject) return json(401, { error: "login_required", error_description: "Cloudflare Access identity is required." });
+  const identity = await accessIdentity(request, env, deps);
+  if (!identity.email) {
+    const description = identity.reason === "access_trust_disabled"
+      ? "Cloudflare Access enforcement is not enabled."
+      : identity.reason === "access_unconfigured"
+        ? "Access JWT verification is not configured."
+        : identity.reason === "owner_mismatch"
+          ? "The verified Access identity is not the allowed owner."
+          : "A verified Cloudflare Access JWT is required.";
+    return json(401, { error: "login_required", error_description: description });
+  }
+  const subject = identity.email;
   if (params.client_id !== ready.clientId || !ready.redirects.includes(params.redirect_uri || "")) {
     return json(400, { error: "invalid_request", error_description: "Unknown client or redirect URI." });
   }
@@ -483,17 +584,119 @@ async function token(request, env, ready, deps) {
     return json(200, await issueToken(env.OAUTH_KV, ready, previous, now));
   }
   if (grant !== "authorization_code") return json(400, { error: "unsupported_grant_type", error_description: "Only authorization_code and refresh_token are supported." });
-  const codeHash = hex(await sha256(params.code || ""));
-  const record = await kvGet(env.OAUTH_KV, `c:${codeHash}`);
-  await env.OAUTH_KV.delete(`c:${codeHash}`);
-  if (!record || record.expires <= now) return json(400, { error: "invalid_grant", error_description: "Authorization code is invalid or expired." });
+  const exchanged = await exchangeCode(params, env, ready, deps);
+  if (!exchanged.ok) return json(400, { error: "invalid_grant", error_description: exchanged.error });
+  return json(200, exchanged.issued);
+}
+
+async function exchangeCode(params, env, ready, deps) {
+  const now = nowSec(deps);
+  const record = await kvGet(env.OAUTH_KV, `c:${hex(await sha256(params.code || ""))}`);
+  await env.OAUTH_KV.delete(`c:${hex(await sha256(params.code || ""))}`);
+  if (!record || record.expires <= now) return { ok: false, error: "Authorization code is invalid or expired." };
   if (params.client_id !== record.clientId || params.redirect_uri !== record.redirectUri) {
-    return json(400, { error: "invalid_grant", error_description: "Client or redirect URI does not match authorization code." });
+    return { ok: false, error: "Client or redirect URI does not match authorization code." };
   }
   if ((await pkceChallenge(params.code_verifier || "")) !== record.challenge) {
-    return json(400, { error: "invalid_grant", error_description: "PKCE verification failed." });
+    return { ok: false, error: "PKCE verification failed." };
   }
-  return json(200, await issueToken(env.OAUTH_KV, ready, record, now));
+  return { ok: true, subject: record.subject, issued: await issueToken(env.OAUTH_KV, ready, record, now) };
+}
+
+const HARNESS_NOTE = "Sign-in finished. No authorization code or token is shown.";
+
+async function revokeValue(env, tokenValue) {
+  if (!tokenValue) return;
+  const hash = hex(await sha256(tokenValue));
+  const access = await kvGet(env.OAUTH_KV, `t:${hash}`);
+  if (access?.refreshHash) await env.OAUTH_KV.delete(`r:${access.refreshHash}`);
+  await env.OAUTH_KV.delete(`t:${hash}`);
+}
+
+async function testStart(env, ready, deps) {
+  const identity = accessSettings(env);
+  if (!identity.ready) {
+    return json(401, { error: "login_required", error_description: identity.trust ? "Access JWT verification is not configured." : "Cloudflare Access enforcement is not enabled." });
+  }
+  const state = await randomToken();
+  const verifier = await randomToken();
+  const now = nowSec(deps);
+  await kvPut(env.OAUTH_KV, `h:${hex(await sha256(state))}`, { verifier, expires: now + 600 }, now + 600);
+  const location = new URL(`${ready.issuer}/oauth/authorize`);
+  location.searchParams.set("response_type", "code");
+  location.searchParams.set("client_id", ready.clientId);
+  location.searchParams.set("redirect_uri", ready.testCallback);
+  location.searchParams.set("scope", SCOPE);
+  location.searchParams.set("code_challenge_method", "S256");
+  location.searchParams.set("code_challenge", await pkceChallenge(verifier));
+  location.searchParams.set("state", state);
+  return new Response(null, { status: 302, headers: { location: location.toString(), "cache-control": "no-store", "referrer-policy": "no-referrer" } });
+}
+
+async function mcpEvidence(env, ready, accessToken, deps) {
+  const call = (method, params) => handleRequest(new Request(`${ready.issuer}/mcp`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  }), env, deps);
+  const init = await (await call("initialize")).json();
+  const listed = await (await call("tools/list")).json();
+  const status = await (await call("tools/call", { name: "provider.status", arguments: {} })).json();
+  const names = (listed.result?.tools || []).map((tool) => tool.name);
+  let providerStatus = null;
+  try {
+    providerStatus = JSON.parse(status.result?.content?.[0]?.text || "null");
+  } catch {
+    providerStatus = null;
+  }
+  return {
+    ok: init.result?.serverInfo?.name === WORKER_NAME && names.includes("provider.status"),
+    live_account_verified: false,
+    upstream_called: false,
+    subject_matches_owner: true,
+    initialize: { server: init.result?.serverInfo?.name || null, protocol: init.result?.protocolVersion || null },
+    tools: names,
+    provider_status: providerStatus,
+  };
+}
+
+async function testCallback(request, env, ready, deps) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code") || "";
+  const state = url.searchParams.get("state") || "";
+  const opaque = /^[A-Za-z0-9_-]{20,200}$/;
+  if (!opaque.test(code) || !opaque.test(state)) return new Response(HARNESS_NOTE, { status: 400, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", referrer: "no-referrer" } });
+  const stateKey = `h:${hex(await sha256(state))}`;
+  const harness = await kvGet(env.OAUTH_KV, stateKey);
+  await env.OAUTH_KV.delete(stateKey);
+  const now = nowSec(deps);
+  if (!harness || harness.expires <= now) return new Response(HARNESS_NOTE, { status: 400, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+  const exchanged = await exchangeCode({
+    code,
+    client_id: ready.clientId,
+    redirect_uri: ready.testCallback,
+    code_verifier: harness.verifier,
+  }, env, ready, deps);
+  if (!exchanged.ok || exchanged.subject.toLowerCase() !== accessSettings(env).allowed) {
+    if (exchanged.ok) await revokeValue(env, exchanged.issued.access_token);
+    return new Response(HARNESS_NOTE, { status: 400, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+  }
+  const evidence = await mcpEvidence(env, ready, exchanged.issued.access_token, deps);
+  await revokeValue(env, exchanged.issued.access_token);
+  await revokeValue(env, exchanged.issued.refresh_token);
+  const handle = await randomToken();
+  await kvPut(env.OAUTH_KV, `e:${hex(await sha256(handle))}`, { evidence, expires: now + 120 }, now + 120);
+  return new Response(null, { status: 302, headers: { location: `/oauth/test-result?handle=${handle}`, "cache-control": "no-store", "referrer-policy": "no-referrer" } });
+}
+
+async function testResult(request, env, deps) {
+  const handle = new URL(request.url).searchParams.get("handle") || "";
+  if (!/^[A-Za-z0-9_-]{20,200}$/.test(handle)) return new Response(HARNESS_NOTE, { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+  const key = `e:${hex(await sha256(handle))}`;
+  const row = await kvGet(env.OAUTH_KV, key);
+  await env.OAUTH_KV.delete(key);
+  if (!row || row.expires <= nowSec(deps)) return new Response(HARNESS_NOTE, { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+  return json(200, row.evidence);
 }
 
 async function revoke(request, env) {
@@ -544,6 +747,9 @@ export async function handleRequest(request, env = {}, deps = {}) {
   if (url.pathname === "/.well-known/oauth-protected-resource" && request.method === "GET") {
     return ready.ok ? json(200, resourceMetadata(ready)) : unconfigured(ready);
   }
+  if (url.pathname === "/oauth/test-start" && request.method === "GET") return ready.ok ? testStart(env, ready, deps) : unconfigured(ready);
+  if (url.pathname === "/oauth/test-callback" && request.method === "GET") return ready.ok ? testCallback(request, env, ready, deps) : unconfigured(ready);
+  if (url.pathname === "/oauth/test-result" && request.method === "GET") return ready.ok ? testResult(request, env, deps) : unconfigured(ready);
   if (url.pathname === "/oauth/authorize" && request.method === "GET") return ready.ok ? authorize(request, env, ready, deps) : unconfigured(ready);
   if (url.pathname === "/oauth/token" && request.method === "POST") return ready.ok ? token(request, env, ready, deps) : unconfigured(ready);
   if (url.pathname === "/oauth/revoke" && request.method === "POST") return ready.ok ? revoke(request, env) : unconfigured(ready);

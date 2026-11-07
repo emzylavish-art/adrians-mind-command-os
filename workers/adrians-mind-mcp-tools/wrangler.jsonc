@@ -12,7 +12,10 @@
   "vars": {
     "MCP_OAUTH_ISSUER": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev",
     "MCP_OAUTH_AUDIENCE": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev/mcp",
-    "MCP_TRUST_ACCESS_IDENTITY": "1"
+    "MCP_TRUST_ACCESS_IDENTITY": "1",
+    "CF_ACCESS_TEAM_DOMAIN": "adriansmind.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "f3d3c26edffe9b02e90616706ed7622c3b96f80e7b1b43ef111eecbb72fdcd37",
+    "CF_ACCESS_ALLOWED_EMAIL": "emzylavish@gmail.com"
   },
   "kv_namespaces": [
     {
