@@ -21,7 +21,7 @@ import {
   type RegistryDb,
   type RegistryRecord,
 } from "./registry-store.ts";
-import { type McpCallRpc, type McpCallTransport, type McpContentPart, type McpResultCode, privacyErrorText } from "./call-contract.ts";
+import { type McpCallRpc, type McpCallTransport, type McpContentPart, type McpResultCode, privacyErrorText, safeReason } from "./call-contract.ts";
 import {
   defaultDnsLookup,
   isLocalHostname,
@@ -453,13 +453,13 @@ export async function registryRpc(
     }
     const parsed = rpcMessage(body.text);
     if (parsed.error) {
-      const safe = privacyErrorText(parsed.error, token);
+      const upstream = privacyErrorText(parsed.error, token);
       return {
         ok: false,
         state: "rpc",
         httpStatus: response.status,
-        rpc: { isError: true, content: [{ type: "text", text: safe }], structuredContent: { message: safe } },
-        error: safe,
+        rpc: { isError: true, content: [{ type: "text", text: upstream }], structuredContent: { message: upstream } },
+        error: safeReason("error", upstream),
         session: nextSession,
       };
     }

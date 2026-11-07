@@ -13,7 +13,7 @@ import {
 } from "./mcp/http-dns-pin.ts";
 import { loadRegistry, saveRegistry, type RegistryDb, type RegistryRecord } from "./mcp/registry-store.ts";
 import type { McpCallRpc, McpCallTransport, McpContentPart } from "./mcp/call-contract.ts";
-import { privacyErrorText } from "./mcp/call-contract.ts";
+import { safeReason } from "./mcp/call-contract.ts";
 
 export type ArgType = "string" | "boolean" | "integer";
 
@@ -196,13 +196,13 @@ async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; l
   }
 }
 
-function rpcEnvelope(text: string, token: string): { result?: unknown; error?: string } {
+function rpcEnvelope(text: string): { result?: unknown; error?: string } {
   const chunks = text.includes("data:") ? text.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()) : [text.trim()];
   for (const chunk of chunks) {
     if (!chunk || chunk === "[DONE]") continue;
     try {
       const parsed = JSON.parse(chunk) as { result?: unknown; error?: { message?: string } };
-      if (parsed.error) return { error: privacyErrorText(parsed.error.message || "The MCP server returned an error.", token) };
+      if (parsed.error) return { error: parsed.error.message || "The MCP server returned an error." };
       if ("result" in parsed) return { result: parsed.result };
     } catch {
       /* ignore non-json */
@@ -315,7 +315,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
     body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
   }, deps, row.token ?? "");
   if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
-  const parsed = rpcEnvelope(listed.text, row.token ?? "");
+  const parsed = rpcEnvelope(listed.text);
   const tools = parsed.result && typeof parsed.result === "object" && Array.isArray((parsed.result as { tools?: unknown }).tools)
     ? (parsed.result as { tools: { name?: unknown; description?: unknown; inputSchema?: unknown }[] }).tools
     : [];
@@ -385,9 +385,17 @@ export async function callCustomConnection(input: {
     body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: operation.name, arguments: checked.args } }),
   }, input, token);
   if (!called.ok) return { ok: false, status: called.status, text: called.error, connection, transport: { ok: false, status: called.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
-  const parsed = rpcEnvelope(called.text, token);
+  const parsed = rpcEnvelope(called.text);
   if (parsed.error) {
-    return { ok: false, status: "error", text: parsed.error, connection, transport: { ok: true, status: called.status, ms: Date.now() - started }, rpc: { isError: true, content: [{ type: "text", text: parsed.error }], structuredContent: null } };
+    const upstream = redact(parsed.error, token);
+    return {
+      ok: false,
+      status: "error",
+      text: safeReason("error", upstream),
+      connection,
+      transport: { ok: true, status: called.status, ms: Date.now() - started },
+      rpc: { isError: true, content: [{ type: "text", text: upstream }], structuredContent: null },
+    };
   }
   const rpc = rpcFromResult(parsed.result, token);
   const text = rpc?.content.filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n") ?? "";

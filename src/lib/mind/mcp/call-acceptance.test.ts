@@ -12,15 +12,24 @@ import { acceptResult, dismissResult, startAttempt } from "../../../components/m
 const SECRET = "sekret-value";
 
 describe("five acceptance answers", () => {
-  it("1 safeReason is one fixed line and ignores a private upstream body", () => {
+  it("1 safeReason ignores innocuous private text, and a success still shows the tool result", () => {
     const raw = "the spare key is under the blue mat\nAuthorization: Bearer abc\nhttps://internal.example/a?token=abc\n{\"password\":\"other-secret\"}";
-    const reason = safeReason("error", raw);
-    assert.equal(reason, "The call failed.");
-    assert.equal(reason.includes("\n"), false);
-    assert.equal(reason.includes("blue mat"), false);
-    assert.equal(reason.includes("internal.example"), false);
-    assert.equal(reason.includes("other-secret"), false);
-    assert.equal(reason.includes("Bearer"), false);
+    const clinical = "Jane Q Customer was seen for a diabetes follow-up. Invoice 44821 is unpaid.";
+    assert.equal(safeReason("error", raw), "The call failed.");
+    assert.equal(safeReason("error", clinical), "The call failed.");
+    assert.equal(safeReason("timeout", clinical), "The server did not answer in time. Nothing was retried.");
+    for (const piece of ["Jane", "diabetes", "44821", "blue mat", "internal.example", "other-secret"]) {
+      assert.equal(safeReason("error", clinical + raw).includes(piece), false);
+    }
+    const failed = acceptResult("local-1", { localAttemptId: "local-1", status: "error", text: clinical });
+    assert.notEqual(failed, "stale");
+    if (failed === "stale") return;
+    assert.equal(failed.text, "The call failed.");
+    assert.equal(failed.text.includes("Jane"), false);
+    const succeeded = acceptResult("local-1", { localAttemptId: "local-1", status: "ok", text: "status:7" });
+    assert.notEqual(succeeded, "stale");
+    if (succeeded === "stale") return;
+    assert.equal(succeeded.text, "status:7");
   });
 
   it("2 local attempt id is not an upstream request id", () => {
