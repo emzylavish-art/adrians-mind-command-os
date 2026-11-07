@@ -176,15 +176,11 @@ function makeNebulaTexture(seed = 1) {
   for (let i = 0; i < 40; i++) {
     const x = rand(i) * size;
     const y = rand(i + 40) * size;
-    const r = 40 + rand(i + 80) * 120;
-    const hue = 205 + rand(i + 120) * 35;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, `hsla(${hue},70%,55%,0.28)`);
-    g.addColorStop(0.5, `hsla(${hue + 12},55%,38%,0.12)`);
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
+    const radius = 0.35 + rand(i + 80) * 1.1;
+    const alpha = 0.035 + rand(i + 120) * 0.055;
+    ctx.fillStyle = `rgba(120,166,216,${alpha.toFixed(3)})`;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
   }
   // paper grain
