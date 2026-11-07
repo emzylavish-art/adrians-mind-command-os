@@ -6669,3 +6669,88 @@ aside .max-w-\[14rem\].truncate {
 .signed-out-entry { position: fixed; z-index: 49; left: 1rem; bottom: 1rem; display:flex; align-items:center; gap:.75rem; border:1px solid var(--color-line); border-radius:1rem; background:var(--color-surface); color:var(--color-fg); padding:.5rem .75rem; box-shadow:0 8px 24px #0006; font-size:.75rem; }
 .signed-out-entry__link { display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:70px; padding:0 .75rem; border-radius:.75rem; background:#efedf5; color:#11121a; font-weight:700; }
 @media(max-width:767.98px) { .signed-out-entry { left:.75rem; bottom:calc(4.5rem + env(safe-area-inset-bottom)); max-width:calc(100vw - 8rem); } }
+
+/* Visual polish lane: composer tools, empty/loading, and hit targets. */
+.composer-toolbar {
+  align-items: center;
+  gap: 0.5rem;
+}
+.composer-toolbar > * { flex: 0 0 auto; }
+.suggestion-chip {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+.suggestion-chip:hover {
+  border-color: rgb(255 255 255 / 0.28);
+  background: rgb(255 255 255 / 0.08);
+}
+.panel-action {
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  border-radius: 0.85rem;
+  border: 1px solid transparent;
+  color: var(--color-info);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.panel-action:hover {
+  border-color: var(--color-line);
+  background: rgb(255 255 255 / 0.06);
+}
+.status-pill {
+  flex: 0 0 auto;
+  max-width: 8.5rem;
+  text-align: center;
+  line-height: 1.2;
+}
+.workspace-loading {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px dashed rgb(255 255 255 / 0.16);
+}
+.workspace-loading p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+.chat-empty-hero {
+  gap: 0.45rem;
+  padding: 1.25rem 0.75rem 0.5rem;
+}
+.shell .header-voice-mode { min-height: 2.75rem !important; }
+html[data-theme="light"] .workspace-loading { border-color: rgb(15 23 42 / 0.16); }
+html[data-theme="light"] .suggestion-chip:hover {
+  border-color: rgb(15 23 42 / 0.2);
+  background: rgb(15 23 42 / 0.04);
+}
+@media (max-width: 767.98px) {
+  .composer-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    padding-bottom: 0.2rem;
+    max-height: none;
+  }
+  .shell .composer-toolbar {
+    flex-wrap: nowrap !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+  .composer-send {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    margin-left: auto;
+    box-shadow: -14px 0 16px rgb(10 10 12 / 0.92);
+  }
+  html[data-theme="light"] .composer-send {
+    box-shadow: -14px 0 16px rgb(255 255 255 / 0.94);
+  }
+}
