@@ -1,3 +1,8 @@
+# FLEET SLEEP — OWNER ORDER 2026-11-07 15:12 WAT
+
+STOP. Every fleet bot goes to sleep now. Do not loop. Do not call a model. Do not push. Do not open a branch. Do not comment. Usage is at the last 5 percent. One session is finishing the open work and shipping live production. Stay asleep until this file says FLEET-WAKE.
+
+
 # FLEET BOOT
 
 Every fleet bot reads this file first. No other action before this file is read.
