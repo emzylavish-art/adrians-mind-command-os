@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 
+const STOPPED = "Emergency stop is on. Nothing was called.";
+
 export const listCustomConnectionsFn = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
@@ -23,6 +25,8 @@ export const saveCustomConnectionFn = createServerFn({ method: "POST" })
     fields: Array.isArray(input.fields) ? input.fields.filter((field) => typeof field === "string").slice(0, 12) : [],
   }))
   .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was saved." };
     const { databaseConfigured } = await import("./mcp/registry-store");
     const { getSql } = await import("@/lib/db");
     const db = databaseConfigured() ? await getSql() : null;
@@ -39,6 +43,10 @@ export const callCustomConnectionFn = createServerFn({ method: "POST" })
     confirmed: input.confirmed === true,
   }))
   .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, status: "error" as const, text: STOPPED, connection: null, transport: null, rpc: null };
+    }
     const { databaseConfigured } = await import("./mcp/registry-store");
     const { getSql } = await import("@/lib/db");
     const db = databaseConfigured() ? await getSql() : null;

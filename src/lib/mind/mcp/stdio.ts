@@ -90,7 +90,9 @@ export function stdioCommandAllowed(command: string, env: NodeJS.ProcessEnv = pr
   return stdioAllowlist(env).includes(wanted);
 }
 
-export { isBlockedChildEnvKey } from "./stdio-policy.ts";
+import { isBlockedChildEnvKey } from "./stdio-policy.ts";
+
+export { isBlockedChildEnvKey };
 
 function clampMs(value: unknown, fallback: number, min = 100, max = 300_000): number {
   const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : Number.NaN;

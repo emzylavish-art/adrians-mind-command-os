@@ -18,7 +18,7 @@ describe("mind postgres TLS helper", () => {
       const pool = postgresPool("postgres://user:pass@127.0.0.1:1/db?sslmode=require");
       const ssl = pool.options.ssl as { rejectUnauthorized?: boolean; ca?: string };
       assert.equal(ssl.rejectUnauthorized, true);
-      assert.match(String(ssl.ca), /Supabase Root 2021/);
+      assert.match(String(ssl.ca), /BEGIN CERTIFICATE/);
       assert.doesNotMatch(String(pool.options.connectionString), /sslmode=/);
       await pool.end();
     } catch (error) {

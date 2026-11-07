@@ -104,4 +104,17 @@ describe("Tools custom connection UI path", { concurrency: false }, () => {
     assert.match(server, /saveMcp\(context\.userId, data\)/);
     assert.doesNotMatch(server, /saveMcp\(context\.userId, data, db\)/);
   });
+
+  it("keeps the client off the server-only module and checks halt before a custom call", () => {
+    const custom = readFileSync(new URL("../../components/mind/custom-connections.tsx", import.meta.url), "utf8");
+    const fns = readFileSync(new URL("./custom-connection-fns.ts", import.meta.url), "utf8");
+    const stdio = readFileSync(new URL("./mcp/stdio.ts", import.meta.url), "utf8");
+    assert.match(custom, /custom-connection-fns/);
+    assert.doesNotMatch(custom, /custom-connection\.server/);
+    const callAt = fns.indexOf("export const callCustomConnectionFn");
+    const haltAt = fns.indexOf("haltIsOn", callAt);
+    const invokeAt = fns.indexOf("callCustomConnection(", callAt);
+    assert.ok(callAt >= 0 && haltAt > callAt && invokeAt > haltAt);
+    assert.match(stdio, /import \{ isBlockedChildEnvKey \} from "\.\/stdio-policy\.ts"/);
+  });
 });

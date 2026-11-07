@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { callCustomConnectionFn, listCustomConnectionsFn, saveCustomConnectionFn } from "@/lib/mind/custom-connection.server";
+import { callCustomConnectionFn, listCustomConnectionsFn, saveCustomConnectionFn } from "@/lib/mind/custom-connection-fns";
 import type { PublicConnection } from "@/lib/mind/custom-connection";
 import { missingConfigNotice, reasonCode, safeReason } from "@/lib/mind/mcp/call-contract";
 import { acceptResult, dismissResult, type AttemptView } from "@/components/mind/custom-connection-result";
