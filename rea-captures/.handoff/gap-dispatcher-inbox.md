@@ -452,3 +452,10 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - Tips: main e4ed639; preview aa53aa0; prod e3ccc51; asset index-qV1VC2j2.js
 - Pillars: Whisper branch-only; VCS branch-only; Tool Registry partial; continuous evolution partial
 - Artifacts: pass-2026-11-07ac/ + internal-audit-2026-11-07ac.md
+
+## pass 2026-11-07ad — 2026-11-06 23:50 CST / 2026-11-07 06:50 WAT
+- NEW owner fixes: none
+- Standing gaps (unchanged): XAI_API_KEY unset prod; 403/login preview-only; OAuth×6 401; CSP+Permissions-Policy; sidebar deep-link 404s / button nav; extensions.js; VCS missing live; live-search env; chat/⌘K/Artifacts; empty panels + Universe cards unavailable; Cloudflare burner pending; GodEye upstream unconfirmed; audit example.com placeholder (06d); forbidden_cross_site Activity; explore TEMPLATE/NOT LIVE; curl /dashboard 307 vs browser chrome; Scheduled no worker; Universe hang intermittent (painted ~4.4s); Grok status honesty (07e); Filters/Dive-to-city click timeout intermittent (not routed)
+- Tips: main e4ed639; preview aa53aa0; prod e3ccc51 (24 ahead of main); asset index-qV1VC2j2.js
+- Pillars: Whisper branch-only; VCS branch-only; Tool Registry partial; continuous evolution partial
+- Artifacts: pass-2026-11-07ad/ + internal-audit-2026-11-07ad.md
