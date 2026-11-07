@@ -1,0 +1,37 @@
+name: Adrian's Mind dashboard verification
+
+on:
+  pull_request:
+    paths:
+      - "src/components/mind/dashboard-3d/**"
+      - "src/lib/mind/dashboard/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/dashboard-verify.yml"
+  push:
+    branches:
+      - "dashboard/yomaru-graph-polish"
+    paths:
+      - "src/components/mind/dashboard-3d/**"
+      - "src/lib/mind/dashboard/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/dashboard-verify.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
