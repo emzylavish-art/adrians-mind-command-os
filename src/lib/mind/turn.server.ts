@@ -15,6 +15,8 @@ import { decideFetchSite } from "./request-guard";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { readModelPayload } from "./stream";
 import { resolveDatabaseUrl } from "../env.server.ts";
+import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
+import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
@@ -32,6 +34,8 @@ export type TurnBody = {
   provider?: unknown;
   /** UI picker: Auto | Fast | Expert | Heavy | Build */
   modelTier?: unknown;
+  /** Astra, Sol, or Luna. When set, this route is used instead of the Grok tier. */
+  logicRoute?: unknown;
   /** Optional image attachments (data-URLs) for multimodal Direct turns. */
   images?: unknown;
   /** Optional explicit note to persist with this turn (owner-scoped). */
@@ -165,6 +169,90 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function logicSse(input: {
+  text: string;
+  model: string;
+  requestedModel: string | null;
+  route: LogicRouteId;
+  usedIds: string[];
+  credentialFallback: "OPENAI_API_KEY" | null;
+}): Response {
+  const label = LOGIC_ROUTE_LABEL[input.route];
+  const done = {
+    text: input.text,
+    model: input.model,
+    requestedModel: input.requestedModel,
+    provider: input.route,
+    usage: null,
+    usedIds: input.usedIds,
+    requestId: null,
+    logicRoute: input.route,
+    credentialFallback: input.credentialFallback,
+    tierReason: `Owner selected ${label}.`,
+  };
+  const body = `event: delta\ndata: ${JSON.stringify({ text: input.text })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
+  return new Response(body, {
+    headers: { "content-type": "text/event-stream", "cache-control": "no-store" },
+  });
+}
+
+async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId): Promise<Response> {
+  const label = LOGIC_ROUTE_LABEL[route];
+  const images = sanitizeAttachments(data.images);
+  if (images.length > 0) {
+    return json({
+      ok: false,
+      error: `${label} cannot see images in this app. Remove the attached images. Nothing was sent. Another route was not substituted.`,
+      logicRoute: route,
+    }, 400);
+  }
+  const { haltIsOn } = await import("./halt.server");
+  if ((await haltIsOn(userId)) || data.halted === true) {
+    return json({ ok: false, error: "Emergency stop is on. No new action can run." });
+  }
+  const text = typeof data.text === "string" ? data.text.trim() : "";
+  if (!text) return json({ ok: false, error: "Write a message first. Nothing was sent." }, 400);
+  const history = Array.isArray(data.history) ? data.history.filter(isHistory).slice(-12) : [];
+  const memoryContext = Array.isArray(data.memoryContext) ? data.memoryContext.filter(isNote).slice(0, 12) : [];
+  const sized = checkTurnSize({ text, history, memoryContext, images: [] });
+  if (!sized.ok) return json(sized, 400);
+  const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
+  if (!memory) return json({ ok: false, error: "Memory setting is invalid." }, 400);
+  const gate = envCheck();
+  if (!gate.ok) return json({ ok: false, error: gate.error });
+  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [] });
+  if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
+  const flat = toAdapterMessages(assembled.messages);
+  if (!flat.ok) return json({ ok: false, error: flat.error }, 400);
+  const inspected = await inspectLogicRoutes(process.env);
+  const view = inspected.find((item) => item.id === route);
+  if (!view?.ready) {
+    return json({
+      ok: false,
+      error: view?.reason ?? `${label} is not ready. Nothing was sent.`,
+      logicRoute: route,
+      missing: view?.missing ?? [],
+    }, 503);
+  }
+  const limited = consumeMindRateLimit("chat", userId, 12);
+  if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
+  const ran = await runLogicRoute({
+    route,
+    messages: flat.messages,
+    env: process.env,
+    inspect: async () => inspected,
+  });
+  if (!ran.ok) return json({ ok: false, error: ran.error, logicRoute: route, provider: route }, ran.called ? 502 : 503);
+  return logicSse({
+    text: ran.content,
+    model: ran.model,
+    requestedModel: ran.requestedModel,
+    route: ran.provider,
+    usedIds: assembled.usedIds,
+    credentialFallback: ran.credentialFallback,
+  });
+}
+
 export async function handleMindTurn(request: Request): Promise<Response> {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
   if (
@@ -191,6 +279,9 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const body = read.body as TurnBody;
   const tierField = parseModelTierField(body.modelTier);
   if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
+  const logicField = resolveRequestedRoute({ logicRoute: body.logicRoute, provider: body.provider });
+  if (!logicField.ok) return json({ ok: false, error: logicField.error }, 400);
+  if (logicField.route) return handleLogicTurn(userId, body, logicField.route);
   const pendingImages = sanitizeAttachments(body.images);
   const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
   // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.

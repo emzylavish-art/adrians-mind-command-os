@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { oauthBoardState } from "@/lib/mind/connection-board";
 import {
   OAUTH_STATUS_FETCH_TIMEOUT_MS,
   fetchOauthStatusPayload,
@@ -43,37 +44,9 @@ const OAUTH_BOARD: Record<string, { connector: string; path: string; messageType
   GitHub: { connector: "github", path: "github", messageType: "github-oauth" },
 };
 
-function boardState(oauth: OauthStatus | null, legacy?: { state: string; detail: string } | null): { state: string; detail: string } {
-  if (oauth && isStatusUnavailable(oauth)) {
-    return { state: "Status unavailable", detail: oauth.detail };
-  }
-  if (oauth?.state === "connected") {
-    return { state: "Connected", detail: oauth.detail };
-  }
-  if (oauth?.state === "not_configured") {
-    return { state: "Not configured", detail: oauth.detail };
-  }
-  if (oauth?.state === "not_connected") {
-    if (legacy?.state === "connected") {
-      return { state: "Connected", detail: legacy.detail };
-    }
-    return { state: "Not connected", detail: oauth.detail };
-  }
-  if (legacy) {
-    return {
-      state: legacy.state === "connected" ? "Connected" : legacy.state === "disconnected" ? "Disconnected" : "Not connected",
-      detail: legacy.detail,
-    };
-  }
-  return { state: "Not connected", detail: "Checking connection…" };
-}
-
 function boardForOauth(name: string, oauth: OauthStatus | null | undefined, legacy?: { state: string; detail: string } | null) {
   void name;
-  if (oauth === undefined) {
-    return { state: "Not connected", detail: "Checking connection…" };
-  }
-  return boardState(oauth, legacy);
+  return oauthBoardState(oauth, legacy);
 }
 
 
