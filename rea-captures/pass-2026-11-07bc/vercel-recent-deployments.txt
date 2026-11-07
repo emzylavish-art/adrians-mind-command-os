@@ -1,0 +1,143 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
+{
+  "result": {
+    "deployments": {
+      "pagination": {
+        "count": 6,
+        "next": 1794045439207,
+        "prev": 1794047731787
+      },
+      "deployments": [
+        {
+          "id": "dpl_5H6VpYyahmHYTbufCrzYfAYKLuyf",
+          "name": "adrians-mind",
+          "url": "adrians-mind-1kbgkm07d-adrian-8a30.vercel.app",
+          "created": 1794047731787,
+          "state": "QUEUED",
+          "target": null,
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "rea-features",
+            "githubCommitSha": "3f246a01a12dfa99cc4d9d011ee653fea947a8f0",
+            "githubCommitMessage": "docs(rea): internal audit pass 2026-11-07bb\n\nLane 2 only. main tip 9f9ea56 (PR #25 workers); prod still b5d888d.\nNo new owner-actionable gaps. Notion stop-point + Gap Dispatcher notified.",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/5H6VpYyahmHYTbufCrzYfAYKLuyf",
+          "isRollbackCandidate": false
+        },
+        {
+          "id": "dpl_AqohvC9DD7CpxH9QFn9T7Laq62MV",
+          "name": "adrians-mind",
+          "url": "adrians-mind-dw4bayyvh-adrian-8a30.vercel.app",
+          "created": 1794047512198,
+          "state": "QUEUED",
+          "target": null,
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "main",
+            "githubCommitSha": "cbeebe62a09d4c272815f75806c6d03688a876fb",
+            "githubCommitMessage": "Merge pull request #26 from emzylavish-art/cursor/visual-polish-041b\n\nPolish composer layout, empty states, and search keyboard focus",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/AqohvC9DD7CpxH9QFn9T7Laq62MV",
+          "isRollbackCandidate": false
+        },
+        {
+          "id": "dpl_GXVQU1PVB14sxN69dnZ1ZBwtuBSN",
+          "name": "adrians-mind",
+          "url": "adrians-mind-rbd3dwi0q-adrian-8a30.vercel.app",
+          "created": 1794047349602,
+          "state": "BUILDING",
+          "target": null,
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "main",
+            "githubCommitSha": "9f9ea56d97467493f6d5cef073caa4fbb3db6321",
+            "githubCommitMessage": "Merge pull request #25 from emzylavish-art/cursor/prod-mcp-worker-de4c\n\nAdd production adrians-mind-mcp Worker config",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/GXVQU1PVB14sxN69dnZ1ZBwtuBSN",
+          "isRollbackCandidate": false
+        },
+        {
+          "id": "dpl_BohhxKfLhRZgUuessmS4WXqLE7qg",
+          "name": "adrians-mind",
+          "url": "adrians-mind-985phcyhh-adrian-8a30.vercel.app",
+          "created": 1794047056617,
+          "state": "CANCELED",
+          "target": null,
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "rea-features",
+            "githubCommitSha": "96a22055acd3071f57c82b43a9f6c91e3d3bdd1e",
+            "githubCommitMessage": "docs(rea): add pass 2026-11-07ba visual+tool artifacts",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/BohhxKfLhRZgUuessmS4WXqLE7qg",
+          "isRollbackCandidate": false
+        },
+        {
+          "id": "dpl_GzffsU64Bu91GcfAGUUEgdB4eJ9V",
+          "name": "adrians-mind",
+          "url": "adrians-mind-pfwzhbdg9-adrian-8a30.vercel.app",
+          "created": 1794045446000,
+          "state": "CANCELED",
+          "target": null,
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "rea-features",
+            "githubCommitSha": "58349f61cd05300995d074c2213480ef582e0024",
+            "githubCommitMessage": "docs(rea): add pass 2026-11-07az visual+tool artifacts\n\nScreenshots, godeye/zap JSON, live probes, and visual-walk notes\nfor the Lane 2 internal audit cycle.",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/GzffsU64Bu91GcfAGUUEgdB4eJ9V",
+          "isRollbackCandidate": false
+        },
+        {
+          "id": "dpl_88XZYnyabBkM8JLe7LKV2rKuH3Tq",
+          "name": "adrians-mind",
+          "url": "adrians-mind-60jopykt0-adrian-8a30.vercel.app",
+          "created": 1794045439207,
+          "state": "CANCELED",
+          "target": null,
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "rea-features",
+            "githubCommitSha": "42d51d6138a13e980e7a433534e7ac270aa9e545",
+            "githubCommitMessage": "docs(rea): internal audit pass 2026-11-07az\n\nLane 2 only. No new owner-actionable findings. Tips unchanged\n(main/prod b5d888d, preview aa53aa0, asset index-ChogKXym.js).",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/88XZYnyabBkM8JLe7LKV2rKuH3Tq",
+          "isRollbackCandidate": false
+        }
+      ]
+    }
+  }
+}
+
+</cursor_untrusted_data_1337>

@@ -652,3 +652,12 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - Pillars: WF/VCS branch-only; Tool Registry partial; continuous evolution partial (main ahead of prod)
 - NEW owner-actionable: **none**
 - Full report: .handoff/internal-audit-2026-11-07bb.md + pass-2026-11-07bb/
+
+## 2026-11-07bc — 2026-11-07 11:42 WAT
+- NEW owner-actionable: **main→prod deploy path** (Vercel target=null for main tips 9f9ea56/cbeebe6; prod stuck b5d888d) → Grok Build
+- Status: main tip → cbeebe6 (PR #26 visual polish); preview/integration aa53aa0; WF 5ab07d0; VCS 55d12ec; branches 108; live index-ChogKXym.js
+- Standing (unchanged): XAI_API_KEY unset; 403/login preview-only; OAuth 401×6; CSP+Permissions-Policy; sidebar/deep-link 404s; extensions.js; VCS missing; live-search; chat/⌘K/Artifacts; empty panels; CF burner; GodEye unconfirmed / wrapper rea-features-only; audit example.com; forbidden_cross_site; explore TEMPLATE; Universe hang intermittent (07c; painted this pass); Grok honesty (07e); Scheduled no-worker; heavy-asset 404s branch-only; registry BlackEye restricted/known
+- Tips: main cbeebe6; preview/integration aa53aa0; prod = b5d888d; live index-ChogKXym.js; whisper-flow 5ab07d0; voice-cloning-studio 55d12ec
+- Pillars: Whisper branch-only; VCS branch-only; Tool Registry partial; continuous evolution partial (main ahead; preview deploys)
+- Visual: dashboard unsigned no bounce; Universe painted; Grok configured vs Safe Keys unavailable; forbidden_cross_site Activity/Tools; Scheduled no worker
+- Artifacts: pass-2026-11-07bc/ ; internal-audit-2026-11-07bc.md

@@ -1,0 +1,122 @@
+<cursor_untrusted_data_1337 source="CallDynamicTool">
+
+{
+  "result": {
+    "deployments": {
+      "pagination": {
+        "count": 5,
+        "next": 1793917323231,
+        "prev": 1794040391091
+      },
+      "deployments": [
+        {
+          "id": "dpl_HmAxBEus6oL75hCkTuXE8NDSM9qF",
+          "name": "adrians-mind",
+          "url": "adrians-mind-p7m8zosds-adrian-8a30.vercel.app",
+          "created": 1794040391091,
+          "state": "READY",
+          "target": "production",
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "main",
+            "githubCommitSha": "b5d888dd107c4a06de582a0e29fce551c95b01df",
+            "githubCommitMessage": "Merge pull request #23 from emzylavish-art/codex/mcp-oauth-mvp\n\nBuild OAuth MCP bridge and Astra/Sol/Luna routing MVP",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/HmAxBEus6oL75hCkTuXE8NDSM9qF",
+          "isRollbackCandidate": true
+        },
+        {
+          "id": "dpl_AfttCs1bbvWcNnEHYjiCSWwAfUtE",
+          "name": "adrians-mind",
+          "url": "adrians-mind-qrfhsotr7-adrian-8a30.vercel.app",
+          "created": 1793990473815,
+          "state": "READY",
+          "target": "production",
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "zapia-isolated-auth-20261104",
+            "githubCommitSha": "532ed14293997bcb6e96f501901dc1ef071fdafc",
+            "githubCommitMessage": "fix(dashboard): restore serializable owner access gate\n\nRestore the dashboard owner gate and regression test as TypeScript source instead of base64 text. Preserve signed-out redirect and deny non-owner access with serializable data. No migrations.",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/AfttCs1bbvWcNnEHYjiCSWwAfUtE",
+          "isRollbackCandidate": true
+        },
+        {
+          "id": "dpl_2EfSqBFkEd18EjFHvPcRgGXCLxpM",
+          "name": "adrians-mind",
+          "url": "adrians-mind-lk28fqub0-adrian-8a30.vercel.app",
+          "created": 1793939838139,
+          "state": "CANCELED",
+          "target": "production",
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "zapia-isolated-auth-20261104",
+            "githubCommitSha": "e3ccc51f568ffb4942f155515041d8da469e298c",
+            "githubCommitMessage": "fix(pc): fail closed on ephemeral hosted approvals",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/2EfSqBFkEd18EjFHvPcRgGXCLxpM",
+          "isRollbackCandidate": false
+        },
+        {
+          "id": "dpl_8mUc9QKZrKCSTMi9SQgvwKqCrzRF",
+          "name": "adrians-mind",
+          "url": "adrians-mind-arq5yi0t2-adrian-8a30.vercel.app",
+          "created": 1793918098334,
+          "state": "READY",
+          "target": "production",
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "zapia-isolated-auth-20261104",
+            "githubCommitSha": "532ed14293997bcb6e96f501901dc1ef071fdafc",
+            "githubCommitMessage": "fix(dashboard): restore serializable owner access gate\n\nRestore the dashboard owner gate and regression test as TypeScript source instead of base64 text. Preserve signed-out redirect and deny non-owner access with serializable data. No migrations.",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/8mUc9QKZrKCSTMi9SQgvwKqCrzRF",
+          "isRollbackCandidate": false
+        },
+        {
+          "id": "dpl_31piTVGcyKJEzFnyxfpS689FGYCb",
+          "name": "adrians-mind",
+          "url": "adrians-mind-kinymwkwj-adrian-8a30.vercel.app",
+          "created": 1793917323231,
+          "state": "CANCELED",
+          "target": "production",
+          "creator": {
+            "uid": "7kmWplo1vCVZflmaWgoJj3C3",
+            "username": "waltersroberta1960-8273"
+          },
+          "meta": {
+            "githubCommitRef": "zapia-isolated-auth-20261104",
+            "githubCommitSha": "532ed14293997bcb6e96f501901dc1ef071fdafc",
+            "githubCommitMessage": "fix(dashboard): restore serializable owner access gate\n\nRestore the dashboard owner gate and regression test as TypeScript source instead of base64 text. Preserve signed-out redirect and deny non-owner access with serializable data. No migrations.",
+            "githubRepo": "adrians-mind-command-os",
+            "githubOrg": "emzylavish-art"
+          },
+          "inspectorUrl": "https://vercel.com/adrian-8a30/adrians-mind/31piTVGcyKJEzFnyxfpS689FGYCb",
+          "isRollbackCandidate": false
+        }
+      ]
+    }
+  }
+}
+
+</cursor_untrusted_data_1337>
