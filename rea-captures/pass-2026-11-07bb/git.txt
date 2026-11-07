@@ -1,0 +1,43 @@
+BRANCH_COUNT: 108
+== main
+9f9ea56 2026-11-07T10:29:06Z Merge pull request #25 from emzylavish-art/cursor/prod-mcp-worker-de4c
+e682b1b 2026-11-07T09:16:29Z Report provider key lengths and add a separate retest ledger.
+43301c0 2026-11-07T08:28:49Z Add the production adrians-mind-mcp Worker config.
+b5d888d 2026-11-07T07:46:17Z Merge pull request #23 from emzylavish-art/codex/mcp-oauth-mvp
+a19adbb 2026-11-07T07:43:40Z Merge pull request #24 from emzylavish-art/cursor/worker-mcp-tools-de4c
+== preview/integration
+aa53aa0 2026-11-03T06:18:24Z Phase 5: harness MODEL_PROVIDER xai/openai with one-token readiness probe
+c1ee830 2026-11-03T02:37:07Z fix(ui): phone drawer nav + honest Notion status
+b84dcc2 2026-11-03T01:47:11Z fix(auth): first-party Google/GitHub OAuth without supabase.co in the browser
+23860f7 2026-11-03T01:24:03Z fix(auth): mutable OAuth callback redirect so Set-Cookie can merge
+518db93 2026-11-03T01:05:06Z fix(login): keep Google/GitHub enabled on auth loader fallback
+== whisper-flow
+5ab07d0 2026-11-03T02:55:14Z test(whisper-flow): wait for hydration after integration drawer UI
+840e79c 2026-11-03T02:52:04Z merge(preview/integration): bring whisper-flow up to c1ee830 for Adrian's Mind
+c1ee830 2026-11-03T02:37:07Z fix(ui): phone drawer nav + honest Notion status
+6fb7e27 2026-11-03T02:09:05Z chore(whisper-flow): refresh routeTree.gen Register types after build
+6120342 2026-11-03T02:08:43Z feat(whisper-flow): xAI polish, command hardening, STT sign-in copy
+== voice-cloning-studio
+55d12ec 2026-11-03T03:29:04Z visual(vcs): polish engine-down empty card + error alert cards
+6917bbf 2026-11-03T02:21:07Z style(voice-cloning-studio): kill frost-card bleed on glass panels
+1187004 2026-11-03T02:14:35Z test(voice): attacker pass + Playwright mock-hub E2E for studio flows
+1bbdef7 2026-11-03T01:41:46Z feat(voice): Voice Connection Hub + adapters; keep visual polish hooks
+57f988f 2026-11-03T01:36:03Z style(voice-cloning-studio): glass polish + Create profile contrast
+== compare main...preview/integration
+status=diverged ahead=85 behind=323
+== whisper/voice branch names
+fleet/review/voice-and-connection a53ed1b
+fleet/tools/voice-and-connection-pins 43aa05c
+fleet/voice-stream/pipeline a53ed1b
+voice-cloning-studio 55d12ec
+voice-integration 9399e37
+voice-wiring 9a1f554
+whisper-flow 5ab07d0
+== open PRs
+#26 cursor/visual-polish-041b 2026-11-07T09:40:37Z Polish composer layout, empty states, and search keyboard focus
+#22 fix/mcp-runner-tool-parity-20261106 2026-11-06T18:21:34Z Expose implemented runner capabilities through both MCP transports
+#12 fleet/tools/voice-and-connection-pins 2026-11-05T12:19:55Z Pin voice and connection tools for the fleet
+#9 chatgpt/functionality-persistence-2026-11-03 2026-11-03T15:37:23Z feat(functionality): real local agent dispatch and atomic workspace saves
+#7 visual/polish-pass-11 2026-11-03T05:23:45Z visual/polish-pass-11: visual polish pass 11
+#6 visual/polish-pass-10-stacking 2026-11-03T04:36:30Z visual(pass-10): stacking/overlap CSS + phone mobile structure
+#2 intent-predictor 2026-11-01T23:11:21Z feat: keystroke + voice intent predictor (client-side)

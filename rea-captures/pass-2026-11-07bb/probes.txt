@@ -1,0 +1,31 @@
+== HEAD /
+HTTP/2 200 
+age: 0
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::vxl6z-1794047407643-96b7c57b416c
+== bundle
+grep: (standard input): binary file matches
+== probes
+/                                             200 text/html; charset=utf-8 41255B
+/login                                        200 text/html; charset=utf-8 10529B
+/dashboard                                    307  0B
+/memory                                       200 text/html; charset=utf-8 3222B
+/explore                                      200 text/html; charset=utf-8 3105B
+/tools                                        404 text/html; charset=utf-8 3183B
+/voice                                        404 text/html; charset=utf-8 3183B
+/chat                                         404 text/html; charset=utf-8 3183B
+/activity                                     404 text/html; charset=utf-8 3183B
+/voice-cloning-studio                         404 text/html; charset=utf-8 3183B
+/whisper-flow                                 404 text/html; charset=utf-8 3183B
+/api/tools/registry                           404 text/html; charset=utf-8 2861B
+/api/mind/oauth/github/status                 401 application/json 43B
+/api/mind/oauth/gmail/status                  401 application/json 43B
+/api/mind/oauth/google_calendar/status        401 application/json 43B
+/api/mind/oauth/google_drive/status           401 application/json 43B
+/api/mind/oauth/notion/status                 401 application/json 43B
+/api/mind/oauth/slack/status                  401 application/json 43B
+== registry body
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><link rel="stylesheet" href="/assets/styles-BTes9Ayn.css" data-precedence="default"/><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" d
+== oauth github body
+{"ok":false,"error":"Sign in is required."}

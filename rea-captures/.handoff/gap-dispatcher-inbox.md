@@ -643,3 +643,12 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - Pillars: Whisper branch-only; VCS branch-only; Tool Registry partial; continuous evolution partial
 - Visual: dashboard unsigned no bounce; Universe painted after brief loader; Grok configured vs Safe Keys NOT CONNECTED; forbidden_cross_site Activity/Tools/PC; SPA route-like 404s under /; Scheduled no worker
 - Artifacts: pass-2026-11-07ba/ ; internal-audit-2026-11-07ba.md
+
+## 2026-11-07bb — 2026-11-07 11:34 WAT
+- main tip → 9f9ea56 (PR #25 workers MCP); **prod still b5d888d** / index-ChogKXym.js
+- preview/integration aa53aa0; WF 5ab07d0; VCS 55d12ec; branches 108
+- Tools: godeye/zap OK; still missing CSP + Permissions-Policy; OAuth×6 401; registry 404
+- Visual: Universe painted; Memory empty; Explore TEMPLATE/NOT LIVE; Library/Projects/Tools/Voice/Chat/Activity/Scheduled/Settings/Safe Keys 404; PC 403s
+- Pillars: WF/VCS branch-only; Tool Registry partial; continuous evolution partial (main ahead of prod)
+- NEW owner-actionable: **none**
+- Full report: .handoff/internal-audit-2026-11-07bb.md + pass-2026-11-07bb/
