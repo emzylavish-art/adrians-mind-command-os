@@ -188,6 +188,7 @@ export function notionFailureFromTurn(turn: NotionTurn, params: NotionFailurePar
   const error = turn.error || "";
   if (isUserStoppedReply(error)) return { tone: "user_stopped", message: oneLine(error), params: snap };
   if (turn.needsConfirmation) return { tone: "needs_confirmation", turn };
+  if (turn.ok) return { tone: "ok", turn };
   if (turn.state === "unconfigured" || turn.state === "disconnected") {
     if (isHardNotionDetail(error)) {
       if (classifyHonestFailure(error) === "auth_required") {

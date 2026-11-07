@@ -57,7 +57,9 @@ describe("H33 Notion connector failure banners", () => {
     assert.equal(HONEST_FAILURE_MESSAGES.notion_not_configured, NOTION_SETUP);
     assert.equal(notionConnection(undefined, false).detail, HONEST_FAILURE_MESSAGES.notion_not_configured);
     assert.equal(notionConnection("secret", true).detail, HONEST_FAILURE_MESSAGES.notion_disconnected);
-    assert.equal(JSON.stringify(notionConnection("secret", true)).includes("secret"), false);
+    const token = "ntn_live_token_should_not_leak";
+    assert.equal(JSON.stringify(notionConnection(token, true)).includes(token), false);
+    assert.equal(JSON.stringify(notionConnection(token, false)).includes(token), false);
   });
 
   it("missing token is a Setup notice, never a silent empty and never a Retry", () => {
