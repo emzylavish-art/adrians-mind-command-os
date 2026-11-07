@@ -1,0 +1,14 @@
+HTTP/2 200 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-encoding: br
+content-type: text/html; charset=utf-8
+date: Sat, 07 Nov 2026 01:30:08 GMT
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::65qdj-1794015008294-efeec22c8f07
+

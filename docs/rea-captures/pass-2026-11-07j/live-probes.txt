@@ -1,0 +1,32 @@
+=== LIVE PROBES pass-2026-11-07j 2026-11-07 02:29–02:31 Africa/Lagos (UTC+1) ===
+Target: https://adrians-mind.vercel.app
+Method: curl (no browser). vs 07i: UNCHANGED statuses.
+
+GET / -> 200 | final=https://adrians-mind.vercel.app/ | redirects=0
+GET /login -> 200 | final=.../login | redirects=0
+GET /memory -> 200 | final=.../memory | redirects=0
+GET /explore -> 200 | final=.../explore | redirects=0
+GET /dashboard -> 307 Location=/login?next=%2Fdashboard | (with -L: final=/login?next=%2Fdashboard code=200 redirects=1)
+GET /tools -> 404
+GET /voice -> 404
+GET /artifacts -> 404
+GET /settings -> 404
+GET /activity -> 404
+GET /scheduled -> 404
+
+=== OAuth status x6 (unauthenticated) ===
+GET /api/mind/oauth/github/status -> 401
+GET /api/mind/oauth/gmail/status -> 401
+GET /api/mind/oauth/google_calendar/status -> 401
+GET /api/mind/oauth/google_drive/status -> 401
+GET /api/mind/oauth/notion/status -> 401
+GET /api/mind/oauth/slack/status -> 401
+
+=== live index asset ===
+index bundles: index-qV1VC2j2.js  (UNCHANGED vs 07i)
+extensions: https://grok.com/grok-app-builder/extensions.js  (known standing)
+script srcs: /assets/index-qV1VC2j2.js + extensions.js (+ image preloads)
+
+=== response headers (home) ===
+present: strict-transport-security; x-content-type-options: nosniff; x-frame-options: DENY; referrer-policy: strict-origin-when-cross-origin
+missing: Content-Security-Policy; Permissions-Policy  (known standing)

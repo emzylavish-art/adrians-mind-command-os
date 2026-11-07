@@ -1,0 +1,40 @@
+{
+  "tool": "owasp_zap_passive",
+  "product": "Adrian's Mind",
+  "mode": "passive-only",
+  "target": "https://adrians-mind.vercel.app",
+  "scan": {
+    "engine": "in-repo-passive-probe",
+    "status": 200,
+    "final_url": "https://adrians-mind.vercel.app/",
+    "response_headers": {
+      "age": "0",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-encoding": "gzip",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Sat, 07 Nov 2026 01:30:10 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "Vercel",
+      "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "x-vercel-cache": "MISS",
+      "x-vercel-id": "cle1::iad1::dsmjx-1794015010231-6782717e5c31",
+      "transfer-encoding": "chunked"
+    },
+    "findings": [
+      {
+        "id": "missing_content_security_policy",
+        "severity": "medium",
+        "description": "No Content-Security-Policy header observed."
+      },
+      {
+        "id": "missing_permissions_policy",
+        "severity": "medium",
+        "description": "No Permissions-Policy header."
+      }
+    ],
+    "findings_count": 2,
+    "note": "Full OWASP ZAP daemon not installed; in-repo passive baseline used. Active scan disabled."
+  }
+}

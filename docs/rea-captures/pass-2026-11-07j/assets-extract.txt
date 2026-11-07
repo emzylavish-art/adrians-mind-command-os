@@ -1,0 +1,14 @@
+index bundles:
+index-qV1VC2j2.js
+
+extensions:
+https://grok.com/grok-app-builder/extensions.js
+
+scripts:
+/assets/index-qV1VC2j2.js
+/brand/logo-mark.jpg
+/icons/library.svg
+/icons/projects.svg
+/icons/research.svg
+/icons/systems.svg
+https://grok.com/grok-app-builder/extensions.js
