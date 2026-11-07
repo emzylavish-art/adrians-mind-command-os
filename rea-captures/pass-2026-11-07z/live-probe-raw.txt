@@ -1,0 +1,116 @@
+===== / =====
+no_follow code=200 redirect=
+follow code=200 final=https://adrians-mind.vercel.app/ redirects=0
+
+===== /login =====
+no_follow code=200 redirect=
+follow code=200 final=https://adrians-mind.vercel.app/login redirects=0
+
+===== /dashboard =====
+no_follow code=307 redirect=https://adrians-mind.vercel.app/login?next=%2Fdashboard
+follow code=200 final=https://adrians-mind.vercel.app/login?next=%2Fdashboard redirects=1
+
+===== /memory =====
+no_follow code=200 redirect=
+follow code=200 final=https://adrians-mind.vercel.app/memory redirects=0
+
+===== /explore =====
+no_follow code=200 redirect=
+follow code=200 final=https://adrians-mind.vercel.app/explore redirects=0
+
+===== /tools =====
+no_follow code=404 redirect=
+follow code=404 final=https://adrians-mind.vercel.app/tools redirects=0
+
+===== /voice =====
+no_follow code=404 redirect=
+follow code=404 final=https://adrians-mind.vercel.app/voice redirects=0
+
+===== /chat =====
+no_follow code=404 redirect=
+follow code=404 final=https://adrians-mind.vercel.app/chat redirects=0
+
+===== /activity =====
+no_follow code=404 redirect=
+follow code=404 final=https://adrians-mind.vercel.app/activity redirects=0
+
+===== SECURITY HEADERS / =====
+HTTP/2 200 
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+===== ASSET probe =====
+/assets/index-qV1VC2j2.js
+/assets/react-DB-4Zxce.js
+/assets/actions-BG0IWsrI.js
+/assets/link-Lxx_zRdo.js
+/assets/route-BAhszpLd.js
+/assets/jsx-runtime-BtH0gOTJ.js
+/assets/routes-wC3KRy8L.js
+/assets/client-CJ-to4pt.js
+/assets/workspace-BJAXxp_0.js
+/assets/memory-saved-indicator-DIEJAYLn.js
+/assets/index-qV1VC2j2.js
+/assets/react-DB-4Zxce.js
+/assets/actions-BG0IWsrI.js
+/assets/link-Lxx_zRdo.js
+/assets/route-BAhszpLd.js
+/assets/jsx-runtime-BtH0gOTJ.js
+/assets/index-qV1VC2j2.js
+/assets/routes-wC3KRy8L.js
+/assets/client-CJ-to4pt.js
+/assets/workspace-BJAXxp_0.js
+===== OAuth / auth status endpoints =====
+/api/auth/providers -> 404 | 
+/api/auth/session -> 404 | 
+/auth/google -> 404 | <!DOCTYPE html><html lang="en"><head><meta name="twitter:card" content="summary_large_image"><meta property="og:title" c
+/auth/github -> 404 | <!DOCTYPE html><html lang="en"><head><meta name="twitter:card" content="summary_large_image"><meta property="og:title" c
+/api/oauth/google/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/oauth/github/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/oauth/notion/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/oauth/slack/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/oauth/discord/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/oauth/spotify/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/integrations/google/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/integrations/github/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/integrations/notion/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/integrations/slack/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/integrations/discord/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+/api/integrations/spotify/status -> 404 | <!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+===== /api/mind/oauth/*/status =====
+/api/mind/oauth/google/status -> 404 | {"ok":false,"error":"Unknown OAuth connector: google"}
+/api/mind/oauth/github/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/notion/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/slack/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/discord/status -> 404 | {"ok":false,"error":"Unknown OAuth connector: discord"}
+/api/mind/oauth/spotify/status -> 404 | {"ok":false,"error":"Unknown OAuth connector: spotify"}
+===== /_vercel meta / deployment =====
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::fq75l-1794027789049-cde25bfa8461
+
+===== OAuth×6 (known standing) =====
+/api/mind/oauth/github/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/gmail/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/google_calendar/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/google_drive/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/notion/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/slack/status -> 401 | {"ok":false,"error":"Sign in is required."}
+
+===== OAuth×6 CONFIRMED =====
+/api/mind/oauth/github/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/gmail/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/google_calendar/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/google_drive/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/notion/status -> 401 | {"ok":false,"error":"Sign in is required."}
+/api/mind/oauth/slack/status -> 401 | {"ok":false,"error":"Sign in is required."}
+
+===== FULL SECURITY-ISH HEADERS / =====
+HTTP/2 200 
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::hsltg-1794027808625-d921fa3b1fb5
