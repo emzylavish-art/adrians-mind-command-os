@@ -1,0 +1,35 @@
+/ -> 200 
+/login -> 200 
+/dashboard -> 307 https://adrians-mind.vercel.app/login?next=%2Fdashboard
+/memory -> 200 
+/explore -> 200 
+/tools -> 404 
+/voice -> 404 
+/chat -> 404 
+/activity -> 404 
+/library -> 404 
+/projects -> 404 
+/voice-cloning-studio -> 404 
+/whisper-flow -> 404 
+/api/tools/registry -> 404 
+oauth/github/status -> 401
+oauth/gmail/status -> 401
+oauth/google_calendar/status -> 401
+oauth/google_drive/status -> 401
+oauth/notion/status -> 401
+oauth/slack/status -> 401
+--: line 30: warning: command substitution: ignored null byte in input
+index-ChogKXym.js
+index-ChogKXym.js
+index-ChogKXym.js
+index-ChogKXym.js
+assets/index-ChogKXym.js
+assets/react-DB-4Zxce.js
+assets/actions-BG0IWsrI.js
+assets/link-Lxx_zRdo.js
+assets/route-BAhszpLd.js
+assets/jsx-runtime-BtH0gOTJ.js
+assets/routes-DJ7148ZD.js
+assets/client-CJ-to4pt.js
+assets/workspace-BJAXxp_0.js
+assets/memory-saved-indicator-DIEJAYLn.js

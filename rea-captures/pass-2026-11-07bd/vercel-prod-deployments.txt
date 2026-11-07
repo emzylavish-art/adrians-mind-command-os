@@ -1,0 +1,17 @@
+pass 2026-11-07bd Vercel sample (adrian-8a30 / adrians-mind)
+- rea-features 3868976 QUEUED target=null (docs bc)
+- rea-features 3f246a0 QUEUED target=null (docs bb)
+- main cbeebe6 BUILDING target=null (PR #26 merge) — NOT production
+- main 9f9ea56 READY target=null (PR #25 merge) — preview only, not production
+- Production target filter queried separately this pass
+Live asset on adrians-mind.vercel.app still: index-ChogKXym.js
+Prior production READY at deploy time: b5d888d (unchanged live asset)
+
+Production target=production (latest):
+- READY b5d888d main (PR #23) id=dpl_HmAxBEus6oL75hCkTuXE8NDSM9qF — STILL production tip
+- No production deploy for 9f9ea56 or cbeebe6
+
+Status vs prior pass bc:
+- 9f9ea56: BUILDING→READY but still target=null (preview) — confirms deploy-path bug already routed 07bc
+- cbeebe6: still BUILDING target=null
+- Live index-ChogKXym.js UNCHANGED
