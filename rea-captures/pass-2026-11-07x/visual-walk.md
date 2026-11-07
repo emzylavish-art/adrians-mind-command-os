@@ -1,0 +1,11 @@
+# Adrian's Mind visual walk — 2026-11-07 (read-only, no login)
+- Auth: /dashboard stayed on /dashboard (no /login bounce). "/" shows session chrome: user "Adrian (Personal)", sidebar Library/Projects/Scheduled/Explore.
+- Universe (/dashboard): painted within ~20s (not stuck). Panels: Notion Galaxy "Unavailable — No Notion snapshot file / NOTION_TOKEN unset"; Money "no spend source yet"; Fleet plan "Queue unavailable"; Weather "Quiet void 18 idle"; charts all "no source yet"; INTERIOR "Building data unavailable". Feed 4 landings pending.
+- Header: "Grok configured" on every view. Home System Status: Memory OFF, Database REMOTE CONFIGURED (no restart test), Voice browser speech, REA PARTIAL, HP NOT PAIRED; Grok: CONFIGURED checked Nov 6 11:31 PM. Safe Keys NOT CONNECTED not re-checked (no such control seen).
+- Home: Recent Activity lists 5x forbidden_cross_site (Nov 6 10:26–11:13 PM) -> gap persists. Active Projects empty.
+- Library: "No files yet", empty (known). Projects: 0 on device; Oak Bridge Capital & BridgePoint EXTERNAL cards. Scheduled: "No worker process is running", no schedules (known).
+- /explore: persona directory, many TEMPLATE / NOT LIVE cards (Official 10; Video/Audio/Budget/My agents 0); handoff "not yet verified" (known).
+- /memory: renders; empty "No saved memory yet"; global notes only. Works.
+- /chat, /activity, /tools: "Page not found" (deep-link 404s known).
+- Not walked: Tools/Agents/Build etc. composer chips (not opened; read-only).
+- NEW vs known: nothing new; all known gaps reproduced. Universe did not hang this pass. /memory is live (not 404).

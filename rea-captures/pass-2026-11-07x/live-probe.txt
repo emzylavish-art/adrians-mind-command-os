@@ -1,0 +1,19 @@
+PATH / -> 200|
+PATH /login -> 200|
+PATH /dashboard -> 307|https://adrians-mind.vercel.app/login?next=%2Fdashboard307|https://adrians-mind.vercel.app/dashboard
+PATH /memory -> 200|
+PATH /explore -> 200|
+PATH /tools -> 404|
+PATH /voice -> 404|
+PATH /chat -> 404|
+PATH /activity -> 404|
+OAUTH github -> 401
+OAUTH gmail -> 401
+OAUTH google_calendar -> 401
+OAUTH google_drive -> 401
+OAUTH notion -> 401
+OAUTH slack -> 401
+index-qV1VC2j2.js
+index-qV1VC2j2.js
+index-qV1VC2j2.js
+extensions.js
