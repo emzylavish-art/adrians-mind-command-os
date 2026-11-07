@@ -287,3 +287,123 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - **NEW findings needing fix:** none.
 - Full report: `/workspace/rea-captures/internal-audit-2026-11-07h.md` + `pass-2026-11-07h/`
 - Zack-message conditions: **not met**.
+
+## 2026-11-07 02:19 WAT — REA pass 2026-11-07i → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints on /dashboard (unsigned Adrian Personal chrome); curl still 307→login; Activity/Tools `forbidden_cross_site`; Scheduled no worker; Connected Grok KEY PRESENT + header “Grok configured” (honesty already routed 07e; not claimed XAI fixed+live); explore TEMPLATE/NOT LIVE; empty Universe side cards (Notion Galaxy / Money / Fleet).
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07i.md` + `pass-2026-11-07i/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 02:33 WAT — REA pass 2026-11-07j → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints on /dashboard (unsigned Adrian Personal chrome); curl still 307→login; Activity/Tools `forbidden_cross_site`; Scheduled no worker; Connected/header Grok KEY PRESENT + “Grok configured” vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live); explore TEMPLATE/NOT LIVE; empty Universe side cards.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07j.md` + `pass-2026-11-07j/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 02:50 WAT — REA pass 2026-11-07k → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints on /dashboard (existing box session); curl still 307→login; forbidden_cross_site in Recent Activity; Scheduled no worker; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” (honesty already routed 07e; Safe Keys UI not reachable this pass).
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07k.md` + `pass-2026-11-07k/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 03:10 WAT — REA pass 2026-11-07l → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints on /dashboard (existing box session); curl still 307→login; forbidden_cross_site on Activity + in-app Memory; Scheduled local-only; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Safe Keys Chat NOT CONNECTED (honesty already routed 07e).
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07l.md` + `pass-2026-11-07l/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-06 20:16 CST / 2026-11-07 03:16 WAT — REA pass 2026-11-07m → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints under 30s on /dashboard (existing box session); curl still 307→login; forbidden_cross_site on Activity; Scheduled local-only; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Connected KEY PRESENT vs Safe Keys NOT CONNECTED (honesty already routed 07e).
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07m.md` + `pass-2026-11-07m/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-06 20:25 CST / 2026-11-07 03:25 WAT — REA pass 2026-11-07n → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints on /dashboard (existing box session); curl still 307→login; forbidden_cross_site on Activity + Tools; Scheduled local-only; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Connected KEY PRESENT vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live). Screenshot lag limited PNGs to 01/02/07.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07n.md` + `pass-2026-11-07n/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-06 20:37 CST / 2026-11-07 03:37 WAT — REA pass 2026-11-07o → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** First /dashboard capture mid Painting the universe… (intermittent known); SPA walk PNGs 01–17; curl still 307→login; forbidden_cross_site on Activity; Scheduled local-only; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” + Connected KEY PRESENT (honesty already routed 07e; not claimed XAI fixed+live).
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07o.md` + `pass-2026-11-07o/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 03:45 WAT — REA pass 2026-11-07p → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe painted on /dashboard (existing box session); curl still 307→login; forbidden_cross_site in Recent Activity; Scheduled no worker; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” (honesty already routed 07e; not claimed XAI fixed+live). PNGs 01–07.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07p.md` + `pass-2026-11-07p/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 03:57 WAT — REA pass 2026-11-07q → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints ~25s on /dashboard (existing box session); curl still 307→login; forbidden_cross_site on Activity/Tools/Agents/Projects; Scheduled worker checking / local-only; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Connected KEY PRESENT vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live). PNGs 01–12.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07q.md` + `pass-2026-11-07q/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 04:12 WAT — REA pass 2026-11-07r → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints ≤25s on /dashboard (local Adrian Personal chrome + sign-in prompt; no password attempt); curl still 307→login; forbidden_cross_site on Activity (persists across SPA); Scheduled explicit no worker / local-only; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Connected KEY PRESENT vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live). PNGs 01–19.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07r.md` + `pass-2026-11-07r/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 04:28 WAT — REA pass 2026-11-07s → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe painted ~8s on /dashboard (existing box session); curl still 307→login; forbidden_cross_site on Activity + Tools PC shell (Retry); Scheduled no worker; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Connected KEY PRESENT vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live). Sign-in prompt for voice not seen this pass. PNGs 01–19.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07s.md` + `pass-2026-11-07s/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 04:53 WAT — REA pass 2026-11-07t → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints ~20s on /dashboard (existing box session); curl still 307→login; forbidden_cross_site on Activity/Skills (+ related SPA); Scheduled no worker; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Connected KEY PRESENT vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live). PNGs 01–19.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07t.md` + `pass-2026-11-07t/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 05:05 WAT — REA pass 2026-11-07u → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints ≤~25s on /dashboard (box session; Chat home sign-in prompt for voice); curl still 307→login; forbidden_cross_site on Activity + Skills/Build/Runs/Research/Agents/Help; Scheduled no worker; explore TEMPLATE/NOT LIVE; empty Library/Projects; header “Grok configured” vs Connected KEY PRESENT vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live). PNGs 01–19.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07u.md` + `pass-2026-11-07u/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 05:16 WAT — REA pass 2026-11-07v → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe painted within ~40s on /dashboard (box session; Chat home sign-in CTA for voice); curl still 307→login; forbidden_cross_site on Activity + Tools/Connected/Skills/Build/Runs/Research/Agents/Memory; Scheduled no worker; explore TEMPLATE/NOT LIVE; empty Library/Projects; header Checking → “Grok configured” vs Connected Key present (not live-verified) vs Safe Keys NOT CONNECTED (honesty already routed 07e; not claimed XAI fixed+live). PNGs 01–20.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07v.md` + `pass-2026-11-07v/`
+- Zack-message conditions: **not met**.
+
+## 2026-11-07 05:22 WAT — REA pass 2026-11-07w → Gap Dispatcher
+- **UNCHANGED:** main `e4ed639` / preview `aa53aa0` / Production `e3ccc51` (main+24) / live `index-qV1VC2j2.js`.
+- **UNCHANGED:** CSP+Permissions-Policy missing; OAuth×6 401; sidebar buttons; extensions.js; deep-link 404s; VCS branch-only; pillars same; audit `example.com` still blocking password walks.
+- **Visual:** Universe paints ~8s on /dashboard (box session; no password attempt); curl still 307→login; forbidden_cross_site in Recent Activity; Scheduled no worker; explore TEMPLATE/NOT LIVE; empty Library/Projects; Universe side cards Unavailable/empty; header “Grok configured” (honesty already routed 07e; not claimed XAI fixed+live). PNGs 01–08.
+- **NEW findings needing fix:** none.
+- Full report: `/workspace/rea-captures/internal-audit-2026-11-07w.md` + `pass-2026-11-07w/`
+- Zack-message conditions: **not met**.
