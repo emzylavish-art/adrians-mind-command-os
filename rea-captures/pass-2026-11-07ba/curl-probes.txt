@@ -1,0 +1,15 @@
+/ 200|
+/login 200|
+/dashboard 307|https://adrians-mind.vercel.app/login?next=%2Fdashboarderr
+/memory 200|
+/explore 200|
+/tools 404|
+/voice 404|
+/chat 404|
+/activity 404|
+/voice-cloning-studio 404|
+/whisper-flow 404|
+/api/tools/registry 404|
+oauth/github/status 401
+oauth/gmail/status 401
+oauth/notion/status 401
