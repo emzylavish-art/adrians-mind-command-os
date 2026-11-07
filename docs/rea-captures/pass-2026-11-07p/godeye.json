@@ -1,0 +1,481 @@
+{
+  "tool": "godeye",
+  "product": "Adrian's Mind",
+  "mode": "read-only",
+  "target": "https://adrians-mind.vercel.app",
+  "page": {
+    "engine": "playwright",
+    "status": 200,
+    "final_url": "https://adrians-mind.vercel.app/",
+    "title": "Adrian's Mind",
+    "links": [
+      {
+        "href": "/explore",
+        "text": "Explore"
+      },
+      {
+        "href": "/login",
+        "text": "Sign in"
+      }
+    ],
+    "buttons": [
+      {
+        "type": "button",
+        "text": "\u00d7",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Collapse sidebar",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Search",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Library",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Projects",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Scheduled",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "New",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "A\nAdrian (Personal)\nSettings \u00b7 this device",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Open menu",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Direct",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Auto",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Alerts",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "A\nAdrian",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "ASK\nREVIEW AND APPROVE BEFORE ACTION",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "AUTOMATIC\nDELETES AND REPLACEMENTS STILL ASK YOU",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Memory: OFF\nOPT IN BEFORE THIS COMMAND CAN READ NOTES.",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Ask",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Research",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Agent",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Build",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Auto",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Fast",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Expert",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Heavy",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Build",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Orchestrator",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Attach",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Image",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Camera",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Drive",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Imagine",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Add Context",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Tools",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Agents",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Projects",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Dictate into composer",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Voice mode",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Start voice (Ctrl+Shift+V)",
+        "id": ""
+      },
+      {
+        "type": "submit",
+        "text": "Send",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Summarize my projects",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "What can the worker do?",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Review connected services",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "View all",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Details",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "View all",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Emergency stop",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Turn off",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Run",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Turn off",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Run",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Turn off",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Run",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Run",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Run",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Run",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Run",
+        "id": ""
+      },
+      {
+        "type": "submit",
+        "text": "Classify locally",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Clear",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Create draft",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Review latest stored version",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Save locally",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Suggest curation",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Chat",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Bots & Agents",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "New chat",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Build",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Projects",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "More",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Speak",
+        "id": ""
+      }
+    ],
+    "forms": [
+      {
+        "action": "",
+        "method": "get",
+        "id": ""
+      },
+      {
+        "action": "",
+        "method": "get",
+        "id": ""
+      }
+    ],
+    "inputs": [
+      {
+        "type": "input",
+        "name": "",
+        "id": "",
+        "placeholder": "Search or jump\u2026"
+      },
+      {
+        "type": "textarea",
+        "name": "",
+        "id": "",
+        "placeholder": "What would you like to work on?"
+      },
+      {
+        "type": "input",
+        "name": "",
+        "id": "",
+        "placeholder": "Search skills"
+      },
+      {
+        "type": "textarea",
+        "name": "request",
+        "id": "",
+        "placeholder": ""
+      },
+      {
+        "type": "select",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      },
+      {
+        "type": "textarea",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      },
+      {
+        "type": "textarea",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      },
+      {
+        "type": "textarea",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      },
+      {
+        "type": "file",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      },
+      {
+        "type": "file",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      }
+    ],
+    "scripts": [
+      "https://grok.com/grok-app-builder/extensions.js",
+      "https://adrians-mind.vercel.app/assets/index-qV1VC2j2.js"
+    ],
+    "styles": [
+      "https://adrians-mind.vercel.app/assets/styles-BTes9Ayn.css",
+      "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap",
+      "https://adrians-mind.vercel.app/assets/routes-DJ6fWTpc.css"
+    ],
+    "console_errors": [],
+    "screenshot_path": "/workspace/rea-captures/pass-2026-11-07p/godeye.png",
+    "html_bytes": 40183
+  },
+  "same_origin_link_statuses": [
+    {
+      "url": "https://adrians-mind.vercel.app/explore",
+      "status": 200
+    },
+    {
+      "url": "https://adrians-mind.vercel.app/login",
+      "status": 200
+    }
+  ],
+  "broken_same_origin_links": [],
+  "summary": {
+    "title": "Adrian's Mind",
+    "status": 200,
+    "engine": "playwright",
+    "link_count": 2,
+    "button_count": 69,
+    "form_count": 2,
+    "input_count": 10,
+    "script_count": 2,
+    "style_count": 3,
+    "console_error_count": 0,
+    "broken_same_origin_count": 0,
+    "screenshot": "/workspace/rea-captures/pass-2026-11-07p/godeye.png"
+  },
+  "note": "in-repo implementation; upstream identity still unconfirmed"
+}
