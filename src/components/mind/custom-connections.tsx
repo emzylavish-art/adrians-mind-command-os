@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { callCustomConnectionFn, listCustomConnectionsFn, saveCustomConnectionFn } from "@/lib/mind/custom-connection.server";
 import type { PublicConnection } from "@/lib/mind/custom-connection";
-import { missingConfigNotice, safeReason } from "@/lib/mind/mcp/call-contract";
+import { missingConfigNotice, reasonCode, safeReason } from "@/lib/mind/mcp/call-contract";
 import { acceptResult, dismissResult, type AttemptView } from "@/components/mind/custom-connection-result";
 
 /** Tools-panel registration for remote MCP and explicit HTTP read/status calls. */
@@ -52,7 +52,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
             setToken("");
             if (!saved.ok) {
               const setup = missingConfigNotice({ text: saved.error });
-              setNotice(setup ? setup.copy : safeReason(saved.error));
+              setNotice(setup ? setup.copy : safeReason(reasonCode("error"), saved.error));
               return;
             }
             setNotice(`${saved.connection.label} saved. State: ${saved.connection.state}.`);

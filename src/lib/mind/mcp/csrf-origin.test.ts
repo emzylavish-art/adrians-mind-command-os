@@ -20,6 +20,15 @@ describe("assertSameOrigin CSRF policy (MCP + OAuth)", () => {
     assert.equal(assertSameOrigin(req(app, { origin: "http://127.0.0.1:8080" })).ok, true);
   });
 
+  it("rejects a spoofed forwarded host and still blocks a foreign Origin", () => {
+    assert.equal(
+      assertSameOrigin(req(app, { origin: "http://127.0.0.1:8080", "x-forwarded-host": "evil.example" })).ok,
+      true,
+    );
+    const spoofed = assertSameOrigin(req(app, { origin: "https://evil.example", "x-forwarded-host": "127.0.0.1:8080" }));
+    assert.equal(spoofed.ok, false);
+  });
+
   it("rejects cross-origin Origin", () => {
     const result = assertSameOrigin(req(app, { origin: "https://evil.example" }));
     assert.equal(result.ok, false);

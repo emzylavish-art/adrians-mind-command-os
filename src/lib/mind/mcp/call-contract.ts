@@ -91,9 +91,29 @@ export function privacyErrorText(text: string, secret = ""): string {
   return out.slice(0, 8000);
 }
 
-/** One line for a person. Not a raw body, header, query string, or credential. */
-export function safeReason(text: string, secret = ""): string {
-  return privacyErrorText(text, secret).replace(/\s+/g, " ").trim().slice(0, 240);
+export const MCP_BACKEND_CONTRACT_VERSION = 1;
+
+const DISPLAY_REASONS: Record<McpResultCode, string> = {
+  ok: "The call finished.",
+  error: "The call failed.",
+  unauthorized: "The server refused the call.",
+  missing_config: "Not configured. Nothing was retried.",
+  incompatible: "The call does not match the advertised schema.",
+  ssrf_denied: "That address is not allowed.",
+  timeout: "The server did not answer in time. Nothing was retried.",
+  disabled: "The server is disabled.",
+};
+
+/** One fixed line for a banner. The upstream body is ignored. */
+export function safeReason(code: McpResultCode, _upstreamBody?: string): string {
+  return DISPLAY_REASONS[code];
+}
+
+export function reasonCode(status: string): McpResultCode {
+  if (status === "ok" || status === "unauthorized" || status === "missing_config" || status === "incompatible" || status === "timeout" || status === "disabled" || status === "ssrf_denied") {
+    return status;
+  }
+  return "error";
 }
 
 export const MISSING_CONFIG_COPY = "Not configured. Nothing was retried.";

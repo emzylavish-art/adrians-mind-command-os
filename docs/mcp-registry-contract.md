@@ -65,11 +65,13 @@ There is no `requestId`, `correlationId`, or trace field on `McpCallContract`. `
 
 ## Acceptance answers
 
-1. `safeReason` in `src/lib/mind/mcp/call-contract.ts` returns one line. `src/lib/mind/mcp/call-acceptance.test.ts` checks that a bearer, a query secret, a URL, and a password field do not survive.
-2. There is no upstream correlation header on this path. `callProvenance` sets `localAttemptId` and `upstreamRequestId: null`. The test checks a local id is not stored as `x-request-id`.
-3. `missingConfigNotice` maps a missing `DATABASE_URL` / `POSTGRES_URL` and a missing token secret to `Not configured. Nothing was retried.` with `retryable: false`. The Tools form uses that copy.
-4. `READ_SAFE_ALLOWLIST` is `pglite_list_schema`. Custom HTTP GET `request` is the other read. POST and other MCP tools are not read-safe. `timeoutRetryDecision` returns `retryable: false` and `autoRetried: false` for both.
-5. `acceptResult` and `dismissResult` in `src/components/mind/custom-connection-result.ts` ignore a late error after a newer click and clear the result on dismiss. Those tests call the helper. They do not mount `command-app.tsx` or the failure banner. Those files belong to logic-picker-routes.
+Backend contract version `MCP_BACKEND_CONTRACT_VERSION` is a candidate only. It is not frozen. Mounted failure-banner tests do not exist on this branch.
+
+1. `safeReason(code)` returns one fixed line and ignores the upstream body. Native JSON-RPC stays on `rpc` for a successful data result.
+2. `localAttemptId` is local. `upstreamRequestId` is null. No `x-request-id` header is read.
+3. `missingConfigNotice` returns `Not configured. Nothing was retried.` and `retryable: false` when the database URL or token secret is missing.
+4. Custom HTTP aborts once at 15 seconds and drops an oversized body. It does not send the request again. `READ_SAFE_ALLOWLIST` is `pglite_list_schema`. Custom HTTP GET `request` is the other read. A timeout is not retried.
+5. Not accepted and not frozen. `src/lib/mind/failure-mount.ts` exists on `logic-picker-routes` at `a86d33d` (`registerFailureHandler`, `emitFailure`, `MountedFailure`) and is absent here. This lane does not import it. `command-app.tsx` and `fleet-panels.tsx` are Logic-owned, so this lane cannot register the `mcp` surface on the mounted page. Helper tests of `acceptResult` are not mounted tests. Logic must call `registerFailureHandler("mcp", handler)` from the mounted UI after that file is on the branch this app runs.
 
 ## Error text
 

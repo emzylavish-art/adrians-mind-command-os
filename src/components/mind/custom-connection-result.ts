@@ -1,4 +1,4 @@
-import { safeReason, type CallProvenance } from "../../lib/mind/mcp/call-contract.ts";
+import { reasonCode, safeReason, type CallProvenance } from "../../lib/mind/mcp/call-contract.ts";
 
 export type AttemptView = CallProvenance & {
   status: string;
@@ -20,7 +20,7 @@ export function acceptResult(
     localAttemptId: incoming.localAttemptId,
     upstreamRequestId: null,
     status: incoming.status,
-    text: safeReason(incoming.text),
+    text: incoming.status === "ok" ? incoming.text : safeReason(reasonCode(incoming.status), incoming.text),
     retryable: false,
   };
 }

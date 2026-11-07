@@ -148,6 +148,40 @@ describe("shared durable registry", { concurrency: false }, () => {
     }
   });
 
+  it("aborts one slow custom HTTP call and does not send it again", async () => {
+    resetRegistryStoreForTests();
+    process.env.CONNECTOR_TOKEN_SECRET = SECRET;
+    const db = memoryDb();
+    let calls = 0;
+    const saved = await saveCustomConnection(db, "owner", { label: "Slow", kind: "http", url: "http://127.0.0.1:9/status", method: "GET" });
+    assert.equal(saved.ok, true);
+    if (!saved.ok) return;
+    const called = await callCustomConnection({
+      db,
+      userId: "owner",
+      id: saved.connection.id,
+      operation: "request",
+      args: {},
+      timeoutMs: 40,
+      fetch: (_url, init) => {
+        calls += 1;
+        return new Promise((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal?.aborted) {
+            reject(new Error("aborted"));
+            return;
+          }
+          signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        });
+      },
+    });
+    assert.equal(calls, 1);
+    assert.equal(called.status, "timeout");
+    assert.equal(called.text, "The server did not answer in time. Nothing was retried.");
+    delete process.env.CONNECTOR_TOKEN_SECRET;
+    resetRegistryStoreForTests();
+  });
+
   it("keeps unauthorized, transport, and JSON-RPC errors distinct", async () => {
     resetRegistryStoreForTests();
     process.env.CONNECTOR_TOKEN_SECRET = SECRET;

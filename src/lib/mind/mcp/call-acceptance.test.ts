@@ -12,15 +12,15 @@ import { acceptResult, dismissResult, startAttempt } from "../../../components/m
 const SECRET = "sekret-value";
 
 describe("five acceptance answers", () => {
-  it("1 safeReason is one line and drops credentials, headers, urls, and payload fields", () => {
-    const raw = `line one ${SECRET}\nAuthorization: Bearer ${SECRET}\nhttps://mcp.example/x?token=${SECRET}\n{"password":"other-secret","token":"${SECRET}"}`;
-    const reason = safeReason(raw, SECRET);
+  it("1 safeReason is one fixed line and ignores a private upstream body", () => {
+    const raw = "the spare key is under the blue mat\nAuthorization: Bearer abc\nhttps://internal.example/a?token=abc\n{\"password\":\"other-secret\"}";
+    const reason = safeReason("error", raw);
+    assert.equal(reason, "The call failed.");
     assert.equal(reason.includes("\n"), false);
-    assert.equal(reason.includes(SECRET), false);
+    assert.equal(reason.includes("blue mat"), false);
+    assert.equal(reason.includes("internal.example"), false);
     assert.equal(reason.includes("other-secret"), false);
-    assert.equal(reason.includes("mcp.example"), false);
-    assert.match(reason, /\[redacted\]/);
-    assert.match(reason, /\[url\]/);
+    assert.equal(reason.includes("Bearer"), false);
   });
 
   it("2 local attempt id is not an upstream request id", () => {
