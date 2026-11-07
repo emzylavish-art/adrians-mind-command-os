@@ -216,8 +216,10 @@ export const notionCommand = createServerFn({ method: "POST" })
 export const mcpList = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { listMcp } = await import("./mcp");
-    return { servers: listMcp(context.userId) };
+    const { listConnectedMcp } = await import("./connected-mcp.server");
+    const { databaseConfigured } = await import("./mcp/registry-store");
+    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+    return { servers: await listConnectedMcp(db, context.userId) };
   });
 
 export const mcpSave = createServerFn({ method: "POST" })
@@ -228,20 +230,22 @@ export const mcpSave = createServerFn({ method: "POST" })
     token: typeof input.token === "string" ? input.token.slice(0, 500) : "",
   }))
   .handler(async ({ data, context }) => {
-    const { saveMcp } = await import("./mcp");
-    const saved = saveMcp(context.userId, data);
-    if (!saved.ok) return saved;
-    const { probeMcp, listMcp } = await import("./mcp");
-    await probeMcp(context.userId, saved.server.id, globalThis.fetch);
-    return { ok: true as const, servers: listMcp(context.userId) };
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was saved." };
+    const { saveConnectedMcp } = await import("./connected-mcp.server");
+    const { databaseConfigured } = await import("./mcp/registry-store");
+    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+    return saveConnectedMcp(db, context.userId, data, { isHalted: haltIsOn });
   });
 
 export const mcpRemove = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { id?: string }) => ({ id: typeof input.id === "string" ? input.id.slice(0, 80) : "" }))
   .handler(async ({ data, context }) => {
-    const { removeMcp } = await import("./mcp");
-    return { servers: removeMcp(context.userId, data.id) };
+    const { removeConnectedMcp } = await import("./connected-mcp.server");
+    const { databaseConfigured } = await import("./mcp/registry-store");
+    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+    return { ok: true as const, servers: await removeConnectedMcp(db, context.userId, data.id) };
   });
 
 export const mcpCommand = createServerFn({ method: "POST" })
@@ -255,8 +259,10 @@ export const mcpCommand = createServerFn({ method: "POST" })
     if (await haltIsOn(context.userId)) {
       return { ok: false, needsConfirmation: false, servers: [], text: "", error: "Emergency stop is on. No MCP server was called." };
     }
-    const { runMcpTurn } = await import("./mcp");
-    return runMcpTurn({ userId: context.userId, text: data.text, confirmed: data.confirmed, fetch: globalThis.fetch });
+    const { runConnectedMcpTurn } = await import("./connected-mcp.server");
+    const { databaseConfigured } = await import("./mcp/registry-store");
+    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+    return runConnectedMcpTurn({ db, userId: context.userId, text: data.text, confirmed: data.confirmed, isHalted: haltIsOn });
   });
 
 export const inspectWebPage = createServerFn({ method: "POST" })

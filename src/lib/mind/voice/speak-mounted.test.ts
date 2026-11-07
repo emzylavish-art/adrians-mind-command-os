@@ -250,6 +250,47 @@ describe("mounted speak() failure banner", () => {
     await late;
     assert.equal(host2.banner(), null);
   });
+
+  it("does not start STT/chat/TTS when capture resolves after the attempt is superseded", async () => {
+    let releaseCapture: (value: unknown) => void = () => undefined;
+    const capture = new Promise<unknown>((resolve) => { releaseCapture = resolve; });
+    let current = true;
+    let transcribe = 0, chat = 0, synthesize = 0, play = 0, failures = 0;
+    const run = runMountedSpeak({
+      text: "", messageId: "", voiceId: "eve", isCurrent: () => current,
+      deps: {
+        capture: () => capture,
+        transcribe: async () => { transcribe += 1; return { ok: true, text: "hello" }; },
+        chatTurn: async () => { chat += 1; return { ok: true, text: "reply" }; },
+        synthesize: async () => { synthesize += 1; return { ok: true, audio: "audio" }; },
+        play: async () => { play += 1; },
+      },
+      reportFailure: () => { failures += 1; }, clearFailure: () => undefined, again: () => undefined,
+    });
+    current = false;
+    releaseCapture({ ok: true, audioBase64: "captured" });
+    const result = await run;
+    assert.equal(result.ok, false);
+    assert.deepEqual([transcribe, chat, synthesize, play, failures], [0, 0, 0, 0, 0]);
+  });
+
+  it("does not begin playback when TTS resolves after the attempt is superseded", async () => {
+    let releaseSpeech: (value: unknown) => void = () => undefined;
+    const speech = new Promise<unknown>((resolve) => { releaseSpeech = resolve; });
+    let current = true, play = 0, failures = 0;
+    const run = runMountedSpeak({
+      text: "reply", messageId: "m1", voiceId: "eve",
+      replay: { correlationId: "c1", chatCommitted: true, transcript: "hello", reply: "reply", audio: null, text: "", messageId: "m1", voiceId: "eve" },
+      isCurrent: () => current,
+      deps: { synthesize: async () => speech, play: async () => { play += 1; } },
+      reportFailure: () => { failures += 1; }, clearFailure: () => undefined, again: () => undefined,
+    });
+    current = false;
+    releaseSpeech({ ok: true, audio: "audio" });
+    const result = await run;
+    assert.equal(result.ok, false);
+    assert.deepEqual([play, failures], [0, 0]);
+  });
 });
 
 void useState;

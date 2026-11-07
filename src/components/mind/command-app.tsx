@@ -185,6 +185,8 @@ import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
+import { useMcpFailureMount, type McpReportedOutcome } from "./use-mcp-failure-mount";
+import { routeFailureAction, type RouteFailureAction } from "@/lib/mind/route-failure";
 import {
   LOGIC_ROUTES,
   chatTurnBody,
@@ -644,7 +646,7 @@ export function CommandApp() {
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null } | null>(null);
+  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction } | null>(null);
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
   const [timelineTickMs, setTimelineTickMs] = useState(0);
@@ -900,6 +902,13 @@ export function CommandApp() {
   const [mcpSavedListState, setMcpSavedListState] = useState<McpListState>({ status: "loading" });
   const mcpRegistryRetryRef = useRef<(() => void) | null>(null);
   const mcpSavedRetryRef = useRef<(() => void) | null>(null);
+  const mcpRegistryGeneration = useRef(0);
+  const mcpSavedGeneration = useRef(0);
+  const mcpOwnerActive = useRef(false);
+  const mcpReloadListsRef = useRef<(() => void) | null>(null);
+  const mcpMutationInFlight = useRef(false);
+  const mcpMutationGeneration = useRef(0);
+  const [mcpMutationBusy, setMcpMutationBusy] = useState(false);
   const [toolResultStatus, setToolResultStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [mcpLabel, setMcpLabel] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
@@ -931,8 +940,12 @@ export function CommandApp() {
 
   useEffect(() => {
     if (!ready) return;
+    let active = true;
+    mcpOwnerActive.current = true;
+    setMcpMutationBusy(false);
     mindStatus()
       .then((status) => {
+        if (!active) return;
         setGrokConfigured(status.grok === "configured");
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
         setStatusSignedIn(status.signedIn === true);
@@ -948,18 +961,30 @@ export function CommandApp() {
         }
       })
       .catch(() => {
+        if (!active) return;
         setGrok("Unavailable");
         setDatabasePill("Unknown");
         setDatabaseDetail("The status check did not finish.");
         setSystem("The status check did not finish.");
       });
     notionStatus()
-      .then((status) => setNotion(status))
-      .catch(() => setNotion({ state: "unconfigured", detail: "Notion status could not be read. Nothing was searched or updated." }));
+      .then((status) => { if (active) setNotion(status); })
+      .catch(() => {
+        if (!active) return;
+        setNotion(null);
+        const message = "Notion status could not be read. Its connection state is unknown.";
+        reportFailureRef.current(message, "notion_status_failed", "notion:status", () => {
+          void notionStatus().then((status) => { if (active) setNotion(status); }).catch(() => undefined);
+        });
+      });
     const loadMcpLists = () => {
+      if (!active) return;
       const loadRegistry = () => {
+        if (!active) return;
+        const generation = ++mcpRegistryGeneration.current;
         setMcpRegistryListState({ status: "loading" });
         void loadMcpList(() => mcpRegistryList()).then((next) => {
+          if (!active || generation !== mcpRegistryGeneration.current) return;
           setMcpRegistryListState(next);
           if (next.status === "ready") {
             setMcpRegistry(next.servers);
@@ -974,8 +999,11 @@ export function CommandApp() {
         });
       };
       const loadSaved = () => {
+        if (!active) return;
+        const generation = ++mcpSavedGeneration.current;
         setMcpSavedListState({ status: "loading" });
         void loadMcpList(() => mcpList()).then((next) => {
+          if (!active || generation !== mcpSavedGeneration.current) return;
           if (next.status === "ready" && next.servers.every(isSavedMcpServer)) {
             setMcpSavedListState(next);
             setMcpServers(next.servers as unknown as SavedMcpServer[]);
@@ -1006,6 +1034,7 @@ export function CommandApp() {
       loadRegistry();
       loadSaved();
     };
+    mcpReloadListsRef.current = loadMcpLists;
     loadMcpLists();
     try {
       const saved = localStorage.getItem("amcos.skills.v1");
@@ -1017,6 +1046,17 @@ export function CommandApp() {
     } catch {
       setSkillStorageError("Skill settings could not be read from browser storage. Existing data was not changed.");
     }
+    return () => {
+      active = false;
+      mcpOwnerActive.current = false;
+      mcpRegistryGeneration.current += 1;
+      mcpSavedGeneration.current += 1;
+      mcpRegistryRetryRef.current = null;
+      mcpSavedRetryRef.current = null;
+      mcpReloadListsRef.current = null;
+      mcpMutationGeneration.current += 1;
+      mcpMutationInFlight.current = false;
+    };
   }, [ready, setWs]);
 
   useEffect(() => {
@@ -1452,6 +1492,13 @@ export function CommandApp() {
         });
         return;
       }
+      if (!result.ok) {
+        const message = result.error || "Notion did not complete the requested operation.";
+        const retry = () => { void askNotion(chat, text, confirmed, pageId); };
+        reportFailure(message, "notion_operation_failed", "notion", retry, result.needsConfirmation ? "none" : "retry");
+        recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
+        return;
+      }
       const lines = [result.error, ...result.pages.map((page) => `${page.title} — ${page.url}`), result.content].filter(Boolean);
       recordToolTurn(chat, text, lines.join("\n") || "Notion returned nothing.");
     } catch {
@@ -1537,9 +1584,11 @@ export function CommandApp() {
     if (activeLogic) {
       const view = logicRoutes.find((item) => item.id === activeLogic);
       if (!view?.ready) {
-        reportFailure(view?.reason ?? `${activeLogic} is not ready. Nothing was sent.`, "model_unavailable", "provider", () => {
+        const message = view?.reason ?? `${activeLogic} is not ready. Nothing was sent.`;
+        const action = routeFailureAction({ state: view?.state ?? "needs-config", error: message });
+        reportFailure(message, "model_unavailable", "provider", action === "retry" ? () => {
           void deliver(chat, text, wsRef.current, resume, snapped);
-        });
+        } : null, action);
         return null;
       }
     }
@@ -2583,12 +2632,27 @@ export function CommandApp() {
     setError(null);
   }
 
-  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null) {
+  function presentReportedFailure(outcome: McpReportedOutcome, auditId: string, retry: (() => void) | null) {
+    const { message, action, target, kind, failureAction } = outcome;
+    setWs((prev) => ({
+      ...prev,
+      audit: [{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit].slice(0, 200),
+    }));
+    setFailure({ message, auditId, retry: onceRetry(retry), kind, action: failureAction });
+    setError(message);
+    setNotice(null);
+  }
+
+  useMcpFailureMount(({ outcome, retry, localCorrelationId }) => {
+    presentReportedFailure(outcome, localCorrelationId, outcome.retryable ? retry : null);
+  });
+
+  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null, failureAction: RouteFailureAction = "retry") {
     const kind = classifyHonestFailure(message);
     const auditAction = kind ? honestFailureAuditAction(kind) : action;
     const auditId = crypto.randomUUID();
     const surface = surfaceForReport(auditAction, target);
-    const outcome = { message, action: auditAction, target, kind };
+    const outcome: McpReportedOutcome = { message, action: auditAction, target, kind, retryable: retry !== null && failureAction === "retry", failureAction };
     if (
       surface &&
       emitFailure(
@@ -2600,15 +2664,76 @@ export function CommandApp() {
     ) {
       return;
     }
-    setWs((prev) => ({
-      ...prev,
-      audit: [{ id: auditId, at: new Date().toISOString(), action: auditAction, target, result: message }, ...prev.audit].slice(0, 200),
-    }));
-    setFailure({ message, auditId, retry: onceRetry(retry), kind });
-    setError(message);
-    setNotice(null);
+    presentReportedFailure(outcome, auditId, outcome.retryable ? retry : null);
   }
   reportFailureRef.current = reportFailure;
+
+  function applyConnectedMcpRows(servers: SavedMcpServer[]) {
+    setMcpServers(servers);
+    setMcpSavedListState({ status: "ready", servers: servers.map((server) => ({ id: server.id, label: server.label, kind: "saved", enabled: server.state !== "failed" })) });
+  }
+
+  async function saveConnectedMcp() {
+    if (ws.halted || !mcpUrl.trim() || mcpMutationInFlight.current || !mcpOwnerActive.current) return;
+    mcpMutationInFlight.current = true;
+    setMcpMutationBusy(true);
+    const mutation = ++mcpMutationGeneration.current;
+    const generation = ++mcpSavedGeneration.current;
+    mcpRegistryGeneration.current += 1;
+    const current = () => mcpOwnerActive.current && mutation === mcpMutationGeneration.current && generation === mcpSavedGeneration.current;
+    try {
+      const result = await mcpSave({ data: { label: mcpLabel, url: mcpUrl, token: mcpToken } });
+      if (!current()) return;
+      setMcpToken("");
+      if (!result.ok) {
+        reportFailure(result.error, "mcp_save_failed", "mcp:save", null, "none");
+        mcpReloadListsRef.current?.();
+        return;
+      }
+      applyConnectedMcpRows(result.servers);
+      setMcpLabel("");
+      setMcpUrl("");
+      const saved = result.servers.find((server) => server.id === result.savedId);
+      if (saved?.state === "connected") setNotice("The MCP server answered. It is connected.");
+      else reportFailure(saved?.error || "The MCP handshake did not complete. The connection is saved but is not connected.", "mcp_save_failed", "mcp:save", null, "none");
+      mcpReloadListsRef.current?.();
+    } catch {
+      if (!current()) return;
+      setMcpToken("");
+      reportFailure("The save could not be confirmed. Reload connections before trying another save.", "mcp_save_failed", "mcp:save", null, "none");
+      mcpReloadListsRef.current?.();
+    } finally {
+      if (mutation === mcpMutationGeneration.current) {
+        mcpMutationInFlight.current = false;
+        if (mcpOwnerActive.current) setMcpMutationBusy(false);
+      }
+    }
+  }
+
+  async function removeConnectedMcp(id: string) {
+    if (ws.halted || mcpMutationInFlight.current || !mcpOwnerActive.current) return;
+    mcpMutationInFlight.current = true;
+    setMcpMutationBusy(true);
+    const mutation = ++mcpMutationGeneration.current;
+    const generation = ++mcpSavedGeneration.current;
+    mcpRegistryGeneration.current += 1;
+    const current = () => mcpOwnerActive.current && mutation === mcpMutationGeneration.current && generation === mcpSavedGeneration.current;
+    try {
+      const result = await mcpRemove({ data: { id } });
+      if (!current()) return;
+      applyConnectedMcpRows(result.servers);
+      mcpReloadListsRef.current?.();
+    } catch {
+      if (!current()) return;
+      reportFailure("The removal could not be confirmed. Reload connections before trying again.", "mcp_remove_failed", "mcp:remove", null, "none");
+      mcpReloadListsRef.current?.();
+    } finally {
+      if (mutation === mcpMutationGeneration.current) {
+        mcpMutationInFlight.current = false;
+        if (mcpOwnerActive.current) setMcpMutationBusy(false);
+      }
+    }
+  }
 
   function reportEmergencyStop(target: string, retry: () => void) {
     reportFailure(HONEST_FAILURE_MESSAGES.emergency_stop_active, "emergency_stop_active", target, retry);
@@ -2678,7 +2803,7 @@ export function CommandApp() {
       replay,
       isCurrent: () => generation === speakGenRef.current && !abort.signal.aborted,
       deps: {
-        capture: () => captureSpeakUtterance({ maxMs: 6000 }),
+        capture: () => captureSpeakUtterance({ maxMs: 6000, signal: abort.signal }),
         transcribe: async (audioBase64) => {
           const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
           const token = getBearerToken();
@@ -2690,6 +2815,7 @@ export function CommandApp() {
               accept: "application/json",
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
+            signal: abort.signal,
             body: JSON.stringify({ audioBase64, mime: "audio/webm", filename: "speak.webm" }),
           });
           try {
@@ -3905,7 +4031,18 @@ export function CommandApp() {
           >
             <p className="text-sm text-danger">{failure.message}</p>
             <div className="flex flex-wrap gap-2">
-              <button
+              {failure.action === "setup" ? (
+                <button
+                  type="button"
+                  data-testid="failure-setup"
+                  className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+                  onClick={() => {
+                    clearFailure();
+                    setView("connected");
+                    setNavOpen(false);
+                  }}
+                >Setup</button>
+              ) : failure.action !== "none" ? <button
                 type="button"
                 data-testid="failure-retry"
                 className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50"
@@ -3917,7 +4054,7 @@ export function CommandApp() {
                 }}
               >
                 Retry
-              </button>
+              </button> : null}
               <button
                 type="button"
                 data-testid="failure-view-log"
@@ -4786,7 +4923,25 @@ export function CommandApp() {
                   void notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } }).then((result) => {
                     setNotionPages(result.pages);
                     setNotionNote(result.error || (result.pages.length ? "" : "Notion returned no pages."));
-                  }).catch(() => setNotionNote("Notion could not be reached. Nothing was searched."));
+                    if (!result.ok) {
+                      const message = result.error || "Notion search did not complete.";
+                      reportFailure(message, "notion_search_failed", "notion:search", () => {
+                        void notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } }).then((retryResult) => {
+                          setNotionPages(retryResult.pages);
+                          setNotionNote(retryResult.error || (retryResult.pages.length ? "" : "Notion returned no pages."));
+                        }).catch(() => undefined);
+                      });
+                    }
+                  }).catch(() => {
+                    const message = "Notion search could not be completed. Its connection state is unchanged.";
+                    reportFailure(message, "notion_search_failed", "notion:search", () => {
+                      void notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } }).then((retryResult) => {
+                        setNotionPages(retryResult.pages);
+                        setNotionNote(retryResult.error || (retryResult.pages.length ? "" : "Notion returned no pages."));
+                      }).catch(() => undefined);
+                    });
+                    setNotionNote(message);
+                  });
                 }}
               >
                 <h3 className="font-semibold">Search Notion</h3>
@@ -4806,28 +4961,7 @@ export function CommandApp() {
                 className="rounded-panel border border-line bg-surface p-3"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  if (ws.halted || !mcpUrl.trim()) return;
-                  void mcpSave({ data: { label: mcpLabel, url: mcpUrl, token: mcpToken } }).then((result) => {
-                    setMcpToken("");
-                    if (!result.ok) {
-                      setNotice(result.error);
-                      return;
-                    }
-                    setMcpServers(result.servers);
-                    setMcpSavedListState({
-                      status: "ready",
-                      servers: result.servers.map((server) => ({
-                        id: server.id,
-                        label: server.label,
-                        kind: "saved",
-                        enabled: server.state !== "failed",
-                      })),
-                    });
-                    setMcpLabel("");
-                    setMcpUrl("");
-                    const connected = result.servers.some((server) => server.state === "connected");
-                    setNotice(connected ? "The MCP server answered. It is connected." : result.servers.at(-1)?.error || "The MCP server did not answer. It is not connected.");
-                  }).catch(() => setNotice("The MCP server could not be reached. Nothing was called."));
+                  void saveConnectedMcp();
                 }}
               >
                 <h3 className="font-semibold">MCP server</h3>
@@ -4835,7 +4969,7 @@ export function CommandApp() {
                 <input value={mcpLabel} onChange={(event) => setMcpLabel(event.target.value)} placeholder="Label" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
                 <input value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://mcp.example/tools" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
                 <input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" placeholder="Token, optional" autoComplete="off" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-                <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || !mcpUrl.trim()}>Test and save</button>
+                <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || mcpMutationBusy || !mcpUrl.trim()}>Test and save</button>
                 <ul className="mt-3 space-y-2">
                   {mcpSavedListState.status === "ready" && mcpServers.map((server) => (
                     <li key={server.id} className="rounded-panel border border-line px-3 py-2 text-sm">
@@ -4845,20 +4979,8 @@ export function CommandApp() {
                       <button
                         type="button"
                         className="mt-2 min-h-11 rounded-panel border border-line px-3"
-                        onClick={() => {
-                          void mcpRemove({ data: { id: server.id } }).then((result) => {
-                            setMcpServers(result.servers);
-                            setMcpSavedListState({
-                              status: "ready",
-                              servers: result.servers.map((item) => ({
-                                id: item.id,
-                                label: item.label,
-                                kind: "saved",
-                                enabled: item.state !== "failed",
-                              })),
-                            });
-                          });
-                        }}
+                        disabled={ws.halted || mcpMutationBusy}
+                        onClick={() => { void removeConnectedMcp(server.id); }}
                       >
                         Remove
                       </button>
@@ -4899,7 +5021,7 @@ export function CommandApp() {
             </section>
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
-          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry) => reportFailure(message, "open_page_failed", "browser", retry)} />}
+          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell space-y-4">
               <div className="page-hero">
@@ -6595,4 +6717,3 @@ function chatStamp(chat: Chat) {
   if (!iso) return "New";
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
-

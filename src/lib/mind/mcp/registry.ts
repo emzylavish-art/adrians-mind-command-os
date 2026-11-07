@@ -21,7 +21,7 @@ import {
   type RegistryDb,
   type RegistryRecord,
 } from "./registry-store.ts";
-import { type McpCallRpc, type McpCallTransport, type McpResultCode, mcpRpcFromResult, privacyErrorText, safeReason } from "./call-contract.ts";
+import { type McpCallRpc, type McpCallTransport, type McpResultCode, mcpRpcFromResult, safeReason } from "./call-contract.ts";
 import {
   defaultDnsLookup,
   isLocalHostname,
@@ -213,10 +213,10 @@ export async function registerExternalServer(
 export async function removeRegistryServer(userId: string, id: string, db?: RegistryDb | null): Promise<RegistryServerPublic[]> {
   const servers = await readServers(userId, db);
   if (id === BUILTIN_ID) return servers.map(toPublic);
-  const next = servers.filter((item) => item.id !== id);
-  const saved = await saveRegistry(userId, next, db);
-  if (!saved.ok) return servers.map(toPublic);
-  return next.map(toPublic);
+  const { deleteRegistryServer } = await import("./registry-store.ts");
+  const removed = await deleteRegistryServer(userId, id, db);
+  if (!removed.ok) throw new Error(removed.error);
+  return (await readServers(userId, db)).map(toPublic);
 }
 
 export type ListedTool = {
@@ -360,12 +360,6 @@ export async function registryRpc(
   // answer, pin the connection to a validated public IP.
   let pinnedAddress: string | null = null;
   let pinHostname: string | null = null;
-  if (!isLocalHostname(parsedUrl.hostname)) {
-    const pin = await resolveAndPinMcpHostname(parsedUrl.hostname, options.lookup ?? defaultDnsLookup);
-    if (!pin.ok) return { ok: false, state: "transport", httpStatus: 0, rpc: null, error: `${pin.error} Nothing was called.`, session };
-    pinnedAddress = pin.pinnedAddress;
-    pinHostname = pin.hostname;
-  }
 
   const timeoutMs = options.timeoutMs ?? HTTP_RPC_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? HTTP_RPC_MAX_BYTES;
@@ -391,6 +385,16 @@ export async function registryRpc(
   try {
     let response: Awaited<ReturnType<FetchLike>>;
     try {
+      if (!isLocalHostname(parsedUrl.hostname)) {
+        const pin = await Promise.race([
+          resolveAndPinMcpHostname(parsedUrl.hostname, options.lookup ?? defaultDnsLookup),
+          deadline,
+        ]);
+        controller.signal.throwIfAborted();
+        if (!pin.ok) return { ok: false, state: "transport", httpStatus: 0, rpc: null, error: `${pin.error} Nothing was called.`, session };
+        pinnedAddress = pin.pinnedAddress;
+        pinHostname = pin.hostname;
+      }
       const init = {
           method: "POST",
           redirect: "manual" as const,
@@ -433,13 +437,13 @@ export async function registryRpc(
     }
     const parsed = rpcMessage(body.text);
     if (parsed.error) {
-      const upstream = privacyErrorText(parsed.error, token);
+      const reason = safeReason("error");
       return {
         ok: false,
         state: "rpc",
         httpStatus: response.status,
-        rpc: { isError: true, content: [{ type: "text", text: upstream }], structuredContent: { message: upstream } },
-        error: safeReason("error", upstream),
+        rpc: { isError: true, content: [{ type: "text", text: reason }], structuredContent: null },
+        error: reason,
         session: nextSession,
       };
     }

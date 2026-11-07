@@ -39,6 +39,10 @@ export async function captureSpeakUtterance(options?: {
     if (name === "NotAllowedError" || name === "SecurityError") return speakFailure("mic_denied");
     return speakFailure("mic_missing");
   }
+  if (options?.signal?.aborted) {
+    stream.getTracks().forEach((track) => track.stop());
+    return speakCanceled();
+  }
   const Recorder = options?.MediaRecorder ?? (typeof MediaRecorder !== "undefined" ? MediaRecorder : undefined);
   if (!Recorder) {
     stream.getTracks().forEach((track) => track.stop());
