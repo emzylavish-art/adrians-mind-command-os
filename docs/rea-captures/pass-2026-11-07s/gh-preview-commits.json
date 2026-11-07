@@ -1,0 +1,5 @@
+{"date":"2026-11-03T06:18:24Z","msg":"Phase 5: harness MODEL_PROVIDER xai/openai with one-token readiness probe","sha":"aa53aa0"}
+{"date":"2026-11-03T02:37:07Z","msg":"fix(ui): phone drawer nav + honest Notion status","sha":"c1ee830"}
+{"date":"2026-11-03T01:47:11Z","msg":"fix(auth): first-party Google/GitHub OAuth without supabase.co in the browser","sha":"b84dcc2"}
+{"date":"2026-11-03T01:24:03Z","msg":"fix(auth): mutable OAuth callback redirect so Set-Cookie can merge","sha":"23860f7"}
+{"date":"2026-11-03T01:05:06Z","msg":"fix(login): keep Google/GitHub enabled on auth loader fallback","sha":"518db93"}

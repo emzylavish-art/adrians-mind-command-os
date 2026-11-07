@@ -1,0 +1,25 @@
+=== tips ===
+main e4ed639 e4ed639814e63ba686c273ba4e9018b2740dde76 | 2026-11-05T14:58:49-08:00 | Add GPT MCP proxy server so Claude, Grok, and ChatGPT can call your OpenAI API
+preview/integration aa53aa0 aa53aa0ad54486d9af6649a1307c524c6c34527f | 2026-11-03T00:18:24-06:00 | Phase 5: harness MODEL_PROVIDER xai/openai with one-token readiness probe
+rea-features 061a463 061a463014d033cb9bc2c26b4bc99eaac7b486f0 | 2026-11-06T21:12:37-06:00 | docs(rea): internal audit pass 2026-11-07r
+whisper-flow 5ab07d0 5ab07d0fdbe33aff315bed6ee4123f368d8bf53b | 2026-11-02T20:55:14-06:00 | test(whisper-flow): wait for hydration after integration drawer UI
+voice-cloning-studio 55d12ec 55d12ec97134a133185bef6be7da114613642afe | 2026-11-02T21:29:04-06:00 | visual(vcs): polish engine-down empty card + error alert cards
+
+=== main last 5 ===
+e4ed639 2026-11-05T14:58:49-08:00 Add GPT MCP proxy server so Claude, Grok, and ChatGPT can call your OpenAI API
+
+=== preview/integration last 5 ===
+aa53aa0 2026-11-03T00:18:24-06:00 Phase 5: harness MODEL_PROVIDER xai/openai with one-token readiness probe
+
+=== ahead/behind preview/integration vs main ===
+1	1
+(left=main-only / right=preview-only) i.e. preview behind / ahead of main
+merge_base= short=
+
+=== e3ccc51 vs main ===
+0	24
+e3ccc51 subject: e3ccc51 2026-11-05T20:36:54-08:00 fix(pc): fail closed on ephemeral hosted approvals
+
+=== local rea-features ===
+061a463
+061a463 2026-11-06T21:12:37-06:00 docs(rea): internal audit pass 2026-11-07r
