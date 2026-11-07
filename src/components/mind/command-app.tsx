@@ -179,6 +179,7 @@ import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
+import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
 import {
   LOGIC_ROUTES,
   chatTurnBody,
@@ -1397,6 +1398,11 @@ export function CommandApp() {
       setBusy(false);
       setResearchCitations(result.citations);
       if (!result.ok) {
+        const message = result.error;
+        const retry = () => {
+          void runWebResearch(chat, query, action);
+        };
+        emitFailure("research", mountFailure({ message, action: "research_failed", target: "search", outcome: result }, retry));
         recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
         setResearchNote(result.error);
         return;
@@ -1411,6 +1417,10 @@ export function CommandApp() {
     } catch {
       setBusy(false);
       const message = "The search provider could not be reached. No citations were created.";
+      const retry = () => {
+        void runWebResearch(chat, query, action);
+      };
+      emitFailure("research", mountFailure({ message, action: "research_failed", target: "search" }, retry));
       recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
       setResearchNote(message);
     }
@@ -1441,7 +1451,12 @@ export function CommandApp() {
       recordToolTurn(chat, text, lines.join("\n") || "Notion returned nothing.");
     } catch {
       setBusy(false);
-      setError("Notion could not be reached. Nothing was changed.");
+      const message = "Notion could not be reached. Nothing was changed.";
+      const retry = () => {
+        void askNotion(chat, text, confirmed, pageId);
+      };
+      if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
+      setError(message);
     }
   }
 
@@ -2566,6 +2581,19 @@ export function CommandApp() {
     const kind = classifyHonestFailure(message);
     const auditAction = kind ? honestFailureAuditAction(kind) : action;
     const auditId = crypto.randomUUID();
+    const surface = surfaceForReport(auditAction, target);
+    const outcome = { message, action: auditAction, target, kind };
+    if (
+      surface &&
+      emitFailure(
+        surface,
+        mountFailure(outcome, () => {
+          retry?.();
+        }, auditId),
+      )
+    ) {
+      return;
+    }
     setWs((prev) => ({
       ...prev,
       audit: [{ id: auditId, at: new Date().toISOString(), action: auditAction, target, result: message }, ...prev.audit].slice(0, 200),
@@ -4688,7 +4716,11 @@ export function CommandApp() {
                 grokConfigured={grokConfigured === true}
                 notion={notion}
                 mcp={mcpBoard}
-                onSetup={(message) => setNotice(message)}
+                onSetup={(message) => {
+                  const retry = () => setNotice(message);
+                  if (emitFailure("serviceBoard", mountFailure({ message, action: "service_setup", target: "serviceBoard" }, retry))) return;
+                  setNotice(message);
+                }}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
                     setNotion(status);
