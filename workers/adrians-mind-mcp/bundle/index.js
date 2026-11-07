@@ -104,7 +104,16 @@ const PUBLIC_MCP_ORIGINS = new Set([
   "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev",
   "https://adrians-mind-mcp.operation-beat-magnus.workers.dev",
 ]);
-const GENERATION_LEDGER = "audit:model.generate:once";
+const GENERATION_LEDGERS = {
+  once: "audit:model.generate:once",
+  "retest-1": "audit:model.generate:retest-1",
+};
+
+function generationChoice(value) {
+  if (value === true || value === "once") return "once";
+  if (value === "retest-1") return "retest-1";
+  return null;
+}
 
 function callbackPath(env) {
   return env.MCP_OAUTH_CALLBACK_PATH === "/oauth/callback" ? "/oauth/callback" : "/oauth/test-callback";
@@ -297,7 +306,9 @@ function allowedChatUrl(raw) {
 
 export function routePlan(env) {
   return ROUTES.map((route) => {
-    const key = String(env[route.keyEnv] || env.OPENAI_API_KEY || "");
+const dedicated = typeof env[route.keyEnv] === "string" ? env[route.keyEnv] : "";
+    const shared = typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY : "";
+    const key = dedicated || shared;
     const base = String(env[route.baseEnv] || env.OPENAI_API_BASE_URL || CHAT_URL);
     const model = String(env[route.modelEnv] || route.defaultModel);
     const urlOk = allowedChatUrl(base);
@@ -306,15 +317,29 @@ export function routePlan(env) {
       configured: Boolean(key) && urlOk && Boolean(model.trim()),
       model: model.trim() || null,
       endpoint: urlOk ? CHAT_URL : null,
+      credential: dedicated ? route.keyEnv : key ? "OPENAI_API_KEY" : "unset",
+      credential_length: key.length,
       key,
       url: urlOk ? CHAT_URL : null,
     };
   });
 }
 
+export function credentialLengths(env) {
+  const names = ["OPENAI_API_KEY", "ASTRA_API_KEY", "SOL_API_KEY", "LUNA_API_KEY"];
+  const lengths = {};
+  for (const name of names) {
+    const value = env[name];
+    lengths[name] = typeof value === "string" ? value.length : 0;
+  }
+  return lengths;
+}
+
 export function publicStatus(env) {
   const budget = budgetDecision(env);
-  const routes = routePlan(env).map(({ id, configured, model, endpoint }) => ({ id, configured, model, endpoint }));
+  const routes = routePlan(env).map(({ id, configured, model, endpoint, credential, credential_length }) => ({
+    id, configured, model, endpoint, credential, credential_length,
+  }));
   return {
     worker: workerName(env),
     live_verified: false,
@@ -322,6 +347,7 @@ export function publicStatus(env) {
     oauth: { scope: SCOPE, configured: oauthReadiness(env).ok },
     app_budget: budget,
     route_order: ["astra", "sol", "luna"],
+    credential_lengths: credentialLengths(env),
     providers: routes,
   };
 }
@@ -626,7 +652,7 @@ async function testStart(request, env, ready, deps) {
   if (!identity.ready) {
     return json(401, { error: "login_required", error_description: identity.trust ? "Access JWT verification is not configured." : "Cloudflare Access enforcement is not enabled." });
   }
-  const generation = new URL(request.url).searchParams.get("generation") === "once";
+  const generation = generationChoice(new URL(request.url).searchParams.get("generation"));
   const state = await randomToken();
   const verifier = await randomToken();
   const now = nowSec(deps);
@@ -691,22 +717,24 @@ function callSucceeded(call) {
   return true;
 }
 
-async function claimGeneration(env, deps) {
-  const existing = await kvGet(env.OAUTH_KV, GENERATION_LEDGER);
+async function claimGeneration(env, deps, generation) {
+  const ledger = GENERATION_LEDGERS[generation];
+  if (!ledger) return { ok: false, reason: "not_opted_in" };
+  const existing = await kvGet(env.OAUTH_KV, ledger);
   if (!existing || existing.phase !== "authorized") {
     return { ok: false, reason: existing ? "already_used" : "not_authorized" };
   }
   const nonce = await randomToken();
   const now = nowSec(deps);
-  await kvPut(env.OAUTH_KV, GENERATION_LEDGER, { phase: "attempted", nonce, at: now });
-  const confirm = await kvGet(env.OAUTH_KV, GENERATION_LEDGER);
+  await kvPut(env.OAUTH_KV, ledger, { phase: "attempted", nonce, at: now });
+  const confirm = await kvGet(env.OAUTH_KV, ledger);
   if (!confirm || confirm.nonce !== nonce || confirm.phase !== "attempted") return { ok: false, reason: "ledger_race" };
-  return { ok: true };
+  return { ok: true, ledger };
 }
 
-async function finishGeneration(env, deps, fields) {
+async function finishGeneration(env, deps, ledger, fields) {
   const now = nowSec(deps);
-  await kvPut(env.OAUTH_KV, GENERATION_LEDGER, { phase: "completed", at: now, ...fields });
+  await kvPut(env.OAUTH_KV, ledger, { phase: "completed", at: now, ...fields });
 }
 
 async function mcpEvidence(env, ready, accessToken, deps, generation) {
@@ -719,7 +747,7 @@ async function mcpEvidence(env, ready, accessToken, deps, generation) {
     upstream_called: false,
     live_account_verified: false,
     calls: [],
-    generation: { called: false, reason: generation ? "not_authorized" : "not_opted_in" },
+    generation: { called: false, reason: generation ? "not_authorized" : "not_opted_in", ledger: generation ? GENERATION_LEDGERS[generation] : null },
   };
   if (!testedURL) return { ...evidence, ok: false, error: "issuer_not_allowed" };
   const requests = [
@@ -730,9 +758,9 @@ async function mcpEvidence(env, ready, accessToken, deps, generation) {
   for (const [method, body] of requests) evidence.calls.push(await publicCall(env, testedURL, accessToken, deps, method, body));
   evidence.ok = evidence.calls.length === 3 && evidence.calls.every(callSucceeded);
   if (!generation) return evidence;
-  const claim = await claimGeneration(env, deps);
+  const claim = await claimGeneration(env, deps, generation);
   if (!claim.ok) {
-    evidence.generation = { called: false, reason: claim.reason };
+    evidence.generation = { called: false, reason: claim.reason, ledger: GENERATION_LEDGERS[generation] };
     evidence.ok = false;
     return evidence;
   }
@@ -748,21 +776,26 @@ async function mcpEvidence(env, ready, accessToken, deps, generation) {
   } catch {
     tool = null;
   }
+  const attempted = Array.isArray(tool?.route?.attempted) ? tool.route.attempted : null;
+  const unreached = attempted ? ["astra", "sol", "luna"].filter((id) => !attempted.includes(id)) : null;
   evidence.calls.push(generated);
   evidence.generation = {
     called: true,
+    ledger: claim.ledger,
     http_status: generated.http_status,
     isError: generated.response?.result?.isError === true,
     provider: tool?.provider ?? null,
     model: tool?.model ?? null,
     route: tool?.route ?? null,
+    attempted,
+    unreached,
     usage: tool?.usage ?? { prompt_tokens: null, completion_tokens: null, total_tokens: null, usage_status: "unknown" },
     cost_usd: null,
     provider_billing_allowance: "unknown",
   };
   evidence.upstream_called = true;
   evidence.ok = evidence.ok && callSucceeded(generated);
-  await finishGeneration(env, deps, { http_status: generated.http_status, provider: evidence.generation.provider });
+  await finishGeneration(env, deps, claim.ledger, { http_status: generated.http_status, provider: evidence.generation.provider });
   return evidence;
 }
 
@@ -787,7 +820,7 @@ async function testCallback(request, env, ready, deps) {
     if (exchanged.ok) await revokeValue(env, exchanged.issued.access_token);
     return new Response(HARNESS_NOTE, { status: 400, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
   }
-  const evidence = await mcpEvidence(env, ready, exchanged.issued.access_token, deps, harness.generation === true);
+  const evidence = await mcpEvidence(env, ready, exchanged.issued.access_token, deps, generationChoice(harness.generation));
   await revokeValue(env, exchanged.issued.access_token);
   await revokeValue(env, exchanged.issued.refresh_token);
   const handle = await randomToken();

@@ -22,14 +22,14 @@ Parent sets these five secrets by the official Cloudflare API. No values belong 
 
 No generation: `https://adrians-mind-mcp.operation-beat-magnus.workers.dev/oauth/start`
 
-That path calls only `initialize`, `tools/list`, and `provider.status`.
+That path calls only `initialize`, `tools/list`, and `provider.status`. `provider.status` includes `credential_lengths` for `OPENAI_API_KEY`, `ASTRA_API_KEY`, `SOL_API_KEY`, and `LUNA_API_KEY`. Each value is a character count. The response has no key text, prefix, or hash. Compare those counts with the 164-character source keys before arming a retest.
 
-One generation, after the parent writes the ledger:
+The consumed key `audit:model.generate:once` stays completed. Do not delete or rewrite it.
 
-```bash
-npx wrangler kv key put --namespace-id fef303f6f09149469c711cda6f4ef943 audit:model.generate:once '{"phase":"authorized"}'
-```
+One new generation, only after lengths are confirmed and this separate key is written:
 
-Then open `https://adrians-mind-mcp.operation-beat-magnus.workers.dev/oauth/start?generation=once`
+`audit:model.generate:retest-1` = `{"phase":"authorized"}`
 
-The worker writes `phase: attempted` before `model.generate` and `phase: completed` after. A second visit does not call it again. Prompt is `Reply with OK`, `provider: auto`, `stream: false`. Do not seed `attempted` or `completed` yourself or the call is skipped.
+Then open `https://adrians-mind-mcp.operation-beat-magnus.workers.dev/oauth/start?generation=retest-1`
+
+No other `generation` value runs a model call. The worker writes `attempted` on `audit:model.generate:retest-1` before `model.generate` and `completed` after it. A second visit does not call it again. Prompt is `Reply with OK`, provider `auto`, stream false. Auto routing stops at the first success, so an earlier 401 attempt does not prove the later providers.

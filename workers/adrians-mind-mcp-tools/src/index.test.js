@@ -117,6 +117,63 @@ function mcp(token, method, params, runtime, deps) {
 }
 
 describe("adrians-mind-mcp-test oauth edge", () => {
+  it("reports only credential lengths and keeps the consumed once ledger", () => {
+    const openai = "o".repeat(164);
+    const astra = "a".repeat(10);
+    const status = publicStatus(env({ OPENAI_API_KEY: openai, ASTRA_API_KEY: astra, SOL_API_KEY: "", LUNA_API_KEY: undefined }));
+    assert.equal(status.credential_lengths.OPENAI_API_KEY, 164);
+    assert.equal(status.credential_lengths.ASTRA_API_KEY, 10);
+    assert.equal(status.credential_lengths.SOL_API_KEY, 0);
+    assert.equal(status.credential_lengths.LUNA_API_KEY, 0);
+    assert.equal(status.providers.find((item) => item.id === "astra").credential, "ASTRA_API_KEY");
+    assert.equal(status.providers.find((item) => item.id === "astra").credential_length, 10);
+    assert.equal(status.providers.find((item) => item.id === "sol").credential, "OPENAI_API_KEY");
+    assert.equal(status.providers.find((item) => item.id === "sol").credential_length, 164);
+    const text = JSON.stringify(status);
+    assert.equal(text.includes(openai), false);
+    assert.equal(text.includes(astra), false);
+  });
+
+  it("retest-1 does not rewrite audit:model.generate:once", async () => {
+    const runtime = env();
+    await runtime.OAUTH_KV.put("audit:model.generate:once", JSON.stringify({ phase: "completed", marker: "keep" }));
+    await runtime.OAUTH_KV.put("audit:model.generate:retest-1", JSON.stringify({ phase: "authorized" }));
+    const signer = await accessSigner();
+    const names = [];
+    const fetchImpl = async (_url, init) => {
+      const body = JSON.parse(init.body);
+      names.push(body.params?.name || body.method);
+      const result = body.params?.name === "model.generate"
+        ? { isError: true, content: [{ type: "text", text: JSON.stringify({ route: { attempted: ["astra", "sol", "luna"], selected: null, errors: [{ provider: "astra", error: "HTTP 401" }, { provider: "sol", error: "HTTP 401" }, { provider: "luna", error: "HTTP 401" }] } }) }] }
+        : { isError: false, content: [{ type: "text", text: "{}" }] };
+      if (!body.params) return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { protocolVersion: "2025-03-26", serverInfo: { name: "adrians-mind-mcp-test" }, tools: [] } }), { status: 200 });
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }), { status: 200 });
+    };
+    const start = await handleRequest(new Request(`${ORIGIN}/oauth/test-start?generation=retest-1`), runtime);
+    const authorize = await handleRequest(new Request(start.headers.get("location"), {
+      headers: { "cf-access-jwt-assertion": await signer.sign(ownerClaims()) },
+    }), runtime, { fetchImpl: certFetch(signer.jwk) });
+    const callback = await handleRequest(new Request(authorize.headers.get("location")), runtime, { fetchImpl });
+    const evidence = await (await handleRequest(new Request(new URL(callback.headers.get("location"), ORIGIN)), runtime)).json();
+    assert.equal(evidence.generation.ledger, "audit:model.generate:retest-1");
+    assert.equal(evidence.generation.called, true);
+    assert.equal(evidence.generation.provider, null);
+    assert.deepEqual(evidence.generation.attempted, ["astra", "sol", "luna"]);
+    assert.deepEqual(evidence.generation.unreached, []);
+    assert.equal(names.filter((name) => name === "model.generate").length, 1);
+    const once = JSON.parse(await runtime.OAUTH_KV.get("audit:model.generate:once"));
+    assert.equal(once.marker, "keep");
+    assert.equal(once.phase, "completed");
+    const again = await handleRequest(new Request(`${ORIGIN}/oauth/test-start?generation=other`), runtime);
+    const againAuth = await handleRequest(new Request(again.headers.get("location"), {
+      headers: { "cf-access-jwt-assertion": await signer.sign(ownerClaims()) },
+    }), runtime, { fetchImpl: certFetch(signer.jwk) });
+    const againCallback = await handleRequest(new Request(againAuth.headers.get("location")), runtime, { fetchImpl });
+    const againEvidence = await (await handleRequest(new Request(new URL(againCallback.headers.get("location"), ORIGIN)), runtime)).json();
+    assert.equal(againEvidence.generation.reason, "not_opted_in");
+    assert.equal(names.filter((name) => name === "model.generate").length, 1);
+  });
+
   it("fails closed when OAuth KV or issuer config is missing", async () => {
     const response = await handleRequest(new Request(`${ORIGIN}/mcp`, {
       method: "POST",
