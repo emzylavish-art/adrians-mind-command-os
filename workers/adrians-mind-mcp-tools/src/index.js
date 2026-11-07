@@ -1,199 +1,56 @@
 /**
- * Free-plan Cloudflare Worker MCP entrypoint.
- * Static bearer auth. OPENAI_API_KEY stays on the Worker secret.
- * Python team/mcp_http.py is not executed here.
+ * Nonproduction edge MCP for adrians-mind-mcp-test.
+ * OAuth matches team/oauth.py + team/mcp_http.py. No static bearer labelled as OAuth.
+ * Calls only https://api.openai.com/v1/chat/completions. No tunnels, localhost, or PC tools.
  */
 
-const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const WORKER_NAME = "adrians-mind-mcp-test";
+const SCOPE = "mind.tools";
 const MAX_BODY = 100_000;
 const MAX_READ = 48_000;
 const TEXT_CAP = 8_000;
 
-export const WORKER_NAME = "adrians-mind-mcp-tools";
-
-const INVENTORY = [
-  {
-    category: "chat.completions",
-    tool: "model.generate",
-    dispatch: "implemented",
-    endpoint: "POST /v1/chat/completions",
-    live_account_verified: false,
-    notes: "Non-stream and stream are one Worker call and one usage object. Stream text is aggregated; usage is the final usage object, not a sum of chunks. Missing usage is unknown, not zero.",
-  },
-  {
-    category: "responses",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/responses",
-    live_account_verified: false,
-    notes: "Not dispatched. Responses being recommended does not mean this Worker verified the account.",
-  },
-  {
-    category: "embeddings",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/embeddings",
-    live_account_verified: false,
-    notes: "Not dispatched.",
-  },
-  {
-    category: "images",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/images/generations and /v1/images/edits",
-    live_account_verified: false,
-    notes: "Not dispatched. Older GPT Image model shutdown notices are not a live probe.",
-  },
-  {
-    category: "audio.speech",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/audio/speech",
-    live_account_verified: false,
-    notes: "Not dispatched. Consulted deprecation notes list some TTS models shutting down 2027-01-06.",
-  },
-  {
-    category: "audio.transcriptions",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/audio/transcriptions",
-    live_account_verified: false,
-    notes: "Not dispatched. Consulted notes list whisper/gpt-4o transcribe models shutting down 2027-02-26.",
-  },
-  {
-    category: "audio.translations",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/audio/translations",
-    live_account_verified: false,
-    notes: "Not dispatched. Consulted notes list this endpoint shutting down 2027-02-26.",
-  },
-  {
-    category: "files",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "/v1/files",
-    live_account_verified: false,
-    notes: "Not dispatched.",
-  },
-  {
-    category: "batches",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "/v1/batches",
-    live_account_verified: false,
-    notes: "Not dispatched.",
-  },
-  {
-    category: "moderations",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/moderations",
-    live_account_verified: false,
-    notes: "Not dispatched.",
-  },
-  {
-    category: "models",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "GET /v1/models",
-    live_account_verified: false,
-    notes: "Not dispatched. Model ids are not inferred from an account list.",
-  },
-  {
-    category: "assistants.threads",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "/v1/assistants and /v1/threads",
-    live_account_verified: false,
-    notes: "Not dispatched. Official shutdown date consulted: 2026-08-26. This build did not probe the account.",
-  },
-  {
-    category: "vector_stores",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "/v1/vector_stores",
-    live_account_verified: false,
-    notes: "Not dispatched and not live-verified.",
-  },
-  {
-    category: "fine_tuning",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "/v1/fine_tuning/jobs",
-    live_account_verified: false,
-    notes: "Not dispatched.",
-  },
-  {
-    category: "conversations",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "Conversations API",
-    live_account_verified: false,
-    notes: "Named as the Assistants replacement in consulted docs. Not dispatched.",
-  },
-  {
-    category: "realtime",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "Realtime API",
-    live_account_verified: false,
-    notes: "Not dispatched.",
-  },
-  {
-    category: "legacy.completions",
-    tool: null,
-    dispatch: "unimplemented",
-    endpoint: "POST /v1/completions",
-    live_account_verified: false,
-    notes: "Not dispatched.",
-  },
-  {
-    category: "admin.billing.arbitrary_url",
-    tool: null,
-    dispatch: "not_exposed",
-    endpoint: null,
-    live_account_verified: false,
-    notes: "Account, billing, secret management, and arbitrary URL proxy are intentionally not exposed.",
-  },
+const ROUTES = [
+  { id: "astra", modelEnv: "ASTRA_MODEL", defaultModel: "gpt-6-astra", keyEnv: "ASTRA_API_KEY", baseEnv: "ASTRA_API_BASE_URL" },
+  { id: "sol", modelEnv: "SOL_MODEL", defaultModel: "gpt-6-sol", keyEnv: "SOL_API_KEY", baseEnv: "SOL_API_BASE_URL" },
+  { id: "luna", modelEnv: "LUNA_MODEL", defaultModel: "gpt-6-luna", keyEnv: "LUNA_API_KEY", baseEnv: "LUNA_API_BASE_URL" },
 ];
-
-const MODEL_GENERATE_SCHEMA = {
-  type: "object",
-  properties: {
-    provider: { type: "string", enum: ["openai"] },
-    prompt: { type: "string", maxLength: TEXT_CAP },
-    messages: {
-      type: "array",
-      maxItems: 16,
-      items: {
-        type: "object",
-        properties: {
-          role: { type: "string", enum: ["system", "user", "assistant"] },
-          content: { type: "string", maxLength: TEXT_CAP },
-        },
-        required: ["role", "content"],
-        additionalProperties: false,
-      },
-    },
-    model: { type: "string", minLength: 1, maxLength: 120 },
-    stream: { type: "boolean" },
-    timeout_seconds: { type: "integer", minimum: 1, maximum: 20 },
-  },
-  additionalProperties: false,
-};
 
 export function toolSpecs() {
   return [
     {
-      name: "model.generate",
-      description: "OpenAI chat completions using the Worker secret OPENAI_API_KEY. One call records usage once. Astra, Sol, Luna, Grok, OpenRouter, and Ollama are not dispatched. Provider billing allowance is unknown. No durable usage store.",
-      inputSchema: MODEL_GENERATE_SCHEMA,
+      name: "provider.status",
+      description: "Reports Astra/Sol/Luna configuration and app-budget accounting. Does not call a provider.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
     },
     {
-      name: "mind.tool_inventory",
-      description: "Local inventory of OpenAI API categories. implemented means this Worker can dispatch. unimplemented means not dispatched, not a live claim that OpenAI removed the endpoint. No network call.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      name: "model.generate",
+      description: "Routes Astra, then Sol, then Luna through POST https://api.openai.com/v1/chat/completions. Requires an OAuth access token with mind.tools. Owner override MIND_COMMAND_BUDGET_OWNER_OVERRIDE=1 does not pause the app cap. Provider allowance stays unknown.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          provider: { type: "string", enum: ["auto", "astra", "sol", "luna"] },
+          prompt: { type: "string", maxLength: TEXT_CAP },
+          messages: {
+            type: "array",
+            maxItems: 16,
+            items: {
+              type: "object",
+              properties: {
+                role: { type: "string", enum: ["system", "user", "assistant"] },
+                content: { type: "string", maxLength: TEXT_CAP },
+              },
+              required: ["role", "content"],
+              additionalProperties: false,
+            },
+          },
+          model: { type: "string", minLength: 1, maxLength: 120 },
+          stream: { type: "boolean" },
+          timeout_seconds: { type: "integer", minimum: 1, maximum: 20 },
+        },
+        additionalProperties: false,
+      },
     },
   ];
 }
@@ -201,31 +58,173 @@ export function toolSpecs() {
 function json(status, payload, headers) {
   return new Response(payload == null ? null : JSON.stringify(payload), {
     status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-      ...(headers || {}),
-    },
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...(headers || {}) },
   });
 }
 
-async function digest(text) {
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return new Uint8Array(bytes);
+function bytesToB64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-async function tokenMatches(presented, expected) {
-  if (!presented || !expected) return false;
-  const left = await digest(presented);
-  const right = await digest(expected);
-  let diff = 0;
-  for (let i = 0; i < left.length; i += 1) diff |= left[i] ^ right[i];
-  return diff === 0;
+function hex(bytes) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function bearer(request) {
-  const header = request.headers.get("authorization") || "";
-  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+async function sha256(text) {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+}
+
+export async function pkceChallenge(verifier) {
+  return bytesToB64Url(await sha256(verifier));
+}
+
+async function randomToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return bytesToB64Url(bytes);
+}
+
+function nowSec(deps) {
+  return Math.floor((deps.now ? deps.now() : Date.now()) / 1000);
+}
+
+function safeRedirect(uri) {
+  try {
+    const parsed = new URL(uri);
+    return Boolean(parsed.protocol === "https:" && parsed.hostname && !parsed.hash);
+  } catch {
+    return false;
+  }
+}
+
+export function oauthReadiness(env) {
+  const missing = [];
+  if (!env.OAUTH_KV) missing.push("OAUTH_KV");
+  const issuer = String(env.MCP_OAUTH_ISSUER || "");
+  if (!issuer.startsWith("https://")) missing.push("MCP_OAUTH_ISSUER");
+  if (!String(env.MCP_OAUTH_SECRET || "")) missing.push("MCP_OAUTH_SECRET");
+  if (!String(env.MCP_OAUTH_CLIENT_ID || "")) missing.push("MCP_OAUTH_CLIENT_ID");
+  const redirects = String(env.MCP_OAUTH_REDIRECT_URIS || "").split(",").map((item) => item.trim()).filter(Boolean);
+  if (!redirects.length || redirects.some((uri) => !safeRedirect(uri))) missing.push("MCP_OAUTH_REDIRECT_URIS");
+  const audience = String(env.MCP_OAUTH_AUDIENCE || (issuer ? `${issuer.replace(/\/$/, "")}/mcp` : ""));
+  return { ok: missing.length === 0, missing, issuer: issuer.replace(/\/$/, ""), audience, redirects, clientId: String(env.MCP_OAUTH_CLIENT_ID || "") };
+}
+
+function metadata(ready) {
+  return {
+    issuer: ready.issuer,
+    authorization_endpoint: `${ready.issuer}/oauth/authorize`,
+    token_endpoint: `${ready.issuer}/oauth/token`,
+    revocation_endpoint: `${ready.issuer}/oauth/revoke`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    scopes_supported: [SCOPE],
+    token_endpoint_auth_methods_supported: ["none"],
+  };
+}
+
+function resourceMetadata(ready) {
+  return {
+    resource: ready.audience,
+    authorization_servers: [ready.issuer],
+    scopes_supported: [SCOPE],
+    bearer_methods_supported: ["header"],
+  };
+}
+
+function scopesOk(raw) {
+  const scopes = String(raw || "").split(/\s+/).filter(Boolean);
+  return scopes.length > 0 && scopes.every((scope) => scope === SCOPE);
+}
+
+function subjectFor(request, env) {
+  if (env.MCP_TRUST_ACCESS_IDENTITY === "1") {
+    return request.headers.get("Cf-Access-Authenticated-User-Email") || "";
+  }
+  if (env.MCP_ENV === "development") return String(env.MCP_OAUTH_DEV_SUBJECT || "");
+  return "";
+}
+
+async function kvGet(kv, key) {
+  const raw = await kv.get(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function kvPut(kv, key, value, expiration) {
+  await kv.put(key, JSON.stringify(value), expiration ? { expiration } : undefined);
+}
+
+function parseBudget(raw, fallback) {
+  if (raw == null || raw === "") return { value: fallback, source: "baseline" };
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return { value: null, source: "invalid" };
+  return { value, source: "env" };
+}
+
+export function budgetDecision(env) {
+  const limit = parseBudget(env.MIND_COMMAND_BUDGET_LIMIT_USD, 500);
+  const spent = parseBudget(env.MIND_COMMAND_BUDGET_SPENT_USD, 0);
+  const ownerOverride = env.MIND_COMMAND_BUDGET_OWNER_OVERRIDE === "1";
+  const invalid = limit.value == null || spent.value == null;
+  const paused = invalid || (!ownerOverride && spent.value >= limit.value);
+  return {
+    limit_usd: limit.value,
+    spent_usd: spent.value,
+    owner_override: ownerOverride,
+    accounting: limit.source === "baseline" && spent.source === "baseline" ? "baseline" : invalid ? "invalid" : "env",
+    cap_enforced: !ownerOverride,
+    paused,
+    provider_billing_allowance: "unknown",
+    app_cap: ownerOverride ? "owner_override" : "bounded",
+  };
+}
+
+function allowedChatUrl(raw) {
+  try {
+    const url = new URL(raw || CHAT_URL);
+    return url.origin === "https://api.openai.com" && url.pathname === "/v1/chat/completions" && !url.username && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function routePlan(env) {
+  return ROUTES.map((route) => {
+    const key = String(env[route.keyEnv] || env.OPENAI_API_KEY || "");
+    const base = String(env[route.baseEnv] || env.OPENAI_API_BASE_URL || CHAT_URL);
+    const model = String(env[route.modelEnv] || route.defaultModel);
+    const urlOk = allowedChatUrl(base);
+    return {
+      id: route.id,
+      configured: Boolean(key) && urlOk && Boolean(model.trim()),
+      model: model.trim() || null,
+      endpoint: urlOk ? CHAT_URL : null,
+      key,
+      url: urlOk ? CHAT_URL : null,
+    };
+  });
+}
+
+export function publicStatus(env) {
+  const budget = budgetDecision(env);
+  const routes = routePlan(env).map(({ id, configured, model, endpoint }) => ({ id, configured, model, endpoint }));
+  return {
+    worker: WORKER_NAME,
+    live_verified: false,
+    upstream_called: false,
+    oauth: { scope: SCOPE, configured: oauthReadiness(env).ok },
+    app_budget: budget,
+    route_order: ["astra", "sol", "luna"],
+    providers: routes,
+  };
 }
 
 function numberOrNull(value) {
@@ -258,7 +257,7 @@ function parseSse(text) {
       if (typeof delta === "string") content += delta;
       if (event?.usage && typeof event.usage === "object") usage = event.usage;
     } catch {
-      /* ignore a broken frame; do not invent usage */
+      /* ignore a broken frame */
     }
   }
   return { content, usage: usageFrom(usage) };
@@ -269,8 +268,7 @@ function messagesFrom(args) {
     if (args.messages.length < 1 || args.messages.length > 16) return { error: "messages must contain 1..16 items." };
     const messages = [];
     for (const item of args.messages) {
-      if (!item || typeof item !== "object") return { error: "each message must be an object." };
-      if (!["system", "user", "assistant"].includes(item.role)) return { error: "message role is invalid." };
+      if (!item || !["system", "user", "assistant"].includes(item.role)) return { error: "message role is invalid." };
       if (typeof item.content !== "string" || !item.content.trim() || item.content.length > TEXT_CAP) {
         return { error: "message content must be a non-empty string within the cap." };
       }
@@ -293,182 +291,272 @@ async function readCapped(response) {
   if (!reader) return "";
   const chunks = [];
   let size = 0;
-  let truncated = false;
   while (size < MAX_READ) {
     const step = await reader.read();
     if (step.done) break;
     chunks.push(step.value);
     size += step.value.byteLength;
     if (size >= MAX_READ) {
-      truncated = true;
       await reader.cancel().catch(() => undefined);
       break;
     }
   }
-  const text = new TextDecoder().decode(concat(chunks));
-  return truncated ? text.slice(0, MAX_READ) : text;
-}
-
-function concat(chunks) {
-  const size = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  const out = new Uint8Array(size);
+  const out = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0));
   let offset = 0;
   for (const chunk of chunks) {
     out.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  return new TextDecoder().decode(out).slice(0, MAX_READ);
+}
+
+function redact(text, env) {
+  let out = text;
+  for (const key of ["OPENAI_API_KEY", "ASTRA_API_KEY", "SOL_API_KEY", "LUNA_API_KEY", "MCP_OAUTH_SECRET"]) {
+    const value = env[key];
+    if (value) out = out.split(value).join("[redacted]");
+  }
   return out;
 }
 
 async function generate(args, env, fetchImpl) {
-  if (args.provider != null && args.provider !== "openai") {
+  const budget = budgetDecision(env);
+  if (budget.paused) {
     return {
       isError: true,
       ...resultText({
-        implementation: "not_implemented_on_this_worker",
-        provider: args.provider,
-        live_account_verified: false,
-        note: "This Worker dispatches provider openai only. Other providers are not called and are not declared unsupported.",
+        error: budget.accounting === "invalid"
+          ? "Budget values are invalid. Nothing was sent."
+          : "App budget cap is exhausted. Nothing was sent.",
+        app_budget: budget,
+        upstream_called: false,
       }),
     };
   }
-  const key = env.OPENAI_API_KEY || "";
-  if (!key) {
-    return {
-      isError: true,
-      ...resultText({
-        implementation: "implemented",
-        this_call: "unconfigured",
-        provider: "openai",
-        live_account_verified: false,
-        note: "OPENAI_API_KEY is not set on the Worker. Nothing was sent.",
-      }),
-    };
+  const provider = args.provider || "auto";
+  if (!["auto", "astra", "sol", "luna"].includes(provider)) {
+    return { isError: true, ...resultText({ implementation: "not_implemented_on_this_worker", provider, upstream_called: false }) };
   }
   const built = messagesFrom(args);
-  if (built.error) return { isError: true, ...resultText({ error: built.error }) };
-  const model = typeof args.model === "string" && args.model.trim() ? args.model.trim() : (env.OPENAI_MODEL || "").trim();
-  if (!model || model.length > 120) {
-    return { isError: true, ...resultText({ error: "A model name is required (argument model or Worker variable OPENAI_MODEL)." }) };
+  if (built.error) return { isError: true, ...resultText({ error: built.error, upstream_called: false }) };
+  const plan = routePlan(env).filter((route) => (provider === "auto" ? route.configured : route.id === provider));
+  if (!plan.length || plan.some((route) => provider !== "auto" && !route.configured)) {
+    return { isError: true, ...resultText({ error: "No configured Astra, Sol, or Luna route. Nothing was sent.", upstream_called: false, app_budget: budget }) };
   }
-  const stream = args.stream === true;
   const timeout = Number.isInteger(args.timeout_seconds) ? Math.min(20, Math.max(1, args.timeout_seconds)) : 20;
-  const body = { model, messages: built.messages, stream };
-  if (stream) body.stream_options = { include_usage: true };
-  let response;
-  try {
-    response = await fetchImpl(OPENAI_CHAT_URL, {
-      method: "POST",
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeout * 1000),
-    });
-  } catch {
+  const stream = args.stream === true;
+  const attempted = [];
+  const errors = [];
+  for (const route of plan) {
+    attempted.push(route.id);
+    const model = typeof args.model === "string" && args.model.trim() ? args.model.trim() : route.model;
+    const body = { model, messages: built.messages, stream };
+    if (stream) body.stream_options = { include_usage: true };
+    let response;
+    try {
+      response = await fetchImpl(route.url, {
+        method: "POST",
+        headers: { authorization: `Bearer ${route.key}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeout * 1000),
+      });
+    } catch {
+      errors.push({ provider: route.id, error: "request failed" });
+      continue;
+    }
+    const text = await readCapped(response);
+    if (!response.ok) {
+      errors.push({ provider: route.id, error: `HTTP ${response.status}` });
+      continue;
+    }
+    let content = "";
+    let usage = usageFrom(null);
+    if (stream) {
+      const parsed = parseSse(text);
+      content = parsed.content;
+      usage = parsed.usage;
+    } else {
+      try {
+        const payload = JSON.parse(text);
+        content = payload?.choices?.[0]?.message?.content ?? "";
+        usage = usageFrom(payload?.usage);
+      } catch {
+        errors.push({ provider: route.id, error: "unreadable response" });
+        continue;
+      }
+    }
+    if (typeof content !== "string" || !content.trim()) {
+      errors.push({ provider: route.id, error: "no assistant text" });
+      continue;
+    }
     return {
-      isError: true,
+      isError: false,
       ...resultText({
-        provider: "openai",
+        provider: route.id,
         model,
-        ok: false,
-        error: "openai request failed",
-        usage: usageFrom(null),
-        provider_billing_allowance: "unknown",
-        cost_usd: null,
-      }),
-    };
-  }
-  const text = await readCapped(response);
-  if (!response.ok) {
-    return {
-      isError: true,
-      ...resultText({
-        provider: "openai",
-        model,
-        ok: false,
-        error: `openai returned HTTP ${response.status}`,
-        usage: usageFrom(null),
+        content: content.slice(0, 12_000),
+        streamed: stream,
+        usage,
+        usage_accounting: "single_response",
+        route: { attempted, selected: route.id, errors },
+        app_budget: budget,
         provider_billing_allowance: "unknown",
         cost_usd: null,
         live_account_verified: false,
       }),
     };
   }
-  let content = "";
-  let usage = usageFrom(null);
-  if (stream) {
-    const parsed = parseSse(text);
-    content = parsed.content;
-    usage = parsed.usage;
-  } else {
-    try {
-      const payload = JSON.parse(text);
-      content = payload?.choices?.[0]?.message?.content ?? "";
-      usage = usageFrom(payload?.usage);
-    } catch {
-      return { isError: true, ...resultText({ error: "openai returned an unreadable response", usage: usageFrom(null) }) };
-    }
-  }
-  if (typeof content !== "string" || !content.trim()) {
-    return { isError: true, ...resultText({ error: "openai returned no assistant text", usage, provider: "openai", model }) };
-  }
   return {
-    isError: false,
-    ...resultText({
-      provider: "openai",
-      model,
-      content: content.slice(0, 12_000),
-      truncated: content.length > 12_000,
-      streamed: stream,
-      usage,
-      usage_accounting: "single_response",
-      usage_persistence: "not_durable_on_this_worker",
-      provider_billing_allowance: "unknown",
-      cost_usd: null,
-      app_budget: "not_enforced_here",
-      live_account_verified: false,
-      implementation: "implemented",
-    }),
+    isError: true,
+    ...resultText({ error: "No configured Astra, Sol, or Luna route succeeded.", route: { attempted, selected: null, errors }, app_budget: budget, upstream_called: true }),
   };
 }
 
-function inventory() {
-  return {
-    isError: false,
-    ...resultText({
-      worker: WORKER_NAME,
-      implemented_tools: ["model.generate", "mind.tool_inventory"],
-      live_account_verified: false,
-      provider_billing_allowance: "unknown",
-      usage_persistence: "not_durable_on_this_worker",
-      python_mcp_http: "not_running_on_workers",
-      categories: INVENTORY,
-    }),
-  };
-}
-
-async function callTool(name, args, env, fetchImpl) {
-  if (name === "mind.tool_inventory") return inventory();
-  if (name === "model.generate") return generate(args || {}, env, fetchImpl);
+async function callTool(name, args, env, deps) {
+  if (name === "provider.status") return { isError: false, ...resultText(publicStatus(env)) };
+  if (name === "model.generate") return generate(args || {}, env, deps.fetchImpl || fetch);
   return { isError: true, ...resultText({ error: `Tool unavailable: ${name}` }) };
+}
+
+async function issueToken(kv, ready, record, now) {
+  const access = await randomToken();
+  const refresh = await randomToken();
+  const accessHash = hex(await sha256(access));
+  const refreshHash = hex(await sha256(refresh));
+  await kvPut(kv, `t:${accessHash}`, {
+    subject: record.subject,
+    clientId: record.clientId,
+    scope: SCOPE,
+    aud: ready.audience,
+    expires: now + 3600,
+    refreshHash,
+    refreshExpires: now + 30 * 24 * 60 * 60,
+  }, now + 30 * 24 * 60 * 60);
+  await kvPut(kv, `r:${refreshHash}`, { accessHash }, now + 30 * 24 * 60 * 60);
+  return { access_token: access, token_type: "Bearer", expires_in: 3600, scope: SCOPE, refresh_token: refresh };
+}
+
+async function authorize(request, env, ready, deps) {
+  const url = new URL(request.url);
+  const params = Object.fromEntries(url.searchParams.entries());
+  const subject = subjectFor(request, env);
+  if (!subject) return json(401, { error: "login_required", error_description: "Cloudflare Access identity is required." });
+  if (params.client_id !== ready.clientId || !ready.redirects.includes(params.redirect_uri || "")) {
+    return json(400, { error: "invalid_request", error_description: "Unknown client or redirect URI." });
+  }
+  if (params.response_type !== "code") return json(400, { error: "unsupported_response_type", error_description: "Only response_type=code is supported." });
+  if (params.code_challenge_method !== "S256" || !params.code_challenge) {
+    return json(400, { error: "invalid_request", error_description: "PKCE S256 is required." });
+  }
+  if (!scopesOk(params.scope)) return json(400, { error: "invalid_scope", error_description: "Only the mind.tools scope is supported." });
+  const code = await randomToken();
+  const now = nowSec(deps);
+  await kvPut(env.OAUTH_KV, `c:${hex(await sha256(code))}`, {
+    clientId: params.client_id,
+    redirectUri: params.redirect_uri,
+    challenge: params.code_challenge,
+    subject,
+    scope: SCOPE,
+    expires: now + 600,
+  }, now + 600);
+  const location = new URL(params.redirect_uri);
+  location.searchParams.set("code", code);
+  if (params.state != null) location.searchParams.set("state", params.state);
+  return new Response(null, { status: 302, headers: { location: location.toString(), "cache-control": "no-store" } });
+}
+
+async function token(request, env, ready, deps) {
+  const type = (request.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
+  if (type !== "application/x-www-form-urlencoded") return json(415, { error: "invalid_request", error_description: "Content-Type must be application/x-www-form-urlencoded." });
+  const params = Object.fromEntries(new URLSearchParams(await request.text()).entries());
+  const now = nowSec(deps);
+  const grant = params.grant_type || "authorization_code";
+  if (grant === "refresh_token") {
+    const refreshHash = hex(await sha256(params.refresh_token || ""));
+    const pointer = await kvGet(env.OAUTH_KV, `r:${refreshHash}`);
+    const previous = pointer ? await kvGet(env.OAUTH_KV, `t:${pointer.accessHash}`) : null;
+    if (!previous || previous.refreshExpires <= now || params.client_id !== previous.clientId) {
+      return json(400, { error: "invalid_grant", error_description: "Refresh token is invalid or expired." });
+    }
+    await env.OAUTH_KV.delete(`r:${refreshHash}`);
+    await env.OAUTH_KV.delete(`t:${pointer.accessHash}`);
+    return json(200, await issueToken(env.OAUTH_KV, ready, previous, now));
+  }
+  if (grant !== "authorization_code") return json(400, { error: "unsupported_grant_type", error_description: "Only authorization_code and refresh_token are supported." });
+  const codeHash = hex(await sha256(params.code || ""));
+  const record = await kvGet(env.OAUTH_KV, `c:${codeHash}`);
+  await env.OAUTH_KV.delete(`c:${codeHash}`);
+  if (!record || record.expires <= now) return json(400, { error: "invalid_grant", error_description: "Authorization code is invalid or expired." });
+  if (params.client_id !== record.clientId || params.redirect_uri !== record.redirectUri) {
+    return json(400, { error: "invalid_grant", error_description: "Client or redirect URI does not match authorization code." });
+  }
+  if ((await pkceChallenge(params.code_verifier || "")) !== record.challenge) {
+    return json(400, { error: "invalid_grant", error_description: "PKCE verification failed." });
+  }
+  return json(200, await issueToken(env.OAUTH_KV, ready, record, now));
+}
+
+async function revoke(request, env) {
+  const type = (request.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
+  if (type !== "application/x-www-form-urlencoded") return json(415, { error: "invalid_request" });
+  const params = Object.fromEntries(new URLSearchParams(await request.text()).entries());
+  const hash = hex(await sha256(params.token || ""));
+  const access = await kvGet(env.OAUTH_KV, `t:${hash}`);
+  if (access?.refreshHash) await env.OAUTH_KV.delete(`r:${access.refreshHash}`);
+  await env.OAUTH_KV.delete(`t:${hash}`);
+  const pointer = await kvGet(env.OAUTH_KV, `r:${hash}`);
+  if (pointer?.accessHash) {
+    const record = await kvGet(env.OAUTH_KV, `t:${pointer.accessHash}`);
+    if (record?.refreshHash) await env.OAUTH_KV.delete(`r:${record.refreshHash}`);
+    await env.OAUTH_KV.delete(`t:${pointer.accessHash}`);
+    await env.OAUTH_KV.delete(`r:${hash}`);
+  }
+  return json(200, {});
+}
+
+async function accessClaims(tokenValue, env, ready, deps) {
+  const record = await kvGet(env.OAUTH_KV, `t:${hex(await sha256(tokenValue))}`);
+  if (!record || record.expires <= nowSec(deps)) return { error: "invalid_token", status: 401 };
+  if (record.aud !== ready.audience) return { error: "invalid_token", status: 401 };
+  if (!String(record.scope || "").split(/\s+/).includes(SCOPE)) return { error: "insufficient_scope", status: 403 };
+  return { record };
+}
+
+function unconfigured(ready) {
+  return json(503, { error: "oauth_unconfigured", missing: ready.missing });
 }
 
 export async function handleRequest(request, env = {}, deps = {}) {
   const url = new URL(request.url);
+  const ready = oauthReadiness(env);
   if (request.method === "GET" && url.pathname === "/health") {
     return json(200, {
       status: "ok",
       worker: WORKER_NAME,
       live_verified: false,
-      auth_configured: Boolean(env.MCP_AUTH_TOKEN),
-      openai_key_configured: Boolean(env.OPENAI_API_KEY),
+      oauth_configured: ready.ok,
+      missing: ready.ok ? [] : ready.missing,
     });
   }
+  if (url.pathname === "/.well-known/oauth-authorization-server" && request.method === "GET") {
+    return ready.ok ? json(200, metadata(ready)) : unconfigured(ready);
+  }
+  if (url.pathname === "/.well-known/oauth-protected-resource" && request.method === "GET") {
+    return ready.ok ? json(200, resourceMetadata(ready)) : unconfigured(ready);
+  }
+  if (url.pathname === "/oauth/authorize" && request.method === "GET") return ready.ok ? authorize(request, env, ready, deps) : unconfigured(ready);
+  if (url.pathname === "/oauth/token" && request.method === "POST") return ready.ok ? token(request, env, ready, deps) : unconfigured(ready);
+  if (url.pathname === "/oauth/revoke" && request.method === "POST") return ready.ok ? revoke(request, env) : unconfigured(ready);
   if (url.pathname !== "/mcp") return json(404, { error: "Not found." });
   if (request.method !== "POST") return json(405, { error: "Use JSON POST." });
-  if (!env.MCP_AUTH_TOKEN) return json(503, { error: "MCP_AUTH_TOKEN is not configured." });
-  const presented = bearer(request);
-  if (!(await tokenMatches(presented, env.MCP_AUTH_TOKEN))) {
-    return json(401, { error: "Unauthorized." }, { "www-authenticate": 'Bearer realm="mind-mcp"' });
+  if (!ready.ok) return unconfigured(ready);
+  const header = request.headers.get("authorization") || "";
+  const presented = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const claims = await accessClaims(presented, env, ready, deps);
+  if (claims.error) {
+    return json(claims.status, { error: claims.error === "insufficient_scope" ? "insufficient_scope" : "Unauthorized." }, {
+      "www-authenticate": `Bearer realm="mind-mcp", resource_metadata="${ready.issuer}/.well-known/oauth-protected-resource"`,
+    });
   }
   const contentType = (request.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
   if (contentType !== "application/json") return json(415, { error: "Content-Type must be application/json." });
@@ -493,13 +581,11 @@ export async function handleRequest(request, env = {}, deps = {}) {
       result: {
         protocolVersion: "2025-03-26",
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: WORKER_NAME, version: "0.1.0" },
+        serverInfo: { name: WORKER_NAME, version: "0.2.0" },
       },
     });
   }
-  if (message.method === "tools/list") {
-    return json(200, { jsonrpc: "2.0", id, result: { tools: toolSpecs() } });
-  }
+  if (message.method === "tools/list") return json(200, { jsonrpc: "2.0", id, result: { tools: toolSpecs() } });
   if (message.method === "tools/call") {
     const params = message.params || {};
     if (typeof params.name !== "string" || !params.name) {
@@ -508,16 +594,8 @@ export async function handleRequest(request, env = {}, deps = {}) {
     if (params.arguments != null && (typeof params.arguments !== "object" || Array.isArray(params.arguments))) {
       return json(200, { jsonrpc: "2.0", id, error: { code: -32602, message: "tools/call arguments must be an object." } });
     }
-    const result = await callTool(params.name, params.arguments || {}, env, deps.fetchImpl || fetch);
-    const serialized = JSON.stringify(result);
-    if ((env.OPENAI_API_KEY && serialized.includes(env.OPENAI_API_KEY)) || serialized.includes(env.MCP_AUTH_TOKEN)) {
-      return json(200, {
-        jsonrpc: "2.0",
-        id,
-        result: { isError: true, content: [{ type: "text", text: JSON.stringify({ error: "response redacted" }) }] },
-      });
-    }
-    return json(200, { jsonrpc: "2.0", id, result });
+    const result = await callTool(params.name, params.arguments || {}, env, deps);
+    return json(200, { jsonrpc: "2.0", id, result: JSON.parse(redact(JSON.stringify(result), env)) });
   }
   return json(200, { jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${message.method}` } });
 }

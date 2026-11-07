@@ -1,15 +1,23 @@
 {
-  // Free workers.dev only. Do not attach routes to existing Workers
-  // (adrians-mind, gpt-mcp-proxy, operation-beat-magnus-trigger).
-  // Parent deploys. No KV, D1, R2, AI, Queues, or Durable Objects.
-  "name": "adrians-mind-mcp-tools",
-  "main": "src/index.js",
+  // Nonproduction test worker. Do not deploy over adrians-mind, gpt-mcp-proxy,
+  // operation-beat-magnus-trigger, or any worker using KV adrians-mind-mcp-oauth.
+  "name": "adrians-mind-mcp-test",
+  "main": "dist/index.js",
   "compatibility_date": "2026-11-06",
   "workers_dev": true,
   "observability": {
     "enabled": true,
-    "traces": {
-      "enabled": true
+    "traces": { "enabled": true }
+  },
+  "vars": {
+    "MCP_OAUTH_ISSUER": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev",
+    "MCP_OAUTH_AUDIENCE": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev/mcp",
+    "MCP_TRUST_ACCESS_IDENTITY": "1"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "PARENT_CREATES_adrians-mind-mcp-test-oauth"
     }
-  }
+  ]
 }

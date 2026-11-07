@@ -1,209 +1,213 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { handleRequest, usageFrom } from "./index.js";
+import { budgetDecision, handleRequest, pkceChallenge, publicStatus } from "./index.js";
 
-const env = { MCP_AUTH_TOKEN: "test-token", OPENAI_API_KEY: "sk-test-secret", OPENAI_MODEL: "gpt-test" };
+const ORIGIN = "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev";
 
-function call(method, body, headers = {}, withEnv = env) {
-  return handleRequest(
-    new Request("https://adrians-mind-mcp-tools.operation-beat-magnus.workers.dev/mcp", {
-      method,
-      headers,
-      body: body == null ? undefined : JSON.stringify(body),
-    }),
-    withEnv,
-    { fetchImpl: headers.fetchImpl },
-  );
+function memoryKv() {
+  const store = new Map();
+  return {
+    async get(key) { return store.has(key) ? store.get(key) : null; },
+    async put(key, value) { store.set(key, value); },
+    async delete(key) { store.delete(key); },
+  };
 }
 
-describe("adrians-mind-mcp-tools worker", () => {
-  it("health is public and does not reveal secret values", async () => {
-    const response = await handleRequest(new Request("https://example.workers.dev/health"), env);
+function env(extra = {}) {
+  return {
+    OAUTH_KV: memoryKv(),
+    MCP_OAUTH_ISSUER: ORIGIN,
+    MCP_OAUTH_AUDIENCE: `${ORIGIN}/mcp`,
+    MCP_OAUTH_SECRET: "oauth-secret",
+    MCP_OAUTH_CLIENT_ID: "codex-test",
+    MCP_OAUTH_REDIRECT_URIS: "https://client.example.test/callback",
+    MCP_TRUST_ACCESS_IDENTITY: "1",
+    OPENAI_API_KEY: "sk-test-secret",
+    MIND_COMMAND_BUDGET_OWNER_OVERRIDE: "1",
+    ...extra,
+  };
+}
+
+async function login(runtime = env()) {
+  const verifier = "verifier-value-which-is-long-enough";
+  const challenge = await pkceChallenge(verifier);
+  const authorize = await handleRequest(new Request(
+    `${ORIGIN}/oauth/authorize?response_type=code&client_id=codex-test&redirect_uri=https://client.example.test/callback&scope=mind.tools&code_challenge_method=S256&code_challenge=${challenge}&state=state-1`,
+    { headers: { "cf-access-authenticated-user-email": "owner@example.test" } },
+  ), runtime);
+  assert.equal(authorize.status, 302);
+  const code = new URL(authorize.headers.get("location")).searchParams.get("code");
+  const token = await handleRequest(new Request(`${ORIGIN}/oauth/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      client_id: "codex-test",
+      redirect_uri: "https://client.example.test/callback",
+      code_verifier: verifier,
+    }),
+  }), runtime);
+  const body = await token.json();
+  assert.equal(token.status, 200);
+  assert.equal(body.scope, "mind.tools");
+  return body.access_token;
+}
+
+function mcp(token, method, params, runtime, deps) {
+  return handleRequest(new Request(`${ORIGIN}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  }), runtime, deps);
+}
+
+describe("adrians-mind-mcp-test oauth edge", () => {
+  it("fails closed when OAuth KV or issuer config is missing", async () => {
+    const response = await handleRequest(new Request(`${ORIGIN}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer anything" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    }), { MCP_OAUTH_ISSUER: ORIGIN });
     const body = await response.json();
-    assert.equal(response.status, 200);
-    assert.equal(body.worker, "adrians-mind-mcp-tools");
-    assert.equal(body.live_verified, false);
-    assert.equal(body.auth_configured, true);
-    assert.equal(JSON.stringify(body).includes("sk-test-secret"), false);
-    assert.equal(JSON.stringify(body).includes("test-token"), false);
-  });
-
-  it("rejects missing and wrong bearer tokens with 401 and does not call OpenAI", async () => {
-    let called = 0;
-    const fetchImpl = async () => {
-      called += 1;
-      throw new Error("should not fetch");
-    };
-    const missing = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-      }),
-      env,
-      { fetchImpl },
-    );
-    assert.equal(missing.status, 401);
-    const wrong = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer wrong" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "model.generate", arguments: { prompt: "hi" } } }),
-      }),
-      env,
-      { fetchImpl },
-    );
-    assert.equal(wrong.status, 401);
-    assert.equal(called, 0);
-  });
-
-  it("refuses to start MCP when the auth token secret is unset", async () => {
-    const response = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer test-token" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
-      }),
-      { OPENAI_API_KEY: "sk-test-secret" },
-    );
     assert.equal(response.status, 503);
+    assert.equal(body.error, "oauth_unconfigured");
+    assert.ok(body.missing.includes("OAUTH_KV"));
+    assert.equal(JSON.stringify(body).includes("sk-"), false);
   });
 
-  it("lists only the implemented tools", async () => {
-    const response = await call("POST", { jsonrpc: "2.0", id: 2, method: "tools/list" }, {
-      "content-type": "application/json",
-      authorization: "Bearer test-token",
-    });
-    const body = await response.json();
-    const names = body.result.tools.map((tool) => tool.name);
-    assert.deepEqual(names, ["model.generate", "mind.tool_inventory"]);
-    assert.equal(JSON.stringify(body).includes("sk-test-secret"), false);
+  it("rejects missing, wrong, spoofed, and dev-subject logins", async () => {
+    const runtime = env();
+    const missing = await handleRequest(new Request(`${ORIGIN}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+    }), runtime);
+    assert.equal(missing.status, 401);
+    const spoofed = await handleRequest(new Request(
+      `${ORIGIN}/oauth/authorize?response_type=code&client_id=codex-test&redirect_uri=https://client.example.test/callback&scope=mind.tools&code_challenge_method=S256&code_challenge=abc`,
+      { headers: { "x-authenticated-user": "owner@example.test" } },
+    ), runtime);
+    assert.equal(spoofed.status, 401);
+    const dev = await handleRequest(new Request(
+      `${ORIGIN}/oauth/authorize?response_type=code&client_id=codex-test&redirect_uri=https://client.example.test/callback&scope=mind.tools&code_challenge_method=S256&code_challenge=abc`,
+    ), env({ MCP_OAUTH_DEV_SUBJECT: "owner@example.test" }));
+    assert.equal(dev.status, 401);
   });
 
-  it("inventory marks unimplemented categories and does not call the network", async () => {
+  it("completes PKCE and calls provider.status without an upstream request", async () => {
+    const runtime = env();
     let called = 0;
-    const response = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer test-token" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "mind.tool_inventory", arguments: {} } }),
-      }),
-      env,
-      { fetchImpl: async () => { called += 1; return new Response("no"); } },
-    );
-    const body = await response.json();
-    const payload = JSON.parse(body.result.content[0].text);
+    const token = await login(runtime);
+    const discovery = await handleRequest(new Request(`${ORIGIN}/.well-known/oauth-authorization-server`), runtime);
+    const meta = await discovery.json();
+    assert.equal(meta.issuer, ORIGIN);
+    assert.deepEqual(meta.code_challenge_methods_supported, ["S256"]);
+    assert.deepEqual(meta.scopes_supported, ["mind.tools"]);
+    const listed = await mcp(token, "tools/list", {}, runtime);
+    const names = (await listed.json()).result.tools.map((tool) => tool.name);
+    assert.deepEqual(names, ["provider.status", "model.generate"]);
+    const status = await mcp(token, "tools/call", { name: "provider.status", arguments: {} }, runtime, {
+      fetchImpl: async () => { called += 1; return new Response("no"); },
+    });
+    const payload = JSON.parse((await status.json()).result.content[0].text);
     assert.equal(called, 0);
-    assert.equal(payload.live_account_verified, false);
-    assert.equal(payload.provider_billing_allowance, "unknown");
-    const chat = payload.categories.find((item) => item.category === "chat.completions");
-    const responses = payload.categories.find((item) => item.category === "responses");
-    const assistants = payload.categories.find((item) => item.category === "assistants.threads");
-    assert.equal(chat.dispatch, "implemented");
-    assert.equal(responses.dispatch, "unimplemented");
-    assert.equal(assistants.dispatch, "unimplemented");
-    assert.match(assistants.notes, /2026-08-26/);
-  });
-
-  it("records reported usage once and does not substitute zero for missing usage", async () => {
-    assert.deepEqual(usageFrom(undefined), { prompt_tokens: null, completion_tokens: null, total_tokens: null, usage_status: "unknown" });
-    const calls = [];
-    const response = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer test-token" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "model.generate", arguments: { prompt: "hi", model: "gpt-test" } } }),
-      }),
-      env,
-      {
-        fetchImpl: async (url, init) => {
-          calls.push({ url, init });
-          return new Response(JSON.stringify({
-            choices: [{ message: { content: "ok" } }],
-            usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 },
-          }), { status: 200 });
-        },
-      },
-    );
-    const body = await response.json();
-    const payload = JSON.parse(body.result.content[0].text);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "https://api.openai.com/v1/chat/completions");
-    assert.equal(calls[0].init.headers.authorization, "Bearer sk-test-secret");
-    assert.equal(payload.usage.prompt_tokens, 3);
-    assert.equal(payload.usage.usage_status, "reported");
-    assert.equal(payload.cost_usd, null);
-    assert.equal(payload.provider_billing_allowance, "unknown");
+    assert.equal(payload.upstream_called, false);
+    assert.equal(payload.live_verified, false);
+    assert.equal(payload.app_budget.owner_override, true);
+    assert.equal(payload.app_budget.limit_usd, 500);
+    assert.equal(payload.app_budget.spent_usd, 0);
+    assert.equal(payload.app_budget.accounting, "baseline");
+    assert.equal(payload.providers.find((item) => item.id === "astra").model, "gpt-6-astra");
     assert.equal(JSON.stringify(payload).includes("sk-test-secret"), false);
   });
 
-  it("keeps a streamed response as one usage object from the final chunk", async () => {
+  it("routes Astra then Sol once each and keeps the successful usage", async () => {
+    const runtime = env();
+    const token = await login(runtime);
     const calls = [];
-    const sse = [
-      'data: {"choices":[{"delta":{"content":"MCP "}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}',
-      'data: {"choices":[{"delta":{"content":"verified."}}]}',
-      'data: {"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":2,"total_tokens":4}}',
-      "data: [DONE]",
-    ].join("\n");
-    const response = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer test-token" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "model.generate", arguments: { prompt: "hi", stream: true } } }),
-      }),
-      env,
-      {
-        fetchImpl: async () => {
-          calls.push(1);
-          return new Response(sse, { status: 200 });
-        },
+    const response = await mcp(token, "tools/call", {
+      name: "model.generate",
+      arguments: { provider: "auto", prompt: "hi" },
+    }, runtime, {
+      fetchImpl: async (url, init) => {
+        calls.push({ url, body: JSON.parse(init.body), authorization: init.headers.authorization });
+        if (calls.length === 1) return new Response("no", { status: 503 });
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: "ok" } }],
+          usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
+        }), { status: 200 });
       },
-    );
+    });
     const payload = JSON.parse((await response.json()).result.content[0].text);
-    assert.equal(calls.length, 1);
-    assert.equal(payload.content, "MCP verified.");
-    assert.equal(payload.streamed, true);
-    assert.equal(payload.usage.total_tokens, 4);
-    assert.notEqual(payload.usage.total_tokens, 6);
+    assert.deepEqual(calls.map((call) => call.body.model), ["gpt-6-astra", "gpt-6-sol"]);
+    assert.equal(calls[0].url, "https://api.openai.com/v1/chat/completions");
+    assert.equal(payload.provider, "sol");
+    assert.equal(payload.usage.total_tokens, 3);
+    assert.equal(payload.usage.usage_status, "reported");
+    assert.equal(payload.cost_usd, null);
+    assert.deepEqual(payload.route.attempted, ["astra", "sol"]);
   });
 
-  it("does not call OpenAI for a non-openai provider or a missing key", async () => {
+  it("does not call upstream when the app cap is exhausted without owner override", async () => {
+    const runtime = env({
+      MIND_COMMAND_BUDGET_OWNER_OVERRIDE: "0",
+      MIND_COMMAND_BUDGET_LIMIT_USD: "500",
+      MIND_COMMAND_BUDGET_SPENT_USD: "500",
+    });
+    const token = await login(runtime);
     let called = 0;
-    const fetchImpl = async () => { called += 1; return new Response("no"); };
-    const other = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer test-token" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "model.generate", arguments: { provider: "astra", prompt: "hi" } } }),
-      }),
-      env,
-      { fetchImpl },
-    );
-    const otherPayload = JSON.parse((await other.json()).result.content[0].text);
-    assert.equal(otherPayload.implementation, "not_implemented_on_this_worker");
-    const missingKey = await handleRequest(
-      new Request("https://example.workers.dev/mcp", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer test-token" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "model.generate", arguments: { prompt: "hi" } } }),
-      }),
-      { MCP_AUTH_TOKEN: "test-token" },
-      { fetchImpl },
-    );
-    const missingPayload = JSON.parse((await missingKey.json()).result.content[0].text);
-    assert.equal(missingPayload.this_call, "unconfigured");
+    const response = await mcp(token, "tools/call", {
+      name: "model.generate",
+      arguments: { prompt: "hi" },
+    }, runtime, { fetchImpl: async () => { called += 1; return new Response("no"); } });
+    const payload = JSON.parse((await response.json()).result.content[0].text);
     assert.equal(called, 0);
+    assert.equal(payload.upstream_called, false);
+    assert.match(payload.error, /exhausted/);
   });
 
-  it("deploy config is the free workers.dev name with no paid bindings", () => {
-    const text = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-    const json = JSON.parse(text.replace(/^\s*\/\/.*$/gm, ""));
-    assert.equal(json.name, "adrians-mind-mcp-tools");
-    assert.equal(json.workers_dev, true);
-    assert.equal(json.main, "src/index.js");
-    for (const key of ["kv_namespaces", "d1_databases", "r2_buckets", "ai", "durable_objects", "queues", "routes", "route"]) {
-      assert.equal(json[key], undefined);
-    }
+  it("owner override still allows the call at the 500 baseline cap", () => {
+    const decision = budgetDecision({
+      MIND_COMMAND_BUDGET_LIMIT_USD: "500",
+      MIND_COMMAND_BUDGET_SPENT_USD: "500",
+      MIND_COMMAND_BUDGET_OWNER_OVERRIDE: "1",
+    });
+    assert.equal(decision.paused, false);
+    assert.equal(decision.app_cap, "owner_override");
+    assert.equal(decision.limit_usd, 500);
+  });
+
+  it("refuses a non-OpenAI base URL and leaves missing usage unknown", async () => {
+    const runtime = env({ ASTRA_API_BASE_URL: "https://evil.example/v1/chat/completions", ASTRA_API_KEY: "sk-astra" });
+    assert.equal(publicStatus(runtime).providers.find((item) => item.id === "astra").configured, false);
+    const token = await login(runtime);
+    const calls = [];
+    const response = await mcp(token, "tools/call", {
+      name: "model.generate",
+      arguments: { provider: "sol", prompt: "hi", stream: true },
+    }, runtime, {
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return new Response('data: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n', { status: 200 });
+      },
+    });
+    const payload = JSON.parse((await response.json()).result.content[0].text);
+    assert.deepEqual(calls, ["https://api.openai.com/v1/chat/completions"]);
+    assert.equal(payload.model, "gpt-6-sol");
+    assert.equal(payload.usage.usage_status, "unknown");
+    assert.equal(payload.usage.prompt_tokens, null);
+  });
+
+  it("deploy metadata names the isolated test worker and KV binding", () => {
+    const wrangler = JSON.parse(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, ""));
+    const metadata = JSON.parse(readFileSync(new URL("../dist/metadata.json", import.meta.url), "utf8"));
+    assert.equal(wrangler.name, "adrians-mind-mcp-test");
+    assert.equal(wrangler.vars.MCP_OAUTH_ISSUER, ORIGIN);
+    assert.equal(wrangler.kv_namespaces[0].binding, "OAUTH_KV");
+    assert.equal(metadata.main_module, "index.js");
+    assert.equal(JSON.stringify(metadata).includes("adrians-mind-mcp-oauth"), false);
+    assert.equal(metadata.bindings.some((binding) => binding.name === "OAUTH_KV"), true);
   });
 });
