@@ -670,3 +670,28 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - Pillars: Whisper branch-only; VCS branch-only; Tool Registry partial; continuous evolution partial
 - Visual: dashboard unsigned no bounce; Universe painted; Memory empty; Explore TEMPLATE/NOT LIVE; Activity/Tools SPA + forbidden_cross_site / Loading PC+MCP; Grok configured
 - Artifacts: pass-2026-11-07bd/ ; internal-audit-2026-11-07bd.md
+
+---
+## Pass 2026-11-07be — 2026-11-07 05:04 CST / 2026-11-07 12:04 WAT
+Product: Adrian's Mind. External lane paused.
+
+### Gap list (standing + status; no NEW owner-actionable)
+1. XAI_API_KEY unset in production (known)
+2. 403 /login fixes on preview/integration only — needs OAuth IDs/secrets, state secret, service-role, GROK_PREVIEW_CLIENT_SECRET before promote (known)
+3. OAuth status×6 unsigned 401 console spam (known; fix on branch)
+4. Residual missing CSP + Permissions-Policy (known)
+5. Sidebar deep-link 404s / buttons-not-anchors (known)
+6. Voice Cloning Studio / Whisper Flow branch-only; live routes 404 (known)
+7. Audit login REA_AUDIT_EMAIL @example.com placeholder (routed 06d)
+8. forbidden_cross_site on Activity/Tools/PC (known)
+9. Universe paint hang intermittent (routed 07c; **hung this pass**)
+10. Grok status honesty: configured/Checking vs Safe Keys NOT CONNECTED (routed 07e)
+11. main→prod deploy path: merges build as target=null preview; prod stuck on b5d888d while main tip cbeebe6 (routed 07bc; **cbeebe6 now READY as preview**)
+12. GodEye wrapper on rea-features only; upstream identity unconfirmed (standing Tool Registry partial)
+13. Live-search env unset; chat layout/⌘K/Artifacts/empty panels; extensions.js; Cloudflare burner pending (known)
+
+### New this pass
+**None.** Status-only: cbeebe6 READY target=null; Universe hung; preview ahead/behind 110/354.
+
+### Route owners this pass
+- Gap Dispatcher only (full list). No new SendToAgent owner fixes.
