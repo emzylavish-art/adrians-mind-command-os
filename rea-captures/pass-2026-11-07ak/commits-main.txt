@@ -1,0 +1,5 @@
+e4ed639 Add GPT MCP proxy server so Claude, Grok, and ChatGPT can call your OpenAI API
+a2fe5b3 Add clear run instructions for web app and team runner
+7b87fff Add docs index listing all specifications and blueprints
+d562f70 Add Arcanum AI Security Resource Hub learning path
+d6877f2 Add Attack-Side Cybersecurity Blueprint starting from Linux foundations
