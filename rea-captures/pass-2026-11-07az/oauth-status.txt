@@ -1,0 +1,6 @@
+/api/mind/oauth/github/status 401
+/api/mind/oauth/gmail/status 401
+/api/mind/oauth/google_calendar/status 401
+/api/mind/oauth/google_drive/status 401
+/api/mind/oauth/notion/status 401
+/api/mind/oauth/slack/status 401

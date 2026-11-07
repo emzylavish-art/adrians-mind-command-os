@@ -1,0 +1,13 @@
+=== curl status matrix 2026-11-07T10:53:02+01:00 ===
+/ 200 redirect=
+/login 200 redirect=
+/dashboard 307 redirect=https://adrians-mind.vercel.app/login?next=%2Fdashboard
+/memory 200 redirect=
+/explore 200 redirect=
+/tools 404 redirect=
+/voice 404 redirect=
+/chat 404 redirect=
+/activity 404 redirect=
+/voice-cloning-studio 404 redirect=
+/whisper-flow 404 redirect=
+/api/tools/registry 404 redirect=
