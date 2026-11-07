@@ -65,6 +65,8 @@ class MCPHTTPTests(unittest.TestCase):
         self.assertIn("rea.scan", names)
         self.assertIn("team.worker", names)
         self.assertIn("team.agent.resolve", names)
+        self.assertIn("model.generate", names)
+        self.assertIn("notion.controller", names)
 
     def test_notification_returns_accepted(self):
         status, body = self.request(
