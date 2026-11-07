@@ -19,7 +19,7 @@ import { africaLagosHour } from "@/lib/mind/dashboard/wat-clock";
 import { cullLabelIds } from "@/lib/mind/dashboard/label-cull";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
-import { buildForceLayout } from "@/lib/mind/dashboard/constellations";
+import { botWorldPosition, buildForceLayout } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
