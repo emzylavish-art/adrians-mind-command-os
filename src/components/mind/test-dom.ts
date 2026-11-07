@@ -294,6 +294,8 @@ class StorageBox {
   }
 }
 
+class DomIFrameElement extends DomElement {}
+
 class DomWindow {
   document: DomDocument;
   localStorage: StorageBox;
@@ -301,10 +303,13 @@ class DomWindow {
   navigator = { userAgent: "node-test-dom" };
   location = { hostname: "localhost", pathname: "/", href: "http://localhost/" };
   HTMLElement: typeof DomElement;
+  /** React's commit phase checks the active element against this. No iframes are created here. */
+  HTMLIFrameElement: typeof DomIFrameElement;
   Element: typeof DomElement;
   Node: typeof DomNode;
   constructor() {
     this.HTMLElement = DomElement;
+    this.HTMLIFrameElement = DomIFrameElement;
     this.Element = DomElement;
     this.Node = DomNode;
     this.document = new DomDocument(this);
@@ -351,7 +356,7 @@ let installed = false;
 /** Install one document and localStorage on the global object. Later calls keep the same storage. */
 export function installTestDom(): { window: DomWindow; document: DomDocument } {
   if (installed && globalThis.document && globalThis.localStorage) {
-    return { window: globalThis.window as DomWindow, document: globalThis.document as DomDocument };
+    return { window: globalThis.window as unknown as DomWindow, document: globalThis.document as unknown as DomDocument };
   }
   const view = new DomWindow();
   const assigned = {
@@ -362,10 +367,11 @@ export function installTestDom(): { window: DomWindow; document: DomDocument } {
     HTMLElement: view.HTMLElement,
     Element: view.Element,
     Node: view.Node,
-    navigator: view.navigator,
     IS_REACT_ACT_ENVIRONMENT: true,
   };
   Object.assign(globalThis, assigned);
+  // Node 22+ defines navigator as a getter, so define it instead of assigning.
+  Object.defineProperty(globalThis, "navigator", { value: view.navigator, configurable: true, writable: true });
   installed = true;
   return { window: view, document: view.document };
 }
