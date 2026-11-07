@@ -97,6 +97,7 @@ import {
 import { clampLiveTranscript, shouldClearLiveTranscriptOnModeSwitch } from "@/lib/mind/voice/live-transcript";
 import {
   DEFAULT_XAI_VOICE,
+  resolveXaiVoiceId,
   type XaiBuiltinVoice,
   readStoredVoiceChoice,
   writeStoredVoiceChoice,
@@ -2717,7 +2718,7 @@ export function CommandApp() {
       },
       clearFailure,
       again: (params) => {
-        void speak(params.text, params.messageId, params.voiceId, params);
+        void speak(params.text, params.messageId, resolveXaiVoiceId(params.voiceId), params);
       },
     });
     if (generation !== speakGenRef.current || abort.signal.aborted) return;
