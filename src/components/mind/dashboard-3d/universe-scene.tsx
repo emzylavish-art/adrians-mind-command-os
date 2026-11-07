@@ -19,7 +19,7 @@ import { africaLagosHour } from "@/lib/mind/dashboard/wat-clock";
 import { cullLabelIds } from "@/lib/mind/dashboard/label-cull";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
-import { botWorldPosition, buildForceLayout } from "@/lib/mind/dashboard/constellations";
+import { buildForceLayout } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
@@ -386,6 +386,17 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     sunMesh.position.set(0, 1.2, 0);
     sunMesh.userData.botId = "grok-build";
     scene.add(sunMesh);
+
+    // Focus the camera on the rendered force-layout position, not the legacy lane anchor.
+    function currentBotPosition(botId: string): [number, number, number] {
+      if (botId === "grok-build") {
+        return [sunMesh.position.x, sunMesh.position.y, sunMesh.position.z];
+      }
+      const node = botVis.find((item) => item.id === botId);
+      return node
+        ? [node.base.x, node.base.y, node.base.z]
+        : [0, 0, 0];
+    }
 
     function rebuildBots(list: BotNode[]) {
       // Hacker-pass c8: dispose per-bot materials on each 5 s rebuild (previously leaked
@@ -1048,9 +1059,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const id = hits[0].object.userData.botId as string;
         const bot = dataRef.current.bots.find((b) => b.id === id);
         if (bot) {
-          const pos = bot.id === "grok-build"
-            ? [sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number]
-            : botWorldPosition(bot.id);
+          const pos = currentBotPosition(bot.id);
           const target = focusBotTarget(pos, bot.id, rig.level === "interior" ? "interior" : "universe");
           rig = flyTo(
             rig,
@@ -1329,10 +1338,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (!botId) return;
       const bot = dataRef.current.bots.find((b) => b.id === botId);
       if (!bot) return;
-      const pos =
-        bot.id === "grok-build"
-          ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
-          : botWorldPosition(bot.id);
+      const pos = currentBotPosition(bot.id);
       const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
       if (!acceptPointerPick(rig)) return;
       rig = flyTo(
