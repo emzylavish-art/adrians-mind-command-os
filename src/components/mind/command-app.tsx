@@ -77,7 +77,9 @@ import {
   setVoiceModeStore,
   subscribeVoiceMode,
 } from "@/lib/mind/voice/mode-store";
-import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
+import { type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
+import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
+import { interruptMessageSpeak } from "@/lib/mind/voice/speak-control";
 import { withSessionTimeout } from "@/lib/mind/voice/session-timeout";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
 import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
@@ -2573,63 +2575,41 @@ export function CommandApp() {
     setView("chat");
   }
 
-  async function speak(text: string) {
-    interruptSpeakPlayback();
-    const clipped = clampSpeakText(text);
-    if (!clipped) {
+  async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
+    if (!replay && text.length === 0) {
       setError("Nothing to read aloud.");
       return;
     }
+    interruptSpeakPlayback();
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
     speakAbortRef.current = abort;
     setSpeaking(true);
-    setError(null);
-    let result: Awaited<ReturnType<typeof speakText>>;
-    try {
-      result = await speakText({ data: { text: clipped, voiceId: voiceChoiceRef.current } });
-    } catch (caught) {
-      if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
-      setSpeaking(false);
-      setError(formatVoiceClientError(caught));
-      return;
-    }
-    if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
-    if (!result.ok) {
-      if (!result.error.includes("No speech key")) {
-        setSpeaking(false);
-        setError(result.error);
-        return;
-      }
-      const synth = window.speechSynthesis;
-      if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
-        setSpeaking(false);
-        setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
-        return;
-      }
-      const utter = new SpeechSynthesisUtterance(clipped);
-      utter.onend = () => {
-        if (generation === speakGenRef.current) setSpeaking(false);
-      };
-      utter.onerror = () => {
-        if (generation === speakGenRef.current) {
-          setSpeaking(false);
-          setError("Browser speech failed. Nothing was spoken.");
-        }
-      };
-      synth.cancel();
-      synth.speak(utter);
-      setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
-      return;
-    }
-    try {
-      await sharedAudioOutput.playMpegBase64(result.audio);
-    } catch {
-      if (!shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) {
-        setError("The browser blocked playback.");
-      }
-    } finally {
-      if (generation === speakGenRef.current) setSpeaking(false);
+    const outcome = await runMountedSpeak({
+      text,
+      messageId,
+      voiceId,
+      replay,
+      isCurrent: () => generation === speakGenRef.current && !abort.signal.aborted,
+      deps: {
+        synthesize: async (reply, voice) => speakText({ data: { text: reply, voiceId: voice } }),
+        play: async (audio) => {
+          await sharedAudioOutput.playMpegBase64(audio);
+        },
+      },
+      reportFailure: (message, action, target, retry) => {
+        reportFailure(message, action, target, retry);
+        setFailure((current) => (current ? { ...current, kind: (classifyHonestFailure(message) ?? (action as HonestFailureKind)) } : current));
+      },
+      clearFailure,
+      again: (params) => {
+        void speak(params.text, params.messageId, params.voiceId, params);
+      },
+    });
+    if (generation !== speakGenRef.current || abort.signal.aborted) return;
+    setSpeaking(false);
+    if (!outcome.ok && text.length === 0 && !replay) {
+      setError("Nothing to read aloud.");
     }
   }
 
@@ -4218,7 +4198,7 @@ export function CommandApp() {
                 );
               }}
               onNew={openChat}
-              onSpeak={(text) => void speak(text)}
+              onSpeak={(text, messageId) => void speak(text, messageId ?? "")}
               onListen={() => void listen()}
               onListenStop={() => void listen({ mode: "stop" })}
               onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
@@ -5641,7 +5621,7 @@ function ChatPane({
   onDelete: () => void;
   onSave: (content: string) => void;
   onNew: () => void;
-  onSpeak: (text: string) => void;
+  onSpeak: (text: string, messageId?: string) => void;
   onListen: () => void;
   onListenStop?: () => void;
   onLiveUserTranscript?: (text: string) => void;
@@ -5842,7 +5822,7 @@ function ChatPane({
                   {copiedId === msg.id ? "Copied" : "Copy"}
                 </button>
                 {msg.role === "assistant" && (
-                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content)} disabled={speaking}>
+                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content, msg.id)} disabled={speaking}>
                     {speaking ? "Speaking" : "Read aloud"}
                   </button>
                 )}
@@ -6018,7 +5998,7 @@ function ChatPane({
             <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
               {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content, lastReply.id)}>
               {speaking ? "Reading" : "Read aloud"}
             </button></div>
             
@@ -6175,7 +6155,7 @@ function ChatPane({
             <Mic className="size-4" />
           </button>
           <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
-          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content, lastReply.id)} aria-label="Speak">
             <Volume2 className="size-4" />
           </button>
         </div>
