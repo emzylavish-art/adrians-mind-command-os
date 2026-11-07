@@ -6,6 +6,8 @@
 
 import type { ModelTier } from "./model-tiers.ts";
 
+export type { ModelTier };
+
 export const LOGIC_ROUTES = ["astra", "sol", "luna"] as const;
 export type LogicRouteId = (typeof LOGIC_ROUTES)[number];
 
@@ -222,15 +224,17 @@ export function writeSelection(storage: Pick<Storage, "setItem" | "removeItem"> 
 export function resolveRequestedRoute(input: { logicRoute: unknown; provider: unknown }): { ok: true; route: LogicRouteId | null } | { ok: false; error: string } {
   const parsed = parseLogicRouteField(input.logicRoute);
   if (!parsed.ok) return parsed;
-  const providerIsRoute = isLogicRouteId(input.provider);
-  if (parsed.route && providerIsRoute && parsed.route !== input.provider) {
-    return {
-      ok: false,
-      error: `Selection conflict: logicRoute is ${parsed.route} and provider is ${input.provider}. Nothing was sent. Another route was not substituted.`,
-    };
+  if (isLogicRouteId(input.provider)) {
+    if (parsed.route && parsed.route !== input.provider) {
+      return {
+        ok: false,
+        error: `Selection conflict: logicRoute is ${parsed.route} and provider is ${input.provider}. Nothing was sent. Another route was not substituted.`,
+      };
+    }
+    if (parsed.route) return { ok: true, route: parsed.route };
+    return { ok: true, route: input.provider };
   }
   if (parsed.route) return { ok: true, route: parsed.route };
-  if (providerIsRoute) return { ok: true, route: input.provider };
   return { ok: true, route: null };
 }
 
@@ -323,6 +327,7 @@ export type ChatTurnBodyInput = {
   provider: string;
   modelTier: ModelTier;
   logicRoute: LogicRouteId | null;
+  orchestrator?: "grok" | "astra" | null;
   images: unknown[];
 };
 
@@ -337,6 +342,7 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
     ...(input.logicRoute ? { logicRoute: input.logicRoute } : {}),
+    ...(input.orchestrator ? { orchestrator: input.orchestrator } : {}),
     images: input.images,
   };
 }

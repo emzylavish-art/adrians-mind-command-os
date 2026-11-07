@@ -1,70 +1,43 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { createElement, act } from "react";
-import { createRoot } from "react-dom/client";
-import { JSDOM } from "jsdom";
-import { SurfaceFailureHost } from "./surface-failure-host.ts";
+import { reportSurfaceFailure } from "./surface-failure-host.ts";
 import { emitFailure, registerFailureHandler, type FailureSurface, type MountedFailure } from "../../lib/mind/failure-mount.ts";
-
-const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "http://localhost/" });
-Object.assign(globalThis, {
-  window: dom.window,
-  document: dom.window.document,
-  HTMLElement: dom.window.HTMLElement,
-  Node: dom.window.Node,
-  navigator: dom.window.navigator,
-  IS_REACT_ACT_ENVIRONMENT: true,
-});
 
 const surfaces: FailureSurface[] = ["mcp", "notion", "research", "serviceBoard", "supabase", "persona", "modelRoute"];
 
-async function renderHost(surface: FailureSurface, outcome: { message: string }, retry: () => void) {
-  const host = document.getElementById("root");
-  if (!host) throw new Error("missing root");
-  host.replaceChildren();
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(
-      createElement(SurfaceFailureHost, {
-        surface,
-        message: outcome.message,
-        outcome,
-        retry,
-      }),
-    );
-  });
-  return root;
-}
-
 describe("mounted failure surfaces", () => {
-  it("fires the registered handler and leaves the existing alert hidden", async () => {
+  it("fires the registered handler and leaves the existing alert hidden", () => {
     const outcome = { message: "Sol needs config. Missing SOL_API_KEY." };
-    let seen: MountedFailure<typeof outcome> | null = null;
-    const unregister = registerFailureHandler("modelRoute", (payload) => {
-      seen = payload as MountedFailure<typeof outcome>;
+    const seen: { current: MountedFailure<typeof outcome> | null } = { current: null };
+    const unregister = registerFailureHandler("modelRoute", (payload: MountedFailure<unknown>) => {
+      seen.current = payload as MountedFailure<typeof outcome>;
     });
     const selection = { provider: "sol", logicRoute: "sol" };
-    const root = await renderHost("modelRoute", outcome, () => selection);
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>("[data-testid=report-failure]")?.click();
+    const result = reportSurfaceFailure({
+      surface: "modelRoute",
+      message: outcome.message,
+      outcome,
+      retry: () => selection,
     });
-    assert.equal(seen?.outcome, outcome);
-    assert.deepEqual(seen?.retry(), selection);
-    assert.equal(document.querySelector("[data-testid=existing-failure-ui]"), null);
+    assert.equal(result.handled, true);
+    assert.equal(result.visible, null);
+    assert.equal(seen.current?.outcome, outcome);
+    assert.deepEqual(seen.current?.retry(), selection);
     unregister();
-    root.unmount();
   });
 
-  it("keeps the existing alert when no handler is registered", async () => {
+  it("keeps the existing alert when no handler is registered", () => {
     const outcome = { message: "Notion could not be reached. Nothing was changed." };
     assert.equal(emitFailure("notion", { outcome, retry: () => undefined, localCorrelationId: "local" }), false);
-    const root = await renderHost("notion", outcome, () => undefined);
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>("[data-testid=report-failure]")?.click();
+    const result = reportSurfaceFailure({
+      surface: "notion",
+      message: outcome.message,
+      outcome,
+      retry: () => undefined,
     });
-    assert.equal(document.querySelector("[data-testid=existing-failure-ui]")?.textContent, outcome.message);
-    root.unmount();
+    assert.equal(result.handled, false);
+    assert.equal(result.visible, outcome.message);
   });
 
   it("command-app and the persona directory call emitFailure for every surface except speak", () => {

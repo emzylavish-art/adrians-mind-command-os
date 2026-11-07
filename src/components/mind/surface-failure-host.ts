@@ -6,6 +6,19 @@
 import { createElement, useState, type ReactNode } from "react";
 import { emitFailure, mountFailure, type FailureSurface } from "@/lib/mind/failure-mount";
 
+/** Handler wins. With no handler, the existing alert text stays. */
+export function reportSurfaceFailure(input: {
+  surface: FailureSurface;
+  message: string;
+  outcome: unknown;
+  retry: () => void;
+}): { handled: boolean; visible: string | null } {
+  if (emitFailure(input.surface, mountFailure(input.outcome, input.retry))) {
+    return { handled: true, visible: null };
+  }
+  return { handled: false, visible: input.message };
+}
+
 export function SurfaceFailureHost(props: {
   surface: FailureSurface;
   message: string;
@@ -14,9 +27,9 @@ export function SurfaceFailureHost(props: {
 }): ReactNode {
   const [visible, setVisible] = useState<string | null>(null);
   function report() {
-    const payload = mountFailure(props.outcome, props.retry);
-    if (emitFailure(props.surface, payload)) return;
-    setVisible(props.message);
+    const result = reportSurfaceFailure(props);
+    if (result.handled) return;
+    setVisible(result.visible);
   }
   return createElement(
     "div",

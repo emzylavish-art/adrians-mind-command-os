@@ -10,16 +10,16 @@ describe("failure mount", () => {
 
   it("passes the outcome object unchanged and unregisters", () => {
     const outcome = { message: "Sol needs config", missing: ["SOL_API_KEY"] };
-    let seen: MountedFailure<typeof outcome> | null = null;
-    const unregister = registerFailureHandler("modelRoute", (payload) => {
-      seen = payload as MountedFailure<typeof outcome>;
+    const seen: { current: MountedFailure<typeof outcome> | null } = { current: null };
+    const unregister = registerFailureHandler("modelRoute", (payload: MountedFailure<unknown>) => {
+      seen.current = payload as MountedFailure<typeof outcome>;
     });
     const retrySelection = { provider: "sol", modelTier: "Heavy" as const, logicRoute: "sol" as const };
     const payload = mountFailure(outcome, () => retrySelection, "local-uuid");
     assert.equal(emitFailure("modelRoute", payload), true);
-    assert.equal(seen?.outcome, outcome);
-    assert.equal(seen?.localCorrelationId, "local-uuid");
-    assert.deepEqual(seen?.retry(), retrySelection);
+    assert.equal(seen.current?.outcome, outcome);
+    assert.equal(seen.current?.localCorrelationId, "local-uuid");
+    assert.deepEqual(seen.current?.retry(), retrySelection);
     unregister();
     assert.equal(emitFailure("modelRoute", payload), false);
   });

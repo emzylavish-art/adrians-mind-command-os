@@ -502,7 +502,7 @@ export function FleetPanel({
           {ws.connections.length === 0 && <li className="text-sm text-muted">No extra connections yet. Chat still uses the server Grok key only when you press Send.</li>}
           {ws.connections.map((item) => (
             <li key={item.id} className="dense-card dense-row text-sm">
-              {item.label} · {item.provider} · {logicRoutes.find((row) => row.id === item.provider)?.reason ?? (item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected.")} · secret stored: no
+              {item.label} · {item.provider} · {logicRoutes.find((row) => row.id === (item.provider as string))?.reason ?? (item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected.")} · secret stored: no
             </li>
           ))}
         </ul>
