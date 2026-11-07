@@ -70,7 +70,7 @@ Backend contract version `MCP_BACKEND_CONTRACT_VERSION` is a candidate only. It 
 1. `safeReason(code)` returns one fixed line and ignores the upstream body. Native JSON-RPC stays on `rpc` for a successful data result.
 2. `localAttemptId` is local. `upstreamRequestId` is null. No `x-request-id` header is read.
 3. `missingConfigNotice` returns `Not configured. Nothing was retried.` and `retryable: false` when the database URL or token secret is missing.
-4. Custom HTTP aborts once at 15 seconds and drops an oversized body. It does not send the request again. `READ_SAFE_ALLOWLIST` is `pglite_list_schema`. Custom HTTP GET `request` is the other read. A timeout is not retried.
+4. Custom HTTP aborts once at 15 seconds and drops an oversized body. It does not send the request again. `READ_SAFE_ALLOWLIST` is `pglite_list_schema`. Custom HTTP GET `request` is the other read. `timeoutRetryDecision` returns `bannerRetry: false` for a timeout or transport failure even when the tool is on that allowlist. A candidate consumer banner would offer one manual Retry for safe reads. This version does not. Consumers have not agreed, and the envelope is not frozen.
 5. Not accepted and not frozen. `src/lib/mind/failure-mount.ts` exists on `logic-picker-routes` at `a86d33d` (`registerFailureHandler`, `emitFailure`, `MountedFailure`) and is absent here. This lane does not import it. `command-app.tsx` and `fleet-panels.tsx` are Logic-owned, so this lane cannot register the `mcp` surface on the mounted page. Helper tests of `acceptResult` are not mounted tests. Logic must call `registerFailureHandler("mcp", handler)` from the mounted UI after that file is on the branch this app runs.
 
 ## Error text

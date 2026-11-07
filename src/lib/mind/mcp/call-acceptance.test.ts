@@ -44,13 +44,18 @@ describe("five acceptance answers", () => {
     assert.equal(missingConfigNotice({ text: "The MCP server returned 500." }), null);
   });
 
-  it("4 a timeout does not retry writes, and only the allowlist is read-safe", () => {
+  it("4 and 9 a timeout or transport failure has no banner Retry, for reads and writes", () => {
+    const denied = { retryable: false, autoRetried: false, bannerRetry: false };
+    for (const readSafe of [true, false]) {
+      assert.deepEqual(timeoutRetryDecision({ code: "timeout", readSafe }), denied);
+      assert.deepEqual(timeoutRetryDecision({ code: "error", readSafe }), denied);
+    }
     assert.equal(isKnownReadSafe({ kind: "http", method: "GET", tool: "request" }), true);
     assert.equal(isKnownReadSafe({ kind: "mcp", tool: "pglite_list_schema" }), true);
     assert.equal(isKnownReadSafe({ kind: "http", method: "POST", tool: "request" }), false);
     assert.equal(isKnownReadSafe({ kind: "mcp", tool: "tools/call" }), false);
-    assert.deepEqual(timeoutRetryDecision({ code: "timeout", readSafe: false }), { retryable: false, autoRetried: false });
-    assert.deepEqual(timeoutRetryDecision({ code: "timeout", readSafe: true }), { retryable: false, autoRetried: false });
+    assert.deepEqual(timeoutRetryDecision({ code: "timeout", readSafe: isKnownReadSafe({ kind: "mcp", tool: "pglite_list_schema" }) }), denied);
+    assert.deepEqual(timeoutRetryDecision({ code: "timeout", readSafe: isKnownReadSafe({ kind: "http", method: "POST", tool: "request" }) }), denied);
   });
 
   it("5 repeated click, dismiss, and a stale error do not replace a later success", () => {

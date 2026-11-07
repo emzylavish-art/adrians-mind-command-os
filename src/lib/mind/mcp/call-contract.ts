@@ -134,10 +134,19 @@ export function isKnownReadSafe(input: { kind: "mcp" | "http"; method?: string; 
   return (READ_SAFE_ALLOWLIST as readonly string[]).includes(input.tool);
 }
 
-/** A finished attempt is never sent again, including a timed-out read. */
-export function timeoutRetryDecision(input: { code: string; readSafe: boolean }): { retryable: false; autoRetried: false } {
+/**
+ * This version: no automatic retry and no banner Retry after a timeout or
+ * transport failure, including an allow-listed read.
+ * A candidate consumer rule would offer one manual Retry for safe reads.
+ * That rule is not implemented and is not agreed.
+ */
+export function timeoutRetryDecision(input: { code: string; readSafe: boolean }): {
+  retryable: false;
+  autoRetried: false;
+  bannerRetry: false;
+} {
   void input;
-  return { retryable: false, autoRetried: false };
+  return { retryable: false, autoRetried: false, bannerRetry: false };
 }
 
 export type CallProvenance = {
