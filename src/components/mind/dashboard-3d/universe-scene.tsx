@@ -405,7 +405,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       botMeshes.length = 0;
       const positions = buildForceLayout(list, dataRef.current.constellationEdges);
       for (const bot of list) {
-        const posArr = positions.get(bot.id) ?? [0, 0, 0];
+        const posArr = positions.get(bot.id) ?? ([0, 0, 0] as [number, number, number]);
         const pos = new THREE.Vector3(...posArr);
         if (bot.id === "grok-build") {
           sunMesh.position.copy(pos);
