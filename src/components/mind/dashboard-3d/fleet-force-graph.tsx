@@ -52,7 +52,7 @@ type GraphApi = {
   linkDirectionalArrowLength: (n: number) => GraphApi;
   linkDirectionalArrowRelPos: (n: number) => GraphApi;
   nodeRelSize: (n: number) => GraphApi;
-  graphData: (g?: { nodes: GraphNode[]; links: GraphLink[] }) => GraphApi | { nodes: GraphNode[]; links: GraphLink[] };
+  graphData: (g?: { nodes: GraphNode[]; links: GraphLink[] }) => any;
   onNodeHover: (fn: (node: GraphNode | null) => void) => GraphApi;
   onNodeClick: (fn: (node: GraphNode, event: MouseEvent) => void) => GraphApi;
   cooldownTicks: (n: number) => GraphApi;
@@ -206,7 +206,7 @@ export function FleetForceGraph({
         .linkDirectionalArrowRelPos(1)
         .nodeRelSize(4.2)
         .graphData(initialGraph)
-        .onNodeHover((node) => {
+        .onNodeHover((node: GraphNode | null) => {
           highlighted.current.clear();
           hoverId.current = node?.id ?? null;
           if (node) {
@@ -229,7 +229,7 @@ export function FleetForceGraph({
               graph.linkDirectionalParticles() as unknown as (l: GraphLink) => number,
             );
         })
-        .onNodeClick((node, event) => {
+        .onNodeClick((node: GraphNode, event: MouseEvent) => {
           if (!node) return;
           if (event.ctrlKey || event.metaKey) {
             const distance = 90;
