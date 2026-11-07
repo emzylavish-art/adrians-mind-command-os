@@ -1,0 +1,6 @@
+oauth/github 401 {"ok":false,"error":"Sign in is required."}
+oauth/gmail 401 {"ok":false,"error":"Sign in is required."}
+oauth/google_calendar 401 {"ok":false,"error":"Sign in is required."}
+oauth/google_drive 401 {"ok":false,"error":"Sign in is required."}
+oauth/notion 401 {"ok":false,"error":"Sign in is required."}
+oauth/slack 401 {"ok":false,"error":"Sign in is required."}
