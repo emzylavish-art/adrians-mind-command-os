@@ -1,0 +1,25 @@
+/ HEAD=200 GET=200 41255
+/login HEAD=200 GET=200 10529
+/dashboard HEAD=307 GET=307 0
+/memory HEAD=200 GET=200 3222
+/explore HEAD=200 GET=200 3105
+/tools HEAD=404 GET=404 3183
+/voice HEAD=404 GET=404 3183
+/chat HEAD=404 GET=404 3183
+/activity HEAD=404 GET=404 3183
+/library HEAD=404 GET=404 3183
+/projects HEAD=404 GET=404 3183
+/scheduled HEAD=404 GET=404 3183
+/settings HEAD=404 GET=404 3183
+/whisper HEAD=404 GET=404 3183
+/voice-cloning HEAD=404 GET=404 3183
+oauth/github {"ok":false,"error":"Sign in is required."} [401]
+oauth/gmail {"ok":false,"error":"Sign in is required."} [401]
+oauth/google_calendar {"ok":false,"error":"Sign in is required."} [401]
+oauth/google_drive {"ok":false,"error":"Sign in is required."} [401]
+oauth/notion {"ok":false,"error":"Sign in is required."} [401]
+oauth/slack {"ok":false,"error":"Sign in is required."} [401]
+bundle /: 
+bundle /dashboard: 
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-frame-options: DENY
