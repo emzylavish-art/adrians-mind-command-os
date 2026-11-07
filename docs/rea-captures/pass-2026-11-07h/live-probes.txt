@@ -1,0 +1,33 @@
+=== 2026-11-06T19:03:21-06:00 ===
+/ -> 200/
+/login -> 200/
+/dashboard -> 307/https://adrians-mind.vercel.app/login?next=%2Fdashboard
+/memory -> 200/
+/explore -> 200/
+/tools -> 404/
+/voice -> 404/
+/artifacts -> 404/
+/settings -> 404/
+/activity -> 404/
+/scheduled -> 404/
+---oauth---
+oauth/github/status -> 401
+oauth/gmail/status -> 401
+oauth/google_calendar/status -> 401
+oauth/google_drive/status -> 401
+oauth/notion/status -> 401
+oauth/slack/status -> 401
+---html-bundle---
+50:/assets/styles-BTes9Ayn.css
+62:/assets/routes-DJ6fWTpc.css
+72:/assets/index-qV1VC2j2.js
+76:/assets/react-DB-4Zxce.js
+80:/assets/actions-BG0IWsrI.js
+84:/assets/link-Lxx_zRdo.js
+88:/assets/route-BAhszpLd.js
+92:/assets/jsx-runtime-BtH0gOTJ.js
+96:/assets/routes-wC3KRy8L.js
+100:/assets/client-CJ-to4pt.js
+104:/assets/workspace-BJAXxp_0.js
+108:/assets/memory-saved-indicator-DIEJAYLn.js
+binary file matches (found "\0" byte around offset 40844)

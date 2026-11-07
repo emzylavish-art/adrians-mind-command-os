@@ -1,0 +1,30 @@
+=== LIVE HTML bundle ===
+HTTP:200
+binary file matches (found "\0" byte around offset 40844)
+binary file matches (found "\0" byte around offset 40844)
+
+=== Production deployments (gh) ===
+{"created_at":"2026-11-06T04:38:15Z","description":null,"environment":"Production","id":7592505183,"ref":"e3ccc51f568ffb4942f155515041d8da469e298c","sha":"e3ccc51"}
+{"created_at":"2026-11-05T22:18:59Z","description":null,"environment":"Production","id":7586826135,"ref":"532ed14293997bcb6e96f501901dc1ef071fdafc","sha":"532ed14"}
+{"created_at":"2026-11-05T22:16:26Z","description":null,"environment":"Production","id":7586772946,"ref":"6e66e6f6ed4f50f7fdae59264a03535409a657c4","sha":"6e66e6f"}
+
+=== Route probes (status + Location) ===
+/ -> 200 | 
+/login -> 200 | 
+/dashboard -> 307 | location: /login?next=%2Fdashboard
+/memory -> 200 | 
+/explore -> 200 | 
+/tools -> 404 | 
+/voice -> 404 | 
+/artifacts -> 404 | 
+/settings -> 404 | 
+/activity -> 404 | 
+/scheduled -> 404 | 
+
+=== OAuth status probes ===
+/api/mind/oauth/github/status -> 401
+/api/mind/oauth/gmail/status -> 401
+/api/mind/oauth/google_calendar/status -> 401
+/api/mind/oauth/google_drive/status -> 401
+/api/mind/oauth/notion/status -> 401
+/api/mind/oauth/slack/status -> 401
