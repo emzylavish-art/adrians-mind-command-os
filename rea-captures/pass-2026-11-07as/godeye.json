@@ -1,0 +1,445 @@
+{
+  "tool": "godeye",
+  "product": "Adrian's Mind",
+  "mode": "read-only",
+  "target": "https://adrians-mind.vercel.app",
+  "page": {
+    "engine": "requests",
+    "status": 200,
+    "final_url": "https://adrians-mind.vercel.app/",
+    "title": "Adrian's Mind",
+    "links": [
+      {
+        "href": "/explore",
+        "text": "Explore"
+      },
+      {
+        "href": "/login",
+        "text": ""
+      }
+    ],
+    "buttons": [
+      {
+        "type": "button",
+        "text": "Close menu",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Collapse sidebar",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Search workspace",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Library",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Projects",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Scheduled",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "New chat",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Open Settings",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Open menu",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Switch voice mode (currently direct)",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Model mode Auto. Auto picks Fast, Expert, Heavy, or Build from the prompt. After a turn, the chip shows which model answered.",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Alerts",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Dictate into composer",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Open voice mode",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "Start voice (Ctrl+Shift+V)",
+        "id": ""
+      },
+      {
+        "type": "submit",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "submit",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "New chat",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      },
+      {
+        "type": "button",
+        "text": "",
+        "id": ""
+      }
+    ],
+    "forms": [
+      {
+        "action": "",
+        "method": "get",
+        "id": ""
+      },
+      {
+        "action": "",
+        "method": "get",
+        "id": ""
+      }
+    ],
+    "inputs": [
+      {
+        "type": "text",
+        "name": "",
+        "id": "",
+        "placeholder": "Search or jump\u2026"
+      },
+      {
+        "type": "text",
+        "name": "",
+        "id": "",
+        "placeholder": "Search skills"
+      },
+      {
+        "type": "file",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      },
+      {
+        "type": "file",
+        "name": "",
+        "id": "",
+        "placeholder": ""
+      }
+    ],
+    "scripts": [
+      "https://grok.com/grok-app-builder/extensions.js",
+      "/assets/index-qV1VC2j2.js"
+    ],
+    "styles": [
+      "/assets/styles-BTes9Ayn.css",
+      "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap",
+      "/assets/routes-DJ6fWTpc.css"
+    ],
+    "console_errors": [],
+    "screenshot_path": null,
+    "html_bytes": 41255
+  },
+  "same_origin_link_statuses": [
+    {
+      "url": "https://adrians-mind.vercel.app/explore",
+      "status": 200
+    },
+    {
+      "url": "https://adrians-mind.vercel.app/login",
+      "status": 200
+    }
+  ],
+  "broken_same_origin_links": [],
+  "summary": {
+    "title": "Adrian's Mind",
+    "status": 200,
+    "engine": "requests",
+    "link_count": 2,
+    "button_count": 69,
+    "form_count": 2,
+    "input_count": 4,
+    "script_count": 2,
+    "style_count": 3,
+    "console_error_count": 0,
+    "broken_same_origin_count": 0,
+    "screenshot": null
+  },
+  "note": "in-repo implementation; upstream identity still unconfirmed"
+}
