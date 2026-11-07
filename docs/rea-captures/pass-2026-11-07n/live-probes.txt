@@ -1,0 +1,52 @@
+=== LIVE PROBES pass-2026-11-07n ===
+timestamp: 2026-11-06T20:23:16-06:00
+
+--- Routes ---
+PATH / -> 200
+PATH /login -> 200
+PATH /dashboard -> 307 Location: /login?next=%2Fdashboard
+PATH /memory -> 200
+PATH /explore -> 200
+PATH /tools -> 404
+PATH /voice -> 404
+PATH /artifacts -> 404
+PATH /settings -> 404
+PATH /activity -> 404
+PATH /scheduled -> 404
+PATH /library -> 404
+PATH /projects -> 404
+
+--- OAuth status (expect 401) ---
+OAUTH /github/status -> 401
+OAUTH /gmail/status -> 401
+OAUTH /google_calendar/status -> 401
+OAUTH /google_drive/status -> 401
+OAUTH /notion/status -> 401
+OAUTH /slack/status -> 401
+
+--- Live JS bundle from / HTML ---
+--: line 26: warning: command substitution: ignored null byte in input
+/assets/index-qV1VC2j2.js
+/assets/index-qV1VC2j2.js
+/assets/index-qV1VC2j2.js
+/assets/index-qV1VC2j2.js
+src="/assets/index-qV1VC2j2.js"
+
+--- Security headers on / ---
+content-type: text/html; charset=utf-8
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+
+--- Explicit security header presence ---
+CSP: MISSING
+Permissions-Policy: MISSING
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: strict-origin-when-cross-origin
+HSTS: max-age=63072000; includeSubDomains; preload
+
+--- Scripts ---
+index-qV1VC2j2.js
+https://grok.com/grok-app-builder/extensions.js (present)
