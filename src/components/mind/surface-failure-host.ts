@@ -4,7 +4,7 @@
  */
 
 import { createElement, useState, type ReactNode } from "react";
-import { emitFailure, mountFailure, type FailureSurface } from "@/lib/mind/failure-mount";
+import { emitFailure, mountFailure, type FailureSurface } from "../../lib/mind/failure-mount.ts";
 
 /** Handler wins. With no handler, the existing alert text stays. */
 export function reportSurfaceFailure(input: {
