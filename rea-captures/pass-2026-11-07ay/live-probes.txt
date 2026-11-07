@@ -1,0 +1,17 @@
+/ 200|
+/login 200|
+/dashboard 307|https://adrians-mind.vercel.app/login?next=%2Fdashboard307|https://adrians-mind.vercel.app/dashboard
+/memory 200|
+/explore 200|
+/tools 404|
+/voice 404|
+/chat 404|
+/activity 404|
+/voice-cloning-studio 404|
+/whisper-flow 404|
+/api/tools/registry 404|
+/dashboard-follow 200|https://adrians-mind.vercel.app/login?next=%2Fdashboard
+/api/oauth/notion/status 404
+/api/oauth/google/status 404
+/api/connectors/status 404
+referrer-policy: strict-origin-when-cross-origin
