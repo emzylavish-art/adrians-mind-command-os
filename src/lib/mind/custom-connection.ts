@@ -13,6 +13,7 @@ import {
 } from "./mcp/http-dns-pin.ts";
 import { loadRegistry, saveRegistry, type RegistryDb, type RegistryRecord } from "./mcp/registry-store.ts";
 import type { McpCallRpc, McpCallTransport, McpContentPart } from "./mcp/call-contract.ts";
+import { privacyErrorText } from "./mcp/call-contract.ts";
 
 export type ArgType = "string" | "boolean" | "integer";
 
@@ -192,7 +193,7 @@ function rpcEnvelope(text: string, token: string): { result?: unknown; error?: s
     if (!chunk || chunk === "[DONE]") continue;
     try {
       const parsed = JSON.parse(chunk) as { result?: unknown; error?: { message?: string } };
-      if (parsed.error) return { error: redact(parsed.error.message || "The MCP server returned an error.", token) };
+      if (parsed.error) return { error: privacyErrorText(parsed.error.message || "The MCP server returned an error.", token) };
       if ("result" in parsed) return { result: parsed.result };
     } catch {
       /* ignore non-json */

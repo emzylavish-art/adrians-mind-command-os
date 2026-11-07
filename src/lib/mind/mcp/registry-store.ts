@@ -59,6 +59,7 @@ const TABLE = "mind_mcp_registry";
 
 let memory: Map<string, RegistryRecord[]> | null = null;
 let legacyDirectory: string | null = null;
+let connectedLegacyDirectory: string | null = null;
 
 export function registryBuiltinId() {
   return BUILTIN_ID;
@@ -74,6 +75,12 @@ export function setMcpRegistryDirectory(next: string) {
 export function resetRegistryStoreForTests() {
   memory = null;
   legacyDirectory = null;
+  connectedLegacyDirectory = null;
+}
+
+/** Read-only directory for the older Connected-form files. Null uses .data/mind-mcp. */
+export function setConnectedLegacyDirectory(next: string | null) {
+  connectedLegacyDirectory = next;
 }
 
 export function databaseConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -105,6 +112,51 @@ export function readLegacyRegistryFile(userId: string): { present: boolean; serv
   } catch {
     return { present: false, servers: [] };
   }
+}
+
+function connectedLegacyPath(userId: string) {
+  const directory = connectedLegacyDirectory ?? join(process.cwd(), ".data", "mind-mcp");
+  return join(directory, `${createHash("sha256").update(userId).digest("hex")}.json`);
+}
+
+/** Older Connected form: `.data/mind-mcp/<sha256>.json`. Read only. */
+export function readConnectedLegacyFile(userId: string): { present: boolean; servers: RegistryRecord[] } {
+  try {
+    const parsed = JSON.parse(readFileSync(connectedLegacyPath(userId), "utf8")) as { servers?: Record<string, unknown>[] };
+    const rows = Array.isArray(parsed.servers) ? parsed.servers : [];
+    const servers: RegistryRecord[] = [];
+    for (const raw of rows) {
+      if (typeof raw.ownerId === "string" && raw.ownerId !== userId) continue;
+      if (typeof raw.id !== "string" || typeof raw.url !== "string") continue;
+      const tools = Array.isArray(raw.tools) ? raw.tools : [];
+      const state = raw.state === "connected" ? "ready" : raw.state === "failed" ? "failed" : "unchecked";
+      servers.push({
+        id: raw.id,
+        label: typeof raw.label === "string" ? raw.label : "MCP",
+        kind: "http",
+        protocol: "mcp",
+        enabled: true,
+        url: raw.url,
+        token: typeof raw.token === "string" ? raw.token : undefined,
+        state,
+        error: typeof raw.error === "string" ? raw.error : "",
+        operations: tools.filter((tool) => tool && typeof tool === "object" && typeof (tool as { name?: unknown }).name === "string").map((tool) => ({
+          name: (tool as { name: string }).name,
+          description: typeof (tool as { description?: unknown }).description === "string" ? (tool as { description: string }).description : "",
+          inputSchema: null,
+          compatible: false,
+        })),
+      });
+    }
+    return { present: true, servers };
+  } catch {
+    return { present: false, servers: [] };
+  }
+}
+
+function mergeLegacy(primary: RegistryRecord[], extra: RegistryRecord[]): RegistryRecord[] {
+  const ids = new Set(primary.map((server) => server.id));
+  return [...primary, ...extra.filter((server) => !ids.has(server.id))];
 }
 
 function recordNeedsSecret(server: RegistryRecord): boolean {
@@ -223,26 +275,29 @@ async function importLegacy(db: RegistryDb, userId: string, fileServers: Registr
 }
 
 export async function loadRegistry(userId: string, db?: RegistryDb | null): Promise<RegistryLoad> {
-  const legacy = readLegacyRegistryFile(userId);
+  const registryFile = readLegacyRegistryFile(userId);
+  const connectedFile = readConnectedLegacyFile(userId);
+  const legacyServers = mergeLegacy(registryFile.servers, connectedFile.servers);
+  const legacyFilePresent = registryFile.present || connectedFile.present;
   if (db) {
     let stored = await readDb(db, userId);
-    if (legacy.present) {
-      const imported = await importLegacy(db, userId, legacy.servers);
+    if (legacyFilePresent) {
+      const imported = await importLegacy(db, userId, legacyServers);
       if (imported.ok) stored = await readDb(db, userId);
       else {
         const ids = new Set(stored.map((server) => server.id));
-        const visible = stripLegacySecrets(legacy.servers.filter((server) => !ids.has(server.id) && server.id !== BUILTIN_ID));
+        const visible = stripLegacySecrets(legacyServers.filter((server) => !ids.has(server.id) && server.id !== BUILTIN_ID));
         return { servers: withBuiltin([...stored, ...visible]), persistence: "legacy-readonly", legacyFilePresent: true };
       }
     }
-    return { servers: withBuiltin(stored), persistence: "durable", legacyFilePresent: legacy.present };
+    return { servers: withBuiltin(stored), persistence: "durable", legacyFilePresent };
   }
   if (memory) {
-    if (!memory.has(userId) && legacy.present) memory.set(userId, legacy.servers.map((server) => ({ ...server })));
-    return { servers: withBuiltin(memory.get(userId) ?? []), persistence: "memory", legacyFilePresent: legacy.present };
+    if (!memory.has(userId) && legacyServers.length) memory.set(userId, legacyServers.map((server) => ({ ...server })));
+    return { servers: withBuiltin(memory.get(userId) ?? []), persistence: "memory", legacyFilePresent };
   }
-  if (legacy.present) {
-    return { servers: withBuiltin(stripLegacySecrets(legacy.servers)), persistence: "legacy-readonly", legacyFilePresent: true };
+  if (legacyServers.length) {
+    return { servers: withBuiltin(stripLegacySecrets(legacyServers)), persistence: "legacy-readonly", legacyFilePresent: true };
   }
   return { servers: withBuiltin([]), persistence: "missing_config", legacyFilePresent: false };
 }

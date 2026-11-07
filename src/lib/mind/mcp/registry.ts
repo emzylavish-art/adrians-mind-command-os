@@ -21,7 +21,7 @@ import {
   type RegistryDb,
   type RegistryRecord,
 } from "./registry-store.ts";
-import { type McpCallRpc, type McpCallTransport, type McpContentPart, type McpResultCode } from "./call-contract.ts";
+import { type McpCallRpc, type McpCallTransport, type McpContentPart, type McpResultCode, privacyErrorText } from "./call-contract.ts";
 import {
   defaultDnsLookup,
   isLocalHostname,
@@ -358,7 +358,7 @@ async function readCappedBody(
   return { ok: true, text };
 }
 
-async function rpc(
+export async function registryRpc(
   fetchImpl: FetchLike,
   url: string,
   token: string,
@@ -453,12 +453,13 @@ async function rpc(
     }
     const parsed = rpcMessage(body.text);
     if (parsed.error) {
+      const safe = privacyErrorText(parsed.error, token);
       return {
         ok: false,
         state: "rpc",
         httpStatus: response.status,
-        rpc: { isError: true, content: [{ type: "text", text: parsed.error }], structuredContent: parsed.errorData ?? { message: parsed.error } },
-        error: parsed.error,
+        rpc: { isError: true, content: [{ type: "text", text: safe }], structuredContent: { message: safe } },
+        error: safe,
         session: nextSession,
       };
     }
@@ -542,7 +543,7 @@ export async function listRegistryTools(
       continue;
     }
     if (!server.url) continue;
-    const opened = await rpc(fetchImpl, server.url, server.token ?? "", null, {
+    const opened = await registryRpc(fetchImpl, server.url, server.token ?? "", null, {
       jsonrpc: "2.0",
       id: 1,
       method: "initialize",
@@ -559,8 +560,8 @@ export async function listRegistryTools(
       });
       continue;
     }
-    await rpc(fetchImpl, server.url, server.token ?? "", opened.session, { jsonrpc: "2.0", method: "notifications/initialized" }, deps.http);
-    const listed = await rpc(fetchImpl, server.url, server.token ?? "", opened.session, {
+    await registryRpc(fetchImpl, server.url, server.token ?? "", opened.session, { jsonrpc: "2.0", method: "notifications/initialized" }, deps.http);
+    const listed = await registryRpc(fetchImpl, server.url, server.token ?? "", opened.session, {
       jsonrpc: "2.0",
       id: 2,
       method: "tools/list",
@@ -692,14 +693,14 @@ export async function callRegistryTool(input: {
   if (server.protocol === "http") {
     return { status: "error", ok: false, code: "incompatible", serverId: server.id, tool: input.tool, text: "This connection is a custom HTTP call, not JSON-RPC. Nothing was called.", transport: null, rpc: null };
   }
-  const opened = await rpc(fetchImpl, server.url, server.token ?? "", null, {
+  const opened = await registryRpc(fetchImpl, server.url, server.token ?? "", null, {
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
     params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } },
   }, input.http);
   if (!opened.ok) return rpcFailureResult(server.id, input.tool, opened, started);
-  const called = await rpc(fetchImpl, server.url, server.token ?? "", opened.session, {
+  const called = await registryRpc(fetchImpl, server.url, server.token ?? "", opened.session, {
     jsonrpc: "2.0",
     id: 3,
     method: "tools/call",

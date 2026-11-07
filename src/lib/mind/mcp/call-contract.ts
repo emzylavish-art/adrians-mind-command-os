@@ -80,3 +80,11 @@ export function toMcpCallContract(input: {
     rpc: input.rpc === undefined ? null : input.rpc,
   };
 }
+
+/** Error text only. Removes a known secret, header assignments, and URL literals. */
+export function privacyErrorText(text: string, secret = ""): string {
+  let out = secret ? text.split(secret).join("[redacted]") : text;
+  out = out.replace(/\b(authorization|proxy-authorization|cookie|set-cookie)\s*[:=]\s*\S+/gi, "$1: [redacted]");
+  out = out.replace(/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s)"']+/g, "[url]");
+  return out.slice(0, 8000);
+}

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { callCustomConnection, listCustomConnections, saveCustomConnection } from "./custom-connection.ts";
-import { toMcpCallContract } from "./mcp/call-contract.ts";
+import { privacyErrorText, toMcpCallContract } from "./mcp/call-contract.ts";
 import { callRegistryTool, listRegistryServers } from "./mcp/registry.ts";
 import { decryptSecret } from "./connectors/crypto.ts";
 import { readLegacyRegistryFile, resetRegistryStoreForTests, setMcpRegistryDirectory, toDurableRecord, type RegistryDb } from "./mcp/registry-store.ts";
@@ -304,5 +304,9 @@ describe("mcp call contract", () => {
     assert.equal(denied.transport?.status, 401);
     assert.equal(denied.code, "unauthorized");
     assert.equal(denied.text.includes("401"), true);
+    assert.equal(
+      privacyErrorText("failed secret see https://mcp.example/x?k=secret Authorization: Bearer secret", "secret"),
+      "failed [redacted] see [url] Authorization: [redacted] [redacted]",
+    );
   });
 });

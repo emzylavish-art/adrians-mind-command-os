@@ -61,6 +61,52 @@ A JSON-RPC `error` object, or a tool result with `isError: true`, keeps `transpo
 
 `/api/mind/mcp/call` still returns HTTP 200 after a tool attempt. Sign-in remains 401. A cross-site POST remains 403. Emergency stop remains 403.
 
-## Not in this contract
+There is no `requestId`, `correlationId`, or trace field on `McpCallContract`, `RegistryToolCallResult`, or `PublicConnection`. `transport.ms` is elapsed milliseconds for that one attempt. Nothing else identifies the call.
 
-Gmail stays `GET /api/mind/oauth/gmail/status`. This registry does not start Google sign-in and does not read or send mail. The older Connected-form file `.data/mind-mcp` (`src/lib/mind/mcp.ts`) is a separate store and is unchanged.
+## Error text
+
+Generated errors do not include the saved URL, query string, `Authorization` header, or bearer token. `privacyErrorText` in `src/lib/mind/mcp/call-contract.ts` is applied to upstream JSON-RPC error messages before they are copied to `text` and `rpc.content`. It replaces the stored bearer with `[redacted]`, replaces `authorization` / `cookie` / `set-cookie` / `proxy-authorization` assignments with `[redacted]`, and replaces `scheme://...` literals with `[url]`.
+
+Successful tool text still strips the stored bearer and can contain URLs the tool itself returned. That text is not passed through `privacyErrorText`.
+
+## Missing configuration
+
+These strings are the ones the source returns. No other prerequisite copy is invented.
+
+- No `DATABASE_URL` or `POSTGRES_URL`: `No durable database is configured (DATABASE_URL or POSTGRES_URL). Nothing was saved.` `mcpRegistryList` also sets `persistence: "missing_config"` and does not add a second sentence.
+- `CONNECTOR_TOKEN_SECRET` unset: `CONNECTOR_TOKEN_SECRET is not set. Tokens cannot be stored encrypted. Nothing was saved.`
+- Secret shorter than 16 characters: `CONNECTOR_TOKEN_SECRET is too short (need ≥16 characters). Tokens cannot be stored. Nothing was saved.`
+- Legacy file with a secret and no usable sealing key: `CONNECTOR_TOKEN_SECRET is not set, so a legacy secret was not copied. The legacy file was left unchanged. Nothing was saved.`
+- Ciphertext cannot be decrypted: `The saved credential cannot be decrypted. Set CONNECTOR_TOKEN_SECRET and save the token again. Nothing was called.`
+- Bearer selected and no token entered: `Bearer auth needs a token stored on the server. Nothing was saved.`
+- Bearer selected and the stored token is not usable at call time: `Bearer auth is selected and no usable token is stored. Nothing was called.`
+
+Gmail is not configured here. The existing status route is `GET /api/mind/oauth/gmail/status`. This registry does not register a Google client and does not read or send mail.
+
+## Timeout and retry
+
+Remote JSON-RPC uses one attempt. `HTTP_RPC_TIMEOUT_MS` is 15000. The timer aborts that attempt. The result is `code: "timeout"`, `transport.ok: false`, `transport.status: 0`, and `rpc: null`. The function does not call again.
+
+Custom HTTP `send` has no timer and no second attempt. A hung request waits until the platform closes it.
+
+MCP `tools/call` and custom HTTP POST run only after `confirmed === true`. Custom HTTP GET does not require that flag. None of these paths retry a timed-out, failed, or unknown tool. The server does not mark a tool idempotent and does not retry reads. A later click is a new call, not an automatic retry.
+
+`src/lib/mind/mcp-call-action.ts` is a separate Tools-panel control for one built-in `pglite_query` (`SELECT 1 AS n`). Its Retry button is a user click that repeats those same arguments. This lane does not mount that banner and does not change it. It is not a retry of custom MCP or custom HTTP.
+
+## Connected screen
+
+The Tools panel already mounts `CustomConnections` from `src/components/mind/fleet-panels.tsx`. That file is now reserved by logic-picker-routes and was not edited again. The form calls `listCustomConnectionsFn`, `saveCustomConnectionFn`, and `callCustomConnectionFn`. Saving an MCP URL runs `initialize` and `tools/list`, then the form renders each operation, its argument fields, and `Result ({status}): {text}`. It does not mount the failure banner.
+
+The Connected screen in `src/components/mind/command-app.tsx` still calls `mcpSave`, `mcpList`, and `mcpRemove`. Those handlers live in `src/lib/mind/server.ts`, which logic-picker-routes also owns. This lane did not retarget them. They still use the older `.data/mind-mcp` helpers in `src/lib/mind/mcp.ts`. A registry load can read that file and copy missing ids only when `CONNECTOR_TOKEN_SECRET` can seal every secret. The file is not deleted. Until `server.ts` awaits a registry-backed `listMcp` / `saveMcp` / `probeMcp` / `removeMcp`, the Connected screen does not write `mind_mcp_registry`.
+
+## Tests in this lane
+
+`src/lib/mind/custom-connection.test.ts` checks the shared rows, the call envelope (`code`, `transport`, `rpc`, including an image part), unauthorized versus JSON-RPC errors, missing secret, missing database, legacy registry import, and `privacyErrorText`.
+
+`src/lib/mind/mcp-entrypoints.test.ts` checks the Tools form source (save, list, call, and the result line), that `fleet-panels.tsx` mounts `CustomConnections`, that `command-app.tsx` still calls `mcpSave`, and that a Connected-form legacy file is imported only when it can be sealed.
+
+No test in this lane mounts the failure banner, `mcp-call-action`, or a browser. Those surfaces were not edited. `npm ci --ignore-scripts` failed with `Exit handler never called!`, so `@modelcontextprotocol/sdk` is not installed and `src/lib/mind/mcp/registry.test.ts` was not run.
+
+## Not a deployment record
+
+Nothing here has been migrated or deployed. PR 30 is not production. Live browser proof was not run. Gmail OAuth was not started. The reported production lines `PGLite query error: self-signed certificate in certificate chain` and `Forbidden: cross-site request blocked` were not reproduced against a live database. In source, `pgliteQuery` prefixes the driver message, and `src/lib/db.ts` opens `pg.Pool` from the URL while `src/lib/auth/pg-pool.ts` uses `rejectUnauthorized: true` plus the Supabase root. This lane did not change either file. `assertSameSiteRequest` throws `Forbidden: cross-site request blocked` for scripted `cross-site` and `same-site` requests. `GET /api/mind/mcp/servers` does not call it.
