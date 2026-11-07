@@ -19,7 +19,7 @@ import { africaLagosHour } from "@/lib/mind/dashboard/wat-clock";
 import { cullLabelIds } from "@/lib/mind/dashboard/label-cull";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
-import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
+import { buildForceLayout } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
@@ -403,8 +403,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       botVis.length = 0;
       botMeshes.length = 0;
+      const positions = buildForceLayout(list, dataRef.current.constellationEdges);
       for (const bot of list) {
-        const posArr = botWorldPosition(bot.id);
+        const posArr = positions.get(bot.id) ?? [0, 0, 0];
         const pos = new THREE.Vector3(...posArr);
         if (bot.id === "grok-build") {
           sunMesh.position.copy(pos);
