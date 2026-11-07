@@ -394,7 +394,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       const node = botVis.find((item) => item.id === botId);
       return node
-        ? [node.base.x, node.base.y, node.base.z]
+        ? [node.mesh.position.x, node.mesh.position.y, node.mesh.position.z]
         : [0, 0, 0];
     }
 
