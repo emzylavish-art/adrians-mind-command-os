@@ -229,7 +229,7 @@
   padding: 0.15rem 0.45rem;
   border-radius: 0.4rem;
   background: rgb(7 11 22 / 0.75);
-  border: 1px solid rgb(124 92 255 / 0.35);
+  border: 1px solid rgb(120 166 216 / 0.35);
   color: #f3f5ff;
   font-size: 11px;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -374,7 +374,7 @@
   cursor: pointer;
 }
 .dash3d-time-scrub[data-mode="before_history"] .dash3d-title {
-  color: #c4b5fd;
+  color: #d6b77a;
 }
 
 
@@ -463,7 +463,7 @@
   margin: 0.15rem 0;
 }
 .dash3d-feed-sources li[data-missing="1"] .dash3d-mono {
-  color: #c4b5fd;
+  color: #d6b77a;
 }
 .dash3d-feed-glyph {
   display: flex;
@@ -493,8 +493,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.dash3d-feed-glyph[data-kind="gap"] .dash3d-feed-glyph-mark { color: #c4b5fd; }
-.dash3d-feed-glyph[data-kind="lock"] .dash3d-feed-glyph-mark { color: #c4b5fd; }
+.dash3d-feed-glyph[data-kind="gap"] .dash3d-feed-glyph-mark { color: #d6b77a; }
+.dash3d-feed-glyph[data-kind="lock"] .dash3d-feed-glyph-mark { color: #d6b77a; }
 .dash3d-feed-glyph[data-kind="landing"] .dash3d-feed-glyph-mark { color: #f3f5ff; }
 .dash3d-feed-glyph[data-kind="merge_gate"] .dash3d-feed-glyph-mark { color: #fda4af; }
 .dash3d-feed-glyph[data-kind="notion_stop"] .dash3d-feed-glyph-mark { color: #93c5fd; }
@@ -506,7 +506,7 @@
   max-width: 240px;
 }
 .dash3d-money[data-available="0"] .dash3d-title {
-  color: #c4b5fd;
+  color: #d6b77a;
 }
 .dash3d-money-warn {
   list-style: none;
@@ -514,7 +514,7 @@
   padding: 0;
   font-size: 0.68rem;
 }
-.dash3d-money-warn li[data-level="warn"] { color: #c4b5fd; }
+.dash3d-money-warn li[data-level="warn"] { color: #d6b77a; }
 .dash3d-money-warn li[data-level="crit"] { color: #fb7185; }
 
 
@@ -676,7 +676,7 @@
 .dash3d-mirror-row:disabled { cursor: default; opacity: 0.75; }
 .dash3d-mirror-bot { font-size: 0.72rem; font-weight: 600; }
 .dash3d-mirror-fresh { font-size: 0.62rem; color: #f3f5ff; }
-.dash3d-mirror-fresh.is-stale { color: #c4b5fd; }
+.dash3d-mirror-fresh.is-stale { color: #d6b77a; }
 .dash3d-mirror-title {
   grid-column: 1 / -1;
   font-size: 0.65rem;
@@ -768,7 +768,7 @@
   .dash3d-mobile-chrome .dash3d-pill.is-on,
   .dash3d-filter-sheet .dash3d-pill.is-on,
   .dash3d-graph-filters .dash3d-pill.is-on {
-    background: rgb(124 92 255 / 0.22);
+    background: rgb(120 166 216 / 0.22);
     border-color: var(--dash3d-accent);
   }
   .dash3d-panel-stack {
@@ -808,14 +808,14 @@
   .dash3d-mobile-nav-link {
     color: #f3f5ff;
     text-decoration: none;
-    border: 1px solid rgb(124 92 255 / 0.45);
+    border: 1px solid rgb(120 166 216 / 0.45);
     border-radius: 999px;
     padding: 0.35rem 0.6rem;
     min-height: 2.25rem;
     white-space: nowrap;
   }
   .dash3d-mobile-nav-link.is-active {
-    background: rgb(124 92 255 / 0.28);
+    background: rgb(120 166 216 / 0.28);
   }
   .dash3d-mobile-chrome-row {
     display: flex;
@@ -824,7 +824,7 @@
     align-items: center;
   }
   .dash3d-mobile-card {
-    border: 1px solid rgb(124 92 255 / 0.35);
+    border: 1px solid rgb(120 166 216 / 0.35);
     border-radius: 0.8rem;
     background: #070b16;
   }
