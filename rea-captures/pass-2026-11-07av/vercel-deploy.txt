@@ -1,0 +1,8 @@
+id=dpl_HmAxBEus6oL75hCkTuXE8NDSM9qF
+state=READY
+target=production
+gitRef=main
+gitSha=b5d888dd107c4a06de582a0e29fce551c95b01df
+created=2026-11-07 09:33:11 WAT
+ready=2026-11-07 09:52:18 WAT
+alias=adrians-mind.vercel.app

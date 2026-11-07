@@ -1,0 +1,8 @@
+#26 | 2026-11-07T09:02:39Z | Polish composer layout, empty states, and search keyboard focus | head=cursor/visual-polish-041b
+#25 | 2026-11-07T08:39:27Z | Add production adrians-mind-mcp Worker config | head=cursor/prod-mcp-worker-de4c
+#22 | 2026-11-06T18:21:34Z | Expose implemented runner capabilities through both MCP transports | head=fix/mcp-runner-tool-parity-20261106
+#12 | 2026-11-05T12:19:55Z | Pin voice and connection tools for the fleet | head=fleet/tools/voice-and-connection-pins
+#9 | 2026-11-03T15:37:23Z | feat(functionality): real local agent dispatch and atomic workspace saves | head=chatgpt/functionality-persistence-2026-11-03
+#7 | 2026-11-03T05:23:45Z | visual/polish-pass-11: visual polish pass 11 | head=visual/polish-pass-11
+#6 | 2026-11-03T04:36:30Z | visual(pass-10): stacking/overlap CSS + phone mobile structure | head=visual/polish-pass-10-stacking
+#2 | 2026-11-01T23:11:21Z | feat: keystroke + voice intent predictor (client-side) | head=intent-predictor

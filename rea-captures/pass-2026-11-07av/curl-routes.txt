@@ -1,0 +1,9 @@
+/ 200
+/login 200
+/dashboard 307
+/memory 200
+/explore 200
+/tools 404
+/voice 404
+/chat 404
+/activity 404

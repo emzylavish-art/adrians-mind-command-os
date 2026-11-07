@@ -1,0 +1,27 @@
+{
+  "source": "main tools/registry.json via cursor-github get_file_contents",
+  "blackeye": {
+    "status": "restricted",
+    "install": "blocked",
+    "live": "blocked"
+  },
+  "gods_eyes": {
+    "status": "identity-unconfirmed",
+    "install": "not-installed",
+    "live": "not-connected"
+  },
+  "rea": {
+    "status": "implemented",
+    "live": "callable-cli-and-ci"
+  },
+  "owasp_zap_registry": {
+    "status": "source-verified",
+    "live": "not-connected",
+    "note": "registry entry; local tools/owasp_zap/zap_passive.py is repo wrapper"
+  },
+  "l1b3rt4s": {
+    "status": "source-verified",
+    "live": "not-connected",
+    "guardrail": "research only - NOT RUN"
+  }
+}
