@@ -371,12 +371,15 @@ export const speakText = createServerFn({ method: "POST" })
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
-    const apiKey = resolveVoiceApiKey(process.env);
-    if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
-    const { callXaiTts } = await import("./voice/tts-call");
-    const spoken = await callXaiTts({ text, voiceId: data.voiceId, apiKey });
-    if (!spoken.ok) return { ok: false as const, error: spoken.error };
-    return { ok: true as const, audio: spoken.audio, mime: spoken.mime };
+    const { speakWithFallback } = await import("./voice/provider-fallback");
+    const spoken = await speakWithFallback({
+      text,
+      voiceId: data.voiceId,
+      xaiKey: resolveVoiceApiKey(process.env),
+      openaiKey: process.env.OPENAI_API_KEY?.trim() || undefined,
+    });
+    if (!spoken.ok) return { ok: false as const, error: spoken.error, provider: null };
+    return { ok: true as const, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider };
   });
 
 export const createVoiceClientSecret = createServerFn({ method: "POST" })

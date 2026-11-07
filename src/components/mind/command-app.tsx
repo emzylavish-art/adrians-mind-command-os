@@ -68,7 +68,7 @@ import {
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { formatVoiceClientError } from "@/lib/mind/voice/errors";
+import { DIRECT_FALLBACK_NOTICE, formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
@@ -1600,6 +1600,7 @@ export function CommandApp() {
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
+      if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
       if (!shouldStoreReply(result)) {
         const message = result.ok ? "Grok returned an empty reply." : result.error;
         if (message === STOPPED_REPLY) {
@@ -2598,6 +2599,17 @@ export function CommandApp() {
   }
 
   async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
+    if (!replay && voiceModeRef.current === "orchestrator") {
+      const probe = await probeOllamaConductor({
+        baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+        model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+      });
+      const route = resolveVoiceMode("orchestrator", probe.ok);
+      if (route.fellBack) {
+        applyVoiceMode("direct");
+        setNotice(route.notice ?? DIRECT_FALLBACK_NOTICE);
+      }
+    }
     interruptSpeakPlayback();
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
@@ -2625,13 +2637,21 @@ export function CommandApp() {
             body: JSON.stringify({ audioBase64, mime: "audio/webm", filename: "speak.webm" }),
           });
           try {
-            return (await response.json()) as { ok?: boolean; text?: string; error?: string };
+            const body = (await response.json()) as { ok?: boolean; text?: string; error?: string; provider?: string };
+            if (body.ok && body.provider) setNotice(`${body.provider} transcribed this.`);
+            return body;
           } catch {
             return { ok: false, error: "The transcript request failed. Nothing was substituted." };
           }
         },
         chatTurn: (transcript) => speakChatTurn(transcript),
-        synthesize: async (reply, voice) => speakText({ data: { text: reply, voiceId: voice } }),
+        synthesize: async (reply, voice) => {
+          const spoken = await speakText({ data: { text: reply, voiceId: voice } });
+          if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok && "provider" in spoken && spoken.provider) {
+            setNotice(`${spoken.provider} spoke this reply.`);
+          }
+          return spoken;
+        },
         play: async (audio) => {
           await sharedAudioOutput.playMpegBase64(audio);
         },
@@ -2764,9 +2784,16 @@ export function CommandApp() {
       });
       setBusy(false);
       if (!conducted.ok) {
-        setError(conducted.error);
-        return;
-      }
+        if (!conducted.unreachable) {
+          setError(conducted.error);
+          return;
+        }
+        const route = resolveVoiceMode("orchestrator", false);
+        applyVoiceMode("direct");
+        const notice = route.notice ?? DIRECT_FALLBACK_NOTICE;
+        setNotice(notice);
+        if (overlayOpenRef.current) setOverlayNotice(notice);
+      } else {
       if (active) {
         const turn = buildVoiceChatTurn({
           userText: text,
@@ -2791,6 +2818,7 @@ export function CommandApp() {
       }
       speakOnOpenSession(conducted.text);
       return;
+      }
     }
     if (!active) {
       setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
@@ -3203,9 +3231,12 @@ export function CommandApp() {
           baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
           model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
         });
-        if (!probe.ok) {
-          noteConnectFailure("getting_session", probe.error);
-          return;
+        const route = resolveVoiceMode("orchestrator", probe.ok);
+        if (route.fellBack) {
+          applyVoiceMode("direct");
+          const notice = route.notice ?? DIRECT_FALLBACK_NOTICE;
+          setNotice(notice);
+          if (overlayOpenRef.current) setOverlayNotice(notice);
         }
       }
 

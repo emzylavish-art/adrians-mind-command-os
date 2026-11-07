@@ -11,8 +11,7 @@ import { readJsonObjectBody } from "../request-body.ts";
 import { allowMindRequest } from "../limits.ts";
 import { mintRealtimeClientSecret } from "./client-secret.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
-import { transcribeWavBytes } from "./stt.ts";
-import { callXaiTts } from "./tts-call.ts";
+import { speakWithFallback, transcribeWithFallback } from "./provider-fallback.ts";
 import { decodeAudioBase64, validateSpeakTextInput, validateTranscribeAudioInput } from "./voice-input.ts";
 import { isSpeakCode, speakFailure, voiceSecretExpired, type SpeakCode } from "./speak-failures.ts";
 
@@ -108,11 +107,11 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error });
   const decoded = decodeAudioBase64(parsed.audioBase64);
   if (!decoded.ok) return json({ ok: false, code: "empty_transcript", error: decoded.error });
-  const apiKey = resolveVoiceApiKey(deps.env ?? process.env, deps.secretsPath);
-  if (!apiKey) return coded("provider_not_configured");
-  const transcribed = await transcribeWavBytes({
+  const env = deps.env ?? process.env;
+  const transcribed = await transcribeWithFallback({
     bytes: decoded.bytes,
-    apiKey,
+    xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
+    openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
     filename: parsed.filename,
     mime: parsed.mime,
     fetchImpl: deps.fetchImpl,
@@ -121,7 +120,7 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
     if (/no words were recognized/i.test(transcribed.error)) return coded("empty_transcript");
     return providerOrNetwork(transcribed.error);
   }
-  return json({ ok: true, text: transcribed.text });
+  return json({ ok: true, text: transcribed.text, provider: transcribed.provider });
 }
 
 export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {}): Promise<Response> {
@@ -133,12 +132,17 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
   const parsed = validateSpeakTextInput(read.body.text);
   if (!parsed.ok) return json({ ok: false, code: "chat_failed", error: parsed.error });
-  const apiKey = resolveVoiceApiKey(deps.env ?? process.env, deps.secretsPath);
-  if (!apiKey) return coded("provider_not_configured");
+  const env = deps.env ?? process.env;
   const voiceId = typeof read.body.voiceId === "string" ? read.body.voiceId : undefined;
-  const spoken = await callXaiTts({ text: parsed.text, voiceId, apiKey, fetchImpl: deps.fetchImpl });
+  const spoken = await speakWithFallback({
+    text: parsed.text,
+    voiceId,
+    xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
+    openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
+    fetchImpl: deps.fetchImpl,
+  });
   if (!spoken.ok) return providerOrNetwork(spoken.error);
-  return json({ ok: true, audio: spoken.audio, mime: spoken.mime });
+  return json({ ok: true, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider });
 }
 
 export function speakCodeFromBody(body: unknown): SpeakCode | null {
