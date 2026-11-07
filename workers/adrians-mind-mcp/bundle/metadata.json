@@ -1,0 +1,24 @@
+{
+  "main_module": "index.js",
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "bindings": [
+    {
+      "type": "kv_namespace",
+      "name": "OAUTH_KV",
+      "namespace_id": "fef303f6f09149469c711cda6f4ef943"
+    },
+    { "type": "plain_text", "name": "MCP_WORKER_NAME", "text": "adrians-mind-mcp" },
+    { "type": "plain_text", "name": "MCP_OAUTH_CLIENT_ID", "text": "adrians-mind-mcp" },
+    { "type": "plain_text", "name": "MCP_OAUTH_CALLBACK_PATH", "text": "/oauth/callback" },
+    { "type": "plain_text", "name": "MCP_OAUTH_ISSUER", "text": "https://adrians-mind-mcp.operation-beat-magnus.workers.dev" },
+    { "type": "plain_text", "name": "MCP_OAUTH_AUDIENCE", "text": "https://adrians-mind-mcp.operation-beat-magnus.workers.dev/mcp" },
+    { "type": "plain_text", "name": "MCP_TRUST_ACCESS_IDENTITY", "text": "1" },
+    { "type": "plain_text", "name": "CF_ACCESS_TEAM_DOMAIN", "text": "adriansmind.cloudflareaccess.com" },
+    { "type": "plain_text", "name": "CF_ACCESS_AUD", "text": "08e7315e2002082b3f70a957fb6aa045e4c307783e063545e6942bd29a747c2a" },
+    { "type": "plain_text", "name": "CF_ACCESS_ALLOWED_EMAIL", "text": "emzylavish@gmail.com" },
+    { "type": "plain_text", "name": "MIND_COMMAND_BUDGET_OWNER_OVERRIDE", "text": "1" },
+    { "type": "plain_text", "name": "MIND_COMMAND_BUDGET_LIMIT_USD", "text": "500" },
+    { "type": "plain_text", "name": "MIND_COMMAND_BUDGET_SPENT_USD", "text": "0" }
+  ]
+}
