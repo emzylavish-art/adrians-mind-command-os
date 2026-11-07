@@ -1,0 +1,15 @@
+usage: rea.py [-h] [--json] [--out OUT] [path]
+
+REA (Reverse Engineer Anything): offline repository reconnaissance utility.
+Scans a user-selected directory for file inventory, language distribution,
+likely entrypoints, dependency manifests, and security-relevant markers. It
+does not execute discovered code or contact external systems.
+
+positional arguments:
+  path        directory to inspect
+
+options:
+  -h, --help  show this help message and exit
+  --json      emit JSON
+  --out OUT   write report to a file
+rea_exit:0

@@ -1,0 +1,14 @@
+# Vercel deployments — pass 2026-11-07be (2026-11-07 ~05:00 CST / 12:00 WAT)
+
+## Production target
+- READY production: main b5d888d (PR #23) dpl_HmAxBEus6oL75hCkTuXE8NDSM9qF — UNCHANGED vs bd
+- Prior production READY: zapia-isolated-auth 532ed142
+
+## Recent (any target)
+- main cbeebe6 READY target=null (preview) dpl_AqohvC9DD7CpxH9QFn9T7Laq62MV — STATUS CHANGE vs bd (was BUILDING)
+- main 9f9ea56 READY target=null (preview) dpl_GXVQU1PVB14sxN69dnZ1ZBwtuBSN
+- rea-features docs commits: CANCELED (non-deploying)
+- Implication: main merges still not promoting to production (already routed 07bc)
+
+## Live site
+- https://adrians-mind.vercel.app asset index-ChogKXym.js (matches prod tip era / UNCHANGED)

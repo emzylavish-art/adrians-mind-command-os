@@ -1,0 +1,36 @@
+/ raw=200|
+/login raw=200|
+/dashboard raw=307|https://adrians-mind.vercel.app/login?next=%2Fdashboard
+/memory raw=200|
+/explore raw=200|
+/tools raw=404|
+/voice raw=404|
+/chat raw=404|
+/activity raw=404|
+/library raw=404|
+/projects raw=404|
+/voice-cloning-studio raw=404|
+/whisper-flow raw=404|
+/api/tools/registry raw=404|
+oauth/github/status 401
+oauth/gmail/status 401
+oauth/google_calendar/status 401
+oauth/google_drive/status 401
+oauth/notion/status 401
+oauth/slack/status 401
+index-ChogKXym.js
+binary file matches (found "\0" byte around offset 40844)
+/assets/styles-BTes9Ayn.css
+/assets/routes-DJ6fWTpc.css
+/assets/index-ChogKXym.js
+/assets/react-DB-4Zxce.js
+/assets/actions-BG0IWsrI.js
+/assets/link-Lxx_zRdo.js
+/assets/route-BAhszpLd.js
+/assets/jsx-runtime-BtH0gOTJ.js
+/assets/routes-DJ7148ZD.js
+/assets/client-CJ-to4pt.js
+/assets/workspace-BJAXxp_0.js
+/assets/memory-saved-indicator-DIEJAYLn.js
+extensions.js
+binary file matches (found "\0" byte around offset 40844)
