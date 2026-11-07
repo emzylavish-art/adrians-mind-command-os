@@ -106,6 +106,9 @@ export function mcpRpcFromResult(result: unknown, secret = ""): McpCallRpc {
   if (!result || typeof result !== "object") return null;
   const record = result as Record<string, unknown>;
   if (!("content" in record) && !("isError" in record) && !("structuredContent" in record)) return null;
+  if (record.isError === true) {
+    return { isError: true, content: [{ type: "text", text: safeReason("error") }], structuredContent: null };
+  }
   const content = Array.isArray(record.content)
     ? record.content.map((part) => toContentPart(part, secret)).filter((part): part is McpContentPart => Boolean(part)).slice(0, 20)
     : [];
@@ -166,6 +169,13 @@ const DISPLAY_REASONS: Record<McpResultCode, string> = {
 /** One fixed line for a banner. The upstream body is ignored. */
 export function safeReason(code: McpResultCode, _upstreamBody?: string): string {
   return DISPLAY_REASONS[code];
+}
+
+/** Only the known sign-in refusal is public; arbitrary exceptions may hold secrets. */
+export function mcpPublicException(error: unknown): { status: 401 | 500; message: string } {
+  return error instanceof Error && error.message === "Unauthorized"
+    ? { status: 401, message: "Sign in is required." }
+    : { status: 500, message: safeReason("error") };
 }
 
 export function reasonCode(status: string): McpResultCode {

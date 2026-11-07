@@ -225,7 +225,8 @@ describe("shared durable registry", { concurrency: false }, () => {
       assert.equal(called.transport?.ok, true);
       assert.equal(called.transport?.status, 200);
       assert.equal(called.rpc?.isError, true);
-      assert.equal(called.rpc?.content[0]?.text, "bad tool");
+      assert.equal(called.rpc?.content[0]?.text, "The call failed.");
+      assert.equal(called.rpc?.structuredContent, null);
     } finally {
       rpcServer.close();
       delete process.env.CONNECTOR_TOKEN_SECRET;
@@ -342,5 +343,119 @@ describe("mcp call contract", () => {
       privacyErrorText("failed secret see https://mcp.example/x?k=secret Authorization: Bearer secret", "secret"),
       "failed [redacted] see [url] Authorization: [redacted] [redacted]",
     );
+  });
+});
+
+describe("custom connection blueprint regressions", { concurrency: false }, () => {
+  it("preserves actual 401, 403 and 500 transport status without retries", async () => {
+    resetRegistryStoreForTests();
+    process.env.CONNECTOR_TOKEN_SECRET = SECRET;
+    try {
+      for (const method of ["GET", "POST"] as const) {
+        for (const status of [401, 403, 500]) {
+          const db = memoryDb();
+          const saved = await saveCustomConnection(db, "owner", { label: "Status", kind: "http", url: "http://127.0.0.1:9/status", method });
+          assert.equal(saved.ok, true);
+          if (!saved.ok) continue;
+          let calls = 0;
+          const result = await callCustomConnection({ db, userId: "owner", id: saved.connection.id, operation: "request", confirmed: true, fetch: async () => {
+            calls += 1;
+            return { ok: false, status, headers: { get: () => null }, text: async () => "private response must not be read" };
+          } });
+          assert.equal(calls, 1);
+          assert.equal(result.transport?.status, status);
+          assert.equal(result.transport?.ok, false);
+          assert.equal(result.status, status === 500 ? "error" : "unauthorized");
+          assert.equal(result.rpc, null);
+          assert.equal(JSON.stringify(result).includes("private response"), false);
+        }
+      }
+    } finally {
+      delete process.env.CONNECTOR_TOKEN_SECRET;
+      resetRegistryStoreForTests();
+    }
+  });
+
+  it("drops private JSON-RPC and isError details from every custom result field", async () => {
+    resetRegistryStoreForTests();
+    process.env.CONNECTOR_TOKEN_SECRET = SECRET;
+    const privateText = "fictional private narrative https://internal.example/a?token=alternate-secret Authorization: Bearer another-credential";
+    try {
+      for (const envelope of ["rpc-error", "tool-error"]) {
+        const db = memoryDb();
+        let calls = 0;
+        const fetch = async (_url: string, init?: RequestInit) => {
+          calls += 1;
+          const request = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+          const body = request.method === "tools/list"
+            ? { jsonrpc: "2.0", id: 2, result: { tools: [{ name: "status", inputSchema: { type: "object", properties: {}, required: [] } }] } }
+            : request.method === "tools/call"
+              ? envelope === "rpc-error"
+                ? { jsonrpc: "2.0", id: 3, error: { code: -32000, message: privateText } }
+                : { jsonrpc: "2.0", id: 3, result: { isError: true, content: [{ type: "text", text: privateText }], structuredContent: { token: "alternate-secret", details: privateText } } }
+              : { jsonrpc: "2.0", id: 1, result: { protocolVersion: "2024-11-05" } };
+          return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body) };
+        };
+        const saved = await saveCustomConnection(db, "owner", { label: "Safe error", kind: "mcp", url: "http://127.0.0.1:9/mcp", auth: "bearer", token: "saved-token" }, { fetch });
+        assert.equal(saved.ok, true);
+        if (!saved.ok) continue;
+        const before = calls;
+        const result = await callCustomConnection({ db, userId: "owner", id: saved.connection.id, operation: "status", confirmed: true, fetch });
+        assert.equal(calls - before, 2, "one initialize and one call, not a retry");
+        assert.equal(result.ok, false);
+        assert.equal(result.status, "error");
+        assert.equal(result.text, "The call failed.");
+        assert.equal(result.transport?.status, 200);
+        assert.equal(result.rpc?.isError, true);
+        assert.equal(result.rpc?.structuredContent, null);
+        for (const piece of ["fictional", "internal.example", "alternate-secret", "another-credential", "saved-token"]) {
+          assert.equal(JSON.stringify(result).includes(piece), false);
+        }
+      }
+    } finally {
+      delete process.env.CONNECTOR_TOKEN_SECRET;
+      resetRegistryStoreForTests();
+    }
+  });
+
+  it("bounds a nonsettling DNS lookup without making a network call", async () => {
+    resetRegistryStoreForTests();
+    process.env.CONNECTOR_TOKEN_SECRET = SECRET;
+    try {
+      const db = memoryDb();
+      const saved = await saveCustomConnection(db, "owner", { label: "DNS", kind: "http", url: "https://mcp.example/status", method: "GET" });
+      assert.equal(saved.ok, true);
+      if (!saved.ok) return;
+      let calls = 0;
+      const result = await callCustomConnection({ db, userId: "owner", id: saved.connection.id, operation: "request", timeoutMs: 20,
+        lookup: async () => new Promise<never>(() => {}), fetch: async () => { calls += 1; throw new Error("No fetch expected"); } });
+      assert.equal(calls, 0);
+      assert.equal(result.status, "timeout");
+      assert.equal(result.transport?.status, 0);
+      assert.equal(result.rpc, null);
+    } finally {
+      delete process.env.CONNECTOR_TOKEN_SECRET;
+      resetRegistryStoreForTests();
+    }
+  });
+
+  it("bounds a noncooperative response body without a second send", async () => {
+    resetRegistryStoreForTests();
+    process.env.CONNECTOR_TOKEN_SECRET = SECRET;
+    try {
+      const db = memoryDb();
+      const saved = await saveCustomConnection(db, "owner", { label: "Body", kind: "http", url: "http://127.0.0.1:9/status", method: "GET" });
+      assert.equal(saved.ok, true);
+      if (!saved.ok) return;
+      let calls = 0;
+      const result = await callCustomConnection({ db, userId: "owner", id: saved.connection.id, operation: "request", timeoutMs: 20,
+        fetch: async () => { calls += 1; return { ok: true, status: 200, headers: { get: () => null }, text: async () => new Promise<never>(() => {}) }; } });
+      assert.equal(calls, 1);
+      assert.equal(result.status, "timeout");
+      assert.equal(result.text, "The server did not answer in time. Nothing was retried.");
+    } finally {
+      delete process.env.CONNECTOR_TOKEN_SECRET;
+      resetRegistryStoreForTests();
+    }
   });
 });

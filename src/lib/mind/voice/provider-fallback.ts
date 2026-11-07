@@ -33,7 +33,8 @@ export function isXaiAuthFailure(status: number, body = ""): boolean {
 }
 
 function honestBoth(action: string): string {
-  return `xAI failed and OpenAI failed. Nothing was ${action}.`;
+  const result = action === "transcribed" ? "transcription" : action === "played" ? "playable audio" : "successful reply";
+  return `xAI and OpenAI did not produce a successful ${result}.`;
 }
 
 async function openAiSpeech(input: {

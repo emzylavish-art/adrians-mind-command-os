@@ -49,14 +49,14 @@ import {
   PREVIEW_CLIENT_SECRET,
 } from "./preview";
 
-// Kick (and share) PGLite bootstrap as soon as the auth server module loads.
-void ensureDbReady();
-
 /**
  * Preview secret must outlive module reloads: PGLite (and its session rows) is
  * stored on `globalThis`, so an HMR re-eval of this file must NOT mint a new
  * signing secret or every existing session becomes invalid mid-dev. Process
  * restart clears both the secret and PGLite together.
+ *
+ * Cloudflare Workers forbid crypto and async I/O at module-global scope, so
+ * neither PGLite bootstrap nor preview secret minting run on import.
  */
 const globalAuthRef = globalThis as typeof globalThis & {
   __grokAuthPreviewSecret__?: string;
@@ -65,6 +65,8 @@ function previewAuthSecret(): string {
   globalAuthRef.__grokAuthPreviewSecret__ ??= randomBytes(32).toString("hex");
   return globalAuthRef.__grokAuthPreviewSecret__;
 }
+
+let authInstance: ReturnType<typeof createAuth> | null = null;
 
 /** Read an env var, treating empty/whitespace as unset. */
 const env = (key: string): string | undefined => {
@@ -176,7 +178,12 @@ const grokOAuthPlugin = authConfigured
     })
   : null;
 
-export const auth = betterAuth({
+function createAuth() {
+  // Request-time only: mint secrets/bootstrap after import.
+  if (!resolveDatabaseUrl(process.env)) {
+    void ensureDbReady();
+  }
+  return betterAuth({
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
   // globalThis so HMR doesn't invalidate PGLite-backed sessions (see above).
@@ -254,6 +261,21 @@ export const auth = betterAuth({
     // last so it runs after every other plugin's hooks.
     tanstackStartCookies(),
   ],
+});
+}
+
+function getAuth() {
+  authInstance ??= createAuth();
+  return authInstance;
+}
+
+/** Request-lazy Better Auth instance (Workers-safe import). */
+export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
+  get(_target, prop, receiver) {
+    const instance = getAuth();
+    const value = Reflect.get(instance as object, prop, receiver);
+    return typeof value === "function" ? (value as Function).bind(instance) : value;
+  },
 });
 
 export function readSessionToken(): string | null {

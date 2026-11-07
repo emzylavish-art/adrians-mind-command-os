@@ -117,7 +117,7 @@ export function FleetPanel({
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
-  onFailure?: (message: string, retry: () => void) => void;
+  onFailure?: (message: string, retry: () => void, surface?: "mcp" | "browser") => void;
   logicRoutes?: LogicRoutePublic[];
   providerChoice?: string;
   onSelectProvider?: (id: string) => void;
@@ -177,7 +177,7 @@ export function FleetPanel({
         setMcpServers([]);
         // auth_required → local dismissible notice in McpListStatusRows; do not escalate to top red banner / Retry storm.
         if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
-          onFailure?.(next.message, onceListRetry(loadMcpServers));
+          onFailure?.(next.message, onceListRetry(loadMcpServers), "mcp");
         }
       })
       .finally(() => {
@@ -202,7 +202,7 @@ export function FleetPanel({
         }
         setMcpTools([]);
         if (next.status === "error" && !isListAuthRequiredNotice(next.kind)) {
-          onFailure?.(next.message, onceListRetry(loadMcpTools));
+          onFailure?.(next.message, onceListRetry(loadMcpTools), "mcp");
         }
       })
       .finally(() => {

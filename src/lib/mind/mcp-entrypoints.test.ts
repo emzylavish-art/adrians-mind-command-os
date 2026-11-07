@@ -95,14 +95,17 @@ describe("Tools custom connection UI path", { concurrency: false }, () => {
     resetRegistryStoreForTests();
   });
 
-  it("keeps the Tools mount and leaves the Logic-owned Connected handlers in place", () => {
+  it("keeps the Tools mount and routes Connected and chat through the durable adapter", () => {
     const fleet = readFileSync(new URL("../../components/mind/fleet-panels.tsx", import.meta.url), "utf8");
     const command = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url), "utf8");
     const server = readFileSync(new URL("./server.ts", import.meta.url), "utf8");
     assert.match(fleet, /<CustomConnections/);
     assert.match(command, /mcpSave\(/);
-    assert.match(server, /saveMcp\(context\.userId, data\)/);
-    assert.doesNotMatch(server, /saveMcp\(context\.userId, data, db\)/);
+    assert.match(server, /saveConnectedMcp\(db, context\.userId, data/);
+    assert.match(server, /listConnectedMcp\(db, context\.userId\)/);
+    assert.match(server, /removeConnectedMcp\(db, context\.userId, data\.id\)/);
+    assert.match(server, /runConnectedMcpTurn\(\{ db, userId: context\.userId/);
+    assert.doesNotMatch(server, /\b(?:saveMcp|probeMcp|removeMcp|runMcpTurn)\(/);
   });
 
   it("keeps the client off the server-only module and checks halt before a custom call", () => {

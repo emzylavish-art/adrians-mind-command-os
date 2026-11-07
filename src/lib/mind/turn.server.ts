@@ -326,12 +326,16 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
+  const hasMultimodalContent = prepared.assembled.messages.some((message) => typeof message.content !== "string");
   const keyed = resolveXaiInferenceApiKey(process.env);
   const openaiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
   const chatMessages = prepared.assembled.messages
     .map((message) => ({ role: message.role, content: typeof message.content === "string" ? message.content : "" }))
     .filter((message) => message.content.length > 0);
   if (!keyed.ok) {
+    if (hasMultimodalContent) {
+      return json({ ok: false, error: "Grok is unavailable and OpenAI fallback was not used because it cannot preserve this image-bearing request. No successful reply was received." });
+    }
     const { directChatWithFallback } = await import("./voice/provider-fallback");
     const chat = await directChatWithFallback({ messages: chatMessages, openaiKey });
     if (!chat.ok) return json({ ok: false, error: chat.error });
@@ -376,9 +380,12 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       savedMemoryId,
     },
     authFallback: async () => {
+      if (hasMultimodalContent) {
+        return { ok: false as const, error: "xAI authentication failed and OpenAI fallback was not used because it cannot preserve this image-bearing request. No successful reply was received." };
+      }
       const { openAiDirectChat } = await import("./voice/provider-fallback");
       const chat = await openAiDirectChat({ messages: chatMessages, apiKey: openaiKey });
-      if (!chat.ok) return { ok: false as const, error: "xAI failed and OpenAI failed. Nothing was sent." };
+      if (!chat.ok) return { ok: false as const, error: "xAI and OpenAI did not return a successful reply." };
       return { ok: true as const, text: chat.text, model: chat.model, provider: "OpenAI" };
     },
   });

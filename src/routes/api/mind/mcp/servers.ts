@@ -10,6 +10,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getSql } from "@/lib/db";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
+import { mcpPublicException } from "@/lib/mind/mcp/call-contract";
 import {
   listRegistryServers,
   registerExternalServer,
@@ -36,8 +37,8 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
           const db = databaseConfigured() ? await getSql() : null;
           return json({ ok: true, servers: await listRegistryServers(userId, db) });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Unauthorized";
-          return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
+          const failure = mcpPublicException(error);
+          return json({ ok: false, error: failure.message }, failure.status);
         }
       },
       POST: async ({ request }) => {
@@ -84,8 +85,8 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
           }
           return json({ ok: false, error: "Unknown action. Use toggle, remove, or register." }, 400);
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Unauthorized";
-          return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
+          const failure = mcpPublicException(error);
+          return json({ ok: false, error: failure.message }, failure.status);
         }
       },
     },

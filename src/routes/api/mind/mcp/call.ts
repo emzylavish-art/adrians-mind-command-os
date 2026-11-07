@@ -3,7 +3,7 @@ import { getSql } from "@/lib/db";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { callRegistryTool } from "@/lib/mind/mcp/registry";
-import { toMcpCallContract } from "@/lib/mind/mcp/call-contract";
+import { mcpPublicException, toMcpCallContract } from "@/lib/mind/mcp/call-contract";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -48,8 +48,8 @@ export const Route = createFileRoute("/api/mind/mcp/call")({
           });
           return json(toMcpCallContract({ ...result, ms: Date.now() - started }), 200);
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Unauthorized";
-          return json({ ok: false, status: "error", text: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
+          const failure = mcpPublicException(error);
+          return json({ ok: false, status: "error", text: failure.message }, failure.status);
         }
       },
     },

@@ -29,7 +29,12 @@ export function connectorConnectionStatus(
   ownerId: string,
   env?: OAuthProviderEnv,
 ): ConnectionPublic {
-  return connectionStatus(getProvider(connector), ownerId, env);
+  const provider = getProvider(connector);
+  const status = connectionStatus(provider, ownerId, env);
+  if (status.state === "not_configured" && provider.notConfiguredDetail) {
+    return { ...status, detail: provider.notConfiguredDetail };
+  }
+  return status;
 }
 
 export async function disconnectConnector(

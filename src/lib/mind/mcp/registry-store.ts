@@ -44,6 +44,8 @@ export type RegistryRecord = {
   envEnc?: string;
   /** Set when a secret exists but cannot be used. Not a stored column by itself. */
   secretUnreadable?: boolean;
+  /** Durable deletion marker: suppresses read-only legacy re-import; never public. */
+  deleted?: boolean;
 };
 
 export type RegistryPersistence = "durable" | "memory" | "legacy-readonly" | "missing_config";
@@ -93,7 +95,7 @@ function defaultBuiltin(): RegistryRecord {
 
 function withBuiltin(servers: RegistryRecord[]): RegistryRecord[] {
   const builtin = servers.find((server) => server.id === BUILTIN_ID);
-  const rest = servers.filter((server) => server.id !== BUILTIN_ID);
+  const rest = servers.filter((server) => server.id !== BUILTIN_ID && !server.deleted);
   return [{ ...defaultBuiltin(), ...builtin, id: BUILTIN_ID, kind: "builtin", builtin: true }, ...rest];
 }
 
@@ -242,8 +244,13 @@ async function readDb(db: RegistryDb, userId: string): Promise<RegistryRecord[]>
 }
 
 async function writeDb(db: RegistryDb, userId: string, servers: RegistryRecord[]): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Public loads intentionally hide markers. Preserve them when a caller saves
+  // that visible snapshot, including during a later legacy import.
+  const tombstones = (await readDb(db, userId)).filter((server) => server.deleted);
+  const deletedIds = new Set(tombstones.map((server) => server.id));
+  const next = [...servers.filter((server) => !deletedIds.has(server.id)), ...tombstones];
   const sealed: { id: string; record: Record<string, unknown> }[] = [];
-  for (const server of servers) {
+  for (const server of next) {
     const next = toDurableRecord({ ...server, secretUnreadable: undefined });
     if (!next.ok) return next;
     sealed.push({ id: server.id, record: next.record });
@@ -321,7 +328,9 @@ export async function saveRegistry(
     return { ok: true, persistence: "durable" };
   }
   if (memory) {
-    memory.set(userId, next.map((server) => ({ ...server })));
+    const tombstones = (memory.get(userId) ?? []).filter((server) => server.deleted);
+    const deletedIds = new Set(tombstones.map((server) => server.id));
+    memory.set(userId, [...next.filter((server) => !deletedIds.has(server.id)), ...tombstones].map((server) => ({ ...server })));
     return { ok: true, persistence: "memory" };
   }
   return {
@@ -333,4 +342,23 @@ export async function saveRegistry(
 
 export function registryCanPersist(load: RegistryLoad, db?: RegistryDb | null): boolean {
   return Boolean(db) || (memory !== null && load.persistence === "memory");
+}
+
+/** Delete only this owner's row, retaining a secret-free marker for legacy imports. */
+export async function deleteRegistryServer(userId: string, id: string, db?: RegistryDb | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!id || id === BUILTIN_ID) return { ok: false, error: "That MCP server cannot be removed. Nothing was removed." };
+  const tombstone: RegistryRecord = { id, label: "", kind: "http", enabled: false, deleted: true };
+  if (db) {
+    await db.query(
+      `insert into ${TABLE} (user_id, id, record) values ($1, $2, $3::jsonb) on conflict (user_id, id) do update set record = excluded.record`,
+      [userId, id, JSON.stringify(tombstone)],
+    );
+    return { ok: true };
+  }
+  if (memory) {
+    const loaded = await loadRegistry(userId);
+    memory.set(userId, [...loaded.servers.filter((server) => server.id !== id), tombstone]);
+    return { ok: true };
+  }
+  return { ok: false, error: "No durable database is configured (DATABASE_URL or POSTGRES_URL). Nothing was removed." };
 }

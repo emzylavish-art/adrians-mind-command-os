@@ -45,7 +45,9 @@ describe("Gmail GOOGLE_OAUTH status", () => {
       assert.match(provider.notConfiguredDetail ?? "", /GOOGLE_OAUTH_GMAIL_REDIRECT_URI/);
       const status = connectorConnectionStatus("gmail", "owner");
       assert.equal(status.state, "not_configured");
-      assert.match(status.detail, /not configured/i);
+      assert.match(status.detail, /GOOGLE_OAUTH_CLIENT_ID/);
+      assert.match(status.detail, /GOOGLE_OAUTH_CLIENT_SECRET/);
+      assert.match(status.detail, /GOOGLE_OAUTH_GMAIL_REDIRECT_URI/);
     });
   });
 

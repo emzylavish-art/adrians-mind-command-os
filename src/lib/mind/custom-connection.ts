@@ -156,24 +156,29 @@ function redact(text: string, token: string): string {
 const HTTP_TIMEOUT_MS = 15_000;
 const HTTP_MAX_BYTES = 1_000_000;
 
-async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; lookup?: DnsLookupFn; timeoutMs?: number; maxBytes?: number }, token: string): Promise<{ ok: true; status: number; text: string } | { ok: false; status: CallStatus; error: string }> {
+async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; lookup?: DnsLookupFn; timeoutMs?: number; maxBytes?: number }, token: string): Promise<{ ok: true; status: number; text: string } | { ok: false; status: CallStatus; httpStatus: number; error: string }> {
   const checked = endpointProblem(url);
-  if (!checked.ok) return { ok: false, status: "incompatible", error: checked.error };
+  if (!checked.ok) return { ok: false, status: "incompatible", httpStatus: 0, error: checked.error };
   const parsed = new URL(checked.url);
   const timeoutMs = deps.timeoutMs ?? HTTP_TIMEOUT_MS;
   const maxBytes = deps.maxBytes ?? HTTP_MAX_BYTES;
   const controller = new AbortController();
   let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new Error("timeout"));
+    }, timeoutMs);
+  });
   const timed = { ...init, redirect: "manual" as const, signal: controller.signal };
-  const fail = (status: CallStatus, error: string) => ({ ok: false as const, status, error });
-  try {
+  const fail = (status: CallStatus, error: string, httpStatus = 0) => ({ ok: false as const, status, httpStatus, error });
+  const operation = async () => {
     let response: Awaited<ReturnType<FetchLike>>;
     if (!isLocalHostname(parsed.hostname)) {
       const pin = await resolveAndPinMcpHostname(parsed.hostname, deps.lookup);
+      controller.signal.throwIfAborted();
       if (!pin.ok) return fail("error", `${pin.error} Nothing was called.`);
       response = deps.fetch
         ? await deps.fetch(checked.url, timed)
@@ -182,17 +187,23 @@ async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; l
       const fetchImpl = deps.fetch ?? (globalThis.fetch as FetchLike);
       response = await fetchImpl(checked.url, timed);
     }
-    if (response.status === 401 || response.status === 403) return fail("unauthorized", `The server returned ${response.status}. Nothing was accepted.`);
-    if (response.status >= 300 && response.status < 400) return fail("error", "Redirects are not followed. Nothing was called.");
-    if (!response.ok) return fail("error", `The server returned ${response.status}. Nothing was called.`);
+    controller.signal.throwIfAborted();
+    if (response.status === 401 || response.status === 403) return fail("unauthorized", `The server returned ${response.status}. Nothing was accepted.`, response.status);
+    if (response.status >= 300 && response.status < 400) return fail("error", "Redirects are not followed. Nothing was called.", response.status);
+    if (!response.ok) return fail("error", `The server returned ${response.status}. Nothing was called.`, response.status);
     const text = redact(await response.text(), token);
-    if (Buffer.byteLength(text) > maxBytes) return fail("error", "The response was larger than the limit and was dropped. Nothing was retried.");
-    return { ok: true, status: response.status, text: text.slice(0, 8000) };
+    controller.signal.throwIfAborted();
+    if (Buffer.byteLength(text) > maxBytes) return fail("error", "The response was larger than the limit and was dropped. Nothing was retried.", response.status);
+    return { ok: true as const, status: response.status, text: text.slice(0, 8000) };
+  };
+  try {
+    return await Promise.race([operation(), deadline]);
   } catch {
     if (timedOut) return fail("timeout", "The server did not answer in time. Nothing was retried.");
     return fail("error", "The server could not be reached.");
   } finally {
     clearTimeout(timer);
+    deadline.catch(() => undefined);
   }
 }
 
@@ -213,6 +224,11 @@ function rpcEnvelope(text: string): { result?: unknown; error?: string } {
 
 function rpcFromResult(result: unknown, token: string): McpCallRpc {
   return mcpRpcFromResult(result, token);
+}
+
+function initialized(text: string): boolean {
+  const envelope = rpcEnvelope(text);
+  return !envelope.error && Boolean(envelope.result) && typeof envelope.result === "object" && !Array.isArray(envelope.result);
 }
 
 function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown }): PublicOperation | null {
@@ -295,6 +311,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
   }, deps, row.token ?? "");
   if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
+  if (!initialized(opened.text)) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
   const listed = await send(row.url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
@@ -352,12 +369,12 @@ export async function callCustomConnection(input: {
     const url = new URL(row.url ?? "");
     for (const [key, value] of Object.entries(checked.args)) url.searchParams.set(key, String(value));
     const sent = await send(url.toString(), { method: "GET", headers }, input, token);
-    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.httpStatus, ms: Date.now() - started }, rpc: null };
     return { ok: true, status: "ok", text: sent.text, connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
   if (connection.kind === "http") {
     const sent = await send(row.url ?? "", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(checked.args) }, input, token);
-    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.httpStatus, ms: Date.now() - started }, rpc: null };
     return { ok: true, status: "ok", text: sent.text, connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
   const opened = await send(row.url ?? "", {
@@ -365,23 +382,24 @@ export async function callCustomConnection(input: {
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
   }, input, token);
-  if (!opened.ok) return { ok: false, status: opened.status, text: opened.error, connection, transport: { ok: false, status: opened.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+  if (!opened.ok) return { ok: false, status: opened.status, text: opened.error, connection, transport: { ok: false, status: opened.httpStatus, ms: Date.now() - started }, rpc: null };
+  if (!initialized(opened.text)) return { ok: false, status: "error", text: safeReason("error"), connection, transport: { ok: true, status: opened.status, ms: Date.now() - started }, rpc: { isError: true, content: [{ type: "text", text: safeReason("error") }], structuredContent: null } };
   const called = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: operation.name, arguments: checked.args } }),
   }, input, token);
-  if (!called.ok) return { ok: false, status: called.status, text: called.error, connection, transport: { ok: false, status: called.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+  if (!called.ok) return { ok: false, status: called.status, text: called.error, connection, transport: { ok: false, status: called.httpStatus, ms: Date.now() - started }, rpc: null };
   const parsed = rpcEnvelope(called.text);
   if (parsed.error) {
-    const upstream = redact(parsed.error, token);
+    const reason = safeReason("error");
     return {
       ok: false,
       status: "error",
-      text: safeReason("error", upstream),
+      text: reason,
       connection,
       transport: { ok: true, status: called.status, ms: Date.now() - started },
-      rpc: { isError: true, content: [{ type: "text", text: upstream }], structuredContent: null },
+      rpc: { isError: true, content: [{ type: "text", text: reason }], structuredContent: null },
     };
   }
   const rpc = rpcFromResult(parsed.result, token);

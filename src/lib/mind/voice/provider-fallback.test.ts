@@ -99,7 +99,7 @@ describe("voice provider fallback", () => {
       const result = await run();
       assert.equal(result.ok, false);
       if (!result.ok) {
-        assert.match(result.error, /xAI failed and OpenAI failed/);
+        assert.match(result.error, /xAI and OpenAI did not produce a successful/);
         assert.equal(result.error.includes(XAI), false);
         assert.equal(result.error.includes(OPENAI), false);
         assert.equal(result.provider, null);

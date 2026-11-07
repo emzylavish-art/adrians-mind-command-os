@@ -188,9 +188,37 @@ export async function runMountedSpeak(input: SpeakMountedInput): Promise<{ ok: b
       });
   if (!input.isCurrent()) return { ok: false, params };
   input.clearFailure();
-  const deps: SpeakActionDeps = params.chatCommitted
+  const sourceDeps: SpeakActionDeps = params.chatCommitted
     ? { synthesize: input.deps.synthesize, play: input.deps.play }
     : input.deps;
+  const canceled = (): { ok: false; error: string } => ({ ok: false, error: "Speak attempt was canceled." });
+  const guard = <T>(run: (() => Promise<T>) | undefined): (() => Promise<T | { ok: false; error: string }>) | undefined => run ? async () => {
+    if (!input.isCurrent()) return canceled();
+    const result = await run();
+    return input.isCurrent() ? result : canceled();
+  } : undefined;
+  const guardInput = <T>(run: ((value: T) => Promise<unknown>) | undefined): ((value: T) => Promise<unknown>) | undefined => run ? async (value) => {
+    if (!input.isCurrent()) return canceled();
+    const result = await run(value);
+    return input.isCurrent() ? result : canceled();
+  } : undefined;
+  const guardTwo = <T, U>(run: ((a: T, b: U) => Promise<unknown>) | undefined): ((a: T, b: U) => Promise<unknown>) | undefined => run ? async (a, b) => {
+    if (!input.isCurrent()) return canceled();
+    const result = await run(a, b);
+    return input.isCurrent() ? result : canceled();
+  } : undefined;
+  const guardPlay = (run: ((value: string) => Promise<void>) | undefined): ((value: string) => Promise<void>) | undefined => run ? async (value) => {
+    if (!input.isCurrent()) return;
+    await run(value);
+  } : undefined;
+  const deps: SpeakActionDeps = {
+    session: guard(sourceDeps.session),
+    capture: guard(sourceDeps.capture),
+    transcribe: guardInput(sourceDeps.transcribe),
+    chatTurn: guardInput(sourceDeps.chatTurn),
+    synthesize: guardTwo(sourceDeps.synthesize),
+    play: guardPlay(sourceDeps.play),
+  };
   let result;
   try {
     result = await runSpeakAction(params, deps);
