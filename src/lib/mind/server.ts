@@ -371,27 +371,12 @@ export const speakText = createServerFn({ method: "POST" })
     if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
-    const { resolveXaiVoiceId } = await import("./voice/voices");
     const apiKey = resolveVoiceApiKey(process.env);
     if (!apiKey) return { ok: false as const, error: "The chat key is not used for speech. No speech key is configured. Nothing was played." };
-    const voice_id = resolveXaiVoiceId(data.voiceId);
-    let res: Response;
-    try {
-      res = await fetch("https://api.x.ai/v1/tts", {
-        method: "POST",
-        signal: AbortSignal.timeout(20_000),
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ text, voice_id, language: "en", output_format: { codec: "mp3" } }),
-      });
-    } catch {
-      return { ok: false as const, error: "Voice did not answer in time. Nothing was played." };
-    }
-    if (!res.ok) return { ok: false as const, error: `Voice returned ${res.status}. Nothing was played.` };
-    const contentLength = Number(res.headers.get("content-length") || 0);
-    if (contentLength > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
-    const bytes = Buffer.from(await res.arrayBuffer());
-    if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false as const, error: "Voice returned audio that could not be played." };
-    return { ok: true as const, audio: bytes.toString("base64"), mime: "audio/mpeg" };
+    const { callXaiTts } = await import("./voice/tts-call");
+    const spoken = await callXaiTts({ text, voiceId: data.voiceId, apiKey });
+    if (!spoken.ok) return { ok: false as const, error: spoken.error };
+    return { ok: true as const, audio: spoken.audio, mime: spoken.mime };
   });
 
 export const createVoiceClientSecret = createServerFn({ method: "POST" })

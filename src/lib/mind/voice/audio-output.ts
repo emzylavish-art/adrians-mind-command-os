@@ -104,7 +104,7 @@ export class SharedAudioOutput {
     const audio = new Audio(url);
     this.htmlAudio = audio;
     this.playing = true;
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       let settled = false;
       const finish = () => {
         if (settled) return;
@@ -116,14 +116,26 @@ export class SharedAudioOutput {
         this.onEnded?.();
         resolve();
       };
+      const fail = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        this.playing = false;
+        if (this.htmlAudio === audio) this.htmlAudio = null;
+        this.htmlFinish = null;
+        URL.revokeObjectURL(url);
+        reject(err);
+      };
       this.htmlFinish = finish;
       if (this.stopped) {
         finish();
         return;
       }
       audio.onended = finish;
-      audio.onerror = finish;
-      audio.play().catch(finish);
+      audio.onerror = () => fail(new Error("The browser blocked playback."));
+      const played = audio.play();
+      if (played && typeof (played as Promise<void>).catch === "function") {
+        void (played as Promise<void>).catch((err) => fail(err instanceof Error ? err : new Error("The browser blocked playback.")));
+      }
     });
   }
 
