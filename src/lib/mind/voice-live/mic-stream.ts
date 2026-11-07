@@ -1,6 +1,9 @@
 /** Always-on mic capture → pcm16 @ session rate, with mute (stop appending, keep tracks). */
 
 import { rmsFromFloatSamples } from "../voice/level.ts";
+import type { MicPermissionState } from "../voice/speak-state/events.ts";
+import { LEVEL_INTERVAL_MS } from "../voice/speak-state/signal.ts";
+import type { SpeakMicSink } from "../voice/speak-state/sink.ts";
 
 export type MicStreamHandlers = {
   onPcm16?: (pcm: ArrayBuffer) => void;
@@ -11,7 +14,27 @@ export type MicStreamHandlers = {
 export type MicStreamOptions = {
   sampleRate?: number;
   getUserMediaImpl?: typeof navigator.mediaDevices.getUserMedia;
+  /** Speak-state sink for permission, device changes, and ~50 Hz levels. */
+  speakState?: SpeakMicSink;
 };
+
+/** Map a getUserMedia failure onto the speak-state permission enum. Other failures are not permission changes. */
+export function micPermissionFromError(caught: unknown): MicPermissionState | null {
+  const name =
+    caught && typeof caught === "object" && "name" in caught
+      ? String((caught as { name?: string }).name || "")
+      : "";
+  const message = caught instanceof Error ? caught.message : String(caught || "");
+  if (name === "NotAllowedError" || /permission|notallowed|denied/i.test(message)) return "denied";
+  return null;
+}
+
+export function readAudioDeviceId(stream: {
+  getAudioTracks?: () => Array<{ getSettings?: () => { deviceId?: string } }>;
+}): string | null {
+  const id = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId;
+  return id ? String(id) : null;
+}
 
 function floatTo16BitPCM(input: Float32Array): ArrayBuffer {
   const buffer = new ArrayBuffer(input.length * 2);
@@ -45,6 +68,10 @@ export class LiveMicStream {
   private handlers: MicStreamHandlers;
   private sampleRate: number;
   private getUserMediaImpl?: typeof navigator.mediaDevices.getUserMedia;
+  private speakState?: SpeakMicSink;
+  private stopping = false;
+  private levelPump: ReturnType<typeof setInterval> | null = null;
+  private stopWatch: (() => void) | null = null;
   /** Bound rolling PCM append bytes to avoid unbounded growth (30-min sessions). */
   private appendedBytes = 0;
   static readonly MAX_APPENDED_BYTES_HINT = 24_000 * 2 * 60; // ~1 min of pcm16 — reset counter only
@@ -53,6 +80,16 @@ export class LiveMicStream {
     this.handlers = handlers;
     this.sampleRate = options.sampleRate ?? 24_000;
     this.getUserMediaImpl = options.getUserMediaImpl;
+    this.speakState = options.speakState;
+  }
+
+  get deviceId(): string | null {
+    return this.media ? readAudioDeviceId(this.media) : null;
+  }
+
+  get isTrackLive(): boolean {
+    const track = this.media?.getAudioTracks()[0];
+    return Boolean(track && track.readyState === "live");
   }
 
   get isRunning() {
@@ -71,8 +108,16 @@ export class LiveMicStream {
     if (this.running) return;
     const gum =
       this.getUserMediaImpl ??
-      (typeof navigator !== "undefined" ? navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices) : undefined);
-    if (!gum) throw Object.assign(new Error("No microphone API in this environment."), { name: "NotFoundError" });
+      (typeof navigator !== "undefined"
+        ? navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices)
+        : undefined);
+    if (!gum)
+      throw Object.assign(new Error("No microphone API in this environment."), {
+        name: "NotFoundError",
+      });
+    if (this.speakState && this.speakState.permission !== "granted") {
+      this.speakState.setPermission("prompt", this.speakState.deviceId);
+    }
     let media: MediaStream;
     try {
       media = await gum({
@@ -84,10 +129,32 @@ export class LiveMicStream {
         },
       });
     } catch (err) {
+      const perm = micPermissionFromError(err);
+      if (perm) this.speakState?.setPermission(perm, null);
       this.handlers.onError?.(err);
       throw err;
     }
     this.media = media;
+    try {
+      await this.openGraph(media);
+    } catch (err) {
+      this.stopping = true;
+      media.getTracks().forEach((track) => track.stop());
+      this.media = null;
+      this.audioCtx = null;
+      this.processor = null;
+      this.source = null;
+      this.stopping = false;
+      this.speakState?.setMicOpen(false);
+      this.handlers.onError?.(err);
+      throw err;
+    }
+  }
+
+  private async openGraph(media: MediaStream) {
+    const deviceId = readAudioDeviceId(media);
+    this.speakState?.setPermission("granted", deviceId);
+    this.watchTrack(media);
     const Ctx =
       (globalThis as unknown as { AudioContext?: typeof AudioContext }).AudioContext ??
       (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -104,6 +171,7 @@ export class LiveMicStream {
       const input = ev.inputBuffer.getChannelData(0);
       const level = rmsFromFloatSamples(input);
       this.handlers.onLevel?.(level);
+      this.speakState?.pushLevel(level);
       if (this.muted) return;
       const fromRate = this.audioCtx?.sampleRate ?? this.sampleRate;
       const down = downsample(input, fromRate, this.sampleRate);
@@ -120,12 +188,20 @@ export class LiveMicStream {
     this.processor.connect(silent);
     silent.connect(this.audioCtx.destination);
     this.running = true;
+    this.speakState?.setMicOpen(true);
+    this.armLevelPump();
+    this.armDeviceWatch();
   }
 
   stop() {
+    this.stopping = true;
     this.running = false;
     this.muted = false;
     this.appendedBytes = 0;
+    this.clearLevelPump();
+    this.stopWatch?.();
+    this.stopWatch = null;
+    this.speakState?.setMicOpen(false);
     this.handlers.onLevel?.(0);
     try {
       this.processor?.disconnect();
@@ -139,6 +215,75 @@ export class LiveMicStream {
     this.media = null;
     void this.audioCtx?.close().catch(() => undefined);
     this.audioCtx = null;
+    this.stopping = false;
+  }
+
+  private watchTrack(media: MediaStream) {
+    const track = media.getAudioTracks()[0];
+    if (!track?.addEventListener) return;
+    track.addEventListener("ended", () => {
+      if (this.stopping || !this.running) return;
+      const perm = this.speakState?.permission ?? "granted";
+      this.speakState?.setPermission(perm === "denied" ? "denied" : "granted", null);
+    });
+  }
+
+  private armLevelPump() {
+    this.clearLevelPump();
+    if (typeof setInterval !== "function") return;
+    const timer = setInterval(() => {
+      if (!this.running || this.stopping) return;
+      this.speakState?.pumpLevel();
+    }, LEVEL_INTERVAL_MS);
+    (timer as unknown as { unref?: () => void }).unref?.();
+    this.levelPump = timer;
+  }
+
+  private clearLevelPump() {
+    if (this.levelPump) clearInterval(this.levelPump);
+    this.levelPump = null;
+  }
+
+  private armDeviceWatch() {
+    this.stopWatch?.();
+    const stops: Array<() => void> = [];
+    const perms = typeof navigator !== "undefined" ? navigator.permissions : undefined;
+    if (perms?.query) {
+      let status: PermissionStatus | null = null;
+      const onChange = () => {
+        if (this.stopping || !this.running) return;
+        if (status?.state === "denied") this.speakState?.setPermission("denied", this.deviceId);
+      };
+      void perms
+        .query({ name: "microphone" as PermissionName })
+        .then((next) => {
+          if (this.stopping) return;
+          status = next;
+          next.addEventListener?.("change", onChange);
+        })
+        .catch(() => undefined);
+      stops.push(() => status?.removeEventListener?.("change", onChange));
+    }
+    const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+    if (devices?.addEventListener) {
+      const onDevices = () => {
+        if (this.stopping || !this.running) return;
+        if (!this.isTrackLive) {
+          const perm = this.speakState?.permission ?? "granted";
+          this.speakState?.setPermission(perm === "denied" ? "denied" : "granted", null);
+          return;
+        }
+        const id = this.deviceId;
+        if (id && this.speakState && id !== this.speakState.deviceId) {
+          this.speakState.setPermission("granted", id);
+        }
+      };
+      devices.addEventListener("devicechange", onDevices);
+      stops.push(() => devices.removeEventListener("devicechange", onDevices));
+    }
+    this.stopWatch = () => {
+      for (const stop of stops) stop();
+    };
   }
 }
 

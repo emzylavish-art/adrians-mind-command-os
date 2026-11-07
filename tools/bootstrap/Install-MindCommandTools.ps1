@@ -123,7 +123,14 @@ if (-not $SkipSourceClones) {
         @("frida", "https://github.com/frida/frida.git"),
         @("owasp-zap", "https://github.com/zaproxy/zaproxy.git"),
         @("gdb", "https://github.com/gnutools/binutils-gdb.git"),
-        @("x64dbg", "https://github.com/x64dbg/x64dbg.git")
+        @("x64dbg", "https://github.com/x64dbg/x64dbg.git"),
+        @("pipecat", "https://github.com/pipecat-ai/pipecat.git"),
+        @("whisper-loop", "https://github.com/aryeo0908/whisper-loop.git"),
+        @("voice-agent-starter", "https://github.com/livekit-examples/agent-starter-python.git"),
+        @("api-health", "https://github.com/lxgicstudios/api-health.git"),
+        @("healthy-api", "https://github.com/mosishon/healthy-api.git"),
+        @("omniprobe", "https://github.com/ssrsgaga/API-Check.git"),
+        @("coval-benchmarks", "https://github.com/coval-ai/benchmarks.git")
     )
     foreach ($item in $repos) {
         if ($script:GitExe) { Clone-OrUpdate $item[0] $item[1] }

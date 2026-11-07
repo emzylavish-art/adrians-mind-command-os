@@ -1,0 +1,31 @@
+{
+  "id": "UW-METER-013",
+  "ts": "2026-11-05T09:37:30+00:00",
+  "shared_weekly_pct": 94.5,
+  "prior_pct": 89.3,
+  "grokbot_share_pct": 51.7,
+  "heaviest": {
+    "bot": "Connection Orchestrator",
+    "share_pct": 12
+  },
+  "next": [
+    "Voice Stream 12%",
+    "Merge Bot 10%"
+  ],
+  "at_50": true,
+  "at_90": true,
+  "pp_to_90": 0,
+  "newly_crossed": [
+    "at_90"
+  ],
+  "reset": "2026-11-11T04:38 MT",
+  "mode": "FLEET-HALT-90",
+  "order": "orch-008",
+  "spike_tag": "candidate_runs_iv_merge",
+  "plan": "Premium",
+  "note": "NEWLY CROSSED at_90; shared 94.5% (prior 89.3%); FREEZE fan-out + halt-save; heartbeat paused",
+  "tagged_calls": [
+    "CheckSubscriptionUsage",
+    "CheckSubscriptionUsage breakdown=bot"
+  ]
+}

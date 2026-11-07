@@ -1,0 +1,80 @@
+{
+  "bot": "Usage Watcher",
+  "status": "FLEET-HALT-90",
+  "order": "orch-008",
+  "last_heartbeat": "2026-11-05 09:37 UTC",
+  "last_meter_id": "UW-METER-013",
+  "boot_md_read": true,
+  "boot_md_ref": "fleet/tools/voice-and-connection-pins",
+  "spike_tag": "candidate_runs_iv_merge",
+  "write_branch": "fleet/usage-watcher/meter",
+  "write_branch_exists": true,
+  "last_commit": "pending-halt-save",
+  "pr": "https://github.com/emzylavish-art/adrians-mind-command-os/pull/13",
+  "pr_merged": false,
+  "thresholds": {
+    "at_50": true,
+    "at_90": true,
+    "pp_to_50": 0,
+    "pp_to_90": 0,
+    "newly_crossed": [
+      "at_90"
+    ]
+  },
+  "heaviest": "Connection Orchestrator",
+  "heaviest_share_pct": 12,
+  "weekly_shared_used_pct": 94.5,
+  "prior_weekly_shared_used_pct": 89.3,
+  "grok_bot_share_pct": 51.7,
+  "openai_dashboard_polled": false,
+  "routine": "uw-meter-heartbeat",
+  "routine_paused": true,
+  "completed": [
+    "BOOT.md-read",
+    "UW-ACK-CONTRACT-LOADED",
+    "UW-BRANCH-PUSH-001-DONE",
+    "UW-METER-001",
+    "UW-METER-002",
+    "UW-METER-004-CONSOLIDATE",
+    "UW-METER-005-AT50",
+    "UW-METER-006",
+    "UW-METER-007",
+    "UW-METER-008",
+    "UW-METER-009",
+    "orch-001-accepted",
+    "orch-002-accepted",
+    "orch-003-consolidate-accepted",
+    "orch-005-90plan-accepted",
+    "orch-008-freeze-plan-accepted",
+    "UW-METER-010",
+    "UW-METER-011",
+    "UW-METER-012",
+    "UW-METER-013",
+    "FLEET-HALT-90"
+  ],
+  "consolidate": true,
+  "mode": "halt",
+  "no_cloud_agents": true,
+  "no_extra_polling": true,
+  "flagged_at_50": true,
+  "flagged_at_90": true,
+  "freeze": {
+    "active": true,
+    "fired_at": "2026-11-05T09:37:30+00:00",
+    "reason": "weekly shared Premium >= 90% newly crossed",
+    "notify": [
+      "Connection Orchestrator",
+      "Reporter",
+      "Merge Bot",
+      "Provider Router"
+    ],
+    "commit_message": "FLEET-HALT-90: state save before credit reset"
+  },
+  "plan_90": {
+    "armed": true,
+    "order": "orch-008",
+    "adrian_ref": "t30u",
+    "fired": true
+  },
+  "weekly_shared_source": "CheckSubscriptionUsage this_week"
+}
