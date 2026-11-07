@@ -379,7 +379,7 @@ describe("adrians-mind-mcp-test oauth edge", () => {
     assert.deepEqual(meta.scopes_supported, ["mind.tools"]);
     const listed = await mcp(token, "tools/list", {}, runtime);
     const names = (await listed.json()).result.tools.map((tool) => tool.name);
-    assert.deepEqual(names, ["provider.status", "model.generate"]);
+    assert.deepEqual(names, ["provider.status", "model.generate", "visual.analyze"]);
     const status = await mcp(token, "tools/call", { name: "provider.status", arguments: {} }, runtime, {
       fetchImpl: async () => { called += 1; return new Response("no"); },
     });
@@ -420,6 +420,43 @@ describe("adrians-mind-mcp-test oauth edge", () => {
     assert.equal(payload.usage.usage_status, "reported");
     assert.equal(payload.cost_usd, null);
     assert.deepEqual(payload.route.attempted, ["astra", "sol"]);
+  });
+
+  it("analyzes a visual through Astra and never routes visual work to Luna", async () => {
+    const runtime = env();
+    const token = await login(runtime);
+    const calls = [];
+    const response = await mcp(token, "tools/call", {
+      name: "visual.analyze",
+      arguments: { provider: "auto", prompt: "Describe the dashboard hierarchy.", image_url: "https://example.com/dashboard.png" },
+    }, runtime, {
+      fetchImpl: async (url, init) => {
+        const body = JSON.parse(init.body);
+        calls.push({ url, body, authorization: init.headers.authorization });
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: "The workspace groups dashboard tools clearly." } }],
+          usage: { prompt_tokens: 12, completion_tokens: 7, total_tokens: 19 },
+        }), { status: 200 });
+      },
+    });
+    const payload = JSON.parse((await response.json()).result.content[0].text);
+    assert.equal(payload.provider, "astra");
+    assert.equal(payload.visual.image_input, true);
+    assert.equal(payload.visual.luna, "never_used");
+    assert.deepEqual(payload.route.attempted, ["astra"]);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].body.model, "gpt-6-astra");
+    assert.equal(calls[0].body.messages[0].content[1].type, "image_url");
+    assert.equal(calls[0].body.messages[0].content[1].image_url.url, "https://example.com/dashboard.png");
+
+    let rejectedCalls = 0;
+    const rejected = await mcp(token, "tools/call", {
+      name: "visual.analyze",
+      arguments: { provider: "luna", prompt: "Do not run.", image_url: "https://example.com/dashboard.png" },
+    }, runtime, { fetchImpl: async () => { rejectedCalls += 1; return new Response("unexpected", { status: 500 }); } });
+    const rejectedPayload = JSON.parse((await rejected.json()).result.content[0].text);
+    assert.equal(rejectedPayload.luna, "never_used");
+    assert.equal(rejectedCalls, 0);
   });
 
   it("does not call upstream when the app cap is exhausted without owner override", async () => {

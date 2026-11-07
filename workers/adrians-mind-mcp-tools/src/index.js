@@ -9,6 +9,8 @@ const SCOPE = "mind.tools";
 const MAX_BODY = 100_000;
 const MAX_READ = 48_000;
 const TEXT_CAP = 8_000;
+const VISUAL_PROMPT_CAP = 4_000;
+const VISUAL_IMAGE_CAP = 2_000_000;
 
 const ROUTES = [
   { id: "astra", modelEnv: "ASTRA_MODEL", defaultModel: "gpt-6-astra", keyEnv: "ASTRA_API_KEY", baseEnv: "ASTRA_API_BASE_URL" },
@@ -48,6 +50,22 @@ export function toolSpecs() {
           stream: { type: "boolean" },
           timeout_seconds: { type: "integer", minimum: 1, maximum: 20 },
         },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "visual.analyze",
+      description: "Analyzes a supplied screenshot or visual asset through Astra, then Sol as fallback. Luna is never used by this tool.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          provider: { type: "string", enum: ["auto", "astra", "sol"] },
+          prompt: { type: "string", minLength: 1, maxLength: VISUAL_PROMPT_CAP },
+          image_url: { type: "string", minLength: 12, maxLength: VISUAL_IMAGE_CAP },
+          model: { type: "string", minLength: 1, maxLength: 120 },
+          timeout_seconds: { type: "integer", minimum: 1, maximum: 20 },
+        },
+        required: ["prompt", "image_url"],
         additionalProperties: false,
       },
     },
@@ -407,6 +425,50 @@ function messagesFrom(args) {
   return { messages: [{ role: "user", content: args.prompt }] };
 }
 
+function visualMessages(args) {
+  if (typeof args.prompt !== "string" || !args.prompt.trim() || args.prompt.length > VISUAL_PROMPT_CAP) {
+    return { error: "visual.analyze requires a non-empty prompt within the cap." };
+  }
+  if (typeof args.image_url !== "string" || args.image_url.length < 12 || args.image_url.length > VISUAL_IMAGE_CAP) {
+    return { error: "visual.analyze requires an image_url within the cap." };
+  }
+  let image;
+  if (args.image_url.startsWith("data:image/")) {
+    image = args.image_url;
+  } else {
+    try {
+      const parsed = new URL(args.image_url);
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) {
+        return { error: "image_url must be an HTTPS URL or a data:image URL." };
+      }
+      image = parsed.toString();
+    } catch {
+      return { error: "image_url must be an HTTPS URL or a data:image URL." };
+    }
+  }
+  return {
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: args.prompt },
+        { type: "image_url", image_url: { url: image } },
+      ],
+    }],
+  };
+}
+
+function assistantContent(payload) {
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (typeof part === "string") return part;
+      return typeof part?.text === "string" ? part.text : "";
+    }).join("");
+  }
+  return "";
+}
+
 function resultText(payload) {
   return { content: [{ type: "text", text: JSON.stringify(payload) }] };
 }
@@ -537,9 +599,101 @@ async function generate(args, env, fetchImpl) {
   };
 }
 
+async function visualAnalyze(args, env, fetchImpl) {
+  const budget = budgetDecision(env);
+  if (budget.paused) {
+    return {
+      isError: true,
+      ...resultText({
+        error: budget.accounting === "invalid"
+          ? "Budget values are invalid. Nothing was sent."
+          : "App budget cap is exhausted. Nothing was sent.",
+        app_budget: budget,
+        upstream_called: false,
+      }),
+    };
+  }
+  const provider = args.provider || "auto";
+  if (!["auto", "astra", "sol"].includes(provider)) {
+    return {
+      isError: true,
+      ...resultText({ implementation: "not_implemented_on_this_worker", provider, luna: "never_used", upstream_called: false }),
+    };
+  }
+  const built = visualMessages(args);
+  if (built.error) return { isError: true, ...resultText({ error: built.error, upstream_called: false }) };
+  const plan = routePlan(env)
+    .filter((route) => route.id === "astra" || route.id === "sol")
+    .filter((route) => provider === "auto" ? route.configured : route.id === provider);
+  if (!plan.length || plan.some((route) => provider !== "auto" && !route.configured)) {
+    return {
+      isError: true,
+      ...resultText({ error: "No configured Astra or Sol visual route. Nothing was sent.", upstream_called: false, app_budget: budget, luna: "never_used" }),
+    };
+  }
+  const timeout = Number.isInteger(args.timeout_seconds) ? Math.min(20, Math.max(1, args.timeout_seconds)) : 20;
+  const attempted = [];
+  const errors = [];
+  for (const route of plan) {
+    attempted.push(route.id);
+    const model = typeof args.model === "string" && args.model.trim() ? args.model.trim() : route.model;
+    let response;
+    try {
+      response = await fetchImpl(route.url, {
+        method: "POST",
+        headers: { authorization: `Bearer ${route.key}`, "content-type": "application/json" },
+        body: JSON.stringify({ model, messages: built.messages, stream: false }),
+        signal: AbortSignal.timeout(timeout * 1000),
+      });
+    } catch {
+      errors.push({ provider: route.id, error: "request failed" });
+      continue;
+    }
+    const text = await readCapped(response);
+    if (!response.ok) {
+      errors.push({ provider: route.id, error: `HTTP ${response.status}` });
+      continue;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      errors.push({ provider: route.id, error: "unreadable response" });
+      continue;
+    }
+    const content = assistantContent(payload);
+    if (!content.trim()) {
+      errors.push({ provider: route.id, error: "no assistant text" });
+      continue;
+    }
+    return {
+      isError: false,
+      ...resultText({
+        provider: route.id,
+        model,
+        content: content.slice(0, 12_000),
+        streamed: false,
+        usage: usageFrom(payload?.usage),
+        usage_accounting: "single_response",
+        route: { attempted, selected: route.id, errors },
+        app_budget: budget,
+        provider_billing_allowance: "unknown",
+        cost_usd: null,
+        live_account_verified: false,
+        visual: { image_input: true, luna: "never_used" },
+      }),
+    };
+  }
+  return {
+    isError: true,
+    ...resultText({ error: "No configured Astra or Sol visual route succeeded.", route: { attempted, selected: null, errors }, app_budget: budget, upstream_called: true, luna: "never_used" }),
+  };
+}
+
 async function callTool(name, args, env, deps) {
   if (name === "provider.status") return { isError: false, ...resultText(publicStatus(env)) };
   if (name === "model.generate") return generate(args || {}, env, deps.fetchImpl || fetch);
+  if (name === "visual.analyze") return visualAnalyze(args || {}, env, deps.fetchImpl || fetch);
   return { isError: true, ...resultText({ error: `Tool unavailable: ${name}` }) };
 }
 
