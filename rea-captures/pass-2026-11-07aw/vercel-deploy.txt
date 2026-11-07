@@ -1,0 +1,8 @@
+id=dpl_HmAxBEus6oL75hCkTuXE8NDSM9qF
+state=READY
+target=production
+gitRef=main
+gitSha=b5d888dd107c4a06de582a0e29fce551c95b01df
+alias=adrians-mind.vercel.app
+inspector=https://vercel.com/adrian-8a30/adrians-mind/HmAxBEus6oL75hCkTuXE8NDSM9qF
+note=via user-Vercel--adrian; plain user-Vercel returned project_not_found
