@@ -1,0 +1,50 @@
+=== LIVE PROBES pass-2026-11-07k — 2026-11-07 02:49:32 WAT (Africa/Lagos) ===
+Target: https://adrians-mind.vercel.app
+
+--- Route status (no follow) ---
+200 https://adrians-mind.vercel.app/
+  headers_top: HTTP/2 200 
+200 https://adrians-mind.vercel.app/login
+  headers_top: HTTP/2 200 
+307 https://adrians-mind.vercel.app/dashboard
+  headers_top: HTTP/2 307 
+  location: /login?next=%2Fdashboard
+200 https://adrians-mind.vercel.app/memory
+  headers_top: HTTP/2 200 
+200 https://adrians-mind.vercel.app/explore
+  headers_top: HTTP/2 200 
+404 https://adrians-mind.vercel.app/tools
+  headers_top: HTTP/2 404 
+404 https://adrians-mind.vercel.app/voice
+  headers_top: HTTP/2 404 
+404 https://adrians-mind.vercel.app/artifacts
+  headers_top: HTTP/2 404 
+404 https://adrians-mind.vercel.app/settings
+  headers_top: HTTP/2 404 
+404 https://adrians-mind.vercel.app/activity
+  headers_top: HTTP/2 404 
+404 https://adrians-mind.vercel.app/scheduled
+  headers_top: HTTP/2 404 
+
+--- OAuth status (GET body discarded) ---
+/api/mind/oauth/github/status -> 401 https://adrians-mind.vercel.app/api/mind/oauth/github/status
+/api/mind/oauth/gmail/status -> 401 https://adrians-mind.vercel.app/api/mind/oauth/gmail/status
+/api/mind/oauth/google_calendar/status -> 401 https://adrians-mind.vercel.app/api/mind/oauth/google_calendar/status
+/api/mind/oauth/google_drive/status -> 401 https://adrians-mind.vercel.app/api/mind/oauth/google_drive/status
+/api/mind/oauth/notion/status -> 401 https://adrians-mind.vercel.app/api/mind/oauth/notion/status
+/api/mind/oauth/slack/status -> 401 https://adrians-mind.vercel.app/api/mind/oauth/slack/status
+
+--- Security headers on / ---
+HTTP/2 200 
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::hpgw4-1794016174643-72d5eed0cf40
+
+--- Live JS bundle / scripts ---
+bundles: ['index-qV1VC2j2.js']
+script_srcs: ['https://grok.com/grok-app-builder/extensions.js', '/assets/index-qV1VC2j2.js']
+vs prior tip index-qV1VC2j2.js: UNCHANGED
