@@ -36,6 +36,18 @@
   height: 100% !important;
 }
 
+.dash3d-force-host {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #05070d;
+}
+.dash3d-force-host canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .dash3d-fallback {
   position: absolute;
   inset: 0;

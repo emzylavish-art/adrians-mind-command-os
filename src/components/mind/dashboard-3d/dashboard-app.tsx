@@ -6,7 +6,7 @@ import { MobileChrome, MobilePanelCard, useMobilePanelFocus } from "./mobile-str
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
-import { UniverseScene } from "./universe-scene";
+import { FleetForceGraph } from "./fleet-force-graph";
 import { useDashboardStatus } from "./use-dashboard-status";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
@@ -245,7 +245,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         </header>
       ) : null}
       {state.status === "ready" && sceneData && !webglError && (!narrow || sceneInteract) ? (
-        <UniverseScene
+        <FleetForceGraph
           data={sceneData}
           reducedMotion={reducedMotion}
           onSelectBot={(bot) => {
@@ -264,7 +264,6 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             setNotionPage(null);
           }}
           onUnavailable={setWebglError}
-          onFlyoverChange={onFlyoverChange}
         />
       ) : null}
 
