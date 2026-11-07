@@ -37,8 +37,8 @@ Put Cloudflare Access in front of the hostname, then:
 
 ## Upload
 
-Bundle: `workers/adrians-mind-mcp-tools/dist/index.js`
+Bundle: `workers/adrians-mind-mcp-tools/bundle/index.js`
 
-Metadata: `workers/adrians-mind-mcp-tools/dist/metadata.json`
+Metadata: `workers/adrians-mind-mcp-tools/bundle/metadata.json`
 
 Replace `namespace_id` with the new test namespace before upload. Do not deploy from this repository session.

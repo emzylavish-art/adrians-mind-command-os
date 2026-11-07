@@ -1,0 +1,26 @@
+{
+  "main_module": "index.js",
+  "compatibility_date": "2026-11-06",
+  "bindings": [
+    {
+      "type": "kv_namespace",
+      "name": "OAUTH_KV",
+      "namespace_id": "PARENT_CREATES_adrians-mind-mcp-test-oauth"
+    },
+    {
+      "type": "plain_text",
+      "name": "MCP_OAUTH_ISSUER",
+      "text": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev"
+    },
+    {
+      "type": "plain_text",
+      "name": "MCP_OAUTH_AUDIENCE",
+      "text": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev/mcp"
+    },
+    {
+      "type": "plain_text",
+      "name": "MCP_TRUST_ACCESS_IDENTITY",
+      "text": "1"
+    }
+  ]
+}

@@ -202,7 +202,7 @@ describe("adrians-mind-mcp-test oauth edge", () => {
 
   it("deploy metadata names the isolated test worker and KV binding", () => {
     const wrangler = JSON.parse(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, ""));
-    const metadata = JSON.parse(readFileSync(new URL("../dist/metadata.json", import.meta.url), "utf8"));
+    const metadata = JSON.parse(readFileSync(new URL("../bundle/metadata.json", import.meta.url), "utf8"));
     assert.equal(wrangler.name, "adrians-mind-mcp-test");
     assert.equal(wrangler.vars.MCP_OAUTH_ISSUER, ORIGIN);
     assert.equal(wrangler.kv_namespaces[0].binding, "OAUTH_KV");
