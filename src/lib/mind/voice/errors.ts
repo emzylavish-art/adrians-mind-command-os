@@ -1,7 +1,7 @@
 /** Map thrown / returned voice failures to always-visible user text. Never silent. */
 
 export const VOICE_SIGN_IN_REQUIRED =
-  "Sign in is required. Open Sign in, then try Start voice again.";
+  "Sign in is required before using Speak.";
 
 export const VOICE_START_FAILED = "Voice capture could not start.";
 

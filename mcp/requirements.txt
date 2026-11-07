@@ -1,0 +1,4 @@
+# The original Grokbot proxy uses the Server decorator API removed in MCP 2.x.
+# Keep the existing working transport on the compatible 1.x line.
+mcp>=1.0.0,<2.0.0
+openai>=1.0.0,<2.0.0

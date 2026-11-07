@@ -16,6 +16,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const commandApp = readFileSync(join(root, "components/mind/command-app.tsx"), "utf8");
 const indicatorSrc = readFileSync(join(root, "components/mind/memory-saved-indicator.tsx"), "utf8");
 const toggleSrc = readFileSync(join(root, "components/mind/memory-chat-toggle.tsx"), "utf8");
+const memoryManagerSrc = readFileSync(join(root, "components/mind/memory-manager.tsx"), "utf8");
 
 describe("memory UX mount in command-app", () => {
   it("imports and mounts MemorySavedIndicator + MemoryChatToggle", () => {
@@ -32,6 +33,16 @@ describe("memory UX mount in command-app", () => {
     ]) {
       assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
+  });
+
+  it("does not present a demo local switch as the current chat memory permission", () => {
+    assert.doesNotMatch(memoryManagerSrc, /chatSkipDemo|<MemoryChatToggle/);
+    assert.match(memoryManagerSrc, /data-testid="memory-permission-guidance"/);
+    assert.match(memoryManagerSrc, /separate per-chat choice in Chat/);
+    assert.match(memoryManagerSrc, /This page can save global notes only/);
+    assert.match(memoryManagerSrc, /value="project" disabled/);
+    assert.match(memoryManagerSrc, /value="chat" disabled/);
+    assert.match(memoryManagerSrc, /existing scoped notes remain listed below/);
   });
 
   it("does not invent memorySaved when the turn did not save", () => {

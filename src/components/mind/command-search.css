@@ -1,0 +1,61 @@
+/*
+ * SPV-F2 — command palette width.
+ *
+ * The search slot is flex-1 min-w-0 inside a crowded topbar, so it
+ * collapses to 0 and the w-full palette becomes a one-letter column.
+ * Pull the slot onto its own row (full header width, inside the viewport)
+ * and stop per-letter wrapping on its rows. Does not edit src/styles.css.
+ */
+
+.topbar {
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 30;
+}
+
+.topbar .command-search {
+  order: 2;
+  flex: 1 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  /* Lift the open palette above the in-flow stage (masthead paints later). */
+  z-index: 40;
+}
+
+.topbar .command-search input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#command-palette.command-palette {
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#command-palette.command-palette,
+#command-palette.command-palette button,
+#command-palette.command-palette span {
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+#command-palette.command-palette button {
+  white-space: nowrap;
+  min-height: 2.75rem;
+}
+
+#command-palette .palette-option-active {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+}
+
+html[data-theme="light"] #command-palette .palette-option-active {
+  background: rgb(15 23 42 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.12);
+}

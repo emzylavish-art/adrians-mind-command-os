@@ -1,0 +1,33 @@
+{
+  // Production worker. Do not deploy over adrians-mind, gpt-mcp-proxy,
+  // operation-beat-magnus-trigger, or adrians-mind-mcp-test.
+  "name": "adrians-mind-mcp",
+  "main": "bundle/index.js",
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "vars": {
+    "MCP_WORKER_NAME": "adrians-mind-mcp",
+    "MCP_OAUTH_CLIENT_ID": "adrians-mind-mcp",
+    "MCP_OAUTH_CALLBACK_PATH": "/oauth/callback",
+    "MCP_OAUTH_ISSUER": "https://adrians-mind-mcp.operation-beat-magnus.workers.dev",
+    "MCP_OAUTH_AUDIENCE": "https://adrians-mind-mcp.operation-beat-magnus.workers.dev/mcp",
+    "MCP_TRUST_ACCESS_IDENTITY": "1",
+    "CF_ACCESS_TEAM_DOMAIN": "adriansmind.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "08e7315e2002082b3f70a957fb6aa045e4c307783e063545e6942bd29a747c2a",
+    "CF_ACCESS_ALLOWED_EMAIL": "emzylavish@gmail.com",
+    "MIND_COMMAND_BUDGET_OWNER_OVERRIDE": "1",
+    "MIND_COMMAND_BUDGET_LIMIT_USD": "500",
+    "MIND_COMMAND_BUDGET_SPENT_USD": "0"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "fef303f6f09149469c711cda6f4ef943"
+    }
+  ]
+}

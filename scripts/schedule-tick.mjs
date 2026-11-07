@@ -39,7 +39,7 @@ try {
     await pg.query("insert into _migrations (name) values ($1)", [name]);
     await pg.exec("commit");
   }
-  const result = await runWorkerPass(toSql(pg), now, `worker-${process.pid}`, new Map());
+  const result = await runWorkerPass(toSql(pg), now, `worker-${process.pid}`);
   await pg.close();
   const report = { at: now, heartbeatAt: now, running: false, mode: "one-shot", ...result, hosted: false, localOnly: true, note: "One pass against the file database on this machine. This process then exits. It is not a hosted always-on worker." };
   mkdirSync(join(root, ".data"), { recursive: true });

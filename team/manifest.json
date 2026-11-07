@@ -1,0 +1,665 @@
+{
+  "schema_version": "1.0.0",
+  "name": "Mind Command OS Agent Team",
+  "description": "Interoperable specialist agents and callable tools for compatible AI runners. Includes an explicitly configured, HTTPS-only remote MCP bridge for AI-host integrations.",
+  "entrypoint_contract": {
+    "protocol": "json-stdin-json-stdout",
+    "required_input": [
+      "task"
+    ],
+    "required_output": [
+      "status",
+      "result",
+      "evidence",
+      "limitations"
+    ],
+    "statuses": [
+      "ready",
+      "partial",
+      "blocked",
+      "not_implemented"
+    ]
+  },
+  "routing_policy": {
+    "match": "capabilities",
+    "prefer": "ready",
+    "allow_partial": true,
+    "partial_requires_disclosure": true,
+    "no_claim_without_execution_evidence": true
+  },
+  "agents": [
+    {
+      "id": "orchestrator",
+      "role": "Orchestrator",
+      "capabilities": [
+        "task_classification",
+        "planning",
+        "dispatch",
+        "synthesis",
+        "durable_task_queue"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/orchestrator.md",
+      "requires": []
+    },
+    {
+      "id": "analysis",
+      "role": "Analysis Specialist",
+      "capabilities": [
+        "reasoning",
+        "requirements_analysis",
+        "document_analysis"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/analysis.md",
+      "requires": []
+    },
+    {
+      "id": "research",
+      "role": "Research Specialist",
+      "capabilities": [
+        "source_research",
+        "evidence_collection",
+        "citation"
+      ],
+      "status": "adapter_required",
+      "entrypoint": "team/agents/research.md",
+      "requires": [
+        "configured_search_provider"
+      ]
+    },
+    {
+      "id": "engineering",
+      "role": "Engineering / Codex Specialist",
+      "capabilities": [
+        "coding",
+        "refactoring",
+        "implementation",
+        "tests",
+        "ci"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/engineering.md",
+      "requires": [
+        "repository_access"
+      ]
+    },
+    {
+      "id": "rea",
+      "role": "Reverse Engineering Specialist",
+      "capabilities": [
+        "source_inventory",
+        "static_recon",
+        "manifest_discovery"
+      ],
+      "status": "ready",
+      "entrypoint": "tools/rea/rea.py",
+      "requires": [
+        "python3"
+      ]
+    },
+    {
+      "id": "security",
+      "role": "Defensive Security Specialist",
+      "capabilities": [
+        "secure_code_review",
+        "dependency_review",
+        "static_security_triage"
+      ],
+      "status": "partial",
+      "entrypoint": "tools/security_review/security_review.py",
+      "requires": [
+        "human_review_of_heuristic_findings",
+        "approved_scope"
+      ]
+    },
+    {
+      "id": "gods-eyes",
+      "role": "God's Eyes",
+      "capabilities": [
+        "capability_name_reserved"
+      ],
+      "status": "source_unmapped",
+      "entrypoint": null,
+      "requires": [
+        "identify_exact_project_and_source"
+      ]
+    },
+    {
+      "id": "knowledge",
+      "role": "Memory / Knowledge Specialist",
+      "capabilities": [
+        "context_retrieval",
+        "knowledge_organization"
+      ],
+      "status": "partial",
+      "entrypoint": "tools/knowledge/knowledge_search.py",
+      "requires": [
+        "local_knowledge_path"
+      ]
+    },
+    {
+      "id": "browser-workflow",
+      "role": "Browser / Workflow Specialist",
+      "capabilities": [
+        "browser_workflows",
+        "web_task_automation"
+      ],
+      "status": "adapter_required",
+      "entrypoint": "team/agents/browser-workflow.md",
+      "requires": [
+        "authorized_browser_runtime",
+        "connector_configuration"
+      ]
+    },
+    {
+      "id": "qa-release",
+      "role": "QA / Release Specialist",
+      "capabilities": [
+        "test_execution",
+        "validation",
+        "release_readiness"
+      ],
+      "status": "partial",
+      "entrypoint": "team/agents/qa-release.md",
+      "requires": [
+        "test_runner",
+        "repository_access"
+      ]
+    },
+    {
+      "id": "observability",
+      "role": "Observability Specialist",
+      "capabilities": [
+        "run_status",
+        "structured_logs",
+        "health_checks"
+      ],
+      "status": "partial",
+      "entrypoint": "team/health.py",
+      "requires": [
+        "python3"
+      ]
+    },
+    {
+      "id": "human-approval",
+      "role": "Human Approval Gate",
+      "capabilities": [
+        "approval_for_external_actions"
+      ],
+      "status": "contract_defined",
+      "entrypoint": "team/agents/human-approval.md",
+      "requires": [
+        "approval_channel"
+      ]
+    },
+    {
+      "id": "worker-runtime",
+      "role": "Durable Worker Runtime",
+      "capabilities": [
+        "queue_management",
+        "durable_worker_jobs"
+      ],
+      "status": "partial",
+      "entrypoint": "team/worker.py",
+      "requires": [
+        "python3",
+        "local_sqlite_database",
+        "explicit_worker_process"
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "id": "rea.scan",
+      "agent": "rea",
+      "capabilities": [
+        "source_inventory",
+        "static_recon"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/rea/rea.py",
+      "input_schema": {
+        "path": "string",
+        "json": "boolean",
+        "out": "string"
+      },
+      "safety": "offline; does not execute scanned code"
+    },
+    {
+      "id": "gods-eyes",
+      "agent": "gods-eyes",
+      "capabilities": [
+        "capability_name_reserved"
+      ],
+      "status": "source_unmapped",
+      "entrypoint": null,
+      "input_schema": null,
+      "safety": "Do not fabricate source or executable behavior"
+    },
+    {
+      "id": "blackeye",
+      "agent": "security",
+      "capabilities": [
+        "security_tool_reference"
+      ],
+      "status": "restricted_not_integrated",
+      "entrypoint": null,
+      "input_schema": null,
+      "safety": "Do not integrate credential-harvesting or phishing workflows"
+    },
+    {
+      "id": "security.scan",
+      "agent": "security",
+      "capabilities": [
+        "secure_code_review",
+        "static_security_triage"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/security_review/security_review.py",
+      "input_schema": {
+        "path": "string",
+        "json": "boolean",
+        "out": "string"
+      },
+      "safety": "offline heuristic static review; no code execution or network requests; authorized source only"
+    },
+    {
+      "id": "team.health",
+      "agent": "observability",
+      "capabilities": [
+        "run_status",
+        "health_checks"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/health.py",
+      "input_schema": {
+        "json": "boolean"
+      },
+      "safety": "offline repository readiness report; no secrets, external calls, or provider probes"
+    },
+    {
+      "id": "knowledge.search",
+      "agent": "knowledge",
+      "capabilities": [
+        "context_retrieval",
+        "knowledge_organization"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 tools/knowledge/knowledge_search.py",
+      "input_schema": {
+        "path": "string",
+        "query": "string",
+        "top_k": "integer"
+      },
+      "safety": "offline lexical search over local Markdown/text files; no external service"
+    },
+    {
+      "id": "team.queue",
+      "agent": "worker-runtime",
+      "capabilities": [
+        "queue_management",
+        "durable_worker_jobs"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/queue.py",
+      "input_schema": {
+        "action": "enqueue|claim|complete|fail|list",
+        "task": "string",
+        "payload": "object",
+        "worker": "string",
+        "id": "string",
+        "claim_token": "string (required for complete/fail)",
+        "result": "object",
+        "error": "string",
+        "db": "string"
+      },
+      "safety": "SQLite local queue; stores payloads only and never executes queued task data; worker must apply policy and approvals."
+    },
+    {
+      "id": "team.worker",
+      "agent": "worker-runtime",
+      "capabilities": [
+        "durable_worker_execution",
+        "allowlisted_task_processing"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/worker.py",
+      "input_schema": {
+        "worker_id": "string",
+        "db": "string",
+        "lease_seconds": "integer",
+        "timeout_seconds": "integer"
+      },
+      "safety": "One-shot queue consumer; dispatches only allowlisted local tools; rejects arbitrary commands and code payloads."
+    },
+    {
+      "id": "team.agent.resolve",
+      "agent": "orchestrator",
+      "capabilities": [
+        "agent_prompt_resolution",
+        "dispatch"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/runner.py",
+      "input_schema": {
+        "agent_id": "string",
+        "task": "string",
+        "capabilities": "string[]",
+        "context": "object"
+      },
+      "safety": "Reads verified agent prompt files only; does not execute model inference or external actions."
+    },
+    {
+      "id": "mcp.remote",
+      "status": "ready",
+      "entrypoint": "python3 team/remote_mcp.py",
+      "agent": "engineering",
+      "capabilities": [
+        "remote_mcp_discovery",
+        "allowlisted_remote_tool_invocation"
+      ],
+      "input_schema": {
+        "action": "list|call",
+        "server": "string",
+        "tool": "string",
+        "arguments": "object",
+        "timeout_seconds": "integer"
+      },
+      "safety": "HTTPS only; server must be explicitly enabled and remote tool must be allowlisted. Bearer secrets are environment-only. No endpoints are enabled by default."
+    },
+    {
+      "id": "model.generate",
+      "agent": "orchestrator",
+      "capabilities": [
+        "model_inference",
+        "provider_routing",
+        "local_model_fallback"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/runner.py",
+      "input_schema": {
+        "provider": "astra|sol|luna|openai|auto|grok|openrouter|ollama",
+        "prompt": "string",
+        "messages": "object[] (optional)",
+        "model": "string (optional)",
+        "stream": "boolean (optional)",
+        "timeout_seconds": "integer (optional)"
+      },
+      "safety": "Makes a provider request only when explicitly invoked. Astra/Sol/Luna endpoints, model identifiers, and keys are environment-only; auto routes Astra then Sol then Luna and records the selected provider. OpenAI-compatible streaming is requested only when stream=true. xAI/OpenRouter keys are read from environment variables; Ollama uses localhost. No credentials are logged or persisted. Provider usage may incur charges; select route explicitly."
+    },
+    {
+      "id": "notion.controller",
+      "agent": "knowledge",
+      "capabilities": [
+        "notion_search",
+        "notion_page_retrieval",
+        "notion_block_retrieval",
+        "explicit_page_append"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/runner.py",
+      "input_schema": {
+        "action": "search|retrieve-page|retrieve-children|append-text",
+        "query": "string (search)",
+        "id": "string (page/block id)",
+        "text": "string (append-text)",
+        "page_size": "integer (optional)",
+        "timeout_seconds": "integer (optional)"
+      },
+      "safety": "Requires NOTION_API_KEY from environment. Read actions only retrieve/search. append-text is a write action and requires explicit invocation. Never log or persist token."
+    }
+  ],
+  "catalog": [
+    {
+      "id": "everything-claude-code",
+      "name": "Everything Claude Code",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "superpowers",
+      "name": "Superpowers",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "gsd-core",
+      "name": "GSD Core",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "ui-ux-pro-max",
+      "name": "UI UX Pro Max",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "n8n-mcp",
+      "name": "n8n-MCP",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "lightrag",
+      "name": "LightRAG",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "claude-mem",
+      "name": "Claude Mem",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "obsidian-skills",
+      "name": "Obsidian Skills",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "awesome-claude-code",
+      "name": "Awesome Claude Code",
+      "category": "agent-workflow",
+      "agent": "engineering",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "rea-reverse-engineer-anything",
+      "name": "REA — Reverse Engineer Anything",
+      "category": "agent-workflow",
+      "agent": "rea",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-ci",
+      "guardrail": null
+    },
+    {
+      "id": "ghidra",
+      "name": "Ghidra",
+      "category": "authorized-defensive-analysis",
+      "agent": "security",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "id": "jadx",
+      "name": "JADX",
+      "category": "authorized-defensive-analysis",
+      "agent": "security",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "id": "frida",
+      "name": "Frida",
+      "category": "authorized-defensive-analysis",
+      "agent": "security",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "id": "burp-suite",
+      "name": "Burp Suite",
+      "category": "authorized-defensive-analysis",
+      "agent": "security",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "id": "owasp-zap",
+      "name": "OWASP ZAP",
+      "category": "authorized-defensive-analysis",
+      "agent": "security",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "id": "gdb",
+      "name": "GDB",
+      "category": "authorized-defensive-analysis",
+      "agent": "security",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "id": "x64dbg",
+      "name": "x64dbg",
+      "category": "authorized-defensive-analysis",
+      "agent": "security",
+      "status": "source-resolution-required",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": "Use only on owned or explicitly authorized targets; no credential theft or unauthorized access."
+    },
+    {
+      "id": "blackeye",
+      "name": "BlackEye",
+      "category": "security-risk",
+      "agent": "security",
+      "status": "restricted",
+      "install": "blocked",
+      "live": "blocked",
+      "guardrail": "No phishing or credential-collection deployment."
+    },
+    {
+      "id": "god-s-eyes",
+      "name": "God's Eyes",
+      "category": "unresolved",
+      "agent": "gods-eyes",
+      "status": "identity-unconfirmed",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "arrow-ea",
+      "name": "Arrow EA",
+      "category": "unresolved",
+      "agent": "unmapped",
+      "status": "identity-unconfirmed",
+      "install": "not-installed",
+      "live": "not-connected",
+      "guardrail": null
+    },
+    {
+      "id": "mind-command-os-security-review",
+      "name": "Mind Command OS Security Review",
+      "category": "defensive-static-analysis",
+      "agent": "security",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "guardrail": "Offline heuristic scan of owned/authorized source; no execution, exploitation, or network calls; human review required."
+    },
+    {
+      "id": "mind-command-os-knowledge-search",
+      "name": "Mind Command OS Knowledge Search",
+      "category": "offline-knowledge-retrieval",
+      "agent": "knowledge",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner-and-mcp",
+      "guardrail": "Local lexical search only; semantic search and external knowledge stores are not connected."
+    },
+    {
+      "id": "mind-command-os-durable-queue",
+      "name": "Mind Command OS Durable Queue",
+      "category": "durable-worker-queue",
+      "agent": "worker-runtime",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-and-runner",
+      "guardrail": "Queue payloads are data only; external actions require separate authorized workers and approval."
+    },
+    {
+      "id": "mind-command-os-allowlisted-worker",
+      "name": "Mind Command OS Allowlisted Worker",
+      "category": "durable-worker-runtime",
+      "agent": "worker-runtime",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-cli-runner",
+      "guardrail": "Explicit one-shot processing only through allowlisted local tools; no arbitrary shell or code execution."
+    },
+    {
+      "id": "mind-command-os-agent-prompt-resolver",
+      "name": "Mind Command OS Agent Prompt Resolver",
+      "category": "agent-routing",
+      "agent": "orchestrator",
+      "status": "implemented",
+      "install": "repo-code-present",
+      "live": "callable-runner-and-mcp",
+      "guardrail": "Returns agent contract prompt and requirements; external model/runtime execution remains host-controlled."
+    }
+  ]
+}

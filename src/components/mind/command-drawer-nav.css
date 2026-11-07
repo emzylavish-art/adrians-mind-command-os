@@ -1,0 +1,20 @@
+/*
+ * SPV-N1 — mobile drawer hit target for workspace route links.
+ *
+ * The rail is display:none until Open menu sets navOpen. Once
+ * aside.rail.nav-drawer-open is on screen below md, the Dashboard
+ * link (WORKSPACE_ROUTE_LINKS) keeps a 2.75rem box. Desktop (≥768px)
+ * is outside this query.
+ */
+
+@media (max-width: 767.98px) {
+  aside.rail.nav-drawer-open a.nav-route-link {
+    display: flex !important;
+    visibility: visible !important;
+    position: relative !important;
+    width: 100% !important;
+    min-height: 2.75rem !important;
+    height: auto !important;
+    box-sizing: border-box;
+  }
+}

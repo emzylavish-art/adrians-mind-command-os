@@ -1,5 +1,11 @@
-/** Sidebar Workspace route links that leave the in-app View shell (TanStack routes). */
+/** Authenticated app routes shown with the Workspace navigation. */
 export const WORKSPACE_ROUTE_LINKS = [
+  {
+    id: "explore",
+    label: "Explore",
+    href: "/explore",
+    iconSrc: "/icons/research.svg",
+  },
   {
     id: "dashboard",
     label: "Dashboard",

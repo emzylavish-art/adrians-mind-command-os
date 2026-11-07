@@ -52,6 +52,14 @@ describe("integration persona directory survives merge", () => {
     assert.match(actionSrc, /onceRetry/);
   });
 
+  it("persists the persona synchronously and has no delayed Explore writer", () => {
+    assert.match(directoryUi, /persistPersonaOpen\(window\.localStorage, result\.ws, result\.selection\)/);
+    assert.match(directoryUi, /if \(!persisted\.ok\)/);
+    assert.match(directoryUi, /Nothing was opened/);
+    assert.match(directoryUi, /selected-agent handoff is not yet verified/);
+    assert.doesNotMatch(exploreRoute, /localStorage\.setItem|window\.setTimeout/);
+  });
+
   it("builds a directory from templates and selects into agent chat href", () => {
     const directory = buildPersonaDirectory(emptyFleet());
     assert.ok(directory.cards.length >= 8);
@@ -76,7 +84,7 @@ describe("integration persona directory survives merge", () => {
 
   it("does not drop sibling lane markers in command-app while adding explore", () => {
     for (const needle of [
-      'data-testid="voice-controls"',
+      'header-voice-mode',
       'data-testid="failure-banner"',
       'data-testid="executing-tools"',
       "ModelTierChip",

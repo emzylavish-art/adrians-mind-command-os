@@ -1,0 +1,27 @@
+name: Tool Registry Validation
+
+on:
+  pull_request:
+    paths:
+      - "tools/**"
+      - "scripts/validate-tool-registry.mjs"
+      - ".github/workflows/tool-registry.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/**"
+      - "scripts/validate-tool-registry.mjs"
+      - ".github/workflows/tool-registry.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/validate-tool-registry.mjs

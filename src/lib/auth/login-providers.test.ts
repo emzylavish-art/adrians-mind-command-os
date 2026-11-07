@@ -64,7 +64,9 @@ describe("resolveLoginProviderAction", () => {
       betterAuthEnabled: false,
     });
     assert.equal(x.kind, "not_configured");
-    assert.match((x as { message: string }).message, /configured yet/i);
+    assert.match((x as { message: string }).message, /isn’t available yet/i);
+    assert.match((x as { message: string }).message, /email sign-in/i);
+    assert.doesNotMatch((x as { message: string }).message, /GROK_AUTH|VITE_AUTH|CLIENT_SECRET/);
   });
 });
 

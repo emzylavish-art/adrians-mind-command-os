@@ -1,5 +1,6 @@
 import { addAgentFromTemplate, type AgentDefinition } from "../fleet.ts";
 import type { Workspace } from "../types.ts";
+import { WORKSPACE_KEY } from "../workspace.ts";
 import type { PersonaCard } from "./directory.ts";
 
 export const PERSONA_SELECT_KEY = "amcos.persona.select.v1";
@@ -32,9 +33,9 @@ export function writePersonaSelection(storage: Pick<Storage, "setItem">, selecti
 }
 
 export function readPersonaSelection(storage: Pick<Storage, "getItem">): PersonaSelection | null {
-  const raw = storage.getItem(PERSONA_SELECT_KEY);
-  if (!raw) return null;
   try {
+    const raw = storage.getItem(PERSONA_SELECT_KEY);
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PersonaSelection>;
     if (typeof parsed.agentId !== "string" || !parsed.agentId) return null;
     if (typeof parsed.agentName !== "string" || !parsed.agentName) return null;
@@ -55,6 +56,29 @@ export function readPersonaSelection(storage: Pick<Storage, "getItem">): Persona
 
 export function clearPersonaSelection(storage: Pick<Storage, "removeItem">): void {
   storage.removeItem(PERSONA_SELECT_KEY);
+}
+
+export type PersonaOpenStorage = Pick<Storage, "setItem">;
+
+export type PersistPersonaOpenResult =
+  | { ok: true }
+  | { ok: false; workspacePersisted: boolean };
+
+/** Save the updated local workspace and persona handoff before leaving Explore. */
+export function persistPersonaOpen(
+  storage: PersonaOpenStorage,
+  workspace: Workspace,
+  selection: PersonaSelection,
+): PersistPersonaOpenResult {
+  let workspacePersisted = false;
+  try {
+    storage.setItem(WORKSPACE_KEY, JSON.stringify(workspace));
+    workspacePersisted = true;
+    storage.setItem(PERSONA_SELECT_KEY, JSON.stringify(selection));
+    return { ok: true };
+  } catch {
+    return { ok: false, workspacePersisted };
+  }
 }
 
 /**

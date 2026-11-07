@@ -13,3 +13,9 @@ dist/
 *.pem
 .DS_Store
 .data/
+
+# Local durable worker queue database
+*.sqlite3
+
+# Third-party source checkouts and package state created inside GitHub Codespaces
+.tools/

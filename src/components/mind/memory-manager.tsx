@@ -10,7 +10,6 @@ import {
   type MemoryActionParams,
   type MemoryActionState,
 } from "@/lib/mind/memory-action";
-import { MemoryChatToggle } from "./memory-chat-toggle";
 import { MemorySavedIndicator } from "./memory-saved-indicator";
 
 function stamp(value: string) {
@@ -45,7 +44,6 @@ export function MemoryManagerView({
     memorySaved: false,
     savedMemoryId: null,
   });
-  const [chatSkipDemo, setChatSkipDemo] = useState<"off" | "on">("on");
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -134,7 +132,14 @@ export function MemoryManagerView({
         <a href="/" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm">
           Back to Chat
         </a>
-        <MemoryChatToggle memory={chatSkipDemo} onChange={setChatSkipDemo} />
+        <div className="flex min-h-11 flex-col justify-center rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">
+          <p data-testid="memory-permission-guidance">
+            This page manages saved notes. Whether a chat may use them is a separate per-chat choice in Chat.
+          </p>
+          <p className="mt-1 text-xs" data-testid="memory-scope-guidance">
+            This page can save global notes only. Project and chat notes need a selected owner; existing scoped notes remain listed below.
+          </p>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -164,8 +169,8 @@ export function MemoryManagerView({
             className="min-h-11 rounded-panel border border-line bg-bg px-3 text-sm"
           >
             <option value="global">global</option>
-            <option value="project">project</option>
-            <option value="chat">chat</option>
+            <option value="project" disabled>project (select a project first)</option>
+            <option value="chat" disabled>chat (select a chat first)</option>
           </select>
           <button
             type="button"

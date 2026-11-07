@@ -42,8 +42,7 @@ export function resolveLoginProviderAction(
     if (!input.betterAuthEnabled) {
       return {
         kind: "not_configured",
-        message:
-          "Continue with X isn’t configured yet (needs VITE_AUTH_ENABLED and GROK_AUTH_CLIENT_ID / GROK_AUTH_CLIENT_SECRET).",
+        message: "X sign-in isn’t available yet. Please use email sign-in or contact support.",
       };
     }
     return { kind: "better_auth", providerId: "grok-x", label: "X" };

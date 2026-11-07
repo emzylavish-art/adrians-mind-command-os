@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "mind-command-os-tools": {
+      "command": "python3",
+      "args": ["team/mcp_server.py"],
+      "cwd": "."
+    },
+    "gpt-proxy": {
+      "command": "python3",
+      "args": ["mcp/gpt_proxy_server.py"],
+      "cwd": "."
+    },
+    "cloudflare-api": {
+      "url": "https://mcp.cloudflare.com/mcp"
+    }
+  }
+}

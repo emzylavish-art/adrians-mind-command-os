@@ -1,0 +1,85 @@
+name: Agent team and REA tests
+
+on:
+  push:
+    paths:
+      - "tools/rea/**"
+      - "tools/security_review/**"
+      - "tools/knowledge/**"
+      - "tools/bootstrap/**"
+      - "tools/registry.json"
+      - "tools/integrations/**"
+      - "tools/notion/**"
+      - "policies/**"
+      - ".devcontainer/**"
+      - "team/**"
+      - ".mcp.json"
+      - "Dockerfile.mcp"
+      - ".dockerignore"
+      - ".github/workflows/rea-tests.yml"
+      - ".github/workflows/publish-mcp-image.yml"
+  pull_request:
+    paths:
+      - "tools/rea/**"
+      - "tools/security_review/**"
+      - "tools/knowledge/**"
+      - "tools/bootstrap/**"
+      - "tools/registry.json"
+      - "tools/integrations/**"
+      - "tools/notion/**"
+      - "policies/**"
+      - ".devcontainer/**"
+      - "team/**"
+      - ".github/workflows/rea-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate manifest and MCP config JSON
+        run: |
+          python -m json.tool team/manifest.json > /dev/null
+          python -m json.tool .mcp.json > /dev/null
+          python -m json.tool tools/registry.json > /dev/null
+          python -m json.tool tools/bootstrap/upstream-sources.json > /dev/null
+          python -m json.tool tools/integrations/catalog.json > /dev/null
+      - name: Validate Windows bootstrap metadata
+        run: python tools/bootstrap/validate_bootstrap.py
+      - name: Run budget policy unit tests
+        run: python -m unittest discover -s policies -p 'test_*.py'
+      - name: Run Notion controller tests
+        run: python -m unittest discover -s tools/notion -p 'test_*.py'
+      - name: Run REA unit tests
+        run: python -m unittest discover -s tools/rea -p 'test_*.py'
+      - name: Run security review unit tests
+        run: python -m unittest discover -s tools/security_review -p 'test_*.py'
+      - name: Run offline knowledge search tests
+        run: python -m unittest discover -s tools/knowledge -p 'test_*.py'
+      - name: Run agent team tests
+        run: python -m unittest discover -s team -p 'test_*.py'
+      - name: Validate registry and team manifest
+        run: python team/validate_manifest.py
+      - name: Smoke-test REA CLI
+        run: python tools/rea/rea.py tools/rea --json > /tmp/rea-report.json
+      - name: Smoke-test router CLI
+        run: echo '{"task":"inspect source","capabilities":["source_inventory"]}' | python team/router.py
+      - name: Smoke-test shared JSON runner REA
+        run: echo '{"operation":"invoke","tool_id":"rea.scan","input":{"path":"team"}}' | python team/runner.py
+      - name: Smoke-test shared JSON runner security review
+        run: echo '{"operation":"invoke","tool_id":"security.scan","input":{"path":"team"}}' | python team/runner.py
+      - name: Smoke-test MCP server initialize and tool listing
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | python team/mcp_server.py > /tmp/mcp-response.jsonl
+          python -c "import json; lines=[json.loads(x) for x in open('/tmp/mcp-response.jsonl')]; assert lines[0]['result']['serverInfo']['name']=='mind-command-os-tools'; assert 'rea.scan' in [t['name'] for t in lines[1]['result']['tools']]; assert 'security.scan' in [t['name'] for t in lines[1]['result']['tools']]; assert 'team.health' in [t['name'] for t in lines[1]['result']['tools']]; assert 'team.queue' in [t['name'] for t in lines[1]['result']['tools']]"
+      - name: Smoke-test health tool through runner
+        run: echo '{"operation":"invoke","tool_id":"team.health","input":{}}' | python team/runner.py
+      - name: Build hosted MCP container
+        run: docker build -f Dockerfile.mcp -t mind-command-mcp:test .
