@@ -12,8 +12,8 @@ import {
   type DnsLookupFn,
 } from "./mcp/http-dns-pin.ts";
 import { loadRegistry, saveRegistry, type RegistryDb, type RegistryRecord } from "./mcp/registry-store.ts";
-import type { McpCallRpc, McpCallTransport, McpContentPart } from "./mcp/call-contract.ts";
-import { safeReason } from "./mcp/call-contract.ts";
+import type { McpCallRpc, McpCallTransport } from "./mcp/call-contract.ts";
+import { safeReason, mcpRpcFromResult } from "./mcp/call-contract.ts";
 
 export type ArgType = "string" | "boolean" | "integer";
 
@@ -212,21 +212,7 @@ function rpcEnvelope(text: string): { result?: unknown; error?: string } {
 }
 
 function rpcFromResult(result: unknown, token: string): McpCallRpc {
-  if (!result || typeof result !== "object") return null;
-  const record = result as Record<string, unknown>;
-  if (!("content" in record) && !("isError" in record) && !("structuredContent" in record)) return null;
-  const content = Array.isArray(record.content)
-    ? record.content.filter((part) => part && typeof part === "object").slice(0, 20).map((part) => {
-        const copy = { ...(part as McpContentPart) };
-        if (typeof copy.text === "string") copy.text = redact(copy.text, token).slice(0, 8000);
-        return copy;
-      })
-    : [];
-  return {
-    isError: record.isError === true,
-    content,
-    structuredContent: "structuredContent" in record ? record.structuredContent ?? null : null,
-  };
+  return mcpRpcFromResult(result, token);
 }
 
 function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown }): PublicOperation | null {
@@ -319,8 +305,9 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
   const tools = parsed.result && typeof parsed.result === "object" && Array.isArray((parsed.result as { tools?: unknown }).tools)
     ? (parsed.result as { tools: { name?: unknown; description?: unknown; inputSchema?: unknown }[] }).tools
     : [];
-  row.operations = tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item));
-  row.state = row.operations.some((item) => item.compatible) ? "ready" : "incompatible";
+  const operations = tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item));
+  row.operations = operations;
+  row.state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
   row.error = row.state === "incompatible" ? "No tool advertised an object argument schema. A generic text argument was not assumed." : "";
   await writeRow(db, userId, row);
   return toPublic(row)!;

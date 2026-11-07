@@ -23,12 +23,23 @@ export type McpResultCode =
 
 export type McpCallTransport = { ok: boolean; status: number; ms: number };
 
-export type McpContentPart = { type: string; text?: string; [key: string]: unknown };
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+/** Non-text MCP parts stay as JSON fields TanStack can serialize. No unknown index. */
+export type McpContentPart = {
+  type: string;
+  text?: string;
+  data?: string;
+  mimeType?: string;
+  uri?: string;
+  name?: string;
+  blob?: string;
+};
 
 export type McpCallRpc = {
   isError: boolean;
   content: McpContentPart[];
-  structuredContent: unknown | null;
+  structuredContent: JsonValue | null;
 } | null;
 
 export type McpCallContract = {
@@ -52,6 +63,54 @@ export function mcpResultCode(text: string, status: string, ok: boolean): McpRes
   if (status === "missing_config" || /DATABASE_URL or POSTGRES_URL|CONNECTOR_TOKEN_SECRET|no token is stored|cannot be decrypted|not configured/i.test(text)) return "missing_config";
   if (status === "incompatible" || /argument schema|unexpected argument|missing /i.test(text)) return "incompatible";
   return "error";
+}
+
+export function toJsonValue(value: unknown, secret = "", depth = 0): JsonValue | undefined {
+  if (depth > 8) return undefined;
+  if (typeof value === "string") return (secret ? value.split(secret).join("[redacted]") : value).slice(0, 8000);
+  if (typeof value === "boolean" || value === null) return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (Array.isArray(value)) {
+    const out: JsonValue[] = [];
+    for (const item of value.slice(0, 40)) {
+      const next = toJsonValue(item, secret, depth + 1);
+      if (next !== undefined) out.push(next);
+    }
+    return out;
+  }
+  if (typeof value === "object" && value) {
+    const out: { [key: string]: JsonValue } = {};
+    for (const [key, item] of Object.entries(value).slice(0, 40)) {
+      const next = toJsonValue(item, secret, depth + 1);
+      if (next !== undefined) out[key] = next;
+    }
+    return out;
+  }
+  return undefined;
+}
+
+const CONTENT_FIELDS = ["text", "data", "mimeType", "uri", "name", "blob"] as const;
+
+export function toContentPart(value: unknown, secret = ""): McpContentPart | null {
+  const json = toJsonValue(value, secret);
+  if (!json || typeof json !== "object" || Array.isArray(json) || typeof json.type !== "string") return null;
+  const part: McpContentPart = { type: json.type };
+  for (const key of CONTENT_FIELDS) {
+    const field = json[key];
+    if (typeof field === "string") part[key] = field;
+  }
+  return part;
+}
+
+export function mcpRpcFromResult(result: unknown, secret = ""): McpCallRpc {
+  if (!result || typeof result !== "object") return null;
+  const record = result as Record<string, unknown>;
+  if (!("content" in record) && !("isError" in record) && !("structuredContent" in record)) return null;
+  const content = Array.isArray(record.content)
+    ? record.content.map((part) => toContentPart(part, secret)).filter((part): part is McpContentPart => Boolean(part)).slice(0, 20)
+    : [];
+  const structured = record.structuredContent === undefined ? null : toJsonValue(record.structuredContent, secret) ?? null;
+  return { isError: record.isError === true, content, structuredContent: structured };
 }
 
 export function toMcpCallContract(input: {

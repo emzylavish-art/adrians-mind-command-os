@@ -19,19 +19,19 @@ type Row = { user_id: string; id: string; record: string };
 function memoryDb(rows: Row[] = []): RegistryDb & { rows: Row[] } {
   return {
     rows,
-    async query(text, params = []) {
+    async query<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
       const userId = String(params[0] ?? "");
       if (text.startsWith("select record")) {
-        return rows.filter((row) => row.user_id === userId).map((row) => ({ record: row.record }));
+        return rows.filter((row) => row.user_id === userId).map((row) => ({ record: row.record })) as T[];
       }
       if (text.startsWith("select id")) {
-        return rows.filter((row) => row.user_id === userId).map((row) => ({ id: row.id }));
+        return rows.filter((row) => row.user_id === userId).map((row) => ({ id: row.id })) as T[];
       }
       if (text.startsWith("delete")) {
         const id = String(params[1] ?? "");
         const index = rows.findIndex((row) => row.user_id === userId && row.id === id);
         if (index >= 0) rows.splice(index, 1);
-        return [];
+        return [] as T[];
       }
       if (text.startsWith("insert")) {
         const id = String(params[1] ?? "");
@@ -40,9 +40,9 @@ function memoryDb(rows: Row[] = []): RegistryDb & { rows: Row[] } {
         const next = { user_id: userId, id, record };
         if (index >= 0) rows[index] = next;
         else rows.push(next);
-        return [];
+        return [] as T[];
       }
-      return [];
+      return [] as T[];
     },
   };
 }

@@ -21,7 +21,7 @@ import {
   type RegistryDb,
   type RegistryRecord,
 } from "./registry-store.ts";
-import { type McpCallRpc, type McpCallTransport, type McpContentPart, type McpResultCode, privacyErrorText, safeReason } from "./call-contract.ts";
+import { type McpCallRpc, type McpCallTransport, type McpResultCode, mcpRpcFromResult, privacyErrorText, safeReason } from "./call-contract.ts";
 import {
   defaultDnsLookup,
   isLocalHostname,
@@ -237,11 +237,11 @@ export function listBuiltinTools(enabled: boolean): ListedTool[] {
     serverLabel: "Mind built-in",
     name: tool.name,
     description: tool.description,
-    inputSchema: tool.name === "pglite_list_schema"
-      ? { type: "object", properties: {}, required: [] }
+    inputSchema: (tool.name === "pglite_list_schema"
+      ? { type: "object" as const, properties: {} as Record<string, { type: string }>, required: [] as string[] }
       : tool.name === "pglite_query"
-        ? { type: "object", properties: { sql: { type: "string" } }, required: ["sql"] }
-        : null,
+        ? { type: "object" as const, properties: { sql: { type: "string" } }, required: ["sql"] }
+        : null) satisfies ListedTool["inputSchema"],
     enabled,
   }));
 }
@@ -270,28 +270,8 @@ function rpcMessage(body: string): { result?: unknown; error?: string; errorData
   return { error: "The MCP server did not return a JSON-RPC result." };
 }
 
-function redactValue(value: unknown, token: string, depth = 0): unknown {
-  if (!token || depth > 6) return value;
-  if (typeof value === "string") return value.split(token).join("[redacted]").slice(0, 8000);
-  if (Array.isArray(value)) return value.slice(0, 20).map((item) => redactValue(item, token, depth + 1));
-  if (!value || typeof value !== "object") return value;
-  const out: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value).slice(0, 30)) out[key] = redactValue(item, token, depth + 1);
-  return out;
-}
-
 function rpcFromResult(result: unknown, token = ""): McpCallRpc {
-  if (!result || typeof result !== "object") return null;
-  const record = result as Record<string, unknown>;
-  if (!("content" in record) && !("isError" in record) && !("structuredContent" in record)) return null;
-  const content = Array.isArray(record.content)
-    ? record.content.filter((part) => part && typeof part === "object").slice(0, 20).map((part) => redactValue(part, token) as McpContentPart)
-    : [];
-  return {
-    isError: record.isError === true,
-    content,
-    structuredContent: record.structuredContent === undefined ? null : redactValue(record.structuredContent, token),
-  };
+  return mcpRpcFromResult(result, token);
 }
 
 /** Per-request deadline for remote (http) MCP servers. */
