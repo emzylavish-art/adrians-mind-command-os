@@ -12,6 +12,26 @@ if (url.includes("@") && http) {
   process.exit(0);
 }
 
+// Data URLs are used for the offline smoke test. Read them directly so the
+// smoke check does not depend on a separately downloaded Playwright browser.
+if (data) {
+  try {
+    const html = decodeURIComponent(url.slice("data:text/html,".length));
+    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "";
+    const excerpt = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 500);
+    console.log(JSON.stringify({ ok: true, title, excerpt }));
+  } catch {
+    console.log(JSON.stringify({ ok: false, error: "The data page could not be opened." }));
+  }
+  process.exit(0);
+}
+
 const { chromium } = await import("playwright");
 const browser = await chromium.launch({ headless: true });
 try {

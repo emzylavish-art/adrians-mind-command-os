@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Chat } from "./types";
-import { getRecentChats } from "./recent-chats";
+import { getRecentChats } from "./recent-chats.ts";
 
 function chat(id: string, stamps: string[] = []): Chat {
   return {

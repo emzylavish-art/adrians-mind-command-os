@@ -18,7 +18,7 @@ describe("integration voice + banner wiring survives merge", () => {
     for (const needle of [
       "VoiceLevelMeter",
       "VoiceWaveform",
-      "VoiceModeBadge",
+      "VoiceModeOverlay",
       "commitVoiceMode",
       "applyVoiceMode",
       "formatVoiceClientError",
@@ -26,8 +26,8 @@ describe("integration voice + banner wiring survives merge", () => {
       "matchesVoiceToggleShortcut",
       "VOICE_TOGGLE_SHORTCUT",
       "voiceMicAriaLabel",
-      'data-testid="voice-controls"',
-      'data-testid="voice-mute"',
+      'data-testid="open-voice-mode"',
+      'data-testid="voice-mute-mobile"',
     ]) {
       assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

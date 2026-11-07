@@ -77,7 +77,8 @@ describe("integration-security-c16", () => {
 
   it("keeps sibling lane markers after security merges", () => {
     for (const needle of [
-      'data-testid="voice-controls"',
+      'data-testid="open-voice-mode"',
+      "VoiceModeOverlay",
       'data-testid="failure-banner"',
       'data-testid="executing-tools"',
       "ModelTierChip",

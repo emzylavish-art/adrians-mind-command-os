@@ -168,11 +168,11 @@ describe("mounted Speak click", () => {
 });
 
 describe("mounted speak() failure banner", () => {
-  it("speak() reports failures through reportFailure and does not touch failure-mount", () => {
+  it("speak() reports failures through reportFailure and the shared failure mount", () => {
     assert.match(commandApp, /async function speak\(/);
     assert.match(commandApp, /runMountedSpeak\(/);
     assert.match(commandApp, /reportFailure\(message, action, target, retry\)/);
-    assert.doesNotMatch(commandApp, /failure-mount/);
+    assert.match(commandApp, /failure-mount/);
   });
 
   it("shows the banner, retries identical params once, and dismiss clears it", async () => {
