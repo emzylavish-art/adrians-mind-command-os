@@ -1,0 +1,13 @@
+usage: security_review.py [-h] [--json] [--out OUT] [path]
+
+Defensive static security review for repository-owned source files. This first
+version intentionally performs local, offline checks only. It does not run
+target code, probe hosts, exploit findings, or print matched secret values.
+
+positional arguments:
+  path        Repository directory or source file
+
+options:
+  -h, --help  show this help message and exit
+  --json      Emit JSON
+  --out OUT   Optional output path

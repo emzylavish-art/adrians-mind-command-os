@@ -1,0 +1,42 @@
+/ 200|
+/login 200|
+/memory 200|
+/explore 200|
+/dashboard 307|https://adrians-mind.vercel.app/login?next=%2Fdashboard307|https://adrians-mind.vercel.app/dashboard
+/tools 404|
+/voice 404|
+/artifacts 404|
+/settings 404|
+/activity 404|
+/scheduled 404|
+/library 404|
+/projects 404|
+HTTP/2 307 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+date: Sat, 07 Nov 2026 03:05:15 GMT
+location: /login?next=%2Fdashboard
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::l7qvz-1794020715385-bd21ab44b9f2
+
+---asset---
+assets/index-qV1VC2j2.js
+binary file matches (found "\0" byte around offset 40844)
+---oauth---
+oauth/github 401
+oauth/gmail 401
+oauth/google_calendar 401
+oauth/google_drive 401
+oauth/notion 401
+oauth/slack 401
+---headers---
+HTTP/2 200 
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY

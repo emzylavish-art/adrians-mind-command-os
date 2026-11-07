@@ -1,0 +1,6 @@
+oauth/github/status -> 401
+oauth/gmail/status -> 401
+oauth/google_calendar/status -> 401
+oauth/google_drive/status -> 401
+oauth/notion/status -> 401
+oauth/slack/status -> 401
