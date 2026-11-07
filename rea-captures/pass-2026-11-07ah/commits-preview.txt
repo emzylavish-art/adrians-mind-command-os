@@ -1,0 +1,5 @@
+aa53aa0 2026-11-03T06:18:24Z Phase 5: harness MODEL_PROVIDER xai/openai with one-token readiness probe
+c1ee830 2026-11-03T02:37:07Z fix(ui): phone drawer nav + honest Notion status
+b84dcc2 2026-11-03T01:47:11Z fix(auth): first-party Google/GitHub OAuth without supabase.co in the browser
+23860f7 2026-11-03T01:24:03Z fix(auth): mutable OAuth callback redirect so Set-Cookie can merge
+518db93 2026-11-03T01:05:06Z fix(login): keep Google/GitHub enabled on auth loader fallback
