@@ -167,7 +167,7 @@ function makeNebulaTexture(seed = 1) {
   const c = document.createElement("canvas");
   c.width = size; c.height = size;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = "#050814";
+  ctx.fillStyle = "#05070d";
   ctx.fillRect(0,0,size,size);
   const rand = (n: number) => {
     const x = Math.sin(n * 12.9898 + seed * 78.233) * 43758.5453;
@@ -177,10 +177,10 @@ function makeNebulaTexture(seed = 1) {
     const x = rand(i) * size;
     const y = rand(i + 40) * size;
     const r = 40 + rand(i + 80) * 120;
-    const hue = 220 + rand(i + 120) * 80;
+    const hue = 205 + rand(i + 120) * 35;
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     g.addColorStop(0, `hsla(${hue},70%,55%,0.28)`);
-    g.addColorStop(0.5, `hsla(${hue + 30},60%,40%,0.12)`);
+    g.addColorStop(0.5, `hsla(${hue + 12},55%,38%,0.12)`);
     g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -208,10 +208,7 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   const ctx = c.getContext("2d")!;
   ctx.fillStyle = "#0c1224";
   ctx.fillRect(0,0,w,h);
-  const g = ctx.createLinearGradient(0,0,w,h);
-  g.addColorStop(0, "rgba(124,92,255,0.35)");
-  g.addColorStop(1, "rgba(73,194,255,0.12)");
-  ctx.fillStyle = g;
+  ctx.fillStyle = "#111a27";
   ctx.fillRect(0,0,w,h);
   ctx.strokeStyle = accent;
   ctx.lineWidth = 6;
@@ -301,7 +298,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const height = mount.clientHeight || window.innerHeight;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050814, 0.018);
+    scene.fog = new THREE.FogExp2(0x05070d, 0.018);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 200);
     // Flyover: start high above the universe with every constellation in view.
@@ -313,7 +310,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
-    renderer.setClearColor(0x050814, 1);
+    renderer.setClearColor(0x05070d, 1);
     mount.appendChild(renderer.domElement);
 
     const labelRenderer = new CSS2DRenderer();
@@ -338,7 +335,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const sun = new THREE.PointLight(0xffe6a8, 90, 60);
     sun.position.set(0, 2, 0);
     scene.add(sun);
-    const rim = new THREE.PointLight(0x7c5cff, 40, 50);
+    const rim = new THREE.PointLight(0x6d9fd2, 40, 50);
     rim.position.set(-8, 6, 10);
     if (!atm) scene.add(rim);
 
@@ -590,20 +587,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       mk(
         `Weather · ${status.weather.label}`,
         status.weather.summary,
-        status.weather.tone === "blocked" ? "#f3f5ff" : status.weather.tone === "stalled" ? "#c4b5fd" : "#f3f5ff",
+        status.weather.tone === "blocked" ? "#f3f5ff" : status.weather.tone === "stalled" ? "#d6b77a" : "#f3f5ff",
         [-7.5, 5.5, -2],
       );
       mk(
         "Orchestrator",
         `${status.orchestrator.owner ?? "—"} · ${status.orchestrator.status ?? "—"} · ${status.orchestrator.branch ?? ""}`,
-        "#7c5cff",
+        "#6d9fd2",
         [7.2, 5.2, -1.5],
       );
       const gaps = status.gapDispatcher.items.slice(0, 4).map((g) => `${g.rank ?? "·"} ${g.feature}`).join(" · ")
         || `source: ${status.gapDispatcher.source}`;
       mk("Gap Dispatcher", gaps, "#49c2ff", [0, -6.2, 4]);
       const commits = status.commits.slice(0, 3).map((c) => `${c.sha} ${c.subject}`).join(" · ") || "No commits";
-      mk("Recent commits", commits, "#a78bfa", [-1, 6.5, 5]);
+      mk("Recent commits", commits, "#7ea6d8", [-1, 6.5, 5]);
       const spend = status.spend.available ? "Live spend log on box" : status.spend.reason;
       mk("API spend", spend, "#93a0c2", [6, -3.5, 5]);
       const nudges = status.conductor.nudges.slice(0, 3).join(" · ") || `source: ${status.conductor.source}`;
@@ -889,7 +886,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       for (let i = 0; i < pageIdByIndex.length; i++) {
         const id = pageIdByIndex[i]!;
         if (!focusId) pageMesh.setColorAt(i, base);
-        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x7c5cff));
+        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x6d9fd2));
         else pageMesh.setColorAt(i, dim);
       }
       pageMesh.instanceColor.needsUpdate = true;
