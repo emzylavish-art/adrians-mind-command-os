@@ -5280,6 +5280,10 @@ export function CommandApp() {
           <Link to="/login" className="signed-out-entry__link">Sign in</Link>
         </div>
       )}
+      <style>{`@media (max-width: 767.98px) {
+        nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] { z-index: 30 !important; }
+        .shell .live-voice-compact-entry { z-index: 60 !important; bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)) !important; }
+      }`}</style>
       <nav inert={navOpen} className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
         {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
