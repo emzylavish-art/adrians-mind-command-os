@@ -535,3 +535,11 @@ Google sign-in completed in Gap Dispatcher browser at 23:41 WAT; authenticated /
 - Tips: main e4ed639; preview aa53aa0; prod e3ccc51 (24 ahead of main); asset index-qV1VC2j2.js
 - Pillars: Whisper branch-only; VCS branch-only; Tool Registry partial; continuous evolution partial
 - Artifacts: pass-2026-11-07an/ + internal-audit-2026-11-07an.md
+
+## pass 2026-11-07ao — 2026-11-07 02:02 CST / 2026-11-07 09:02 WAT
+- NEW owner fixes: none
+- Informational: main tip **CHANGED** e4ed639→b5d888d (PR #23 OAuth MCP + PR #24 Worker MCP); prod tip e3ccc51 now 24 ahead / 9 behind main; live asset UNCHANGED
+- Standing gaps (unchanged): XAI_API_KEY unset prod; 403/login preview-only; OAuth×6 401; CSP+Permissions-Policy; sidebar deep-link 404s / button nav; extensions.js; VCS missing live; live-search env; chat/⌘K/Artifacts; empty panels + Universe cards unavailable; Cloudflare burner pending; GodEye upstream unconfirmed; audit example.com placeholder (06d); forbidden_cross_site Activity/Tools; explore TEMPLATE/NOT LIVE; curl /dashboard 307 vs browser chrome; Scheduled no worker; Universe hang intermittent (painted ~1–2s); Grok status honesty (07e; header configured + Safe Keys NOT CONNECTED)
+- Tips: main b5d888d; preview aa53aa0; prod e3ccc51; asset index-qV1VC2j2.js
+- Pillars: Whisper branch-only; VCS branch-only; Tool Registry partial; continuous evolution partial (main advanced, live lagging)
+- Artifacts: pass-2026-11-07ao/ + internal-audit-2026-11-07ao.md
