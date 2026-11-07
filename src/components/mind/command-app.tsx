@@ -78,6 +78,7 @@ import {
   subscribeVoiceMode,
 } from "@/lib/mind/voice/mode-store";
 import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
+import { withSessionTimeout } from "@/lib/mind/voice/session-timeout";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
 import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
 import { formatMicCaptureError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
@@ -3200,7 +3201,7 @@ export function CommandApp() {
 
       let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
       try {
-        secret = await createVoiceClientSecret();
+        secret = await withSessionTimeout(() => createVoiceClientSecret(), undefined, mintAbort.signal);
         if (mintAbort.signal.aborted) {
           markCanceled();
           return;
@@ -3222,7 +3223,7 @@ export function CommandApp() {
         if (expiresAt > 0 && secretNeedsRemint(expiresAt) && !mintAbort.signal.aborted) {
           setNotice("Voice secret is near expiry. Minting a fresh session…");
           try {
-            secret = await createVoiceClientSecret();
+            secret = await withSessionTimeout(() => createVoiceClientSecret(), undefined, mintAbort.signal);
           } catch (caught) {
             if (mintAbort.signal.aborted) {
               markCanceled();
