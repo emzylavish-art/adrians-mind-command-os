@@ -5,7 +5,6 @@
  */
 
 const CHAT_URL = "https://api.openai.com/v1/chat/completions";
-const WORKER_NAME = "adrians-mind-mcp-test";
 const SCOPE = "mind.tools";
 const MAX_BODY = 100_000;
 const MAX_READ = 48_000;
@@ -100,6 +99,29 @@ function safeRedirect(uri) {
 }
 
 const TEST_CLIENT_ID = "adrians-mind-mcp-test";
+const PROD_CLIENT_ID = "adrians-mind-mcp";
+const PUBLIC_MCP_ORIGINS = new Set([
+  "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev",
+  "https://adrians-mind-mcp.operation-beat-magnus.workers.dev",
+]);
+const GENERATION_LEDGERS = {
+  once: "audit:model.generate:once",
+  "retest-1": "audit:model.generate:retest-1",
+};
+
+function generationChoice(value) {
+  if (value === true || value === "once") return "once";
+  if (value === "retest-1") return "retest-1";
+  return null;
+}
+
+function callbackPath(env) {
+  return env.MCP_OAUTH_CALLBACK_PATH === "/oauth/callback" ? "/oauth/callback" : "/oauth/test-callback";
+}
+
+function workerName(env) {
+  return env.MCP_WORKER_NAME === "adrians-mind-mcp" ? "adrians-mind-mcp" : "adrians-mind-mcp-test";
+}
 
 export function oauthReadiness(env) {
   const missing = [];
@@ -107,20 +129,15 @@ export function oauthReadiness(env) {
   const issuer = String(env.MCP_OAUTH_ISSUER || "").replace(/\/$/, "");
   if (!issuer.startsWith("https://")) missing.push("MCP_OAUTH_ISSUER");
   if (!String(env.MCP_OAUTH_SECRET || "")) missing.push("MCP_OAUTH_SECRET");
-  const testCallback = issuer.startsWith("https://") ? `${issuer}/oauth/test-callback` : "";
+  const path = callbackPath(env);
+  const callback = issuer.startsWith("https://") ? `${issuer}${path}` : "";
   const extra = String(env.MCP_OAUTH_REDIRECT_URIS || "").split(",").map((item) => item.trim()).filter(Boolean);
   if (extra.some((uri) => !safeRedirect(uri))) missing.push("MCP_OAUTH_REDIRECT_URIS");
-  const redirects = testCallback && safeRedirect(testCallback) ? [testCallback, ...extra.filter((uri) => uri !== testCallback)] : [];
+  const redirects = callback && safeRedirect(callback) ? [callback, ...extra.filter((uri) => uri !== callback)] : [];
+  const requestedClient = String(env.MCP_OAUTH_CLIENT_ID || "");
+  const clientId = requestedClient === PROD_CLIENT_ID ? PROD_CLIENT_ID : TEST_CLIENT_ID;
   const audience = String(env.MCP_OAUTH_AUDIENCE || (issuer ? `${issuer}/mcp` : ""));
-  return {
-    ok: missing.length === 0,
-    missing,
-    issuer,
-    audience,
-    redirects,
-    clientId: String(env.MCP_OAUTH_CLIENT_ID || TEST_CLIENT_ID),
-    testCallback,
-  };
+  return { ok: missing.length === 0, missing, issuer, audience, redirects, clientId, testCallback: callback };
 }
 
 function metadata(ready) {
@@ -289,7 +306,9 @@ function allowedChatUrl(raw) {
 
 export function routePlan(env) {
   return ROUTES.map((route) => {
-    const key = String(env[route.keyEnv] || env.OPENAI_API_KEY || "");
+const dedicated = typeof env[route.keyEnv] === "string" ? env[route.keyEnv] : "";
+    const shared = typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY : "";
+    const key = dedicated || shared;
     const base = String(env[route.baseEnv] || env.OPENAI_API_BASE_URL || CHAT_URL);
     const model = String(env[route.modelEnv] || route.defaultModel);
     const urlOk = allowedChatUrl(base);
@@ -298,22 +317,37 @@ export function routePlan(env) {
       configured: Boolean(key) && urlOk && Boolean(model.trim()),
       model: model.trim() || null,
       endpoint: urlOk ? CHAT_URL : null,
+      credential: dedicated ? route.keyEnv : key ? "OPENAI_API_KEY" : "unset",
+      credential_length: key.length,
       key,
       url: urlOk ? CHAT_URL : null,
     };
   });
 }
 
+export function credentialLengths(env) {
+  const names = ["OPENAI_API_KEY", "ASTRA_API_KEY", "SOL_API_KEY", "LUNA_API_KEY"];
+  const lengths = {};
+  for (const name of names) {
+    const value = env[name];
+    lengths[name] = typeof value === "string" ? value.length : 0;
+  }
+  return lengths;
+}
+
 export function publicStatus(env) {
   const budget = budgetDecision(env);
-  const routes = routePlan(env).map(({ id, configured, model, endpoint }) => ({ id, configured, model, endpoint }));
+  const routes = routePlan(env).map(({ id, configured, model, endpoint, credential, credential_length }) => ({
+    id, configured, model, endpoint, credential, credential_length,
+  }));
   return {
-    worker: WORKER_NAME,
+    worker: workerName(env),
     live_verified: false,
     upstream_called: false,
     oauth: { scope: SCOPE, configured: oauthReadiness(env).ok },
     app_budget: budget,
     route_order: ["astra", "sol", "luna"],
+    credential_lengths: credentialLengths(env),
     providers: routes,
   };
 }
@@ -613,15 +647,16 @@ async function revokeValue(env, tokenValue) {
   await env.OAUTH_KV.delete(`t:${hash}`);
 }
 
-async function testStart(env, ready, deps) {
+async function testStart(request, env, ready, deps) {
   const identity = accessSettings(env);
   if (!identity.ready) {
     return json(401, { error: "login_required", error_description: identity.trust ? "Access JWT verification is not configured." : "Cloudflare Access enforcement is not enabled." });
   }
+  const generation = generationChoice(new URL(request.url).searchParams.get("generation"));
   const state = await randomToken();
   const verifier = await randomToken();
   const now = nowSec(deps);
-  await kvPut(env.OAUTH_KV, `h:${hex(await sha256(state))}`, { verifier, expires: now + 600 }, now + 600);
+  await kvPut(env.OAUTH_KV, `h:${hex(await sha256(state))}`, { verifier, expires: now + 600, generation }, now + 600);
   const location = new URL(`${ready.issuer}/oauth/authorize`);
   location.searchParams.set("response_type", "code");
   location.searchParams.set("client_id", ready.clientId);
@@ -633,11 +668,10 @@ async function testStart(env, ready, deps) {
   return new Response(null, { status: 302, headers: { location: location.toString(), "cache-control": "no-store", "referrer-policy": "no-referrer" } });
 }
 
-const PUBLIC_MCP_ORIGIN = "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev";
 const HIDDEN_HEADERS = new Set(["authorization", "cookie", "set-cookie", "cf-access-jwt-assertion", "proxy-authorization"]);
 
 function publicMcpUrl(ready) {
-  return ready.issuer === PUBLIC_MCP_ORIGIN ? `${PUBLIC_MCP_ORIGIN}/mcp` : null;
+  return PUBLIC_MCP_ORIGINS.has(ready.issuer) ? `${ready.issuer}/mcp` : null;
 }
 
 function sanitizedHeaders(headers) {
@@ -650,7 +684,60 @@ function sanitizedHeaders(headers) {
   return out;
 }
 
-async function mcpEvidence(env, ready, accessToken, deps) {
+async function publicCall(env, testedURL, accessToken, deps, method, body) {
+  const fetchImpl = deps.fetchImpl || fetch;
+  let response;
+  try {
+    response = await fetchImpl(testedURL, {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    return { method, http_status: null, headers: {}, response: null, error: error instanceof Error ? error.name : "fetch_failed" };
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(await response.text());
+  } catch {
+    parsed = null;
+  }
+  let safe = null;
+  try {
+    safe = JSON.parse(redact(JSON.stringify(parsed), env).split(accessToken).join("[redacted]"));
+  } catch {
+    safe = null;
+  }
+  return { method, http_status: response.status, headers: sanitizedHeaders(response.headers), response: safe };
+}
+
+function callSucceeded(call) {
+  if (call.http_status !== 200 || !call.response?.result) return false;
+  if (call.method === "tools/call" && call.response.result.isError === true) return false;
+  return true;
+}
+
+async function claimGeneration(env, deps, generation) {
+  const ledger = GENERATION_LEDGERS[generation];
+  if (!ledger) return { ok: false, reason: "not_opted_in" };
+  const existing = await kvGet(env.OAUTH_KV, ledger);
+  if (!existing || existing.phase !== "authorized") {
+    return { ok: false, reason: existing ? "already_used" : "not_authorized" };
+  }
+  const nonce = await randomToken();
+  const now = nowSec(deps);
+  await kvPut(env.OAUTH_KV, ledger, { phase: "attempted", nonce, at: now });
+  const confirm = await kvGet(env.OAUTH_KV, ledger);
+  if (!confirm || confirm.nonce !== nonce || confirm.phase !== "attempted") return { ok: false, reason: "ledger_race" };
+  return { ok: true, ledger };
+}
+
+async function finishGeneration(env, deps, ledger, fields) {
+  const now = nowSec(deps);
+  await kvPut(env.OAUTH_KV, ledger, { phase: "completed", at: now, ...fields });
+}
+
+async function mcpEvidence(env, ready, accessToken, deps, generation) {
   const testedURL = publicMcpUrl(ready);
   const evidence = {
     transport: "public_https",
@@ -660,45 +747,55 @@ async function mcpEvidence(env, ready, accessToken, deps) {
     upstream_called: false,
     live_account_verified: false,
     calls: [],
+    generation: { called: false, reason: generation ? "not_authorized" : "not_opted_in", ledger: generation ? GENERATION_LEDGERS[generation] : null },
   };
   if (!testedURL) return { ...evidence, ok: false, error: "issuer_not_allowed" };
-  const fetchImpl = deps.fetchImpl || fetch;
   const requests = [
     ["initialize", { jsonrpc: "2.0", id: 1, method: "initialize", params: {} }],
     ["tools/list", { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }],
     ["tools/call", { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "provider.status", arguments: {} } }],
   ];
-  for (const [method, body] of requests) {
-    let response;
-    try {
-      response = await fetchImpl(testedURL, {
-        method: "POST",
-        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      evidence.calls.push({ method, http_status: null, headers: {}, response: null, error: error instanceof Error ? error.name : "fetch_failed" });
-      continue;
-    }
-    let parsed = null;
-    try {
-      parsed = JSON.parse(await response.text());
-    } catch {
-      parsed = null;
-    }
-    let safe = null;
-    try {
-      safe = JSON.parse(redact(JSON.stringify(parsed), env).split(accessToken).join("[redacted]"));
-    } catch {
-      safe = null;
-    }
-    evidence.calls.push({ method, http_status: response.status, headers: sanitizedHeaders(response.headers), response: safe });
+  for (const [method, body] of requests) evidence.calls.push(await publicCall(env, testedURL, accessToken, deps, method, body));
+  evidence.ok = evidence.calls.length === 3 && evidence.calls.every(callSucceeded);
+  if (!generation) return evidence;
+  const claim = await claimGeneration(env, deps, generation);
+  if (!claim.ok) {
+    evidence.generation = { called: false, reason: claim.reason, ledger: GENERATION_LEDGERS[generation] };
+    evidence.ok = false;
+    return evidence;
   }
-  evidence.ok = evidence.calls.length === 3 && evidence.calls.every((call) => {
-    if (call.http_status !== 200 || !call.response?.result) return false;
-    if (call.method === "tools/call" && call.response.result.isError === true) return false;
-    return true;
+  const generated = await publicCall(env, testedURL, accessToken, deps, "tools/call", {
+    jsonrpc: "2.0",
+    id: 4,
+    method: "tools/call",
+    params: { name: "model.generate", arguments: { provider: "auto", prompt: "Reply with OK", stream: false } },
   });
+  let tool = null;
+  try {
+    tool = JSON.parse(generated.response?.result?.content?.[0]?.text || "null");
+  } catch {
+    tool = null;
+  }
+  const attempted = Array.isArray(tool?.route?.attempted) ? tool.route.attempted : null;
+  const unreached = attempted ? ["astra", "sol", "luna"].filter((id) => !attempted.includes(id)) : null;
+  evidence.calls.push(generated);
+  evidence.generation = {
+    called: true,
+    ledger: claim.ledger,
+    http_status: generated.http_status,
+    isError: generated.response?.result?.isError === true,
+    provider: tool?.provider ?? null,
+    model: tool?.model ?? null,
+    route: tool?.route ?? null,
+    attempted,
+    unreached,
+    usage: tool?.usage ?? { prompt_tokens: null, completion_tokens: null, total_tokens: null, usage_status: "unknown" },
+    cost_usd: null,
+    provider_billing_allowance: "unknown",
+  };
+  evidence.upstream_called = true;
+  evidence.ok = evidence.ok && callSucceeded(generated);
+  await finishGeneration(env, deps, claim.ledger, { http_status: generated.http_status, provider: evidence.generation.provider });
   return evidence;
 }
 
@@ -723,7 +820,7 @@ async function testCallback(request, env, ready, deps) {
     if (exchanged.ok) await revokeValue(env, exchanged.issued.access_token);
     return new Response(HARNESS_NOTE, { status: 400, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
   }
-  const evidence = await mcpEvidence(env, ready, exchanged.issued.access_token, deps);
+  const evidence = await mcpEvidence(env, ready, exchanged.issued.access_token, deps, generationChoice(harness.generation));
   await revokeValue(env, exchanged.issued.access_token);
   await revokeValue(env, exchanged.issued.refresh_token);
   const handle = await randomToken();
@@ -777,7 +874,7 @@ export async function handleRequest(request, env = {}, deps = {}) {
   if (request.method === "GET" && url.pathname === "/health") {
     return json(200, {
       status: "ok",
-      worker: WORKER_NAME,
+      worker: workerName(env),
       live_verified: false,
       oauth_configured: ready.ok,
       missing: ready.ok ? [] : ready.missing,
@@ -789,9 +886,9 @@ export async function handleRequest(request, env = {}, deps = {}) {
   if (url.pathname === "/.well-known/oauth-protected-resource" && request.method === "GET") {
     return ready.ok ? json(200, resourceMetadata(ready)) : unconfigured(ready);
   }
-  if (url.pathname === "/oauth/test-start" && request.method === "GET") return ready.ok ? testStart(env, ready, deps) : unconfigured(ready);
-  if (url.pathname === "/oauth/test-callback" && request.method === "GET") return ready.ok ? testCallback(request, env, ready, deps) : unconfigured(ready);
-  if (url.pathname === "/oauth/test-result" && request.method === "GET") return ready.ok ? testResult(request, env, deps) : unconfigured(ready);
+  if ((url.pathname === "/oauth/test-start" || url.pathname === "/oauth/start") && request.method === "GET") return ready.ok ? testStart(request, env, ready, deps) : unconfigured(ready);
+  if ((url.pathname === "/oauth/test-callback" || url.pathname === "/oauth/callback") && request.method === "GET") return ready.ok ? testCallback(request, env, ready, deps) : unconfigured(ready);
+  if ((url.pathname === "/oauth/test-result" || url.pathname === "/oauth/result") && request.method === "GET") return ready.ok ? testResult(request, env, deps) : unconfigured(ready);
   if (url.pathname === "/oauth/authorize" && request.method === "GET") return ready.ok ? authorize(request, env, ready, deps) : unconfigured(ready);
   if (url.pathname === "/oauth/token" && request.method === "POST") return ready.ok ? token(request, env, ready, deps) : unconfigured(ready);
   if (url.pathname === "/oauth/revoke" && request.method === "POST") return ready.ok ? revoke(request, env) : unconfigured(ready);
@@ -829,7 +926,7 @@ export async function handleRequest(request, env = {}, deps = {}) {
       result: {
         protocolVersion: "2025-03-26",
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: WORKER_NAME, version: "0.2.0" },
+        serverInfo: { name: workerName(env), version: "0.2.0" },
       },
     });
   }
