@@ -179,6 +179,18 @@ import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
+import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
+import {
+  LOGIC_ROUTES,
+  chatTurnBody,
+  isLogicRouteId,
+  logicMenuState,
+  readSelection,
+  respondedRouteLabel,
+  writeSelection,
+  type LogicRouteId,
+  type LogicRoutePublic,
+} from "@/lib/mind/logic-routes";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
@@ -642,6 +654,8 @@ export function CommandApp() {
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
+  const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
   const [pcAgentOnline, setPcAgentOnline] = useState(false);
   const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
@@ -923,6 +937,7 @@ export function CommandApp() {
         setDatabaseDetail(mode.detail);
         setSystem(status.database);
         setCheckedAt(status.checkedAt);
+        if (Array.isArray(status.logicRoutes)) setLogicRoutes(status.logicRoutes);
         if (status.executionHalted && !clearedStop.current) {
           setWs((prev) => (prev.halted ? prev : pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "server already stopped")));
         }
@@ -1001,9 +1016,10 @@ export function CommandApp() {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem("amcos.provider.v1") === "grok") setProviderChoice("grok");
-      const tier = localStorage.getItem("amcos.modelTier.v1");
-      if (tier && (MODEL_TIERS as readonly string[]).includes(tier)) setModelTier(tier as ModelTier);
+      const stored = readSelection(localStorage);
+      setProviderChoice(stored.provider);
+      setModelTier(stored.modelTier);
+      setLogicRoute(stored.logicRoute);
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
     } catch {
@@ -1012,22 +1028,13 @@ export function CommandApp() {
   }, []);
 
   useEffect(() => {
-    if (providerChoice !== "grok") return;
+    writeSelection(localStorage, { provider: providerChoice, modelTier, logicRoute });
     try {
-      localStorage.setItem("amcos.provider.v1", "grok");
-    } catch {
-      /* a private browser can refuse storage */
-    }
-  }, [providerChoice]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("amcos.modelTier.v1", modelTier);
       localStorage.setItem("amcos.failover.v1", failoverPolicy);
     } catch {
       /* a private browser can refuse storage */
     }
-  }, [modelTier, failoverPolicy]);
+  }, [providerChoice, modelTier, logicRoute, failoverPolicy]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -1391,6 +1398,11 @@ export function CommandApp() {
       setBusy(false);
       setResearchCitations(result.citations);
       if (!result.ok) {
+        const message = result.error;
+        const retry = () => {
+          void runWebResearch(chat, query, action);
+        };
+        emitFailure("research", mountFailure({ message, action: "research_failed", target: "search", outcome: result }, retry));
         recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
         setResearchNote(result.error);
         return;
@@ -1405,6 +1417,10 @@ export function CommandApp() {
     } catch {
       setBusy(false);
       const message = "The search provider could not be reached. No citations were created.";
+      const retry = () => {
+        void runWebResearch(chat, query, action);
+      };
+      emitFailure("research", mountFailure({ message, action: "research_failed", target: "search" }, retry));
       recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
       setResearchNote(message);
     }
@@ -1435,7 +1451,12 @@ export function CommandApp() {
       recordToolTurn(chat, text, lines.join("\n") || "Notion returned nothing.");
     } catch {
       setBusy(false);
-      setError("Notion could not be reached. Nothing was changed.");
+      const message = "Notion could not be reached. Nothing was changed.";
+      const retry = () => {
+        void askNotion(chat, text, confirmed, pageId);
+      };
+      if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
+      setError(message);
     }
   }
 
@@ -1507,15 +1528,25 @@ export function CommandApp() {
       });
       return null;
     }
-    let routed = chosenProvider(providerChoice, grokConfigured);
-    if (!routed.ok) {
+    const activeLogic = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
+    if (activeLogic) {
+      const view = logicRoutes.find((item) => item.id === activeLogic);
+      if (!view?.ready) {
+        reportFailure(view?.reason ?? `${activeLogic} is not ready. Nothing was sent.`, "model_unavailable", "provider", () => {
+          void deliver(chat, text, wsRef.current, resume, snapped);
+        });
+        return null;
+      }
+    }
+    let routed = chosenProvider(activeLogic ? "grok" : providerChoice, grokConfigured);
+    if (!activeLogic && !routed.ok) {
       const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
       }
     }
-    if (!routed.ok) {
+    if (!activeLogic && !routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
         void deliver(chat, text, wsRef.current, resume, snapped);
       });
@@ -1571,7 +1602,7 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: {
+        body: chatTurnBody({
           text,
           memory: chat.memory,
           halted: wsRef.current.halted,
@@ -1583,10 +1614,11 @@ export function CommandApp() {
               .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
           })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
-          provider: routed.id,
+          provider: activeLogic ?? (routed.ok ? routed.id : providerChoice),
           modelTier,
+          logicRoute: activeLogic,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
-        },
+        }),
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
           setLiveText((current) => current + chunk);
@@ -1638,9 +1670,19 @@ export function CommandApp() {
           result.resolvedTier && (result.modelTier === "Auto" || (!result.modelTier && modelTier === "Auto"))
             ? `→${result.resolvedTier}`
             : "";
-        const tierLabel = result.model
-          ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
-          : result.model;
+        const answered = result.provider
+          ? respondedRouteLabel({
+              provider: result.provider,
+              model: result.model,
+              requestedModel: result.requestedModel,
+              credentialFallback: result.credentialFallback,
+            })
+          : "";
+        const tierLabel = result.provider
+          ? answered
+          : result.model
+            ? `${result.model}${result.resolvedTier || result.modelTier ? ` (${result.modelTier ?? modelTier}${autoBit})` : ""}`
+            : result.model;
         if (result.resolvedTier === "Fast" || result.resolvedTier === "Expert" || result.resolvedTier === "Heavy" || result.resolvedTier === "Build") {
           setLastResolvedTier(result.resolvedTier);
         }
@@ -2539,6 +2581,19 @@ export function CommandApp() {
     const kind = classifyHonestFailure(message);
     const auditAction = kind ? honestFailureAuditAction(kind) : action;
     const auditId = crypto.randomUUID();
+    const surface = surfaceForReport(auditAction, target);
+    const outcome = { message, action: auditAction, target, kind };
+    if (
+      surface &&
+      emitFailure(
+        surface,
+        mountFailure(outcome, () => {
+          retry?.();
+        }, auditId),
+      )
+    ) {
+      return;
+    }
     setWs((prev) => ({
       ...prev,
       audit: [{ id: auditId, at: new Date().toISOString(), action: auditAction, target, result: message }, ...prev.audit].slice(0, 200),
@@ -3702,9 +3757,19 @@ export function CommandApp() {
           <div className="hidden md:block">
             <ModelTierChip
               tier={modelTier}
-              onChoose={setModelTier}
+              onChoose={(tier) => {
+                setLogicRoute(null);
+                if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
+                setModelTier(tier);
+              }}
               lastResolved={lastResolvedTier}
               lastModel={lastModelUsed}
+              logicRoute={logicRoute}
+              logicRoutes={logicRoutes}
+              onChooseLogic={(route) => {
+                setLogicRoute(route);
+                setProviderChoice(route);
+              }}
             />
           </div>
 
@@ -4294,10 +4359,30 @@ export function CommandApp() {
               providerChoices={providerChoices(grokConfigured)}
               providerChoice={providerChoice}
               onProvider={(id) => {
-                if (id === "grok") setProviderChoice("grok");
+                if (isLogicRouteId(id)) {
+                  const view = logicRoutes.find((item) => item.id === id);
+                  if (!view?.ready) return;
+                  setLogicRoute(id);
+                  setProviderChoice(id);
+                  return;
+                }
+                if (id === "grok") {
+                  setLogicRoute(null);
+                  setProviderChoice("grok");
+                }
               }}
               modelTier={modelTier}
-              onModelTier={setModelTier}
+              onModelTier={(tier) => {
+                setLogicRoute(null);
+                if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
+                setModelTier(tier);
+              }}
+              logicRoute={logicRoute}
+              logicRoutes={logicRoutes}
+              onChooseLogic={(route) => {
+                setLogicRoute(route);
+                setProviderChoice(route);
+              }}
               toolTimeline={toolTimeline}
               timelineNowMs={timelineTickMs || Date.now()}
               agentActivity={agentActivityFromTimeline(toolTimeline)}
@@ -4631,7 +4716,11 @@ export function CommandApp() {
                 grokConfigured={grokConfigured === true}
                 notion={notion}
                 mcp={mcpBoard}
-                onSetup={(message) => setNotice(message)}
+                onSetup={(message) => {
+                  const retry = () => setNotice(message);
+                  if (emitFailure("serviceBoard", mountFailure({ message, action: "service_setup", target: "serviceBoard" }, retry))) return;
+                  setNotice(message);
+                }}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
                     setNotion(status);
@@ -4738,7 +4827,26 @@ export function CommandApp() {
                 </ul>
               </form>
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
-              <FleetPanel mode="connected" ws={ws} setWs={setWs} />
+              <FleetPanel
+                mode="connected"
+                ws={ws}
+                setWs={setWs}
+                logicRoutes={logicRoutes}
+                providerChoice={logicRoute ?? providerChoice}
+                onSelectProvider={(id) => {
+                  if (isLogicRouteId(id)) {
+                    const view = logicRoutes.find((item) => item.id === id);
+                    if (!view?.ready) return;
+                    setLogicRoute(id);
+                    setProviderChoice(id);
+                    return;
+                  }
+                  if (id === "grok") {
+                    setLogicRoute(null);
+                    setProviderChoice("grok");
+                  }
+                }}
+              />
             </section>
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
@@ -5606,6 +5714,9 @@ function ChatPane({
   onProvider,
   modelTier,
   onModelTier,
+  logicRoute = null,
+  logicRoutes = [],
+  onChooseLogic,
   toolTimeline,
   timelineNowMs,
   agentActivity,
@@ -5682,6 +5793,9 @@ function ChatPane({
   onProvider: (id: string) => void;
   modelTier: ModelTier;
   onModelTier: (tier: ModelTier) => void;
+  logicRoute?: LogicRouteId | null;
+  logicRoutes?: LogicRoutePublic[];
+  onChooseLogic?: (route: LogicRouteId) => void;
   toolTimeline: ToolTimelineRow[];
   timelineNowMs: number;
   agentActivity: ReturnType<typeof agentActivityFromTimeline>;
@@ -5789,9 +5903,9 @@ function ChatPane({
             </div>
           )}
           <div className="mt-3 xl:hidden">
-            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} />
+            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} />
             <div className="mt-3">
-              <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} />
+              <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
             </div>
           </div>
         </div>
@@ -6096,10 +6210,10 @@ function ChatPane({
       </section>
       <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-auto border-l border-line/70 p-3 xl:flex" data-testid="chat-right-rail">
         <section className="glass-panel rounded-panel p-3">
-          <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} />
+          <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} />
         </section>
         <section className="glass-panel rounded-panel p-3">
-          <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} />
+          <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
         </section>
         <section className="glass-panel rounded-panel p-3">
           <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
@@ -6298,21 +6412,49 @@ function ModelTierPicker({
   name,
   tier,
   onChoose,
+  logicRoute = null,
+  logicRoutes = [],
+  onChooseLogic,
 }: {
   name: string;
   tier: ModelTier;
   onChoose: (tier: ModelTier) => void;
+  logicRoute?: LogicRouteId | null;
+  logicRoutes?: LogicRoutePublic[];
+  onChooseLogic?: (route: LogicRouteId) => void;
 }) {
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm font-semibold">Mode</legend>
-      <p className="text-xs text-muted">Chooses which Grok model runs. Auto routes from the prompt.</p>
+      <p className="text-xs text-muted">Grok modes use the tier models. Astra, Sol, and Luna follow provider.status.</p>
       {MODEL_TIERS.map((item) => (
         <label key={item} className="flex items-start gap-2 text-sm">
-          <input type="radio" name={name} checked={tier === item} onChange={() => onChoose(item)} className="mt-1" />
+          <input type="radio" name={name} checked={logicRoute == null && tier === item} onChange={() => onChoose(item)} className="mt-1" />
           <span className="font-medium">{item}</span>
         </label>
       ))}
+      {LOGIC_ROUTES.map((id) => {
+        const view = logicRoutes.find((item) => item.id === id);
+        const menu = logicMenuState(view, id);
+        return (
+          <label key={id} className={`flex items-start gap-2 text-sm ${menu.selectable ? "" : "opacity-70"}`} data-testid={`logic-route-radio-${id}`}>
+            <input
+              type="radio"
+              name={name}
+              className="mt-1"
+              checked={logicRoute === id}
+              disabled={!menu.selectable}
+              onChange={() => {
+                if (menu.selectable) onChooseLogic?.(id);
+              }}
+            />
+            <span>
+              <span className="font-medium">{menu.label}{view ? ` · ${view.state}` : ""}</span>
+              <span className="block text-xs text-muted">{menu.detail}</span>
+            </span>
+          </label>
+        );
+      })}
     </fieldset>
   );
 }
@@ -6322,15 +6464,39 @@ function ProviderPicker({
   choices,
   choice,
   onChoose,
+  logicRoutes = [],
 }: {
   name: string;
   choices: { id: string; label: string; enabled: boolean; reason: string }[];
   choice: string;
   onChoose: (id: string) => void;
+  logicRoutes?: LogicRoutePublic[];
 }) {
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm font-semibold">Provider</legend>
+      {LOGIC_ROUTES.map((id) => {
+        const view = logicRoutes.find((item) => item.id === id);
+        const menu = logicMenuState(view, id);
+        return (
+          <label key={id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === id ? "model-option-active" : ""} ${menu.selectable ? "" : "opacity-70"}`}>
+            <input
+              type="radio"
+              name={name}
+              className="mt-1"
+              checked={choice === id}
+              disabled={!menu.selectable}
+              onChange={() => {
+                if (menu.selectable) onChoose(id);
+              }}
+            />
+            <span>
+              {menu.label}{view ? ` · ${view.state}` : ""}
+              <span className="block text-xs text-muted">{menu.detail}</span>
+            </span>
+          </label>
+        );
+      })}
       {choices.map((item) => (
         <label
           key={item.id}

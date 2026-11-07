@@ -10,6 +10,7 @@ import {
 } from "@/lib/mind/personas";
 import type { Workspace } from "@/lib/mind/types";
 import { persistPersonaOpen } from "@/lib/mind/personas/selection";
+import { emitFailure, mountFailure } from "@/lib/mind/failure-mount";
 
 function botAvatarSrc(name: string) {
   const lower = name.toLowerCase();
@@ -54,14 +55,21 @@ export function PersonaDirectoryView({
   function openCard(card: PersonaCard) {
     const result = selectPersona(latestWorkspace.current, card);
     if (!result.ok) {
-      setNote(result.error);
+      const message = result.error;
+      const retry = () => openCard(card);
+      if (!emitFailure("persona", mountFailure({ message, action: "persona_open", target: "persona", outcome: result }, retry))) {
+        setNote(message);
+      }
       return;
     }
     let persisted: ReturnType<typeof persistPersonaOpen>;
     try {
       persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection);
     } catch {
-      setNote("Could not access local storage. Nothing was opened.");
+      const message = "Could not access local storage. Nothing was opened.";
+      if (!emitFailure("persona", mountFailure({ message, action: "persona_open", target: "persona" }, () => openCard(card)))) {
+        setNote(message);
+      }
       return;
     }
     if (!persisted.ok) {
@@ -69,11 +77,12 @@ export function PersonaDirectoryView({
         latestWorkspace.current = result.ws;
         setWs(() => result.ws);
       }
-      setNote(
-        persisted.workspacePersisted
-          ? "The persona was saved, but its selection could not be saved. Nothing was opened."
-          : "Could not save this persona. Nothing was opened.",
-      );
+      const message = persisted.workspacePersisted
+        ? "The persona was saved, but its selection could not be saved. Nothing was opened."
+        : "Could not save this persona. Nothing was opened.";
+      if (!emitFailure("persona", mountFailure({ message, action: "persona_open", target: "persona", outcome: persisted }, () => openCard(card)))) {
+        setNote(message);
+      }
       return;
     }
     latestWorkspace.current = result.ws;

@@ -63,7 +63,7 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null }
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
   | { event: "error"; error: string }
   | { event: "canceled"; error: string };
 
@@ -107,6 +107,9 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         tierReason: typeof record.tierReason === "string" ? record.tierReason : undefined,
         memorySaved: record.memorySaved === true,
         savedMemoryId: typeof record.savedMemoryId === "string" ? record.savedMemoryId : null,
+        provider: typeof record.provider === "string" ? record.provider : undefined,
+        requestedModel: typeof record.requestedModel === "string" ? record.requestedModel : undefined,
+        credentialFallback: typeof record.credentialFallback === "string" ? record.credentialFallback : null,
       });
     }
   }

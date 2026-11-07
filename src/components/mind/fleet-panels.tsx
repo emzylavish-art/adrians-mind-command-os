@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
+import { oauthBoardState } from "@/lib/mind/connection-board";
+import { fetchOauthStatusPayload } from "@/lib/mind/service-board-status";
+import { LOGIC_ROUTES, logicMenuState, type LogicRoutePublic } from "@/lib/mind/logic-routes";
 import {
   AGENT_TEMPLATES,
   FLEET_TOOLS,
@@ -85,11 +88,17 @@ export function FleetPanel({
   ws,
   setWs,
   onFailure,
+  logicRoutes = [],
+  providerChoice,
+  onSelectProvider,
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
   onFailure?: (message: string, retry: () => void) => void;
+  logicRoutes?: LogicRoutePublic[];
+  providerChoice?: string;
+  onSelectProvider?: (id: string) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [goal, setGoal] = useState("");
@@ -97,7 +106,8 @@ export function FleetPanel({
   const [mailLabel, setMailLabel] = useState("");
   const [mailAddress, setMailAddress] = useState("");
   const [connectionLabel, setConnectionLabel] = useState("");
-  const [provider, setProvider] = useState<ProviderConnection["provider"]>("openai");
+  const [provider, setProvider] = useState<string>(providerChoice ?? "openai");
+  const [gmailBoard, setGmailBoard] = useState<{ state: string; detail: string }>({ state: "Checking", detail: "Checking connection…" });
   const [jobName, setJobName] = useState("");
   const [jobZone, setJobZone] = useState("America/Chicago");
   const [jobHour, setJobHour] = useState("");
@@ -247,6 +257,17 @@ export function FleetPanel({
         if (generation === workerHealthGeneration.current) workerHealthInFlight.current = false;
       });
   }
+
+  useEffect(() => {
+    if (mode !== "connected") return;
+    let cancel = false;
+    void fetchOauthStatusPayload("/api/mind/oauth/gmail/status").then((status) => {
+      if (!cancel) setGmailBoard(oauthBoardState(status));
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [mode]);
 
   // After sign-in, refetch MCP list so servers appear without a full reload (one quiet notice).
   useEffect(() => {
@@ -442,19 +463,47 @@ export function FleetPanel({
           <p className="text-sm text-muted">Connection records do not store API keys or OAuth tokens. Gmail stays not connected until Google OAuth is configured.</p>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <select aria-label="Connection provider" value={provider} onChange={(event) => setProvider(event.target.value as ProviderConnection["provider"])} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
-            {["grok", "openai", "anthropic", "gemini", "openrouter", "ollama"].map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
+          <select
+            aria-label="Connection provider"
+            value={provider}
+            onChange={(event) => {
+              const next = event.target.value;
+              setProvider(next);
+              onSelectProvider?.(next);
+            }}
+            className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
+          >
+            {["grok", "openai", "anthropic", "gemini", "openrouter", "ollama", ...LOGIC_ROUTES].map((item) => {
+              const route = logicRoutes.find((row) => row.id === item);
+              const menu = route ? logicMenuState(route, route.id) : null;
+              return (
+                <option key={item} value={item} disabled={menu ? !menu.selectable : false}>
+                  {menu ? `${menu.label} · ${route?.state}` : item}
+                </option>
+              );
+            })}
           </select>
           <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection name" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
-          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => apply(addConnection(ws, provider, connectionLabel, false))}>Add connection</button>
+          <button
+            type="button"
+            className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+            onClick={() => {
+              const stored = provider === "grok" || provider === "openai" || provider === "anthropic" || provider === "gemini" || provider === "openrouter" || provider === "ollama" ? provider : null;
+              if (stored) apply(addConnection(ws, stored, connectionLabel, false));
+              else {
+                onSelectProvider?.(provider);
+                setNote("That route is selected for chat. It is not stored as an API key.");
+              }
+            }}
+          >
+            Add connection
+          </button>
         </div>
         <ul className="mt-4 space-y-2">
           {ws.connections.length === 0 && <li className="text-sm text-muted">No extra connections yet. Chat still uses the server Grok key only when you press Send.</li>}
           {ws.connections.map((item) => (
             <li key={item.id} className="dense-card dense-row text-sm">
-              {item.label} · {item.provider} · {item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected."} · secret stored: no
+              {item.label} · {item.provider} · {logicRoutes.find((row) => row.id === (item.provider as string))?.reason ?? (item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected.")} · secret stored: no
             </li>
           ))}
         </ul>
@@ -464,9 +513,10 @@ export function FleetPanel({
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => apply(addMailbox(ws, mailLabel, mailAddress))}>Add mailbox record</button>
           <button type="button" className="is-coming-soon min-h-11 rounded-panel border border-line px-3 text-sm" title="Coming soon — Google OAuth is not started from this button" aria-disabled={true} onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
         </div>
+        <p className="mt-4 text-sm" data-testid="gmail-oauth-status">Gmail OAuth: {gmailBoard.state}. {gmailBoard.detail}</p>
         <ul className="mt-3 space-y-2">
           {ws.mailboxes.map((item) => (
-            <li key={item.id} className="text-sm text-muted">{item.label} · {item.address} · {item.status}</li>
+            <li key={item.id} className="text-sm text-muted">{item.label} · {item.address} · local record {item.status}. This is not the OAuth session.</li>
           ))}
         </ul>
         {note ? <p className="mt-3 text-sm text-muted">{note}</p> : null}

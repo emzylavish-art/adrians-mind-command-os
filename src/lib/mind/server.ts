@@ -37,6 +37,9 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const described = describePersistence(resolveDatabaseUrl(process.env));
   const persistence = described.note;
   const databaseBackend = described.backend;
+  const { inspectLogicRoutes } = await import("./logic-route-adapter.server.ts");
+  const { toPublicLogicRoute } = await import("./logic-routes.ts");
+  const logicRoutes = (await inspectLogicRoutes(process.env)).map(toPublicLogicRoute);
   if (!gate.ok) {
     return {
       ok: false as const,
@@ -50,6 +53,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       persistence,
       databaseBackend,
       providers: configuredProviders(process.env),
+      logicRoutes,
       checkedAt,
     };
   }
@@ -68,6 +72,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     persistence,
     databaseBackend,
     providers: configuredProviders(process.env),
+    logicRoutes,
     checkedAt,
   };
 });
