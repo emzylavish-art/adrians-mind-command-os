@@ -1,35 +1,79 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getSupabaseAuthUser,
   signOutSupabase,
 } from "@/lib/supabase/actions";
+import {
+  SupabaseAccountFailureBanner,
+  onceRetry,
+  runSupabaseAccountProbe,
+  runSupabaseSignOut,
+  type SupabaseAccountActionState,
+} from "@/lib/mind/supabase-account-action";
 
 /**
  * Shows the Supabase-signed-in email and a sign-out control in the account menu.
  * Uses server functions only — no client tokens.
+ * Probe/network failures show a red Retry banner (never a silent empty "not configured").
  */
-export function SupabaseAccountControls() {
+export function SupabaseAccountControls({
+  onFailure,
+}: {
+  /** Optional: reportFailure for top View log — mount wiring may live outside this lane. */
+  onFailure?: (message: string, retry: () => void) => void;
+} = {}) {
   const [email, setEmail] = useState<string | null>(null);
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [actionState, setActionState] = useState<SupabaseAccountActionState>({ status: "idle" });
+  const onFailureRef = useRef(onFailure);
+  onFailureRef.current = onFailure;
 
-  useEffect(() => {
-    let cancelled = false;
-    void getSupabaseAuthUser()
-      .then((result) => {
-        if (cancelled) return;
-        setConfigured(result.configured);
-        setEmail(result.user?.email ?? null);
-      })
-      .catch(() => {
-        if (cancelled) return;
+  function loadAccount() {
+    const run = () => {
+      setActionState({ status: "running", action: "probe" });
+      void runSupabaseAccountProbe(() => getSupabaseAuthUser()).then((result) => {
+        if (result.ok) {
+          setConfigured(result.configured);
+          setEmail(result.email);
+          setReady(true);
+          setActionState({ status: "ok" });
+          return;
+        }
         setConfigured(false);
         setEmail(null);
+        setReady(true);
+        setActionState({
+          status: "error",
+          kind: result.kind,
+          message: result.message,
+          params: result.params,
+        });
+        const retry = onceRetry(() => run());
+        if (retry) onFailureRef.current?.(result.message, retry);
       });
-    return () => {
-      cancelled = true;
     };
+    run();
+  }
+
+  useEffect(() => {
+    loadAccount();
+    // Probe once on mount; Retry re-enters loadAccount explicitly.
   }, []);
+
+  if (!ready) return null;
+
+  if (actionState.status === "error" && actionState.params.action === "probe") {
+    return (
+      <div className="mt-3 space-y-3 border-t border-line pt-3" data-testid="supabase-account">
+        <SupabaseAccountFailureBanner
+          state={actionState}
+          onRetry={onceRetry(() => loadAccount()) ?? (() => undefined)}
+        />
+      </div>
+    );
+  }
 
   if (!configured) return null;
 
@@ -68,7 +112,29 @@ export function SupabaseAccountControls() {
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-panel border border-line bg-bg px-3 text-sm font-medium text-fg transition-colors hover:border-fg/25 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-55"
           onClick={() => {
             setBusy(true);
-            void signOutSupabase().catch(() => setBusy(false));
+            setActionState({ status: "running", action: "sign_out" });
+            const run = () => {
+              setBusy(true);
+              setActionState({ status: "running", action: "sign_out" });
+              void runSupabaseSignOut(() => signOutSupabase()).then((result) => {
+                if (result.ok) {
+                  setActionState({ status: "ok" });
+                  // Redirect navigates away; if it returned without redirect, clear busy.
+                  setBusy(false);
+                  return;
+                }
+                setBusy(false);
+                setActionState({
+                  status: "error",
+                  kind: result.kind,
+                  message: result.message,
+                  params: result.params,
+                });
+                const retry = onceRetry(() => run());
+                if (retry) onFailureRef.current?.(result.message, retry);
+              });
+            };
+            run();
           }}
         >
           {busy ? (
@@ -100,6 +166,30 @@ export function SupabaseAccountControls() {
           )}
         </button>
       )}
+      {actionState.status === "error" && actionState.params.action === "sign_out" ? (
+        <SupabaseAccountFailureBanner
+          state={actionState}
+          onRetry={
+            onceRetry(() => {
+              setBusy(true);
+              void runSupabaseSignOut(() => signOutSupabase()).then((result) => {
+                if (result.ok) {
+                  setActionState({ status: "ok" });
+                  setBusy(false);
+                  return;
+                }
+                setBusy(false);
+                setActionState({
+                  status: "error",
+                  kind: result.kind,
+                  message: result.message,
+                  params: result.params,
+                });
+              });
+            }) ?? (() => undefined)
+          }
+        />
+      ) : null}
     </div>
   );
 }

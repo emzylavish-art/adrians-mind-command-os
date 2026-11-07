@@ -20,7 +20,10 @@ import {
   mapImagineHttpErrorCopy,
   shouldShowFailureBanner,
   isAuthRequiredNotice,
+  isNotionUnconfiguredNotice,
+  mapNotionApiErrorCopy,
   MCP_AUTH_REQUIRED_NOTICE,
+  NOTION_UNCONFIGURED_NOTICE,
 } from "./failure-states.ts";
 
 describe("honest failure states", () => {
@@ -145,6 +148,14 @@ describe("top-5 gap classifiers", () => {
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_approve_failed), "network_failure");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.pc_deny_failed), "network_failure");
     assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_try_select_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.oauth_disconnect_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.open_page_failed), "network_failure");
+    assert.equal(classifyHonestFailure("Gmail OAuth could not be started. Nothing was connected."), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.mcp_toggle_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.supabase_account_probe_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.supabase_sign_out_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.persona_select_failed), "network_failure");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.fleet_mutation_failed), "network_failure");
     assert.equal(classifyHonestFailure("The worker status could not be read. The network request failed. Nothing was substituted."), "network_failure");
     assert.equal(honestFailureAuditAction("network_failure"), "network_failure");
   });
@@ -325,5 +336,97 @@ describe("H23 auth_required is a notice, not a red failure banner", () => {
     assert.match(failureBannerMountHint(), /shouldShowFailureBanner/);
     assert.match(failureBannerMountHint(), /Sign in to load MCP servers/);
     assert.match(failureBannerMountHint(), /reportFailureRef|reportFailure/);
+  });
+});
+
+
+describe("H32 research-layer classifyHonestFailure", () => {
+  it("classifies research timeout, not-configured, and provider HTTP as research_failed", () => {
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.research_timeout), "research_failed");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.research_not_configured), "research_failed");
+    assert.equal(classifyHonestFailure("The search provider returned 502. No citations were created."), "research_failed");
+    assert.equal(classifyHonestFailure("Search timed out. No citations were created."), "research_failed");
+    assert.equal(honestFailureAuditAction("research_failed"), "research_failed");
+    assert.equal(honestFailureDescription("research_failed"), HONEST_FAILURE_MESSAGES.research_failed);
+  });
+
+  it("keeps 429 research HTTP as rate_limited (priority over research_failed)", () => {
+    assert.equal(classifyHonestFailure("The search provider returned 429. No citations were created."), "rate_limited");
+  });
+
+  it("partial warning copy is not an honest failure kind and not a red banner", () => {
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.research_partial), null);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.research_partial), false);
+  });
+});
+
+describe("H33 Notion connector classifyHonestFailure", () => {
+  it("keeps missing token and disconnect as notices, not red notion_failed", () => {
+    assert.equal(NOTION_UNCONFIGURED_NOTICE, HONEST_FAILURE_MESSAGES.notion_not_configured);
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.notion_not_configured), null);
+    assert.equal(isNotionUnconfiguredNotice(HONEST_FAILURE_MESSAGES.notion_not_configured), true);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.notion_not_configured), false);
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.notion_disconnected), null);
+    assert.equal(shouldShowFailureBanner(HONEST_FAILURE_MESSAGES.notion_disconnected), false);
+    assert.equal(
+      isNotionUnconfiguredNotice("Notion is not configured. Set NOTION_TOKEN or NOTION_API_KEY on the server. Nothing was read."),
+      true,
+    );
+    assert.equal(shouldShowFailureBanner("Notion OAuth is not configured. Set NOTION_OAUTH_CLIENT_ID. Nothing was started."), false);
+  });
+
+  it("classifies Notion HTTP 401/403/404/5xx as notion_failed and 429 as rate_limited", () => {
+    for (const status of [401, 403, 404, 500, 503]) {
+      const line = `Notion returned ${status}. Nothing was invented.`;
+      assert.equal(classifyHonestFailure(line), "notion_failed", line);
+      assert.equal(shouldShowFailureBanner(line), true, line);
+    }
+    assert.equal(classifyHonestFailure("Notion returned 429. Nothing was invented."), "rate_limited");
+    assert.equal(shouldShowFailureBanner("Notion returned 429. Nothing was invented."), true);
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.notion_timeout), "notion_failed");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.notion_unreachable), "notion_failed");
+    assert.equal(classifyHonestFailure(HONEST_FAILURE_MESSAGES.notion_status_failed), "notion_failed");
+    assert.equal(honestFailureAuditAction("notion_failed"), "notion_failed");
+    assert.equal(honestFailureDescription("notion_failed"), HONEST_FAILURE_MESSAGES.notion_failed);
+    assert.equal(classifyHonestFailure("Too many Notion requests. Wait a minute. Nothing was changed."), "rate_limited");
+  });
+
+  it("does not treat an empty search or an MCP-wrapped Notion tool error as a configure notice", () => {
+    assert.equal(classifyHonestFailure("Notion returned no matching pages."), null);
+    assert.equal(shouldShowFailureBanner("Notion returned no matching pages."), true);
+    const wrapped = "MCP tool “notion_read” failed. Notion returned 401. Nothing was invented.";
+    assert.equal(classifyHonestFailure(wrapped), "mcp_tool_failed");
+    assert.equal(isNotionUnconfiguredNotice(wrapped), false);
+    assert.equal(shouldShowFailureBanner(wrapped), true);
+    const wrappedMissing = "MCP tool “notion_read_page” failed. Notion is not configured. Set NOTION_TOKEN. Nothing was read.";
+    assert.equal(classifyHonestFailure(wrappedMissing), "mcp_tool_failed");
+    assert.equal(shouldShowFailureBanner(wrappedMissing), true);
+  });
+
+  it("keeps intentional Stop off the red banner", () => {
+    assert.equal(classifyHonestTurnOutcome(STOPPED_REPLY), "user_stopped");
+    assert.equal(shouldShowFailureBanner(STOPPED_REPLY), false);
+    assert.equal(isNotionUnconfiguredNotice(STOPPED_REPLY), false);
+    assert.notEqual(classifyHonestFailure(STOPPED_REPLY), "notion_failed");
+  });
+
+  it("mapNotionApiErrorCopy keeps the status and the server reason on one line", () => {
+    assert.equal(mapNotionApiErrorCopy(401, ""), "Notion returned 401. Nothing was invented.");
+    assert.equal(
+      mapNotionApiErrorCopy(403, "API token is invalid."),
+      "Notion returned 403. API token is invalid. Nothing was invented.",
+    );
+    assert.equal(mapNotionApiErrorCopy(404, "Notion returned 404. Nothing was invented."), "Notion returned 404. Nothing was invented.");
+    assert.equal(classifyHonestFailure(mapNotionApiErrorCopy(500, "bad\ngateway")), "notion_failed");
+    assert.equal(mapNotionApiErrorCopy(500, "bad\ngateway"), "Notion returned 500. bad gateway. Nothing was invented.");
+    assert.equal(classifyHonestFailure(mapNotionApiErrorCopy(429, "")), "rate_limited");
+    assert.equal(mapNotionApiErrorCopy(408, ""), HONEST_FAILURE_MESSAGES.notion_timeout);
+  });
+
+  it("mount hint names the Notion reportFailure gate", () => {
+    assert.match(failureBannerMountHint(), /H33 Notion/);
+    assert.match(failureBannerMountHint(), /reportFailure/);
+    assert.match(failureBannerMountHint(), /#audit-/);
+    assert.match(failureBannerMountHint(), /user_stopped/);
   });
 });

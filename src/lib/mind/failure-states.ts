@@ -8,7 +8,20 @@
  * media keeps request/HTTP mapping — this module only classifies and banners that copy.
  * H22: intentional user Stop (STOPPED_REPLY) is classified as user_stopped — not chat_failed,
  * and must not paint the red failure banner (see shouldShowFailureBanner / classifyHonestTurnOutcome).
+ * H24/H25: ServiceBoard OAuth connect/disconnect and Tools Open page failures classify as network_failure.
+ * H26: MCP enable/disable toggle failures classify as network_failure (or auth_required).
+ * H27: Supabase account probe/sign-out failures classify as network_failure.
+ * H28: Explore persona select failures classify as network_failure (or emergency_stop).
+ * H29: Fleet panel apply() mutation failures classify as network_failure (or emergency_stop).
+ * H32: Research-layer failures (not configured / timeout / provider HTTP / empty sources) classify as
+ * research_failed. Provider 429 still rate_limited (earlier check). Partial deep is a warning tone
+ * (research-failure-action), not a red failure — citations stay visible.
+ * H33: Notion connector — missing token/env or an owner disconnect is a configure notice
+ * (isNotionUnconfiguredNotice, not a red banner, not a silent empty). API reject
+ * (401/403/404/5xx), timeout, and unreachable classify as notion_failed. Notion 429 stays
+ * rate_limited. MCP-wrapped Notion tool errors stay mcp_tool_failed. User Stop stays user_stopped.
  */
+
 
 export type HonestFailureKind =
   | "model_unavailable"
@@ -20,7 +33,9 @@ export type HonestFailureKind =
   | "auth_required"
   | "forbidden_cross_site"
   | "rate_limited"
-  | "image_generation_failed";
+  | "image_generation_failed"
+  | "research_failed"
+  | "notion_failed";
 
 /** Logic-wiring turn-timeouts copy (CHAT_TIMEOUT_REPLY) — recognized even when that module is not on this branch. */
 export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
@@ -56,6 +71,22 @@ export const HONEST_FAILURE_MESSAGES = {
   pc_approve_failed: "The PC shell approval could not be completed.",
   pc_deny_failed: "The PC shell denial could not be completed.",
   mcp_try_select_failed: "The MCP Try SELECT 1 call failed.",
+  /** ServiceBoard OAuth Connect start failed (non-ok / network). */
+  oauth_connect_failed: "Nothing was connected.",
+  /** ServiceBoard OAuth Disconnect failed. */
+  oauth_disconnect_failed: "Disconnect failed. The board was not changed.",
+  /** Tools panel Open page / inspectWebPage failed. */
+  open_page_failed: "The page was not opened.",
+  /** Tools panel MCP enable/disable toggle failed. */
+  mcp_toggle_failed: "The MCP server toggle could not be completed.",
+  /** Account menu: getSupabaseAuthUser probe rejected (not the same as configured:false). */
+  supabase_account_probe_failed: "Supabase account status could not be loaded.",
+  /** Account menu: signOutSupabase rejected without a redirect. */
+  supabase_sign_out_failed: "Supabase sign out could not be completed.",
+  /** Explore persona Open in Chat (selectPersona) failed. */
+  persona_select_failed: "That persona could not be opened.",
+  /** Fleet panel local mutation (add/deploy/enqueue/schedule/connection/mailbox) failed. */
+  fleet_mutation_failed: "That fleet change could not be applied.",
   /** Default one-line Imagine failure (mapImagineHttpError 5xx). */
   image_generation_failed: "The image service failed. Nothing was saved as a success.",
   image_generation_refused: "Image generation was refused (auth or permission).",
@@ -64,10 +95,43 @@ export const HONEST_FAILURE_MESSAGES = {
   image_generation_invalid: "That Imagine request was invalid. Check the prompt and images.",
   image_generation_too_large: "That Imagine request was too large.",
   image_generation_timeout: "Image generation timed out. Nothing was saved as a success.",
+  /** Research page / chat web_research hard failure (mirrors research.ts copy). */
+  research_failed: "Research failed. No citations were created.",
+  research_not_configured: "No search provider is configured. Nothing was searched and no citations were created.",
+  research_timeout: "Search timed out. No citations were created.",
+  research_provider_http: "The search provider returned an error. No citations were created.",
+  research_provider_unreachable: "The search provider did not answer. No citations were created.",
+  research_empty_sources: "The search returned no usable sources. No citations were created.",
+  /** Partial deep: warning copy — citations still shown; not a red failure. */
+  research_partial: "Some research searches timed out. Only confirmed sources are listed.",
+  /**
+   * Same sentence as notion.ts NOTION_SETUP. No token/env — configure on Connected → Setup.
+   * Notice, not a red Retry of the same unconfigured call.
+   */
+  notion_not_configured:
+    "Notion is not connected. Set NOTION_TOKEN on the server to an internal integration secret, then share the pages with that integration. Nothing was searched or updated. The secret is not shown here.",
+  /** Same sentence as notion.ts when the owner disconnects the workspace. */
+  notion_disconnected:
+    "Notion is disconnected for this workspace. The server secret stays hidden. Nothing is called.",
+  /** Notion API / command hard failures (red Retry banner). */
+  notion_failed: "The Notion request failed. Nothing was invented.",
+  notion_api_rejected: "Notion rejected the request. Nothing was invented.",
+  /** Same sentence as notion.ts when fetch throws. */
+  notion_unreachable: "Notion could not be reached. Nothing was changed.",
+  /** Client budget exceeded — same idea as other connector/list timeouts, Notion-specific copy. */
+  notion_timeout: "Notion timed out. Nothing was searched or updated.",
+  /** notionStatus() rejected or returned nothing. Already used by the Connected status catch. */
+  notion_status_failed: "Notion status could not be read. Nothing was searched or updated.",
 } as const;
 
 /** Non-blocking copy when MCP (or similar) list load hits 401 before sign-in. */
 export const MCP_AUTH_REQUIRED_NOTICE = "Sign in to load MCP servers.";
+
+/**
+ * Non-blocking copy when Notion has no token/env.
+ * Points at the existing Connected → ServiceBoard Setup control. Never a silent empty.
+ */
+export const NOTION_UNCONFIGURED_NOTICE = HONEST_FAILURE_MESSAGES.notion_not_configured;
 
 
 export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
@@ -81,6 +145,8 @@ export const HONEST_FAILURE_ACTIONS: Record<HonestFailureKind, string> = {
   forbidden_cross_site: "forbidden_cross_site",
   rate_limited: "rate_limited",
   image_generation_failed: "image_generation_failed",
+  research_failed: "research_failed",
+  notion_failed: "notion_failed",
 };
 
 /** Copy the MCP integration code returns when a tool call fails (status "error"). */
@@ -159,6 +225,75 @@ const IMAGE_GENERATION_FAILURE_MARKERS = [
   "No xAI inference API key is available for image",
 ];
 
+/** Honest research.ts / searchWeb failure copy (H32). Empty-query validation is not listed (not a banner). */
+const RESEARCH_FAILURE_MARKERS = [
+  HONEST_FAILURE_MESSAGES.research_failed,
+  HONEST_FAILURE_MESSAGES.research_not_configured,
+  HONEST_FAILURE_MESSAGES.research_timeout,
+  HONEST_FAILURE_MESSAGES.research_provider_http,
+  HONEST_FAILURE_MESSAGES.research_provider_unreachable,
+  HONEST_FAILURE_MESSAGES.research_empty_sources,
+  "Search timed out. No citations were created.",
+  "No search provider is configured",
+  "MIND_SEARCH_ENDPOINT is missing",
+  "MIND_SEARCH_KEY is missing",
+  "Nothing was searched and no citations were created",
+  "The search provider did not answer",
+  "The search provider returned",
+  "The search provider returned an unreadable result",
+  "The search provider returned a result that is too large",
+  "The search returned no usable sources",
+  "Deep research ran but returned no usable sources",
+  "Research stopped. No citations were saved as a success",
+  "The search provider could not be reached",
+  "The search did not run. No citations were created",
+  "Research refused. No citations were created",
+];
+
+/** Honest Notion connector / callNotion copy (H33). Unconfigured markers are notices. */
+const NOTION_FAILURE_MARKERS = [
+  HONEST_FAILURE_MESSAGES.notion_failed,
+  HONEST_FAILURE_MESSAGES.notion_api_rejected,
+  HONEST_FAILURE_MESSAGES.notion_unreachable,
+  HONEST_FAILURE_MESSAGES.notion_timeout,
+  HONEST_FAILURE_MESSAGES.notion_status_failed,
+  "Notion could not be reached",
+  "Notion timed out",
+  "Notion rejected the request",
+  "Notion status could not be read",
+  "Notion accepted a write, but the text was not found",
+  "credentials are present but the API rejected",
+];
+
+const NOTION_UNCONFIGURED_MARKERS = [
+  HONEST_FAILURE_MESSAGES.notion_not_configured,
+  HONEST_FAILURE_MESSAGES.notion_disconnected,
+  NOTION_UNCONFIGURED_NOTICE,
+  "Notion is not connected",
+  "Set NOTION_TOKEN",
+  "Notion is not configured",
+  "Notion is disconnected for this workspace",
+  "Notion OAuth is not configured",
+];
+
+/**
+ * True when Notion has no token/env, OAuth client env, or the owner disconnected it.
+ * Configure notice (Connected → Setup) — never a silent empty and never a Retry of that call.
+ * API reject copy ("Notion returned 401", "credentials are present but the API rejected") is not this.
+ * MCP-wrapped tool lines stay mcp_tool_failed so the existing tool banner is unchanged.
+ */
+export function isNotionUnconfiguredNotice(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  if (/^MCP tool\b/.test(text) || text.startsWith("MCP tool failed.")) return false;
+  if (/credentials are present but the API rejected/i.test(text)) return false;
+  if (/Notion returned \d{3}\b/i.test(text)) return false;
+  if (/Notion timed out|Notion could not be reached|Notion status could not be read|Notion rejected the request/i.test(text)) {
+    return false;
+  }
+  return NOTION_UNCONFIGURED_MARKERS.some((marker) => text.includes(marker));
+}
+
 export function classifyHonestFailure(message: string): HonestFailureKind | null {
   const text = message.trim();
   if (!text) return null;
@@ -181,7 +316,7 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
   if (IMAGE_GENERATION_FAILURE_MARKERS.some((marker) => text.includes(marker)) || /^Image generation failed \(HTTP /i.test(text)) {
     return "image_generation_failed";
   }
-  if (/rate limited/i.test(text) || /\b429\b/.test(text)) {
+  if (/rate limited/i.test(text) || /\b429\b/.test(text) || /Too many Notion requests/i.test(text)) {
     return "rate_limited";
   }
   if (CHAT_TIMEOUT_MARKERS.some((marker) => text.includes(marker))) {
@@ -195,6 +330,19 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
   }
   if (MODEL_UNAVAILABLE_MARKERS.some((marker) => text.includes(marker))) {
     return "model_unavailable";
+  }
+  if (RESEARCH_FAILURE_MARKERS.some((marker) => text.includes(marker))) {
+    return "research_failed";
+  }
+  // Unconfigured/disconnected Notion is a configure notice — not notion_failed.
+  if (isNotionUnconfiguredNotice(text)) {
+    return null;
+  }
+  if (
+    NOTION_FAILURE_MARKERS.some((marker) => text.includes(marker)) ||
+    /Notion returned \d{3}\b/i.test(text)
+  ) {
+    return "notion_failed";
   }
   if (
     text === HONEST_FAILURE_MESSAGES.mcp_list_failed
@@ -211,6 +359,21 @@ export function classifyHonestFailure(message: string): HonestFailureKind | null
     || text.includes("PC shell denial could not be completed")
     || text === HONEST_FAILURE_MESSAGES.mcp_try_select_failed
     || text.includes("MCP Try SELECT 1 call failed")
+    || text === HONEST_FAILURE_MESSAGES.oauth_disconnect_failed
+    || text.includes("Disconnect failed. The board was not changed")
+    || text === HONEST_FAILURE_MESSAGES.open_page_failed
+    || text.includes("The page was not opened")
+    || text.includes("OAuth could not be started")
+    || text === HONEST_FAILURE_MESSAGES.mcp_toggle_failed
+    || text.includes("MCP server toggle could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.supabase_account_probe_failed
+    || text.includes("Supabase account status could not be loaded")
+    || text === HONEST_FAILURE_MESSAGES.supabase_sign_out_failed
+    || text.includes("Supabase sign out could not be completed")
+    || text === HONEST_FAILURE_MESSAGES.persona_select_failed
+    || text.includes("That persona could not be opened")
+    || text === HONEST_FAILURE_MESSAGES.fleet_mutation_failed
+    || text.includes("That fleet change could not be applied")
   ) {
     return "network_failure";
   }
@@ -242,18 +405,27 @@ export function classifyHonestTurnOutcome(message: string): HonestTurnOutcomeKin
 /**
  * Whether the red failure banner (Retry + View log) should be shown for this message.
  * Intentional Stop → false. Pre-sign-in auth_required → false (use a dismissible notice instead).
+ * Notion with no token/env → false (configure notice, not red).
  * Timeouts, disconnects, and other honest failures → true.
  * Unclassified messages stay true so existing chat_failed banner behavior is preserved until classified.
  */
 export function shouldShowFailureBanner(message: string): boolean {
   if (isUserStoppedReply(message)) return false;
   if (classifyHonestFailure(message) === "auth_required") return false;
+  if (isResearchPartialNotice(message)) return false;
+  if (isNotionUnconfiguredNotice(message)) return false;
   return true;
 }
 
 /** True when copy is the pre-sign-in auth gate (not a hard failure). */
 export function isAuthRequiredNotice(message: string): boolean {
   return classifyHonestFailure(message) === "auth_required";
+}
+
+/** True when copy is the H32 partial-deep warning (citations kept; use warning banner, not red failure). */
+export function isResearchPartialNotice(message: string): boolean {
+  const text = message.trim();
+  return text === HONEST_FAILURE_MESSAGES.research_partial || text.startsWith("Some research searches timed out");
 }
 
 /**
@@ -286,7 +458,11 @@ export function honestTurnAuditAction(message: string): string | null {
  * is from command-app loadMcpLists above and needs the one-line gate from the owning lane.
  */
 export function failureBannerMountHint(): string {
-  return "loadMcpLists catch: if (!shouldShowFailureBanner(message)) { setNotice(\"Sign in to load MCP servers.\"); return; } else reportFailureRef.current(...)";
+  return [
+    "loadMcpLists catch: if (!shouldShowFailureBanner(message)) { setNotice(\"Sign in to load MCP servers.\"); return; } else reportFailureRef.current(...)",
+    "H32 research: startResearch/runWebResearch — researchFailureFromResult(result); if failure reportFailure(message, honestFailureAuditAction(kind), \"search\", retry); if partial show ResearchPartialWarningBanner (citations stay).",
+    "H33 Notion: askNotion/notionStatus — notionFailureFromTurn/Catch; unconfigured → setNotice(NOTION_UNCONFIGURED_NOTICE)+setView(\"connected\") Setup; API/timeout → reportFailure(..., onceRetry(identical notionCommand)); View log focuses #audit-{id}; user_stopped is not red; never silent empty.",
+  ].join(" | ");
 }
 
 export function honestFailureDescription(kind: HonestFailureKind, message?: string): string {
@@ -312,6 +488,10 @@ export function honestFailureDescription(kind: HonestFailureKind, message?: stri
       return HONEST_FAILURE_MESSAGES.rate_limited;
     case "image_generation_failed":
       return HONEST_FAILURE_MESSAGES.image_generation_failed;
+    case "research_failed":
+      return HONEST_FAILURE_MESSAGES.research_failed;
+    case "notion_failed":
+      return HONEST_FAILURE_MESSAGES.notion_failed;
   }
 }
 
@@ -409,6 +589,33 @@ export function mapImagineHttpErrorCopy(status: number, message: string): string
   if (status >= 500) return HONEST_FAILURE_MESSAGES.image_generation_failed;
   if (status === 408 || /timeout/i.test(raw)) return HONEST_FAILURE_MESSAGES.image_generation_timeout;
   return `Image generation failed (HTTP ${status || "error"}).`;
+}
+
+/**
+ * Banner-only Notion API HTTP mapping (callNotion / probe).
+ * Keeps the server's one-line reason and the status. 429 stays rate-limit copy.
+ * Timeout copy matches the client connector budget, not a chat timeout.
+ */
+export function mapNotionApiErrorCopy(status: number, message: string): string {
+  const raw = oneLine(typeof message === "string" ? message : "");
+  const stripped = raw.replace(/\s*Nothing was invented\.?$/i, "").trim();
+  if (status === 429 || /\b429\b/.test(raw) || /rate limited/i.test(raw)) {
+    if (raw && (/Nothing was invented|Notion returned 429|rate limited/i.test(raw))) return raw;
+    return "Notion returned 429. Nothing was invented.";
+  }
+  if (status === 408 || /\btimed out\b/i.test(raw)) {
+    return HONEST_FAILURE_MESSAGES.notion_timeout;
+  }
+  if (/^Notion returned \d{3}\b/i.test(raw) && /Nothing was invented/i.test(raw)) return raw;
+  if (status > 0) {
+    const reason = stripped.replace(/^Notion returned \d{3}\.?\s*/i, "").trim();
+    const head = `Notion returned ${status}.`;
+    const body = reason ? `${head} ${reason}` : head;
+    const sentence = /[.!?…]$/.test(body) ? body : `${body}.`;
+    const line = /Nothing was invented/i.test(body) ? body : `${sentence} Nothing was invented.`;
+    return line.length > 300 ? `${line.slice(0, 299).trimEnd()}…` : line;
+  }
+  return raw || HONEST_FAILURE_MESSAGES.notion_failed;
 }
 
 export type ImageGenerationFailure = {

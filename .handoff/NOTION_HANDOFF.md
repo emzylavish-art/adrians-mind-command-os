@@ -484,3 +484,280 @@ command on Zack's PC.
 - Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child: https://app.notion.com/p/40bb95f33e42812b841ece22e9e38f99
 - Pushed origin/error-banners → 413595890690100e7b5d710ba40da8a8aa4a4aee
 - Lock releasing.
+
+## 2026-11-01T22:44:00+01:00 (Africa/Lagos) — Error Banners Bot — Final push
+- Sweep: allowed files only; no new silent-empty / swallowed-catch gaps beyond H16–H23. No code fix this round.
+- Lock: /workspace/locks/error-banners-final-push.lock (timestamp refreshed; releasing at end).
+- Merge: origin/preview/integration @ 6d5779c fast-forwarded into error-banners (H16–H23 still ancestors). No forbidden conflicts.
+- Gates: typecheck pass; TS strip-types 1042/1042 pass (0 fail); scripts 202 pass / 4 skipped; prior known fails (c16 Imagine, voice/attack-pass, ollama-conductor) absent; lint our files 0e/4w; build pass.
+- Pushed origin/error-banners → 6d5779c40fcf1253dbf4e1924a760f777ac47d21 (ls-remote matches).
+- Preview deploy BLOCKED: vercel CLI auth.json empty (logged out); user-Vercel MCP no teams / authorize_team_access(adrian-8a30) 404; Git status “GitHub couldn’t verify an account for the commit” on Vercel – adrians-mind. Never --prod.
+- Production: https://adrians-mind.vercel.app HTTP 200; production branch unknown (inspect blocked).
+- Notion requested page 40b1aa27632381768d58cde0731f142a still 404; child under mirror: https://app.notion.com/p/40bb95f33e428173be4be400afbaedfa
+- Blocked: command-app.tsx shouldShowFailureBanner at loadMcpLists catch ≈603–613 + reload after sign-in (Grok Build); View log for MessageBody/MemoryManager; voice/, media/, agent-planner banners; Vercel team auth.
+- Lock releasing.
+
+## 2026-11-02T15:33:52-06:00 (America/Chicago) — Error Banners Bot — H24 OAuth connect/disconnect banners
+- Gap: ServiceBoard Connect/Disconnect catch → muted `setNote` only; no red Retry / View log.
+- Lock: /workspace/locks/error-banners.lock (claimed; releasing after H25 + Notion).
+- preview/integration merge ABORTED (conflict in .handoff/NOTION_HANDOFF.md); continued on tip 700abb8.
+- Fix: oauth-board-action.ts runOauthBoardAction + snapshot params + OauthBoardActionStatusRows; onceRetry; optional onFailure→reportFailure. failure-states oauth_connect_failed / oauth_disconnect_failed → network_failure.
+- Files: src/lib/mind/oauth-board-action.ts(+test), src/components/mind/service-board.tsx, failure-states(+test), package.json test list.
+- Gates: typecheck pass; TS strip-types 1052/1052; lint touched 0e/4w (pre-existing hooks/unused); build pass.
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40cb95f33e42817e85bcd7d6d950675b
+- Next: H25 Open page muted pageNote.
+
+## 2026-11-02T15:33:52-06:00 (America/Chicago) — Error Banners Bot — H25 Open page action banner
+- Gap: Tools panel Open page catch/ok:false → muted pageNote; Retry via top onFailure only; no inline red banner with identical-URL Retry.
+- Fix: open-page-action.ts runOpenPage + snapshotOpenPageParams + OpenPageActionStatusRows; onceRetry; onFailure→reportFailure (already wired open_page_failed in command-app). failure-states open_page_failed → network_failure.
+- Files: src/lib/mind/open-page-action.ts(+test), src/components/mind/fleet-panels.tsx, failure-states(+test), package.json test list.
+- Gates: same as H24 (combined).
+- Blocked still: command-app.tsx mounts (Grok Build); voice/; media/; agent-planner; Vercel preview; ServiceBoard onFailure mount in command-app (optional prop ready).
+
+- Notion requested page 40b1aa27… still 404; child: https://app.notion.com/p/40cb95f33e4281cab098e1f62b9aa7b2
+- Pushed origin/error-banners → 5166d08c3af0aa0231555a56fa7d22fb1230876c
+
+
+## 2026-11-02T15:36:39-06:00 (America/Chicago) — Error Banners Bot — H26 MCP toggle banner
+- Gap: Tools panel MCP Turn on/off `mcpRegistryToggle` had no `.catch` — Unauthorized/network failures were silent.
+- Fix: mcp-toggle-action.ts runMcpToggle + snapshot id/enabled + McpToggleActionStatusRows; onceRetry; onFailure→reportFailure. failure-states mcp_toggle_failed → network_failure (copy avoids database_write "could not be saved" collision).
+- Files: src/lib/mind/mcp-toggle-action.ts(+test), src/components/mind/fleet-panels.tsx, failure-states(+test), package.json, .handoff/NOTION_HANDOFF.md
+- Gates: typecheck pass; TS 1056/1056; lint touched 0e/3w; build pass.
+- Notion: child under mirror (40b1aa27… still 404).
+- Next: sweep; supabase-account silent catch noted; command-app mounts still blocked.
+
+- Notion child: https://app.notion.com/p/40cb95f33e42816eb53fd3a38516d425
+- Pushed origin/error-banners → de905f8123527971294f05ace56762dabcb73557
+
+## 2026-11-02T15:38:44-06:00 (America/Chicago) — Error Banners Bot — H27 Supabase account probe/sign-out banners
+- Gap: supabase-account getSupabaseAuthUser `.catch` → treated as not configured (silent empty); signOut `.catch` → clear busy only.
+- Fix: supabase-account-action.ts runSupabaseAccountProbe / runSupabaseSignOut (redirect-like throws = ok) + SupabaseAccountFailureBanner; onceRetry; optional onFailure. failure-states supabase_account_probe_failed / supabase_sign_out_failed.
+- Files: src/lib/mind/supabase-account-action.ts(+test), src/components/mind/supabase-account.tsx, failure-states(+test), package.json, .handoff/NOTION_HANDOFF.md
+- Gates: typecheck pass; TS 1061/1061; lint touched 0e; build pass.
+- Notion: child under mirror (40b1aa27… still 404).
+- Remaining blocked: command-app.tsx mounts; voice/; media/; agent-planner; Vercel preview. No further fixable silent-empty gaps found in allowed files after H24–H27.
+
+- Notion child: https://app.notion.com/p/40cb95f33e428107a528f1e2571d90f6
+- Pushed origin/error-banners → 2c6ec789d9d9a070fc7cad476d89c6781c5cd505
+- Lock releasing.
+
+## 2026-11-02T15:38:56-06:00 (America/Chicago) — Error Banners Bot — Sweep complete (H24–H27)
+- Allowed-file hunt finished: no remaining fixable silent-empty / swallowed-catch gaps beyond H24–H27.
+- Skipped (blocked): command-app.tsx mounts (Grok Build); voice/; media/; mcp/; server.ts; styles.css; agent-planner banners; Vercel preview auth.
+- Tip: 2c6ec789d9d9a070fc7cad476d89c6781c5cd505
+- Notion children: H24 https://app.notion.com/p/40cb95f33e42817e85bcd7d6d950675b · H25 https://app.notion.com/p/40cb95f33e4281cab098e1f62b9aa7b2 · H26 https://app.notion.com/p/40cb95f33e42816eb53fd3a38516d425 · H27 https://app.notion.com/p/40cb95f33e428107a528f1e2571d90f6
+- Original handoff 40b1aa27632381768d58cde0731f142a still 404; mirror used.
+- Lock released.
+
+## 2026-11-02T23:50:46+01:00 (Africa/Lagos) — Error Banners Bot — merge abort + Merge Gate / Gap Dispatcher handoffs
+- Gap id: MERGE-ABORT-PI + HANDOFF-MG + REQUEST-GD (no new H28 code)
+- What: Retried `git merge origin/preview/integration` (`5d400c8`) into `error-banners`. **ABORTED** — conflicts beyond `.handoff/NOTION_HANDOFF.md`: `package.json`, `src/components/mind/fleet-panels.tsx`, `src/components/mind/supabase-account.tsx`. `git merge --abort`. Tip unchanged.
+- Files: `/workspace/handoffs/error-banners-to-merge-gate.md`, `/workspace/handoffs/error-banners-to-gap-dispatcher.md`, `.handoff/NOTION_HANDOFF.md` (this entry). No product source changes.
+- SHA: origin/error-banners remains `32864b112ead8d5b82b9afb4788f149a903a7f50` (H16–H27 + docs). Handoff commit SHA TBD after this append.
+- Gates: no code change; prior tip gates stand (Conductor verified H24–H27). Merge not landed → no post-merge gates.
+- integration.lock: held by Logic Bot (not Merge Gate) as of claim time — noted in Merge Gate handoff.
+- Vercel daily deploy limit until ~Nov 3 4 PM CST / Nov 3 11 PM WAT.
+- Next: Merge Gate resolves PI∪error-banners when lock free; Gap Dispatcher assigns H28+ if any in allowed files. command-app mounts still blocked for this lane.
+- Forbidden respected: no command-app / styles shell / voice / media / mcp / server.ts edits; no force-push; no merge to main.
+
+- Notion children: merge abort / Merge Gate https://app.notion.com/p/40cb95f33e428142b40bf3b0a22af734 · Gap Dispatcher request https://app.notion.com/p/40cb95f33e4281b9a2caecb3ac200290
+- Workspace handoffs: /workspace/handoffs/error-banners-to-merge-gate.md · /workspace/handoffs/error-banners-to-gap-dispatcher.md
+
+## 2026-11-02T20:29:51-06:00 (America/Chicago) — Error Banners Bot — H28 persona select + H29 fleet apply banners
+- Gap id: H28, H29
+- What:
+  - **H28**: Explore `persona-directory` `selectPersona` ok:false rendered as muted `persona-note`. Now red `PersonaSelectFailureBanner` (Retry identical card params via `persona-select-action` + onceRetry; optional onFailure for View log).
+  - **H29**: FleetPanel `apply()` validation failures (add template/custom, deploy, enqueue, schedule, connection, mailbox) + "Add an agent first" were muted notes. Now `FleetMutationFailureBanner` with snapshotted params + onceRetry. Persisted `deployment.error` display upgraded muted→`text-danger` (status only).
+- Files: `src/lib/mind/persona-select-action.ts(+test)`, `src/lib/mind/fleet-mutation-action.ts(+test)`, `src/components/mind/persona-directory.tsx`, `src/components/mind/fleet-panels.tsx`, `failure-states(+test)`, `integration-persona-explore.test.ts`, `package.json` test list.
+- SHA: `493027af23b799d3725e0aea7c30dc1e721dc687` (pushed origin/error-banners)
+- Gates: typecheck pass; node strip-types tests **1067/1067** (+ scripts 202/202); lint touched **0 errors** / 3 pre-existing hooks warnings on fleet-panels; build pass.
+- Merge: Retried `origin/preview/integration` (`b84dcc2`) into error-banners — **ABORTED**. Conflicts: `.handoff/NOTION_HANDOFF.md`, `package.json`, `fleet-panels.tsx`, `supabase-account.tsx`. Outside-NOTION_HANDOFF conflicts → abort per lane rules. Tip unchanged.
+- Next: Merge Gate resolves PI∪error-banners keeping H24–H29 banners; Gap Dispatcher may assign H30+ if any remain in allowed files. Still BLOCKED for this lane: command-app.tsx mounts (PersonaDirectoryView/SupabaseAccount/ServiceBoard/MessageBody onFailure), voice/, media/, mcp/, server.ts, styles.css shell.
+- Forbidden respected: no command-app / styles shell / voice / media / mcp / server.ts; no force-push; no merge to main.
+
+- Notion children: H28 https://app.notion.com/p/40db95f33e428137afbac78794dff0fe · H29 https://app.notion.com/p/40db95f33e4281889b4ecead023e69bb · cycle https://app.notion.com/p/40db95f33e428113a797c5011e1eccce
+- Workspace handoffs: /workspace/handoffs/error-banners-to-merge-gate.md · /workspace/handoffs/error-banners-to-gap-dispatcher.md
+- Lock releasing.
+
+## 2026-11-02T21:51:24-06:00 (America/Chicago) — Error Banners Bot — H30 login callback ?error= banner + gap verify
+- Gap id: H30 + ERR-01 gap-lock reverify + AUTH-01 client check
+- What:
+  - **Gap locks**: All `error-banners-gap-*.lock` (+ imagine/verifier/top5) re-verified on tip `0c02656` — ancestry of H16–H29 SHAs OK; focused banner/list/retry/service-board tests 104/104. Appended `verified fixed on 0c02656…, released` to each lock.
+  - **AUTH-01**: Callback **500** (immutable `Response.redirect`) cannot be fixed in this lane — needs Grok Build promote of `23860f7` (`oauthCallbackRedirect` mutable 302 + try/catch → `/login?error=`). Recorded for owner.
+  - **H30**: Client `/login` previously suppressed all `?error=` via `loginErrorBannerFromSearch → null` (silent after successful callback redirect). Now classifies auth_error vs server_error, seeds red banner + Retry (re-runs last OAuth provider from sessionStorage), strips `?error=` after mount to avoid stale restore. Bare `1`/empty still quiet.
+- Files: `src/lib/auth/login-providers.ts(+test)`, `src/routes/login.tsx`, `src/routeTree.gen.ts` (build Register), `.handoff/NOTION_HANDOFF.md`
+- Forbidden respected: no callback route / media / mcp / command-app / styles.css / server.ts edits.
+- Gates (pre-push): typecheck pass; npm test **1069/1069**; eslint touched **0 errors**; build pass.
+- Next: Merge Gate still needs PI∪error-banners (prior abort); Grok Build AUTH-01 callback promote; command-app onFailure mounts still blocked.
+
+- Notion child: https://app.notion.com/p/40db95f33e42817282e8d238dec39a84
+- STATE: /workspace/fleet/error-banners/STATE.json
+- Results for Logic Bot: /workspace/audit/full-function/from-error-banners.md
+- Pushed origin/error-banners → ef20284882c21a19b57f2eacdb5cafdf2ad31aea
+- Lock releasing.
+
+
+## 2026-11-02T22:18:00-06:00 (America/Chicago) — Error Banners Bot — H31 hunt: no remaining allowed-file gaps
+- Gap id: HUNT-H31 (no code fix)
+- What:
+  - Re-checked `/workspace/audit/full-function/to-error-banners.md`, `/workspace/handoffs/`, Notion Gap Dispatcher — no new H31+ assignment.
+  - All `error-banners-gap-*.lock` (+ imagine/verifier/top5) still **done, released**.
+  - Fresh hunt in allowed files (components/mind excl. voice/media/mcp/dashboard-3d/live-voice-bar/command-app; banner action libs; login/explore/memory routes): swallowed catches, fetch !ok, muted-note errors, missing Retry/View log where fixable, Retry params, stuck loaders.
+  - **Honest result: no remaining fixable silent-failure gap for H31+.** H16–H30 stand. Tip unchanged.
+- Skipped / BLOCKED (not this lane): AUTH-01 callback 500 (Grok Build `23860f7`); command-app.tsx onFailure mounts + saveError muted strip; Merge Gate PI∪error-banners; voice/; media/; mcp/; server.ts; styles.css shell; auth callback route.
+- Gates (honesty): focused banner suite **119/119**; tip gates from H30 stand (tsc / 1069 tests / lint 0 / build).
+- Tip: `836c1dbcf7a6b99e7ea6b800ac5bdac0ef9edf6e` (no product SHA this cycle)
+- Notion child: https://app.notion.com/p/40db95f33e4281fea288ce8bda62426a
+- STATE: /workspace/fleet/error-banners/STATE.json
+- Lock releasing.
+
+
+## 2026-11-02T22:38:20-06:00 (America/Chicago) — Error Banners Bot — H32 research-layer banners
+- Gap id: H32 (research-layer audit `/workspace/audit/research-layer/tasks/to-error-banners.md`)
+- What:
+  - Added `research_failed` HonestFailureKind + honest research.ts copy markers (timeout, not configured, MIND_SEARCH_*, provider HTTP/unreachable/empty/stopped).
+  - Provider `429` still `rate_limited` (priority). Partial deep copy is warning-only (`isResearchPartialNotice` → no red banner).
+  - New `research-failure-action.ts`: `researchFailureFromResult` / `researchFailureFromCatch` / `ResearchFailureBanner` / `ResearchPartialWarningBanner` / mount hint.
+  - Never invents “sources found” on failure; empty query is `empty_query` (not red failure).
+  - Tests: failure-states + markup + research-failure-action (focused suite green).
+- Skipped / BLOCKED (not this lane): `command-app.tsx` startResearch/runWebResearch mount (Grok Build / Merge Gate) — startResearch already `reportFailure`; classifiers now map kinds on that path. Chat `runWebResearch` still muted note until mount. Voice/media/mcp/server.ts/styles untouched.
+- Gates: typecheck PASS · focused H32 suite 55/55 · lint touched 0 errors
+- Tip: `7784fe89b5c993afafe0be699d777d3e93b7a5cb` (short `7784fe8`)
+- Notion: https://app.notion.com/p/40db95f33e428194a22dc24ece801564
+- STATE: /workspace/fleet/error-banners/STATE.json
+- Lock releasing.
+
+- H32 gates on 7e3c229: typecheck pass, tests 1287 pass/0 fail/4 skipped, build pass, lint 0 errors in H32-touched files; repo-wide eslint has 34 pre-existing errors in 52 untouched files (command-app.tsx, service-board.tsx, dashboard-3d, voice, media, pairing, scripts) owned by other lanes.
+
+## 2026-11-07T12:45:00Z — Error Banners — H33 Notion connector banners
+
+- Gap id: H33
+- Branch: `cursor/h33-notion-failure-banners-6c0c` off `error-banners` @ `6bf042f`. Not merged to main. No force-push.
+- What changed:
+  - Missing `NOTION_TOKEN` / owner disconnect is a configure notice (`NOTION_UNCONFIGURED_NOTICE` matches `notion.ts` `NOTION_SETUP`). It is not a silent empty state and not a red Retry of the same unconfigured call. The only action is Setup, which the command-app owner wires to the existing Connected view (`setView("connected")` → ServiceBoard Setup). No new route.
+  - Notion API 401/403/404/5xx is `notion_failed`: red banner, one-line server reason (`Notion returned {status}. … Nothing was invented.`), Retry via `onceRetry` of the snapshotted `text` / `confirmed` / `pageId`, View log `#audit-{id}`.
+  - 429 and “Too many Notion requests” stay `rate_limited` (still a red banner, same Retry).
+  - A stuck `notionCommand` / `notionStatus` gets a timeout banner only after `NOTION_COMMAND_TIMEOUT_MS` (same 10s budget as `OAUTH_STATUS_FETCH_TIMEOUT_MS`). A call that finishes inside the budget is not a timeout. User Stop (`STOPPED_REPLY`) is `user_stopped` and is not red.
+  - MCP-wrapped Notion tool errors stay `mcp_tool_failed`. Empty search and “pick one” are not red failures.
+  - The earlier recovery draft’s bare “Notion returned” marker was not kept; it would have painted an empty search as an API failure.
+- Files: `src/lib/mind/failure-states.ts`, `src/lib/mind/failure-states.test.ts`, `src/lib/mind/failure-banner-markup.test.ts`, `src/lib/mind/notion-failure-action.ts`, `src/lib/mind/notion-failure-action.test.ts`, `package.json` (test list), `.handoff/NOTION_HANDOFF.md`. `command-app.tsx` was not edited.
+- Gates: focused strip-types suite **72 pass / 0 fail** (`failure-states.test.ts`, `failure-banner-markup.test.ts`, `notion-failure-action.test.ts`). Full `npm test`, `tsc --noEmit`, `npm run build`, and eslint were **not run**: `registry.npmjs.org:443` resets the TLS handshake (`ECONNRESET`), so dependencies could not be installed. The banner markup tests rendered with a gitignored local react stub, not production `react-dom`. Repo-wide ~34 pre-existing lint errors were not remeasured.
+- Next: command-app owner pastes the mount below. Then re-run typecheck, full `npm test`, build, and eslint on the touched files. Do not merge to main.
+
+### Mount snippet for the command-app owner
+
+Canonical copy is `NOTION_COMMAND_APP_MOUNT` in `src/lib/mind/notion-failure-action.ts`. Paste this. Do not add a route. `reportFailure` already writes the audit row; the existing shell View log focuses `#audit-${failure.auditId}` (activity row `id={`audit-${entry.id}`}`).
+
+```tsx
+// H33 — command-app owner. Do not add a route. Setup stays on view "connected".
+import {
+  notionFailureFromCatch,
+  notionFailureFromTurn,
+  notionOutcomeFromStatus,
+  onceRetry,
+  shouldShowFailureBanner,
+  withNotionCommandTimeout,
+} from "@/lib/mind/notion-failure-action";
+
+const notionStatusParams = { text: "", confirmed: false, pageId: null as string | null, surface: "status" as const };
+
+function reloadNotionStatus() {
+  void withNotionCommandTimeout(() => notionStatus())
+    .then((status) => {
+      const outcome = notionOutcomeFromStatus(status, notionStatusParams);
+      if (outcome.tone === "unconfigured") {
+        setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+        setNotice(outcome.notice.message);
+        return;
+      }
+      if (outcome.tone === "user_stopped") {
+        setNotice(outcome.message);
+        return;
+      }
+      if (outcome.tone === "auth_required" || (outcome.tone === "failure" && !shouldShowFailureBanner(outcome.failure.message))) {
+        setNotice(outcome.tone === "auth_required" ? outcome.message : outcome.failure.message);
+        return;
+      }
+      if (outcome.tone === "failure") {
+        const retry = onceRetry(() => { reloadNotionStatus(); });
+        reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+        return;
+      }
+      setNotion({ state: "connected", detail: outcome.detail });
+    })
+    .catch((caught) => {
+      const outcome = notionFailureFromCatch(caught, notionStatusParams);
+      if (outcome.tone === "user_stopped") { setNotice(outcome.message); return; }
+      if (outcome.tone === "unconfigured") {
+        setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+        setNotice(outcome.notice.message);
+        return;
+      }
+      if (outcome.tone === "auth_required" || !shouldShowFailureBanner(outcome.failure.message)) {
+        setNotice(outcome.tone === "auth_required" ? outcome.message : outcome.failure.message);
+        return;
+      }
+      const retry = onceRetry(() => { reloadNotionStatus(); });
+      reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+    });
+}
+
+// askNotion: replace the body. Retry calls askNotion with the snapshotted text/confirmed/pageId.
+async function askNotion(chat, text, confirmed = false, pageId = null) {
+  const params = { text, confirmed, pageId, surface: "chat" as const };
+  setBusy(true);
+  setError(null);
+  try {
+    const result = await withNotionCommandTimeout(() => notionCommand({ data: { text, confirmed, pageId } }));
+    setBusy(false);
+    const outcome = notionFailureFromTurn(result, params);
+    if (outcome.tone === "user_stopped") { setNotice(outcome.message); return; }
+    if (outcome.tone === "unconfigured") {
+      setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+      setNotice(outcome.notice.message);
+      clearFailure();
+      return;
+    }
+    if (outcome.tone === "auth_required") { setNotice(outcome.message); return; }
+    if (outcome.tone === "needs_confirmation" && outcome.turn.pages[0]) {
+      const target = outcome.turn.pages[0];
+      setPending({ id: target.id, kind: "notion-append", label: "Append to Notion", detail: outcome.turn.error, confirm: "Append", run: () => { void askNotion(chat, text, true, target.id); } });
+      return;
+    }
+    if (outcome.tone === "failure") {
+      if (!shouldShowFailureBanner(outcome.failure.message)) { setNotice(outcome.failure.message); return; }
+      const retryParams = outcome.failure.params;
+      const retry = onceRetry(() => { void askNotion(chat, retryParams.text, retryParams.confirmed, retryParams.pageId); });
+      reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+      return;
+    }
+    const lines = [result.error, ...result.pages.map((page) => page.title + " — " + page.url), result.content].filter(Boolean);
+    recordToolTurn(chat, text, lines.join("\n") || "Notion returned nothing.");
+  } catch (caught) {
+    setBusy(false);
+    const outcome = notionFailureFromCatch(caught, params);
+    if (outcome.tone === "user_stopped") { setNotice(outcome.message); return; }
+    if (outcome.tone === "unconfigured") {
+      setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+      setNotice(outcome.notice.message);
+      clearFailure();
+      return;
+    }
+    if (outcome.tone === "auth_required" || !shouldShowFailureBanner(outcome.failure.message)) {
+      setNotice(outcome.tone === "auth_required" ? outcome.message : outcome.failure.message);
+      return;
+    }
+    const retryParams = outcome.failure.params;
+    const retry = onceRetry(() => { void askNotion(chat, retryParams.text, retryParams.confirmed, retryParams.pageId); });
+    reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+  }
+}
+
+// Optional inline notice (setNotice already carries the sentence):
+// <NotionUnconfiguredNoticeBanner notice={notice} onConfigure={() => setView("connected")} />
+// Shell View log: setView("activity"); setFocusAuditId(failure.auditId) → #audit-${failure.auditId}
+// Inline banner: <a href={notionFailureLogHref(auditId)} data-testid="failure-view-log">View log</a>
+```
+
+Connected search form: same `notionFailureFromTurn` with `surface: "connected"` and the query baked into `text` (`Search my Notion for ${query}`). Unconfigured → `setNotice`. Failure → `reportFailure` with `onceRetry` of that same text. Do not leave the error in the muted `notionNote`.
+
