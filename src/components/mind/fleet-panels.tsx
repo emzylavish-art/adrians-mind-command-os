@@ -58,6 +58,7 @@ import {
   snapshotMcpTrySelectParams,
   type McpCallActionState,
 } from "@/lib/mind/mcp-call-action";
+import { CustomConnections } from "@/components/mind/custom-connections";
 
 
 function botAvatarSrc(name: string) {
@@ -798,6 +799,7 @@ export function FleetPanel({
           }
         />
         {mcpCallNote && mcpCallActionState.status !== "error" ? <p className="whitespace-pre-wrap text-sm text-muted">Tool result ({mcpCallStatus}): {mcpCallNote}</p> : null}
+        <CustomConnections halted={ws.halted} />
       </div>
 
       <ul className="mt-4 space-y-2 text-sm">

@@ -232,8 +232,8 @@ export type ListedTool = {
   name: string;
   description: string;
   enabled: boolean;
-  /** Honest listing status for this row (placeholder rows carry error/timeout/disabled). */
-  status?: "ok" | "error" | "timeout" | "disabled";
+  /** Object argument schema from tools/list. Null means incompatible; callers must not invent {text}. */
+  inputSchema?: { type: "object"; properties: Record<string, { type: string }>; required: string[] } | null;
 };
 
 export function listBuiltinTools(enabled: boolean): ListedTool[] {
@@ -242,6 +242,11 @@ export function listBuiltinTools(enabled: boolean): ListedTool[] {
     serverLabel: "Mind built-in",
     name: tool.name,
     description: tool.description,
+    inputSchema: tool.name === "pglite_list_schema"
+      ? { type: "object", properties: {}, required: [] }
+      : tool.name === "pglite_query"
+        ? { type: "object", properties: { sql: { type: "string" } }, required: ["sql"] }
+        : null,
     enabled,
   }));
 }
@@ -529,15 +534,19 @@ export async function listRegistryTools(
       continue;
     }
     const remoteTools = Array.isArray((listed.result as { tools?: unknown }).tools)
-      ? ((listed.result as { tools: { name?: string; description?: string }[] }).tools)
+      ? ((listed.result as { tools: { name?: string; description?: string; inputSchema?: unknown }[] }).tools)
       : [];
     for (const tool of remoteTools) {
-      if (!tool?.name) continue;
+      if (!tool?.name || tool.name.toLowerCase() === "model.generate") continue;
+      const schema = tool.inputSchema && typeof tool.inputSchema === "object" && (tool.inputSchema as { type?: string }).type === "object"
+        ? tool.inputSchema as { type: "object"; properties: Record<string, { type: string }>; required?: string[] }
+        : null;
       tools.push({
         serverId: server.id,
         serverLabel: server.label,
         name: tool.name.slice(0, 80),
         description: (tool.description ?? "").slice(0, 200),
+        inputSchema: schema ? { type: "object", properties: schema.properties ?? {}, required: schema.required ?? [] } : null,
         enabled: true,
       });
     }
