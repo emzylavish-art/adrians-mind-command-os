@@ -183,23 +183,82 @@ describe("adrians-mind-mcp-test oauth edge", () => {
     assert.equal(authorize.status, 302);
     const callbackUrl = new URL(authorize.headers.get("location"));
     const code = callbackUrl.searchParams.get("code");
-    const callback = await handleRequest(new Request(callbackUrl), runtime);
+    const seen = [];
+    const callback = await handleRequest(new Request(callbackUrl), runtime, {
+      fetchImpl: async (url, init) => {
+        const body = JSON.parse(init.body);
+        seen.push({ url, authorization: init.headers.authorization, method: body.method });
+        const payload = body.method === "initialize"
+          ? { jsonrpc: "2.0", id: 1, result: { protocolVersion: "2025-03-26", serverInfo: { name: "adrians-mind-mcp-test" } } }
+          : body.method === "tools/list"
+            ? { jsonrpc: "2.0", id: 2, result: { tools: [{ name: "provider.status" }, { name: "model.generate" }] } }
+            : { jsonrpc: "2.0", id: 3, result: { isError: false, content: [{ type: "text", text: "{\"upstream_called\":false}" }] } };
+        return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json", "x-request-id": "req-1", "set-cookie": "session=secret" } });
+      },
+    });
     const callbackText = await callback.text();
     assert.equal(callback.status, 302);
     assert.equal(callbackText.includes(code), false);
+    assert.deepEqual(seen.map((call) => call.method), ["initialize", "tools/list", "tools/call"]);
+    assert.equal(seen.every((call) => call.url === `${ORIGIN}/mcp` && call.authorization.startsWith("Bearer ")), true);
     const resultUrl = new URL(callback.headers.get("location"), ORIGIN);
     const result = await handleRequest(new Request(resultUrl), runtime);
     const evidence = await result.json();
     const serialized = JSON.stringify(evidence);
     assert.equal(evidence.ok, true);
-    assert.equal(evidence.subject_matches_owner, true);
-    assert.equal(evidence.upstream_called, false);
-    assert.ok(evidence.tools.includes("provider.status"));
+    assert.equal(evidence.transport, "public_https");
+    assert.equal(evidence.testedURL, `${ORIGIN}/mcp`);
+    assert.equal(evidence.fetch_path, "injected");
+    assert.equal(evidence.external_network_verified, false);
+    assert.deepEqual(evidence.calls.map((call) => call.http_status), [200, 200, 200]);
+    assert.equal(evidence.calls[0].headers["x-request-id"], "req-1");
+    assert.equal(evidence.calls[0].headers["set-cookie"], undefined);
     assert.equal(serialized.includes(code), false);
+    assert.equal(serialized.includes(seen[0].authorization), false);
     assert.equal(serialized.includes("access_token"), false);
     assert.equal(serialized.includes("sk-test-secret"), false);
+    assert.equal(serialized.includes("session=secret"), false);
     const replay = await handleRequest(new Request(resultUrl), runtime);
     assert.equal(replay.status, 404);
+  });
+
+  it("does not send the bearer to any issuer other than the test host", async () => {
+    const runtime = env({ MCP_OAUTH_ISSUER: "https://evil.example", MCP_OAUTH_AUDIENCE: "https://evil.example/mcp" });
+    const signer = await accessSigner();
+    const start = await handleRequest(new Request("https://evil.example/oauth/test-start"), runtime);
+    const startUrl = new URL(start.headers.get("location"));
+    const authorize = await handleRequest(new Request(startUrl, {
+      headers: { "cf-access-jwt-assertion": await signer.sign(ownerClaims()) },
+    }), runtime, { fetchImpl: certFetch(signer.jwk) });
+    let called = 0;
+    const callback = await handleRequest(new Request(authorize.headers.get("location")), runtime, {
+      fetchImpl: async () => { called += 1; return new Response("no", { status: 500 }); },
+    });
+    const evidence = await (await handleRequest(new Request(new URL(callback.headers.get("location"), "https://evil.example")), runtime)).json();
+    assert.equal(called, 0);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.error, "issuer_not_allowed");
+    assert.equal(evidence.testedURL, null);
+  });
+
+  it("requires every public MCP response to be HTTP 200 and not isError", async () => {
+    const runtime = env();
+    const signer = await accessSigner();
+    const start = await handleRequest(new Request(`${ORIGIN}/oauth/test-start`), runtime);
+    const authorize = await handleRequest(new Request(start.headers.get("location"), {
+      headers: { "cf-access-jwt-assertion": await signer.sign(ownerClaims()) },
+    }), runtime, { fetchImpl: certFetch(signer.jwk) });
+    const callback = await handleRequest(new Request(authorize.headers.get("location")), runtime, {
+      fetchImpl: async (_url, init) => {
+        const method = JSON.parse(init.body).method;
+        const result = method === "tools/call" ? { isError: true, content: [] } : { tools: [] };
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }), { status: method === "initialize" ? 500 : 200 });
+      },
+    });
+    const evidence = await (await handleRequest(new Request(new URL(callback.headers.get("location"), ORIGIN)), runtime)).json();
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.calls[0].http_status, 500);
+    assert.equal(evidence.calls[2].response.result.isError, true);
   });
 
   it("completes PKCE and calls provider.status without an upstream request", async () => {
@@ -315,6 +374,8 @@ describe("adrians-mind-mcp-test oauth edge", () => {
     assert.equal(wrangler.vars.CF_ACCESS_AUD, AUD);
     assert.equal(wrangler.vars.MCP_TRUST_ACCESS_IDENTITY, "1");
     assert.equal(wrangler.vars.CF_ACCESS_ALLOWED_EMAIL, "emzylavish@gmail.com");
+    assert.deepEqual(wrangler.compatibility_flags, ["global_fetch_strictly_public"]);
+    assert.deepEqual(metadata.compatibility_flags, ["global_fetch_strictly_public"]);
     assert.equal(wrangler.kv_namespaces[0].binding, "OAUTH_KV");
     assert.equal(metadata.main_module, "index.js");
     assert.equal(JSON.stringify(metadata).includes("adrians-mind-mcp-oauth"), false);

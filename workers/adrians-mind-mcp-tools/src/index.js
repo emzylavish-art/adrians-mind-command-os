@@ -633,31 +633,73 @@ async function testStart(env, ready, deps) {
   return new Response(null, { status: 302, headers: { location: location.toString(), "cache-control": "no-store", "referrer-policy": "no-referrer" } });
 }
 
+const PUBLIC_MCP_ORIGIN = "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev";
+const HIDDEN_HEADERS = new Set(["authorization", "cookie", "set-cookie", "cf-access-jwt-assertion", "proxy-authorization"]);
+
+function publicMcpUrl(ready) {
+  return ready.issuer === PUBLIC_MCP_ORIGIN ? `${PUBLIC_MCP_ORIGIN}/mcp` : null;
+}
+
+function sanitizedHeaders(headers) {
+  const out = {};
+  headers.forEach((value, key) => {
+    const name = key.toLowerCase();
+    if (HIDDEN_HEADERS.has(name)) return;
+    out[name] = String(value).slice(0, 180);
+  });
+  return out;
+}
+
 async function mcpEvidence(env, ready, accessToken, deps) {
-  const call = (method, params) => handleRequest(new Request(`${ready.issuer}/mcp`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-  }), env, deps);
-  const init = await (await call("initialize")).json();
-  const listed = await (await call("tools/list")).json();
-  const status = await (await call("tools/call", { name: "provider.status", arguments: {} })).json();
-  const names = (listed.result?.tools || []).map((tool) => tool.name);
-  let providerStatus = null;
-  try {
-    providerStatus = JSON.parse(status.result?.content?.[0]?.text || "null");
-  } catch {
-    providerStatus = null;
-  }
-  return {
-    ok: init.result?.serverInfo?.name === WORKER_NAME && names.includes("provider.status"),
-    live_account_verified: false,
+  const testedURL = publicMcpUrl(ready);
+  const evidence = {
+    transport: "public_https",
+    testedURL,
+    fetch_path: deps.fetchImpl ? "injected" : "global_fetch",
+    external_network_verified: false,
     upstream_called: false,
-    subject_matches_owner: true,
-    initialize: { server: init.result?.serverInfo?.name || null, protocol: init.result?.protocolVersion || null },
-    tools: names,
-    provider_status: providerStatus,
+    live_account_verified: false,
+    calls: [],
   };
+  if (!testedURL) return { ...evidence, ok: false, error: "issuer_not_allowed" };
+  const fetchImpl = deps.fetchImpl || fetch;
+  const requests = [
+    ["initialize", { jsonrpc: "2.0", id: 1, method: "initialize", params: {} }],
+    ["tools/list", { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }],
+    ["tools/call", { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "provider.status", arguments: {} } }],
+  ];
+  for (const [method, body] of requests) {
+    let response;
+    try {
+      response = await fetchImpl(testedURL, {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      evidence.calls.push({ method, http_status: null, headers: {}, response: null, error: error instanceof Error ? error.name : "fetch_failed" });
+      continue;
+    }
+    let parsed = null;
+    try {
+      parsed = JSON.parse(await response.text());
+    } catch {
+      parsed = null;
+    }
+    let safe = null;
+    try {
+      safe = JSON.parse(redact(JSON.stringify(parsed), env).split(accessToken).join("[redacted]"));
+    } catch {
+      safe = null;
+    }
+    evidence.calls.push({ method, http_status: response.status, headers: sanitizedHeaders(response.headers), response: safe });
+  }
+  evidence.ok = evidence.calls.length === 3 && evidence.calls.every((call) => {
+    if (call.http_status !== 200 || !call.response?.result) return false;
+    if (call.method === "tools/call" && call.response.result.isError === true) return false;
+    return true;
+  });
+  return evidence;
 }
 
 async function testCallback(request, env, ready, deps) {

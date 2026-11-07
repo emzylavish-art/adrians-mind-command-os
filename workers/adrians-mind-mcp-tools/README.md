@@ -39,7 +39,9 @@ Start URL:
 
 `https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev/oauth/test-start`
 
-That request stores the PKCE verifier in `OAUTH_KV` and redirects to `/oauth/authorize`. After the real Access OTP login, the callback exchanges the code with the stored verifier, runs `initialize`, `tools/list`, and `provider.status`, revokes the issued token, and redirects to a one-time result. The result JSON has no authorization code, access token, or API key. `provider.status` does not call OpenAI.
+That request stores the PKCE verifier in `OAUTH_KV` and redirects to `/oauth/authorize`. It does not send `prompt=login`, so an Access session from the last hour can continue without a new OTP. After login, the callback exchanges the code in KV, then `fetch`es `POST https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev/mcp` for `initialize`, `tools/list`, and `tools/call` `provider.status`. The bearer is not sent to any other URL. `global_fetch_strictly_public` makes that same-host fetch a public subrequest. The issued token is revoked before the result is stored.
+
+The earlier harness called `handleRequest` inside the Worker. That was not a public HTTPS `/mcp` call. This bundle does not use that fallback. A result is `ok` only when all three HTTP statuses are 200 and `tools/call` has `isError` not true. `external_network_verified` stays false in the payload. Unit tests inject `fetch` and do not prove the live network. After this bundle is deployed, rerun the start URL and read `fetch_path: "global_fetch"` plus the three `http_status` values. `provider.status` does not call OpenAI. The result JSON has no authorization code, access token, or API key.
 
 ## Upload
 
