@@ -80,7 +80,7 @@ def invoke(tool_id, payload, manifest):
                         ["Notion access requires NOTION_API_KEY and page/database sharing. append-text is a write operation and only runs when explicitly requested."])
 
     if tool_id == "model.generate":
-        provider = payload.get("provider")
+        provider = payload.get("provider", "auto")
         prompt = payload.get("prompt")
         messages = payload.get("messages")
         if messages is None:
@@ -89,12 +89,17 @@ def invoke(tool_id, payload, manifest):
             messages = [{"role": "user", "content": prompt}]
         if not isinstance(messages, list) or not messages:
             return envelope("blocked", limitations=["messages must be a non-empty list."])
-        if provider not in {"grok", "openrouter", "ollama"}:
-            return envelope("blocked", limitations=["provider must be grok, openrouter, or ollama."])
-        command = [sys.executable, str(ROOT / "team" / "provider_router.py"),
-                   "--provider", provider, "--prompt", json.dumps(messages)]
+        if provider not in {"astra", "sol", "luna", "openai", "grok", "openrouter", "ollama", "auto"}:
+            return envelope("blocked", limitations=["provider must be astra, sol, luna, openai, auto, grok, openrouter, or ollama."])
+        command = [sys.executable, str(ROOT / "team" / "provider_router.py"), "--prompt", json.dumps(messages)]
+        if provider == "auto":
+            command.append("--route")
+        else:
+            command.extend(["--provider", provider])
         if payload.get("model"):
             command.extend(["--model", str(payload["model"])])
+        if payload.get("stream") is True:
+            command.append("--stream")
         command.extend(["--timeout", str(payload.get("timeout_seconds", 60))])
         try:
             completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True,

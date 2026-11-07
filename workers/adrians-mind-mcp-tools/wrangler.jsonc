@@ -1,0 +1,27 @@
+{
+  // Nonproduction test worker. Do not deploy over adrians-mind, gpt-mcp-proxy,
+  // operation-beat-magnus-trigger, or any worker using KV adrians-mind-mcp-oauth.
+  "name": "adrians-mind-mcp-test",
+  "main": "bundle/index.js",
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "vars": {
+    "MCP_OAUTH_ISSUER": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev",
+    "MCP_OAUTH_AUDIENCE": "https://adrians-mind-mcp-test.operation-beat-magnus.workers.dev/mcp",
+    "MCP_TRUST_ACCESS_IDENTITY": "1",
+    "CF_ACCESS_TEAM_DOMAIN": "adriansmind.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "f3d3c26edffe9b02e90616706ed7622c3b96f80e7b1b43ef111eecbb72fdcd37",
+    "CF_ACCESS_ALLOWED_EMAIL": "emzylavish@gmail.com"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "PARENT_CREATES_adrians-mind-mcp-test-oauth"
+    }
+  ]
+}

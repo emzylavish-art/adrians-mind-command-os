@@ -33,6 +33,8 @@ class MCPServerTests(unittest.TestCase):
         self.assertIn("rea.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("security.scan", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.health", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("model.generate", [tool["name"] for tool in responses[1]["result"]["tools"]])
+        self.assertIn("notion.controller", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.queue", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("knowledge.search", [tool["name"] for tool in responses[1]["result"]["tools"]])
         self.assertIn("team.worker", [tool["name"] for tool in responses[1]["result"]["tools"]])
@@ -140,6 +142,10 @@ class MCPServerTests(unittest.TestCase):
             "params": {"name": "gods-eyes", "arguments": {}},
         }])
         self.assertTrue(responses[0]["result"]["isError"])
+
+    def test_invalid_jsonrpc_is_protocol_error(self):
+        responses = rpc([{"jsonrpc": "1.0", "id": 99, "method": "ping"}])
+        self.assertEqual(responses[0]["error"]["code"], -32600)
 
 
 if __name__ == "__main__":
