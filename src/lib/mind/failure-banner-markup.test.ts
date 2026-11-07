@@ -56,6 +56,12 @@ describe("failure banner markup contract", () => {
     ["research_failed", HONEST_FAILURE_MESSAGES.research_timeout],
     ["research_failed", "The search provider returned 502. No citations were created."],
     ["rate_limited", "The search provider returned 429. No citations were created."],
+    ["notion_failed", "Notion returned 401. Nothing was invented."],
+    ["notion_failed", "Notion returned 403. Nothing was invented."],
+    ["notion_failed", "Notion returned 404. Nothing was invented."],
+    ["notion_failed", "Notion returned 500. Nothing was invented."],
+    ["notion_failed", HONEST_FAILURE_MESSAGES.notion_timeout],
+    ["rate_limited", "Notion returned 429. Nothing was invented."],
   ] as const;
 
   for (const [kind, message] of cases) {
