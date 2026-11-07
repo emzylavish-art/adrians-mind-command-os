@@ -15,7 +15,7 @@ import { hasForbiddenPollutionKey, readJsonObjectBody, MIND_BODY_UNREADABLE } fr
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("integration-security-c17", () => {
-  it("SSRF block: private IPs and credentialed URLs refused at registration", () => {
+  it("SSRF block: private IPs and credentialed URLs refused at registration", async () => {
     assert.equal(isPrivateAddressLiteral("10.0.0.1"), true);
     assert.equal(isPrivateAddressLiteral("169.254.169.254"), true);
     assert.equal(isPrivateAddressLiteral("192.168.1.1"), true);
@@ -33,10 +33,10 @@ describe("integration-security-c17", () => {
       ]) {
         const problem = httpServerUrlProblem(new URL(url));
         assert.ok(problem, `expected refusal for ${url}`);
-        const saved = registerExternalServer("owner-c17", { label: "probe", url });
+        const saved = await registerExternalServer("owner-c17", { label: "probe", url });
         assert.equal(saved.ok, false, `should refuse ${url}`);
       }
-      assert.equal(registerExternalServer("owner-c17", { label: "ok", url: "https://mcp.example/mcp" }).ok, true);
+      assert.equal((await registerExternalServer("owner-c17", { label: "ok", url: "https://mcp.example/mcp" })).ok, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

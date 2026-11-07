@@ -52,7 +52,7 @@ async function main() {
   process.env.MIND_MCP_STDIO_ALLOW = process.execPath;
 
   const marker = join(mkdtempSync(join(tmpdir(), "mind-mcp-marker-")), "spawned");
-  const saved = registry.registerExternalServer(owner, {
+  const saved = await registry.registerExternalServer(owner, {
     label: "Fixture stdio",
     command: process.execPath,
     args: [FIXTURE],
@@ -69,7 +69,7 @@ async function main() {
   check("disabled call refuses", disabledCall.ok === false && /disabled/i.test(disabledCall.text), disabledCall.text);
   check("disabled never spawned", stdio.stdioSpawnCount() === spawnsBefore && !existsSync(marker), `spawns=${stdio.stdioSpawnCount() - spawnsBefore} marker=${existsSync(marker)}`);
 
-  registry.setServerEnabled(owner, server.id, true);
+  await registry.setServerEnabled(owner, server.id, true);
   const savedAllow = process.env.MIND_MCP_STDIO_ALLOW;
   delete process.env.MIND_MCP_STDIO_ALLOW;
   const deniedList = await registry.listRegistryTools(owner, undefined, { isHalted: notHalted });
@@ -107,7 +107,7 @@ async function main() {
   });
   check("slow tools/call -> timeout", slow.status === "timeout" && slow.ok === false, `${slow.status}: ${slow.text.split("\n")[0]} in ${Date.now() - t0}ms`);
 
-  const hung = registry.registerExternalServer(owner, {
+  const hung = await registry.registerExternalServer(owner, {
     label: "Hung init",
     command: process.execPath,
     args: [FIXTURE],
@@ -115,7 +115,7 @@ async function main() {
     connectTimeoutMs: 1000,
   });
   const hungServer = hung.servers.find((s) => s.label === "Hung init");
-  registry.setServerEnabled(owner, hungServer.id, true);
+  await registry.setServerEnabled(owner, hungServer.id, true);
   t0 = Date.now();
   const hungCall = await registry.callRegistryTool({ userId: owner, serverId: hungServer.id, tool: "echo", args: { text: "x" }, getSql: noSql, isHalted: notHalted });
   check("hung initialize -> timeout", hungCall.status === "timeout", `${hungCall.status}: ${hungCall.text.split("\n")[0]} in ${Date.now() - t0}ms`);

@@ -127,7 +127,7 @@ async function main() {
   log(`[local] pc_run_shell no agent: ${pcNone.text}`);
 
   // 4) toggle-off gating
-  registry.setServerEnabled("verify", registry.BUILTIN_ID, false);
+  await registry.setServerEnabled("verify", registry.BUILTIN_ID, false);
   const gated = await registry.callRegistryTool({
     userId: "verify",
     serverId: registry.BUILTIN_ID,
@@ -136,7 +136,7 @@ async function main() {
     getSql,
   });
   log(`[local] toggle-off gate: ok=${gated.ok} text=${gated.text}`);
-  registry.setServerEnabled("verify", registry.BUILTIN_ID, true);
+  await registry.setServerEnabled("verify", registry.BUILTIN_ID, true);
 
   // 5) MCP HTTP tools/call (builtin handler — same as /api/mind/mcp/builtin)
   const server = createServer(async (req, res) => {

@@ -64,7 +64,7 @@ describe("MCP DNS rebinding guard (resolve + pin)", () => {
 
   it("callRegistryTool never fetches when mocked DNS returns a private second answer", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-dns-")));
-    const saved = registerExternalServer("dns-owner", {
+    const saved = await registerExternalServer("dns-owner", {
       label: "Remote",
       url: "https://rebinder.example/mcp",
     });
