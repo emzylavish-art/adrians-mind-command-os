@@ -1,0 +1,8 @@
+/tools 404
+/voice 404
+/voice-cloning-studio 404
+/whisper 404
+/activity 404
+/scheduled 404
+/login 200
+/explore 200
