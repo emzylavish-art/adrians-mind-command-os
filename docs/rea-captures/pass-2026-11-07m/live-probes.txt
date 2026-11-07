@@ -1,0 +1,48 @@
+=== LIVE PROBES pass-2026-11-07m — 2026-11-07 03:12:26 WAT Africa/Lagos (WAT) ===
+Target: https://adrians-mind.vercel.app
+vs prior pass 2026-11-07l
+
+--- Route status (HEAD, no follow) ---
+/ 200 
+/login 200 
+/dashboard 307 https://adrians-mind.vercel.app/login?next=%2Fdashboard
+/memory 200 
+/explore 200 
+/tools 404 
+/voice 404 
+/artifacts 404 
+/settings 404 
+/activity 404 
+/scheduled 404 
+/library 404 
+/projects 404 
+
+--- OAuth status (HEAD) ---
+oauth/github 401
+oauth/gmail 401
+oauth/google_calendar 401
+oauth/google_drive 401
+oauth/notion 401
+oauth/slack 401
+
+--- Security headers on / ---
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+
+--: line 24: warning: command substitution: ignored null byte in input
+--- Live JS bundle ---
+index-qV1VC2j2.js
+vs 07l index-qV1VC2j2.js: UNCHANGED
+scripts also include: https://grok.com/grok-app-builder/extensions.js
+(extensions.js known standing if present)
+
+MISSING: content-security-policy
+MISSING: permissions-policy
+PRESENT: HSTS, XCTO=nosniff, XFO=DENY, Referrer-Policy=strict-origin-when-cross-origin
+
+--- vs 07l ---
+Routes/OAuth/headers/bundle: UNCHANGED (library+projects also 404; consistent with known deep-link 404s)
+REA_AUDIT_EMAIL domain: @example.com (redacted local-part; still example.com — standing)
