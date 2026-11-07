@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -156,6 +156,7 @@ import { historyTextForImages, parseImagineCommand, toImageAttachments, type Ima
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
+import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
 import { relevantMemories } from "@/lib/mind/memory";
@@ -488,6 +489,7 @@ export function CommandApp() {
   const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteIndex, setPaletteIndex] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
   const navDrawerRef = useRef<HTMLElement>(null);
   const navCloseRef = useRef<HTMLButtonElement>(null);
@@ -1133,6 +1135,39 @@ export function CommandApp() {
     setAccountOpen(false);
     setContextOpen(false);
     setToolsOpen(false);
+  }
+
+  function openPaletteHit(hit: (typeof hits)[number]) {
+    if (hit.view === "chat" && hit.ref) setActiveId(hit.ref);
+    setView(hit.view);
+    setQuery("");
+    setPaletteIndex(0);
+    setPaletteOpen(false);
+    setNavOpen(false);
+  }
+
+  function onPaletteKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    const action = paletteKeyAction({
+      key: event.key,
+      open: paletteOpen,
+      count: hits.length,
+      index: paletteIndex,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+    });
+    if (action.type === "none") return;
+    event.preventDefault();
+    if (action.type === "close") {
+      setPaletteOpen(false);
+      return;
+    }
+    if (action.type === "move") {
+      setPaletteIndex(action.index);
+      return;
+    }
+    const hit = hits[action.index];
+    if (hit) openPaletteHit(hit);
   }
 
   function requestProtected(kind: string, id: string, label: string, detail: string, confirm: string, run: () => void) {
@@ -3604,9 +3639,11 @@ export function CommandApp() {
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
+                setPaletteIndex(0);
                 setPaletteOpen(true);
               }}
               onFocus={() => setPaletteOpen(true)}
+              onKeyDown={onPaletteKeyDown}
               placeholder="Search or jump…"
               className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
               role="combobox"
@@ -3616,25 +3653,25 @@ export function CommandApp() {
               aria-controls="command-palette"
               aria-autocomplete="list"
               aria-haspopup="listbox"
+              aria-activedescendant={paletteOpen && hits.length > 0 ? `palette-hit-${hits[Math.min(Math.max(paletteIndex, 0), hits.length - 1)]!.key}` : undefined}
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="command-palette floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2">
-                {hits.length === 0 && <p className="px-2 py-2 text-sm text-muted">No matches.</p>}
-                {hits.map((hit) => {
+              <div id="command-palette" className="command-palette floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2" role="listbox" aria-label="Search results">
+                {hits.length === 0 && <p className="px-2 py-3 text-sm text-muted">No matches.</p>}
+                {hits.map((hit, index) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
+                  const active = hits.length > 0 && index === Math.min(Math.max(paletteIndex, 0), hits.length - 1);
                   return (
                     <div key={hit.key} className="flex items-center gap-1">
                       <button
                         type="button"
-                        className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-panel px-2 text-left text-sm"
-                        onClick={() => {
-                          if (hit.view === "chat" && hit.ref) setActiveId(hit.ref);
-                          setView(hit.view);
-                          setQuery("");
-                          setPaletteOpen(false);
-                          setNavOpen(false);
-                        }}
+                        id={`palette-hit-${hit.key}`}
+                        role="option"
+                        aria-selected={active}
+                        className={`palette-option flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-panel px-2 text-left text-sm${active ? " palette-option-active" : ""}`}
+                        onMouseEnter={() => setPaletteIndex(index)}
+                        onClick={() => openPaletteHit(hit)}
                       >
                         <span className="truncate">{hit.label}</span>
                         <span className="text-xs text-muted">{hit.meta}</span>
@@ -3679,7 +3716,10 @@ export function CommandApp() {
           </button>
           <button
             type="button"
-            className="flex h-11 items-center gap-2 rounded-full border border-line px-2"
+            className="flex h-11 min-h-11 items-center gap-2 rounded-full border border-line px-2"
+            aria-label="Account menu"
+            aria-expanded={accountOpen}
+            aria-controls="account-panel"
             onClick={() => {
               setAccountOpen((open) => !open);
               setBellOpen(false);
@@ -3702,7 +3742,7 @@ export function CommandApp() {
           </div>
         )}
         {accountOpen && (
-          <div className="border-b border-line bg-surface px-4 py-3 text-sm">
+          <div id="account-panel" className="border-b border-line bg-surface px-4 py-3 text-sm" role="region" aria-label="Account">
             <p className="font-semibold">Adrian (Personal)</p>
             <UserButton />
             <SupabaseAccountControls />
@@ -3883,13 +3923,14 @@ export function CommandApp() {
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="What would you like to work on?"
+                    aria-label="Command"
                     rows={3}
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
                       <Paperclip className="size-4" /> Attach
                     </button>
@@ -3956,7 +3997,7 @@ export function CommandApp() {
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button></div>
 
-                    <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                    <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
                   </div>
@@ -4041,7 +4082,19 @@ export function CommandApp() {
 
               <div className="grid gap-3 xl:grid-cols-3">
                 <Panel title="Active Projects" action="View all" onAction={() => setView("projects")}>
-                  {ws.projects.length === 0 && <p className="text-sm text-muted">No projects yet. Create one and it stays on this device until you export it.</p>}
+                  {!ready && (
+                    <div className="workspace-loading" role="status" data-testid="projects-loading">
+                      <p>Loading projects saved in this browser…</p>
+                      <div className="skeleton h-3" style={{ width: "72%" }} />
+                      <div className="skeleton h-3" style={{ width: "46%" }} />
+                    </div>
+                  )}
+                  {ready && ws.projects.length === 0 && (
+                    <div className="empty-state mt-3 text-sm text-muted" data-testid="projects-empty">
+                      <p className="font-semibold text-fg">No projects yet</p>
+                      <p>Create one and it stays on this device until you export it.</p>
+                    </div>
+                  )}
                   {ws.projects.slice(0, 3).map((project) => {
                     const chats = ws.chats.filter((chat) => chat.projectId === project.id).length;
                     const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
@@ -4069,7 +4122,19 @@ export function CommandApp() {
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>
                 </Panel>
                 <Panel title="Recent Activity" action="View all" onAction={() => setView("activity")}>
-                  {ws.audit.length === 0 && <p className="text-sm text-muted">No activity yet. Actions you take show up here. Nothing is invented.</p>}
+                  {!ready && (
+                    <div className="workspace-loading" role="status" data-testid="activity-loading">
+                      <p>Loading activity saved in this browser…</p>
+                      <div className="skeleton h-3" style={{ width: "80%" }} />
+                      <div className="skeleton h-3" style={{ width: "38%" }} />
+                    </div>
+                  )}
+                  {ready && ws.audit.length === 0 && (
+                    <div className="empty-state mt-3 text-sm text-muted" data-testid="activity-empty">
+                      <p className="font-semibold text-fg">No activity yet</p>
+                      <p>Actions you take show up here. Nothing is invented.</p>
+                    </div>
+                  )}
                   {ws.audit.slice(0, 5).map((entry) => (
                     <button key={entry.id} type="button" onClick={() => setView("activity")} className="mt-2 flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm">
                       <span className="truncate">{humanAction(entry.action)}</span>
@@ -5399,7 +5464,7 @@ function Panel({ title, action, onAction, children }: { title: string; action: s
     <section className="glow-card rounded-panel border border-line/80 p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">{title}</h2>
-        <button type="button" className="text-sm text-info" onClick={onAction}>{action}</button>
+        <button type="button" className="panel-action" onClick={onAction}>{action}</button>
       </div>
       {children}
     </section>
@@ -5427,7 +5492,7 @@ function StatusRow({
         <p className="text-sm font-semibold">{name}</p>
         <p className="text-xs text-muted">{detail}</p>
       </div>
-      <span className={`rounded-full border border-line px-2 py-1 text-xs ${color}`}>{pill}</span>
+      <span className={`status-pill rounded-full border border-line px-2 py-1 text-xs ${color}`}>{pill}</span>
     </div>
   );
 }
@@ -5907,6 +5972,7 @@ function ChatPane({
               }
             }}
             placeholder={`Message (${modelTier})...`}
+            aria-label="Message"
             className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
           />
           <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
@@ -5923,7 +5989,7 @@ function ChatPane({
               <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
               <Paperclip className="size-4" /> Attach
             </button>
@@ -5965,7 +6031,7 @@ function ChatPane({
               {speaking ? "Reading" : "Read aloud"}
             </button></div>
             
-            <button type="submit" disabled={busy || halted || !active || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+            <button type="submit" disabled={busy || halted || !active || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
           <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
             <p className="text-xs text-muted" role="status">{chromeNote}</p>

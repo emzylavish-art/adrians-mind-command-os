@@ -334,8 +334,8 @@ function Login() {
                 disabled={busy}
                 className={
                   active
-                    ? "min-h-10 rounded-[calc(var(--radius-panel)-0.15rem)] bg-fg px-3 text-sm font-semibold text-bg transition-colors disabled:opacity-60"
-                    : "min-h-10 rounded-[calc(var(--radius-panel)-0.15rem)] px-3 text-sm font-medium text-muted transition-colors hover:text-fg disabled:opacity-60"
+                    ? "min-h-11 rounded-[calc(var(--radius-panel)-0.15rem)] bg-fg px-3 text-sm font-semibold text-bg transition-colors disabled:opacity-60"
+                    : "min-h-11 rounded-[calc(var(--radius-panel)-0.15rem)] px-3 text-sm font-medium text-muted transition-colors hover:text-fg disabled:opacity-60"
                 }
                 onClick={() => {
                   setMode(value);
@@ -358,7 +358,7 @@ function Login() {
             <p className="text-sm leading-relaxed text-danger">{banner}</p>
             <button
               type="button"
-              className="inline-flex min-h-9 shrink-0 items-center rounded-panel border border-line bg-surface px-3 text-xs font-medium text-fg transition-colors hover:bg-surface-2"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-panel border border-line bg-surface px-3 text-xs font-medium text-fg transition-colors hover:bg-surface-2"
               onClick={() => setBanner(null)}
             >
               Dismiss
