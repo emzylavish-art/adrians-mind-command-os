@@ -77,6 +77,7 @@ import {
   setVoiceModeStore,
   subscribeVoiceMode,
 } from "@/lib/mind/voice/mode-store";
+import { captureSpeakUtterance } from "@/lib/mind/voice/capture-utterance";
 import { type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
 import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
 import { interruptMessageSpeak } from "@/lib/mind/voice/speak-control";
@@ -2575,23 +2576,61 @@ export function CommandApp() {
     setView("chat");
   }
 
-  async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
-    if (!replay && text.length === 0) {
-      setError("Nothing to read aloud.");
-      return;
+  async function speakChatTurn(transcript: string) {
+    let chat = (activeId ? wsRef.current.chats.find((item) => item.id === activeId) : null) ?? null;
+    let source = wsRef.current;
+    if (!chat) {
+      const made = createChat(source, {
+        memory: memoryChoice,
+        autonomy,
+        temporary,
+        projectId: chatProjectId || projectChoice || null,
+      });
+      chat = made.chat;
+      source = { ...source, chats: [made.chat, ...source.chats] };
+      setActiveId(made.chat.id);
+      setView("chat");
+      setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "speak"));
     }
+    const reply = await deliver(chat, transcript, source);
+    if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
+    return { ok: true as const, text: reply };
+  }
+
+  async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
     interruptSpeakPlayback();
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
     speakAbortRef.current = abort;
     setSpeaking(true);
-    const outcome = await runMountedSpeak({
+    await runMountedSpeak({
       text,
       messageId,
       voiceId,
       replay,
       isCurrent: () => generation === speakGenRef.current && !abort.signal.aborted,
       deps: {
+        capture: () => captureSpeakUtterance({ maxMs: 6000 }),
+        transcribe: async (audioBase64) => {
+          const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+          const token = getBearerToken();
+          const response = await fetch(`${prefix}/api/mind/voice/stt`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "content-type": "application/json",
+              accept: "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ audioBase64, mime: "audio/webm", filename: "speak.webm" }),
+          });
+          try {
+            return (await response.json()) as { ok?: boolean; text?: string; error?: string };
+          } catch {
+            return { ok: false, error: "The transcript request failed. Nothing was substituted." };
+          }
+        },
+        chatTurn: (transcript) => speakChatTurn(transcript),
         synthesize: async (reply, voice) => speakText({ data: { text: reply, voiceId: voice } }),
         play: async (audio) => {
           await sharedAudioOutput.playMpegBase64(audio);
@@ -2608,9 +2647,6 @@ export function CommandApp() {
     });
     if (generation !== speakGenRef.current || abort.signal.aborted) return;
     setSpeaking(false);
-    if (!outcome.ok && text.length === 0 && !replay) {
-      setError("Nothing to read aloud.");
-    }
   }
 
   function appendLiveVoiceUser(text: string) {
@@ -5319,7 +5355,7 @@ export function CommandApp() {
         authReady={statusSignedIn === true}
         authSignedIn={statusSignedIn === true}
         onSignInRequired={() => setVoiceSignInNotice(true)}
-        onCompactSpeak={() => void openVoiceOverlay()}
+        onCompactSpeak={() => void speak("")}
         onChatAttachImage={(image) => setPendingImages((prev) => prev.length >= 4 ? prev : [...prev, image])}
         onDictateToggle={() => startBrowserDictation()}
         isOverlayMicOpen={() =>

@@ -85,6 +85,88 @@ function harness(deps: SpeakMountedInput["deps"]) {
   };
 }
 
+function sourceBetween(start: string, end: string) {
+  const from = commandApp.indexOf(start);
+  const to = commandApp.indexOf(end, from + start.length);
+  assert.ok(from >= 0 && to > from, `${start} .. ${end}`);
+  return commandApp.slice(from, to);
+}
+
+describe("mounted Speak click", () => {
+  it("runs mic, STT, the composer deliver(), TTS, and playback in that order", async () => {
+    const speakTurn = sourceBetween("async function speakChatTurn", "async function speak(");
+    const composer = sourceBetween("async function sendCommand", "async function startResearch");
+    assert.match(speakTurn, /const reply = await deliver\(chat, transcript, source\)/);
+    assert.doesNotMatch(speakTurn, /fetch\(|consumeMindTurn|\/api\/mind\/turn/);
+    assert.match(composer, /await deliver\(made\.chat, full,/);
+    assert.match(commandApp, /onCompactSpeak=\{\(\) => void speak\(""\)\}/);
+    assert.match(commandApp, /chatTurn: \(transcript\) => speakChatTurn\(transcript\)/);
+
+    const order: string[] = [];
+    const delivered: string[] = [];
+    async function deliver(text: string) {
+      delivered.push(text);
+      return "It is sunny.";
+    }
+    let pending: Promise<unknown> = Promise.resolve();
+    const composerButton = createElement("button", {
+      type: "button",
+      "data-testid": "composer-send",
+      onClick: () => {
+        void deliver("typed hello");
+      },
+    });
+    const button = createElement("button", {
+      type: "button",
+      "data-testid": "composer-speak",
+      onClick: () => {
+        pending = runMountedSpeak({
+          text: "",
+          messageId: "",
+          voiceId: "Ara",
+          isCurrent: () => true,
+          deps: {
+            capture: async () => {
+              order.push("mic");
+              return { ok: true, audioBase64: "bWlj" };
+            },
+            transcribe: async (audio) => {
+              order.push("stt");
+              assert.equal(audio, "bWlj");
+              return { ok: true, text: "what is the weather" };
+            },
+            chatTurn: async (transcript) => {
+              order.push("chat");
+              const reply = await deliver(transcript);
+              if (!reply) return { ok: false, error: "The chat turn failed. Nothing was spoken." };
+              return { ok: true, text: reply };
+            },
+            synthesize: async (reply) => {
+              order.push("tts");
+              assert.equal(reply, "It is sunny.");
+              return { ok: true, audio: "dHRz" };
+            },
+            play: async (audio) => {
+              order.push("play");
+              assert.equal(audio, "dHRz");
+            },
+          },
+          reportFailure: () => undefined,
+          clearFailure: () => undefined,
+          again: () => undefined,
+        });
+      },
+    });
+    assert.match(renderToStaticMarkup(composerButton), /data-testid="composer-send"/);
+    assert.match(renderToStaticMarkup(button), /data-testid="composer-speak"/);
+    (composerButton.props.onClick as () => void)();
+    (button.props.onClick as () => void)();
+    await pending;
+    assert.deepEqual(order, ["mic", "stt", "chat", "tts", "play"]);
+    assert.deepEqual(delivered, ["typed hello", "what is the weather"]);
+  });
+});
+
 describe("mounted speak() failure banner", () => {
   it("speak() reports failures through reportFailure and does not touch failure-mount", () => {
     assert.match(commandApp, /async function speak\(/);
