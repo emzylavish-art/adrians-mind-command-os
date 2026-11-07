@@ -19,6 +19,9 @@ import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as ApiMindVoiceSessionRouteImport } from './routes/api/mind/voice/session'
+import { Route as ApiMindVoiceSttRouteImport } from './routes/api/mind/voice/stt'
+import { Route as ApiMindVoiceTtsRouteImport } from './routes/api/mind/voice/tts'
 import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
 import { Route as ApiMindMcpBuiltinRouteImport } from './routes/api/mind/mcp/builtin'
 import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
@@ -101,6 +104,21 @@ const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   id: '/api/mind/turn',
   path: '/api/mind/turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindVoiceSessionRoute = ApiMindVoiceSessionRouteImport.update({
+  id: '/api/mind/voice/session',
+  path: '/api/mind/voice/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindVoiceSttRoute = ApiMindVoiceSttRouteImport.update({
+  id: '/api/mind/voice/stt',
+  path: '/api/mind/voice/stt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindVoiceTtsRoute = ApiMindVoiceTtsRouteImport.update({
+  id: '/api/mind/voice/tts',
+  path: '/api/mind/voice/tts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindDashboardStatusRoute = ApiMindDashboardStatusRouteImport.update({
@@ -289,6 +307,9 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
+  '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
+  '/api/mind/voice/tts': typeof ApiMindVoiceTtsRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -334,6 +355,9 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
+  '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
+  '/api/mind/voice/tts': typeof ApiMindVoiceTtsRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -380,6 +404,9 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
+  '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
+  '/api/mind/voice/tts': typeof ApiMindVoiceTtsRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/mcp/builtin': typeof ApiMindMcpBuiltinRoute
   '/api/mind/mcp/call': typeof ApiMindMcpCallRoute
@@ -427,6 +454,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/voice/session'
+    | '/api/mind/voice/stt'
+    | '/api/mind/voice/tts'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -472,6 +502,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/voice/session'
+    | '/api/mind/voice/stt'
+    | '/api/mind/voice/tts'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -517,6 +550,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/turn'
+    | '/api/mind/voice/session'
+    | '/api/mind/voice/stt'
+    | '/api/mind/voice/tts'
     | '/api/mind/dashboard/status'
     | '/api/mind/mcp/builtin'
     | '/api/mind/mcp/call'
@@ -563,6 +599,9 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  ApiMindVoiceSessionRoute: typeof ApiMindVoiceSessionRoute
+  ApiMindVoiceSttRoute: typeof ApiMindVoiceSttRoute
+  ApiMindVoiceTtsRoute: typeof ApiMindVoiceTtsRoute
   ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
   ApiMindMcpBuiltinRoute: typeof ApiMindMcpBuiltinRoute
   ApiMindMcpCallRoute: typeof ApiMindMcpCallRoute
@@ -668,6 +707,27 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/turn'
       fullPath: '/api/mind/turn'
       preLoaderRoute: typeof ApiMindTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/voice/session': {
+      id: '/api/mind/voice/session'
+      path: '/api/mind/voice/session'
+      fullPath: '/api/mind/voice/session'
+      preLoaderRoute: typeof ApiMindVoiceSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/voice/stt': {
+      id: '/api/mind/voice/stt'
+      path: '/api/mind/voice/stt'
+      fullPath: '/api/mind/voice/stt'
+      preLoaderRoute: typeof ApiMindVoiceSttRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/voice/tts': {
+      id: '/api/mind/voice/tts'
+      path: '/api/mind/voice/tts'
+      fullPath: '/api/mind/voice/tts'
+      preLoaderRoute: typeof ApiMindVoiceTtsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/dashboard/status': {
@@ -915,6 +975,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  ApiMindVoiceSessionRoute: ApiMindVoiceSessionRoute,
+  ApiMindVoiceSttRoute: ApiMindVoiceSttRoute,
+  ApiMindVoiceTtsRoute: ApiMindVoiceTtsRoute,
   ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,
   ApiMindMcpBuiltinRoute: ApiMindMcpBuiltinRoute,
   ApiMindMcpCallRoute: ApiMindMcpCallRoute,

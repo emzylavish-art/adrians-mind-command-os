@@ -68,6 +68,8 @@ export function relayModelStream(input: {
   params?: RelayModelParams;
   /** Optional metadata echoed on the done event (e.g. selected/resolved tier). */
   meta?: Record<string, unknown>;
+  /** Called only after an xAI 401 or 400 auth failure. Must not receive the key. */
+  authFallback?: () => Promise<{ ok: true; text: string; model: string; provider: string } | { ok: false; error: string }>;
 }): Response {
   const linked = combineAbort(input.requestSignal, input.timeoutMs ?? chatTurnTimeoutMs());
   const encoder = new TextEncoder();
@@ -134,7 +136,26 @@ export function relayModelStream(input: {
           return;
         }
         if (!res.ok || !res.body) {
-          await res.body?.cancel().catch(() => undefined);
+          const bodyText = await res.text().catch(() => "");
+          const authFailed = res.status === 401 || (res.status === 400 && /incorrect api key|invalid api key|invalid_api_key|authentication/i.test(bodyText));
+          if (authFailed && input.authFallback) {
+            const alt = await input.authFallback();
+            if (alt.ok) {
+              send("done", {
+                text: alt.text,
+                model: alt.model,
+                provider: alt.provider,
+                usage: null,
+                usedIds: input.usedIds,
+                requestId: null,
+                ...(input.meta ?? {}),
+              });
+            } else {
+              send("error", { error: alt.error });
+            }
+            finish();
+            return;
+          }
           const error =
             res.status === 404
               ? "That model is not available. Nothing was saved as a success."
@@ -179,6 +200,7 @@ export function relayModelStream(input: {
         send("done", {
           text: feed.text.trim(),
           model: input.model,
+          provider: "xAI",
           usage,
           usedIds: input.usedIds,
           requestId: res.headers.get("x-request-id"),

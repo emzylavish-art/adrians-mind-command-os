@@ -73,6 +73,8 @@ describe("RealtimeVoiceSession", () => {
     const update = created!.sent.find((line) => line.includes("session.update"));
     assert.ok(update);
     assert.ok(update!.includes('"voice":"eve"'), update);
+    assert.ok(update!.includes('"transcription"'), update);
+    assert.ok(update!.includes("grok-voice-transcribe-2.0"), update);
     session.close();
   });
 

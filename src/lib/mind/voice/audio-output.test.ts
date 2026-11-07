@@ -56,4 +56,37 @@ describe("SharedAudioOutput", () => {
       g.Blob = prevBlob;
     }
   });
+
+  it("rejects when audio.play() is rejected (autoplay blocked)", async () => {
+    const out = new SharedAudioOutput();
+    const AudioStub = class {
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = "";
+      play() {
+        return Promise.reject(new DOMException("play() failed", "NotAllowedError"));
+      }
+      pause() {}
+      removeAttribute() {}
+      load() {}
+    };
+    const g = globalThis as unknown as { Audio?: typeof Audio; URL?: typeof URL; Blob?: typeof Blob };
+    const prevAudio = g.Audio;
+    const prevURL = g.URL;
+    const prevBlob = g.Blob;
+    g.Audio = AudioStub as unknown as typeof Audio;
+    g.URL = { createObjectURL: () => "blob:test", revokeObjectURL: () => undefined } as unknown as typeof URL;
+    g.Blob = class { constructor(_parts?: unknown[], _opts?: unknown) {} } as unknown as typeof Blob;
+    try {
+      await assert.rejects(
+        () => out.playMpegBase64(Buffer.from("ID3fake-audio-bytes-for-test").toString("base64")),
+        /blocked|NotAllowedError|play\(\) failed/,
+      );
+      assert.equal(out.isPlaying, false);
+    } finally {
+      g.Audio = prevAudio;
+      g.URL = prevURL;
+      g.Blob = prevBlob;
+    }
+  });
 });

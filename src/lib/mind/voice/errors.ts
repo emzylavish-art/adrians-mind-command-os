@@ -1,5 +1,7 @@
 /** Map thrown / returned voice failures to always-visible user text. Never silent. */
 
+import type { VoiceRoutingMode } from "./mode.ts";
+
 export const VOICE_SIGN_IN_REQUIRED =
   "Sign in is required before using Speak.";
 
@@ -37,7 +39,63 @@ export function formatMicCaptureError(err: unknown): string | null {
   return null;
 }
 
-/** Only persist after the first client hydrate so the SSR default cannot clobber localStorage. */
-export function shouldPersistVoiceMode(hydrated: boolean): boolean {
-  return hydrated;
+export const DIRECT_FALLBACK_NOTICE = "Using Direct — no paired computer for Orchestrator.";
+
+/** Voice starts on the server xAI path unless a paired computer is actually available. */
+export function defaultVoiceMode(): VoiceRoutingMode {
+  return "direct";
+}
+
+/**
+ * Orchestrator without a paired computer is Direct.
+ * The caller shows `notice` and continues the Direct session. It does not surface the Ollama error.
+ */
+export function resolveVoiceMode(
+  mode: VoiceRoutingMode | null | undefined,
+  pairedComputer: boolean,
+): { mode: VoiceRoutingMode; fellBack: boolean; notice: string | null } {
+  const selected: VoiceRoutingMode = mode === "orchestrator" ? "orchestrator" : "direct";
+  if (selected === "orchestrator" && !pairedComputer) {
+    return { mode: "direct", fellBack: true, notice: DIRECT_FALLBACK_NOTICE };
+  }
+  return { mode: selected, fellBack: false, notice: null };
+}
+
+/**
+ * Hydrate a stored mode. A stale orchestrator value with no paired computer becomes Direct
+ * so the next session does not start on the failing path.
+ */
+export function hydrateResolvedVoiceMode(raw: string | null | undefined, pairedComputer: boolean): VoiceRoutingMode {
+  return resolveVoiceMode(raw === "orchestrator" ? "orchestrator" : "direct", pairedComputer).mode;
+}
+
+/**
+ * Persist only after client hydrate.
+ * Do not write orchestrator back when no paired computer is available.
+ */
+export function shouldPersistVoiceMode(hydrated: boolean, mode?: VoiceRoutingMode, pairedComputer?: boolean): boolean {
+  if (!hydrated) return false;
+  if (mode === "orchestrator" && pairedComputer === false) return false;
+  return true;
+}
+
+/** Mode choice, then the session mint, then connect. Providers are injected so tests make no network calls. */
+export async function beginVoiceModeSession(input: {
+  mode: VoiceRoutingMode;
+  pairedComputer: boolean;
+  mint: () => Promise<{ ok: boolean; value?: string; error?: string }>;
+  connect: (secret: string) => Promise<void>;
+}): Promise<{ mode: VoiceRoutingMode; notice: string | null; error: string | null; connected: boolean }> {
+  const route = resolveVoiceMode(input.mode, input.pairedComputer);
+  const secret = await input.mint();
+  if (!secret.ok || !secret.value) {
+    return {
+      mode: route.mode,
+      notice: route.notice,
+      error: secret.error ?? "Voice capture could not start.",
+      connected: false,
+    };
+  }
+  await input.connect(secret.value);
+  return { mode: route.mode, notice: route.notice, error: null, connected: true };
 }

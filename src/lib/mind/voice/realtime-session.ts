@@ -161,7 +161,10 @@ export class RealtimeVoiceSession {
         instructions: "You are a voice capture helper. Prefer short replies when asked to speak.",
         turn_detection: { type: "server_vad" },
         audio: {
-          input: { format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE } },
+          input: {
+            format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE },
+            transcription: { model: "grok-voice-transcribe-2.0" },
+          },
           output: { format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE } },
         },
       },

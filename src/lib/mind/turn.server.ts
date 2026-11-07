@@ -327,7 +327,16 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
   const keyed = resolveXaiInferenceApiKey(process.env);
-  if (!keyed.ok) return json({ ok: false, error: keyed.error });
+  const openaiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
+  const chatMessages = prepared.assembled.messages
+    .map((message) => ({ role: message.role, content: typeof message.content === "string" ? message.content : "" }))
+    .filter((message) => message.content.length > 0);
+  if (!keyed.ok) {
+    const { directChatWithFallback } = await import("./voice/provider-fallback");
+    const chat = await directChatWithFallback({ messages: chatMessages, openaiKey });
+    if (!chat.ok) return json({ ok: false, error: chat.error });
+    return sseChatDone(chat, prepared.assembled.usedIds);
+  }
   const apiKey = keyed.key;
   let memorySaved = false;
   let savedMemoryId: string | null = null;
@@ -366,6 +375,19 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       memorySaved,
       savedMemoryId,
     },
+    authFallback: async () => {
+      const { openAiDirectChat } = await import("./voice/provider-fallback");
+      const chat = await openAiDirectChat({ messages: chatMessages, apiKey: openaiKey });
+      if (!chat.ok) return { ok: false as const, error: "xAI failed and OpenAI failed. Nothing was sent." };
+      return { ok: true as const, text: chat.text, model: chat.model, provider: "OpenAI" };
+    },
+  });
+}
+
+function sseChatDone(chat: { text: string; model: string; provider: string }, usedIds: string[]): Response {
+  const payload = { text: chat.text, model: chat.model, provider: chat.provider, usage: null, usedIds, requestId: null };
+  return new Response(`event: done\ndata: ${JSON.stringify(payload)}\n\n`, {
+    headers: { "content-type": "text/event-stream", "cache-control": "no-store" },
   });
 }
 

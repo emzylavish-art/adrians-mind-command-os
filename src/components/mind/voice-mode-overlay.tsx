@@ -87,10 +87,12 @@ export function VoiceModeOverlay(props: {
           </button>
         </div>
 
-        <VoiceWaveform level={props.level} active={active} bars={11} label={status} className="h-12" />
-        <p className="text-sm font-semibold" data-testid="voice-overlay-status">
-          {status}
-        </p>
+        <div data-testid="composer-voice-live" data-state={props.phase} role="status" aria-live="polite">
+          <VoiceWaveform level={props.level} active={active} bars={11} label={status} className="h-12" />
+          <p className="text-sm font-semibold" data-testid="voice-overlay-status">
+            {status}
+          </p>
+        </div>
         {connecting ? (
           <p className="text-xs text-muted" data-testid="voice-overlay-stage">
             {status} Each stage times out after 10s.

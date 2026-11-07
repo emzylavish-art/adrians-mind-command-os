@@ -68,7 +68,7 @@ import {
 const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { formatVoiceClientError } from "@/lib/mind/voice/errors";
+import { DIRECT_FALLBACK_NOTICE, formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
@@ -77,7 +77,11 @@ import {
   setVoiceModeStore,
   subscribeVoiceMode,
 } from "@/lib/mind/voice/mode-store";
-import { interruptMessageSpeak, shouldIgnoreSpeakResult } from "@/lib/mind/voice/speak-control";
+import { captureSpeakUtterance } from "@/lib/mind/voice/capture-utterance";
+import { type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
+import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
+import { interruptMessageSpeak } from "@/lib/mind/voice/speak-control";
+import { withSessionTimeout } from "@/lib/mind/voice/session-timeout";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
 import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
 import { formatMicCaptureError, VOICE_CONNECTION_DROPPED } from "@/lib/mind/voice/errors";
@@ -1628,6 +1632,7 @@ export function CommandApp() {
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
+      if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
       if (!shouldStoreReply(result)) {
         const message = result.ok ? "Grok returned an empty reply." : result.error;
         if (message === STOPPED_REPLY) {
@@ -2627,64 +2632,96 @@ export function CommandApp() {
     setView("chat");
   }
 
-  async function speak(text: string) {
-    interruptSpeakPlayback();
-    const clipped = clampSpeakText(text);
-    if (!clipped) {
-      setError("Nothing to read aloud.");
-      return;
+  async function speakChatTurn(transcript: string) {
+    let chat = (activeId ? wsRef.current.chats.find((item) => item.id === activeId) : null) ?? null;
+    let source = wsRef.current;
+    if (!chat) {
+      const made = createChat(source, {
+        memory: memoryChoice,
+        autonomy,
+        temporary,
+        projectId: chatProjectId || projectChoice || null,
+      });
+      chat = made.chat;
+      source = { ...source, chats: [made.chat, ...source.chats] };
+      setActiveId(made.chat.id);
+      setView("chat");
+      setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "speak"));
     }
+    const reply = await deliver(chat, transcript, source);
+    if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
+    return { ok: true as const, text: reply };
+  }
+
+  async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
+    if (!replay && voiceModeRef.current === "orchestrator") {
+      const probe = await probeOllamaConductor({
+        baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
+        model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+      });
+      const route = resolveVoiceMode("orchestrator", probe.ok);
+      if (route.fellBack) {
+        applyVoiceMode("direct");
+        setNotice(route.notice ?? DIRECT_FALLBACK_NOTICE);
+      }
+    }
+    interruptSpeakPlayback();
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
     speakAbortRef.current = abort;
     setSpeaking(true);
-    setError(null);
-    let result: Awaited<ReturnType<typeof speakText>>;
-    try {
-      result = await speakText({ data: { text: clipped, voiceId: voiceChoiceRef.current } });
-    } catch (caught) {
-      if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
-      setSpeaking(false);
-      setError(formatVoiceClientError(caught));
-      return;
-    }
-    if (shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) return;
-    if (!result.ok) {
-      if (!result.error.includes("No speech key")) {
-        setSpeaking(false);
-        setError(result.error);
-        return;
-      }
-      const synth = window.speechSynthesis;
-      if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
-        setSpeaking(false);
-        setError(`${result.error} This browser has no speech synthesis. Nothing was spoken.`);
-        return;
-      }
-      const utter = new SpeechSynthesisUtterance(clipped);
-      utter.onend = () => {
-        if (generation === speakGenRef.current) setSpeaking(false);
-      };
-      utter.onerror = () => {
-        if (generation === speakGenRef.current) {
-          setSpeaking(false);
-          setError("Browser speech failed. Nothing was spoken.");
-        }
-      };
-      synth.cancel();
-      synth.speak(utter);
-      setNotice("Speaking with this browser. This is not a realtime voice provider, and no speech key was used.");
-      return;
-    }
-    try {
-      await sharedAudioOutput.playMpegBase64(result.audio);
-    } catch {
-      if (!shouldIgnoreSpeakResult(generation, speakGenRef.current, abort.signal.aborted)) {
-        setError("The browser blocked playback.");
-      }
-    } finally {
-      if (generation === speakGenRef.current) setSpeaking(false);
-    }
+    await runMountedSpeak({
+      text,
+      messageId,
+      voiceId,
+      replay,
+      isCurrent: () => generation === speakGenRef.current && !abort.signal.aborted,
+      deps: {
+        capture: () => captureSpeakUtterance({ maxMs: 6000 }),
+        transcribe: async (audioBase64) => {
+          const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+          const token = getBearerToken();
+          const response = await fetch(`${prefix}/api/mind/voice/stt`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "content-type": "application/json",
+              accept: "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ audioBase64, mime: "audio/webm", filename: "speak.webm" }),
+          });
+          try {
+            const body = (await response.json()) as { ok?: boolean; text?: string; error?: string; provider?: string };
+            if (body.ok && body.provider) setNotice(`${body.provider} transcribed this.`);
+            return body;
+          } catch {
+            return { ok: false, error: "The transcript request failed. Nothing was substituted." };
+          }
+        },
+        chatTurn: (transcript) => speakChatTurn(transcript),
+        synthesize: async (reply, voice) => {
+          const spoken = await speakText({ data: { text: reply, voiceId: voice } });
+          if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok && "provider" in spoken && spoken.provider) {
+            setNotice(`${spoken.provider} spoke this reply.`);
+          }
+          return spoken;
+        },
+        play: async (audio) => {
+          await sharedAudioOutput.playMpegBase64(audio);
+        },
+      },
+      reportFailure: (message, action, target, retry) => {
+        reportFailure(message, action, target, retry);
+        setFailure((current) => (current ? { ...current, kind: (classifyHonestFailure(message) ?? (action as HonestFailureKind)) } : current));
+      },
+      clearFailure,
+      again: (params) => {
+        void speak(params.text, params.messageId, params.voiceId, params);
+      },
+    });
+    if (generation !== speakGenRef.current || abort.signal.aborted) return;
+    setSpeaking(false);
   }
 
   function appendLiveVoiceUser(text: string) {
@@ -2802,9 +2839,16 @@ export function CommandApp() {
       });
       setBusy(false);
       if (!conducted.ok) {
-        setError(conducted.error);
-        return;
-      }
+        if (!conducted.unreachable) {
+          setError(conducted.error);
+          return;
+        }
+        const route = resolveVoiceMode("orchestrator", false);
+        applyVoiceMode("direct");
+        const notice = route.notice ?? DIRECT_FALLBACK_NOTICE;
+        setNotice(notice);
+        if (overlayOpenRef.current) setOverlayNotice(notice);
+      } else {
       if (active) {
         const turn = buildVoiceChatTurn({
           userText: text,
@@ -2829,6 +2873,7 @@ export function CommandApp() {
       }
       speakOnOpenSession(conducted.text);
       return;
+      }
     }
     if (!active) {
       setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
@@ -3241,9 +3286,12 @@ export function CommandApp() {
           baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
           model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
         });
-        if (!probe.ok) {
-          noteConnectFailure("getting_session", probe.error);
-          return;
+        const route = resolveVoiceMode("orchestrator", probe.ok);
+        if (route.fellBack) {
+          applyVoiceMode("direct");
+          const notice = route.notice ?? DIRECT_FALLBACK_NOTICE;
+          setNotice(notice);
+          if (overlayOpenRef.current) setOverlayNotice(notice);
         }
       }
 
@@ -3255,7 +3303,7 @@ export function CommandApp() {
 
       let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
       try {
-        secret = await createVoiceClientSecret();
+        secret = await withSessionTimeout(() => createVoiceClientSecret(), undefined, mintAbort.signal);
         if (mintAbort.signal.aborted) {
           markCanceled();
           return;
@@ -3277,7 +3325,7 @@ export function CommandApp() {
         if (expiresAt > 0 && secretNeedsRemint(expiresAt) && !mintAbort.signal.aborted) {
           setNotice("Voice secret is near expiry. Minting a fresh session…");
           try {
-            secret = await createVoiceClientSecret();
+            secret = await withSessionTimeout(() => createVoiceClientSecret(), undefined, mintAbort.signal);
           } catch (caught) {
             if (mintAbort.signal.aborted) {
               markCanceled();
@@ -4282,7 +4330,7 @@ export function CommandApp() {
                 );
               }}
               onNew={openChat}
-              onSpeak={(text) => void speak(text)}
+              onSpeak={(text, messageId) => void speak(text, messageId ?? "")}
               onListen={() => void listen()}
               onListenStop={() => void listen({ mode: "stop" })}
               onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
@@ -5388,6 +5436,10 @@ export function CommandApp() {
           <Link to="/login" className="signed-out-entry__link">Sign in</Link>
         </div>
       )}
+      <style>{`@media (max-width: 767.98px) {
+        nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] { z-index: 30 !important; }
+        .shell .live-voice-compact-entry { z-index: 60 !important; bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)) !important; }
+      }`}</style>
       <nav inert={navOpen} className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Primary">
         {NAV.filter((item) => item.id === "command" || item.id === "agents").map((item) => {
           const Icon = item.icon;
@@ -5442,7 +5494,7 @@ export function CommandApp() {
         authReady={statusSignedIn === true}
         authSignedIn={statusSignedIn === true}
         onSignInRequired={() => setVoiceSignInNotice(true)}
-        onCompactSpeak={() => void openVoiceOverlay()}
+        onCompactSpeak={() => void speak("")}
         onChatAttachImage={(image) => setPendingImages((prev) => prev.length >= 4 ? prev : [...prev, image])}
         onDictateToggle={() => startBrowserDictation()}
         isOverlayMicOpen={() =>
@@ -5747,7 +5799,7 @@ function ChatPane({
   onDelete: () => void;
   onSave: (content: string) => void;
   onNew: () => void;
-  onSpeak: (text: string) => void;
+  onSpeak: (text: string, messageId?: string) => void;
   onListen: () => void;
   onListenStop?: () => void;
   onLiveUserTranscript?: (text: string) => void;
@@ -5951,7 +6003,7 @@ function ChatPane({
                   {copiedId === msg.id ? "Copied" : "Copy"}
                 </button>
                 {msg.role === "assistant" && (
-                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content)} disabled={speaking}>
+                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content, msg.id)} disabled={speaking}>
                     {speaking ? "Speaking" : "Read aloud"}
                   </button>
                 )}
@@ -6127,7 +6179,7 @@ function ChatPane({
             <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
               {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)}>
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content, lastReply.id)}>
               {speaking ? "Reading" : "Read aloud"}
             </button></div>
             
@@ -6284,7 +6336,7 @@ function ChatPane({
             <Mic className="size-4" />
           </button>
           <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
-          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content)} aria-label="Speak">
+          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content, lastReply.id)} aria-label="Speak">
             <Volume2 className="size-4" />
           </button>
         </div>
