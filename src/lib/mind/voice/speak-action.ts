@@ -31,6 +31,11 @@ export type SpeakRetryParams = {
   transcript: string | null;
   reply: string | null;
   audio: string | null;
+  /** Exact text passed to Speak. Not trimmed. */
+  text: string;
+  messageId: string;
+  /** Voice id captured with the attempt. Not trimmed. */
+  voiceId: string;
 };
 
 export type SpeakActionDeps = {
@@ -38,7 +43,7 @@ export type SpeakActionDeps = {
   capture?: () => Promise<unknown>;
   transcribe?: (audioBase64: string) => Promise<unknown>;
   chatTurn?: (transcript: string) => Promise<unknown>;
-  synthesize?: (text: string) => Promise<unknown>;
+  synthesize?: (text: string, voiceId: string) => Promise<unknown>;
   play?: (audio: string) => Promise<void>;
 };
 
@@ -143,14 +148,19 @@ export function snapshotSpeakRetryParams(input: {
   transcript?: string | null;
   reply?: string | null;
   audio?: string | null;
+  text?: string;
+  messageId?: string;
+  voiceId?: string;
 }): SpeakRetryParams {
-  const correlationId = input.correlationId?.trim() || crypto.randomUUID();
   return {
-    correlationId,
+    correlationId: typeof input.correlationId === "string" && input.correlationId.length > 0 ? input.correlationId : crypto.randomUUID(),
     chatCommitted: input.chatCommitted === true,
-    transcript: input.transcript?.trim() ? input.transcript.trim() : null,
-    reply: input.reply?.trim() ? input.reply.trim() : null,
-    audio: input.audio?.trim() ? input.audio.trim() : null,
+    transcript: input.transcript == null ? null : input.transcript,
+    reply: input.reply == null ? null : input.reply,
+    audio: input.audio == null ? null : input.audio,
+    text: typeof input.text === "string" ? input.text : "",
+    messageId: typeof input.messageId === "string" ? input.messageId : "",
+    voiceId: typeof input.voiceId === "string" ? input.voiceId : "",
   };
 }
 
@@ -184,7 +194,7 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
   if (snap.chatCommitted) {
     if (snap.reply && deps.synthesize && deps.play) {
       try {
-        const spoken = await deps.synthesize(snap.reply);
+        const spoken = await deps.synthesize(snap.reply, snap.voiceId);
         if (failed(spoken)) {
           const classified = classifySpeakFailure(spoken);
           return { ok: false, noop: false, ...classified, params: snap };
@@ -281,7 +291,7 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
   };
   if (reply && deps.synthesize && deps.play) {
     try {
-      const spoken = await deps.synthesize(reply);
+      const spoken = await deps.synthesize(reply, committed.voiceId);
       if (failed(spoken)) {
         const classified = classifySpeakFailure(spoken);
         return { ok: false, noop: false, ...classified, params: committed };

@@ -103,4 +103,18 @@ describe("runSpeakAction retry", () => {
     assert.equal(again.ok, false);
     if (!again.ok) assert.equal(again.noop, true);
   });
+
+  it("retry params deep-equal the original untrimmed text, message id, and voice", () => {
+    const original = {
+      correlationId: "corr-1",
+      chatCommitted: true,
+      transcript: "  hello \n",
+      reply: "  Sunny.  ",
+      audio: " aud ",
+      text: "  Speak this exactly \n",
+      messageId: "msg-42",
+      voiceId: "Ara ",
+    };
+    assert.deepEqual(snapshotSpeakRetryParams(original), original);
+  });
 });
