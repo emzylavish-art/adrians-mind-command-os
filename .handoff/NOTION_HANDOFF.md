@@ -628,3 +628,136 @@ command on Zack's PC.
 - Lock releasing.
 
 - H32 gates on 7e3c229: typecheck pass, tests 1287 pass/0 fail/4 skipped, build pass, lint 0 errors in H32-touched files; repo-wide eslint has 34 pre-existing errors in 52 untouched files (command-app.tsx, service-board.tsx, dashboard-3d, voice, media, pairing, scripts) owned by other lanes.
+
+## 2026-11-07T12:45:00Z — Error Banners — H33 Notion connector banners
+
+- Gap id: H33
+- Branch: `cursor/h33-notion-failure-banners-6c0c` off `error-banners` @ `6bf042f`. Not merged to main. No force-push.
+- What changed:
+  - Missing `NOTION_TOKEN` / owner disconnect is a configure notice (`NOTION_UNCONFIGURED_NOTICE` matches `notion.ts` `NOTION_SETUP`). It is not a silent empty state and not a red Retry of the same unconfigured call. The only action is Setup, which the command-app owner wires to the existing Connected view (`setView("connected")` → ServiceBoard Setup). No new route.
+  - Notion API 401/403/404/5xx is `notion_failed`: red banner, one-line server reason (`Notion returned {status}. … Nothing was invented.`), Retry via `onceRetry` of the snapshotted `text` / `confirmed` / `pageId`, View log `#audit-{id}`.
+  - 429 and “Too many Notion requests” stay `rate_limited` (still a red banner, same Retry).
+  - A stuck `notionCommand` / `notionStatus` gets a timeout banner only after `NOTION_COMMAND_TIMEOUT_MS` (same 10s budget as `OAUTH_STATUS_FETCH_TIMEOUT_MS`). A call that finishes inside the budget is not a timeout. User Stop (`STOPPED_REPLY`) is `user_stopped` and is not red.
+  - MCP-wrapped Notion tool errors stay `mcp_tool_failed`. Empty search and “pick one” are not red failures.
+  - The earlier recovery draft’s bare “Notion returned” marker was not kept; it would have painted an empty search as an API failure.
+- Files: `src/lib/mind/failure-states.ts`, `src/lib/mind/failure-states.test.ts`, `src/lib/mind/failure-banner-markup.test.ts`, `src/lib/mind/notion-failure-action.ts`, `src/lib/mind/notion-failure-action.test.ts`, `package.json` (test list), `.handoff/NOTION_HANDOFF.md`. `command-app.tsx` was not edited.
+- Gates: focused strip-types suite **72 pass / 0 fail** (`failure-states.test.ts`, `failure-banner-markup.test.ts`, `notion-failure-action.test.ts`). Full `npm test`, `tsc --noEmit`, `npm run build`, and eslint were **not run**: `registry.npmjs.org:443` resets the TLS handshake (`ECONNRESET`), so dependencies could not be installed. The banner markup tests rendered with a gitignored local react stub, not production `react-dom`. Repo-wide ~34 pre-existing lint errors were not remeasured.
+- Next: command-app owner pastes the mount below. Then re-run typecheck, full `npm test`, build, and eslint on the touched files. Do not merge to main.
+
+### Mount snippet for the command-app owner
+
+Canonical copy is `NOTION_COMMAND_APP_MOUNT` in `src/lib/mind/notion-failure-action.ts`. Paste this. Do not add a route. `reportFailure` already writes the audit row; the existing shell View log focuses `#audit-${failure.auditId}` (activity row `id={`audit-${entry.id}`}`).
+
+```tsx
+// H33 — command-app owner. Do not add a route. Setup stays on view "connected".
+import {
+  notionFailureFromCatch,
+  notionFailureFromTurn,
+  notionOutcomeFromStatus,
+  onceRetry,
+  shouldShowFailureBanner,
+  withNotionCommandTimeout,
+} from "@/lib/mind/notion-failure-action";
+
+const notionStatusParams = { text: "", confirmed: false, pageId: null as string | null, surface: "status" as const };
+
+function reloadNotionStatus() {
+  void withNotionCommandTimeout(() => notionStatus())
+    .then((status) => {
+      const outcome = notionOutcomeFromStatus(status, notionStatusParams);
+      if (outcome.tone === "unconfigured") {
+        setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+        setNotice(outcome.notice.message);
+        return;
+      }
+      if (outcome.tone === "user_stopped") {
+        setNotice(outcome.message);
+        return;
+      }
+      if (outcome.tone === "auth_required" || (outcome.tone === "failure" && !shouldShowFailureBanner(outcome.failure.message))) {
+        setNotice(outcome.tone === "auth_required" ? outcome.message : outcome.failure.message);
+        return;
+      }
+      if (outcome.tone === "failure") {
+        const retry = onceRetry(() => { reloadNotionStatus(); });
+        reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+        return;
+      }
+      setNotion({ state: "connected", detail: outcome.detail });
+    })
+    .catch((caught) => {
+      const outcome = notionFailureFromCatch(caught, notionStatusParams);
+      if (outcome.tone === "user_stopped") { setNotice(outcome.message); return; }
+      if (outcome.tone === "unconfigured") {
+        setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+        setNotice(outcome.notice.message);
+        return;
+      }
+      if (outcome.tone === "auth_required" || !shouldShowFailureBanner(outcome.failure.message)) {
+        setNotice(outcome.tone === "auth_required" ? outcome.message : outcome.failure.message);
+        return;
+      }
+      const retry = onceRetry(() => { reloadNotionStatus(); });
+      reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+    });
+}
+
+// askNotion: replace the body. Retry calls askNotion with the snapshotted text/confirmed/pageId.
+async function askNotion(chat, text, confirmed = false, pageId = null) {
+  const params = { text, confirmed, pageId, surface: "chat" as const };
+  setBusy(true);
+  setError(null);
+  try {
+    const result = await withNotionCommandTimeout(() => notionCommand({ data: { text, confirmed, pageId } }));
+    setBusy(false);
+    const outcome = notionFailureFromTurn(result, params);
+    if (outcome.tone === "user_stopped") { setNotice(outcome.message); return; }
+    if (outcome.tone === "unconfigured") {
+      setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+      setNotice(outcome.notice.message);
+      clearFailure();
+      return;
+    }
+    if (outcome.tone === "auth_required") { setNotice(outcome.message); return; }
+    if (outcome.tone === "needs_confirmation" && outcome.turn.pages[0]) {
+      const target = outcome.turn.pages[0];
+      setPending({ id: target.id, kind: "notion-append", label: "Append to Notion", detail: outcome.turn.error, confirm: "Append", run: () => { void askNotion(chat, text, true, target.id); } });
+      return;
+    }
+    if (outcome.tone === "failure") {
+      if (!shouldShowFailureBanner(outcome.failure.message)) { setNotice(outcome.failure.message); return; }
+      const retryParams = outcome.failure.params;
+      const retry = onceRetry(() => { void askNotion(chat, retryParams.text, retryParams.confirmed, retryParams.pageId); });
+      reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+      return;
+    }
+    const lines = [result.error, ...result.pages.map((page) => page.title + " — " + page.url), result.content].filter(Boolean);
+    recordToolTurn(chat, text, lines.join("\n") || "Notion returned nothing.");
+  } catch (caught) {
+    setBusy(false);
+    const outcome = notionFailureFromCatch(caught, params);
+    if (outcome.tone === "user_stopped") { setNotice(outcome.message); return; }
+    if (outcome.tone === "unconfigured") {
+      setNotion({ state: outcome.notice.state, detail: outcome.notice.message });
+      setNotice(outcome.notice.message);
+      clearFailure();
+      return;
+    }
+    if (outcome.tone === "auth_required" || !shouldShowFailureBanner(outcome.failure.message)) {
+      setNotice(outcome.tone === "auth_required" ? outcome.message : outcome.failure.message);
+      return;
+    }
+    const retryParams = outcome.failure.params;
+    const retry = onceRetry(() => { void askNotion(chat, retryParams.text, retryParams.confirmed, retryParams.pageId); });
+    reportFailure(outcome.failure.message, outcome.failure.auditAction, "notion", retry);
+  }
+}
+
+// Optional inline notice (setNotice already carries the sentence):
+// <NotionUnconfiguredNoticeBanner notice={notice} onConfigure={() => setView("connected")} />
+// Shell View log: setView("activity"); setFocusAuditId(failure.auditId) → #audit-${failure.auditId}
+// Inline banner: <a href={notionFailureLogHref(auditId)} data-testid="failure-view-log">View log</a>
+```
+
+Connected search form: same `notionFailureFromTurn` with `surface: "connected"` and the query baked into `text` (`Search my Notion for ${query}`). Unconfigured → `setNotice`. Failure → `reportFailure` with `onceRetry` of that same text. Do not leave the error in the muted `notionNote`.
+
