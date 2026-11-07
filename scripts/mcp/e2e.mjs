@@ -41,7 +41,7 @@ async function main() {
 
   const registry = await import(pathToFileURL(join(root, "src/lib/mind/mcp/registry.ts")).href);
   registry.setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-e2e-")));
-  log(`registry servers: ${JSON.stringify(registry.listRegistryServers("e2e-user"))}`);
+  log(`registry servers: ${JSON.stringify(await registry.listRegistryServers("e2e-user"))}`);
   const reg = await registry.callRegistryTool({
     userId: "e2e-user",
     serverId: registry.BUILTIN_ID,

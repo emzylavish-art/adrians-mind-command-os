@@ -68,7 +68,7 @@ describe("integration-security-c19", () => {
     assert.match(approvals, /consumePcApproval/);
   });
 
-  it("c17 SSRF guards survive: private IPs refused; redirects manual", () => {
+  it("c17 SSRF guards survive: private IPs refused; redirects manual", async () => {
     assert.equal(isPrivateAddressLiteral("10.0.0.1"), true);
     assert.equal(isPrivateAddressLiteral("169.254.169.254"), true);
     assert.equal(isPrivateAddressLiteral("192.168.0.5"), true);
@@ -85,9 +85,9 @@ describe("integration-security-c19", () => {
         "http://mcp.example/mcp",
       ]) {
         assert.ok(httpServerUrlProblem(new URL(url)), `expected refusal for ${url}`);
-        assert.equal(registerExternalServer("owner-c19", { label: "probe", url }).ok, false);
+        assert.equal((await registerExternalServer("owner-c19", { label: "probe", url })).ok, false);
       }
-      assert.equal(registerExternalServer("owner-c19", { label: "ok", url: "https://mcp.example/mcp" }).ok, true);
+      assert.equal((await registerExternalServer("owner-c19", { label: "ok", url: "https://mcp.example/mcp" })).ok, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

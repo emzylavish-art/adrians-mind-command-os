@@ -441,8 +441,12 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
     if (!userId) {
       return buildMcpRegistryListPayload(null, []);
     }
-    const { listRegistryServers } = await import("./mcp/registry");
-    return buildMcpRegistryListPayload(userId, listRegistryServers(userId));
+    const { listRegistryServers, databaseConfigured } = await import("./mcp/registry");
+    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+    const servers = await listRegistryServers(userId, db);
+    const payload = buildMcpRegistryListPayload(userId, servers);
+    if (payload.status === "ok" && !db) return { ...payload, persistence: "missing_config" as const };
+    return payload;
   });
 
 export const mcpRegistryToggle = createServerFn({ method: "POST" })
@@ -452,15 +456,17 @@ export const mcpRegistryToggle = createServerFn({ method: "POST" })
     enabled: input.enabled === true,
   }))
   .handler(async ({ data, context }) => {
-    const { setServerEnabled } = await import("./mcp/registry");
-    return { servers: setServerEnabled(context.userId, data.id, data.enabled) };
+    const { setServerEnabled, databaseConfigured } = await import("./mcp/registry");
+    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+    return { servers: await setServerEnabled(context.userId, data.id, data.enabled, db) };
   });
 
 export const mcpRegistryTools = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { listRegistryTools } = await import("./mcp/registry");
-    return { tools: await listRegistryTools(context.userId) };
+    const { listRegistryTools, databaseConfigured } = await import("./mcp/registry");
+    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+    return { tools: await listRegistryTools(context.userId, undefined, { registryDb: db }) };
   });
 
 export const mcpRegistryCall = createServerFn({ method: "POST" })
@@ -475,14 +481,16 @@ export const mcpRegistryCall = createServerFn({ method: "POST" })
     if (await haltIsOn(context.userId)) {
       return { ok: false, status: "error" as const, serverId: data.serverId, tool: data.tool, text: "Emergency stop is on. No MCP tool was called." };
     }
-    const { callRegistryTool } = await import("./mcp/registry");
+    const { callRegistryTool, databaseConfigured } = await import("./mcp/registry");
     const { getSql } = await import("../db");
+    const registryDb = databaseConfigured() ? await getSql() : null;
     const result = await callRegistryTool({
       userId: context.userId,
       serverId: data.serverId,
       tool: data.tool,
       args: data.args,
       getSql,
+      registryDb,
     });
     return {
       ok: result.ok,
@@ -490,6 +498,9 @@ export const mcpRegistryCall = createServerFn({ method: "POST" })
       serverId: result.serverId,
       tool: result.tool,
       text: result.text,
+      ...(result.code ? { code: result.code } : {}),
+      ...(result.transport !== undefined ? { transport: result.transport } : {}),
+      ...(result.rpc !== undefined ? { rpc: result.rpc } : {}),
     };
   });
 

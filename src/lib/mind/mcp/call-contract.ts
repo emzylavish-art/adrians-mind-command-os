@@ -1,7 +1,15 @@
 /**
- * Additive MCP call contract. Existing fields ok/status/text/serverId/tool/data stay.
- * HTTP status of /api/mind/mcp/call stays 200 for tool outcomes so older clients
- * that only read the body are not broken. Auth and CSRF responses stay 401/403.
+ * Additive MCP call contract.
+ *
+ * Legacy fields `ok`, `status`, `serverId`, `tool`, `text`, and `data` stay.
+ * `/api/mind/mcp/call` still returns HTTP 200 for a finished tool attempt.
+ * Sign-in stays 401. A cross-site POST stays 403. Emergency stop stays 403.
+ *
+ * `transport` is the HTTP exchange with the upstream MCP server.
+ * `rpc` is the JSON-RPC tool result when the upstream actually returned one,
+ * including non-text content parts. It is null when the call never produced
+ * a JSON-RPC result (unauthorized, transport failure, built-in tool, or a
+ * refusal before the request).
  */
 export type McpResultCode =
   | "ok"
@@ -15,11 +23,13 @@ export type McpResultCode =
 
 export type McpCallTransport = { ok: boolean; status: number; ms: number };
 
+export type McpContentPart = { type: string; text?: string; [key: string]: unknown };
+
 export type McpCallRpc = {
   isError: boolean;
-  content: { type: "text"; text: string }[];
+  content: McpContentPart[];
   structuredContent: unknown | null;
-};
+} | null;
 
 export type McpCallContract = {
   ok: boolean;
@@ -29,7 +39,7 @@ export type McpCallContract = {
   text: string;
   data?: unknown;
   code: McpResultCode;
-  transport: McpCallTransport;
+  transport: McpCallTransport | null;
   rpc: McpCallRpc;
 };
 
@@ -39,7 +49,7 @@ export function mcpResultCode(text: string, status: string, ok: boolean): McpRes
   if (/disabled/i.test(text)) return "disabled";
   if (/private|link-local|metadata|refused/i.test(text)) return "ssrf_denied";
   if (status === "unauthorized" || /returned 401|returned 403|sign in is required/i.test(text)) return "unauthorized";
-  if (status === "missing_config" || /no token is stored|not configured/i.test(text)) return "missing_config";
+  if (status === "missing_config" || /no token is stored|cannot be decrypted|not configured/i.test(text)) return "missing_config";
   if (status === "incompatible" || /argument schema|unexpected argument|missing /i.test(text)) return "incompatible";
   return "error";
 }
@@ -52,11 +62,12 @@ export function toMcpCallContract(input: {
   text?: string;
   data?: unknown;
   ms: number;
+  code?: McpResultCode;
+  transport?: McpCallTransport | null;
+  rpc?: McpCallRpc;
 }): McpCallContract {
   const text = input.text ?? "";
-  const code = mcpResultCode(text, input.status, input.ok);
-  const http = /returned (\d{3})/.exec(text);
-  const transportStatus = code === "timeout" ? 0 : http ? Number(http[1]) : input.ok ? 200 : 0;
+  const code = input.code ?? mcpResultCode(text, input.status, input.ok);
   return {
     ok: input.ok,
     status: input.status,
@@ -65,11 +76,7 @@ export function toMcpCallContract(input: {
     text,
     ...(input.data !== undefined ? { data: input.data } : {}),
     code,
-    transport: { ok: code !== "timeout" && code !== "ssrf_denied" && !/could not be reached/i.test(text), status: transportStatus, ms: input.ms },
-    rpc: {
-      isError: !input.ok,
-      content: [{ type: "text", text }],
-      structuredContent: input.data ?? null,
-    },
+    transport: input.transport === undefined ? null : input.transport,
+    rpc: input.rpc === undefined ? null : input.rpc,
   };
 }

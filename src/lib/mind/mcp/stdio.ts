@@ -90,13 +90,7 @@ export function stdioCommandAllowed(command: string, env: NodeJS.ProcessEnv = pr
   return stdioAllowlist(env).includes(wanted);
 }
 
-/* Env keys that let a config hijack an allowlisted binary (dynamic loader / runtime injection). */
-const BLOCKED_CHILD_ENV = /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|NODE_REPL_EXTERNAL_MODULE$|PYTHONSTARTUP$|PYTHONPATH$|PYTHONHOME$|PERL5OPT$|PERL5LIB$|RUBYOPT$|RUBYLIB$|BASH_ENV$|ENV$|PROMPT_COMMAND$|GIT_SSH_COMMAND$|GIT_EXEC_PATH$|PATH$|HOME$|MIND_MCP_STDIO_ALLOW$)/;
-
-/** True for env keys a server config may NOT set on its child. */
-export function isBlockedChildEnvKey(key: string): boolean {
-  return BLOCKED_CHILD_ENV.test(key.toUpperCase());
-}
+export { isBlockedChildEnvKey } from "./stdio-policy.ts";
 
 function clampMs(value: unknown, fallback: number, min = 100, max = 300_000): number {
   const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : Number.NaN;

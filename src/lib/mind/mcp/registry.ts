@@ -1,6 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import {
   BUILTIN_TOOL_DEFS,
   notionAppendSection,
@@ -12,7 +10,18 @@ import {
   type SqlLike,
   type ToolResult,
 } from "./tools.ts";
-import { callStdioTool, isBlockedChildEnvKey, listStdioTools, type StdioOptions } from "./stdio.ts";
+import { isBlockedChildEnvKey } from "./stdio-policy.ts";
+import type { StdioOptions } from "./stdio.ts";
+import {
+  databaseConfigured,
+  loadRegistry,
+  registryBuiltinId,
+  saveRegistry,
+  setMcpRegistryDirectory,
+  type RegistryDb,
+  type RegistryRecord,
+} from "./registry-store.ts";
+import { type McpCallRpc, type McpCallTransport, type McpContentPart, type McpResultCode } from "./call-contract.ts";
 import {
   defaultDnsLookup,
   isLocalHostname,
@@ -43,6 +52,9 @@ export type RegistryServer = {
   /** Opaque token for external HTTP MCP; never returned to the client */
   token?: string;
   builtin?: boolean;
+  /** mcp is JSON-RPC. http is a single GET or POST. Absent means mcp. */
+  protocol?: "mcp" | "http";
+  httpMethod?: "GET" | "POST";
 };
 
 export type RegistryServerPublic = Omit<RegistryServer, "token" | "env"> & { hasToken: boolean; envKeys?: string[] };
@@ -56,55 +68,30 @@ export type RegistryToolCallResult = {
   tool: string;
   text: string;
   data?: Record<string, unknown> | Record<string, unknown>[] | string | number | boolean | null;
+  /** Stable code. Absent on older in-process callers that only read ok/text. */
+  code?: McpResultCode;
+  /** HTTP transport. Null when the call never left the process (built-in, refused before fetch). */
+  transport?: McpCallTransport | null;
+  /** Upstream JSON-RPC tool result. Null when the server did not return one. */
+  rpc?: McpCallRpc;
 };
 
-type StoreFile = { servers: RegistryServer[] };
+const BUILTIN_ID = registryBuiltinId();
 
-const BUILTIN_ID = "builtin-mind";
+export { setMcpRegistryDirectory, databaseConfigured };
+export type { RegistryDb };
 
-let directory = join(process.cwd(), ".data", "mind-mcp-registry");
-
-export function setMcpRegistryDirectory(next: string) {
-  directory = next;
+async function readServers(userId: string, db?: RegistryDb | null): Promise<RegistryRecord[]> {
+  return (await loadRegistry(userId, db)).servers;
 }
 
-function fileFor(userId: string) {
-  return join(directory, `${createHash("sha256").update(userId).digest("hex")}.json`);
-}
-
-function defaultServers(): RegistryServer[] {
-  return [
-    {
-      id: BUILTIN_ID,
-      label: "Mind built-in",
-      kind: "builtin",
-      enabled: true,
-      builtin: true,
-    },
-  ];
-}
-
-function readStore(userId: string): StoreFile {
-  try {
-    const parsed = JSON.parse(readFileSync(fileFor(userId), "utf8")) as StoreFile;
-    const servers = Array.isArray(parsed.servers) ? parsed.servers : [];
-    if (!servers.some((s) => s.id === BUILTIN_ID)) {
-      return { servers: [...defaultServers(), ...servers] };
-    }
-    return { servers };
-  } catch {
-    return { servers: defaultServers() };
-  }
-}
-
-function writeStore(userId: string, store: StoreFile) {
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(fileFor(userId), JSON.stringify(store, null, 2));
-}
-
-function toPublic(server: RegistryServer): RegistryServerPublic {
-  const { token: _token, env, ...rest } = server;
-  return { ...rest, hasToken: Boolean(server.token), ...(env ? { envKeys: Object.keys(env) } : {}) };
+function toPublic(server: RegistryRecord): RegistryServerPublic {
+  const { token: _token, env, tokenEnc: _tokenEnc, envEnc: _envEnc, secretUnreadable: _unread, operations: _operations, state: _state, error: _error, ...rest } = server;
+  return {
+    ...rest,
+    hasToken: Boolean(server.token || server.tokenEnc || server.secretUnreadable),
+    ...(env ? { envKeys: Object.keys(env) } : {}),
+  };
 }
 
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -151,20 +138,21 @@ function stdioConfig(server: RegistryServer) {
   };
 }
 
-export function listRegistryServers(userId: string): RegistryServerPublic[] {
-  return readStore(userId).servers.map(toPublic);
+export async function listRegistryServers(userId: string, db?: RegistryDb | null): Promise<RegistryServerPublic[]> {
+  return (await readServers(userId, db)).map(toPublic);
 }
 
-export function setServerEnabled(userId: string, id: string, enabled: boolean): RegistryServerPublic[] {
-  const store = readStore(userId);
-  const server = store.servers.find((item) => item.id === id);
-  if (!server) return store.servers.map(toPublic);
+export async function setServerEnabled(userId: string, id: string, enabled: boolean, db?: RegistryDb | null): Promise<RegistryServerPublic[]> {
+  const servers = await readServers(userId, db);
+  const server = servers.find((item) => item.id === id);
+  if (!server) return servers.map(toPublic);
   server.enabled = enabled === true;
-  writeStore(userId, store);
-  return store.servers.map(toPublic);
+  const saved = await saveRegistry(userId, servers, db);
+  if (!saved.ok) return (await readServers(userId, db)).map(toPublic);
+  return servers.map(toPublic);
 }
 
-export function registerExternalServer(
+export async function registerExternalServer(
   userId: string,
   input: {
     label: string;
@@ -176,10 +164,11 @@ export function registerExternalServer(
     connectTimeoutMs?: number;
     callTimeoutMs?: number;
   },
-): { ok: true; servers: RegistryServerPublic[] } | { ok: false; error: string } {
+  db?: RegistryDb | null,
+): Promise<{ ok: true; servers: RegistryServerPublic[] } | { ok: false; error: string; code?: "missing_config" }> {
   const label = input.label.trim().slice(0, 80);
   if (!label) return { ok: false, error: "A label is required. Nothing was saved." };
-  const store = readStore(userId);
+  const servers = await readServers(userId, db);
   if (input.url?.trim()) {
     let parsed: URL;
     try {
@@ -189,19 +178,21 @@ export function registerExternalServer(
     }
     const refused = httpServerUrlProblem(parsed);
     if (refused) return { ok: false, error: `${refused} Nothing was saved.` };
-    store.servers.push({
+    servers.push({
       id: randomUUID(),
       label,
       kind: "http",
       enabled: true,
+      protocol: "mcp",
       url: parsed.toString(),
-      token: input.token?.slice(0, 500),
+      token: input.token?.slice(0, 500) || undefined,
     });
-    writeStore(userId, store);
-    return { ok: true, servers: store.servers.map(toPublic) };
+    const saved = await saveRegistry(userId, servers, db);
+    if (!saved.ok) return saved;
+    return { ok: true, servers: servers.map(toPublic) };
   }
   if (input.command?.trim()) {
-    store.servers.push({
+    servers.push({
       id: randomUUID(),
       label,
       kind: "command",
@@ -212,18 +203,20 @@ export function registerExternalServer(
       connectTimeoutMs: timeoutField(input.connectTimeoutMs),
       callTimeoutMs: timeoutField(input.callTimeoutMs),
     });
-    writeStore(userId, store);
-    return { ok: true, servers: store.servers.map(toPublic) };
+    const saved = await saveRegistry(userId, servers, db);
+    if (!saved.ok) return saved;
+    return { ok: true, servers: servers.map(toPublic) };
   }
   return { ok: false, error: "Provide a URL or a command. Nothing was saved." };
 }
 
-export function removeRegistryServer(userId: string, id: string): RegistryServerPublic[] {
-  const store = readStore(userId);
-  if (id === BUILTIN_ID) return store.servers.map(toPublic);
-  store.servers = store.servers.filter((item) => item.id !== id);
-  writeStore(userId, store);
-  return store.servers.map(toPublic);
+export async function removeRegistryServer(userId: string, id: string, db?: RegistryDb | null): Promise<RegistryServerPublic[]> {
+  const servers = await readServers(userId, db);
+  if (id === BUILTIN_ID) return servers.map(toPublic);
+  const next = servers.filter((item) => item.id !== id);
+  const saved = await saveRegistry(userId, next, db);
+  if (!saved.ok) return servers.map(toPublic);
+  return next.map(toPublic);
 }
 
 export type ListedTool = {
@@ -232,6 +225,8 @@ export type ListedTool = {
   name: string;
   description: string;
   enabled: boolean;
+  /** Honest listing status for this row (placeholder rows carry error/timeout/disabled). */
+  status?: "ok" | "error" | "timeout" | "disabled";
   /** Object argument schema from tools/list. Null means incompatible; callers must not invent {text}. */
   inputSchema?: { type: "object"; properties: Record<string, { type: string }>; required: string[] } | null;
 };
@@ -258,7 +253,7 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<{
   text: () => Promise<string>;
 }>;
 
-function rpcMessage(body: string): { result?: unknown; error?: string } {
+function rpcMessage(body: string): { result?: unknown; error?: string; errorData?: unknown } {
   const chunks = body.includes("data:")
     ? body.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim())
     : [body.trim()];
@@ -266,13 +261,37 @@ function rpcMessage(body: string): { result?: unknown; error?: string } {
     if (!chunk || chunk === "[DONE]") continue;
     try {
       const parsed = JSON.parse(chunk) as { result?: unknown; error?: { message?: string } };
-      if (parsed.error) return { error: parsed.error.message || "The MCP server returned an error." };
+      if (parsed.error) return { error: parsed.error.message || "The MCP server returned an error.", errorData: parsed.error };
       if ("result" in parsed) return { result: parsed.result };
     } catch {
       /* skip */
     }
   }
   return { error: "The MCP server did not return a JSON-RPC result." };
+}
+
+function redactValue(value: unknown, token: string, depth = 0): unknown {
+  if (!token || depth > 6) return value;
+  if (typeof value === "string") return value.split(token).join("[redacted]").slice(0, 8000);
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => redactValue(item, token, depth + 1));
+  if (!value || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value).slice(0, 30)) out[key] = redactValue(item, token, depth + 1);
+  return out;
+}
+
+function rpcFromResult(result: unknown, token = ""): McpCallRpc {
+  if (!result || typeof result !== "object") return null;
+  const record = result as Record<string, unknown>;
+  if (!("content" in record) && !("isError" in record) && !("structuredContent" in record)) return null;
+  const content = Array.isArray(record.content)
+    ? record.content.filter((part) => part && typeof part === "object").slice(0, 20).map((part) => redactValue(part, token) as McpContentPart)
+    : [];
+  return {
+    isError: record.isError === true,
+    content,
+    structuredContent: record.structuredContent === undefined ? null : redactValue(record.structuredContent, token),
+  };
 }
 
 /** Per-request deadline for remote (http) MCP servers. */
@@ -300,7 +319,15 @@ export function httpServerUrlProblem(parsed: URL): string | null {
   return null;
 }
 
-type RpcFailure = { ok: false; error: string; session: string | null; timedOut?: boolean };
+type RpcFailure = {
+  ok: false;
+  error: string;
+  session: string | null;
+  timedOut?: boolean;
+  state: "unauthorized" | "transport" | "rpc";
+  httpStatus: number;
+  rpc: McpCallRpc;
+};
 
 async function readCappedBody(
   response: Awaited<ReturnType<FetchLike>> & { body?: unknown },
@@ -338,16 +365,16 @@ async function rpc(
   session: string | null,
   message: unknown,
   options: HttpRpcOptions = {},
-): Promise<{ ok: true; result: unknown; session: string | null } | RpcFailure> {
+): Promise<{ ok: true; result: unknown; session: string | null; httpStatus: number; rpc: McpCallRpc } | RpcFailure> {
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
   } catch {
-    return { ok: false, error: "The saved MCP URL is invalid. Nothing was called.", session };
+    return { ok: false, state: "transport", httpStatus: 0, rpc: null, error: "The saved MCP URL is invalid. Nothing was called.", session };
   }
   // Re-check at call time: stores saved before this guard existed may hold internal targets.
   const refused = httpServerUrlProblem(parsedUrl);
-  if (refused) return { ok: false, error: `${refused} Nothing was called.`, session };
+  if (refused) return { ok: false, state: "transport", httpStatus: 0, rpc: null, error: `${refused} Nothing was called.`, session };
 
   // DNS rebinding guard for non-local external hosts: resolve now, refuse every
   // answer, pin the connection to a validated public IP.
@@ -355,7 +382,7 @@ async function rpc(
   let pinHostname: string | null = null;
   if (!isLocalHostname(parsedUrl.hostname)) {
     const pin = await resolveAndPinMcpHostname(parsedUrl.hostname, options.lookup ?? defaultDnsLookup);
-    if (!pin.ok) return { ok: false, error: `${pin.error} Nothing was called.`, session };
+    if (!pin.ok) return { ok: false, state: "transport", httpStatus: 0, rpc: null, error: `${pin.error} Nothing was called.`, session };
     pinnedAddress = pin.pinnedAddress;
     pinHostname = pin.hostname;
   }
@@ -374,6 +401,9 @@ async function rpc(
   });
   const timeoutFailure = (): RpcFailure => ({
     ok: false,
+    state: "transport",
+    httpStatus: 0,
+    rpc: null,
     error: `The MCP server did not answer within ${Math.round(timeoutMs / 1000) || 1}s. Nothing was called.`,
     session,
     timedOut: true,
@@ -400,27 +430,40 @@ async function rpc(
       response = await Promise.race([doFetch(), deadline]);
     } catch {
       if (timedOut) return timeoutFailure();
-      return { ok: false, error: "The MCP server could not be reached.", session };
+      return { ok: false, state: "transport", httpStatus: 0, rpc: null, error: "The MCP server could not be reached.", session };
     }
     const nextSession = response.headers.get("mcp-session-id") || session;
     if ((response.status >= 300 && response.status < 400) || response.status === 0) {
-      return { ok: false, error: "The MCP server tried to redirect. Redirects are not followed. Nothing was called.", session: nextSession };
+      return { ok: false, state: "transport", httpStatus: response.status, rpc: null, error: "The MCP server tried to redirect. Redirects are not followed. Nothing was called.", session: nextSession };
     }
-    if (!response.ok) return { ok: false, error: `The MCP server returned ${response.status}. Nothing was called.`, session: nextSession };
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, state: "unauthorized", httpStatus: response.status, rpc: null, error: `The MCP server returned ${response.status}. Nothing was called.`, session: nextSession };
+    }
+    if (!response.ok) return { ok: false, state: "transport", httpStatus: response.status, rpc: null, error: `The MCP server returned ${response.status}. Nothing was called.`, session: nextSession };
     let body: Awaited<ReturnType<typeof readCappedBody>>;
     try {
       body = await Promise.race([readCappedBody(response, maxBytes), deadline]);
     } catch {
       if (timedOut) return timeoutFailure();
-      return { ok: false, error: "The MCP server response could not be read.", session: nextSession };
+      return { ok: false, state: "transport", httpStatus: response.status, rpc: null, error: "The MCP server response could not be read.", session: nextSession };
     }
     if (!body.ok) {
       controller.abort();
-      return { ok: false, error: `The MCP server response was larger than ${maxBytes} bytes and was dropped.`, session: nextSession };
+      return { ok: false, state: "transport", httpStatus: response.status, rpc: null, error: `The MCP server response was larger than ${maxBytes} bytes and was dropped.`, session: nextSession };
     }
     const parsed = rpcMessage(body.text);
-    if (parsed.error) return { ok: false, error: parsed.error, session: nextSession };
-    return { ok: true, result: parsed.result, session: nextSession };
+    if (parsed.error) {
+      return {
+        ok: false,
+        state: "rpc",
+        httpStatus: response.status,
+        rpc: { isError: true, content: [{ type: "text", text: parsed.error }], structuredContent: parsed.errorData ?? { message: parsed.error } },
+        error: parsed.error,
+        session: nextSession,
+      };
+    }
+    const rpcBody = rpcFromResult(parsed.result, token);
+    return { ok: true, result: parsed.result, session: nextSession, httpStatus: response.status, rpc: rpcBody };
   } finally {
     clearTimeout(timer);
     deadline.catch(() => undefined);
@@ -430,11 +473,11 @@ async function rpc(
 export async function listRegistryTools(
   userId: string,
   fetchImpl: FetchLike = globalThis.fetch as FetchLike,
-  deps: StdioDeps & { http?: HttpRpcOptions } = {},
+  deps: StdioDeps & { http?: HttpRpcOptions; registryDb?: RegistryDb | null } = {},
 ): Promise<ListedTool[]> {
-  const store = readStore(userId);
+  const servers = await readServers(userId, deps.registryDb);
   const tools: ListedTool[] = [];
-  for (const server of store.servers) {
+  for (const server of servers) {
     if (server.kind === "builtin") {
       tools.push(...listBuiltinTools(server.enabled));
       continue;
@@ -462,6 +505,7 @@ export async function listRegistryTools(
         });
         continue;
       }
+      const { listStdioTools } = await import("./stdio.ts");
       const listed = await listStdioTools(stdioConfig(server), deps.stdio);
       if (listed.status !== "ok") {
         tools.push({
@@ -600,14 +644,19 @@ export async function callRegistryTool(input: {
   getSql: () => Promise<SqlLike>;
   fetch?: FetchLike;
   http?: HttpRpcOptions;
+  registryDb?: RegistryDb | null;
 } & StdioDeps): Promise<RegistryToolCallResult> {
-  const store = readStore(input.userId);
-  const server = store.servers.find((item) => item.id === input.serverId);
+  const started = Date.now();
+  const servers = await readServers(input.userId, input.registryDb);
+  const server = servers.find((item) => item.id === input.serverId);
   if (!server) {
-    return { status: "error", ok: false, serverId: input.serverId, tool: input.tool, text: "That MCP server is not registered. Nothing was called." };
+    return { status: "error", ok: false, serverId: input.serverId, tool: input.tool, text: "That MCP server is not registered. Nothing was called.", transport: null, rpc: null };
   }
   if (!server.enabled) {
-    return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: `MCP server “${server.label}” is disabled. Nothing was called.` };
+    return { status: "error", ok: false, code: "disabled", serverId: server.id, tool: input.tool, text: `MCP server “${server.label}” is disabled. Nothing was called.`, transport: null, rpc: null };
+  }
+  if (server.secretUnreadable || (server.tokenEnc && !server.token)) {
+    return { status: "error", ok: false, code: "missing_config", serverId: server.id, tool: input.tool, text: "The saved credential cannot be decrypted. Set CONNECTOR_TOKEN_SECRET and save the token again. Nothing was called.", transport: null, rpc: null };
   }
   const args = input.args && typeof input.args === "object" ? input.args : {};
   if (server.kind === "builtin") {
@@ -625,6 +674,7 @@ export async function callRegistryTool(input: {
     if (await (input.isHalted ?? defaultIsHalted)(input.userId)) {
       return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on. No MCP tool was called." };
     }
+    const { callStdioTool } = await import("./stdio.ts");
     const result = await callStdioTool(stdioConfig(server), input.tool, args, input.stdio);
     return {
       status: result.status,
@@ -636,38 +686,63 @@ export async function callRegistryTool(input: {
     };
   }
   if (!server.url) {
-    return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Server has no URL. Nothing was called." };
+    return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Server has no URL. Nothing was called.", transport: null, rpc: null };
   }
   const fetchImpl = input.fetch ?? (globalThis.fetch as FetchLike);
+  if (server.protocol === "http") {
+    return { status: "error", ok: false, code: "incompatible", serverId: server.id, tool: input.tool, text: "This connection is a custom HTTP call, not JSON-RPC. Nothing was called.", transport: null, rpc: null };
+  }
   const opened = await rpc(fetchImpl, server.url, server.token ?? "", null, {
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
     params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } },
   }, input.http);
-  if (!opened.ok) {
-    return { status: opened.timedOut ? "timeout" : "error", ok: false, serverId: server.id, tool: input.tool, text: opened.error };
-  }
+  if (!opened.ok) return rpcFailureResult(server.id, input.tool, opened, started);
   const called = await rpc(fetchImpl, server.url, server.token ?? "", opened.session, {
     jsonrpc: "2.0",
     id: 3,
     method: "tools/call",
     params: { name: input.tool, arguments: args },
   }, input.http);
-  if (!called.ok) {
-    return { status: called.timedOut ? "timeout" : "error", ok: false, serverId: server.id, tool: input.tool, text: called.error };
-  }
-  const content =
-    called.result && typeof called.result === "object" && Array.isArray((called.result as { content?: unknown }).content)
-      ? (called.result as { content: { text?: string }[] }).content.map((part) => part.text ?? "").join("\n").slice(0, 8000)
-      : "";
-  const isError = Boolean(called.result && typeof called.result === "object" && (called.result as { isError?: boolean }).isError);
+  if (!called.ok) return rpcFailureResult(server.id, input.tool, called, started);
+  return rpcSuccessResult(server.id, input.tool, called.rpc, called.httpStatus, started);
+}
+
+function textFromRpc(rpc: McpCallRpc): string {
+  if (!rpc) return "";
+  return rpc.content.filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n").slice(0, 8000);
+}
+
+function rpcFailureResult(serverId: string, tool: string, failure: RpcFailure, started: number): RegistryToolCallResult {
+  const code: McpResultCode = failure.state === "unauthorized" ? "unauthorized" : failure.timedOut ? "timeout" : failure.error.toLowerCase().includes("refused") || failure.error.toLowerCase().includes("private") ? "ssrf_denied" : "error";
+  const httpOk = failure.state === "rpc" && failure.httpStatus >= 200 && failure.httpStatus < 300;
   return {
-    status: isError || !content ? "error" : "ok",
-    ok: !isError && Boolean(content),
-    serverId: server.id,
-    tool: input.tool,
-    text: content || "The MCP server returned no text. Nothing was invented.",
+    status: failure.timedOut ? "timeout" : "error",
+    ok: false,
+    code,
+    serverId,
+    tool,
+    text: failure.error,
+    transport: { ok: httpOk, status: failure.httpStatus, ms: Date.now() - started },
+    rpc: failure.rpc,
+  };
+}
+
+function rpcSuccessResult(serverId: string, tool: string, rpc: McpCallRpc, httpStatus: number, started: number): RegistryToolCallResult {
+  const text = textFromRpc(rpc);
+  const hasPayload = Boolean(text) || Boolean(rpc && (rpc.content.length > 0 || rpc.structuredContent != null));
+  const isError = Boolean(rpc?.isError);
+  return {
+    status: isError || !hasPayload ? "error" : "ok",
+    ok: !isError && hasPayload,
+    code: isError ? "error" : hasPayload ? "ok" : "error",
+    serverId,
+    tool,
+    text: text || (hasPayload ? "" : "The MCP server returned no content. Nothing was invented."),
+    transport: { ok: true, status: httpStatus, ms: Date.now() - started },
+    rpc,
+    ...(rpc?.structuredContent && typeof rpc.structuredContent === "object" ? { data: rpc.structuredContent as RegistryToolCallResult["data"] } : {}),
   };
 }
 

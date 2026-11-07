@@ -36,16 +36,16 @@ function rpcReply(id: unknown, result: unknown) {
   return JSON.stringify({ jsonrpc: "2.0", id, result });
 }
 
-function freshOwner(url: string, owner = "owner") {
+async function freshOwner(url: string, owner = "owner") {
   setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-http-")));
-  const saved = registerExternalServer(owner, { label: "Remote", url });
+  const saved = await registerExternalServer(owner, { label: "Remote", url });
   assert.equal(saved.ok, true, saved.ok ? "" : saved.error);
   if (!saved.ok) throw new Error("register failed");
   return saved.servers.find((s) => s.kind === "http")!;
 }
 
 describe("http MCP registry hardening (REGRESSION)", () => {
-  it("refuses private, link-local, metadata and credentialed URLs at registration", () => {
+  it("refuses private, link-local, metadata and credentialed URLs at registration", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-http-")));
     for (const url of [
       "https://169.254.169.254/latest/meta-data",
@@ -61,11 +61,11 @@ describe("http MCP registry hardening (REGRESSION)", () => {
       "https://user:pass@mcp.example/mcp",
       "http://mcp.example/mcp",
     ]) {
-      const saved = registerExternalServer("owner", { label: "x", url });
+      const saved = await registerExternalServer("owner", { label: "x", url });
       assert.equal(saved.ok, false, `should refuse ${url}`);
     }
-    assert.equal(registerExternalServer("owner", { label: "ok", url: "https://mcp.example/mcp" }).ok, true);
-    assert.equal(registerExternalServer("owner", { label: "local", url: "http://localhost:9/mcp" }).ok, true);
+    assert.equal((await registerExternalServer("owner", { label: "ok", url: "https://mcp.example/mcp" })).ok, true);
+    assert.equal((await registerExternalServer("owner", { label: "local", url: "http://localhost:9/mcp" })).ok, true);
     assert.equal(isPrivateAddressLiteral("8.8.8.8"), false);
     assert.equal(isPrivateAddressLiteral("mcp.example"), false);
   });
@@ -100,7 +100,7 @@ describe("http MCP registry hardening (REGRESSION)", () => {
     const url = await listen(() => {
       /* never answer */
     });
-    const server = freshOwner(url);
+    const server = await freshOwner(url);
     const started = Date.now();
     const tools = await listRegistryTools("owner", undefined, { http: { timeoutMs: 300 } });
     const row = tools.find((t) => t.serverId === server.id);
@@ -123,7 +123,7 @@ describe("http MCP registry hardening (REGRESSION)", () => {
       res.writeHead(307, { location: internal });
       res.end();
     });
-    const server = freshOwner(url);
+    const server = await freshOwner(url);
     const called = await callRegistryTool({ userId: "owner", serverId: server.id, tool: "x", getSql: noSql });
     assert.equal(called.ok, false);
     assert.match(called.text, /redirect/i);
@@ -144,7 +144,7 @@ describe("http MCP registry hardening (REGRESSION)", () => {
       };
       pump();
     });
-    const server = freshOwner(url);
+    const server = await freshOwner(url);
     const called = await callRegistryTool({ userId: "owner", serverId: server.id, tool: "x", getSql: noSql, http: { maxBytes: 100_000 } });
     assert.equal(called.ok, false);
     assert.match(called.text, /larger than 100000 bytes/);
@@ -164,7 +164,7 @@ describe("http MCP registry hardening (REGRESSION)", () => {
         res.end();
       });
     });
-    const server = freshOwner(url);
+    const server = await freshOwner(url);
     const tools = await listRegistryTools("owner");
     assert.equal(tools.some((t) => t.serverId === server.id && t.name === "ping"), true);
     const called = await callRegistryTool({ userId: "owner", serverId: server.id, tool: "ping", getSql: noSql });

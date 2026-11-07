@@ -7,6 +7,7 @@
  * notice). Only live verify scripts probe this path. Keep the 401.
  */
 import { createFileRoute } from "@tanstack/react-router";
+import { getSql } from "@/lib/db";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import {
@@ -31,7 +32,9 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          return json({ ok: true, servers: listRegistryServers(userId) });
+          const { databaseConfigured } = await import("@/lib/mind/mcp/registry-store");
+          const db = databaseConfigured() ? await getSql() : null;
+          return json({ ok: true, servers: await listRegistryServers(userId, db) });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";
           return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
@@ -44,6 +47,8 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
+          const { databaseConfigured } = await import("@/lib/mind/mcp/registry-store");
+          const db = databaseConfigured() ? await getSql() : null;
           const body = (await request.json().catch(() => ({}))) as {
             action?: string;
             id?: string;
@@ -58,13 +63,13 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
             callTimeoutMs?: number;
           };
           if (body.action === "toggle" && typeof body.id === "string") {
-            return json({ ok: true, servers: setServerEnabled(userId, body.id, body.enabled === true) });
+            return json({ ok: true, servers: await setServerEnabled(userId, body.id, body.enabled === true, db) });
           }
           if (body.action === "remove" && typeof body.id === "string") {
-            return json({ ok: true, servers: removeRegistryServer(userId, body.id) });
+            return json({ ok: true, servers: await removeRegistryServer(userId, body.id, db) });
           }
           if (body.action === "register") {
-            const saved = registerExternalServer(userId, {
+            const saved = await registerExternalServer(userId, {
               label: body.label ?? "",
               url: body.url,
               command: body.command,
@@ -73,7 +78,7 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
               env: body.env,
               connectTimeoutMs: body.connectTimeoutMs,
               callTimeoutMs: body.callTimeoutMs,
-            });
+            }, db);
             if (!saved.ok) return json(saved, 400);
             return json(saved);
           }

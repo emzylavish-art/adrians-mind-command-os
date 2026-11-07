@@ -1,7 +1,7 @@
 /**
- * Custom MCP (JSON-RPC over HTTP) and custom HTTP read/status connections.
- * Tokens stay in the per-user server file. Public records expose schemas only.
- * Gmail OAuth is not started here. model.generate is refused.
+ * Custom MCP and custom HTTP connections stored in the shared MCP registry.
+ * Bearer tokens are sealed with CONNECTOR_TOKEN_SECRET before a database write.
+ * model.generate is refused. Gmail OAuth is not started here.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -11,6 +11,8 @@ import {
   resolveAndPinMcpHostname,
   type DnsLookupFn,
 } from "./mcp/http-dns-pin.ts";
+import { loadRegistry, saveRegistry, type RegistryDb, type RegistryRecord } from "./mcp/registry-store.ts";
+import type { McpCallRpc, McpCallTransport, McpContentPart } from "./mcp/call-contract.ts";
 
 export type ArgType = "string" | "boolean" | "integer";
 
@@ -44,31 +46,8 @@ export type PublicConnection = {
 
 export type CallStatus = "ok" | "error" | "unauthorized" | "missing_config" | "incompatible" | "timeout";
 
-export type ConnectionDb = {
-  query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
-};
+export type ConnectionDb = RegistryDb;
 
-type Stored = PublicConnection & { url: string; token: string; ownerId: string };
-
-async function readAll(db: ConnectionDb, userId: string): Promise<Stored[]> {
-  const rows = await db.query<{ record: Stored | string }>(
-    "select record from mind_custom_connection where user_id = $1",
-    [userId],
-  );
-  const out: Stored[] = [];
-  for (const row of rows) {
-    const record = typeof row.record === "string" ? JSON.parse(row.record) as Stored : row.record;
-    if (record?.ownerId === userId) out.push(record);
-  }
-  return out;
-}
-
-async function upsert(db: ConnectionDb, userId: string, row: Stored) {
-  await db.query(
-    "insert into mind_custom_connection (user_id, id, record) values ($1, $2, $3::jsonb) on conflict (user_id, id) do update set record = excluded.record",
-    [userId, row.id, JSON.stringify(row)],
-  );
-}
 type FetchLike = (url: string, init?: RequestInit) => Promise<{
   ok: boolean;
   status: number;
@@ -76,13 +55,35 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<{
   text: () => Promise<string>;
 }>;
 
-function toPublic(row: Stored): PublicConnection {
-  const { url: _url, token: _token, ownerId: _owner, ...rest } = row;
-  return { ...rest, hasToken: Boolean(row.token) };
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
 }
 
-export async function listCustomConnections(db: ConnectionDb, userId: string): Promise<PublicConnection[]> {
-  return (await readAll(db, userId)).map(toPublic);
+function toPublic(server: RegistryRecord): PublicConnection | null {
+  if (!server.url || server.kind === "builtin" || server.kind === "command") return null;
+  const kind = server.protocol === "http" ? "http" : "mcp";
+  const operations = Array.isArray(server.operations) ? server.operations as PublicOperation[] : [];
+  return {
+    id: server.id,
+    label: server.label,
+    kind,
+    host: hostOf(server.url),
+    method: kind === "http" ? (server.httpMethod === "POST" ? "POST" : "GET") : "MCP",
+    auth: server.token || server.tokenEnc ? "bearer" : "none",
+    hasToken: Boolean(server.token || server.tokenEnc),
+    state: (server.state as ConnectionState) || "unchecked",
+    operations,
+    error: server.secretUnreadable ? "The saved credential cannot be decrypted. Nothing was called." : server.error ?? "",
+  };
+}
+
+export async function listCustomConnections(db: ConnectionDb | null, userId: string): Promise<PublicConnection[]> {
+  const loaded = await loadRegistry(userId, db);
+  return loaded.servers.map(toPublic).filter((row): row is PublicConnection => Boolean(row));
 }
 
 export function endpointProblem(value: string): { ok: true; url: string; host: string } | { ok: false; error: string } {
@@ -185,7 +186,7 @@ async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; l
   return { ok: true, status: response.status, text };
 }
 
-function rpcResult(text: string, token: string): { result?: unknown; error?: string } {
+function rpcEnvelope(text: string, token: string): { result?: unknown; error?: string } {
   const chunks = text.includes("data:") ? text.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()) : [text.trim()];
   for (const chunk of chunks) {
     if (!chunk || chunk === "[DONE]") continue;
@@ -200,6 +201,24 @@ function rpcResult(text: string, token: string): { result?: unknown; error?: str
   return { error: "The MCP server did not return a JSON-RPC result." };
 }
 
+function rpcFromResult(result: unknown, token: string): McpCallRpc {
+  if (!result || typeof result !== "object") return null;
+  const record = result as Record<string, unknown>;
+  if (!("content" in record) && !("isError" in record) && !("structuredContent" in record)) return null;
+  const content = Array.isArray(record.content)
+    ? record.content.filter((part) => part && typeof part === "object").slice(0, 20).map((part) => {
+        const copy = { ...(part as McpContentPart) };
+        if (typeof copy.text === "string") copy.text = redact(copy.text, token).slice(0, 8000);
+        return copy;
+      })
+    : [];
+  return {
+    isError: record.isError === true,
+    content,
+    structuredContent: "structuredContent" in record ? record.structuredContent ?? null : null,
+  };
+}
+
 function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown }): PublicOperation | null {
   if (typeof tool.name !== "string" || !tool.name.trim() || tool.name.toLowerCase() === "model.generate") return null;
   const schema = readOperationSchema(tool.inputSchema);
@@ -211,7 +230,15 @@ function operationFromTool(tool: { name?: unknown; description?: unknown; inputS
   };
 }
 
-export async function saveCustomConnection(db: ConnectionDb, userId: string, input: {
+async function writeRow(db: ConnectionDb | null, userId: string, row: RegistryRecord): Promise<{ ok: true } | { ok: false; error: string }> {
+  const loaded = await loadRegistry(userId, db);
+  const servers = loaded.servers.filter((server) => server.id !== row.id);
+  servers.push(row);
+  const saved = await saveRegistry(userId, servers, db);
+  return saved.ok ? { ok: true } : { ok: false, error: saved.error };
+}
+
+export async function saveCustomConnection(db: ConnectionDb | null, userId: string, input: {
   label: string;
   kind: "mcp" | "http";
   url: string;
@@ -219,13 +246,13 @@ export async function saveCustomConnection(db: ConnectionDb, userId: string, inp
   auth?: "none" | "bearer";
   token?: string;
   fields?: string[];
-}, deps: { fetch?: FetchLike; lookup?: DnsLookupFn } = {}): Promise<{ ok: true; connection: PublicConnection } | { ok: false; error: string }> {
+}, deps: { fetch?: FetchLike; lookup?: DnsLookupFn } = {}): Promise<{ ok: true; connection: PublicConnection } | { ok: false; error: string; code?: "missing_config" }> {
   const checked = endpointProblem(input.url);
   if (!checked.ok) return checked;
   const label = input.label.trim().slice(0, 80) || checked.host;
   const auth = input.auth === "bearer" ? "bearer" : "none";
   const token = (input.token ?? "").slice(0, 500);
-  if (auth === "bearer" && !token) return { ok: false, error: "Bearer auth needs a token stored on the server. Nothing was saved." };
+  if (auth === "bearer" && !token) return { ok: false, code: "missing_config", error: "Bearer auth needs a token stored on the server. Nothing was saved." };
   const method = input.kind === "http" ? (input.method === "POST" ? "POST" : "GET") : "MCP";
   const fields = (input.fields ?? []).map((field) => field.trim()).filter((field) => /^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(field)).slice(0, 12);
   const httpSchema: OperationSchema = {
@@ -233,131 +260,133 @@ export async function saveCustomConnection(db: ConnectionDb, userId: string, inp
     properties: Object.fromEntries(fields.map((field) => [field, { type: "string" as const }])),
     required: fields,
   };
-  const row: Stored = {
+  const row: RegistryRecord = {
     id: randomUUID(),
     label,
-    kind: input.kind,
-    host: checked.host,
+    kind: "http",
+    enabled: true,
     url: checked.url,
-    method,
-    auth,
-    token,
-    hasToken: Boolean(token),
-    ownerId: userId,
+    protocol: input.kind === "http" ? "http" : "mcp",
+    httpMethod: method === "POST" ? "POST" : method === "GET" ? "GET" : undefined,
+    token: token || undefined,
     state: "unchecked",
-    operations: input.kind === "http" ? [{ name: "request", description: `${method} ${checked.host}`, inputSchema: httpSchema, compatible: true }] : [],
     error: "",
+    operations: input.kind === "http" ? [{ name: "request", description: `${method} ${checked.host}`, inputSchema: httpSchema, compatible: true }] : [],
   };
-  await upsert(db, userId, row);
+  const saved = await writeRow(db, userId, row);
+  if (!saved.ok) return { ok: false, code: "missing_config", error: saved.error };
   if (input.kind === "mcp") return { ok: true, connection: await refreshMcp(db, userId, row.id, deps) };
   row.state = "ready";
-  await upsert(db, userId, row);
-  return { ok: true, connection: toPublic(row) };
+  await writeRow(db, userId, row);
+  const listed = await listCustomConnections(db, userId);
+  return { ok: true, connection: listed.find((item) => item.id === row.id) ?? toPublic({ ...row, token: undefined, tokenEnc: token ? "sealed" : undefined })! };
 }
 
-async function refreshMcp(db: ConnectionDb, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
-  const connections = await readAll(db, userId);
-  const row = connections.find((item) => item.id === id);
-  if (!row) return { id, label: "", kind: "mcp", host: "", method: "MCP", auth: "none", hasToken: false, state: "failed", operations: [], error: "That connection is not saved." };
+async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
+  const loaded = await loadRegistry(userId, db);
+  const row = loaded.servers.find((item) => item.id === id);
+  if (!row?.url) return { id, label: "", kind: "mcp", host: "", method: "MCP", auth: "none", hasToken: false, state: "failed", operations: [], error: "That connection is not saved." };
+  const fail = async (state: ConnectionState, error: string) => {
+    row.state = state;
+    row.operations = [];
+    row.error = error;
+    await writeRow(db, userId, row);
+    return toPublic(row)!;
+  };
   const opened = await send(row.url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
-  }, deps, row.token);
-  if (!opened.ok) {
-    row.state = opened.status === "unauthorized" ? "unauthorized" : "failed";
-    row.operations = [];
-    row.error = opened.error;
-    await upsert(db, userId, row);
-    return toPublic(row);
-  }
+  }, deps, row.token ?? "");
+  if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
   const listed = await send(row.url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
     body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
-  }, deps, row.token);
-  if (!listed.ok) {
-    row.state = listed.status === "unauthorized" ? "unauthorized" : "failed";
-    row.operations = [];
-    row.error = listed.error;
-    await upsert(db, userId, row);
-    return toPublic(row);
-  }
-  const parsed = rpcResult(listed.text, row.token);
+  }, deps, row.token ?? "");
+  if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
+  const parsed = rpcEnvelope(listed.text, row.token ?? "");
   const tools = parsed.result && typeof parsed.result === "object" && Array.isArray((parsed.result as { tools?: unknown }).tools)
     ? (parsed.result as { tools: { name?: unknown; description?: unknown; inputSchema?: unknown }[] }).tools
     : [];
   row.operations = tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item));
   row.state = row.operations.some((item) => item.compatible) ? "ready" : "incompatible";
   row.error = row.state === "incompatible" ? "No tool advertised an object argument schema. A generic text argument was not assumed." : "";
-  await upsert(db, userId, row);
-  return toPublic(row);
+  await writeRow(db, userId, row);
+  return toPublic(row)!;
 }
 
 export async function callCustomConnection(input: {
   userId: string;
-  db: ConnectionDb;
+  db: ConnectionDb | null;
   id: string;
   operation: string;
   args?: Record<string, unknown>;
   confirmed?: boolean;
   fetch?: FetchLike;
   lookup?: DnsLookupFn;
-}): Promise<{ ok: boolean; status: CallStatus; text: string; connection: PublicConnection | null }> {
-  const connections = await readAll(input.db, input.userId);
-  const row = connections.find((item) => item.id === input.id);
-  if (!row) return { ok: false, status: "error", text: "That connection is not saved. Nothing was called.", connection: null };
+}): Promise<{ ok: boolean; status: CallStatus; text: string; connection: PublicConnection | null; transport: McpCallTransport | null; rpc: McpCallRpc }> {
+  const started = Date.now();
+  const loaded = await loadRegistry(input.userId, input.db);
+  const row = loaded.servers.find((item) => item.id === input.id);
+  const connection = row ? toPublic(row) : null;
+  if (!row || !connection) return { ok: false, status: "error", text: "That connection is not saved. Nothing was called.", connection: null, transport: null, rpc: null };
   if (input.operation.toLowerCase() === "model.generate") {
-    return { ok: false, status: "incompatible", text: "model.generate is not a connectivity check. Nothing was called.", connection: toPublic(row) };
+    return { ok: false, status: "incompatible", text: "model.generate is not a connectivity check. Nothing was called.", connection, transport: null, rpc: null };
   }
-  const operation = row.operations.find((item) => item.name === input.operation);
+  const operation = connection.operations.find((item) => item.name === input.operation);
   if (!operation?.compatible || !operation.inputSchema) {
-    return { ok: false, status: "incompatible", text: "This operation has no compatible argument schema. Nothing was called.", connection: toPublic(row) };
+    return { ok: false, status: "incompatible", text: "This operation has no compatible argument schema. Nothing was called.", connection, transport: null, rpc: null };
   }
-  if (row.auth === "bearer" && !row.token) {
-    return { ok: false, status: "missing_config", text: "Bearer auth is selected and no token is stored. Nothing was called.", connection: toPublic(row) };
+  if (connection.auth === "bearer" && !row.token) {
+    return { ok: false, status: "missing_config", text: "Bearer auth is selected and no usable token is stored. Nothing was called.", connection, transport: null, rpc: null };
   }
-  const mutating = row.kind === "mcp" || row.method === "POST";
+  const mutating = connection.kind === "mcp" || connection.method === "POST";
   if (mutating && input.confirmed !== true) {
-    return { ok: false, status: "error", text: "Confirm this call before it runs. Nothing was called.", connection: toPublic(row) };
+    return { ok: false, status: "error", text: "Confirm this call before it runs. Nothing was called.", connection, transport: null, rpc: null };
   }
   const checked = validateArgs(operation.inputSchema, input.args ?? {});
-  if (!checked.ok) return { ok: false, status: "incompatible", text: checked.error, connection: toPublic(row) };
+  if (!checked.ok) return { ok: false, status: "incompatible", text: checked.error, connection, transport: null, rpc: null };
   const headers: Record<string, string> = { accept: "application/json", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) };
-  if (row.kind === "http" && row.method === "GET") {
-    const url = new URL(row.url);
+  const token = row.token ?? "";
+  if (connection.kind === "http" && connection.method === "GET") {
+    const url = new URL(row.url ?? "");
     for (const [key, value] of Object.entries(checked.args)) url.searchParams.set(key, String(value));
-    const sent = await send(url.toString(), { method: "GET", headers }, input, row.token);
-    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection: toPublic(row) };
-    return { ok: true, status: "ok", text: sent.text, connection: toPublic(row) };
+    const sent = await send(url.toString(), { method: "GET", headers }, input, token);
+    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+    return { ok: true, status: "ok", text: sent.text, connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
-  if (row.kind === "http") {
-    const sent = await send(row.url, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(checked.args) }, input, row.token);
-    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection: toPublic(row) };
-    return { ok: true, status: "ok", text: sent.text, connection: toPublic(row) };
+  if (connection.kind === "http") {
+    const sent = await send(row.url ?? "", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(checked.args) }, input, token);
+    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+    return { ok: true, status: "ok", text: sent.text, connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
-  const opened = await send(row.url, {
+  const opened = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
-  }, input, row.token);
-  if (!opened.ok) return { ok: false, status: opened.status, text: opened.error, connection: toPublic(row) };
-  const called = await send(row.url, {
+  }, input, token);
+  if (!opened.ok) return { ok: false, status: opened.status, text: opened.error, connection, transport: { ok: false, status: opened.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+  const called = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: operation.name, arguments: checked.args } }),
-  }, input, row.token);
-  if (!called.ok) return { ok: false, status: called.status, text: called.error, connection: toPublic(row) };
-  const parsed = rpcResult(called.text, row.token);
-  if (parsed.error) return { ok: false, status: "error", text: parsed.error, connection: toPublic(row) };
-  const content = parsed.result && typeof parsed.result === "object" && Array.isArray((parsed.result as { content?: unknown }).content)
-    ? (parsed.result as { content: { text?: string }[] }).content.map((part) => part.text ?? "").join("\n")
-    : "";
-  const isError = Boolean(parsed.result && typeof parsed.result === "object" && (parsed.result as { isError?: boolean }).isError);
+  }, input, token);
+  if (!called.ok) return { ok: false, status: called.status, text: called.error, connection, transport: { ok: false, status: called.status === "unauthorized" ? 401 : 0, ms: Date.now() - started }, rpc: null };
+  const parsed = rpcEnvelope(called.text, token);
+  if (parsed.error) {
+    return { ok: false, status: "error", text: parsed.error, connection, transport: { ok: true, status: called.status, ms: Date.now() - started }, rpc: { isError: true, content: [{ type: "text", text: parsed.error }], structuredContent: null } };
+  }
+  const rpc = rpcFromResult(parsed.result, token);
+  const text = rpc?.content.filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n") ?? "";
+  const hasPayload = Boolean(text) || Boolean(rpc && (rpc.content.length > 0 || rpc.structuredContent != null));
+  const isError = Boolean(rpc?.isError);
   return {
-    ok: !isError && Boolean(content),
-    status: isError || !content ? "error" : "ok",
-    text: redact(content || "The MCP server returned no text. Nothing was invented.", row.token),
-    connection: toPublic(row),
+    ok: !isError && hasPayload,
+    status: isError || !hasPayload ? "error" : "ok",
+    text: text || (hasPayload ? "" : "The MCP server returned no content. Nothing was invented."),
+    connection,
+    transport: { ok: true, status: called.status, ms: Date.now() - started },
+    rpc,
   };
 }

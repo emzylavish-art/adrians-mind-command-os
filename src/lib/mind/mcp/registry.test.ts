@@ -16,16 +16,16 @@ import {
 } from "./registry.ts";
 
 describe("mcp registry", () => {
-  it("always includes the built-in server enabled by default", () => {
+  it("always includes the built-in server enabled by default", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
-    const servers = listRegistryServers("owner");
+    const servers = await listRegistryServers("owner");
     assert.equal(servers.some((s) => s.id === BUILTIN_ID && s.enabled), true);
   });
 
   it("toggles enabled and refuses calls when disabled", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
-    setServerEnabled("owner", BUILTIN_ID, false);
-    const listed = listRegistryServers("owner");
+    await setServerEnabled("owner", BUILTIN_ID, false);
+    const listed = await listRegistryServers("owner");
     assert.equal(listed.find((s) => s.id === BUILTIN_ID)?.enabled, false);
     const called = await callRegistryTool({
       userId: "owner",
@@ -56,7 +56,7 @@ describe("mcp registry", () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
     const tools = await listRegistryTools("owner");
     assert.equal(tools.some((t) => t.name === "pglite_query"), true);
-    const saved = registerExternalServer("owner", { label: "Desk", url: "https://mcp.example/tools", token: "secret" });
+    const saved = await registerExternalServer("owner", { label: "Desk", url: "https://mcp.example/tools", token: "secret" });
     assert.equal(saved.ok, true);
     if (saved.ok) {
       assert.equal(JSON.stringify(saved.servers).includes("secret"), false);
@@ -81,8 +81,8 @@ describe("mcp registry", () => {
   const FIXTURE = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../scripts/mcp/fixture-stdio-server.mjs");
   const noSql = async () => ({ query: async () => [] });
 
-  function registerFixture(owner: string, env?: Record<string, string>) {
-    const saved = registerExternalServer(owner, { label: "Fixture stdio", command: process.execPath, args: [FIXTURE], env });
+  async function registerFixture(owner: string, env?: Record<string, string>) {
+    const saved = await registerExternalServer(owner, { label: "Fixture stdio", command: process.execPath, args: [FIXTURE], env });
     assert.equal(saved.ok, true);
     if (!saved.ok) throw new Error("register failed");
     const server = saved.servers.find((s) => s.kind === "command");
@@ -90,18 +90,18 @@ describe("mcp registry", () => {
     return server!;
   }
 
-  it("registers command servers disabled, hides env values from the client", () => {
+  it("registers command servers disabled, hides env values from the client", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
-    const server = registerFixture("owner", { API_KEY: "super-secret-value" });
+    const server = await registerFixture("owner", { API_KEY: "super-secret-value" });
     assert.equal(server.enabled, false);
     assert.deepEqual(server.envKeys, ["API_KEY"]);
-    assert.equal(JSON.stringify(listRegistryServers("owner")).includes("super-secret-value"), false);
+    assert.equal(JSON.stringify(await listRegistryServers("owner")).includes("super-secret-value"), false);
   });
 
   it("never spawns a disabled stdio server on list or call", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
     const marker = join(mkdtempSync(join(tmpdir(), "mind-mcp-marker-")), "spawned");
-    const server = registerFixture("owner", { MCP_FIXTURE_MARKER: marker });
+    const server = await registerFixture("owner", { MCP_FIXTURE_MARKER: marker });
     const before = stdioSpawnCount();
     const tools = await listRegistryTools("owner");
     const row = tools.find((t) => t.serverId === server.id);
@@ -117,8 +117,8 @@ describe("mcp registry", () => {
 
   it("does not spawn when the emergency stop is on", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
-    const server = registerFixture("owner");
-    setServerEnabled("owner", server.id, true);
+    const server = await registerFixture("owner");
+    await setServerEnabled("owner", server.id, true);
     const before = stdioSpawnCount();
     const tools = await listRegistryTools("owner", undefined, { isHalted: () => true });
     assert.equal(tools.find((t) => t.serverId === server.id)?.name, "(halted)");
@@ -130,8 +130,8 @@ describe("mcp registry", () => {
 
   it("lists and calls real tools on an enabled stdio server, then reaps the child", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
-    const server = registerFixture("owner");
-    setServerEnabled("owner", server.id, true);
+    const server = await registerFixture("owner");
+    await setServerEnabled("owner", server.id, true);
     const tools = await listRegistryTools("owner", undefined, { isHalted: () => false });
     const names = tools.filter((t) => t.serverId === server.id).map((t) => t.name).sort();
     assert.deepEqual(names, ["add", "echo", "env_probe", "fail", "sleep"]);
@@ -152,8 +152,8 @@ describe("mcp registry", () => {
 
   it("surfaces timeout status through the registry", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
-    const server = registerFixture("owner");
-    setServerEnabled("owner", server.id, true);
+    const server = await registerFixture("owner");
+    await setServerEnabled("owner", server.id, true);
     const called = await callRegistryTool({
       userId: "owner",
       serverId: server.id,
@@ -171,9 +171,9 @@ describe("mcp registry", () => {
   it("REGRESSION: an enabled command server outside the operator allowlist never spawns", async () => {
     setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-reg-")));
     const marker = join(mkdtempSync(join(tmpdir(), "mind-mcp-marker-")), "spawned");
-    const server = registerFixture("attacker", { MCP_FIXTURE_MARKER: marker, LD_PRELOAD: "/tmp/evil.so", NODE_OPTIONS: "--require /tmp/x.js" });
+    const server = await registerFixture("attacker", { MCP_FIXTURE_MARKER: marker, LD_PRELOAD: "/tmp/evil.so", NODE_OPTIONS: "--require /tmp/x.js" });
     assert.deepEqual(server.envKeys, ["MCP_FIXTURE_MARKER"]);
-    setServerEnabled("attacker", server.id, true);
+    await setServerEnabled("attacker", server.id, true);
     const saved = process.env.MIND_MCP_STDIO_ALLOW;
     delete process.env.MIND_MCP_STDIO_ALLOW;
     try {

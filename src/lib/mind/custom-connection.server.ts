@@ -4,9 +4,11 @@ import { authMiddleware } from "@/lib/auth/middleware";
 export const listCustomConnectionsFn = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
+    const { databaseConfigured } = await import("./mcp/registry-store");
     const { getSql } = await import("@/lib/db");
+    const db = databaseConfigured() ? await getSql() : null;
     const { listCustomConnections } = await import("./custom-connection");
-    return { ok: true as const, connections: await listCustomConnections(await getSql(), context.userId) };
+    return { ok: true as const, connections: await listCustomConnections(db, context.userId) };
   });
 
 export const saveCustomConnectionFn = createServerFn({ method: "POST" })
@@ -21,9 +23,11 @@ export const saveCustomConnectionFn = createServerFn({ method: "POST" })
     fields: Array.isArray(input.fields) ? input.fields.filter((field) => typeof field === "string").slice(0, 12) : [],
   }))
   .handler(async ({ data, context }) => {
+    const { databaseConfigured } = await import("./mcp/registry-store");
     const { getSql } = await import("@/lib/db");
+    const db = databaseConfigured() ? await getSql() : null;
     const { saveCustomConnection } = await import("./custom-connection");
-    return saveCustomConnection(await getSql(), context.userId, data);
+    return saveCustomConnection(db, context.userId, data);
   });
 
 export const callCustomConnectionFn = createServerFn({ method: "POST" })
@@ -35,7 +39,9 @@ export const callCustomConnectionFn = createServerFn({ method: "POST" })
     confirmed: input.confirmed === true,
   }))
   .handler(async ({ data, context }) => {
+    const { databaseConfigured } = await import("./mcp/registry-store");
     const { getSql } = await import("@/lib/db");
+    const db = databaseConfigured() ? await getSql() : null;
     const { callCustomConnection } = await import("./custom-connection");
-    return callCustomConnection({ db: await getSql(), userId: context.userId, ...data });
+    return callCustomConnection({ db, userId: context.userId, ...data });
   });
