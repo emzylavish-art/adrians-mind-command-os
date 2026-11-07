@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { callCustomConnectionFn, listCustomConnectionsFn, saveCustomConnectionFn } from "@/lib/mind/custom-connection.server";
 import type { PublicConnection } from "@/lib/mind/custom-connection";
-
-type Result = { status: string; text: string };
+import { missingConfigNotice, safeReason } from "@/lib/mind/mcp/call-contract";
+import { acceptResult, dismissResult, type AttemptView } from "@/components/mind/custom-connection-result";
 
 /** Tools-panel registration for remote MCP and explicit HTTP read/status calls. */
 export function CustomConnections({ halted }: { halted: boolean }) {
@@ -17,7 +17,8 @@ export function CustomConnections({ halted }: { halted: boolean }) {
   const [fields, setFields] = useState("");
   const [args, setArgs] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
-  const [result, setResult] = useState<Result | null>(null);
+  const [result, setResult] = useState<AttemptView | null>(null);
+  const activeAttempt = useRef("");
 
   async function reload() {
     const listed = await listCustomConnectionsFn();
@@ -50,7 +51,8 @@ export function CustomConnections({ halted }: { halted: boolean }) {
           }).then((saved) => {
             setToken("");
             if (!saved.ok) {
-              setNotice(saved.error);
+              const setup = missingConfigNotice({ text: saved.error });
+              setNotice(setup ? setup.copy : safeReason(saved.error));
               return;
             }
             setNotice(`${saved.connection.label} saved. State: ${saved.connection.state}.`);
@@ -117,11 +119,17 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                       if (!raw) continue;
                       payload[name] = spec.type === "integer" ? Number(raw) : spec.type === "boolean" ? raw === "true" : raw;
                     }
-                    setResult({ status: "running", text: "" });
+                    const localAttemptId = crypto.randomUUID();
+                    activeAttempt.current = localAttemptId;
+                    setResult({ localAttemptId, upstreamRequestId: null, status: "running", text: "", retryable: false });
                     void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, confirmed: confirm || row.method === "GET" } }).then((called) => {
-                      setResult({ status: called.status, text: called.text });
+                      const next = acceptResult(activeAttempt.current, { localAttemptId, status: called.status, text: called.text });
+                      if (next !== "stale") setResult(next);
                       if (called.connection) setRows((current) => current.map((item) => item.id === called.connection?.id ? called.connection : item));
-                    }).catch(() => setResult({ status: "error", text: "The call did not complete." }));
+                    }).catch(() => {
+                      const next = acceptResult(activeAttempt.current, { localAttemptId, status: "error", text: "The call did not complete." });
+                      if (next !== "stale") setResult(next);
+                    });
                   }}
                 >
                   Call {operation.name}
@@ -131,7 +139,12 @@ export function CustomConnections({ halted }: { halted: boolean }) {
           </li>
         ))}
       </ul>
-      {result ? <p className="whitespace-pre-wrap text-sm text-muted">Result ({result.status}): {result.text}</p> : null}
+      {result ? (
+        <p className="whitespace-pre-wrap text-sm text-muted">
+          Result ({result.status}): {result.text}
+          <button type="button" className="ml-3 min-h-11 rounded-panel border border-line px-3" onClick={() => setResult(dismissResult())}>Dismiss</button>
+        </p>
+      ) : null}
     </div>
   );
 }

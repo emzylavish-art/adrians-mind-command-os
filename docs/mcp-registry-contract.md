@@ -61,7 +61,15 @@ A JSON-RPC `error` object, or a tool result with `isError: true`, keeps `transpo
 
 `/api/mind/mcp/call` still returns HTTP 200 after a tool attempt. Sign-in remains 401. A cross-site POST remains 403. Emergency stop remains 403.
 
-There is no `requestId`, `correlationId`, or trace field on `McpCallContract`, `RegistryToolCallResult`, or `PublicConnection`. `transport.ms` is elapsed milliseconds for that one attempt. Nothing else identifies the call.
+There is no `requestId`, `correlationId`, or trace field on `McpCallContract`. `transport.ms` is elapsed milliseconds for that one attempt. The Tools form adds `localAttemptId` for the click and sets `upstreamRequestId` to null. That id is not read from a response header.
+
+## Acceptance answers
+
+1. `safeReason` in `src/lib/mind/mcp/call-contract.ts` returns one line. `src/lib/mind/mcp/call-acceptance.test.ts` checks that a bearer, a query secret, a URL, and a password field do not survive.
+2. There is no upstream correlation header on this path. `callProvenance` sets `localAttemptId` and `upstreamRequestId: null`. The test checks a local id is not stored as `x-request-id`.
+3. `missingConfigNotice` maps a missing `DATABASE_URL` / `POSTGRES_URL` and a missing token secret to `Not configured. Nothing was retried.` with `retryable: false`. The Tools form uses that copy.
+4. `READ_SAFE_ALLOWLIST` is `pglite_list_schema`. Custom HTTP GET `request` is the other read. POST and other MCP tools are not read-safe. `timeoutRetryDecision` returns `retryable: false` and `autoRetried: false` for both.
+5. `acceptResult` and `dismissResult` in `src/components/mind/custom-connection-result.ts` ignore a late error after a newer click and clear the result on dismiss. Those tests call the helper. They do not mount `command-app.tsx` or the failure banner. Those files belong to logic-picker-routes.
 
 ## Error text
 

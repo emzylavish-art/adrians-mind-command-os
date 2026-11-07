@@ -49,7 +49,7 @@ export function mcpResultCode(text: string, status: string, ok: boolean): McpRes
   if (/disabled/i.test(text)) return "disabled";
   if (/private|link-local|metadata|refused/i.test(text)) return "ssrf_denied";
   if (status === "unauthorized" || /returned 401|returned 403|sign in is required/i.test(text)) return "unauthorized";
-  if (status === "missing_config" || /no token is stored|cannot be decrypted|not configured/i.test(text)) return "missing_config";
+  if (status === "missing_config" || /DATABASE_URL or POSTGRES_URL|CONNECTOR_TOKEN_SECRET|no token is stored|cannot be decrypted|not configured/i.test(text)) return "missing_config";
   if (status === "incompatible" || /argument schema|unexpected argument|missing /i.test(text)) return "incompatible";
   return "error";
 }
@@ -85,6 +85,48 @@ export function toMcpCallContract(input: {
 export function privacyErrorText(text: string, secret = ""): string {
   let out = secret ? text.split(secret).join("[redacted]") : text;
   out = out.replace(/\b(authorization|proxy-authorization|cookie|set-cookie)\s*[:=]\s*\S+/gi, "$1: [redacted]");
+  out = out.replace(/\bBearer\s+\S+/gi, "Bearer [redacted]");
   out = out.replace(/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s)"']+/g, "[url]");
+  out = out.replace(/"(password|token|secret|authorization|api_key|api-key)"\s*:\s*"[^"]*"/gi, '"$1":"[redacted]"');
   return out.slice(0, 8000);
+}
+
+/** One line for a person. Not a raw body, header, query string, or credential. */
+export function safeReason(text: string, secret = ""): string {
+  return privacyErrorText(text, secret).replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+export const MISSING_CONFIG_COPY = "Not configured. Nothing was retried.";
+
+/** Database and token setup failures. retryable is always false. */
+export function missingConfigNotice(input: { code?: string; text?: string }): { copy: typeof MISSING_CONFIG_COPY; retryable: false } | null {
+  const text = input.text ?? "";
+  const code = input.code === "missing_config" ? "missing_config" : mcpResultCode(text, "error", false);
+  if (code !== "missing_config") return null;
+  return { copy: MISSING_CONFIG_COPY, retryable: false };
+}
+
+/** Tools this process treats as reads. Nothing else is read-safe. */
+export const READ_SAFE_ALLOWLIST = ["pglite_list_schema"] as const;
+
+export function isKnownReadSafe(input: { kind: "mcp" | "http"; method?: string; tool: string }): boolean {
+  if (input.kind === "http" && input.method === "GET" && input.tool === "request") return true;
+  return (READ_SAFE_ALLOWLIST as readonly string[]).includes(input.tool);
+}
+
+/** A finished attempt is never sent again, including a timed-out read. */
+export function timeoutRetryDecision(input: { code: string; readSafe: boolean }): { retryable: false; autoRetried: false } {
+  void input;
+  return { retryable: false, autoRetried: false };
+}
+
+export type CallProvenance = {
+  /** Created in this process for this click. Not an upstream id. */
+  localAttemptId: string;
+  /** This path does not read x-request-id or any upstream correlation header. */
+  upstreamRequestId: null;
+};
+
+export function callProvenance(localAttemptId: string): CallProvenance {
+  return { localAttemptId, upstreamRequestId: null };
 }
