@@ -10,6 +10,8 @@ KV binding `OAUTH_KV` is namespace `adrians-mind-mcp-production-oauth`, id `fef3
 
 Public client `adrians-mind-mcp`. Callback `https://adrians-mind-mcp.operation-beat-magnus.workers.dev/oauth/callback`.
 
+The production bundle exposes `provider.status`, `model.generate`, and `visual.analyze`. `visual.analyze` accepts an HTTPS image URL or `data:image` URL plus a prompt, uses Astra first and Sol as fallback, and never routes visual work to Luna. The image is sent to the configured OpenAI-compatible provider; the worker does not fetch or persist it.
+
 Parent sets these five secrets by the official Cloudflare API. No values belong in this repo:
 
 - `MCP_OAUTH_SECRET`
