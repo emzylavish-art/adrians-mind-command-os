@@ -1,0 +1,13 @@
+200 /
+200 /login
+200 /memory
+200 /explore
+307 /dashboard
+404 /tools
+404 /voice
+404 /artifacts
+404 /settings
+404 /activity
+404 /scheduled
+404 /library
+404 /projects

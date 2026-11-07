@@ -1,0 +1,62 @@
+=== curl dashboard headers ===
+final_url=https://adrians-mind.vercel.app/dashboard http=307 redirect=https://adrians-mind.vercel.app/login?next=%2Fdashboard
+HTTP/2 307 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+date: Sat, 07 Nov 2026 03:46:54 GMT
+location: /login?next=%2Fdashboard
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::9dtrc-1794023214059-db0ce3025efc
+
+=== curl / follow redirects ===
+HTTP/2 307 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+date: Sat, 07 Nov 2026 03:46:54 GMT
+location: /login?next=%2Fdashboard
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::rgkkt-1794023214154-e1ea8b6a21dd
+
+HTTP/2 200 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: text/html; charset=utf-8
+date: Sat, 07 Nov 2026 03:46:54 GMT
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+=== HTML asset tip ===
+50:/assets/styles-BTes9Ayn.css
+62:/assets/routes-DJ6fWTpc.css
+72:/assets/index-qV1VC2j2.js
+76:/assets/react-DB-4Zxce.js
+80:/assets/actions-BG0IWsrI.js
+84:/assets/link-Lxx_zRdo.js
+88:/assets/route-BAhszpLd.js
+92:/assets/jsx-runtime-BtH0gOTJ.js
+96:/assets/routes-wC3KRy8L.js
+100:/assets/client-CJ-to4pt.js
+104:/assets/workspace-BJAXxp_0.js
+108:/assets/memory-saved-indicator-DIEJAYLn.js
+binary file matches (found "\0" byte around offset 40844)
+=== OAuth status sample ===
+github 401
+gmail 401
+google_calendar 401
+google_drive 401
+notion 401
+slack 401
+=== security headers on HTML ===
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-content-type-options: nosniff
+x-frame-options: DENY
