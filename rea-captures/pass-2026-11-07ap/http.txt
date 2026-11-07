@@ -1,0 +1,15 @@
+/ GET=200 redir= size=41255 HEAD=200
+/login GET=200 redir= size=11532 HEAD=200
+/dashboard GET=307 redir=https://adrians-mind.vercel.app/login?next=%2Fdashboard size=0 HEAD=307
+/memory GET=200 redir= size=3222 HEAD=200
+/explore GET=200 redir= size=3105 HEAD=200
+/tools GET=404 redir= size=3183 HEAD=404
+/voice GET=404 redir= size=3183 HEAD=404
+/chat GET=404 redir= size=3183 HEAD=404
+/activity GET=404 redir= size=3183 HEAD=404
+/api/mind/oauth/github/status GET=401 redir= size=43 HEAD=401
+/api/mind/oauth/gmail/status GET=401 redir= size=43 HEAD=401
+/api/mind/oauth/google_calendar/status GET=401 redir= size=43 HEAD=401
+/api/mind/oauth/google_drive/status GET=401 redir= size=43 HEAD=401
+/api/mind/oauth/notion/status GET=401 redir= size=43 HEAD=401
+/api/mind/oauth/slack/status GET=401 redir= size=43 HEAD=401
