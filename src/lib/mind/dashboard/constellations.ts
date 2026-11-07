@@ -159,8 +159,8 @@ export function buildForceLayout(
           (node.anchor[0] - node.position[0]) * 0.055,
           (node.anchor[1] - node.position[1]) * 0.055,
           (node.anchor[2] - node.position[2]) * 0.055,
-        ],
-      ]),
+        ] as Vec,
+      ] as const),
     );
 
     // Local repulsion prevents labels and hit targets from collapsing together.
@@ -219,7 +219,7 @@ export function buildForceLayout(
     }
   }
 
-  return new Map(nodes.map((node) => [node.id, [...node.position] as Vec]));
+  return new Map<DashboardBotId, Vec>(nodes.map((node) => [node.id, [...node.position] as Vec] as const));
 }
 
 export function systemWeather(bots: BotNode[]): { label: string; tone: Health; summary: string } {
