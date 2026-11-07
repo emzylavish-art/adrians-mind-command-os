@@ -259,6 +259,36 @@
 
 .dash3d-universe .dash3d-hud { display: none; }
 
+.dash3d-graph-chrome {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: flex-start;
+  pointer-events: none;
+}
+.dash3d-graph-chrome > * { pointer-events: auto; }
+.dash3d-graph-chrome-brand {
+  min-width: min(260px, 100%);
+  max-width: 340px;
+  padding: 0.65rem 0.8rem;
+}
+.dash3d-graph-chrome-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin-left: auto;
+}
+.dash3d-zoomout.is-on {
+  border-color: rgba(120, 166, 216, 0.7);
+  color: var(--dash3d-fg);
+}
+
 .dash3d-skybar {
   position: absolute;
   top: 0.85rem;
@@ -323,7 +353,7 @@
   border-radius: 16px;
   object-fit: cover;
   border: 1px solid rgba(255,255,255,0.14);
-  box-shadow: 0 0 18px rgba(124,92,255,0.25);
+  box-shadow: 0 0 18px rgba(120,166,216,0.22);
   margin: 0 0 0.5rem;
   background: rgba(8,12,28,0.8);
 }

@@ -67,6 +67,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
+  const [supportOpen, setSupportOpen] = useState(false);
   useEffect(() => {
     const sound = createHealthSound({ reducedMotion });
     soundRef.current = sound;
@@ -195,6 +196,54 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       data-health-filter={operatorPrefs.healthFilter}
       onPointerDownCapture={unlockSound}
     >
+      {state.status === "ready" ? (
+        <header className="dash3d-graph-chrome" data-testid="dash3d-graph-chrome">
+          <div className="dash3d-glass dash3d-graph-chrome-brand">
+            <p className="dash3d-muted" style={{ margin: 0, letterSpacing: "0.08em", fontSize: "0.68rem" }}>
+              ADRIAN&apos;S MIND
+            </p>
+            <h1 className="dash3d-title" style={{ margin: "0.1rem 0 0" }}>
+              Fleet 3D graph
+            </h1>
+            <p className="dash3d-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.72rem" }}>
+              Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search
+            </p>
+          </div>
+          <div className="dash3d-graph-chrome-tools">
+            <GraphFiltersPanel />
+            <button
+              type="button"
+              className="dash3d-glass dash3d-zoomout"
+              data-testid="operator-open"
+              onClick={() => setOperatorOpen(true)}
+            >
+              Search graph
+            </button>
+            <button
+              type="button"
+              className={`dash3d-glass dash3d-zoomout${supportOpen ? " is-on" : ""}`}
+              data-testid="support-panels-toggle"
+              aria-pressed={supportOpen}
+              onClick={() => setSupportOpen((v) => !v)}
+            >
+              {supportOpen ? "Hide support panels" : "Support panels"}
+            </button>
+            <button
+              type="button"
+              className="dash3d-glass dash3d-zoomout"
+              data-testid="zoom-sky"
+              onClick={() => {
+                unlockSound();
+                setSelected(null);
+                setNotionPage(null);
+                document.dispatchEvent(new CustomEvent("dash3d-sky"));
+              }}
+            >
+              Zoom to sky
+            </button>
+          </div>
+        </header>
+      ) : null}
       {state.status === "ready" && sceneData && !webglError && (!narrow || sceneInteract) ? (
         <UniverseScene
           data={sceneData}
@@ -269,9 +318,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
           onBack={clearPanelFocus}
         />
       ) : null}
-      {state.status === "ready" && !narrow ? <GraphFiltersPanel /> : null}
-
-      {state.status === "ready" ? (
+      {state.status === "ready" && supportOpen ? (
         <div className="dash3d-panel-stack" data-testid="dash3d-panel-stack">
         {sortHudCards([
           { id: "weather" as const, band: state.data.weather.tone === "blocked" || state.data.weather.tone === "stalled" ? "needs" as const : "status" as const, seq: 0, title: "System weather", summary: state.data.weather.label, col: "left" as const },
@@ -353,9 +400,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               {card.id === "controls" ? (
                 <div className="dash3d-flyhud-row">
                   {state.stale ? <p className="dash3d-muted" data-testid="status-stale">Status stale — showing last good data. {state.stale.error}</p> : null}
-                  <button type="button" className="dash3d-glass dash3d-zoomout" data-testid="operator-open" onClick={() => setOperatorOpen(true)}>Operator</button>
                   <button type="button" className="dash3d-glass dash3d-zoomout" data-testid="sound-mute" aria-pressed={soundMuted} onClick={() => { unlockSound(); const next = !soundMuted; soundRef.current?.setMuted(next); setSoundMuted(next); }}>{soundMuted ? "Sound muted" : "Sound on"}</button>
-                  <button type="button" className="dash3d-glass dash3d-zoomout" data-testid="zoom-sky" onClick={() => { unlockSound(); setSelected(null); setNotionPage(null); document.dispatchEvent(new CustomEvent("dash3d-sky")); }}>Zoom to sky</button>
                 </div>
               ) : null}
               {card.id === "flyhud" && !webglError ? <FlyoverHud fly={fly} layout={layoutForHud} /> : null}

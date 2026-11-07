@@ -411,6 +411,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       botVis.length = 0;
       botMeshes.length = 0;
       const positions = buildForceLayout(list, dataRef.current.constellationEdges);
+      const degree = new Map<string, number>();
+      for (const edge of dataRef.current.constellationEdges ?? []) {
+        degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1);
+        degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1);
+      }
       for (const bot of list) {
         const posArr = positions.get(bot.id) ?? ([0, 0, 0] as [number, number, number]);
         const pos = new THREE.Vector3(...posArr);
@@ -430,6 +435,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         });
         const mesh = new THREE.Mesh(sphereGeo, mat);
         mesh.position.copy(pos);
+        const scale = 0.85 + Math.min(1.4, (degree.get(bot.id) ?? 0) * 0.18);
+        mesh.scale.setScalar(scale);
         mesh.userData.botId = bot.id;
         botGroup.add(mesh);
         botMeshes.push(mesh);
@@ -455,24 +462,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             card.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
             card.userData.botId = bot.id;
             botGroup.add(card);
-            // Life-size billboard person/character in the constellation (reuses same Imagine portrait).
-            const personMat = new THREE.MeshBasicMaterial({
-              map: tex,
-              transparent: true,
-              depthWrite: false,
-              side: THREE.DoubleSide,
-              opacity: 0.9,
-            });
-            const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
-            person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
-            person.userData.botId = bot.id;
-            person.userData.kind = "character";
-            botGroup.add(person);
           },
           undefined,
           () => { /* no portrait asset yet */ },
         );
-        glow.scale.set(2.2, 2.2, 2.2);
+        glow.scale.set(1.6 * scale, 1.6 * scale, 1.6 * scale);
         glow.position.copy(pos);
         botGroup.add(glow);
 
@@ -492,37 +486,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
 
     // Shared scene characters / environments (real Imagine assets already in public/).
-    const sceneArts = [
-      { url: "/dashboard-3d/art/backdrop-nebula.webp", pos: new THREE.Vector3(-10, 4.5, -8), scale: [6.5, 3.8] as const },
-      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
-      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
-      { url: "/dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
-      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
-      { url: "/dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
-      { url: "/dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
-      { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
-    ];
-    for (const art of sceneArts) {
-      loader.load(
-        art.url,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          const mat = new THREE.MeshBasicMaterial({
-            map: tex,
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            opacity: 0.55,
-          });
-          const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
-          plane.position.copy(art.pos);
-          plane.userData.kind = "scene";
-          botGroup.add(plane);
-        },
-        undefined,
-        () => { /* missing art — keep procedural sky */ },
-      );
-    }
+    // Keep the canvas graph-first (Obsidian-style). Decorative scene planes stay out of the force graph.
 
     type FlowLine = { line: THREE.Line; seed: number; speed: number; baseOpacity: number };
     const flowLines: FlowLine[] = [];
