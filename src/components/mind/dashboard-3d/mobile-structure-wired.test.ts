@@ -15,26 +15,27 @@ describe("mobile structure wiring", () => {
     assert.match(app, /GraphFiltersPanel triggerOnly/);
     assert.match(app, /dash3d-panel-stack/);
     assert.match(app, /dash3d-plain-fallback/);
-    assert.match(app, /!narrow \|\| sceneInteract/);
+    assert.match(app, /!narrow \\|\\| sceneInteract/);
     assert.match(app, /data-hud-card/);
     assert.equal((app.match(/data-testid="scene-interact"/g) ?? []).length, 0);
     assert.match(readFileSync(join(here, "mobile-structure.tsx"), "utf8"), /data-testid="scene-interact"/);
     assert.match(readFileSync(join(here, "mobile-structure.tsx"), "utf8"), /Orbit off/);
   });
 
-  it("keeps the session gate on getSessionUser", () => {
+  it("makes the dashboard route public while retaining the session-gate implementation for protected flows", () => {
     const route = readFileSync(join(here, "../../../routes/dashboard.tsx"), "utf8");
     const gate = readFileSync(join(here, "../../../lib/mind/dashboard/require-dashboard-user.ts"), "utf8");
+    assert.doesNotMatch(route, /requireDashboardUser/);
+    assert.match(route, /Public read-only dashboard/);
     assert.match(gate, /getSessionUser/);
     assert.equal(gate.includes("requireUserId"), false);
-    assert.match(route, /requireDashboardUser/);
   });
 
-  it("css stacks cards, parks orbit, and stays on the purple accent", () => {
+  it("css stacks cards, parks orbit, and uses the approved restrained accent", () => {
     const css = readFileSync(join(here, "dashboard-3d.css"), "utf8");
-    assert.match(css, /@media \(max-width: 720px\)/);
+    assert.match(css, /@media \\(max-width: 720px\\)/);
     assert.match(css, /dash3d-mobile-card/);
-    assert.match(css, /touch-action:\s*pan-y pinch-zoom/);
+    assert.match(css, /touch-action:\\s*pan-y pinch-zoom/);
     assert.match(css, /data-scene-interact="1"/);
     assert.match(css, /100dvh/);
     assert.match(css, /safe-area-inset/);
