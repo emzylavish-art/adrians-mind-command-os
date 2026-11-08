@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity, ArrowDownRight, ArrowUpRight, Bell, CalendarDays, Check,
   ChevronDown, CircleHelp, Clapperboard, Command, Download, ExternalLink,
@@ -56,7 +56,7 @@ function MetricCard({ label, value, change, icon: Icon, detail }: { label: strin
   </div>;
 }
 
-function Panel({ title, subtitle, children, action }: { title: string; subtitle?: string; children: React.ReactNode; action?: React.ReactNode }) {
+function Panel({ title, subtitle, children, action }: { title: string; subtitle?: string; children: ReactNode; action?: React.ReactNode }) {
   return <section className="rounded-2xl border border-white/[0.08] bg-[#101722] p-5">
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-white">{title}</h2>{subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}</div>{action}</div>
     {children}
@@ -69,15 +69,45 @@ export function YouTubeCommandCenter() {
   const [search, setSearch] = useState("");
   const [showConnect, setShowConnect] = useState(false);
   const [notice, setNotice] = useState("");
+  const [liveData, setLiveData] = useState<any>(null);
+  const [connectionState, setConnectionState] = useState<"checking" | "connected" | "not_connected" | "not_signed_in">("checking");
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const statusResponse = await fetch("/api/mind/oauth/youtube/status", { credentials: "include", cache: "no-store" });
+        const status = await statusResponse.json().catch(() => null);
+        if (!active) return;
+        if (!statusResponse.ok) { setConnectionState("not_signed_in"); return; }
+        if (status?.state !== "connected") { setConnectionState("not_connected"); return; }
+        setConnectionState("connected");
+        const overviewResponse = await fetch("/api/mind/youtube/overview?days=28", { credentials: "include", cache: "no-store" });
+        const overview = await overviewResponse.json().catch(() => null);
+        if (active && overviewResponse.ok && overview?.ok) setLiveData(overview);
+      } catch {
+        if (active) setConnectionState("not_connected");
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, []);
+  const liveRows: unknown[][] = liveData?.analytics?.rows || [];
+  const liveColumns: string[] = liveData?.analytics?.columns || [];
+  const metric = (name: string) => {
+    const index = liveColumns.indexOf(name);
+    if (index < 0) return 0;
+    return liveRows.reduce((sum, row) => sum + Number(row[index] || 0), 0);
+  };
+  const fmt = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const connectYouTube = () => { window.location.assign("/api/mind/oauth/youtube/start"); };
   const filteredVideos = useMemo(() => videos.filter(v => v.title.toLowerCase().includes(search.toLowerCase())), [search]);
-  const activeNav = nav.find(n => n.label === section);
   const select = (s: Section) => { setSection(s); setNotice(""); };
 
   return <div className="min-h-screen bg-[#080d14] text-slate-100">
     <div className="flex min-h-screen">
       <aside className="hidden w-[248px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0b111a] px-4 py-5 lg:flex">
         <div className="flex items-center gap-3 px-2"><span className="grid h-10 w-10 place-items-center rounded-xl bg-red-600 text-white"><Youtube size={22}/></span><div><div className="text-sm font-bold tracking-wide text-white">CHANNEL OS</div><div className="text-[10px] uppercase tracking-[.2em] text-slate-500">Creator command center</div></div></div>
-        <div className="mt-8 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400"/><span className="text-xs font-semibold text-slate-300">Channel not connected</span></div><p className="mt-2 text-[11px] leading-relaxed text-slate-500">Connect YouTube to replace sample metrics with your channel data.</p><button onClick={() => {select("Integrations");setShowConnect(true)}} className="mt-3 w-full rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950">Connect channel</button></div>
+        <div className="mt-8 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400"/><span className="text-xs font-semibold text-slate-300">Channel not connected</span></div><p className="mt-2 text-[11px] leading-relaxed text-slate-500">Connect YouTube to replace sample metrics with your channel data.</p><button onClick={connectYouTube} className="mt-3 w-full rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950">Connect channel</button></div>
         <div className="mt-7 px-2 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">Workspace</div>
         <nav className="mt-3 space-y-1">{nav.map(({label,icon:Icon}) => <button key={label} onClick={() => select(label)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${section===label ? "bg-white/[0.09] font-semibold text-white ring-1 ring-white/[0.08]" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"}`}><Icon size={17}/>{label}</button>)}</nav>
         <div className="mt-7 px-2 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">System</div>
@@ -87,7 +117,7 @@ export function YouTubeCommandCenter() {
       <main className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] bg-[#080d14]/90 px-4 py-3 backdrop-blur-xl sm:px-7">
           <div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-red-600 text-white lg:hidden"><Youtube size={19}/></div><div><div className="text-xs text-slate-500">Adrian's Mind / YouTube</div><div className="text-sm font-semibold text-white">{section}</div></div></div>
-          <div className="flex items-center gap-2"><button onClick={()=>setNotice("Live refresh becomes available after the channel is connected.")} className="hidden items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:text-white sm:flex"><RefreshCw size={13}/> Refresh</button><button onClick={()=>select("Integrations")} className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500"><Youtube size={14}/> Connect YouTube</button><button aria-label="Notifications" className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-slate-400"><Bell size={16}/></button></div>
+          <div className="flex items-center gap-2"><button onClick={()=>setNotice("Live refresh becomes available after the channel is connected.")} className="hidden items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:text-white sm:flex"><RefreshCw size={13}/> Refresh</button><button onClick={connectYouTube} className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500"><Youtube size={14}/> Connect YouTube</button><button aria-label="Notifications" className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-slate-400"><Bell size={16}/></button></div>
         </header>
         <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6 sm:px-7 sm:py-8">
           <div className="flex flex-wrap items-end justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-red-400"><span className="h-1.5 w-1.5 rounded-full bg-red-500"/> YouTube channel workspace</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{section === "Overview" ? "Your channel, at a glance." : section}</h1><p className="mt-2 max-w-2xl text-sm text-slate-400">{section === "Overview" ? "A unified view of channel performance, content health, audience and monetization." : "Manage and understand your YouTube channel from one workspace."}</p></div><div className="flex items-center gap-2"><select value={period} onChange={e=>setPeriod(e.target.value)} className="rounded-lg border border-white/10 bg-[#101722] px-3 py-2.5 text-xs text-slate-300 outline-none"><option>Last 7 days</option><option>Last 28 days</option><option>Last 90 days</option><option>Last 365 days</option></select><button onClick={()=>setNotice("Reports will use live channel data after YouTube is connected.")} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2.5 text-xs text-slate-300 hover:bg-white/5"><Download size={14}/> Export</button></div></div>
@@ -97,10 +127,10 @@ export function YouTubeCommandCenter() {
 
           {section==="Overview" && <>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label="Views" value="443.8K" change="+18.6%" icon={Eye} detail="Compared with previous period"/>
-              <MetricCard label="Watch time" value="42.6K hrs" change="+12.4%" icon={Watch} detail="Hours of viewing time"/>
-              <MetricCard label="Subscribers" value="28,492" change="+6.8%" icon={Users} detail="+1,824 net subscribers"/>
-              <MetricCard label="Estimated revenue" value="$2,846.20" change="+9.2%" icon={Wallet} detail="Estimated, not finalized"/>
+              <MetricCard label="Views" value={liveData ? fmt(metric("views")) : "443.8K"} change={liveData ? "Live" : "+18.6%"} icon={Eye} detail={liveData ? "YouTube Analytics · last 28 days" : "Demonstration data"}/>
+              <MetricCard label="Watch time" value={liveData ? (metric("estimatedMinutesWatched")/60).toLocaleString("en-US",{maximumFractionDigits:1})+" hrs" : "42.6K hrs"} change={liveData ? "Live" : "+12.4%"} icon={Watch} detail={liveData ? "Hours watched in last 28 days" : "Demonstration data"}/>
+              <MetricCard label="Subscribers" value={liveData ? fmt(liveData.channel.subscribers) : "28,492"} change={liveData ? "+"+fmt(metric("subscribersGained")-metric("subscribersLost"))+" net" : "+6.8%"} icon={Users} detail={liveData ? "Current channel subscribers" : "Demonstration data"}/>
+              <MetricCard label="Estimated revenue" value={liveData?.revenueAvailable ? money(liveData.revenue) : "Unavailable"} change={liveData?.revenueAvailable ? "Live" : "—"} icon={Wallet} detail={liveData?.revenueAvailable ? "YouTube Analytics estimate" : "Not available for this account"}/>
             </div>
             <div className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
               <Panel title="Channel performance" subtitle={`Views and subscriber growth · ${period}`} action={<span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-slate-400">DEMO</span>}>
@@ -141,7 +171,7 @@ export function YouTubeCommandCenter() {
 
           {section==="Reports" && <Panel title="Channel reports" subtitle="Report templates ready for live channel data"><div className="grid gap-3 md:grid-cols-2">{[{n:"Weekly channel report",d:"Views, subscribers, watch time and top content"},{n:"Video performance report",d:"Compare published videos and engagement"},{n:"Audience report",d:"Viewer segments and geography where available"},{n:"Monetization report",d:"Revenue and RPM where channel eligibility allows"}].map(x=><div key={x.n} className="rounded-xl border border-white/[0.07] p-4"><FileText size={18} className="text-slate-400"/><p className="mt-3 text-sm font-semibold text-slate-200">{x.n}</p><p className="mt-1 text-xs text-slate-500">{x.d}</p><button onClick={()=>setNotice("Report export will be enabled when the channel's live data is connected.")} className="mt-4 text-xs text-red-400">Prepare report →</button></div>)}</div></Panel>}
 
-          {section==="Integrations" && <div className="grid gap-5 xl:grid-cols-[1.1fr_1fr]"><Panel title="Connect your YouTube channel" subtitle="Authorize securely with Google"><div className="flex items-start gap-4 rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-red-600 text-white"><Youtube size={26}/></span><div className="min-w-0 flex-1"><p className="font-semibold text-white">YouTube</p><p className="mt-1 text-xs leading-relaxed text-slate-400">Connect the Google account that manages your channel. Authorization will grant only the requested YouTube permissions.</p><span className="mt-3 inline-flex rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] text-amber-200">Not connected</span></div></div><div className="mt-4 space-y-2 text-xs text-slate-400"><p className="flex items-center gap-2"><Check size={13} className="text-emerald-400"/> Read channel and video information</p><p className="flex items-center gap-2"><Check size={13} className="text-emerald-400"/> Retrieve channel analytics where authorized</p><p className="flex items-center gap-2"><Check size={13} className="text-emerald-400"/> Manage comments and uploads only with explicit scopes</p></div><button onClick={()=>setShowConnect(v=>!v)} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white hover:bg-red-500"><Youtube size={17}/> {showConnect?"Connection setup details":"Continue with Google"}</button>{showConnect&&<div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-3 text-xs leading-relaxed text-amber-100/80">The production OAuth callback and Google consent configuration must be completed before this button can initiate a secure account connection. No Google password should be entered into this dashboard.</div>}</Panel><Panel title="Connection architecture" subtitle="Production integration status"><div className="space-y-4">{[{n:"Google OAuth client",s:"Credentials detected in project environment"},{n:"OAuth callback",s:"YouTube-specific callback not yet verified"},{n:"YouTube Data API v3",s:"Not yet verified"},{n:"YouTube Analytics API",s:"Not yet verified"},{n:"Encrypted token storage",s:"Requires account connection test"},{n:"Channel data sync",s:"Waiting for authorization"}].map(x=><div key={x.n} className="flex items-start justify-between gap-3 border-b border-white/[0.06] pb-3 last:border-0"><div><p className="text-xs font-semibold text-slate-200">{x.n}</p><p className="mt-1 text-[11px] text-slate-500">{x.s}</p></div><span className="h-2 w-2 shrink-0 rounded-full bg-amber-400"/></div>)}</div></Panel></div>}
+          {section==="Integrations" && <div className="grid gap-5 xl:grid-cols-[1.1fr_1fr]"><Panel title="Connect your YouTube channel" subtitle="Authorize securely with Google"><div className="flex items-start gap-4 rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-red-600 text-white"><Youtube size={26}/></span><div className="min-w-0 flex-1"><p className="font-semibold text-white">YouTube</p><p className="mt-1 text-xs leading-relaxed text-slate-400">Connect the Google account that manages your channel. Authorization will grant only the requested YouTube permissions.</p><span className="mt-3 inline-flex rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] text-amber-200">Not connected</span></div></div><div className="mt-4 space-y-2 text-xs text-slate-400"><p className="flex items-center gap-2"><Check size={13} className="text-emerald-400"/> Read channel and video information</p><p className="flex items-center gap-2"><Check size={13} className="text-emerald-400"/> Retrieve channel analytics where authorized</p><p className="flex items-center gap-2"><Check size={13} className="text-emerald-400"/> Manage comments and uploads only with explicit scopes</p></div><button onClick={connectYouTube} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white hover:bg-red-500"><Youtube size={17}/> Continue with Google</button>{showConnect&&<div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-3 text-xs leading-relaxed text-amber-100/80">The production OAuth callback and Google consent configuration must be completed before this button can initiate a secure account connection. No Google password should be entered into this dashboard.</div>}</Panel><Panel title="Connection architecture" subtitle="Production integration status"><div className="space-y-4">{[{n:"Google OAuth client",s:"Credentials detected in project environment"},{n:"OAuth callback",s:"YouTube-specific callback not yet verified"},{n:"YouTube Data API v3",s:"Not yet verified"},{n:"YouTube Analytics API",s:"Not yet verified"},{n:"Encrypted token storage",s:"Requires account connection test"},{n:"Channel data sync",s:"Waiting for authorization"}].map(x=><div key={x.n} className="flex items-start justify-between gap-3 border-b border-white/[0.06] pb-3 last:border-0"><div><p className="text-xs font-semibold text-slate-200">{x.n}</p><p className="mt-1 text-[11px] text-slate-500">{x.s}</p></div><span className="h-2 w-2 shrink-0 rounded-full bg-amber-400"/></div>)}</div></Panel></div>}
 
           {section==="Settings" && <Panel title="Workspace settings" subtitle="Channel preferences and security"><div className="max-w-2xl space-y-4">{[{n:"Workspace name",v:"Adrian's Mind — YouTube"},{n:"Default reporting period",v:period},{n:"Timezone",v:"Use channel or account timezone"},{n:"Data privacy",v:"Private — authorized account only"}].map(x=><div key={x.n} className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3"><span className="text-xs text-slate-400">{x.n}</span><span className="text-xs text-slate-200">{x.v}</span></div>)}<p className="text-xs leading-relaxed text-slate-500">Sensitive channel data must be protected behind authenticated sessions. Public visitors must never receive private analytics, OAuth tokens, or channel-management permissions.</p></div></Panel>}
 
