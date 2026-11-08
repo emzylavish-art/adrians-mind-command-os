@@ -1,13 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardPage } from "@/components/mind/dashboard-3d/dashboard-page";
-import { requireDashboardUser } from "@/lib/mind/dashboard/require-dashboard-user";
 
 /**
- * Universe dashboard. A Better Auth or Supabase session may enter.
- * No session goes to sign-in. The check runs in a server function.
+ * Public read-only dashboard. The dashboard status endpoint intentionally
+ * exposes the same read-only operational snapshot without requiring a login.
+ * Mutating APIs and operator actions retain their own authentication checks.
  */
 export const Route = createFileRoute("/dashboard")({
-  beforeLoad: async () => ({ access: await requireDashboardUser() }),
   component: DashboardPage,
   head: () => ({
     meta: [

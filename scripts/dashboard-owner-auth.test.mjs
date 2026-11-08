@@ -1,11 +1,18 @@
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { describe,it } from 'node:test';
-const owner=readFileSync('src/lib/mind/dashboard/owner.server.ts','utf8');
-const page=readFileSync('src/lib/mind/dashboard/require-dashboard-user.ts','utf8');
-const api=readFileSync('src/routes/api/mind/dashboard/status.ts','utf8');
-describe('owner auth source contract',()=>{
- it('uses private env and fails closed',()=>{assert.match(owner,/process\.env\.MIND_OWNER_USER_ID/);assert.match(owner,/userId === configuredOwnerId\.trim\(\)/);assert.match(owner,/configuredOwnerId\.trim\(\)\.length === 0/);assert.doesNotMatch(owner,/email|VITE_|fallback/i)});
- it('preserves signin redirect and gates the page',()=>{assert.ok(page.indexOf('if (!user)')<page.indexOf('isMindOwnerId(user.id)'));assert.ok(page.indexOf('isMindOwnerId(user.id)')<page.indexOf('return { forbidden: false, sessionUser'));assert.match(page,/return \{ forbidden: true \}/)});
- it('gates status before builder and no-store',()=>{assert.ok(api.indexOf('requireUserId(bearer)')<api.indexOf('isMindOwnerId(userId)'));assert.ok(api.indexOf('isMindOwnerId(userId)')<api.indexOf('buildDashboardStatus()'));assert.match(api,/json\(\{ ok: false, error: "Forbidden\." \}, 403\)/);assert.match(api,/"cache-control": "no-store"/)})
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { describe, it } from "node:test";
+const page = readFileSync("src/routes/dashboard.tsx", "utf8");
+const component = readFileSync("src/components/mind/dashboard-3d/dashboard-page.tsx", "utf8");
+const api = readFileSync("src/routes/api/mind/dashboard/status.ts", "utf8");
+describe("public read-only dashboard contract", () => {
+  it("does not gate the dashboard page on owner identity or login", () => {
+    assert.doesNotMatch(page, /requireDashboardUser|beforeLoad/);
+    assert.doesNotMatch(component, /Access denied|forbidden/);
+    assert.match(component, /DashboardApp/);
+  });
+  it("serves a public read-only status snapshot with no-store headers", () => {
+    assert.doesNotMatch(api, /requireUserId|isMindOwnerId|authorization/);
+    assert.match(api, /buildDashboardStatus\(\)/);
+    assert.match(api, /"cache-control": "no-store"/);
+  });
 });
