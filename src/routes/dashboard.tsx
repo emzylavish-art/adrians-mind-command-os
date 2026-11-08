@@ -1,17 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DashboardPage } from "@/components/mind/dashboard-3d/dashboard-page";
+import { YouTubeCommandCenter } from "@/components/mind/youtube/youtube-command-center";
 
 /**
- * Public read-only dashboard. The dashboard status endpoint intentionally
- * exposes the same read-only operational snapshot without requiring a login.
- * Mutating APIs and operator actions retain their own authentication checks.
+ * Primary production experience: YouTube Channel Command Center.
+ * Channel metrics remain explicitly marked as demonstration data until OAuth
+ * and YouTube API access have been completed for the channel owner.
  */
 export const Route = createFileRoute("/dashboard")({
-  component: DashboardPage,
+  component: YouTubeCommandCenter,
   head: () => ({
     meta: [
-      { title: "Adrian's Mind · 3D Graph Dashboard" },
-      { name: "theme-color", content: "#05070d" },
+      { title: "Adrian's Mind · YouTube Channel Command Center" },
+      { name: "theme-color", content: "#080d14" },
+      { name: "description", content: "YouTube channel analytics and creator command center." },
     ],
   }),
 });
