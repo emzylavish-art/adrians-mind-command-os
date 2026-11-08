@@ -220,6 +220,43 @@ const githubProvider: OAuthProvider = {
     "GitHub OAuth is not configured. Set GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET, and GITHUB_OAUTH_REDIRECT_URI. Nothing was started.",
 };
 
+
+const youtubeProvider: OAuthProvider = {
+  id: "youtube",
+  displayName: "YouTube",
+  envKeys: {
+    clientId: "GOOGLE_OAUTH_CLIENT_ID",
+    clientSecret: "GOOGLE_OAUTH_CLIENT_SECRET",
+    redirectUri: "GOOGLE_OAUTH_YOUTUBE_REDIRECT_URI",
+    authorizeUrl: "GOOGLE_OAUTH_AUTHORIZE_URL",
+    tokenUrl: "GOOGLE_OAUTH_TOKEN_URL",
+    revokeUrl: "GOOGLE_OAUTH_REVOKE_URL",
+  },
+  defaults: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    revokeUrl: "https://oauth2.googleapis.com/revoke",
+  },
+  scopes: [
+    "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+  ],
+  pkce: true,
+  tokenAuth: "body",
+  revokeStyle: "form_token",
+  authorizeExtra: {
+    access_type: "offline",
+    prompt: "consent",
+    include_granted_scopes: "true",
+  },
+  readEnv: (env = process.env) => googleBaseEnv(env, "GOOGLE_OAUTH_YOUTUBE_REDIRECT_URI"),
+  parseAccount: parseGoogleAccount,
+  notConfiguredDetail:
+    "YouTube OAuth is not configured. Set GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_YOUTUBE_REDIRECT_URI. Nothing was started.",
+};
+
 const notionProvider: OAuthProvider = {
   id: "notion",
   displayName: "Notion",
@@ -262,6 +299,7 @@ const notionProvider: OAuthProvider = {
 
 export const OAUTH_PROVIDERS: Record<ConnectorId, OAuthProvider> = {
   notion: notionProvider,
+  youtube: youtubeProvider,
   gmail: gmailProvider,
   google_calendar: googleCalendarProvider,
   google_drive: googleDriveProvider,
@@ -272,6 +310,7 @@ export const OAUTH_PROVIDERS: Record<ConnectorId, OAuthProvider> = {
 /** Connectors served by the dynamic /api/mind/oauth/$connector/* routes (Notion keeps dedicated routes). */
 export const DYNAMIC_OAUTH_CONNECTORS = [
   "gmail",
+  "youtube",
   "google_calendar",
   "google_drive",
   "slack",
