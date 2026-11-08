@@ -1,18 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { YouTubeCommandCenter } from "@/components/mind/youtube/youtube-command-center";
+import { AgentCommandCenter } from "@/components/mind/agent-command-center";
 
-/**
- * Primary production experience: YouTube Channel Command Center.
- * Channel metrics remain explicitly marked as demonstration data until OAuth
- * and YouTube API access have been completed for the channel owner.
- */
+/** Agent-first operational dashboard inspired by modern creator analytics layouts. */
 export const Route = createFileRoute("/dashboard")({
-  component: YouTubeCommandCenter,
+  component: AgentCommandCenter,
   head: () => ({
     meta: [
-      { title: "Adrian's Mind · YouTube Channel Command Center" },
+      { title: "Adrian's Mind · Agent Command Center" },
       { name: "theme-color", content: "#080d14" },
-      { name: "description", content: "YouTube channel analytics and creator command center." },
+      { name: "description", content: "Live AI agent fleet, task queue, execution timeline, and system health." },
     ],
   }),
 });
