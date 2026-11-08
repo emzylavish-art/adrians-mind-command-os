@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "src/components/mind/dashboard-3d/**"
+      - "src/components/mind/youtube/**"
+      - "src/lib/mind/connectors/**"
+      - "src/routes/api/mind/youtube/**"
+      - "src/routes/dashboard.tsx"
       - "src/lib/mind/dashboard/**"
       - "package.json"
       - "package-lock.json"
