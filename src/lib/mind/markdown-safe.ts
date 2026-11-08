@@ -34,6 +34,7 @@ export function safeHref(raw: string): string | null {
   if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) && !/^(https?:|mailto:|tel:)/i.test(normalized)) {
     return null;
   }
+  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(href)) return null;
   return href;
 }

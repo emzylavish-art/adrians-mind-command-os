@@ -135,7 +135,9 @@ async function main() {
     const timer = setTimeout(() => {
       try {
         ws.close();
-      } catch {}
+      } catch {
+        // Best-effort socket cleanup after the timeout path.
+      }
       reject(new Error("live-roundtrip timed out"));
     }, 60_000);
 
@@ -262,7 +264,9 @@ async function main() {
           clearTimeout(timer);
           try {
             ws.close();
-          } catch {}
+          } catch {
+            // The socket may already be closed after the barge-in probe.
+          }
           resolve();
         }
       }
@@ -281,7 +285,9 @@ async function main() {
     const timer = setTimeout(() => {
       try {
         ws.close();
-      } catch {}
+      } catch {
+        // Closing an already-closed probe socket is harmless.
+      }
       reject(new Error("ephemeral WS connect timed out"));
     }, 15_000);
     ws.on("open", () => {
@@ -306,7 +312,7 @@ async function main() {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       const timer = setTimeout(() => {
-        try { ws.close(); } catch {}
+        try { ws.close(); } catch { /* already closed */ }
         reject(new Error("image-input probe timed out"));
       }, 20_000);
       const tinyJpeg =
@@ -350,7 +356,7 @@ async function main() {
             metrics.imageInput.note ||
             "Realtime accepted the event envelope but native image understanding is unsupported; UI uses chat/vision fallback.";
           clearTimeout(timer);
-          try { ws.close(); } catch {}
+          try { ws.close(); } catch { /* already closed */ }
           resolve();
         }
       });

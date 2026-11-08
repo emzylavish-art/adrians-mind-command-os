@@ -49,7 +49,7 @@ function BannerHost(props: { banner: Banner; onDismiss: () => void }) {
 function harness(deps: SpeakMountedInput["deps"]) {
   let generation = 0;
   let banner: Banner = null;
-  let attempts: SpeakRetryParams[] = [];
+  const attempts: SpeakRetryParams[] = [];
   const reportFailure: SpeakMountedInput["reportFailure"] = (message, action, _target, retry) => {
     banner = { message, kind: action, retry: onceRetry(retry) };
   };

@@ -26,7 +26,9 @@ export function isSafeImageSrc(value: unknown): value is string {
 /** Strip HTML/control characters from filenames and alt text shown in UI. */
 export function sanitizeMediaLabel(value: unknown, max = 120): string | undefined {
   if (typeof value !== "string") return undefined;
+  // eslint-disable-next-line no-control-regex
   const cleaned = value
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]/g, "")
     .replace(/[<>`"']/g, "")
     .replace(/\s+/g, " ")
@@ -38,6 +40,7 @@ export function sanitizeMediaLabel(value: unknown, max = 120): string | undefine
 /** Normalize Imagine prompts: strip nulls, cap length, keep Unicode. */
 export function sanitizeImaginePrompt(raw: unknown, max = 4000): { ok: true; prompt: string } | { ok: false; error: string } {
   if (typeof raw !== "string") return { ok: false, error: "Write a prompt for Imagine." };
+  // eslint-disable-next-line no-control-regex
   const prompt = raw.replace(/\u0000/g, "").normalize("NFC").trim();
   if (!prompt) return { ok: false, error: "Write a prompt for Imagine." };
   if (prompt.length > max) return { ok: false, error: `That Imagine prompt is too long (max ${max} characters).` };

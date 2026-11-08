@@ -48,7 +48,7 @@ export function sanitizeAudioFilename(filename: unknown, mimeFallback: string): 
   const fallback = `dictation.${extFromMime}`;
   if (typeof filename !== "string" || !filename.trim()) return fallback;
   const base = filename.replace(/\\/g, "/").split("/").pop() || fallback;
-  const cleaned = base.replace(/[^\w.\-]+/g, "_").replace(/^\.+/, "").slice(0, MAX_FILENAME_CHARS);
+  const cleaned = base.replace(/[^\w.-]+/g, "_").replace(/^\.+/, "").slice(0, MAX_FILENAME_CHARS);
   if (!cleaned || cleaned === "." || cleaned === "..") return fallback;
   if (!/\.\w{1,8}$/.test(cleaned)) return `${cleaned}.${extFromMime}`.slice(0, MAX_FILENAME_CHARS);
   return cleaned;

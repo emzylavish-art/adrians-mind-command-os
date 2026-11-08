@@ -24,7 +24,7 @@ describe("barge-in cutoff state machine", () => {
   });
 
   it("ignores speech_started during echo-guard (TTS must not barge itself)", () => {
-    let state = reduceBargeIn(createBargeInState(), { type: "session_speaking" });
+    const state = reduceBargeIn(createBargeInState(), { type: "session_speaking" });
     assert.equal(isInEchoGuard(state), true);
     const next = reduceBargeIn(state, { type: "speech_started" });
     assert.equal(next.phase, "speaking");
@@ -82,7 +82,7 @@ describe("barge-in cutoff state machine", () => {
   });
 
   it("does not cut on speech_started while already listening", () => {
-    let state = reduceBargeIn(createBargeInState(), { type: "session_listening" });
+    const state = reduceBargeIn(createBargeInState(), { type: "session_listening" });
     const next = reduceBargeIn(state, { type: "speech_started" });
     assert.equal(next.phase, "listening");
     assert.equal(shouldCutPlayback(state, next), false);

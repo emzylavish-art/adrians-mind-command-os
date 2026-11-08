@@ -37,7 +37,9 @@ try {
       try {
         localStorage.removeItem("amcos.workspace.v1");
         localStorage.removeItem("amcos.chats.v1");
-      } catch {}
+      } catch {
+        // Storage may be unavailable in a smoke run; reload still verifies the empty state.
+      }
     });
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForTimeout(500);
