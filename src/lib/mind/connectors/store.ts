@@ -107,6 +107,12 @@ export function getAccessToken(ownerId: string, connector: ConnectorId): string 
   return decryptSecret(conn.accessTokenEnc);
 }
 
+export function getRefreshToken(ownerId: string, connector: ConnectorId): string | null {
+  const conn = readConnection(ownerId, connector);
+  if (!conn?.refreshTokenEnc) return null;
+  return decryptSecret(conn.refreshTokenEnc);
+}
+
 export function storeAccessToken(input: {
   ownerId: string;
   connector: ConnectorId;
@@ -120,7 +126,12 @@ export function storeAccessToken(input: {
   scopes?: string;
 }): StoredConnection {
   const access = encryptSecret(input.accessToken);
-  const refresh = input.refreshToken ? encryptSecret(input.refreshToken) : undefined;
+  const previous = readConnection(input.ownerId, input.connector);
+  const refresh = input.refreshToken
+    ? encryptSecret(input.refreshToken)
+    : previous?.refreshTokenEnc
+      ? { ciphertext: previous.refreshTokenEnc }
+      : undefined;
   const conn: StoredConnection = {
     connector: input.connector,
     ownerId: input.ownerId,
