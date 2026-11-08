@@ -15,7 +15,7 @@ describe("mobile structure wiring", () => {
     assert.match(app, /GraphFiltersPanel triggerOnly/);
     assert.match(app, /dash3d-panel-stack/);
     assert.match(app, /dash3d-plain-fallback/);
-    assert.match(app, /!narrow \\|\\| sceneInteract/);
+    assert.ok(app.includes("!narrow || sceneInteract"));
     assert.match(app, /data-hud-card/);
     assert.equal((app.match(/data-testid="scene-interact"/g) ?? []).length, 0);
     assert.match(readFileSync(join(here, "mobile-structure.tsx"), "utf8"), /data-testid="scene-interact"/);
@@ -33,9 +33,9 @@ describe("mobile structure wiring", () => {
 
   it("css stacks cards, parks orbit, and uses the approved restrained accent", () => {
     const css = readFileSync(join(here, "dashboard-3d.css"), "utf8");
-    assert.match(css, /@media \\(max-width: 720px\\)/);
+    assert.match(css, /@media \(max-width: 720px\)/);
     assert.match(css, /dash3d-mobile-card/);
-    assert.match(css, /touch-action:\\s*pan-y pinch-zoom/);
+    assert.match(css, /touch-action:\s*pan-y pinch-zoom/);
     assert.match(css, /data-scene-interact="1"/);
     assert.match(css, /100dvh/);
     assert.match(css, /safe-area-inset/);
