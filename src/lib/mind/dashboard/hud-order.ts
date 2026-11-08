@@ -14,5 +14,7 @@ export function sortHudCards<T extends HudOrderItem>(items: readonly T[]): T[] {
 }
 
 export function hudDefaultOpen(index: number): boolean {
-  return index < 2;
+  // Graph canvas is the primary experience; supporting cards stay collapsed until opened.
+  void index;
+  return false;
 }

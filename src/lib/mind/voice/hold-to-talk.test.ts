@@ -127,7 +127,10 @@ describe("hold-to-talk Space", () => {
     assert.equal(heldLongEnough(0, HOLD_TO_TALK_TAP_THRESHOLD_MS), true);
   });
 
-  it("controller starts after threshold, cancels on release even before listening, stops on blur", async () => {
+  it("controller starts after threshold, cancels on release even before listening, stops on blur", (t) => {
+    // Keep the timer and elapsed-time clock synchronized; real sleeps can race
+    // Date.now() rounding when the threshold callback fires on a busy runner.
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
     let listening = false;
     const log: string[] = [];
     const ctl = createHoldToTalkController({
@@ -143,9 +146,12 @@ describe("hold-to-talk Space", () => {
       thresholdMs: 30,
       getDocument: () => ({ querySelector: () => null }),
     });
+    t.after(() => ctl.dispose());
     const target = el({ tagName: "DIV" });
     ctl.onKeyDown({ key: " ", repeat: false, target, preventDefault() {} } as unknown as KeyboardEvent);
-    await new Promise((r) => setTimeout(r, 120));
+    t.mock.timers.tick(29);
+    assert.deepEqual(log, []);
+    t.mock.timers.tick(1);
     assert.deepEqual(log, ["start"]);
     // Release always stops after a real hold (cancels in-flight mint path).
     ctl.onKeyUp({ key: " ", preventDefault() {} } as unknown as KeyboardEvent);
@@ -154,7 +160,7 @@ describe("hold-to-talk Space", () => {
     log.length = 0;
     listening = false;
     ctl.onKeyDown({ key: " ", repeat: false, target, preventDefault() {} } as unknown as KeyboardEvent);
-    await new Promise((r) => setTimeout(r, 120));
+    t.mock.timers.tick(30);
     ctl.onBlurOrHide();
     assert.deepEqual(log, ["start", "stop"]);
   });

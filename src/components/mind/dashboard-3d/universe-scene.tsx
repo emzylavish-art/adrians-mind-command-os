@@ -19,7 +19,7 @@ import { africaLagosHour } from "@/lib/mind/dashboard/wat-clock";
 import { cullLabelIds } from "@/lib/mind/dashboard/label-cull";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
-import { botWorldPosition } from "@/lib/mind/dashboard/constellations";
+import { buildForceLayout } from "@/lib/mind/dashboard/constellations";
 import { pageStarPositions } from "@/lib/mind/dashboard/notion-graph-core";
 import {
   rebuildLandingPaths,
@@ -167,7 +167,7 @@ function makeNebulaTexture(seed = 1) {
   const c = document.createElement("canvas");
   c.width = size; c.height = size;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = "#050814";
+  ctx.fillStyle = "#05070d";
   ctx.fillRect(0,0,size,size);
   const rand = (n: number) => {
     const x = Math.sin(n * 12.9898 + seed * 78.233) * 43758.5453;
@@ -176,15 +176,11 @@ function makeNebulaTexture(seed = 1) {
   for (let i = 0; i < 40; i++) {
     const x = rand(i) * size;
     const y = rand(i + 40) * size;
-    const r = 40 + rand(i + 80) * 120;
-    const hue = 220 + rand(i + 120) * 80;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, `hsla(${hue},70%,55%,0.28)`);
-    g.addColorStop(0.5, `hsla(${hue + 30},60%,40%,0.12)`);
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
+    const radius = 0.35 + rand(i + 80) * 1.1;
+    const alpha = 0.035 + rand(i + 120) * 0.055;
+    ctx.fillStyle = `rgba(120,166,216,${alpha.toFixed(3)})`;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
   }
   // paper grain
@@ -208,10 +204,7 @@ function makePaintCardTexture(title: string, body: string, accent: string) {
   const ctx = c.getContext("2d")!;
   ctx.fillStyle = "#0c1224";
   ctx.fillRect(0,0,w,h);
-  const g = ctx.createLinearGradient(0,0,w,h);
-  g.addColorStop(0, "rgba(124,92,255,0.35)");
-  g.addColorStop(1, "rgba(73,194,255,0.12)");
-  ctx.fillStyle = g;
+  ctx.fillStyle = "#111a27";
   ctx.fillRect(0,0,w,h);
   ctx.strokeStyle = accent;
   ctx.lineWidth = 6;
@@ -301,7 +294,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const height = mount.clientHeight || window.innerHeight;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050814, 0.018);
+    scene.fog = new THREE.FogExp2(0x05070d, 0.018);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 200);
     // Flyover: start high above the universe with every constellation in view.
@@ -313,7 +306,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
-    renderer.setClearColor(0x050814, 1);
+    renderer.setClearColor(0x05070d, 1);
     mount.appendChild(renderer.domElement);
 
     const labelRenderer = new CSS2DRenderer();
@@ -338,7 +331,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const sun = new THREE.PointLight(0xffe6a8, 90, 60);
     sun.position.set(0, 2, 0);
     scene.add(sun);
-    const rim = new THREE.PointLight(0x7c5cff, 40, 50);
+    const rim = new THREE.PointLight(0x6d9fd2, 40, 50);
     rim.position.set(-8, 6, 10);
     if (!atm) scene.add(rim);
 
@@ -394,6 +387,17 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     sunMesh.userData.botId = "grok-build";
     scene.add(sunMesh);
 
+    // Focus the camera on the rendered force-layout position, not the legacy lane anchor.
+    function currentBotPosition(botId: string): [number, number, number] {
+      if (botId === "grok-build") {
+        return [sunMesh.position.x, sunMesh.position.y, sunMesh.position.z];
+      }
+      const node = botVis.find((item) => item.id === botId);
+      return node
+        ? [node.mesh.position.x, node.mesh.position.y, node.mesh.position.z]
+        : [0, 0, 0];
+    }
+
     function rebuildBots(list: BotNode[]) {
       // Hacker-pass c8: dispose per-bot materials on each 5 s rebuild (previously leaked
       // ~2 materials per bot per rebuild → thousands of orphaned materials per hour).
@@ -406,8 +410,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       }
       botVis.length = 0;
       botMeshes.length = 0;
+      const positions = buildForceLayout(list, dataRef.current.constellationEdges);
+      const degree = new Map<string, number>();
+      for (const edge of dataRef.current.constellationEdges ?? []) {
+        degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1);
+        degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1);
+      }
       for (const bot of list) {
-        const posArr = botWorldPosition(bot.id);
+        const posArr = positions.get(bot.id) ?? ([0, 0, 0] as [number, number, number]);
         const pos = new THREE.Vector3(...posArr);
         if (bot.id === "grok-build") {
           sunMesh.position.copy(pos);
@@ -425,6 +435,8 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         });
         const mesh = new THREE.Mesh(sphereGeo, mat);
         mesh.position.copy(pos);
+        const scale = 0.85 + Math.min(1.4, (degree.get(bot.id) ?? 0) * 0.18);
+        mesh.scale.setScalar(scale);
         mesh.userData.botId = bot.id;
         botGroup.add(mesh);
         botMeshes.push(mesh);
@@ -450,24 +462,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
             card.position.copy(pos).add(new THREE.Vector3(0, 1.25, 0));
             card.userData.botId = bot.id;
             botGroup.add(card);
-            // Life-size billboard person/character in the constellation (reuses same Imagine portrait).
-            const personMat = new THREE.MeshBasicMaterial({
-              map: tex,
-              transparent: true,
-              depthWrite: false,
-              side: THREE.DoubleSide,
-              opacity: 0.9,
-            });
-            const person = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), personMat);
-            person.position.copy(pos).add(new THREE.Vector3(1.35, 0.2, 0.4));
-            person.userData.botId = bot.id;
-            person.userData.kind = "character";
-            botGroup.add(person);
           },
           undefined,
           () => { /* no portrait asset yet */ },
         );
-        glow.scale.set(2.2, 2.2, 2.2);
+        glow.scale.set(1.6 * scale, 1.6 * scale, 1.6 * scale);
         glow.position.copy(pos);
         botGroup.add(glow);
 
@@ -487,37 +486,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
 
     // Shared scene characters / environments (real Imagine assets already in public/).
-    const sceneArts = [
-      { url: "/dashboard-3d/art/backdrop-nebula.webp", pos: new THREE.Vector3(-10, 4.5, -8), scale: [6.5, 3.8] as const },
-      { url: "/dashboard-3d/art/backdrop-city.webp", pos: new THREE.Vector3(11, 2.2, -6), scale: [5.5, 3.2] as const },
-      { url: "/dashboard-3d/art/backdrop-interior.webp", pos: new THREE.Vector3(0, -2.5, 9), scale: [4.8, 2.8] as const },
-      { url: "/dashboard-3d/art/scene-operator-character.webp", pos: new THREE.Vector3(-6.5, 0.4, 4.5), scale: [2.2, 3.2] as const },
-      { url: "/dashboard-3d/art/scene-agents-walk.webp", pos: new THREE.Vector3(7.5, 1.0, 5.5), scale: [5.2, 2.9] as const },
-      { url: "/dashboard-3d/art/scene-fleet-guild.webp", pos: new THREE.Vector3(-9.5, 1.2, 2.0), scale: [5.4, 3.0] as const },
-      { url: "/dashboard-3d/art/scene-notion-archive.webp", pos: new THREE.Vector3(9.8, 0.6, -1.5), scale: [5.0, 2.9] as const },
-      { url: "/dashboard-3d/art/scene-city-street.webp", pos: new THREE.Vector3(2.5, -1.8, 10.5), scale: [5.6, 3.1] as const },
-    ];
-    for (const art of sceneArts) {
-      loader.load(
-        art.url,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          const mat = new THREE.MeshBasicMaterial({
-            map: tex,
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            opacity: 0.55,
-          });
-          const plane = new THREE.Mesh(new THREE.PlaneGeometry(art.scale[0], art.scale[1]), mat);
-          plane.position.copy(art.pos);
-          plane.userData.kind = "scene";
-          botGroup.add(plane);
-        },
-        undefined,
-        () => { /* missing art — keep procedural sky */ },
-      );
-    }
+    // Keep the canvas graph-first (Obsidian-style). Decorative scene planes stay out of the force graph.
 
     type FlowLine = { line: THREE.Line; seed: number; speed: number; baseOpacity: number };
     const flowLines: FlowLine[] = [];
@@ -590,20 +559,20 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       mk(
         `Weather · ${status.weather.label}`,
         status.weather.summary,
-        status.weather.tone === "blocked" ? "#f3f5ff" : status.weather.tone === "stalled" ? "#c4b5fd" : "#f3f5ff",
+        status.weather.tone === "blocked" ? "#f3f5ff" : status.weather.tone === "stalled" ? "#d6b77a" : "#f3f5ff",
         [-7.5, 5.5, -2],
       );
       mk(
         "Orchestrator",
         `${status.orchestrator.owner ?? "—"} · ${status.orchestrator.status ?? "—"} · ${status.orchestrator.branch ?? ""}`,
-        "#7c5cff",
+        "#6d9fd2",
         [7.2, 5.2, -1.5],
       );
       const gaps = status.gapDispatcher.items.slice(0, 4).map((g) => `${g.rank ?? "·"} ${g.feature}`).join(" · ")
         || `source: ${status.gapDispatcher.source}`;
       mk("Gap Dispatcher", gaps, "#49c2ff", [0, -6.2, 4]);
       const commits = status.commits.slice(0, 3).map((c) => `${c.sha} ${c.subject}`).join(" · ") || "No commits";
-      mk("Recent commits", commits, "#a78bfa", [-1, 6.5, 5]);
+      mk("Recent commits", commits, "#7ea6d8", [-1, 6.5, 5]);
       const spend = status.spend.available ? "Live spend log on box" : status.spend.reason;
       mk("API spend", spend, "#93a0c2", [6, -3.5, 5]);
       const nudges = status.conductor.nudges.slice(0, 3).join(" · ") || `source: ${status.conductor.source}`;
@@ -889,7 +858,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       for (let i = 0; i < pageIdByIndex.length; i++) {
         const id = pageIdByIndex[i]!;
         if (!focusId) pageMesh.setColorAt(i, base);
-        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x7c5cff));
+        else if (neigh.has(id)) pageMesh.setColorAt(i, id === focusId ? hot : new THREE.Color(0x6d9fd2));
         else pageMesh.setColorAt(i, dim);
       }
       pageMesh.instanceColor.needsUpdate = true;
@@ -1054,9 +1023,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
         const id = hits[0].object.userData.botId as string;
         const bot = dataRef.current.bots.find((b) => b.id === id);
         if (bot) {
-          const pos = bot.id === "grok-build"
-            ? [sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number]
-            : botWorldPosition(bot.id);
+          const pos = currentBotPosition(bot.id);
           const target = focusBotTarget(pos, bot.id, rig.level === "interior" ? "interior" : "universe");
           rig = flyTo(
             rig,
@@ -1335,10 +1302,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (!botId) return;
       const bot = dataRef.current.bots.find((b) => b.id === botId);
       if (!bot) return;
-      const pos =
-        bot.id === "grok-build"
-          ? ([sunMesh.position.x, sunMesh.position.y, sunMesh.position.z] as [number, number, number])
-          : botWorldPosition(bot.id);
+      const pos = currentBotPosition(bot.id);
       const target = focusBotTarget(pos, bot.id, fly.level === "interior" ? "interior" : "universe");
       if (!acceptPointerPick(rig)) return;
       rig = flyTo(

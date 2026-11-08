@@ -126,6 +126,102 @@ export function botWorldPosition(botId: DashboardBotId, indexInLane = 0): [numbe
   return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * 0.35, cz + Math.sin(angle) * r];
 }
 
+/**
+ * Deterministic 3D force relaxation inspired by the interaction model in
+ * Obsidian 3D Graph (Yomaru). Lane centers remain soft anchors so the Mind
+ * command hierarchy stays legible while connected nodes gain natural spacing.
+ */
+export function buildForceLayout(
+  bots: BotNode[],
+  edges: ConstellationEdge[],
+  iterations = 72,
+): Map<DashboardBotId, [number, number, number]> {
+  type Vec = [number, number, number];
+  const nodes = bots.map((bot, index) => {
+    const anchor = botWorldPosition(bot.id);
+    const seed = [...bot.id].reduce((sum, char) => sum + char.charCodeAt(0), index * 17);
+    const jitter = (n: number) => Math.sin(seed * (n + 1) * 12.9898) * 0.12;
+    return {
+      id: bot.id,
+      anchor,
+      position: [anchor[0] + jitter(0), anchor[1] + jitter(1), anchor[2] + jitter(2)] as Vec,
+    };
+  });
+  const byId = new Map(nodes.map((node) => [node.id, node] as const));
+  const links = edges.filter((edge) => byId.has(edge.from) && byId.has(edge.to));
+  const steps = Number.isFinite(iterations) ? Math.max(1, Math.min(160, Math.floor(iterations))) : 72;
+
+  for (let step = 0; step < steps; step++) {
+    const forces = new Map<DashboardBotId, Vec>(
+      nodes.map((node) => [
+        node.id,
+        [
+          (node.anchor[0] - node.position[0]) * 0.055,
+          (node.anchor[1] - node.position[1]) * 0.055,
+          (node.anchor[2] - node.position[2]) * 0.055,
+        ] as Vec,
+      ] as const),
+    );
+
+    // Local repulsion prevents labels and hit targets from collapsing together.
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i]!;
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j]!;
+        let dx = a.position[0] - b.position[0];
+        let dy = a.position[1] - b.position[1];
+        let dz = a.position[2] - b.position[2];
+        let distance = Math.hypot(dx, dy, dz);
+        if (distance < 1e-4) {
+          dx = (i + 1) * 0.013;
+          dy = (j + 1) * 0.017;
+          dz = (i + j + 1) * 0.011;
+          distance = Math.hypot(dx, dy, dz);
+        }
+        if (distance >= 3.2) continue;
+        const strength = ((3.2 - distance) / distance) * 0.075;
+        const fa = forces.get(a.id)!;
+        const fb = forces.get(b.id)!;
+        const fx = dx * strength;
+        const fy = dy * strength;
+        const fz = dz * strength;
+        fa[0] += fx; fa[1] += fy; fa[2] += fz;
+        fb[0] -= fx; fb[1] -= fy; fb[2] -= fz;
+      }
+    }
+
+    // Edges gently pull connected nodes together without flattening the lanes.
+    for (const edge of links) {
+      const from = byId.get(edge.from)!;
+      const to = byId.get(edge.to)!;
+      const dx = to.position[0] - from.position[0];
+      const dy = to.position[1] - from.position[1];
+      const dz = to.position[2] - from.position[2];
+      const distance = Math.hypot(dx, dy, dz) || 1;
+      const rest = edge.kind === "lane" ? 2.8 : 5.4;
+      const strength = ((distance - rest) / distance) * 0.008;
+      const fx = dx * strength;
+      const fy = dy * strength;
+      const fz = dz * strength;
+      const ff = forces.get(from.id)!;
+      const ft = forces.get(to.id)!;
+      ff[0] += fx; ff[1] += fy; ff[2] += fz;
+      ft[0] -= fx; ft[1] -= fy; ft[2] -= fz;
+    }
+
+    for (const node of nodes) {
+      const force = forces.get(node.id)!;
+      const length = Math.hypot(force[0], force[1], force[2]) || 1;
+      const scale = Math.min(0.18, 0.18 / length);
+      node.position[0] += force[0] * scale;
+      node.position[1] += force[1] * scale;
+      node.position[2] += force[2] * scale;
+    }
+  }
+
+  return new Map<DashboardBotId, Vec>(nodes.map((node) => [node.id, [...node.position] as Vec] as const));
+}
+
 export function systemWeather(bots: BotNode[]): { label: string; tone: Health; summary: string } {
   const counts = { healthy: 0, stalled: 0, blocked: 0, idle: 0 };
   for (const b of bots) counts[b.health] += 1;

@@ -61,7 +61,8 @@ describe("voice attack pass", () => {
     );
   });
 
-  it("[fixed] offline/sleep-style hide stops hold-to-talk", async () => {
+  it("[fixed] offline/sleep-style hide stops hold-to-talk", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
     let listening = false;
     const log: string[] = [];
     const ctl = createHoldToTalkController({
@@ -76,13 +77,14 @@ describe("voice attack pass", () => {
       isListening: () => listening,
       thresholdMs: 20,
     });
+    t.after(() => ctl.dispose());
     ctl.onKeyDown({
       key: " ",
       repeat: false,
       target: { tagName: "DIV" } as unknown as EventTarget,
       preventDefault() {},
     } as unknown as KeyboardEvent);
-    await new Promise((r) => setTimeout(r, 40));
+    t.mock.timers.tick(20);
     assert.deepEqual(log, ["start"]);
     ctl.onBlurOrHide();
     assert.deepEqual(log, ["start", "stop"]);
