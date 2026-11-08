@@ -51,8 +51,8 @@ async function userIdFrom(request: Request): Promise<string> {
 function stripSecrets(message: string): string {
   return message
     .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
-    .replace(/ya29\.[A-Za-z0-9._\-]+/g, "[REDACTED]")
-    .replace(/sl\.[A-Za-z0-9._\-]+/g, "[REDACTED]");
+    .replace(/ya29\.[A-Za-z0-9._-]+/g, "[REDACTED]")
+    .replace(/sl\.[A-Za-z0-9._-]+/g, "[REDACTED]");
 }
 
 /**

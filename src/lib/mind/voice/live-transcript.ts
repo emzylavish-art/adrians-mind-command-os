@@ -7,6 +7,7 @@ export const LIVE_TRANSCRIPT_DOCS_NOTE =
 /** Strip controls and hard-cap length for on-screen live text. */
 export function clampLiveTranscript(raw: unknown, max = MAX_LIVE_TRANSCRIPT_CHARS): string {
   if (typeof raw !== "string") return "";
+  // eslint-disable-next-line no-control-regex
   const cleaned = raw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim();
   if (!cleaned) return "";
   return cleaned.length > max ? cleaned.slice(0, max) : cleaned;

@@ -63,6 +63,7 @@ export function isValidModelId(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > MAX_MODEL_ID_LENGTH) return false;
   if (/\s/.test(trimmed)) return false;
+  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(trimmed)) return false;
   if (/^(xai-|sk-|Bearer\b)/i.test(trimmed)) return false;
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(trimmed)) return false;

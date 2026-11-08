@@ -274,7 +274,7 @@ export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
   get(_target, prop, receiver) {
     const instance = getAuth();
     const value = Reflect.get(instance as object, prop, receiver);
-    return typeof value === "function" ? (value as Function).bind(instance) : value;
+    return typeof value === "function" ? (value as (...args: never[]) => unknown).bind(instance) : value;
   },
 });
 

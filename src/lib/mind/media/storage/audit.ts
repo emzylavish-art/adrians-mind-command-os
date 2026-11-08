@@ -18,7 +18,7 @@ export function storageAuditPath() {
 }
 
 const SECRET_RE =
-  /(Bearer\s+[A-Za-z0-9._\-]+)|(ya29\.[A-Za-z0-9._\-]+)|(sl\.[A-Za-z0-9._\-]+)|(eyJ[A-Za-z0-9._\-]+)|(access[_-]?token["']?\s*[:=]\s*["'][^"']+["'])/gi;
+  /(Bearer\s+[A-Za-z0-9._-]+)|(ya29\.[A-Za-z0-9._-]+)|(sl\.[A-Za-z0-9._-]+)|(eyJ[A-Za-z0-9._-]+)|(access[_-]?token["']?\s*[:=]\s*["'][^"']+["'])/gi;
 
 export function redactSecrets(text: string): string {
   return text.replace(SECRET_RE, "[REDACTED]");

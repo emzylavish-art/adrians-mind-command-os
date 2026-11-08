@@ -120,6 +120,7 @@ export function validateXaiInferenceKeyShape(raw: string): { ok: true; key: stri
   const key = raw.trim();
   if (!key) return { ok: false, reason: "missing_key" };
   // Header injection / control characters (including embedded CR/LF/TAB).
+  // eslint-disable-next-line no-control-regex
   if (/[\r\n\t\x00-\x1f\x7f]/.test(key)) return { ok: false, reason: "malformed_key" };
   // Non-ASCII.
   if (/[^\x20-\x7e]/.test(key)) return { ok: false, reason: "malformed_key" };

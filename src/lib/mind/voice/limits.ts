@@ -6,6 +6,7 @@ export const MAX_OLLAMA_TRANSCRIPT_CHARS = 2_000;
 
 /** Strip NULs and other C0 control chars except tab/newline/carriage-return. */
 export function stripControlChars(raw: string): string {
+  // eslint-disable-next-line no-control-regex
   return raw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
 }
 

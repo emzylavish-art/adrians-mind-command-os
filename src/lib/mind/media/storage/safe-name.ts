@@ -7,6 +7,7 @@ const MAX_NAME = 180;
 export function sanitizeStorageFileName(raw: unknown): string {
   if (typeof raw !== "string") return "media.bin";
   let name = raw.replace(/\\/g, "/").split("/").pop() ?? "media.bin";
+  // eslint-disable-next-line no-control-regex
   name = name.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\.\./g, "").trim();
   name = name.replace(/[<>:`"'|?*]/g, "_");
   if (!name || name === "." || name === "..") name = "media.bin";
@@ -23,10 +24,14 @@ export function sanitizeFolderSegments(segments: unknown): string[] {
   const out: string[] = [];
   for (const seg of segments) {
     if (typeof seg !== "string") continue;
+    // eslint-disable-next-line no-control-regex
     const cleaned = seg
       .replace(/\\/g, "/")
       .split("/")
-      .map((p) => p.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\.\./g, "").trim())
+      .map((p) => {
+        // eslint-disable-next-line no-control-regex
+        return p.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\.\./g, "").trim();
+      })
       .filter((p) => p && p !== "." && p !== "..");
     for (const p of cleaned) {
       if (/^[A-Za-z0-9._\- ]{1,64}$/.test(p)) out.push(p);
