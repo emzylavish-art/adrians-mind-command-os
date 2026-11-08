@@ -33,6 +33,7 @@ describe("mobile structure wiring", () => {
     const gate = readFileSync(join(here, "../../../lib/mind/dashboard/require-dashboard-user.ts"), "utf8");
     assert.doesNotMatch(route, /requireDashboardUser/);
     assert.match(route, /Public read-only dashboard/);
+    assert.match(route, /component: AgentCommandCenter/);
     assert.match(gate, /getSessionUser/);
     assert.equal(gate.includes("requireUserId"), false);
   });
