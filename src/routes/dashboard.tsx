@@ -1,18 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { YouTubeCommandCenter } from "@/components/mind/youtube/youtube-command-center";
+import { DashboardPage } from "@/components/mind/dashboard-3d/dashboard-page";
 
 /**
- * Primary production experience: YouTube Channel Command Center.
- * Channel metrics remain explicitly marked as demonstration data until OAuth
- * and YouTube API access have been completed for the channel owner.
+ * Adrian's Mind primary command surface: the interactive 3D fleet and knowledge graph.
+ * The YouTube creator workspace lives at /dashboard/youtube and remains a separate module.
  */
 export const Route = createFileRoute("/dashboard")({
-  component: YouTubeCommandCenter,
+  component: DashboardPage,
   head: () => ({
     meta: [
-      { title: "Adrian's Mind · YouTube Channel Command Center" },
+      { title: "Adrian's Mind · 3D Command Dashboard" },
       { name: "theme-color", content: "#080d14" },
-      { name: "description", content: "YouTube channel analytics and creator command center." },
+      { name: "description", content: "Interactive 3D command dashboard for Adrian's Mind." },
     ],
   }),
 });
