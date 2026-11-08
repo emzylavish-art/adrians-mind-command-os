@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AgentCommandCenter } from "@/components/mind/agent-command-center";
 
-/** Agent-first operational dashboard inspired by modern creator analytics layouts. */
+/** Public read-only dashboard for Adrian's Mind agent operations. */
 export const Route = createFileRoute("/dashboard")({
   component: AgentCommandCenter,
   head: () => ({
