@@ -22,6 +22,12 @@ describe("mobile structure wiring", () => {
     assert.match(readFileSync(join(here, "mobile-structure.tsx"), "utf8"), /Orbit off/);
   });
 
+  it("lazy-loads the browser-only force graph to keep server rendering window-safe", () => {
+    const app = readFileSync(join(here, "dashboard-app.tsx"), "utf8");
+    assert.match(app, /lazy\(\(\) => import\("\.\/fleet-force-graph"\)/);
+    assert.doesNotMatch(app, /import \{ FleetForceGraph \} from "\.\/fleet-force-graph"/);
+  });
+
   it("makes the dashboard route public while retaining the session-gate implementation for protected flows", () => {
     const route = readFileSync(join(here, "../../../routes/dashboard.tsx"), "utf8");
     const gate = readFileSync(join(here, "../../../lib/mind/dashboard/require-dashboard-user.ts"), "utf8");

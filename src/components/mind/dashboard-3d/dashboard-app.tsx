@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hudDefaultOpen, sortHudCards } from "@/lib/mind/dashboard/hud-order";
 import { subscribePrefersReducedMotion } from "./motion";
 import { GraphFiltersPanel } from "./graph-filters-panel";
@@ -6,7 +6,7 @@ import { MobileChrome, MobilePanelCard, useMobilePanelFocus } from "./mobile-str
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
-import { FleetForceGraph } from "./fleet-force-graph";
+const FleetForceGraph = lazy(() => import("./fleet-force-graph").then((module) => ({ default: module.FleetForceGraph })));
 import { useDashboardStatus } from "./use-dashboard-status";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
@@ -245,6 +245,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         </header>
       ) : null}
       {state.status === "ready" && sceneData && !webglError && (!narrow || sceneInteract) ? (
+        <Suspense fallback={<div className="dash3d-fallback"><div className="dash3d-glass"><p className="dash3d-title">Loading 3D graph…</p></div></div>}>
         <FleetForceGraph
           data={sceneData}
           reducedMotion={reducedMotion}
@@ -265,6 +266,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
           }}
           onUnavailable={setWebglError}
         />
+        </Suspense>
       ) : null}
 
       {webglError ? (
