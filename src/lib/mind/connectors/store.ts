@@ -5,6 +5,7 @@ import { decryptSecret, encryptSecret } from "./crypto.ts";
 
 export const CONNECTOR_IDS = [
   "notion",
+  "youtube",
   "gmail",
   "google_calendar",
   "google_drive",
@@ -20,6 +21,7 @@ export function isConnectorId(value: string): value is ConnectorId {
 
 export const CONNECTOR_DISPLAY_NAMES: Record<ConnectorId, string> = {
   notion: "Notion",
+  youtube: "YouTube",
   gmail: "Gmail",
   google_calendar: "Google Calendar",
   google_drive: "Google Drive",
