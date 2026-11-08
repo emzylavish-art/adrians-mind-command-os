@@ -93,33 +93,54 @@ function buildGraph(data: DashboardStatus, allow: Set<string> | null) {
     degree.set(e.to, (degree.get(e.to) ?? 0) + 1);
   }
   const nodes: GraphNode[] = bots.map((bot) => ({
-    id: bot.id,
-    name: bot.name,
-    health: bot.health,
-    kind: "bot",
-    val: 1 + (degree.get(bot.id) ?? 0),
-    bot,
+    id: bot.id, name: bot.name, health: bot.health, kind: "bot",
+    val: 1 + (degree.get(bot.id) ?? 0), bot,
   }));
+
+  // Bound Notion nodes for mobile performance and retain only valid endpoints.
   const pages = (data.notionGraph?.pages ?? []).slice(0, 48);
+  const pageIds = new Set(pages.map((page) => page.id));
   for (const page of pages) {
     nodes.push({
-      id: `notion:${page.id}`,
-      name: page.title || page.id,
-      health: "idle",
-      kind: "notion",
-      val: 1,
+      id: `notion:${page.id}`, name: page.title || page.id,
+      health: "idle", kind: "notion", val: 1,
     });
   }
+
   const links: GraphLink[] = edges.map((e) => ({
-    source: e.from,
-    target: e.to,
-    kind: e.kind,
+    source: e.from, target: e.to, kind: e.kind,
   }));
+
+  // Render the real Notion-to-Notion relationships, not just isolated pages.
+  const seenNotionEdges = new Set<string>();
+  for (const edge of data.notionGraph?.edges ?? []) {
+    if (!pageIds.has(edge.from) || !pageIds.has(edge.to) || edge.from === edge.to) continue;
+    const key = [edge.from, edge.to, edge.kind].sort().join(":");
+    if (seenNotionEdges.has(key)) continue;
+    seenNotionEdges.add(key);
+    links.push({
+      source: `notion:${edge.from}`,
+      target: `notion:${edge.to}`,
+      kind: edge.kind || "notion",
+    });
+  }
+
+  // Preserve explicit fleet-to-Notion mappings.
   for (const [botId, pageId] of Object.entries(data.notionGraph?.botPageMap ?? {})) {
-    if (bots.some((b) => b.id === botId) && pages.some((p) => p.id === pageId)) {
+    if (bots.some((b) => b.id === botId) && pageIds.has(pageId)) {
       links.push({ source: botId, target: `notion:${pageId}`, kind: "notion" });
     }
   }
+
+  // Scale nodes by total visible degree, including Notion relationships.
+  const allDegree = new Map<string, number>();
+  for (const link of links) {
+    const source = typeof link.source === "string" ? link.source : link.source.id;
+    const target = typeof link.target === "string" ? link.target : link.target.id;
+    allDegree.set(source, (allDegree.get(source) ?? 0) + 1);
+    allDegree.set(target, (allDegree.get(target) ?? 0) + 1);
+  }
+  for (const node of nodes) node.val = 1 + (allDegree.get(node.id) ?? 0);
   return { nodes, links };
 }
 
