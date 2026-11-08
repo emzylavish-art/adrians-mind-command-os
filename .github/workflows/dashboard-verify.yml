@@ -10,6 +10,7 @@ on:
       - ".github/workflows/dashboard-verify.yml"
   push:
     branches:
+      - "main"
       - "dashboard/yomaru-graph-polish"
     paths:
       - "src/components/mind/dashboard-3d/**"
