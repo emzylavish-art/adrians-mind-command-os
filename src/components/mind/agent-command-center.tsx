@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import {
   Activity, Bot, CheckCircle2, CircleAlert, Clock3, GitCommitHorizontal,
   LayoutDashboard, ListTodo, Network, RefreshCw, Search, ShieldCheck,
@@ -7,7 +7,9 @@ import {
 import { useDashboardStatus } from "@/components/mind/dashboard-3d/use-dashboard-status";
 import type { BotNode, Health } from "@/lib/mind/dashboard/types";
 
-type Section = "Overview" | "Agents" | "Runs" | "Tasks" | "Activity";
+type Section = "Overview" | "Agents" | "Runs" | "Tasks" | "Activity" | "3D Map";
+
+const Dashboard3D = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((m) => ({ default: m.DashboardApp })));
 
 const sections: { id: Section; icon: typeof LayoutDashboard }[] = [
   { id: "Overview", icon: LayoutDashboard },
@@ -15,6 +17,7 @@ const sections: { id: Section; icon: typeof LayoutDashboard }[] = [
   { id: "Runs", icon: Workflow },
   { id: "Tasks", icon: ListTodo },
   { id: "Activity", icon: Activity },
+  { id: "3D Map", icon: Network },
 ];
 
 const healthLabel: Record<Health, string> = {
@@ -85,7 +88,7 @@ export function AgentCommandCenter() {
         <div className="mt-7 px-2 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">Command</div>
         <nav className="mt-3 space-y-1">{sections.map(({id,icon:Icon})=><button key={id} onClick={()=>{setSection(id);setSelected(null)}} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${section===id ? "bg-white/[0.09] font-semibold text-white ring-1 ring-white/[0.08]" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"}`}><Icon size={17}/>{id}</button>)}</nav>
         <div className="mt-7 px-2 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">Explore</div>
-        <a href="/dashboard/3d" className="mt-3 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-400 hover:bg-white/[0.04] hover:text-white"><Network size={17}/>3D fleet map</a>
+        <button onClick={()=>setSection("3D Map")} className="mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-400 hover:bg-white/[0.04] hover:text-white"><Network size={17}/>3D fleet map</button>
         <a href="/" className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-400 hover:bg-white/[0.04] hover:text-white"><Bot size={17}/>AI workspace</a>
         <div className="mt-auto rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><div className="flex items-center gap-2 text-xs text-slate-300"><ShieldCheck size={14}/> Operational visibility</div><p className="mt-1 text-[10px] leading-relaxed text-slate-600">Status is sourced from the connected agent, lock, Git, and queue telemetry. Missing sources remain unreported.</p></div>
       </aside>
@@ -95,11 +98,12 @@ export function AgentCommandCenter() {
           <div className="flex items-center gap-2"><button onClick={()=>void refresh()} disabled={busy} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-50"><RefreshCw size={13} className={busy ? "animate-spin" : ""}/>Refresh</button><a href="/" className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500">Open AI workspace</a></div>
         </header>
         <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6 sm:px-7 sm:py-8">
-          <nav className="flex gap-1 overflow-x-auto pb-1 lg:hidden">{sections.map(({id,icon:Icon})=><button key={id} onClick={()=>setSection(id)} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs ${section===id ? "bg-white/10 text-white" : "text-slate-400"}`}><Icon size={14}/>{id}</button>)}<a href="/dashboard/3d" className="shrink-0 rounded-lg px-3 py-2 text-xs text-slate-400">3D map</a></nav>
-          <div className="flex flex-wrap items-end justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-violet-300"><span className="h-1.5 w-1.5 rounded-full bg-violet-400"/> AI AGENT OPERATIONS</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{section === "Overview" ? "Your agent fleet, at a glance." : section === "Agents" ? "Agents & workers" : section === "Runs" ? "Execution history" : section === "Tasks" ? "Task queue" : "System activity"}</h1><p className="mt-2 max-w-2xl text-sm text-slate-400">{section === "Overview" ? "Monitor agent health, active work, execution signals, and system readiness from one command surface." : "Live operational information from the Adrian's Mind runtime."}</p></div><div className="text-right text-xs text-slate-500">{data ? `Last updated ${timeLabel(data.generatedAt)}` : "Awaiting telemetry"}</div></div>
+          <nav className="flex gap-1 overflow-x-auto pb-1 lg:hidden">{sections.map(({id,icon:Icon})=><button key={id} onClick={()=>setSection(id)} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs ${section===id ? "bg-white/10 text-white" : "text-slate-400"}`}><Icon size={14}/>{id}</button>)}<button onClick={()=>setSection("3D Map")} className="shrink-0 rounded-lg px-3 py-2 text-xs text-slate-400">3D map</button></nav>
+          <div className="flex flex-wrap items-end justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-violet-300"><span className="h-1.5 w-1.5 rounded-full bg-violet-400"/> AI AGENT OPERATIONS</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{section === "Overview" ? "Your agent fleet, at a glance." : section === "Agents" ? "Agents & workers" : section === "Runs" ? "Execution history" : section === "Tasks" ? "Task queue" : section === "3D Map" ? "3D fleet map" : "System activity"}</h1><p className="mt-2 max-w-2xl text-sm text-slate-400">{section === "Overview" ? "Monitor agent health, active work, execution signals, and system readiness from one command surface." : "Live operational information from the Adrian's Mind runtime."}</p></div><div className="text-right text-xs text-slate-500">{data ? `Last updated ${timeLabel(data.generatedAt)}` : "Awaiting telemetry"}</div></div>
           {state.status === "error" && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-200">Dashboard data unavailable: {state.error}. Refresh to retry.</div>}
           {state.status === "loading" && !data && <div className="rounded-2xl border border-white/[0.08] bg-[#111a27] p-8 text-sm text-slate-400">Loading live agent telemetry…</div>}
           {data && <>
+            {section === "3D Map" && <div className="relative min-h-[75vh] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#080d14]"><Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading 3D fleet graph…</div>}><Dashboard3D embedded /></Suspense></div>}
             {section === "Overview" && <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <Stat label="Registered agents" value={bots.length} note="Agents in current status snapshot" icon={Bot}/>
