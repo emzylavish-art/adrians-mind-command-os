@@ -7,7 +7,6 @@
  */
 import { useEffect, useMemo, useRef } from "react";
 // The published package exports a factory; default import shape varies by bundler.
-import ForceGraph3D from "3d-force-graph";
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
@@ -143,8 +142,8 @@ function buildGraph(data: DashboardStatus, allow: Set<string> | null) {
   return { nodes, links };
 }
 
-function createGraph(el: HTMLElement): GraphApi {
-  const factory = ForceGraph3D as unknown as (opts?: { controlType?: string }) => (dom: HTMLElement) => GraphApi;
+function createGraph(el: HTMLElement, importedFactory: unknown): GraphApi {
+  const factory = importedFactory as (opts?: { controlType?: string }) => (dom: HTMLElement) => GraphApi;
   return factory({ controlType: "orbit" })(el);
 }
 
@@ -172,180 +171,211 @@ export function FleetForceGraph({
     const mount = mountRef.current;
     if (!mount) return;
 
-    let graph: GraphApi;
-    try {
-      graph = createGraph(mount)
-        .backgroundColor("#05070d")
-        .showNavInfo(false)
-        .nodeId("id")
-        .nodeLabel((n) => sanitizeLabelText(n.name))
-        .nodeVal((n) => n.val)
-        .nodeOpacity(0.92)
-        .nodeColor((n) => {
-          const hot = hoverId.current === n.id || highlighted.current.has(n.id);
-          if (n.kind === "notion") return hot ? "#78a6d8" : "#3a4a63";
-          const base = HEALTH_COLOR[n.health] ?? "#687487";
-          if (highlighted.current.size && !hot) return "#243044";
-          return base;
-        })
-        .linkColor((l) => {
-          const s = nodeIdOf(l.source);
-          const t = nodeIdOf(l.target);
-          const hot =
-            (s && highlighted.current.has(s)) ||
-            (t && highlighted.current.has(t)) ||
-            hoverId.current === s ||
-            hoverId.current === t;
-          if (highlighted.current.size && !hot) return "rgba(36,48,68,0.25)";
-          if (l.kind === "lane") return hot ? "#78a6d8" : "rgba(120,166,216,0.35)";
-          if (l.kind === "notion") return hot ? "#9aa3b5" : "rgba(154,163,181,0.28)";
-          return hot ? "#f4f6fb" : "rgba(244,246,251,0.22)";
-        })
-        .linkWidth((l) => {
-          const s = nodeIdOf(l.source);
-          const t = nodeIdOf(l.target);
-          const hot =
-            (s && highlighted.current.has(s)) ||
-            (t && highlighted.current.has(t)) ||
-            hoverId.current === s ||
-            hoverId.current === t;
-          return hot ? 1.6 : 0.7;
-        })
-        .linkDirectionalParticles((l) => {
-          const s = nodeIdOf(l.source);
-          const t = nodeIdOf(l.target);
-          const hot =
-            (s && highlighted.current.has(s)) ||
-            (t && highlighted.current.has(t)) ||
-            hoverId.current === s ||
-            hoverId.current === t;
-          return hot && !reducedMotion ? 2 : 0;
-        })
-        .linkDirectionalParticleWidth(1.2)
-        .linkDirectionalArrowLength(3.2)
-        .linkDirectionalArrowRelPos(1)
-        .nodeRelSize(4.2)
-        .graphData(initialGraph)
-        .onNodeHover((node: GraphNode | null) => {
-          highlighted.current.clear();
-          hoverId.current = node?.id ?? null;
-          if (node) {
-            highlighted.current.add(node.id);
-            const g = graph.graphData() as { links: GraphLink[] };
-            for (const link of g.links) {
-              const s = nodeIdOf(link.source);
-              const t = nodeIdOf(link.target);
-              if (s === node.id || t === node.id) {
-                if (s) highlighted.current.add(s);
-                if (t) highlighted.current.add(t);
+    // 3d-force-graph reads browser globals while its module is evaluated.
+    // Import it only after mount so SSR can render the dashboard safely.
+    let disposed = false;
+    let cleanup: (() => void) | null = null;
+
+    const initialize = async () => {
+      const module = await import("3d-force-graph");
+      if (disposed) return;
+
+      let graph: GraphApi;
+      try {
+        graph = createGraph(mount, module.default)
+          .backgroundColor("#05070d")
+          .showNavInfo(false)
+          .nodeId("id")
+          .nodeLabel((n) => sanitizeLabelText(n.name))
+          .nodeVal((n) => n.val)
+          .nodeOpacity(0.92)
+          .nodeColor((n) => {
+            const hot = hoverId.current === n.id || highlighted.current.has(n.id);
+            if (n.kind === "notion") return hot ? "#78a6d8" : "#3a4a63";
+            const base = HEALTH_COLOR[n.health] ?? "#687487";
+            if (highlighted.current.size && !hot) return "#243044";
+            return base;
+          })
+          .linkColor((l) => {
+            const s = nodeIdOf(l.source);
+            const t = nodeIdOf(l.target);
+            const hot =
+              (s && highlighted.current.has(s)) ||
+              (t && highlighted.current.has(t)) ||
+              hoverId.current === s ||
+              hoverId.current === t;
+            if (highlighted.current.size && !hot) return "rgba(36,48,68,0.25)";
+            if (l.kind === "lane") return hot ? "#78a6d8" : "rgba(120,166,216,0.35)";
+            if (l.kind === "notion") return hot ? "#9aa3b5" : "rgba(154,163,181,0.28)";
+            return hot ? "#f4f6fb" : "rgba(244,246,251,0.22)";
+          })
+          .linkWidth((l) => {
+            const s = nodeIdOf(l.source);
+            const t = nodeIdOf(l.target);
+            const hot =
+              (s && highlighted.current.has(s)) ||
+              (t && highlighted.current.has(t)) ||
+              hoverId.current === s ||
+              hoverId.current === t;
+            return hot ? 1.6 : 0.7;
+          })
+          .linkDirectionalParticles((l) => {
+            const s = nodeIdOf(l.source);
+            const t = nodeIdOf(l.target);
+            const hot =
+              (s && highlighted.current.has(s)) ||
+              (t && highlighted.current.has(t)) ||
+              hoverId.current === s ||
+              hoverId.current === t;
+            return hot && !reducedMotion ? 2 : 0;
+          })
+          .linkDirectionalParticleWidth(1.2)
+          .linkDirectionalArrowLength(3.2)
+          .linkDirectionalArrowRelPos(1)
+          .nodeRelSize(4.2)
+          .graphData(initialGraph)
+          .onNodeHover((node: GraphNode | null) => {
+            highlighted.current.clear();
+            hoverId.current = node?.id ?? null;
+            if (node) {
+              highlighted.current.add(node.id);
+              const current = graph.graphData() as { links: GraphLink[] };
+              for (const link of current.links) {
+                const s = nodeIdOf(link.source);
+                const t = nodeIdOf(link.target);
+                if (s === node.id || t === node.id) {
+                  if (s) highlighted.current.add(s);
+                  if (t) highlighted.current.add(t);
+                }
               }
             }
-          }
-          graph
-            .nodeColor(graph.nodeColor() as unknown as (n: GraphNode) => string)
-            .linkColor(graph.linkColor() as unknown as (l: GraphLink) => string)
-            .linkWidth(graph.linkWidth() as unknown as (l: GraphLink) => number)
-            .linkDirectionalParticles(
-              graph.linkDirectionalParticles() as unknown as (l: GraphLink) => number,
-            );
-        })
-        .onNodeClick((node: GraphNode, event: MouseEvent) => {
-          if (!node) return;
-          if (event.ctrlKey || event.metaKey) {
-            const distance = 90;
-            const hx = node.x || 0.001;
-            const hy = node.y || 0.001;
-            const hz = node.z || 0.001;
-            const distRatio = 1 + distance / Math.hypot(hx, hy, hz);
-            graph.cameraPosition(
-              { x: hx * distRatio, y: hy * distRatio, z: hz * distRatio },
-              { x: node.x || 0, y: node.y || 0, z: node.z || 0 },
-              reducedMotion ? 0 : 900,
-            );
-          }
-          if (node.kind === "bot" && node.bot) callbacks.current.onSelectBot(node.bot);
-          if (node.kind === "notion") callbacks.current.onSelectNotion(node.id.replace(/^notion:/, ""));
-        })
-        .cooldownTicks(reducedMotion ? 0 : 90)
-        .d3AlphaDecay(reducedMotion ? 1 : 0.022)
-        .d3VelocityDecay(0.35);
-    } catch (err) {
-      callbacks.current.onUnavailable(err instanceof Error ? err.message : "WebGL graph failed to start");
-      return;
-    }
+            graph
+              .nodeColor(graph.nodeColor() as unknown as (n: GraphNode) => string)
+              .linkColor(graph.linkColor() as unknown as (l: GraphLink) => string)
+              .linkWidth(graph.linkWidth() as unknown as (l: GraphLink) => number)
+              .linkDirectionalParticles(
+                graph.linkDirectionalParticles() as unknown as (l: GraphLink) => number,
+              );
+          })
+          .onNodeClick((node: GraphNode, event: MouseEvent) => {
+            if (!node) return;
+            if (event.ctrlKey || event.metaKey) {
+              const distance = 90;
+              const hx = node.x || 0.001;
+              const hy = node.y || 0.001;
+              const hz = node.z || 0.001;
+              const distRatio = 1 + distance / Math.hypot(hx, hy, hz);
+              graph.cameraPosition(
+                { x: hx * distRatio, y: hy * distRatio, z: hz * distRatio },
+                { x: node.x || 0, y: node.y || 0, z: node.z || 0 },
+                reducedMotion ? 0 : 900,
+              );
+            }
+            if (node.kind === "bot" && node.bot) callbacks.current.onSelectBot(node.bot);
+            if (node.kind === "notion") callbacks.current.onSelectNotion(node.id.replace(/^notion:/, ""));
+          })
+          .cooldownTicks(reducedMotion ? 0 : 90)
+          .d3AlphaDecay(reducedMotion ? 1 : 0.022)
+          .d3VelocityDecay(0.35);
+      } catch (err) {
+        callbacks.current.onUnavailable(err instanceof Error ? err.message : "WebGL graph failed to start");
+        return;
+      }
 
-    graphRef.current = graph;
-    const resize = () => {
-      const w = Math.max(1, mount.clientWidth || window.innerWidth);
-      const h = Math.max(1, mount.clientHeight || window.innerHeight);
-      graph.width(w).height(h);
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(mount);
+      if (disposed) {
+        try {
+          graph._destructor();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
 
-    const focusNode = (node: GraphNode) => {
-      const distance = 90;
-      const hx = node.x || 0.001;
-      const hy = node.y || 0.001;
-      const hz = node.z || 0.001;
-      const distRatio = 1 + distance / Math.hypot(hx, hy, hz);
-      graph.cameraPosition(
-        { x: hx * distRatio, y: hy * distRatio, z: hz * distRatio },
-        { x: node.x || 0, y: node.y || 0, z: node.z || 0 },
-        reducedMotion ? 0 : 900,
-      );
+      graphRef.current = graph;
+      const resize = () => {
+        const w = Math.max(1, mount.clientWidth || window.innerWidth);
+        const h = Math.max(1, mount.clientHeight || window.innerHeight);
+        graph.width(w).height(h);
+      };
+      resize();
+      const ro = new ResizeObserver(resize);
+      ro.observe(mount);
+
+      const focusNode = (node: GraphNode) => {
+        const distance = 90;
+        const hx = node.x || 0.001;
+        const hy = node.y || 0.001;
+        const hz = node.z || 0.001;
+        const distRatio = 1 + distance / Math.hypot(hx, hy, hz);
+        graph.cameraPosition(
+          { x: hx * distRatio, y: hy * distRatio, z: hz * distRatio },
+          { x: node.x || 0, y: node.y || 0, z: node.z || 0 },
+          reducedMotion ? 0 : 900,
+        );
+      };
+
+      const onFocusBot = (ev: Event) => {
+        const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
+        if (!botId || !graphRef.current) return;
+        const current = graphRef.current.graphData() as { nodes: GraphNode[] };
+        const node = current.nodes.find((n) => n.id === botId);
+        if (!node) return;
+        focusNode(node);
+        if (node.bot) callbacks.current.onSelectBot(node.bot);
+      };
+      const onSky = () => {
+        graphRef.current?.cameraPosition({ x: 0, y: 0, z: 280 }, { x: 0, y: 0, z: 0 }, reducedMotion ? 0 : 1100);
+        callbacks.current.onSkyView();
+      };
+      const onZoom = (ev: Event) => {
+        const factor = (ev as CustomEvent<{ factor?: number }>).detail?.factor;
+        const activeGraph = graphRef.current;
+        if (!activeGraph || typeof factor !== "number" || !Number.isFinite(factor)) return;
+        const current = activeGraph.cameraPosition();
+        const scale = Math.min(2.5, Math.max(0.4, factor));
+        activeGraph.cameraPosition(
+          { x: current.x * scale, y: current.y * scale, z: current.z * scale },
+          { x: 0, y: 0, z: 0 },
+          reducedMotion ? 0 : 350,
+        );
+      };
+      const onFilter = (ev: Event) => {
+        const detail = (ev as CustomEvent<GraphFilterState>).detail;
+        if (!detail || !graphRef.current) return;
+        const status = dataRef.current;
+        allowRef.current = filterBotIds(status.bots, status.constellationEdges ?? [], detail);
+        graphRef.current.graphData(buildGraph(status, allowRef.current));
+      };
+      document.addEventListener("dash3d-focus-bot", onFocusBot);
+      document.addEventListener("dash3d-sky", onSky);
+      document.addEventListener("dash3d-zoom", onZoom);
+      document.addEventListener("dash3d-graph-filter", onFilter);
+
+      cleanup = () => {
+        document.removeEventListener("dash3d-focus-bot", onFocusBot);
+        document.removeEventListener("dash3d-sky", onSky);
+        document.removeEventListener("dash3d-zoom", onZoom);
+        document.removeEventListener("dash3d-graph-filter", onFilter);
+        ro.disconnect();
+        try {
+          graph._destructor();
+        } catch {
+          /* ignore */
+        }
+        if (graphRef.current === graph) graphRef.current = null;
+        mount.replaceChildren();
+      };
     };
 
-    const onFocusBot = (ev: Event) => {
-      const botId = (ev as CustomEvent<{ botId?: string }>).detail?.botId;
-      if (!botId || !graphRef.current) return;
-      const g = graphRef.current.graphData() as { nodes: GraphNode[] };
-      const node = g.nodes.find((n) => n.id === botId);
-      if (!node) return;
-      focusNode(node);
-      if (node.bot) callbacks.current.onSelectBot(node.bot);
-    };
-    const onSky = () => {
-      graphRef.current?.cameraPosition({ x: 0, y: 0, z: 280 }, { x: 0, y: 0, z: 0 }, reducedMotion ? 0 : 1100);
-      callbacks.current.onSkyView();
-    };
-    const onZoom = (ev: Event) => {
-      const factor = (ev as CustomEvent<{ factor?: number }>).detail?.factor;
-      const activeGraph = graphRef.current;
-      if (!activeGraph || typeof factor !== "number" || !Number.isFinite(factor)) return;
-      const current = activeGraph.cameraPosition();
-      const scale = Math.min(2.5, Math.max(0.4, factor));
-      activeGraph.cameraPosition(
-        { x: current.x * scale, y: current.y * scale, z: current.z * scale },
-        { x: 0, y: 0, z: 0 },
-        reducedMotion ? 0 : 350,
-      );
-    };
-    const onFilter = (ev: Event) => {
-      const detail = (ev as CustomEvent<GraphFilterState>).detail;
-      if (!detail || !graphRef.current) return;
-      const status = dataRef.current;
-      allowRef.current = filterBotIds(status.bots, status.constellationEdges ?? [], detail);
-      graphRef.current.graphData(buildGraph(status, allowRef.current));
-    };
-    document.addEventListener("dash3d-focus-bot", onFocusBot);
-    document.addEventListener("dash3d-sky", onSky);
-    document.addEventListener("dash3d-zoom", onZoom);
-    document.addEventListener("dash3d-graph-filter", onFilter);
+    void initialize().catch((err) => {
+      if (!disposed) {
+        callbacks.current.onUnavailable(err instanceof Error ? err.message : "3D graph module failed to load");
+      }
+    });
 
     return () => {
-      document.removeEventListener("dash3d-focus-bot", onFocusBot);
-      document.removeEventListener("dash3d-sky", onSky);
-      document.removeEventListener("dash3d-zoom", onZoom);
-      document.removeEventListener("dash3d-graph-filter", onFilter);
-      ro.disconnect();
-      try {
-        graph._destructor();
-      } catch {
-        /* ignore */
-      }
-      graphRef.current = null;
+      disposed = true;
+      cleanup?.();
       mount.replaceChildren();
     };
   }, [initialGraph, reducedMotion]);
