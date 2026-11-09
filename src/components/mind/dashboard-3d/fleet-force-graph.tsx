@@ -60,11 +60,10 @@ type GraphApi = {
   d3VelocityDecay: (n: number) => GraphApi;
   width: (n: number) => GraphApi;
   height: (n: number) => GraphApi;
-  cameraPosition: (
-    pos: { x: number; y: number; z: number },
-    lookAt: { x: number; y: number; z: number },
-    ms: number,
-  ) => GraphApi;
+  cameraPosition: {
+    (): { x: number; y: number; z: number };
+    (pos: { x: number; y: number; z: number }, lookAt: { x: number; y: number; z: number }, ms: number): GraphApi;
+  };
   _destructor: () => void;
 };
 
@@ -311,6 +310,18 @@ export function FleetForceGraph({
       graphRef.current?.cameraPosition({ x: 0, y: 0, z: 280 }, { x: 0, y: 0, z: 0 }, reducedMotion ? 0 : 1100);
       callbacks.current.onSkyView();
     };
+    const onZoom = (ev: Event) => {
+      const factor = (ev as CustomEvent<{ factor?: number }>).detail?.factor;
+      const activeGraph = graphRef.current;
+      if (!activeGraph || typeof factor !== "number" || !Number.isFinite(factor)) return;
+      const current = activeGraph.cameraPosition();
+      const scale = Math.min(2.5, Math.max(0.4, factor));
+      activeGraph.cameraPosition(
+        { x: current.x * scale, y: current.y * scale, z: current.z * scale },
+        { x: 0, y: 0, z: 0 },
+        reducedMotion ? 0 : 350,
+      );
+    };
     const onFilter = (ev: Event) => {
       const detail = (ev as CustomEvent<GraphFilterState>).detail;
       if (!detail || !graphRef.current) return;
@@ -320,11 +331,13 @@ export function FleetForceGraph({
     };
     document.addEventListener("dash3d-focus-bot", onFocusBot);
     document.addEventListener("dash3d-sky", onSky);
+    document.addEventListener("dash3d-zoom", onZoom);
     document.addEventListener("dash3d-graph-filter", onFilter);
 
     return () => {
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-sky", onSky);
+      document.removeEventListener("dash3d-zoom", onZoom);
       document.removeEventListener("dash3d-graph-filter", onFilter);
       ro.disconnect();
       try {
