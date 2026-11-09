@@ -17,6 +17,7 @@ import { readModelPayload } from "./stream";
 import { resolveDatabaseUrl } from "../env.server.ts";
 import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
+import { parseCustomProviderChoice, executeCustomChat } from "./ai-provider-config.server.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
@@ -282,6 +283,39 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const logicField = resolveRequestedRoute({ logicRoute: body.logicRoute, provider: body.provider });
   if (!logicField.ok) return json({ ok: false, error: logicField.error }, 400);
   if (logicField.route) return handleLogicTurn(userId, body, logicField.route);
+  if (typeof body.provider === "string" && body.provider.startsWith("custom:")) {
+    const chosen = parseCustomProviderChoice(body.provider);
+    if (!chosen.ok) return json(chosen, 400);
+    const { haltIsOn } = await import("./halt.server.ts");
+    if (await haltIsOn(userId) || body.halted === true) return json({ ok: false, error: "Emergency stop is on." }, 403);
+    const images = sanitizeAttachments(body.images);
+    if (images.length) return json({ ok: false, error: "This custom API route currently supports text only. Remove image attachments." }, 400);
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!text) return json({ ok: false, error: "Write a message first." }, 400);
+    const memory = body.memory === "on" ? "on" : body.memory === "off" ? "off" : null;
+    if (!memory) return json({ ok: false, error: "Invalid memory setting." }, 400);
+    const history = Array.isArray(body.history) ? body.history.filter(isHistory).slice(-12) : [];
+    const memoryContext = Array.isArray(body.memoryContext) ? body.memoryContext.filter(isNote).slice(0, 12) : [];
+    const sized = checkTurnSize({ text, history, memoryContext, images: [] });
+    if (!sized.ok) return json(sized, 400);
+    const gate = envCheck();
+    if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
+    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [] });
+    if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
+    const formatted = toAdapterMessages(assembled.messages);
+    if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);
+    const limited = consumeMindRateLimit("chat", userId, 12);
+    if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
+    try {
+      const result = await executeCustomChat(userId, chosen, formatted.messages);
+      if (!result.ok) return json(result, 502);
+      const done = { text: result.text, model: result.model, provider: result.provider, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
+      const stream = `event: delta\ndata: ${JSON.stringify({ text: result.text })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
+      return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+    } catch {
+      return json({ ok: false, error: "The custom API or provider database is unavailable." }, 503);
+    }
+  }
   const pendingImages = sanitizeAttachments(body.images);
   const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
   // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.

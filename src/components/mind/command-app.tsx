@@ -48,6 +48,8 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
+import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
+import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
@@ -660,6 +662,8 @@ export function CommandApp() {
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [providerChoice, setProviderChoice] = useState("grok");
+  const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
+  const customAiChoices = customAiProviders.flatMap((item) => item.models.map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Custom API at ${item.host}. Requires usable API credit.` })));
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
@@ -1058,6 +1062,21 @@ export function CommandApp() {
       mcpMutationInFlight.current = false;
     };
   }, [ready, setWs]);
+
+  useEffect(() => {
+    if (statusSignedIn !== true) return;
+    let active = true;
+    const bearer = getBearerToken();
+    void fetch("/api/mind/providers", {
+      credentials: "same-origin",
+      headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
+    }).then(async (response) => {
+      if (!response.ok) return;
+      const body = await response.json() as { ok?: boolean; providers?: PublicAiProvider[] };
+      if (active && body.ok && Array.isArray(body.providers)) setCustomAiProviders(body.providers);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [statusSignedIn]);
 
   useEffect(() => {
     try {
@@ -1592,15 +1611,16 @@ export function CommandApp() {
         return null;
       }
     }
-    let routed = chosenProvider(activeLogic ? "grok" : providerChoice, grokConfigured);
-    if (!activeLogic && !routed.ok) {
+    const isCustomProvider = providerChoice.startsWith("custom:") && !activeLogic;
+    let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : providerChoice, isCustomProvider ? true : grokConfigured);
+    if (!activeLogic && !isCustomProvider && !routed.ok) {
       const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
       }
     }
-    if (!activeLogic && !routed.ok) {
+    if (!activeLogic && !isCustomProvider && !routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
         void deliver(chat, text, wsRef.current, resume, snapped);
       });
@@ -1668,7 +1688,7 @@ export function CommandApp() {
               .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
           })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
-          provider: activeLogic ?? (routed.ok ? routed.id : providerChoice),
+          provider: activeLogic ?? (isCustomProvider ? providerChoice : (routed.ok ? routed.id : providerChoice)),
           modelTier,
           logicRoute: activeLogic,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
@@ -4542,7 +4562,7 @@ export function CommandApp() {
                 setView("agents");
                 void checkRea();
               }}
-              providerChoices={providerChoices(grokConfigured)}
+              providerChoices={[...providerChoices(grokConfigured), ...customAiChoices]}
               providerChoice={providerChoice}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
@@ -4552,9 +4572,9 @@ export function CommandApp() {
                   setProviderChoice(id);
                   return;
                 }
-                if (id === "grok") {
+                if (id === "grok" || id.startsWith("custom:")) {
                   setLogicRoute(null);
-                  setProviderChoice("grok");
+                  setProviderChoice(id);
                 }
               }}
               modelTier={modelTier}
@@ -4998,6 +5018,7 @@ export function CommandApp() {
                 </ul>
               </form>
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
+              <AiProviderConnections onChange={setCustomAiProviders} />
               <FleetPanel
                 mode="connected"
                 ws={ws}
@@ -5361,6 +5382,7 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
+              <AiProviderConnections onChange={setCustomAiProviders} />
               <SafeKeysPanel />
               <VoiceSettingsBlock />
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>

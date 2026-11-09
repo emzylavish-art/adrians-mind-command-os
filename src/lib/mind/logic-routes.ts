@@ -190,7 +190,7 @@ export type StoredSelection = {
 const STORED_PROVIDERS = new Set(["grok", "openai", "anthropic", "gemini", "openrouter", "ollama", "astra", "sol", "luna"]);
 
 export function readStoredProvider(raw: string | null): string {
-  return raw && STORED_PROVIDERS.has(raw) ? raw : "grok";
+  return raw && (STORED_PROVIDERS.has(raw) || /^custom:[0-9a-f-]{36}:[A-Za-z0-9%_.:/@-]{1,300}$/i.test(raw)) ? raw : "grok";
 }
 
 export function readSelection(storage: Pick<Storage, "getItem"> | null | undefined): StoredSelection {

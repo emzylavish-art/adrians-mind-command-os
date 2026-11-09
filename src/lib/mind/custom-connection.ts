@@ -156,7 +156,7 @@ function redact(text: string, token: string): string {
 const HTTP_TIMEOUT_MS = 15_000;
 const HTTP_MAX_BYTES = 1_000_000;
 
-async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; lookup?: DnsLookupFn; timeoutMs?: number; maxBytes?: number }, token: string): Promise<{ ok: true; status: number; text: string } | { ok: false; status: CallStatus; httpStatus: number; error: string }> {
+async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; lookup?: DnsLookupFn; timeoutMs?: number; maxBytes?: number }, token: string): Promise<{ ok: true; status: number; text: string; sessionId: string | null } | { ok: false; status: CallStatus; httpStatus: number; error: string }> {
   const checked = endpointProblem(url);
   if (!checked.ok) return { ok: false, status: "incompatible", httpStatus: 0, error: checked.error };
   const parsed = new URL(checked.url);
@@ -194,7 +194,7 @@ async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; l
     const text = redact(await response.text(), token);
     controller.signal.throwIfAborted();
     if (Buffer.byteLength(text) > maxBytes) return fail("error", "The response was larger than the limit and was dropped. Nothing was retried.", response.status);
-    return { ok: true as const, status: response.status, text: text.slice(0, 8000) };
+    return { ok: true as const, status: response.status, text: text.slice(0, 8000), sessionId: response.headers.get("mcp-session-id") };
   };
   try {
     return await Promise.race([operation(), deadline]);
@@ -312,9 +312,22 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
   }, deps, row.token ?? "");
   if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
   if (!initialized(opened.text)) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
+  const sessionHeaders = opened.sessionId ? { "mcp-session-id": opened.sessionId } : {};
+  const meta = rpcEnvelope(opened.text).result;
+  const version = meta && typeof meta === "object" && typeof (meta as { protocolVersion?: unknown }).protocolVersion === "string"
+    ? (meta as { protocolVersion: string }).protocolVersion : "2024-11-05";
+  const protocolHeaders = opened.sessionId ? { ...sessionHeaders, "mcp-protocol-version": version } : {};
+  if (opened.sessionId) {
+    const notified = await send(row.url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+    }, deps, row.token ?? "");
+    if (!notified.ok) return fail("failed", "The MCP initialized notification was not accepted.");
+  }
   const listed = await send(row.url, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
     body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
   }, deps, row.token ?? "");
   if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
@@ -384,9 +397,21 @@ export async function callCustomConnection(input: {
   }, input, token);
   if (!opened.ok) return { ok: false, status: opened.status, text: opened.error, connection, transport: { ok: false, status: opened.httpStatus, ms: Date.now() - started }, rpc: null };
   if (!initialized(opened.text)) return { ok: false, status: "error", text: safeReason("error"), connection, transport: { ok: true, status: opened.status, ms: Date.now() - started }, rpc: { isError: true, content: [{ type: "text", text: safeReason("error") }], structuredContent: null } };
+  const reply = rpcEnvelope(opened.text).result;
+  const version = reply && typeof reply === "object" && typeof (reply as { protocolVersion?: unknown }).protocolVersion === "string"
+    ? (reply as { protocolVersion: string }).protocolVersion : "2024-11-05";
+  const protocolHeaders = opened.sessionId ? { "mcp-session-id": opened.sessionId, "mcp-protocol-version": version } : {};
+  if (opened.sessionId) {
+    const ready = await send(row.url ?? "", {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json", ...protocolHeaders },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+    }, input, token);
+    if (!ready.ok) return { ok: false, status: ready.status, text: ready.error, connection, transport: { ok: false, status: ready.httpStatus, ms: Date.now() - started }, rpc: null };
+  }
   const called = await send(row.url ?? "", {
     method: "POST",
-    headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream" },
+    headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },
     body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: operation.name, arguments: checked.args } }),
   }, input, token);
   if (!called.ok) return { ok: false, status: called.status, text: called.error, connection, transport: { ok: false, status: called.httpStatus, ms: Date.now() - started }, rpc: null };

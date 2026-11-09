@@ -138,7 +138,8 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
     text: parsed.text,
     voiceId,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
-    openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
+    // Do not silently replace an explicitly selected xAI voice with an unrelated voice.
+    openaiKey: voiceId ? undefined : (env.OPENAI_API_KEY?.trim() || undefined),
     fetchImpl: deps.fetchImpl,
   });
   if (!spoken.ok) return providerOrNetwork(spoken.error);
