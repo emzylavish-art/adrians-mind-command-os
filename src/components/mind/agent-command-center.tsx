@@ -103,7 +103,7 @@ export function AgentCommandCenter() {
           {state.status === "error" && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-200">Dashboard data unavailable: {state.error}. Refresh to retry.</div>}
           {state.status === "loading" && !data && <div className="rounded-2xl border border-white/[0.08] bg-[#111a27] p-8 text-sm text-slate-400">Loading live agent telemetry…</div>}
           {data && <>
-            {section === "3D Map" && <div className="relative min-h-[75vh] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#080d14]"><Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading 3D fleet graph…</div>}><Dashboard3D embedded /></Suspense></div>}
+            {section === "3D Map" && <div className="relative h-[75vh] min-h-[560px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#080d14]"><Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading 3D fleet graph…</div>}><Dashboard3D embedded /></Suspense></div>}
             {section === "Overview" && <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <Stat label="Registered agents" value={bots.length} note="Agents in current status snapshot" icon={Bot}/>
