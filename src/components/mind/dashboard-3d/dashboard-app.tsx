@@ -231,6 +231,24 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             <button
               type="button"
               className="dash3d-glass dash3d-zoomout"
+              data-testid="zoom-in"
+              aria-label="Zoom in"
+              onClick={() => document.dispatchEvent(new CustomEvent("dash3d-zoom", { detail: { factor: 0.8 } }))}
+            >
+              Zoom +
+            </button>
+            <button
+              type="button"
+              className="dash3d-glass dash3d-zoomout"
+              data-testid="zoom-out"
+              aria-label="Zoom out"
+              onClick={() => document.dispatchEvent(new CustomEvent("dash3d-zoom", { detail: { factor: 1.25 } }))}
+            >
+              Zoom −
+            </button>
+            <button
+              type="button"
+              className="dash3d-glass dash3d-zoomout"
               data-testid="zoom-sky"
               onClick={() => {
                 unlockSound();
