@@ -253,6 +253,7 @@ import {
   reviseMemory,
   unpackWorkspace,
   updateChatPersonality,
+  updateChatCustomPersonality,
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
@@ -1704,6 +1705,7 @@ export function CommandApp() {
           logicRoute: activeLogic,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
           personalityId: chat.personalityId ?? "assistant",
+          customPersonality: chat.customPersonality ?? "",
         }),
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
@@ -4484,6 +4486,8 @@ export function CommandApp() {
               chats={ws.chats}
               personalityId={active?.personalityId ?? "assistant"}
               onPersonalityChange={(personalityId) => { if (active) setWs((prev) => updateChatPersonality(prev, active.id, personalityId)); }}
+              customPersonality={active?.customPersonality ?? ""}
+              onCustomPersonalityChange={(value) => { if (active) setWs((prev) => updateChatCustomPersonality(prev, active.id, value)); }}
               projectId={chatProjectId}
               projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
               onClearProject={() => setChatProjectId(null)}
@@ -5882,6 +5886,8 @@ function ChatPane({
   chats,
   personalityId,
   onPersonalityChange,
+  customPersonality,
+  onCustomPersonalityChange,
   projectId,
   projectName,
   onClearProject,
@@ -5963,6 +5969,8 @@ function ChatPane({
   chats: Chat[];
   personalityId: PersonalityId;
   onPersonalityChange: (personalityId: PersonalityId) => void;
+  customPersonality: string;
+  onCustomPersonalityChange: (value: string) => void;
   projectId: string | null;
   projectName: string | null;
   onClearProject: () => void;
@@ -6140,6 +6148,24 @@ function ChatPane({
             </select>
             <span className="text-xs text-muted">Style only · same permissions and approval rules</span>
           </div>
+          {active && personalityId === "custom" && (
+            <div className="mt-2 max-w-xl space-y-1">
+              <label htmlFor="thread-custom-personality" className="text-xs font-semibold text-muted">Describe EVE's conversation style</label>
+              <textarea
+                id="thread-custom-personality"
+                value={customPersonality}
+                onChange={(event) => onCustomPersonalityChange(event.target.value.slice(0, 800))}
+                maxLength={800}
+                rows={3}
+                disabled={busy}
+                placeholder="For example: concise, analytical, candid, and lightly humorous. Challenge weak assumptions respectfully."
+                className="w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm"
+                aria-describedby="thread-custom-personality-help"
+              />
+              <p id="thread-custom-personality-help" className="text-xs text-muted">Up to 800 characters. This changes tone and presentation only; it cannot change tools, access, approvals or safety rules.</p>
+              <p className="text-right text-[11px] tabular-nums text-muted">{customPersonality.length}/800</p>
+            </div>
+          )}
           {active && (
             <div className="mt-3 max-w-md" data-testid="memory-chat-toggle-header">
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
