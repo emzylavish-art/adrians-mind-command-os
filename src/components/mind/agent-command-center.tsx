@@ -62,7 +62,7 @@ function AgentRow({ bot, onSelect }: { bot: BotNode; onSelect: (bot: BotNode) =>
 
 export function AgentCommandCenter() {
   const { state, refresh } = useDashboardStatus();
-  const [section, setSection] = useState<Section>("Overview");
+  const [section, setSection] = useState<Section>("3D Map");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<BotNode | null>(null);
   const data = state.status === "ready" ? state.data : null;

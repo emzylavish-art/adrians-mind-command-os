@@ -316,7 +316,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
   const meta = rpcEnvelope(opened.text).result;
   const version = meta && typeof meta === "object" && typeof (meta as { protocolVersion?: unknown }).protocolVersion === "string"
     ? (meta as { protocolVersion: string }).protocolVersion : "2024-11-05";
-  const protocolHeaders = opened.sessionId ? { ...sessionHeaders, "mcp-protocol-version": version } : {};
+  const protocolHeaders: Record<string, string> = opened.sessionId ? { ...sessionHeaders, "mcp-protocol-version": version } : {};
   if (opened.sessionId) {
     const notified = await send(row.url, {
       method: "POST",
@@ -400,7 +400,7 @@ export async function callCustomConnection(input: {
   const reply = rpcEnvelope(opened.text).result;
   const version = reply && typeof reply === "object" && typeof (reply as { protocolVersion?: unknown }).protocolVersion === "string"
     ? (reply as { protocolVersion: string }).protocolVersion : "2024-11-05";
-  const protocolHeaders = opened.sessionId ? { "mcp-session-id": opened.sessionId, "mcp-protocol-version": version } : {};
+  const protocolHeaders: Record<string, string> = opened.sessionId ? { "mcp-session-id": opened.sessionId, "mcp-protocol-version": version } : {};
   if (opened.sessionId) {
     const ready = await send(row.url ?? "", {
       method: "POST",

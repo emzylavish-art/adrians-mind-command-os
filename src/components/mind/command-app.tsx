@@ -32,6 +32,7 @@ import {
   CalendarClock,
   CircleHelp,
   Link2,
+  Network,
   ListTree,
   Menu,
   PanelLeft,
@@ -326,6 +327,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     items: [
       { id: "command", label: "Chat", icon: MessageSquare },
       { id: "agents", label: "Bots & Agents", icon: Bot },
+      { id: "dashboard", label: "3D Graph", icon: Network },
       { id: "build", label: "Build", icon: Terminal },
       { id: "projects", label: "Projects", icon: Folder },
       { id: "research", label: "Research", icon: Search },
@@ -5604,7 +5606,7 @@ export function CommandApp() {
         >
           <Plus className="size-5" />
         </button>
-        {NAV.filter((item) => item.id === "build" || item.id === "projects").map((item) => {
+        {NAV.filter((item) => item.id === "dashboard" || item.id === "projects").map((item) => {
           const Icon = item.icon;
           const on = view === item.id;
           return (

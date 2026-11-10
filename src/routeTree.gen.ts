@@ -18,6 +18,7 @@ import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
+import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindVoiceSessionRouteImport } from './routes/api/mind/voice/session'
 import { Route as ApiMindVoiceSttRouteImport } from './routes/api/mind/voice/stt'
@@ -99,6 +100,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
   id: '/api/mind/agent',
   path: '/api/mind/agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
+  id: '/api/mind/providers',
+  path: '/api/mind/providers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
@@ -306,6 +312,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
+  '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
@@ -354,6 +361,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
+  '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
@@ -403,6 +411,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
+  '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
@@ -453,6 +462,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
+    | '/api/mind/providers'
     | '/api/mind/turn'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
@@ -501,6 +511,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
+    | '/api/mind/providers'
     | '/api/mind/turn'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
@@ -549,6 +560,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
+    | '/api/mind/providers'
     | '/api/mind/turn'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
@@ -598,6 +610,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
+  ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindVoiceSessionRoute: typeof ApiMindVoiceSessionRoute
   ApiMindVoiceSttRoute: typeof ApiMindVoiceSttRoute
@@ -700,6 +713,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/agent'
       fullPath: '/api/mind/agent'
       preLoaderRoute: typeof ApiMindAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/providers': {
+      id: '/api/mind/providers'
+      path: '/api/mind/providers'
+      fullPath: '/api/mind/providers'
+      preLoaderRoute: typeof ApiMindProvidersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/turn': {
@@ -974,6 +994,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
+  ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindVoiceSessionRoute: ApiMindVoiceSessionRoute,
   ApiMindVoiceSttRoute: ApiMindVoiceSttRoute,
