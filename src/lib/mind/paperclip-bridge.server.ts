@@ -91,7 +91,7 @@ export async function getPaperclipSnapshot(
   const config = paperclipConfig(env);
   if (!config) return fail("not_configured", NO_AGENT_RUNTIME);
   const pinFn = deps.pin ?? resolveAndPinMcpHostname;
-  const requestFn = deps.request ?? pinnedHttpFetch;
+  const requestFn: RequestFn = deps.request ?? ((url, ip, host, init) => pinnedHttpFetch(url, ip, host, init));
   const pinned = await pinFn(config.base.hostname);
   if (!pinned.ok) return fail("unavailable", "Paperclip server could not be reached through a permitted public HTTPS host.");
 

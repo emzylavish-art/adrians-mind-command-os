@@ -16,7 +16,7 @@ test("protected mind operations require the owner on the server", () => {
   for (const name of ["sendTurn", "setExecutionHalt", "saveMindCopy", "loadMindCopy", "speakText", "searchWeb", "inspectWebPage"]) {
     assert.match(sliceExport(server, name), /\.middleware\(\[authMiddleware\]\)/);
   }
-  assert.doesNotMatch(sliceExport(server, "mindStatus", "searchWeb"), /authMiddleware/);
+  assert.doesNotMatch(sliceExport(server, "mindStatus", "paperclipStatus"), /authMiddleware/);
   for (const name of ["reaDoctor", "reaInspect"]) {
     assert.match(sliceExport(rea, name), /\.middleware\(\[authMiddleware\]\)/);
   }
