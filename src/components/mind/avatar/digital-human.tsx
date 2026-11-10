@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { characterById, readStoredCharacterId } from "@/lib/mind/characters";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import {
@@ -11,7 +11,8 @@ import {
 import { readAvatarSession, subscribeAvatarSession } from "@/lib/mind/avatar/session";
 import { selectFaceSrc, speechFrame } from "@/lib/mind/avatar/face-src";
 import { type VisemeId } from "@/lib/mind/avatar/visemes";
-import { HumanStage } from "@/components/mind/avatar/human-stage";
+
+const HumanStage = lazy(() => import("@/components/mind/avatar/human-stage").then((module) => ({ default: module.HumanStage })));
 
 const FRAMING_KEY = "amcos.avatar.framing.v1";
 /** Mouth band on the original headshot plates, as fractions of the plate. */
@@ -58,7 +59,9 @@ export function DigitalHuman({
   const [storedId, setStoredId] = useState(() => readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage));
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [flat, setFlat] = useState(false);
+  // Three.js is browser-only. Keep the server render on the safe canvas path so
+  // the HumanStage module is never evaluated by the SSR runtime.
+  const [flat, setFlat] = useState(() => typeof window === "undefined");
   const useFlat = useCallback(() => setFlat(true), []);
   const images = useRef(new Map<string, HTMLImageElement>());
   const clockRef = useRef<AudioClock>({ playing: false, current: 0, duration: 0 });
@@ -183,7 +186,9 @@ export function DigitalHuman({
       {flat ? (
         <canvas ref={canvasRef} width={720} height={960} className="block h-auto w-full" aria-label={`${character.name}, ${label}`} />
       ) : (
-        <HumanStage characterId={character.id} framing={framing} expression={expression} onFail={useFlat} />
+        <Suspense fallback={<div className="grid min-h-48 place-items-center text-xs text-muted">Loading avatar…</div>}>
+          <HumanStage characterId={character.id} framing={framing} expression={expression} onFail={useFlat} />
+        </Suspense>
       )}
       <figcaption className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted">
         <span>{character.name} · {character.role}</span>
