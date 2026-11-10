@@ -3,12 +3,14 @@ import { getBearerToken } from "@/lib/auth/client";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 
 type PublicRow = PublicAiProvider;
-type ProviderKind = "openai" | "xai" | "openrouter" | "compatible";
+type ProviderKind = "openai" | "xai" | "openrouter" | "anthropic" | "gemini" | "compatible";
 
 const PRESETS: Record<ProviderKind, string> = {
   openai: "https://api.openai.com/v1",
   xai: "https://api.x.ai/v1",
   openrouter: "https://openrouter.ai/api/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
   compatible: "",
 };
 
@@ -60,7 +62,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
   return (
     <section className="settings-card rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
       <h3 className="font-semibold">Custom AI APIs and models</h3>
-      <p className="mt-1 text-muted">Connect a compatible API once, discover its models, then select a model from the chat provider picker. No Vercel edit is needed for future keys.</p>
+      <p className="mt-1 text-muted">Connect OpenAI-compatible, Anthropic or Gemini APIs, discover supported models, then choose a model from chat. Your key is encrypted on the server. Some providers require a manually entered model ID.</p>
       <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(event) => {
         event.preventDefault();
         void run({ action: "save", label, baseUrl, apiKey, model: initialModel }, "Provider saved. You can refresh its models without using chat credits.");
@@ -71,11 +73,13 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
             const next = event.target.value as ProviderKind;
             setKind(next);
             setBaseUrl(PRESETS[next]);
-            setLabel(next === "xai" ? "xAI" : next === "openrouter" ? "OpenRouter" : next === "openai" ? "OpenAI" : "Custom API");
+            setLabel(next === "xai" ? "xAI" : next === "openrouter" ? "OpenRouter" : next === "openai" ? "OpenAI" : next === "anthropic" ? "Anthropic" : next === "gemini" ? "Gemini" : "Custom API");
           }}>
             <option value="openai">OpenAI</option>
             <option value="xai">xAI / Grok</option>
             <option value="openrouter">OpenRouter</option>
+            <option value="anthropic">Anthropic (native API)</option>
+            <option value="gemini">Google Gemini (native API)</option>
             <option value="compatible">Custom OpenAI-compatible API</option>
           </select>
         </label>

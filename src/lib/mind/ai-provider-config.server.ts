@@ -4,6 +4,7 @@
  * Network requests are DNS-validated and pinned, with no redirect following.
  */
 import { randomUUID } from "node:crypto";
+import { providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest, parseProviderText } from "./ai-provider-native.ts";
 import { getSql, type Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
 import { isLocalHostname, isPrivateAddressLiteral, pinnedHttpFetch, resolveAndPinMcpHostname } from "./mcp/http-dns-pin.ts";
@@ -149,7 +150,7 @@ export async function setAiProviderModel(userId: string, id: string, model: stri
 
 async function requestProvider(
   row: StoredProvider,
-  path: "models" | "chat/completions",
+  path: string,
   init: RequestInit,
 ): Promise<{ status: number; text: string; requestId: string | null }> {
   const checked = baseUrl(row.base_url);
@@ -188,7 +189,7 @@ export async function discoverAiModels(userId: string, id: string):
   try {
     const res = await requestProvider(row, "models", {
       method: "GET",
-      headers: { authorization: "Bearer " + key, accept: "application/json" },
+      headers: modelDiscoveryHeaders(providerWireProtocol(row.base_url), key),
     });
     if (res.status !== 200) {
       lastError = providerError(res.status);
@@ -243,30 +244,19 @@ export async function executeCustomChat(
   if (!key) return { ok: false, error: "The saved provider credential could not be decrypted." };
   if (!messages.length || !messages.some((m) => m.role === "user")) return { ok: false, error: "No user message was supplied." };
   try {
-    const res = await requestProvider(row, "chat/completions", {
+    const kind = providerWireProtocol(row.base_url);
+    const request = buildProviderChatRequest(kind, key, selection.model, messages);
+    const res = await requestProvider(row, request.path, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: "Bearer " + key, accept: "application/json" },
-      body: JSON.stringify({ model: selection.model, messages: messages.slice(-15), stream: false }),
+      headers: request.headers,
+      body: request.body,
     });
     if (res.status < 200 || res.status >= 300) return { ok: false, error: providerError(res.status) };
-    const body = JSON.parse(res.text) as {
-      choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>;
-      model?: string;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-    const message = body.choices?.[0]?.message;
-    if (Array.isArray(message?.tool_calls) && message.tool_calls.length) return {
-      ok: false, error: "This model requested tools. Tool execution is not enabled for this provider. Nothing was executed.",
-    };
-    const content = message?.content;
-    const text = typeof content === "string" ? content.trim() :
-      Array.isArray(content) ? content.filter((part): part is { type: string; text: string } =>
-        Boolean(part && typeof part === "object" && part.type === "text" && typeof part.text === "string"))
-        .map((part) => part.text).join("").trim() : "";
-    if (!text) return { ok: false, error: "The provider returned no assistant text." };
+    const parsed = parseProviderText(kind, res.text);
+    if (!parsed.ok) return parsed;
     return {
-      ok: true, text, model: selection.model, provider: row.label,
-      requestId: res.requestId, usage: body.usage ?? null,
+      ok: true, text: parsed.text, model: selection.model, provider: row.label,
+      requestId: res.requestId, usage: parsed.usage,
     };
   } catch {
     return { ok: false, error: "The provider could not be reached or returned an unreadable response." };
