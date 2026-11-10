@@ -8,6 +8,7 @@ import { getVoiceMode } from "../voice/mode-store.ts";
 import { readStoredVoiceChoice } from "../voice/voices.ts";
 import { formatVoiceClientError } from "../voice/errors.ts";
 import { LiveVoiceSession, type LiveSessionDeps, type MintSecretResult } from "./live-session.ts";
+import type { VoiceProfileInput } from "./session-instructions.ts";
 import { phaseToLabel, phaseToUiAttr, type LiveVoicePublicState } from "./types.ts";
 import { isLiveVoiceOccupied } from "./occupancy.ts";
 import { readStoredVolume } from "./speaker-gain.ts";
@@ -30,6 +31,7 @@ export type UseLiveVoiceSessionOptions = {
   onError?: (message: string) => void;
   onNotice?: (message: string) => void;
   mintSecret?: LiveSessionDeps["mintSecret"];
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
 };
 
 export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
@@ -75,6 +77,7 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
         getMode: () => getVoiceMode(),
         getVoiceId: () =>
           readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage),
+        getVoiceProfile: () => optionsRef.current.getVoiceProfile?.() ?? null,
       },
     );
     sessionRef.current = session;

@@ -97,6 +97,17 @@ export const paperclipStatus = createServerFn({ method: "GET" })
     return getPaperclipSnapshot();
   });
 
+/** One authenticated pass over the owner's saved server workspace. Does not replace the browser copy. */
+export const runDurableCorePass = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    if (!allowMindRequest("core_pass", context.userId, 6)) {
+      return { ok: false as const, error: "Too many runtime steps. Wait a minute. Nothing ran." };
+    }
+    const { runDurableCorePassForUser } = await import("./core-runtime.server");
+    return runDurableCorePassForUser(context.userId);
+  });
+
 export const workerHealth = createServerFn({ method: "GET" }).handler(async () => {
   const { readFileSync } = await import("node:fs");
   let file = null;

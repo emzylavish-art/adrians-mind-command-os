@@ -107,6 +107,9 @@ import {
   writeStoredVoiceChoice,
 } from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import { voiceSessionInstructions } from "@/lib/mind/voice-live/session-instructions";
+import { readStoredCharacterId } from "@/lib/mind/characters";
+import { applyWorkbenchCommand } from "@/lib/mind/workbench-command";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import { appendDictationText } from "@/lib/mind/voice/dictation";
 import {
@@ -2649,8 +2652,16 @@ export function CommandApp() {
     setError(null);
     setWs((prev) => {
       const updated = pushAudit({ ...prev, halted: next }, "emergency_stop", "session", next ? "on" : "cleared");
-      return next ? haltFleet(updated) : updated;
+      if (!next) return updated;
+      const stopped = haltFleet(updated);
+      return {
+        ...stopped,
+        schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
+      };
     });
+    setNotice(next
+      ? "Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept."
+      : "Emergency stop is off. Schedules stay paused until you enable them.");
     try {
       const result = await setExecutionHalt({ data: { on: next } });
       if (!result.ok) setError(result.error);
@@ -3515,6 +3526,13 @@ export function CommandApp() {
       }
 
       publishConnectStage("connecting");
+      const voiceChat = wsRef.current.chats.find((item) => item.id === activeId) ?? null;
+      const voiceBuilt = voiceSessionInstructions({
+        mode: getVoiceMode(),
+        personalityId: voiceChat?.personalityId ?? "assistant",
+        customPersonality: voiceChat?.customPersonality ?? "",
+        characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
+      });
       const session = new RealtimeVoiceSession(
         {
           onTranscript: (text) => {
@@ -3614,7 +3632,7 @@ export function CommandApp() {
         },
         sharedAudioOutput,
         undefined,
-        { voice: voiceChoiceRef.current },
+        { voice: voiceChoiceRef.current, instructions: voiceBuilt.instructions },
       );
       voiceSession.current = session;
       await session.connect(secret.value);
@@ -4136,6 +4154,20 @@ export function CommandApp() {
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
+              personalityId={active?.personalityId ?? "assistant"}
+              customPersonality={active?.customPersonality ?? ""}
+              chatTitle={active?.title ?? ""}
+              onCommand={(command) => {
+                const result = applyWorkbenchCommand(wsRef.current, command);
+                setWs(result.workspace);
+                if (result.ok) {
+                  setNotice(result.message);
+                  setError(null);
+                } else {
+                  setError(result.message);
+                }
+              }}
+              onToggleStop={() => { void toggleStop(); }}
               onOpenChat={() => { setView("command"); setNavOpen(false); }}
               onOpenDashboard={() => { setView("dashboard"); setNavOpen(false); }}
               onOpenAgents={() => { setView("agents"); setNavOpen(false); }}
@@ -5710,6 +5742,14 @@ export function CommandApp() {
         onChatAttachText={(text, name) => {
           setDraft((prev) => (prev ? `${prev}\n\n${text}` : text));
           setNotice(`Attached ${name} into the composer (live was off).`);
+        }}
+        getVoiceProfile={() => {
+          const chat = wsRef.current.chats.find((item) => item.id === activeId) ?? null;
+          return {
+            personalityId: chat?.personalityId ?? "assistant",
+            customPersonality: chat?.customPersonality ?? "",
+            characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
+          };
         }}
       />
     </div>
