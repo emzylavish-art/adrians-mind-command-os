@@ -50,6 +50,7 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
+import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
 import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
@@ -5282,6 +5283,7 @@ export function CommandApp() {
                 <p className="text-sm text-muted">{pcAgentDetail}</p>
                 <p className="text-xs text-muted">Build effort is not wired to a different model. Send stays on Direct.</p>
               </div>
+              <KimiPhase4Panel initializeResponse={null} updates={[]} />
               <div className="flex flex-wrap gap-2">
                 {BUILD_SUGGESTIONS.map((item) => (
                   <button
