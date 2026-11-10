@@ -213,6 +213,7 @@ import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import {
@@ -685,6 +686,9 @@ export function CommandApp() {
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
+  const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
+  const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
+  const [ratings, setRatings] = useState<ResponseRating[]>([]);
   const [pcAgentOnline, setPcAgentOnline] = useState(false);
   const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
   const [buildPick, setBuildPick] = useState<string | null>(null);
@@ -889,6 +893,31 @@ export function CommandApp() {
     if (resolved.notice) setNotice(resolved.notice);
     // Effort does not change modelTier. The server model stays on the Direct path.
     if (mode === "build") setView("build");
+  }
+
+  function chooseRoutingMode(mode: RoutingMode) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    writeRoutingMode(storage, mode);
+    setRoutingMode(mode);
+  }
+
+  function toggleRoutingSeat(id: LogicRouteId) {
+    setRoutingPanel((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+      writeRoutingPanel(typeof localStorage === "undefined" ? null : localStorage, next);
+      return next;
+    });
+  }
+
+  function rateReply(messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) {
+    const next = saveRating(typeof localStorage === "undefined" ? null : localStorage, {
+      messageId,
+      score,
+      model,
+      mode: routingMode,
+      at: new Date().toISOString(),
+    });
+    setRatings(next);
   }
 
   function interruptSpeakPlayback() {
@@ -1131,6 +1160,9 @@ export function CommandApp() {
       setLogicRoute(stored.logicRoute);
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
+      setRoutingMode(readRoutingMode(localStorage));
+      setRoutingPanel(readRoutingPanel(localStorage));
+      setRatings(readRatings(localStorage));
     } catch {
       /* a private browser can refuse storage */
     }
@@ -1635,7 +1667,14 @@ export function CommandApp() {
     }
   }
 
-  async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []): Promise<string | null> {
+  async function deliver(
+    chat: Chat,
+    text: string,
+    source: Workspace,
+    resume = false,
+    images: ImageAttachment[] = [],
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean },
+  ): Promise<string | null> {
     if (turnInFlight.current) return null;
     const snapped = snapshotImages(images);
     if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
@@ -1644,7 +1683,9 @@ export function CommandApp() {
       });
       return null;
     }
-    const activeLogic = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
+    const activeLogic = options && "logicRoute" in options
+      ? options.logicRoute ?? null
+      : logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
     if (activeLogic) {
       const view = logicRoutes.find((item) => item.id === activeLogic);
       if (!view?.ready) {
@@ -1671,7 +1712,14 @@ export function CommandApp() {
       });
       return null;
     }
-    const live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    let live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    if (options?.isolateOutputs) {
+      let lastUser = -1;
+      live.forEach((item, index) => {
+        if (item.role === "user") lastUser = index;
+      });
+      if (lastUser >= 0) live = live.slice(0, lastUser + 1);
+    }
     const messages = selectRetryMessages(chat.messages, live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
     const history = historyForDeliver(messages, resume);
@@ -1683,7 +1731,7 @@ export function CommandApp() {
       void deliver(chat, text, wsRef.current, true, snapped);
     };
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
-    if (!resume) {
+    if (!resume && !options?.skipUserMessage) {
       const displayText = historyTextForImages(text, snapped);
       const userMsg = {
         id: crypto.randomUUID(),
@@ -1962,6 +2010,27 @@ export function CommandApp() {
     });
   }
 
+  async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<void> {
+    const primary = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
+    const seats = logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason }));
+    const plan = planRouting({ mode: routingMode, primary, seats, panel: routingPanel });
+    if (!plan.ok) {
+      setError(plan.reason);
+      return;
+    }
+    setNotice(plan.note);
+    for (let index = 0; index < plan.calls.length; index += 1) {
+      const call = plan.calls[index];
+      if (!call) return;
+      const textOut = await deliver(chat, full, index === 0 ? source : wsRef.current, false, images, {
+        ...(call.route ? { logicRoute: call.route } : {}),
+        skipUserMessage: index > 0,
+        isolateOutputs: index > 0,
+      });
+      if (textOut == null) return;
+    }
+  }
+
   async function sendCommand() {
     if (busy || turnInFlight.current) return;
     const text = draft.trim();
@@ -2011,6 +2080,16 @@ export function CommandApp() {
       });
       return;
     }
+    const routePlan = planRouting({
+      mode: routingMode,
+      primary: logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null),
+      seats: logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason })),
+      panel: routingPanel,
+    });
+    if (!routePlan.ok) {
+      setError(routePlan.reason);
+      return;
+    }
     const made = createChat(ws, {
       memory: memoryChoice,
       autonomy,
@@ -2037,7 +2116,7 @@ export function CommandApp() {
     });
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, false, images);
+    await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
   }
 
   async function startResearch() {
@@ -2192,6 +2271,16 @@ export function CommandApp() {
       });
       return;
     }
+    const chatPlan = planRouting({
+      mode: routingMode,
+      primary: logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null),
+      seats: logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason })),
+      panel: routingPanel,
+    });
+    if (!chatPlan.ok) {
+      setError(chatPlan.reason);
+      return;
+    }
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
     setDraft("");
@@ -2209,7 +2298,7 @@ export function CommandApp() {
     }
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    await deliver(active, full, ws, false, images);
+    await deliverPlanned(active, full, ws, images);
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
@@ -4313,6 +4402,12 @@ export function CommandApp() {
                     ))}
                   </div>
                   <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
+                  <RoutingModeControl
+                    mode={routingMode}
+                    panel={routingPanel}
+                    onMode={chooseRoutingMode}
+                    onToggle={toggleRoutingSeat}
+                  />
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
@@ -4654,6 +4749,12 @@ export function CommandApp() {
               }}
               composerEffort={composerEffort}
               onComposerEffort={chooseComposerEffort}
+              routingMode={routingMode}
+              onRoutingMode={chooseRoutingMode}
+              routingPanel={routingPanel}
+              onToggleRoute={toggleRoutingSeat}
+              ratings={ratings}
+              onRate={rateReply}
               stagedName={staged?.name ?? null}
               pendingImages={pendingImages}
               onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
@@ -6023,6 +6124,12 @@ function ChatPane({
   onComposerMode,
   composerEffort,
   onComposerEffort,
+  routingMode,
+  onRoutingMode,
+  routingPanel,
+  onToggleRoute,
+  ratings,
+  onRate,
   stagedName,
   pendingImages,
   onRemoveImage,
@@ -6106,6 +6213,12 @@ function ChatPane({
   onComposerMode: (mode: Autonomy) => void;
   composerEffort: ComposerModeId;
   onComposerEffort: (mode: ComposerModeId) => void;
+  routingMode: RoutingMode;
+  onRoutingMode: (mode: RoutingMode) => void;
+  routingPanel: LogicRouteId[];
+  onToggleRoute: (id: LogicRouteId) => void;
+  ratings: ResponseRating[];
+  onRate: (messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) => void;
   stagedName: string | null;
   pendingImages: ImageAttachment[];
   onRemoveImage: (index: number) => void;
@@ -6313,6 +6426,21 @@ function ChatPane({
                     {speaking ? "Speaking" : "Read aloud"}
                   </button>
                 )}
+                {msg.role === "assistant" && (
+                  <span className="flex flex-wrap items-center gap-1 text-xs text-muted">
+                    Rate
+                    {([1, 2, 3, 4, 5] as const).map((score) => (
+                      <button
+                        key={score}
+                        type="button"
+                        className={`min-h-11 min-w-11 ${ratings.find((item) => item.messageId === msg.id)?.score === score ? "text-accent" : ""}`}
+                        onClick={() => onRate(msg.id, score, msg.model ?? null)}
+                      >
+                        {score}
+                      </button>
+                    ))}
+                  </span>
+                )}
                 {msg.role === "assistant" && last?.id === msg.id && (
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={onRegenerate} disabled={busy || halted}>Regenerate</button>
                 )}
@@ -6416,6 +6544,7 @@ function ChatPane({
           }}
         >
           <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
+          <RoutingModeControl mode={routingMode} panel={routingPanel} onMode={onRoutingMode} onToggle={onToggleRoute} />
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -6647,6 +6776,60 @@ function ChatPane({
           </button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function RoutingModeControl({
+  mode,
+  panel,
+  onMode,
+  onToggle,
+}: {
+  mode: RoutingMode;
+  panel: LogicRouteId[];
+  onMode: (mode: RoutingMode) => void;
+  onToggle: (id: LogicRouteId) => void;
+}) {
+  const modes: RoutingMode[] = ["A", "B", "C", "D"];
+  return (
+    <div className="mb-2" data-testid="routing-mode">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted">Routing</span>
+        {modes.map((item) => (
+          <button
+            key={item}
+            type="button"
+            aria-pressed={mode === item}
+            className={`min-h-11 rounded-full px-3 text-sm ${mode === item ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
+            onClick={() => onMode(item)}
+          >
+            {item} {ROUTING_MODE_LABEL[item]}
+          </button>
+        ))}
+      </div>
+      {mode !== "A" && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted">Routes</span>
+          {(["astra", "sol", "luna"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={panel.includes(id)}
+              className={`min-h-11 rounded-full px-3 text-sm ${panel.includes(id) ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
+              onClick={() => onToggle(id)}
+            >
+              {id}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="mt-1 text-xs text-muted">
+        {mode === "A" && "One model answers. Nothing else is called."}
+        {mode === "B" && "Two ready routes answer. Both replies stay. Nothing is merged."}
+        {mode === "C" && "Each selected ready route answers on its own. Nothing is merged."}
+        {mode === "D" && "Selected ready routes stay side by side. Nothing is merged."}
+      </p>
     </div>
   );
 }
