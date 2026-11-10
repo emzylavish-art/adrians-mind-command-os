@@ -4136,6 +4136,9 @@ export function CommandApp() {
               workspace={ws}
               onOpenChat={() => { setView("command"); setNavOpen(false); }}
               onOpenDashboard={() => { setView("dashboard"); setNavOpen(false); }}
+              onOpenAgents={() => { setView("agents"); setNavOpen(false); }}
+              onOpenRuns={() => { setView("runs"); setNavOpen(false); }}
+              onOpenConnections={() => { setView("connected"); setNavOpen(false); }}
             />
           )}
           {view === "dashboard" && (
