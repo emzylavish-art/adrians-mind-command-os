@@ -89,6 +89,11 @@ describe("request carries the selection", () => {
     };
     assert.equal(chatTurnBody({ ...shared, personalityId: "unhinged" }).personalityId, "unhinged");
     assert.equal(chatTurnBody(shared).personalityId, "assistant");
+    assert.equal(
+      chatTurnBody({ ...shared, personalityId: "custom", customPersonality: "Candid and concise." }).customPersonality,
+      "Candid and concise.",
+    );
+    assert.equal(chatTurnBody(shared).customPersonality, "");
   });
 
   it("refuses a provider and logicRoute that disagree", () => {
