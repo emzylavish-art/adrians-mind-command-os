@@ -2,9 +2,9 @@
  * MCP registry HTTP API.
  *
  * Anonymous GET returns 401 "Sign in is required." — correct for this REST
- * surface. The in-app Tools UI does NOT call this route; it uses the soft-auth
- * mcpRegistryList server function (typed `unauthenticated`, quiet sign-in
- * notice). Only live verify scripts probe this path. Keep the 401.
+ * surface. The in-app Tools UI normally uses the soft-auth server function
+ * (typed `unauthenticated`). A browser-side transport failure can trigger
+ * one authenticated, read-only REST fallback. Keep the anonymous 401.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { getSql } from "@/lib/db";
@@ -21,7 +21,7 @@ import {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
 }
 
@@ -35,6 +35,38 @@ export const Route = createFileRoute("/api/mind/mcp/servers")({
           const userId = await requireUserId(bearer);
           const { databaseConfigured } = await import("@/lib/mind/mcp/registry-store");
           const db = databaseConfigured() ? await getSql() : null;
+          const view = new URL(request.url).searchParams.get("view") ?? "registry";
+          if (view === "saved") {
+            const { listConnectedMcp } = await import("@/lib/mind/connected-mcp.server");
+            return json({ ok: true, servers: await listConnectedMcp(db, userId) });
+          }
+          if (view === "health") {
+            // Authenticated, read-only diagnostics. No keys, database URL,
+            // OAuth tokens or foreign-user records are included.
+            if (!db) return json({ ok: false, code: "database_not_configured", message: "A durable database is required." }, 503);
+            let migrated: string[];
+            try {
+              const rows = await db.query<{ name: string }>("SELECT name FROM _migrations");
+              migrated = rows.map((row) => row.name);
+            } catch {
+              return json({ ok: false, code: "migration_table_unavailable", message: "Migration records could not be read." }, 503);
+            }
+            const required = ["0005_custom_connection.sql", "0006_ai_providers.sql", "0007_oauth_connections.sql"];
+            const migrations = Object.fromEntries(required.map((name) => [name, migrated.includes(name)]));
+            if (required.some((name) => !migrated.includes(name))) {
+              return json({ ok: false, code: "migrations_pending", migrations }, 503);
+            }
+            try {
+              const rows = await db.query<{ count: number }>(
+                "SELECT COUNT(*)::int AS count FROM mind_mcp_registry WHERE user_id = $1",
+                [userId],
+              );
+              return json({ ok: true, code: "ready", migrations, savedRegistryRows: rows[0]?.count ?? 0 });
+            } catch {
+              return json({ ok: false, code: "registry_table_unavailable", migrations }, 503);
+            }
+          }
+          if (view !== "registry") return json({ ok: false, code: "unknown_view" }, 400);
           return json({ ok: true, servers: await listRegistryServers(userId, db) });
         } catch (error) {
           const failure = mcpPublicException(error);

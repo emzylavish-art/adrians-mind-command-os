@@ -4,6 +4,7 @@ import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
 import { getBearerToken } from "@/lib/auth/client";
+import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -989,7 +990,7 @@ export function CommandApp() {
         if (!active) return;
         const generation = ++mcpRegistryGeneration.current;
         setMcpRegistryListState({ status: "loading" });
-        void loadMcpList(() => mcpRegistryList()).then((next) => {
+        void loadMcpList(() => loadMcpWithHttpFallback(() => mcpRegistryList(), "registry", { bearerToken: getBearerToken() })).then((next) => {
           if (!active || generation !== mcpRegistryGeneration.current) return;
           setMcpRegistryListState(next);
           if (next.status === "ready") {
@@ -1008,7 +1009,7 @@ export function CommandApp() {
         if (!active) return;
         const generation = ++mcpSavedGeneration.current;
         setMcpSavedListState({ status: "loading" });
-        void loadMcpList(() => mcpList()).then((next) => {
+        void loadMcpList(() => loadMcpWithHttpFallback(() => mcpList(), "saved", { bearerToken: getBearerToken() })).then((next) => {
           if (!active || generation !== mcpSavedGeneration.current) return;
           if (next.status === "ready" && next.servers.every(isSavedMcpServer)) {
             setMcpSavedListState(next);

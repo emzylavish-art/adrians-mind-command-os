@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { getBearerToken } from "@/lib/auth/client";
+import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
 import { oauthBoardState } from "@/lib/mind/connection-board";
 import { fetchOauthStatusPayload } from "@/lib/mind/service-board-status";
@@ -166,7 +168,7 @@ export function FleetPanel({
     const generation = nextListGeneration(mcpListGeneration.current);
     mcpListGeneration.current = generation;
     setMcpListState({ status: "loading" });
-    void loadMcpList(() => mcpRegistryList(), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
+    void loadMcpList(() => loadMcpWithHttpFallback(() => mcpRegistryList(), "registry", { bearerToken: getBearerToken() }), { timeoutMs: MCP_LIST_LOAD_TIMEOUT_MS })
       .then((next) => {
         if (!isCurrentListGeneration(generation, mcpListGeneration.current)) return;
         setMcpListState(next);

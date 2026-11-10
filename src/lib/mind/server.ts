@@ -434,7 +434,7 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
       sessionUser,
       authConfigured,
       gateIdentityEnabled: gateIdentityEnabled(),
-      databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+      databaseConfigured: Boolean(resolveDatabaseUrl(process.env)),
       devUserId: DEV_USER_ID,
     });
     if (!userId) {
