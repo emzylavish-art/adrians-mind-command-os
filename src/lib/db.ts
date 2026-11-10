@@ -1,6 +1,7 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { postgresPool } from "./auth/pg-pool.ts";
 import { resolveDatabaseUrl } from "./env.server.ts";
 
@@ -144,7 +145,11 @@ async function createPgliteSql(): Promise<Sql> {
   // on this machine. It is not a hosted database and not cloud backup.
   globalRef.__pgliteInstance__ ??= (async () => {
     const { PGlite } = await import("@electric-sql/pglite");
-    const dataDir = join(process.cwd(), ".data", "pglite");
+    // Each Node test file has a separate worker process. Share one DB within
+    // the process, but never collide on the same PGLite files across workers.
+    const dataDir = process.env.NODE_TEST_CONTEXT
+      ? join(tmpdir(), "adrians-mind-pglite-test-" + process.pid)
+      : join(process.cwd(), ".data", "pglite");
     mkdirSync(dataDir, { recursive: true });
     const pg = new PGlite({
       dataDir,
@@ -173,11 +178,28 @@ async function createPgliteSql(): Promise<Sql> {
   // passes serialized on a global chain so concurrent callers never
   // double-apply.
   const migrate = async (): Promise<void> => {
-    const migrations = import.meta.glob("/migrations/*.sql", {
-      query: "?raw",
-      import: "default",
-      eager: true,
-    }) as Record<string, string>;
+    let migrations: Record<string, string>;
+    try {
+      // Vite replaces this call at build time. Keep the literal call so the
+      // plugin can inline the SQL files into the production server bundle.
+      migrations = import.meta.glob("/migrations/*.sql", {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>;
+    } catch (error) {
+      // Node's --experimental-strip-types test runner does not supply
+      // import.meta.glob. Load the identical migration source from disk
+      // without weakening production's Vite bundling path.
+      if (!(error instanceof TypeError) ||
+          typeof process === "undefined" || !process.cwd()) throw error;
+      const folder = join(process.cwd(), "migrations");
+      migrations = Object.fromEntries(
+        readdirSync(folder)
+          .filter((name) => /^\d{4}_[A-Za-z0-9_-]+\.sql$/.test(name))
+          .map((name) => ["/migrations/" + name, readFileSync(join(folder, name), "utf8")]),
+      );
+    }
     const doneRows = await pg.query<{ name: string }>(
       "select name from _migrations",
     );
