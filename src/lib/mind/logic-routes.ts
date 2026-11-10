@@ -184,6 +184,7 @@ export function readinessFromProviderStatus(snapshot: ProviderStatusSnapshot): L
 export type StoredSelection = {
   provider: string;
   personalityId?: string;
+  customPersonality?: string;
   modelTier: ModelTier;
   logicRoute: LogicRouteId | null;
 };
@@ -342,6 +343,7 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     history: input.history,
     memoryContext: input.memoryContext,
     personalityId: input.personalityId ?? "assistant",
+    customPersonality: input.customPersonality ?? "",
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
     ...(input.logicRoute ? { logicRoute: input.logicRoute } : {}),
