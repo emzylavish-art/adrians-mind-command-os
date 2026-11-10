@@ -14,7 +14,12 @@ runner); it does not perform model inference or claim external services are live
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"team.health","input":{}}'` — inspect repository-declared readiness.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"knowledge.search","input":{"path":"./notes","query":"agent tools"}}'` — search local knowledge files.
 - `python team/runner.py --task '{"operation":"invoke","tool_id":"team.queue","input":{"operation":"enqueue","task":"inspect repo","payload":{"capabilities":["source_inventory"]}}}'` — persist a worker job.
-- `python team/runner.py --task '{"operation":"invoke","tool_id":"team.agent.resolve","input":{"task":"inventory source","capabilities":["source_inventory"]}}'` — resolve the matching specialist prompt.
+- `python team/runner.py --task '{"operation":"invoke","tool_id":"team.orchestrator","input":{"action":"inventory"}}'` — check declared tools without calling a model.
+- `python team/runner.py --task '{"operation":"invoke","tool_id":"team.manus","input":{"goal":"Write the local report.","transport":"local","state_dir":"team/state","project_id":"proof","tier":0}}'` — one local computer step. Cloud Manus is not called.
+- `python team/runner.py --task '{"operation":"invoke","tool_id":"team.automations","input":{"state_dir":"team/state","db":"team/queue.sqlite3","trigger":{"type":"time","name":"daily-research-summary"}}}'` — enqueue into the existing queue. This does not start a scheduler.
+
+The orchestration loop reuses `team/queue.py`, the approval tiers, and the Notion bus. It does not add a second queue. `team/state/KILL` stops the next gated action and survives a process restart. Tier 3+ requires an approval record. A fleet wake writes a record and does not spawn a specialist.
+
 
 ### JSON contract
 
