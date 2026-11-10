@@ -7,12 +7,13 @@ describe("mind postgres TLS helper", () => {
   it("points the mind pool at the verified helper and does not disable TLS", async () => {
     const source = readFileSync(new URL("../../db.ts", import.meta.url), "utf8");
     const helper = readFileSync(new URL("../../auth/pg-pool.ts", import.meta.url), "utf8");
+    const tlsHelper = readFileSync(new URL("../../auth/postgres-ssl.mjs", import.meta.url), "utf8");
     assert.match(source, /postgresPool\(databaseUrl\)/);
     assert.doesNotMatch(source, /rejectUnauthorized:\s*false/);
     assert.doesNotMatch(source, /NODE_TLS_REJECT_UNAUTHORIZED/);
-    assert.match(helper, /rejectUnauthorized:\s*true/);
-    assert.match(helper, /SUPABASE_ROOT_2021/);
-    assert.match(helper, /sslmode=/);
+    assert.match(helper, /supabasePostgresPoolOptions/);
+    assert.match(tlsHelper, /rejectUnauthorized:\s*true/);
+    assert.match(tlsHelper, /SUPABASE_ROOT_2021_CA/);
     try {
       const { postgresPool } = await import("../../auth/pg-pool.ts");
       const pool = postgresPool("postgres://user:pass@127.0.0.1:1/db?sslmode=require");
