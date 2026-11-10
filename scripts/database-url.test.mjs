@@ -11,9 +11,10 @@ test("resolveDatabaseUrl prefers DATABASE_URL then POSTGRES_URL", () => {
   );
 });
 
-test("resolveMigrateDatabaseUrl prefers non-pooling when DATABASE_URL unset", () => {
+test("resolveMigrateDatabaseUrl prefers the direct URL over pooled URLs", () => {
   assert.equal(
     resolveMigrateDatabaseUrl({
+      DATABASE_URL: "postgres://pool-from-database-url",
       POSTGRES_URL_NON_POOLING: "postgres://direct",
       POSTGRES_URL: "postgres://pool",
     }),

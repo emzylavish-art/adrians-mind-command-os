@@ -13,7 +13,7 @@ export function resolveDatabaseUrl(env = process.env) {
 
 /** Migrations prefer a direct (non-pooler) connection when available. */
 export function resolveMigrateDatabaseUrl(env = process.env) {
-  for (const key of ["DATABASE_URL", "POSTGRES_URL_NON_POOLING", "POSTGRES_URL"]) {
+  for (const key of ["POSTGRES_URL_NON_POOLING", "DATABASE_URL", "POSTGRES_URL"]) {
     const value = typeof env[key] === "string" ? env[key].trim() : "";
     if (value) return value;
   }
