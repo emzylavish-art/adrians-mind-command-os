@@ -47,6 +47,7 @@ export type Chat = {
   temporary: boolean;
   autonomy: Autonomy;
   personalityId?: PersonalityId;
+  customPersonality?: string;
   projectId: string | null;
   messages: Msg[];
   retrievalLog: Retrieval[];
