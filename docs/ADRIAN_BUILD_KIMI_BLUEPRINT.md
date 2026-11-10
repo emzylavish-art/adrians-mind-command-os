@@ -1,3 +1,5 @@
+> **Superseded for delivery sequencing:** The authoritative, complete plan is now `docs/ADRIAN_BUILD_KIMI_MASTER_IMPLEMENTATION_BLUEPRINT.md`. Where this earlier draft differs, the master blueprint wins. In particular, delivery is **website-first using a persistent hosted Kimi runtime**; Windows Companion/local PC execution is a later phase and is not a prerequisite for the first website release. The coding agent handoff also points to the master blueprint.
+
 # Adrian Build — Kimi Code Integration Blueprint
 
 **Status:** Architecture and implementation handoff; not implemented or runtime-verified.
