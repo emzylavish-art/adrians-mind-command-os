@@ -19,6 +19,15 @@ import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 import { resolveMigrateDatabaseUrl } from "./database-url.mjs";
 
+// A Vercel Preview/Development build must never apply SQL against whichever
+// DATABASE_URL was inherited from the project configuration. Only the
+// production deployment is allowed to update the production schema.
+// Local invocations remain explicit and continue to work.
+if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") {
+  console.log("[migrate] non-production Vercel environment — skipping database migrations.");
+  process.exit(0);
+}
+
 const databaseUrl = resolveMigrateDatabaseUrl(process.env);
 if (!databaseUrl) {
   console.log(
