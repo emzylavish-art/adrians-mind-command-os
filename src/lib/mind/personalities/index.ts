@@ -17,6 +17,7 @@ export function normalizeCustomPersonality(value: unknown): string {
   if (typeof value !== "string") return "";
   return value
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, MAX_CUSTOM_PERSONALITY_CHARS);
