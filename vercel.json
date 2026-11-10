@@ -1,6 +1,6 @@
 {
   "installCommand": "npm install --include=dev --no-audit --no-fund",
-  "buildCommand": "npx vite build && node scripts/copy-pglite-assets.mjs",
+  "buildCommand": "npm run build",
   "redirects": [
     {
       "source": "/signup",
