@@ -20,6 +20,24 @@ export class SharedAudioOutput {
   private onEnded: (() => void) | null = null;
   private htmlAudio: HTMLAudioElement | null = null;
   private htmlFinish: (() => void) | null = null;
+  private clockListeners = new Set<(clock: { playing: boolean; current: number; duration: number }) => void>();
+
+  onClock(listener: (clock: { playing: boolean; current: number; duration: number }) => void): () => void {
+    this.clockListeners.add(listener);
+    listener(this.clock());
+    return () => this.clockListeners.delete(listener);
+  }
+
+  private clock() {
+    const audio = this.htmlAudio;
+    const duration = audio && Number.isFinite(audio.duration) ? audio.duration : 0;
+    return { playing: this.playing, current: audio?.currentTime ?? 0, duration };
+  }
+
+  private emitClock() {
+    const clock = this.clock();
+    for (const listener of this.clockListeners) listener(clock);
+  }
 
   get isPlaying() {
     return this.playing;
@@ -79,6 +97,7 @@ export class SharedAudioOutput {
         if (this.sources.length === 0) {
           this.playing = false;
           this.onEnded?.();
+          this.emitClock();
         }
         resolve();
       };
@@ -88,6 +107,7 @@ export class SharedAudioOutput {
           return;
         }
         source.start();
+        this.emitClock();
       } catch {
         resolve();
       }
@@ -104,6 +124,7 @@ export class SharedAudioOutput {
     const audio = new Audio(url);
     this.htmlAudio = audio;
     this.playing = true;
+    this.emitClock();
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       const finish = () => {
@@ -114,6 +135,7 @@ export class SharedAudioOutput {
         this.htmlFinish = null;
         URL.revokeObjectURL(url);
         this.onEnded?.();
+        this.emitClock();
         resolve();
       };
       const fail = (err: Error) => {
@@ -123,6 +145,7 @@ export class SharedAudioOutput {
         if (this.htmlAudio === audio) this.htmlAudio = null;
         this.htmlFinish = null;
         URL.revokeObjectURL(url);
+        this.emitClock();
         reject(err);
       };
       this.htmlFinish = finish;
@@ -131,6 +154,8 @@ export class SharedAudioOutput {
         return;
       }
       audio.onended = finish;
+      audio.ontimeupdate = () => this.emitClock();
+      audio.onerror = () => fail(new Error("The browser blocked playback."));
       audio.onerror = () => fail(new Error("The browser blocked playback."));
       const played = audio.play();
       if (played && typeof (played as Promise<void>).catch === "function") {
@@ -164,6 +189,7 @@ export class SharedAudioOutput {
     this.stop();
     this.stopHtmlAudio();
     this.playing = false;
+    this.emitClock();
   }
 }
 

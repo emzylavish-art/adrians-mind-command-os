@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Activity, ArrowUpRight, Bot, CircleAlert, Clock3, FileText, Globe2, ShieldCheck } from "lucide-react";
+import { DigitalHuman, readStoredFraming, writeStoredFraming } from "@/components/mind/avatar/digital-human";
+import { AVATAR_EXPRESSIONS, type AvatarExpression, type AvatarFraming } from "@/lib/mind/avatar/presence";
 import { MIND_CHARACTERS, readStoredCharacterId, rosterAvailability, writeStoredCharacterId } from "@/lib/mind/characters";
 import { paperclipStatus, runDurableCorePass } from "@/lib/mind/server";
 import { CONVERSATIONAL_PERSONALITIES, resolvePersonalityId } from "@/lib/mind/personalities";
@@ -44,6 +46,7 @@ export function EveWorkbench({
   onOpenConnections,
   onCommand,
   onToggleStop,
+  onPreviewVoice,
   personalityId,
   customPersonality,
   chatTitle,
@@ -56,6 +59,7 @@ export function EveWorkbench({
   onOpenConnections: () => void;
   onCommand: (command: WorkbenchCommand) => void;
   onToggleStop: () => void;
+  onPreviewVoice?: (line: string) => void;
   personalityId?: string;
   customPersonality?: string;
   chatTitle?: string;
@@ -76,6 +80,8 @@ export function EveWorkbench({
   const [goal, setGoal] = useState("");
   const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
   const [characterId, setCharacterId] = useState(() => readStoredCharacterId(storageOrNull()));
+  const [framing, setFraming] = useState<AvatarFraming>(() => readStoredFraming());
+  const [expression, setExpression] = useState<AvatarExpression | null>(null);
   const [paperclip, setPaperclip] = useState<PaperclipView | null>(null);
   const [paperclipError, setPaperclipError] = useState<string | null>(null);
   const [serverNote, setServerNote] = useState<string | null>(null);
@@ -286,9 +292,30 @@ export function EveWorkbench({
 
           <div className="flex flex-col gap-4">
             <section className="rounded-panel border border-line bg-surface p-4">
-              <h2 className="flex items-center gap-2 font-semibold"><Bot className="size-5" /> EVE presence</h2>
-              <p className="mt-1 text-xs text-muted">{roster.femaleFilled} of {roster.femaleFilled + roster.femaleOpen} female voices filled. {roster.maleFilled} of {roster.maleOpen} male voices filled. All share Adrian Core and cannot grant tools.</p>
+              <h2 className="flex items-center gap-2 font-semibold"><Bot className="size-5" /> Digital human</h2>
+              <p className="mt-1 text-xs text-muted">{roster.femaleFilled} of {roster.femaleFilled + roster.femaleOpen} female identities filled. {roster.maleFilled} of {roster.maleOpen} male identities filled. Same Adrian Core. No extra permissions.</p>
+              <DigitalHuman characterId={characterId} framing={framing} expression={expression} className="mt-3" />
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Avatar framing">
+                {(["full", "upper", "face", "compact"] as AvatarFraming[]).map((mode) => (
+                  <button key={mode} type="button" className={"min-h-11 rounded-panel border px-3 text-xs " + (framing === mode ? "border-accent bg-accent/10" : "border-line")} onClick={() => { setFraming(mode); writeStoredFraming(mode); }}>{mode}</button>
+                ))}
+              </div>
+              <label className="mt-3 grid gap-1 text-xs text-muted">
+                Expression
+                <select className="min-h-11 rounded-panel border border-line bg-bg px-3 text-sm text-fg" value={expression ?? "auto"} onChange={(event) => setExpression(event.target.value === "auto" ? null : event.target.value as AvatarExpression)}>
+                  <option value="auto">Follow live state</option>
+                  {AVATAR_EXPRESSIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </label>
               <p className="mt-2 text-sm">Active chat: {chatTitle || "No chat open"} · style {style?.label ?? "Assistant"}{resolvePersonalityId(personalityId) === "custom" && customPersonality ? ` · “${customPersonality.slice(0, 80)}”` : ""}</p>
+              <button
+                type="button"
+                className="mt-2 inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm"
+                onClick={() => onPreviewVoice?.(`Hello. I am ${MIND_CHARACTERS.find((item) => item.id === characterId)?.name ?? "EVE"}.`)}
+              >
+                Play voice preview
+              </button>
+              <p className="mt-1 text-xs text-muted">Preview speaks only if a speech key is configured. It does not invent audio. Lip sync follows that playback.</p>
               <div className="mt-3 grid gap-2">
                 {MIND_CHARACTERS.map((character) => (
                   <button key={character.id} type="button" onClick={() => chooseCharacter(character.id)} className={"rounded-panel border px-3 py-2 text-left " + (characterId === character.id ? "border-accent bg-accent/10" : "border-line")} aria-pressed={characterId === character.id}>
@@ -297,7 +324,7 @@ export function EveWorkbench({
                   </button>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-muted">No 3D face, lip-sync or video avatar is connected. Choosing a character sets the stored xAI voice id only.</p>
+              <p className="mt-3 text-xs text-muted">Original photographs, not a licensed face rig. EVE has ah, ee, oo and mm visemes timed to speech. The others have a closed mouth and an ah viseme. Full body is finished for EVE only. A rigged GLB is not included.</p>
             </section>
 
             <section className="rounded-panel border border-line bg-surface p-4">

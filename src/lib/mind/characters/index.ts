@@ -20,6 +20,11 @@ export type MindCharacter = {
   voiceId: XaiBuiltinVoice;
   speakingStyle: string;
   summary: string;
+  /** Original photographic plates. Not a licensed third-party GLB. */
+  portrait: string;
+  fullBody: string | null;
+  visemes: Partial<Record<"aa" | "ee" | "oo" | "mm", string>>;
+  expressions: Partial<Record<"listening" | "thoughtful" | "concerned" | "smiling", string>>;
 };
 
 export const MIND_CHARACTERS: readonly MindCharacter[] = [
@@ -31,6 +36,20 @@ export const MIND_CHARACTERS: readonly MindCharacter[] = [
     voiceId: "eve",
     speakingStyle: "Steady, direct and calm. Lead with the operational fact, then the next action.",
     summary: "Primary interface for Adrian Core. Reports real status and does not invent execution.",
+    portrait: "/characters/eve/neutral.jpg",
+    fullBody: "/characters/eve/full.jpg",
+    visemes: {
+      aa: "/characters/eve/viseme-aa.jpg",
+      ee: "/characters/eve/viseme-ee.jpg",
+      oo: "/characters/eve/viseme-oo.jpg",
+      mm: "/characters/eve/viseme-mm.jpg",
+    },
+    expressions: {
+      listening: "/characters/eve/listen.jpg",
+      thoughtful: "/characters/eve/thoughtful.jpg",
+      concerned: "/characters/eve/concerned.jpg",
+      smiling: "/characters/eve/smile.jpg",
+    },
   },
   {
     id: "liora",
@@ -40,6 +59,10 @@ export const MIND_CHARACTERS: readonly MindCharacter[] = [
     voiceId: "liora",
     speakingStyle: "Patient and precise. Separate evidence from inference.",
     summary: "Reads what is already stored and says when a source is missing.",
+    portrait: "/characters/liora/neutral.jpg",
+    fullBody: null,
+    visemes: { aa: "/characters/liora/viseme-aa.jpg" },
+    expressions: {},
   },
   {
     id: "iris",
@@ -49,6 +72,10 @@ export const MIND_CHARACTERS: readonly MindCharacter[] = [
     voiceId: "iris",
     speakingStyle: "Businesslike, structured and brief.",
     summary: "Same authority boundary as EVE, with a formal delivery.",
+    portrait: "/characters/iris/neutral.jpg",
+    fullBody: null,
+    visemes: { aa: "/characters/iris/viseme-aa.jpg" },
+    expressions: {},
   },
   {
     id: "luna",
@@ -58,6 +85,10 @@ export const MIND_CHARACTERS: readonly MindCharacter[] = [
     voiceId: "luna",
     speakingStyle: "Warm and plain-spoken. Do not claim to be a clinician.",
     summary: "Supportive delivery only. Does not relax safety or approval rules.",
+    portrait: "/characters/luna/neutral.jpg",
+    fullBody: null,
+    visemes: { aa: "/characters/luna/viseme-aa.jpg" },
+    expressions: {},
   },
   {
     id: "aurora",
@@ -67,6 +98,10 @@ export const MIND_CHARACTERS: readonly MindCharacter[] = [
     voiceId: "aurora",
     speakingStyle: "Vivid but factual. Do not dramatise status, timestamps or tool results.",
     summary: "Narrative delivery for explanations. Operational facts stay literal.",
+    portrait: "/characters/aurora/neutral.jpg",
+    fullBody: null,
+    visemes: { aa: "/characters/aurora/viseme-aa.jpg" },
+    expressions: {},
   },
 ] as const;
 

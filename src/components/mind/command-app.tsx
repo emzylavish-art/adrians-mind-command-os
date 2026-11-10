@@ -109,6 +109,8 @@ import {
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { voiceSessionInstructions } from "@/lib/mind/voice-live/session-instructions";
 import { readStoredCharacterId } from "@/lib/mind/characters";
+import { noteSpokenText, readAvatarSession, setAvatarPresence } from "@/lib/mind/avatar/session";
+import { DigitalHuman } from "@/components/mind/avatar/digital-human";
 import { applyWorkbenchCommand } from "@/lib/mind/workbench-command";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import { appendDictationText } from "@/lib/mind/voice/dictation";
@@ -737,6 +739,33 @@ export function CommandApp() {
   const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
+    if (ws.halted) {
+      setAvatarPresence("offline");
+      return;
+    }
+    if (speaking) return;
+    const live = readAvatarSession().presence;
+    if (live === "processing" || live === "speaking" || live === "interrupted" || live === "error") return;
+    const waiting = ws.runs.some((run) => run.state === "waiting_approval");
+    const executing = ws.runs.some((run) => run.state === "running");
+    if (voiceListening) {
+      setAvatarPresence("listening");
+      return;
+    }
+    if (waiting) {
+      setAvatarPresence("waiting_approval");
+      return;
+    }
+    if (executing) {
+      setAvatarPresence("executing");
+      return;
+    }
+    if (live === "listening" || live === "offline" || live === "waiting_approval" || live === "executing") {
+      setAvatarPresence("idle");
+    }
+  }, [ws.halted, ws.runs, voiceListening, speaking]);
+
+  useEffect(() => {
     // Single store: hydrate from localStorage once; every badge reads the same snapshot.
     const storage = typeof localStorage === "undefined" ? null : localStorage;
     hydrateVoiceModeStore(storage);
@@ -870,6 +899,7 @@ export function CommandApp() {
     });
     speakAbortRef.current = null;
     setSpeaking(false);
+    setAvatarPresence("interrupted");
   }
 
   useEffect(() => {
@@ -2845,6 +2875,8 @@ export function CommandApp() {
     const abort = new AbortController();
     speakAbortRef.current = abort;
     setSpeaking(true);
+    setAvatarPresence("processing");
+    let speechFailed = false;
     await runMountedSpeak({
       text,
       messageId,
@@ -2877,6 +2909,7 @@ export function CommandApp() {
         },
         chatTurn: (transcript) => speakChatTurn(transcript),
         synthesize: async (reply, voice) => {
+          noteSpokenText(reply);
           const spoken = await speakText({ data: { text: reply, voiceId: voice } });
           if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok && "provider" in spoken && spoken.provider) {
             setNotice(`${spoken.provider} spoke this reply.`);
@@ -2888,6 +2921,8 @@ export function CommandApp() {
         },
       },
       reportFailure: (message, action, target, retry) => {
+        speechFailed = true;
+        setAvatarPresence("error");
         reportFailure(message, action, target, retry);
         setFailure((current) => (current ? { ...current, kind: (classifyHonestFailure(message) ?? (action as HonestFailureKind)) } : current));
       },
@@ -2898,6 +2933,7 @@ export function CommandApp() {
     });
     if (generation !== speakGenRef.current || abort.signal.aborted) return;
     setSpeaking(false);
+    if (!speechFailed && !wsRef.current.halted) setAvatarPresence("idle");
   }
 
   function appendLiveVoiceUser(text: string) {
@@ -2928,6 +2964,7 @@ export function CommandApp() {
   function appendLiveVoiceAssistant(text: string) {
     const clipped = text.trim();
     if (!clipped) return;
+    noteSpokenText(clipped);
     const targetId = activeId ?? active?.id ?? null;
     if (!targetId) {
       setNotice(`Live voice reply: ${clipped.slice(0, 160)}`);
@@ -3551,6 +3588,7 @@ export function CommandApp() {
             session.interruptPlayback();
           },
           onError: (message) => {
+            setAvatarPresence("error");
             const shown = message || "Voice realtime error.";
             setError(shown);
             if (overlayOpenRef.current) {
@@ -3564,9 +3602,15 @@ export function CommandApp() {
             const previous = lastSessionStatusRef.current;
             lastSessionStatusRef.current = status;
             setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
-            if (status === "speaking") setSpeaking(true);
+            if (status === "processing") setAvatarPresence("processing");
+            if (status === "speaking") {
+              setSpeaking(true);
+              if (readAvatarSession().utterance) setAvatarPresence("speaking");
+            }
+            if (status === "listening") setAvatarPresence("listening");
             if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
             if (status === "idle" || status === "closed") {
+              if (!wsRef.current.halted) setAvatarPresence("idle");
               setVoiceLevel(0);
               if (status === "closed") setVoiceLiveTranscript("");
             }
@@ -4168,6 +4212,7 @@ export function CommandApp() {
                 }
               }}
               onToggleStop={() => { void toggleStop(); }}
+              onPreviewVoice={(line) => { void speak(line); }}
               onOpenChat={() => { setView("command"); setNavOpen(false); }}
               onOpenDashboard={() => { setView("dashboard"); setNavOpen(false); }}
               onOpenAgents={() => { setView("agents"); setNavOpen(false); }}
@@ -4185,11 +4230,14 @@ export function CommandApp() {
           {view === "command" && (
             <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
               <div className="masthead flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h1 className="font-display text-3xl font-bold md:text-4xl">
-                    {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
-                  </h1>
-                  <p className="text-sm text-muted">Your workspace, under your control.</p>
+                <div className="flex min-w-0 items-end gap-3">
+                  <DigitalHuman framing="compact" className="mb-1 w-24 shrink-0" />
+                  <div>
+                    <h1 className="font-display text-3xl font-bold md:text-4xl">
+                      {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
+                    </h1>
+                    <p className="text-sm text-muted">Your workspace, under your control.</p>
+                  </div>
                 </div>
                 <p className="text-right text-sm text-muted">
                   {now
@@ -6158,6 +6206,7 @@ function ChatPane({
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="masthead px-4 pt-4">
+          <DigitalHuman framing="compact" className="mb-3 max-w-[9.5rem]" />
           <div className="flex flex-wrap items-end justify-between gap-2">
             <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
             {active && !renaming && (
