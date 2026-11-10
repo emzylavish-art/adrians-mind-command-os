@@ -10,6 +10,7 @@ export function assembleTurn(input: {
   memoryContext: MemoryNote[];
   images?: ImageAttachment[];
   personalityId?: unknown;
+  customPersonality?: unknown;
 }):
   | { ok: false; error: string }
   | {
@@ -44,7 +45,7 @@ export function assembleTurn(input: {
     messages: [
       {
         role: "system",
-        content: `You are Adrian's Mind in Direct mode. ${memoryLine} ${personalityInstruction(input.personalityId)} Do not claim tools, agents, or other models ran.`,
+        content: `You are Adrian's Mind in Direct mode. ${memoryLine} ${personalityInstruction(input.personalityId, input.customPersonality)} Do not claim tools, agents, or other models ran.`,
       },
       ...historyMessages,
       { role: "user", content: userContent },
