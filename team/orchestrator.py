@@ -6,6 +6,7 @@ says so. Execution jobs go to the existing queue. Nothing here is a second queue
 """
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -153,6 +154,38 @@ def route_and_enqueue(payload):
     }
 
 
+def notion_writeback_payload(evidence, line, page_id):
+    limitations = evidence.get("limitations") or []
+    if isinstance(limitations, str):
+        limitations = [limitations]
+    text = "\n".join([
+        str(evidence.get("summary", "")),
+        "Artifacts: " + ", ".join(str(item) for item in (evidence.get("artifact_files") or [])),
+        "Evidence: " + ", ".join(str(item) for item in (evidence.get("evidence_log") or [])),
+        "Limitations: " + ", ".join(str(item) for item in limitations),
+        line,
+    ]).strip()
+    return {
+        "tool_id": "notion.controller",
+        "input": {"action": "append-text", "id": page_id or "", "text": text},
+        "condition": (
+            "Runs only when notion_page_id is a Notion page id, "
+            "approval.approved is true with an id, and NOTION_API_KEY is set. "
+            "Otherwise nothing is sent."
+        ),
+    }
+
+
+def _append_notion(page_id, text):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "notion_controller", ROOT / "tools" / "notion" / "controller.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.append_text(page_id, text)
+
+
 def synthesize(payload):
     folder = payload.get("state_dir")
     evidence = payload.get("evidence")
@@ -172,12 +205,61 @@ def synthesize(payload):
             "status": "blocked", "result": None, "evidence": ["team/orchestrator.py"],
             "limitations": [f"Evidence package is missing: {', '.join(missing)}"],
         }
-    line = log_line(folder, "SYNTHESIZE", "ACCEPTED", "UPDATE PROJECT STATE")
+    line = log_line(folder, "SYNTHESIZE", "ACCEPTED", "NOTION WRITE-BACK")
+    page_id = payload.get("notion_page_id")
+    if not isinstance(page_id, str):
+        page_id = ""
+    deferred = notion_writeback_payload(evidence, line, page_id.strip())
+    approval = payload.get("approval")
+    key_set = bool(os.environ.get("NOTION_API_KEY"))
+    approved = (
+        isinstance(approval, dict)
+        and approval.get("approved") is True
+        and isinstance(approval.get("id"), str)
+        and bool(approval.get("id").strip())
+    )
+    if not page_id.strip() or not approved or not key_set:
+        reasons = []
+        if not page_id.strip():
+            reasons.append("notion_page_id is missing")
+        if not approved:
+            reasons.append("approval record is missing")
+        if not key_set:
+            reasons.append("NOTION_API_KEY is not set")
+        reason = "Notion write-back deferred: " + "; ".join(reasons) + "."
+        log_line(folder, "NOTION", "DEFERRED", reason)
+        return {
+            "status": "ready",
+            "result": {
+                "accepted": True, "log": line, "logs": read_log(folder),
+                "notion_writeback": {"sent": False, "deferred": deferred},
+            },
+            "evidence": ["team/orchestrator.py"],
+            "limitations": [reason, deferred["condition"]],
+        }
+    try:
+        response = _append_notion(page_id.strip(), deferred["input"]["text"])
+    except Exception as exc:
+        message = str(exc)
+        log_line(folder, "NOTION", "BLOCKED", message)
+        return {
+            "status": "partial",
+            "result": {
+                "accepted": True, "log": line, "logs": read_log(folder),
+                "notion_writeback": {"sent": False, "deferred": deferred, "error": message},
+            },
+            "evidence": ["team/orchestrator.py", "tools/notion/controller.py"],
+            "limitations": ["Notion append did not succeed.", deferred["condition"]],
+        }
+    log_line(folder, "NOTION", "APPENDED", page_id.strip())
     return {
         "status": "ready",
-        "result": {"accepted": True, "log": line, "logs": read_log(folder)},
-        "evidence": ["team/orchestrator.py"],
-        "limitations": ["Synthesis checks the package shape. It does not prove a cloud computer ran."],
+        "result": {
+            "accepted": True, "log": line, "logs": read_log(folder),
+            "notion_writeback": {"sent": True, "response": response},
+        },
+        "evidence": ["team/orchestrator.py", "tools/notion/controller.py"],
+        "limitations": ["Notion append-text ran because the page id, approval, and NOTION_API_KEY were all present."],
     }
 
 

@@ -142,11 +142,51 @@ class OrchestrationTests(unittest.TestCase):
                 },
             })
             self.assertEqual(accepted["status"], "ready")
+            self.assertFalse(accepted["result"]["notion_writeback"]["sent"])
+            deferred = accepted["result"]["notion_writeback"]["deferred"]
+            self.assertEqual(deferred["tool_id"], "notion.controller")
+            self.assertEqual(deferred["input"]["action"], "append-text")
+            self.assertIn("done", deferred["input"]["text"])
             control.set_kill(tmp, True)
             self.assertTrue(control.killed(tmp))
             self.assertEqual(control.gate(tmp)["status"], "blocked")
             cloud = manus.run_local({"goal": "x", "transport": "api", "state_dir": tmp, "project_id": "gated"})
             self.assertIn("Kill switch", cloud["limitations"][0])
+
+    def test_notion_writeback_sends_only_when_gated(self):
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+            original = orchestrator._append_notion
+
+            def fake_append(page_id, text):
+                calls.append((page_id, text))
+                return {"object": "list"}
+
+            orchestrator._append_notion = fake_append
+            os.environ["NOTION_API_KEY"] = "test-only"
+            try:
+                sent = orchestrator.run({
+                    "action": "synthesize",
+                    "state_dir": tmp,
+                    "tier": 0,
+                    "notion_page_id": "4141aa27632381dcbf2af2d83d16c60d",
+                    "approval": {"approved": True, "id": "human-1"},
+                    "evidence": {
+                        "summary": "package",
+                        "artifact_files": ["objective.md"],
+                        "evidence_log": ["objective.md"],
+                        "limitations": ["local only"],
+                    },
+                })
+            finally:
+                os.environ.pop("NOTION_API_KEY", None)
+                orchestrator._append_notion = original
+            self.assertEqual(sent["status"], "ready")
+            self.assertTrue(sent["result"]["notion_writeback"]["sent"])
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][0], "4141aa27632381dcbf2af2d83d16c60d")
+            self.assertIn("package", calls[0][1])
 
     def test_phase6_fleet_wake_does_not_spawn(self):
         with tempfile.TemporaryDirectory() as tmp:
