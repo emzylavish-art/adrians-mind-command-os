@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
-import { buildConnectorAuthorizeUrl, isDynamicOauthConnector } from "@/lib/mind/connectors/connector-oauth";
+import { buildConnectorAuthorizeUrlPersistent, isDynamicOauthConnector } from "@/lib/mind/connectors/connector-oauth";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/api/mind/oauth/$connector/start")({
           const wantsJson =
             request.headers.get("accept")?.includes("application/json") ||
             new URL(request.url).searchParams.get("format") === "json";
-          const started = buildConnectorAuthorizeUrl(connector, { ownerId: userId });
+          const started = await buildConnectorAuthorizeUrlPersistent(connector, { ownerId: userId });
           if (!started.ok) return json({ ok: false, error: started.error, state: "not_configured" }, 400);
           if (wantsJson) return json({ ok: true, url: started.url, state: started.state, connector });
           return Response.redirect(started.url, 302);

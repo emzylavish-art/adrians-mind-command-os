@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
-import { buildNotionAuthorizeUrl } from "@/lib/mind/connectors/notion-oauth";
+import { buildNotionAuthorizeUrlPersistent } from "@/lib/mind/connectors/notion-oauth";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/api/mind/oauth/notion/start")({
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
           const wantsJson = request.headers.get("accept")?.includes("application/json") || new URL(request.url).searchParams.get("format") === "json";
-          const started = buildNotionAuthorizeUrl({ ownerId: userId });
+          const started = await buildNotionAuthorizeUrlPersistent({ ownerId: userId });
           if (!started.ok) return json({ ok: false, error: started.error, state: "not_configured" }, 400);
           if (wantsJson) return json({ ok: true, url: started.url, state: started.state });
           return Response.redirect(started.url, 302);

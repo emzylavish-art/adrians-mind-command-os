@@ -27,11 +27,30 @@ import { NotionMirrorPanel } from "./notion-mirror-panel";
 import type { OperatorPrefs } from "@/lib/mind/dashboard/operator-palette";
 import "./dashboard-3d.css";
 
+// Load the existing painterly 3D renderer after hydration. Its Three.js modules
+// are not imported during SSR, so the default graph can remain server-safe.
+type UniverseComponent = typeof import("./universe-scene")["UniverseScene"];
+type UniverseProps = Parameters<UniverseComponent>[0];
+
+function ClientUniverseScene(props: UniverseProps) {
+  const [Component, setComponent] = useState<UniverseComponent | null>(null);
+  useEffect(() => {
+    let active = true;
+    void import("./universe-scene")
+      .then((mod) => { if (active) setComponent(() => mod.UniverseScene); })
+      .catch(() => { if (active) props.onUnavailable("Painterly 3D scene could not be loaded."); });
+    return () => { active = false; };
+  }, []);
+  if (!Component) return <div className="dash3d-fallback"><div className="dash3d-glass">Loading painterly universe…</div></div>;
+  return <Component {...props} />;
+}
+
 export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const { state } = useDashboardStatus();
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
+  const [rendererMode, setRendererMode] = useState<"graph" | "universe">("graph");
   const [fly, setFlyState] = useState<FlyState>(FLY_HOME);
   const [cityLayout, setCityLayout] = useState<CityLayout | null>(null);
   const onFlyoverChange = useCallback((next: FlyState, layout: CityLayout) => {
@@ -176,6 +195,13 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
     soundRef.current?.sync(voices);
   }, [sceneData]);
 
+  const selectGraphBot = (bot: BotNode) => {
+    if (state.status !== "ready") return;
+    setSelected(bot);
+    const mapped = state.data.notionGraph.botPageMap[bot.id];
+    setNotionPage(mapped ? state.data.notionGraph.pages.find((p) => p.id === mapped) ?? null : null);
+  };
+
   const openNotion = (pageId: string) => {
     if (state.status !== "ready") return;
     const page = state.data.notionGraph.pages.find((p) => p.id === pageId) ?? null;
@@ -203,13 +229,31 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               ADRIAN&apos;S MIND
             </p>
             <h1 className="dash3d-title" style={{ margin: "0.1rem 0 0" }}>
-              Fleet 3D graph
+              {rendererMode === "graph" ? "Fleet 3D graph" : "Painterly 3D universe"}
             </h1>
             <p className="dash3d-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.72rem" }}>
               Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search
             </p>
           </div>
           <div className="dash3d-graph-chrome-tools">
+            <button
+              type="button"
+              data-testid="switch-force-graph"
+              aria-pressed={rendererMode === "graph"}
+              className="dash3d-glass dash3d-zoomout"
+              onClick={() => { setRendererMode("graph"); setWebglError(null); }}
+            >
+              Graph
+            </button>
+            <button
+              type="button"
+              data-testid="switch-painterly-universe"
+              aria-pressed={rendererMode === "universe"}
+              className="dash3d-glass dash3d-zoomout"
+              onClick={() => { setRendererMode("universe"); setWebglError(null); }}
+            >
+              Universe
+            </button>
             <GraphFiltersPanel />
             <button
               type="button"
@@ -264,26 +308,26 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       ) : null}
       {state.status === "ready" && sceneData && !webglError && (!narrow || sceneInteract) ? (
         <Suspense fallback={<div className="dash3d-fallback"><div className="dash3d-glass"><p className="dash3d-title">Loading 3D graph…</p></div></div>}>
-        <FleetForceGraph
-          data={sceneData}
-          reducedMotion={reducedMotion}
-          onSelectBot={(bot) => {
-            setSelected(bot);
-            const mapped = state.data.notionGraph.botPageMap[bot.id];
-            if (mapped) {
-              const page = state.data.notionGraph.pages.find((p) => p.id === mapped) ?? null;
-              setNotionPage(page);
-            } else {
-              setNotionPage(null);
-            }
-          }}
-          onSelectNotion={openNotion}
-          onSkyView={() => {
-            setSelected(null);
-            setNotionPage(null);
-          }}
-          onUnavailable={setWebglError}
-        />
+        {rendererMode === "graph" ? (
+          <FleetForceGraph
+            data={sceneData}
+            reducedMotion={reducedMotion}
+            onSelectBot={selectGraphBot}
+            onSelectNotion={openNotion}
+            onSkyView={() => { setSelected(null); setNotionPage(null); }}
+            onUnavailable={setWebglError}
+          />
+        ) : (
+          <ClientUniverseScene
+            data={sceneData}
+            reducedMotion={reducedMotion}
+            onSelectBot={selectGraphBot}
+            onSelectNotion={openNotion}
+            onSkyView={() => { setSelected(null); setNotionPage(null); }}
+            onUnavailable={setWebglError}
+            onFlyoverChange={onFlyoverChange}
+          />
+        )}
         </Suspense>
       ) : null}
 

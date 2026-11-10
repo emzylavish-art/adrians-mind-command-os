@@ -1,8 +1,11 @@
 import { getAccessToken } from "./store.ts";
+import { getDurableAccessToken, hasDurableOAuthStore } from "./durable-oauth.server.ts";
 import type { ConnectionPublic } from "./store.ts";
 import {
   buildAuthorizeUrl,
+  buildAuthorizeUrlPersistent,
   connectionStatus,
+  connectionStatusPersistent,
   disconnectProvider,
   exchangeAuthorizationCode,
   providerConfigured,
@@ -31,6 +34,13 @@ export function buildNotionAuthorizeUrl(input: {
   return buildAuthorizeUrl(notion(), input);
 }
 
+export async function buildNotionAuthorizeUrlPersistent(input: {
+  ownerId: string;
+  env?: NotionOAuthEnv;
+}): Promise<{ ok: true; url: string; state: string } | { ok: false; error: string }> {
+  return buildAuthorizeUrlPersistent(notion(), input);
+}
+
 export async function exchangeNotionCode(input: {
   code: string;
   state: string;
@@ -45,6 +55,10 @@ export function notionConnectionStatus(ownerId: string, env?: NotionOAuthEnv): C
   return connectionStatus(notion(), ownerId, env);
 }
 
+export async function notionConnectionStatusPersistent(ownerId: string, env?: NotionOAuthEnv): Promise<ConnectionPublic> {
+  return connectionStatusPersistent(notion(), ownerId, env);
+}
+
 export async function disconnectNotion(input: {
   ownerId: string;
   env?: NotionOAuthEnv;
@@ -53,7 +67,21 @@ export async function disconnectNotion(input: {
   return disconnectProvider(notion(), input);
 }
 
-/** Prefer OAuth-stored token, then env integration token. */
+/** Durable token resolution for production tool calls. */
+export async function resolveNotionTokenPersistent(
+  ownerId: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | undefined> {
+  if (ownerId) {
+    const oauth = hasDurableOAuthStore()
+      ? await getDurableAccessToken(ownerId, "notion")
+      : getAccessToken(ownerId, "notion");
+    if (oauth) return oauth;
+  }
+  return env.NOTION_TOKEN?.trim() || env.NOTION_API_KEY?.trim() || undefined;
+}
+
+/** Prefer OAuth-stored token, then env integration token. Legacy local-test helper. */
 export function resolveNotionToken(ownerId: string | undefined, env: NodeJS.ProcessEnv = process.env): string | undefined {
   if (ownerId) {
     const oauth = getAccessToken(ownerId, "notion");

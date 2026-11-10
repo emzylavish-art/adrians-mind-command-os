@@ -1,8 +1,8 @@
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
 import {
-  allCloudConnectionStatuses,
-  cloudConnectionStatus,
+  allCloudConnectionStatusesPersistent,
+  cloudConnectionStatusPersistent,
   resolveCloudAccessToken,
 } from "./connection.ts";
 import { fetchGoogleDriveFile, listGoogleDriveFiles } from "./drive.ts";
@@ -47,7 +47,7 @@ export async function handleCloudStatus(request: Request): Promise<Response> {
   if (blocked) return blocked;
   try {
     const userId = await userIdFrom(request);
-    return json({ ok: true, sources: allCloudConnectionStatuses(userId) });
+    return json({ ok: true, sources: await allCloudConnectionStatusesPersistent(userId) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
@@ -67,7 +67,7 @@ export async function handleCloudList(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const source = parseSource(url.searchParams.get("source") ?? "google_drive");
   if (!source) return json({ ok: false, error: "Unknown cloud source." }, 400);
-  const status = cloudConnectionStatus(userId, source);
+  const status = await cloudConnectionStatusPersistent(userId, source);
   if (status.state !== "connected") {
     return json({ ok: false, error: status.detail, state: status.state, source });
   }
@@ -110,7 +110,7 @@ export async function handleCloudFetch(request: Request): Promise<Response> {
   if (!fileId) return json({ ok: false, error: "Pick a file first." }, 400);
   if (!isSafeCloudFileId(fileId)) return json({ ok: false, error: "That file id is not allowed." }, 400);
 
-  const status = cloudConnectionStatus(userId, source);
+  const status = await cloudConnectionStatusPersistent(userId, source);
   if (status.state !== "connected") {
     return json({ ok: false, error: status.detail, state: status.state, source });
   }

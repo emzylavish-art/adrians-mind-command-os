@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
-import { notionConnectionStatus } from "@/lib/mind/connectors/notion-oauth";
+import { notionConnectionStatusPersistent } from "@/lib/mind/connectors/notion-oauth";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/api/mind/oauth/notion/status")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          const status = notionConnectionStatus(userId);
+          const status = await notionConnectionStatusPersistent(userId);
           return json({
             ok: true,
             state: status.state,

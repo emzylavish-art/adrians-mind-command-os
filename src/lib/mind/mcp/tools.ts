@@ -1,4 +1,4 @@
-import { resolveNotionToken } from "../connectors/notion-oauth.ts";
+import { resolveNotionTokenPersistent } from "../connectors/notion-oauth.ts";
 /**
  * Built-in MCP tool handlers for Adrian's Mind.
  * Honest failures only — never invent success for Notion, PC, or SQL.
@@ -91,7 +91,7 @@ export async function notionReadPage(input: {
   ownerId?: string;
   fetch?: NotionFetch;
 }): Promise<ToolResult> {
-  const token = input.token ?? resolveNotionToken(input.ownerId) ?? notionTokenFromEnv();
+  const token = input.token ?? await resolveNotionTokenPersistent(input.ownerId) ?? notionTokenFromEnv();
   if (!token) {
     return {
       ok: false,
@@ -116,7 +116,7 @@ export async function notionAppendSection(input: {
   ownerId?: string;
   fetch?: NotionFetch;
 }): Promise<ToolResult> {
-  const token = input.token ?? resolveNotionToken(input.ownerId) ?? notionTokenFromEnv();
+  const token = input.token ?? await resolveNotionTokenPersistent(input.ownerId) ?? notionTokenFromEnv();
   if (!token) {
     return {
       ok: false,

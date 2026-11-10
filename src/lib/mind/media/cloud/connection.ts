@@ -7,6 +7,7 @@ import {
   type CloudConnectionRecord,
   type CloudSource,
 } from "./types.ts";
+import { getDurableAccessToken, hasDurableOAuthStore, readDurableConnection } from "../../connectors/durable-oauth.server.ts";
 
 let directory = join(process.cwd(), ".data", "mind-connectors");
 
@@ -61,6 +62,10 @@ export async function resolveCloudAccessToken(
   const envKey = env.MIND_GOOGLE_DRIVE_TOKEN?.trim();
   if (envKey) return { ok: true, token: envKey };
 
+  if (hasDurableOAuthStore()) {
+    const token = await getDurableAccessToken(ownerId, "google_drive");
+    if (token) return { ok: true, token };
+  }
   const record = readCloudConnectionRecord(ownerId, source);
   if (!record) {
     return { ok: false, error: `Google Drive is not connected. ${SERVICE_BOARD_HINT}` };
@@ -121,6 +126,30 @@ export function cloudConnectionStatus(
     accountLabel: record.accountLabel,
     connectedAt: record.connectedAt,
   };
+}
+
+/** Serverless-safe status based on encrypted Postgres OAuth records. */
+export async function cloudConnectionStatusPersistent(
+  ownerId: string,
+  source: CloudSource,
+  env: Record<string, string | undefined> = process.env,
+): Promise<CloudConnectionPublic> {
+  const local = cloudConnectionStatus(ownerId, source, env);
+  if (source !== "google_drive" || local.state === "connected" || !hasDurableOAuthStore()) return local;
+  const row = await readDurableConnection(ownerId, "google_drive");
+  if (!row || !(await getDurableAccessToken(ownerId, "google_drive"))) return local;
+  return {
+    source, state: "connected", detail: "Google Drive OAuth connection is stored securely on the server.",
+    accountLabel: row.accountLabel, connectedAt: row.connectedAt,
+  };
+}
+
+export async function allCloudConnectionStatusesPersistent(
+  ownerId: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<CloudConnectionPublic[]> {
+  return Promise.all((["google_drive", "onedrive"] as CloudSource[]).map((source) =>
+    cloudConnectionStatusPersistent(ownerId, source, env)));
 }
 
 export function allCloudConnectionStatuses(

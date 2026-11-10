@@ -1,7 +1,9 @@
 import type { ConnectionPublic, ConnectorId } from "./store.ts";
 import {
   buildAuthorizeUrl,
+  buildAuthorizeUrlPersistent,
   connectionStatus,
+  connectionStatusPersistent,
   disconnectProvider,
   exchangeAuthorizationCode,
   type DisconnectResult,
@@ -15,6 +17,14 @@ export function buildConnectorAuthorizeUrl(
   input: { ownerId: string; env?: OAuthProviderEnv },
 ) {
   return buildAuthorizeUrl(getProvider(connector), input);
+}
+
+/** Serverless-safe connection start (database-backed when configured). */
+export async function buildConnectorAuthorizeUrlPersistent(
+  connector: ConnectorId,
+  input: { ownerId: string; env?: OAuthProviderEnv },
+) {
+  return buildAuthorizeUrlPersistent(getProvider(connector), input);
 }
 
 export async function exchangeConnectorCode(
@@ -31,6 +41,19 @@ export function connectorConnectionStatus(
 ): ConnectionPublic {
   const provider = getProvider(connector);
   const status = connectionStatus(provider, ownerId, env);
+  if (status.state === "not_configured" && provider.notConfiguredDetail) {
+    return { ...status, detail: provider.notConfiguredDetail };
+  }
+  return status;
+}
+
+export async function connectorConnectionStatusPersistent(
+  connector: ConnectorId,
+  ownerId: string,
+  env?: OAuthProviderEnv,
+): Promise<ConnectionPublic> {
+  const provider = getProvider(connector);
+  const status = await connectionStatusPersistent(provider, ownerId, env);
   if (status.state === "not_configured" && provider.notConfiguredDetail) {
     return { ...status, detail: provider.notConfiguredDetail };
   }

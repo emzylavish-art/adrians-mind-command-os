@@ -11,8 +11,9 @@ import {
   toPublic,
   type ConnectionPublic,
   type ConnectorId,
+  type PendingOAuth,
 } from "./store.ts";
-
+import { hasDurableOAuthStore, saveDurablePendingOAuth, takeDurablePendingOAuth, saveDurableConnection, readDurableConnection, getDurableAccessToken, clearDurableConnection } from "./durable-oauth.server.ts";
 
 function ownerIdsMatch(a: string, b: string): boolean {
   try {
@@ -90,10 +91,10 @@ export function providerConfigured(env: OAuthProviderEnv): boolean {
   return Boolean(env.clientId && env.clientSecret && env.redirectUri);
 }
 
-export function buildAuthorizeUrl(
+function prepareAuthorizeUrl(
   provider: OAuthProvider,
   input: { ownerId: string; env?: OAuthProviderEnv },
-): { ok: true; url: string; state: string } | { ok: false; error: string } {
+): { ok: true; url: string; state: string; pending: PendingOAuth } | { ok: false; error: string } {
   const env = input.env ?? provider.readEnv();
   const name = provider.displayName;
   if (!providerConfigured(env) || !env.clientId || !env.redirectUri || !env.authorizeUrl) {
@@ -117,7 +118,7 @@ export function buildAuthorizeUrl(
     return { ok: false, error: `${name} redirect URI is invalid. Nothing was started.` };
   }
   const { state, codeVerifier, codeChallenge } = newOAuthState();
-  savePendingOAuth({
+  const pending: PendingOAuth = {
     state,
     ownerId: input.ownerId,
     connector: provider.id,
@@ -125,7 +126,7 @@ export function buildAuthorizeUrl(
     redirectUri: env.redirectUri,
     createdAt: new Date().toISOString(),
     scopes: provider.scopes.join(" "),
-  });
+  };
   const url = new URL(env.authorizeUrl);
   url.searchParams.set("client_id", env.clientId);
   url.searchParams.set("response_type", "code");
@@ -141,7 +142,29 @@ export function buildAuthorizeUrl(
   for (const [k, v] of Object.entries(provider.authorizeExtra || {})) {
     url.searchParams.set(k, v);
   }
-  return { ok: true, url: url.toString(), state };
+  return { ok: true, url: url.toString(), state, pending };
+}
+
+/** Synchronous local/test entrypoint. Production routes use the async durable variant. */
+export function buildAuthorizeUrl(
+  provider: OAuthProvider,
+  input: { ownerId: string; env?: OAuthProviderEnv },
+): { ok: true; url: string; state: string } | { ok: false; error: string } {
+  const ready = prepareAuthorizeUrl(provider, input);
+  if (!ready.ok) return ready;
+  savePendingOAuth(ready.pending);
+  return { ok: true, url: ready.url, state: ready.state };
+}
+
+export async function buildAuthorizeUrlPersistent(
+  provider: OAuthProvider,
+  input: { ownerId: string; env?: OAuthProviderEnv },
+): Promise<{ ok: true; url: string; state: string } | { ok: false; error: string }> {
+  const ready = prepareAuthorizeUrl(provider, input);
+  if (!ready.ok) return ready;
+  if (hasDurableOAuthStore()) await saveDurablePendingOAuth(ready.pending);
+  else savePendingOAuth(ready.pending);
+  return { ok: true, url: ready.url, state: ready.state };
 }
 
 export async function exchangeAuthorizationCode(
@@ -164,7 +187,7 @@ export async function exchangeAuthorizationCode(
   if (env.redirectUri && typeof env.redirectUri === "string") {
     /* checked after pending load */
   }
-  const pending = takePendingOAuth(input.state);
+  const pending = hasDurableOAuthStore() ? await takeDurablePendingOAuth(input.state) : takePendingOAuth(input.state);
   if (!pending || pending.connector !== provider.id) {
     return { ok: false, error: "OAuth state is invalid or expired. Nothing was stored." };
   }
@@ -209,7 +232,10 @@ export async function exchangeAuthorizationCode(
   }
   const hints = provider.parseAccount(json);
   try {
-    const conn = storeAccessToken({
+    const save = hasDurableOAuthStore()
+      ? saveDurableConnection
+      : async (payload: Parameters<typeof storeAccessToken>[0]) => storeAccessToken(payload);
+    const conn = await save({
       ownerId: pending.ownerId,
       connector: provider.id,
       accessToken: json.access_token,
@@ -237,6 +263,19 @@ export function connectionStatus(
   return toPublic(provider.id, readConnection(ownerId, provider.id), providerConfigured(cfg));
 }
 
+/** Production status reads persisted connection rows across serverless instances. */
+export async function connectionStatusPersistent(
+  provider: OAuthProvider,
+  ownerId: string,
+  env?: OAuthProviderEnv,
+): Promise<ConnectionPublic> {
+  const cfg = env ?? provider.readEnv();
+  const conn = hasDurableOAuthStore()
+    ? await readDurableConnection(ownerId, provider.id)
+    : readConnection(ownerId, provider.id);
+  return toPublic(provider.id, conn, providerConfigured(cfg));
+}
+
 export type DisconnectResult = ConnectionPublic & { revokeOk?: boolean; revokeDetail?: string };
 
 export async function disconnectProvider(
@@ -244,7 +283,9 @@ export async function disconnectProvider(
   input: { ownerId: string; env?: OAuthProviderEnv; fetch?: FetchLike },
 ): Promise<DisconnectResult> {
   const env = input.env ?? provider.readEnv();
-  const token = getAccessToken(input.ownerId, provider.id);
+  const token = hasDurableOAuthStore()
+    ? await getDurableAccessToken(input.ownerId, provider.id)
+    : getAccessToken(input.ownerId, provider.id);
   let revokeOk: boolean | undefined;
   let revokeDetail: string | undefined;
   if (token && env.revokeUrl && provider.revokeStyle !== "none") {
@@ -295,7 +336,8 @@ export async function disconnectProvider(
       revokeDetail = "Provider revoke failed or was unreachable; local token was still cleared.";
     }
   }
-  clearConnection(input.ownerId, provider.id);
+  if (hasDurableOAuthStore()) await clearDurableConnection(input.ownerId, provider.id);
+  else clearConnection(input.ownerId, provider.id);
   const pub = toPublic(provider.id, null, providerConfigured(env));
   const detail =
     revokeDetail && pub.state !== "not_configured"

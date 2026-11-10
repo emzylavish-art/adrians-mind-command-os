@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
-import { connectorConnectionStatus, isDynamicOauthConnector } from "@/lib/mind/connectors/connector-oauth";
+import { connectorConnectionStatusPersistent, isDynamicOauthConnector } from "@/lib/mind/connectors/connector-oauth";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/api/mind/oauth/$connector/status")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          const status = connectorConnectionStatus(connector, userId);
+          const status = await connectorConnectionStatusPersistent(connector, userId);
           return json({ ok: true, ...status });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";
