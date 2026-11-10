@@ -11,6 +11,7 @@ import {
   normalizeWorkspace,
   packWorkspace,
   unpackWorkspace,
+  updateChatPersonality,
 } from "./workspace.ts";
 
 describe("workspace memory", () => {
@@ -114,6 +115,17 @@ describe("workspace memory", () => {
     assert.ok(packed.length > 10_000);
     assert.ok(elapsed < 200, `normalize and canonical took ${elapsed.toFixed(1)}ms`);
   });
+  it("stores a personality per chat and defaults old workspace data safely", () => {
+    const old = normalizeWorkspace({ chats: [{ id: "legacy", title: "Old chat", messages: [] }] });
+    assert.equal(old.chats[0]?.personalityId, "assistant");
+    const made = createChat(old, { memory: "off", autonomy: "ask", temporary: false, projectId: null, personalityId: "unhinged" });
+    assert.equal(made.chat.personalityId, "unhinged");
+    const next = updateChatPersonality(made.ws, made.chat.id, "professional");
+    assert.equal(next.chats.find((chat) => chat.id === made.chat.id)?.personalityId, "professional");
+    const invalid = updateChatPersonality(next, made.chat.id, "unknown-mode");
+    assert.equal(invalid.chats.find((chat) => chat.id === made.chat.id)?.personalityId, "assistant");
+  });
+
   it("deleteMemory removes a note for real", () => {
     let ws = emptyWorkspace();
     ws = addMemory(ws, { scope: "global", text: "temp", source: "owner", projectId: null, chatId: null });

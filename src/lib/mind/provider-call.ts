@@ -57,6 +57,7 @@ export async function callConfiguredProvider(input: {
   id: OtherProvider;
   key: string;
   prompt: string;
+  systemPrompt?: string;
   history?: History[];
   fetch: FetchLike;
 }): Promise<{ ok: boolean; text: string; error: string }> {
@@ -67,29 +68,35 @@ export async function callConfiguredProvider(input: {
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .slice(-12)
     .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
+  const systemPrompt = input.systemPrompt?.trim().slice(0, 5000);
   const messages = [...history, { role: "user" as const, content: prompt }];
+  const completionMessages = [
+    ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
+    ...messages,
+  ];
   const models = MODELS;
   const endpoints: Record<OtherProvider, { url: string; init: RequestInit }> = {
     openai: {
       url: "https://api.openai.com/v1/chat/completions",
       init: { headers: { authorization: "Bearer " + input.key, "content-type": "application/json" },
-        body: JSON.stringify({ model: models.openai, messages }) },
+        body: JSON.stringify({ model: models.openai, messages: completionMessages }) },
     },
     anthropic: {
       url: "https://api.anthropic.com/v1/messages",
       init: { headers: { "x-api-key": input.key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: models.anthropic, max_tokens: 400, messages }) },
+        body: JSON.stringify({ model: models.anthropic, max_tokens: 400, ...(systemPrompt ? { system: systemPrompt } : {}), messages }) },
     },
     gemini: {
       url: "https://generativelanguage.googleapis.com/v1beta/models/" + models.gemini + ":generateContent?key=" + encodeURIComponent(input.key),
       init: { headers: { "content-type": "application/json" }, body: JSON.stringify({
+        ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
         contents: messages.map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.content }] })),
       }) },
     },
     openrouter: {
       url: "https://openrouter.ai/api/v1/chat/completions",
       init: { headers: { authorization: "Bearer " + input.key, "content-type": "application/json" },
-        body: JSON.stringify({ model: models.openrouter, messages }) },
+        body: JSON.stringify({ model: models.openrouter, messages: completionMessages }) },
     },
   };
   const target = endpoints[input.id];

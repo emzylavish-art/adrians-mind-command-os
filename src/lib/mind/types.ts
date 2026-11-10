@@ -1,3 +1,5 @@
+import type { PersonalityId } from "./personalities/index.ts";
+
 import type {
   AgentDefinition,
   AgentRun,
@@ -44,6 +46,7 @@ export type Chat = {
   memory: "off" | "on";
   temporary: boolean;
   autonomy: Autonomy;
+  personalityId?: PersonalityId;
   projectId: string | null;
   messages: Msg[];
   retrievalLog: Retrieval[];

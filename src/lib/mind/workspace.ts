@@ -1,4 +1,5 @@
 import { emptyFleet, readFleet } from "./fleet.ts";
+import { DEFAULT_PERSONALITY_ID, resolvePersonalityId } from "./personalities/index.ts";
 import type {
   AuditEntry,
   Autonomy,
@@ -156,6 +157,7 @@ function normalizeChat(row: unknown): Chat | null {
     memory,
     temporary: row.temporary === true,
     autonomy,
+    personalityId: resolvePersonalityId(row.personalityId),
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     messages,
     retrievalLog,
@@ -219,7 +221,7 @@ export function loadWorkspace(storage: Pick<Storage, "getItem">): Workspace {
 
 export function createChat(
   ws: Workspace,
-  input: { memory: "off" | "on"; autonomy: Autonomy; temporary: boolean; projectId: string | null },
+  input: { memory: "off" | "on"; autonomy: Autonomy; temporary: boolean; projectId: string | null; personalityId?: unknown },
 ): { ws: Workspace; chat: Chat } {
   const chat: Chat = {
     id: crypto.randomUUID(),
@@ -227,11 +229,21 @@ export function createChat(
     memory: input.memory,
     temporary: input.temporary,
     autonomy: input.autonomy,
+    personalityId: resolvePersonalityId(input.personalityId ?? DEFAULT_PERSONALITY_ID),
     projectId: input.projectId,
     messages: [],
     retrievalLog: [],
   };
   return { ws: { ...ws, chats: [chat, ...ws.chats] }, chat };
+}
+
+export function updateChatPersonality(ws: Workspace, chatId: string, personalityId: unknown): Workspace {
+  const next = resolvePersonalityId(personalityId);
+  if (!chatId || !ws.chats.some((chat) => chat.id === chatId)) return ws;
+  return {
+    ...ws,
+    chats: ws.chats.map((chat) => chat.id === chatId ? { ...chat, personalityId: next } : chat),
+  };
 }
 
 export function addMemory(

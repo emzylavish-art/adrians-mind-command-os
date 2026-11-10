@@ -1,4 +1,5 @@
 import type { MemoryNote } from "./types";
+import { personalityInstruction } from "./personalities/index.ts";
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
 import { buildHistoryMessages, type HistoryInputMessage } from "./media/history.ts";
 
@@ -8,6 +9,7 @@ export function assembleTurn(input: {
   text: string;
   memoryContext: MemoryNote[];
   images?: ImageAttachment[];
+  personalityId?: unknown;
 }):
   | { ok: false; error: string }
   | {
@@ -42,7 +44,7 @@ export function assembleTurn(input: {
     messages: [
       {
         role: "system",
-        content: `You are Adrian's Mind in Direct mode. ${memoryLine} Do not claim tools, agents, or other models ran.`,
+        content: `You are Adrian's Mind in Direct mode. ${memoryLine} ${personalityInstruction(input.personalityId)} Do not claim tools, agents, or other models ran.`,
       },
       ...historyMessages,
       { role: "user", content: userContent },

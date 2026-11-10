@@ -152,6 +152,7 @@ import { buildVoiceChatTurn } from "@/lib/mind/voice/voice-chat-turn";
 import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
 import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
+import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
@@ -251,11 +252,14 @@ import {
   pushUsage,
   reviseMemory,
   unpackWorkspace,
+  updateChatPersonality,
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
+import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
 
 type View =
   | "command"
+  | "intelligence"
   | "chat"
   | "projects"
   | "memory"
@@ -302,6 +306,7 @@ type Staged = { name: string; text: string };
 
 const NAV_ICON_SRC: Partial<Record<View, string>> = {
   command: "/icons/chat.svg",
+  intelligence: "/icons/bots.svg",
   agents: "/icons/bots.svg",
   build: "/icons/build.svg",
   projects: "/icons/projects.svg",
@@ -327,6 +332,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     label: "Workspace",
     items: [
       { id: "command", label: "Chat", icon: MessageSquare },
+      { id: "intelligence", label: "EVE / Intelligence", icon: Bot },
       { id: "agents", label: "Bots & Agents", icon: Bot },
       { id: "dashboard", label: "3D Graph", icon: Network },
       { id: "build", label: "Build", icon: Terminal },
@@ -368,6 +374,7 @@ const BUILD_SUGGESTIONS = [
 
 const TITLES: Record<View, string> = {
   command: "Chat",
+  intelligence: "EVE / Intelligence",
   chat: "Thread",
   projects: "Projects",
   memory: "Memory",
@@ -592,6 +599,7 @@ export function CommandApp() {
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
+  const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1695,6 +1703,7 @@ export function CommandApp() {
           modelTier,
           logicRoute: activeLogic,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          personalityId: chat.personalityId ?? "assistant",
         }),
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
@@ -1972,6 +1981,7 @@ export function CommandApp() {
       autonomy,
       temporary,
       projectId: projectChoice || null,
+      personalityId: defaultPersonalityId,
     });
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
@@ -2197,6 +2207,7 @@ export function CommandApp() {
         autonomy,
         temporary,
         projectId: projectChoice || null,
+        personalityId: defaultPersonalityId,
       });
       chat = made.chat;
       setActiveId(made.chat.id);
@@ -2768,6 +2779,7 @@ export function CommandApp() {
       autonomy,
       temporary,
       projectId: chatProjectId || projectChoice || null,
+      personalityId: defaultPersonalityId,
     });
     setWs((prev) =>
       pushAudit(
@@ -2790,6 +2802,7 @@ export function CommandApp() {
         autonomy,
         temporary,
         projectId: chatProjectId || projectChoice || null,
+        personalityId: defaultPersonalityId,
       });
       chat = made.chat;
       source = { ...source, chats: [made.chat, ...source.chats] };
@@ -4117,7 +4130,14 @@ export function CommandApp() {
           </div>
         ) : null}
 
-        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" ? "overflow-hidden" : "overflow-auto"}`}>
+        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto"}`}>
+          {view === "intelligence" && (
+            <EveWorkbench
+              workspace={ws}
+              onOpenChat={() => { setView("command"); setNavOpen(false); }}
+              onOpenDashboard={() => { setView("dashboard"); setNavOpen(false); }}
+            />
+          )}
           {view === "dashboard" && (
             <div className="h-full min-h-0">
               <Suspense fallback={<p className="p-6 text-sm text-muted">Opening the dashboard…</p>}>
@@ -4175,6 +4195,13 @@ export function CommandApp() {
                       <span className={`absolute top-0.5 size-5 rounded-full bg-fg ${memoryChoice === "on" ? "right-0.5" : "left-0.5"}`} />
                     </span>
                   </button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-panel border border-line/70 bg-bg/60 px-3 py-2">
+                  <label htmlFor="new-chat-personality" className="text-sm font-medium">Conversation style</label>
+                  <select id="new-chat-personality" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm">
+                    {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                  </select>
+                  <span className="text-xs text-muted">Style only. It does not change tools, permissions or approvals.</span>
                 </div>
                 <form
                   className="mt-3"
@@ -4452,6 +4479,8 @@ export function CommandApp() {
             <ChatPane
               active={active}
               chats={ws.chats}
+              personalityId={active?.personalityId ?? "assistant"}
+              onPersonalityChange={(personalityId) => { if (active) setWs((prev) => updateChatPersonality(prev, active.id, personalityId)); }}
               projectId={chatProjectId}
               projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
               onClearProject={() => setChatProjectId(null)}
@@ -5848,6 +5877,8 @@ function ReaPanel({
 function ChatPane({
   active,
   chats,
+  personalityId,
+  onPersonalityChange,
   projectId,
   projectName,
   onClearProject,
@@ -5927,6 +5958,8 @@ function ChatPane({
 }: {
   active: Chat | null;
   chats: Chat[];
+  personalityId: PersonalityId;
+  onPersonalityChange: (personalityId: PersonalityId) => void;
   projectId: string | null;
   projectName: string | null;
   onClearProject: () => void;
@@ -6097,6 +6130,13 @@ function ChatPane({
             </form>
           )}
           <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label htmlFor="thread-personality" className="text-xs font-semibold text-muted">EVE / conversation style</label>
+            <select id="thread-personality" value={personalityId} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm" disabled={!active || busy}>
+              {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+            </select>
+            <span className="text-xs text-muted">Style only · same permissions and approval rules</span>
+          </div>
           {active && (
             <div className="mt-3 max-w-md" data-testid="memory-chat-toggle-header">
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />

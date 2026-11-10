@@ -18,6 +18,7 @@ import { resolveDatabaseUrl } from "../env.server.ts";
 import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
 import { parseCustomProviderChoice, executeCustomChat } from "./ai-provider-config.server.ts";
+import { personalityInstruction } from "./personalities/index.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
@@ -33,6 +34,7 @@ export type TurnBody = {
   history?: unknown;
   memoryContext?: unknown;
   provider?: unknown;
+  personalityId?: unknown;
   /** UI picker: Auto | Fast | Expert | Heavy | Build */
   modelTier?: unknown;
   /** Astra, Sol, or Luna. When set, this route is used instead of the Grok tier. */
@@ -84,6 +86,7 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     history,
     memoryContext,
     images,
+    personalityId: data.personalityId,
   });
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
@@ -221,7 +224,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   if (!memory) return json({ ok: false, error: "Memory setting is invalid." }, 400);
   const gate = envCheck();
   if (!gate.ok) return json({ ok: false, error: gate.error });
-  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [] });
+  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId });
   if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
   const flat = toAdapterMessages(assembled.messages);
   if (!flat.ok) return json({ ok: false, error: flat.error }, 400);
@@ -300,7 +303,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     if (!sized.ok) return json(sized, 400);
     const gate = envCheck();
     if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
-    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [] });
+    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId });
     if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
     const formatted = toAdapterMessages(assembled.messages);
     if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);
@@ -359,6 +362,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       id: selected.id,
       key,
       prompt: typeof body.text === "string" ? body.text : "",
+      systemPrompt: personalityInstruction(body.personalityId),
       history,
       fetch: globalThis.fetch,
     });
