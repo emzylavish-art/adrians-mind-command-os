@@ -96,9 +96,11 @@ describe("mounted Speak click", () => {
   it("runs mic, STT, the composer deliver(), TTS, and playback in that order", async () => {
     const speakTurn = sourceBetween("async function speakChatTurn", "async function speak(");
     const composer = sourceBetween("async function sendCommand", "async function startResearch");
+    const planned = sourceBetween("async function deliverPlanned", "async function sendCommand");
     assert.match(speakTurn, /const reply = await deliver\(chat, transcript, source\)/);
     assert.doesNotMatch(speakTurn, /fetch\(|consumeMindTurn|\/api\/mind\/turn/);
-    assert.match(composer, /await deliver\(made\.chat, full,/);
+    assert.match(composer, /await deliverPlanned\(made\.chat, full,/);
+    assert.match(planned, /await deliver\(chat, full,/);
     assert.match(commandApp, /onCompactSpeak=\{\(\) => void speak\(""\)\}/);
     assert.match(commandApp, /chatTurn: \(transcript\) => speakChatTurn\(transcript\)/);
 
