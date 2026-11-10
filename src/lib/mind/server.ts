@@ -387,7 +387,9 @@ export const speakText = createServerFn({ method: "POST" })
       text,
       voiceId: data.voiceId,
       xaiKey: resolveVoiceApiKey(process.env),
-      openaiKey: process.env.OPENAI_API_KEY?.trim() || undefined,
+      // Speak honours the chosen xAI voice (Eve by default). A different
+      // provider/voice is never substituted without explicit consent.
+      openaiKey: undefined,
     });
     if (!spoken.ok) return { ok: false as const, error: spoken.error, provider: null };
     return { ok: true as const, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider };

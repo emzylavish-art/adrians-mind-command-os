@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
+import { oauthStatusFailure } from "@/lib/mind/connectors/status-http";
 import { notionConnectionStatusPersistent } from "@/lib/mind/connectors/notion-oauth";
 
 function json(body: unknown, status = 200) {
@@ -24,8 +25,8 @@ export const Route = createFileRoute("/api/mind/oauth/notion/status")({
             connectedAt: status.connectedAt,
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Unauthorized";
-          return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
+          const failure = oauthStatusFailure(error);
+          return json(failure.body, failure.status);
         }
       },
     },

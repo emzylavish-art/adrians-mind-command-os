@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getBearerToken } from "@/lib/auth/client";
+import { checkMcpStorage } from "@/lib/mind/mcp-storage-status";
 import { oauthBoardState } from "@/lib/mind/connection-board";
 import {
   OAUTH_STATUS_FETCH_TIMEOUT_MS,
@@ -80,6 +82,7 @@ export function ServiceBoard({
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
   const [oauthActionState, setOauthActionState] = useState<OauthBoardActionState>({ status: "idle" });
+  const [mcpStorage, setMcpStorage] = useState<{ state: "checking" | "ready" | "error"; detail: string } | null>(null);
   const inFlight = useRef<Set<string>>(new Set());
 
   const refreshOne = useCallback((name: string) => {
@@ -176,6 +179,13 @@ export function ServiceBoard({
     run();
   }
 
+  function verifyMcpStorage() {
+    setMcpStorage({ state: "checking", detail: "Checking the authenticated MCP database and migrations…" });
+    void checkMcpStorage({ bearerToken: getBearerToken() }).then((result) => {
+      setMcpStorage({ state: result.state, detail: result.detail });
+    });
+  }
+
   function connectOauth(name: string) {
     const meta = OAUTH_BOARD[name];
     if (!meta) return;
@@ -200,12 +210,12 @@ export function ServiceBoard({
         const showNotConfigured = Boolean(meta && oauth?.state === "not_configured");
         const isBusy = busy === service.name;
         return (
-          <article key={service.name} className="dense-card card-texture p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold">{service.name}</h3>
-              <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
+          <article key={service.name} className="dense-card card-texture min-w-0 overflow-hidden p-3">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+              <h3 className="min-w-0 break-words font-semibold">{service.name}</h3>
+              <span className="max-w-full break-words rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
             </div>
-            {unavailable ? null : <p className="mt-2 text-sm text-muted">{service.detail}</p>}
+            {unavailable ? null : <p className="mt-2 break-words text-sm text-muted">{service.detail}</p>}
             {unavailable && oauth ? (
               <div
                 className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-panel border border-danger/40 bg-danger/10 px-3 py-2"
@@ -244,6 +254,26 @@ export function ServiceBoard({
                 {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
               </button>
             )}
+            {service.name === "MCP" ? (
+              <div className="mt-3 grid min-w-0 gap-2">
+                <button
+                  type="button"
+                  className="min-h-11 rounded-panel border border-line px-3 text-left text-sm disabled:opacity-50"
+                  data-testid="mcp-storage-check"
+                  disabled={mcpStorage?.state === "checking"}
+                  onClick={verifyMcpStorage}
+                >
+                  Check MCP storage
+                </button>
+                {mcpStorage ? (
+                  <p className="break-words text-xs text-muted" role="status" data-testid="mcp-storage-check-result">
+                    {mcpStorage.detail}
+                  </p>
+                ) : (
+                  <p className="break-words text-xs text-muted">This checks your database and migrations, not external MCP tool execution.</p>
+                )}
+              </div>
+            ) : null}
             {oauthActionState.status === "error" && oauthActionState.params.name === service.name ? (
               <OauthBoardActionStatusRows
                 state={oauthActionState}

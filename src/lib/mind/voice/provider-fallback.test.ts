@@ -43,6 +43,33 @@ function scriptedFetch(openaiStatus: number) {
 }
 
 describe("voice provider fallback", () => {
+  it("does not call OpenAI or hide the xAI voice error without explicit fallback", async () => {
+    const tts = scriptedFetch(200);
+    const spoken = await speakWithFallback({
+      text: "This should use Eve only.", voiceId: "eve",
+      xaiKey: XAI, fetchImpl: tts.fetchImpl,
+    });
+    assert.equal(spoken.ok, false);
+    if (!spoken.ok) {
+      assert.match(spoken.error, /Voice returned 400/);
+      assert.equal(spoken.provider, null);
+    }
+    assert.equal(tts.seen.length, 1);
+    assert.match(tts.seen[0], /api\.x\.ai/);
+    assert.equal(tts.seen.some((url) => url.includes("api.openai.com")), false);
+  });
+
+  it("reports missing xAI speech configuration without trying an alternative", async () => {
+    let called = false;
+    const spoken = await speakWithFallback({
+      text: "hello", voiceId: "eve",
+      fetchImpl: (async () => { called = true; throw new Error("Unexpected request"); }) as typeof fetch,
+    });
+    assert.equal(spoken.ok, false);
+    assert.equal(called, false);
+    if (!spoken.ok) assert.match(spoken.error, /xAI voice is not configured/);
+  });
+
   it("uses OpenAI STT, TTS, and chat when xAI returns 400", async () => {
     const stt = scriptedFetch(200);
     const heard = await transcribeWithFallback({

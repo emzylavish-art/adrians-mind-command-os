@@ -139,7 +139,9 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
     voiceId,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
     // Do not silently replace an explicitly selected xAI voice with an unrelated voice.
-    openaiKey: voiceId ? undefined : (env.OPENAI_API_KEY?.trim() || undefined),
+    // Even the implicit default is Eve. Never switch to OpenAI/alloy
+    // merely because the client omitted voiceId or xAI could not respond.
+    openaiKey: undefined,
     fetchImpl: deps.fetchImpl,
   });
   if (!spoken.ok) return providerOrNetwork(spoken.error);

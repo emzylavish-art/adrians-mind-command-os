@@ -162,11 +162,15 @@ export async function speakWithFallback(input: {
   fetchImpl?: typeof fetch;
 }): Promise<FallbackOk<{ audio: string; mime: "audio/mpeg" }> | FallbackFail> {
   const fetchImpl = input.fetchImpl ?? fetch;
+  let selectedVoiceError = "xAI voice is not configured. Nothing was played or substituted.";
   if (input.xaiKey) {
     const first = await callXaiTts({ text: input.text, voiceId: input.voiceId, apiKey: input.xaiKey, fetchImpl });
     if (first.ok) return { ok: true, audio: first.audio, mime: "audio/mpeg", provider: "xAI" };
+    selectedVoiceError = first.error;
   }
-  if (!input.openaiKey) return { ok: false, error: honestBoth("played"), provider: null };
+  // Explicit opt-in callers may supply an OpenAI key to enable an alternative
+  // voice. Normal Speak routes do not; failures preserve the chosen voice.
+  if (!input.openaiKey) return { ok: false, error: selectedVoiceError, provider: null };
   const second = await openAiSpeech({ text: input.text, apiKey: input.openaiKey, fetchImpl });
   if (!second.ok) return { ok: false, error: honestBoth("played"), provider: null };
   return { ok: true, audio: second.audio, mime: "audio/mpeg", provider: "OpenAI" };
