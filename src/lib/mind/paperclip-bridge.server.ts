@@ -30,7 +30,7 @@ export type PaperclipSnapshot = {
 };
 
 type SafeResponse = { ok: boolean; status: number; text: () => Promise<string> };
-type RequestFn = (url: URL, ip: string, host: string, init: RequestInit) => Promise<SafeResponse>;
+type RequestFn = (url: URL, ip: string, host: string, init: RequestInit & { signal?: AbortSignal }) => Promise<SafeResponse>;
 type PinFn = (host: string) => Promise<ResolvePinResult>;
 
 const NO_AGENT_RUNTIME = "No Paperclip service has been verified. Agent templates are not live agents.";
