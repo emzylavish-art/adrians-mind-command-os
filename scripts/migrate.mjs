@@ -18,6 +18,7 @@ import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 import { resolveMigrateDatabaseUrl } from "./database-url.mjs";
+import { supabasePostgresPoolOptions } from "../src/lib/auth/postgres-ssl.mjs";
 
 // A Vercel Preview/Development build must never apply SQL against whichever
 // DATABASE_URL was inherited from the project configuration. Only the
@@ -52,7 +53,7 @@ async function main() {
     return;
   }
 
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = new pg.Pool({ ...supabasePostgresPoolOptions(databaseUrl), max: 1 });
   const client = await pool.connect();
   try {
     await client.query(
