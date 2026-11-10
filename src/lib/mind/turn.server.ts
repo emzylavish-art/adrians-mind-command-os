@@ -352,8 +352,22 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const limited = consumeMindRateLimit("chat", userId, 12);
     if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
-    const called = await callConfiguredProvider({ id: selected.id, key, prompt: typeof body.text === "string" ? body.text : "", fetch: globalThis.fetch });
-    return json({ ...called, provider: selected.id });
+    const history = Array.isArray(body.history)
+      ? body.history.filter(isHistory).slice(-12).map((item) => ({ role: item.role, content: item.content }))
+      : [];
+    const called = await callConfiguredProvider({
+      id: selected.id,
+      key,
+      prompt: typeof body.text === "string" ? body.text : "",
+      history,
+      fetch: globalThis.fetch,
+    });
+    if (!called.ok) return json({ ok: false, error: called.error, provider: selected.id }, 502);
+    // Use the same SSE contract as the Grok and custom-provider chat paths.
+    const done = { text: called.text, model: selected.model, provider: selected.id, usage: null, usedIds: [], requestId: null };
+    const stream = "event: delta\ndata: " + JSON.stringify({ text: called.text }) +
+      "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
+    return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
   const prepared = await prepareMindTurn(userId, body);
   if (!prepared.ok) return json(prepared);

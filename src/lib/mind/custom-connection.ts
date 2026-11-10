@@ -312,11 +312,14 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
   }, deps, row.token ?? "");
   if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
   if (!initialized(opened.text)) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
-  const sessionHeaders = opened.sessionId ? { "mcp-session-id": opened.sessionId } : {};
   const meta = rpcEnvelope(opened.text).result;
   const version = meta && typeof meta === "object" && typeof (meta as { protocolVersion?: unknown }).protocolVersion === "string"
     ? (meta as { protocolVersion: string }).protocolVersion : "2024-11-05";
-  const protocolHeaders: Record<string, string> = opened.sessionId ? { ...sessionHeaders, "mcp-protocol-version": version } : {};
+  const protocolHeaders: Record<string, string> = {};
+  if (opened.sessionId) {
+    protocolHeaders["mcp-session-id"] = opened.sessionId;
+    protocolHeaders["mcp-protocol-version"] = version;
+  }
   if (opened.sessionId) {
     const notified = await send(row.url, {
       method: "POST",
