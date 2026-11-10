@@ -1,5 +1,5 @@
 import { emptyFleet, readFleet } from "./fleet.ts";
-import { DEFAULT_PERSONALITY_ID, resolvePersonalityId } from "./personalities/index.ts";
+import { DEFAULT_PERSONALITY_ID, normalizeCustomPersonality, resolvePersonalityId } from "./personalities/index.ts";
 import type {
   AuditEntry,
   Autonomy,
@@ -158,6 +158,7 @@ function normalizeChat(row: unknown): Chat | null {
     temporary: row.temporary === true,
     autonomy,
     personalityId: resolvePersonalityId(row.personalityId),
+    customPersonality: normalizeCustomPersonality(row.customPersonality),
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     messages,
     retrievalLog,
@@ -221,7 +222,7 @@ export function loadWorkspace(storage: Pick<Storage, "getItem">): Workspace {
 
 export function createChat(
   ws: Workspace,
-  input: { memory: "off" | "on"; autonomy: Autonomy; temporary: boolean; projectId: string | null; personalityId?: unknown },
+  input: { memory: "off" | "on"; autonomy: Autonomy; temporary: boolean; projectId: string | null; personalityId?: unknown; customPersonality?: unknown },
 ): { ws: Workspace; chat: Chat } {
   const chat: Chat = {
     id: crypto.randomUUID(),
@@ -230,6 +231,7 @@ export function createChat(
     temporary: input.temporary,
     autonomy: input.autonomy,
     personalityId: resolvePersonalityId(input.personalityId ?? DEFAULT_PERSONALITY_ID),
+    customPersonality: normalizeCustomPersonality(input.customPersonality),
     projectId: input.projectId,
     messages: [],
     retrievalLog: [],
@@ -243,6 +245,15 @@ export function updateChatPersonality(ws: Workspace, chatId: string, personality
   return {
     ...ws,
     chats: ws.chats.map((chat) => chat.id === chatId ? { ...chat, personalityId: next } : chat),
+  };
+}
+
+export function updateChatCustomPersonality(ws: Workspace, chatId: string, customPersonality: unknown): Workspace {
+  const next = normalizeCustomPersonality(customPersonality);
+  if (!chatId || !ws.chats.some((chat) => chat.id === chatId)) return ws;
+  return {
+    ...ws,
+    chats: ws.chats.map((chat) => chat.id === chatId ? { ...chat, customPersonality: next } : chat),
   };
 }
 
