@@ -86,7 +86,6 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     history,
     memoryContext,
     images,
-    personalityId: data.personalityId,
   });
   if (!sized.ok) return sized;
   const memory: "off" | "on" | null = data.memory === "on" ? "on" : data.memory === "off" ? "off" : null;
