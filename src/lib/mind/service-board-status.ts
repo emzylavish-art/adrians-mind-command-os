@@ -66,6 +66,17 @@ export async function fetchOauthStatusPayload(
       }
     }
     if (!res.ok || !body || typeof body !== "object") {
+      // Our own OAuth status routes return a small fixed, sanitised failure
+      // message. Preserve it for an actionable 503 card, but never echo
+      // arbitrary upstream exception strings or HTML into the interface.
+      if (res.status === 503 && body && typeof body === "object") {
+        const failure = body as Record<string, unknown>;
+        const detail = failure.detail;
+        if (failure.state === "unavailable" && typeof detail === "string" &&
+            /^Connection status could not be read \(server unavailable\)\.$/.test(detail)) {
+          return { state: "unavailable", detail };
+        }
+      }
       return unavailableStatus(res.status);
     }
     const record = body as Record<string, unknown>;

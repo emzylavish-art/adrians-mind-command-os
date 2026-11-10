@@ -55,6 +55,22 @@ describe("service-board oauth status resolution", () => {
     assert.equal(isStatusUnavailable(status), true);
   });
 
+  it("preserves only our sanitised 503 server-unavailable detail", async () => {
+    const detail = "Connection status could not be read (server unavailable).";
+    const status = await fetchOauthStatusPayload("/api/mind/oauth/notion/status", {
+      fetchFn: async () => jsonResponse(503, { ok: false, state: "unavailable", detail }),
+    });
+    assert.equal(status.state, "unavailable");
+    assert.equal(status.detail, detail);
+    assert.equal(isStatusUnavailable(status), true);
+    const injected = await fetchOauthStatusPayload("/api/mind/oauth/notion/status", {
+      fetchFn: async () => jsonResponse(503, {
+        ok: false, state: "unavailable", detail: "Database URL: secret@example.invalid",
+      }),
+    });
+    assert.equal(injected.detail, STATUS_UNAVAILABLE_DETAIL);
+  });
+
   it("network rejection → Status unavailable", async () => {
     const status = await fetchOauthStatusPayload("/api/mind/oauth/google_drive/status", {
       fetchFn: async () => {
