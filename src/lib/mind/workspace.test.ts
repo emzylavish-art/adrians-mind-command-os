@@ -12,6 +12,7 @@ import {
   packWorkspace,
   unpackWorkspace,
   updateChatPersonality,
+  updateChatCustomPersonality,
 } from "./workspace.ts";
 
 describe("workspace memory", () => {
@@ -120,10 +121,15 @@ describe("workspace memory", () => {
     assert.equal(old.chats[0]?.personalityId, "assistant");
     const made = createChat(old, { memory: "off", autonomy: "ask", temporary: false, projectId: null, personalityId: "unhinged" });
     assert.equal(made.chat.personalityId, "unhinged");
-    const next = updateChatPersonality(made.ws, made.chat.id, "professional");
-    assert.equal(next.chats.find((chat) => chat.id === made.chat.id)?.personalityId, "professional");
-    const invalid = updateChatPersonality(next, made.chat.id, "unknown-mode");
+    const next = updateChatPersonality(made.ws, made.chat.id, "custom");
+    const customized = updateChatCustomPersonality(next, made.chat.id, "Candid, concise, analytical.");
+    assert.equal(customized.chats.find((chat) => chat.id === made.chat.id)?.personalityId, "custom");
+    assert.equal(customized.chats.find((chat) => chat.id === made.chat.id)?.customPersonality, "Candid, concise, analytical.");
+    const invalid = updateChatPersonality(customized, made.chat.id, "unknown-mode");
     assert.equal(invalid.chats.find((chat) => chat.id === made.chat.id)?.personalityId, "assistant");
+    assert.equal(invalid.chats.find((chat) => chat.id === made.chat.id)?.customPersonality, "Candid, concise, analytical.");
+    const reloaded = normalizeWorkspace({ chats: [{ ...invalid.chats[0], customPersonality: "x".repeat(900) }] });
+    assert.equal(reloaded.chats[0]?.customPersonality?.length, 800);
   });
 
   it("deleteMemory removes a note for real", () => {
