@@ -6,6 +6,7 @@ Manus merges, reconciles, and deploys. Do not open a new Vercel project. Do not 
 
 - Repo: https://github.com/emzylavish-art/adrians-mind-command-os
 - This branch: `feat/grokbuild-full-system-implementation`
+- Avatar commit: `63bb3030bd8e2cf56753d8208e1c96c21f64e592` (`Add EVE photographic digital human with timed visemes.`)
 - Parent (do not overwrite): `feat/adrian-core-eve-personality-2026-11-10` at `d4e600d2fbac035578771e6af2e191117ae83193`
 - Existing draft PR: https://github.com/emzylavish-art/adrians-mind-command-os/pull/50
 - Stack this branch on that branch. Do not force-push PR #50. Do not retarget PR #50 onto this work by rewriting its branch.
