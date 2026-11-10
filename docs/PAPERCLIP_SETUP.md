@@ -10,6 +10,36 @@ this is not a continuously operational agent system.
 The existing Vercel project "adrians-mind" stays the one user-facing production
 site. Paperclip requires its own persistent server and isolated database.
 
+## Read-only application bridge (prepared; not a running service)
+
+Adrian's Mind can display authenticated real Paperclip agents and recent
+heartbeat runs on **Bots & Agents**, once all four production secrets/settings
+below are configured through Vercel environment variables (not GitHub code):
+
+- `PAPERCLIP_API_URL` — the persistent Paperclip instance's public HTTPS origin,
+  for example `https://paperclip.example.com` (not localhost, and no path).
+- `PAPERCLIP_API_KEY` — a properly scoped Board/API credential issued by that
+  Paperclip instance; never paste it into app chat or browser settings.
+- `PAPERCLIP_COMPANY_ID` — the exact Paperclip company identifier.
+- `PAPERCLIP_OWNER_USER_ID` — the exact authenticated Adrian's Mind owner ID
+  allowed to see this one Paperclip company. Without an exact owner match,
+  the bridge does not make a request or reveal the fleet.
+
+The server-only bridge `src/lib/mind/paperclip-bridge.server.ts` uses the
+documented GET endpoints `/api/health`,
+`/api/companies/:companyId/agents` and
+`/api/companies/:companyId/heartbeat-runs?summary=true&limit=25`.
+It checks the configured public HTTPS hostname and pins its DNS resolution.
+It never returns the credential, treats upstream permission or runtime
+failures as unavailable, and does not claim static bot templates are live.
+
+This is deliberately **read-only**. Real task creation, scheduling,
+delegation, approvals and interruption will be implemented only after the
+instance is hosted, authenticated and a first read-only agent task succeeds.
+The Paperclip service requires its own persistent host; GitHub Actions only
+verified the temporary CLI preflight. No AI credits or paid hosting were
+provisioned by this repository change.
+
 ## Requirements for running Paperclip
 
 - Persistent Linux/macOS/WSL2 host or supported container host with sufficient

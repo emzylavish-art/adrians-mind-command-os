@@ -77,6 +77,26 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   };
 });
 
+/** Authenticated read-only bridge to a real Paperclip instance.
+ * An explicitly configured owner ID is required before any fleet data is
+ * retrieved; installing Paperclip CLI alone never activates this endpoint.
+ */
+export const paperclipStatus = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { getPaperclipSnapshot, paperclipOwnerAllowed } = await import("./paperclip-bridge.server");
+    const empty = (state: "not_configured" | "unavailable", message: string) => ({
+      state, message, agents: [], runs: [], checkedAt: new Date().toISOString(),
+    });
+    if (!paperclipOwnerAllowed(context.userId, process.env)) {
+      return empty("not_configured", "No Paperclip instance is authorised for this account.");
+    }
+    if (!allowMindRequest("paperclip_read", context.userId, 8)) {
+      return empty("unavailable", "Too many Paperclip status checks. Wait one minute.");
+    }
+    return getPaperclipSnapshot();
+  });
+
 export const workerHealth = createServerFn({ method: "GET" }).handler(async () => {
   const { readFileSync } = await import("node:fs");
   let file = null;

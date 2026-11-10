@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
-import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, workerHealth } from "@/lib/mind/server";
+import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, paperclipStatus, workerHealth } from "@/lib/mind/server";
 import { oauthBoardState } from "@/lib/mind/connection-board";
 import { fetchOauthStatusPayload } from "@/lib/mind/service-board-status";
 import { LOGIC_ROUTES, logicMenuState, type LogicRoutePublic } from "@/lib/mind/logic-routes";
@@ -260,6 +260,32 @@ export function FleetPanel({
       pcApprovalsInFlight.current = false;
     };
   }, [mode]);
+  const [paperclipSnapshot, setPaperclipSnapshot] = useState<{
+    state: "loading" | "not_configured" | "unavailable" | "connected";
+    message: string;
+    agents: { id: string; name: string; status: string }[];
+    runs: { id: string; agentId: string; status: string }[];
+  } | null>(null);
+  const paperclipAttempt = useRef(0);
+  function reloadPaperclip() {
+    const current = ++paperclipAttempt.current;
+    setPaperclipSnapshot({ state: "loading", message: "Checking the real Paperclip service…", agents: [], runs: [] });
+    void paperclipStatus()
+      .then((status) => {
+        if (current !== paperclipAttempt.current) return;
+        setPaperclipSnapshot({ state: status.state, message: status.message, agents: status.agents, runs: status.runs });
+      })
+      .catch(() => {
+        if (current !== paperclipAttempt.current) return;
+        setPaperclipSnapshot({ state: "unavailable", message: "Paperclip status could not be loaded. No agents were marked as running.", agents: [], runs: [] });
+      });
+  }
+  useEffect(() => {
+    if (mode !== "agents") return;
+    reloadPaperclip();
+    return () => { paperclipAttempt.current += 1; };
+  }, [mode]);
+
   const [customName, setCustomName] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
@@ -401,7 +427,39 @@ export function FleetPanel({
     return (
       <section className="dense-card card-texture mx-4 mb-6 p-4 md:mx-6">
         <h3 className="font-semibold">Agent directory</h3>
-        <p className="mt-1 text-sm text-muted">Templates are definitions. A saved agent is not deployed. Local ready means the Run worker button in this app can execute it. Hosted stays external until a worker process exists.</p>
+        <p className="mt-1 text-sm text-muted">Templates are definitions, not running processes. Real hosted execution requires a connected agent runtime.</p>
+        <div className="mt-3 grid min-w-0 gap-2 rounded-panel border border-line p-3" data-testid="paperclip-runtime-status">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold">Paperclip agent service</p>
+            <button
+              type="button"
+              data-testid="paperclip-refresh"
+              className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50"
+              disabled={paperclipSnapshot?.state === "loading"}
+              onClick={reloadPaperclip}
+            >
+              Refresh status
+            </button>
+          </div>
+          <p className="break-words text-sm text-muted" role="status">{paperclipSnapshot?.message ?? "Checking whether a real Paperclip service is available…"}</p>
+          {paperclipSnapshot?.state === "connected" ? (
+            <div className="grid gap-2 text-sm" data-testid="paperclip-live-agent-list">
+              <p>{paperclipSnapshot.agents.length} agent(s) retrieved; {paperclipSnapshot.runs.length} recent run(s) retrieved.</p>
+              {paperclipSnapshot.agents.length === 0 ? (
+                <p className="text-muted">The service is reachable, but this company has no visible agents.</p>
+              ) : (
+                <ul className="grid gap-1">
+                  {paperclipSnapshot.agents.map((agent) => (
+                    <li key={agent.id} className="flex min-w-0 flex-wrap justify-between gap-2 rounded-panel bg-bg px-3 py-2">
+                      <span className="min-w-0 break-words">{agent.name}</span>
+                      <span className="text-muted">{agent.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {AGENT_TEMPLATES.map((template) => (
             <button key={template.name} type="button" className="dense-card inline-flex min-h-11 items-center gap-2 px-3 text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_template", templateName: template.name }))}>
