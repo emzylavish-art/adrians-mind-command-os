@@ -17,10 +17,16 @@ export function EveWorkbench({
   workspace,
   onOpenChat,
   onOpenDashboard,
+  onOpenAgents,
+  onOpenRuns,
+  onOpenConnections,
 }: {
   workspace: Workspace;
   onOpenChat: () => void;
   onOpenDashboard: () => void;
+  onOpenAgents: () => void;
+  onOpenRuns: () => void;
+  onOpenConnections: () => void;
 }) {
   const runs = [...workspace.runs].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 8);
   const events = [...workspace.runEvents].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 10);
@@ -42,14 +48,23 @@ export function EveWorkbench({
               <p className="mt-1 text-sm text-muted">Primary operator interface · workspace activity and task review</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <nav className="flex flex-wrap gap-2" aria-label="EVE workbench destinations">
             <button type="button" onClick={onOpenChat} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink">
               Open Chat <ArrowUpRight className="size-4" />
             </button>
-            <button type="button" onClick={onOpenDashboard} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">
-              Open 3D Dashboard
+            <button type="button" onClick={onOpenAgents} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">
+              Agents
             </button>
-          </div>
+            <button type="button" onClick={onOpenRuns} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">
+              Run history
+            </button>
+            <button type="button" onClick={onOpenConnections} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">
+              Connections
+            </button>
+            <button type="button" onClick={onOpenDashboard} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">
+              3D Dashboard
+            </button>
+          </nav>
         </header>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Workbench status">
