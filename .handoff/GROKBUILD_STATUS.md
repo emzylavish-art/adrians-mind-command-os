@@ -1,6 +1,6 @@
 # GrokBuild status
 
-Updated on branch `feat/grokbuild-full-system-implementation`. This is the living status. It does not replace `.handoff/MANUS_RELEASE_2026-11-10.md` for merge and deploy.
+Updated on branch `feat/grokbuild-full-system-implementation`. Product code ends at `0cd79ea4a748eb65759455b161dfa34ff30df616`. Manus uses `.handoff/MANUS_PROMPT_2026-11-10.md`. Manus connects accounts and deploys. Manus does not rebuild.
 
 | Subsystem | Status |
 |---|---|
