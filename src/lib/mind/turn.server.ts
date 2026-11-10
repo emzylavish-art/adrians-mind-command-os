@@ -35,6 +35,7 @@ export type TurnBody = {
   memoryContext?: unknown;
   provider?: unknown;
   personalityId?: unknown;
+  customPersonality?: unknown;
   /** UI picker: Auto | Fast | Expert | Heavy | Build */
   modelTier?: unknown;
   /** Astra, Sol, or Luna. When set, this route is used instead of the Grok tier. */
@@ -101,6 +102,7 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     memoryContext,
     images,
     personalityId: data.personalityId,
+    customPersonality: data.customPersonality,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
   const tier = resolveModelTier(data.modelTier, text || "image", process.env);
@@ -224,7 +226,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   if (!memory) return json({ ok: false, error: "Memory setting is invalid." }, 400);
   const gate = envCheck();
   if (!gate.ok) return json({ ok: false, error: gate.error });
-  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId });
+  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality });
   if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
   const flat = toAdapterMessages(assembled.messages);
   if (!flat.ok) return json({ ok: false, error: flat.error }, 400);
@@ -303,7 +305,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     if (!sized.ok) return json(sized, 400);
     const gate = envCheck();
     if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
-    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId });
+    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId, customPersonality: body.customPersonality });
     if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
     const formatted = toAdapterMessages(assembled.messages);
     if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);
@@ -362,7 +364,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       id: selected.id,
       key,
       prompt: typeof body.text === "string" ? body.text : "",
-      systemPrompt: personalityInstruction(body.personalityId),
+      systemPrompt: personalityInstruction(body.personalityId, body.customPersonality),
       history,
       fetch: globalThis.fetch,
     });
