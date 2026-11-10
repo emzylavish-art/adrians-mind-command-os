@@ -20,6 +20,13 @@ describe("production build and migration contract", () => {
     assert.ok(compile >= 0 && migration > compile && assets > migration);
   });
 
+  it("production migrations and app Postgres access share the pinned CA helper", () => {
+    const migrator = readFileSync(new URL("./migrate.mjs", import.meta.url), "utf8");
+    const appPool = readFileSync(new URL("../src/lib/auth/pg-pool.ts", import.meta.url), "utf8");
+    assert.match(migrator, /supabasePostgresPoolOptions/);
+    assert.match(appPool, /supabasePostgresPoolOptions/);
+  });
+
   it("Vercel preview and development builds cannot run SQL migrations", () => {
     for (const environment of ["preview", "development"]) {
       const result = spawnSync(process.execPath, [fileURLToPath(new URL("./migrate.mjs", import.meta.url))], {

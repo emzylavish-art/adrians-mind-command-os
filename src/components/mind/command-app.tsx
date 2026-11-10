@@ -107,6 +107,11 @@ import {
   writeStoredVoiceChoice,
 } from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import { voiceSessionInstructions } from "@/lib/mind/voice-live/session-instructions";
+import { readStoredCharacterId } from "@/lib/mind/characters";
+import { noteSpokenText, readAvatarSession, setAvatarPresence } from "@/lib/mind/avatar/session";
+import { DigitalHuman } from "@/components/mind/avatar/digital-human";
+import { applyWorkbenchCommand } from "@/lib/mind/workbench-command";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import { appendDictationText } from "@/lib/mind/voice/dictation";
 import {
@@ -152,6 +157,7 @@ import { buildVoiceChatTurn } from "@/lib/mind/voice/voice-chat-turn";
 import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
 import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
+import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
@@ -207,6 +213,7 @@ import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import {
@@ -251,11 +258,15 @@ import {
   pushUsage,
   reviseMemory,
   unpackWorkspace,
+  updateChatPersonality,
+  updateChatCustomPersonality,
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
+import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
 
 type View =
   | "command"
+  | "intelligence"
   | "chat"
   | "projects"
   | "memory"
@@ -302,6 +313,7 @@ type Staged = { name: string; text: string };
 
 const NAV_ICON_SRC: Partial<Record<View, string>> = {
   command: "/icons/chat.svg",
+  intelligence: "/icons/bots.svg",
   agents: "/icons/bots.svg",
   build: "/icons/build.svg",
   projects: "/icons/projects.svg",
@@ -327,6 +339,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     label: "Workspace",
     items: [
       { id: "command", label: "Chat", icon: MessageSquare },
+      { id: "intelligence", label: "EVE / Intelligence", icon: Bot },
       { id: "agents", label: "Bots & Agents", icon: Bot },
       { id: "dashboard", label: "3D Graph", icon: Network },
       { id: "build", label: "Build", icon: Terminal },
@@ -368,6 +381,7 @@ const BUILD_SUGGESTIONS = [
 
 const TITLES: Record<View, string> = {
   command: "Chat",
+  intelligence: "EVE / Intelligence",
   chat: "Thread",
   projects: "Projects",
   memory: "Memory",
@@ -592,6 +606,7 @@ export function CommandApp() {
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
+  const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -671,6 +686,9 @@ export function CommandApp() {
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
+  const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
+  const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
+  const [ratings, setRatings] = useState<ResponseRating[]>([]);
   const [pcAgentOnline, setPcAgentOnline] = useState(false);
   const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
   const [buildPick, setBuildPick] = useState<string | null>(null);
@@ -723,6 +741,33 @@ export function CommandApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [speaking, setSpeaking] = useState(false);
+
+  useEffect(() => {
+    if (ws.halted) {
+      setAvatarPresence("offline");
+      return;
+    }
+    if (speaking) return;
+    const live = readAvatarSession().presence;
+    if (live === "processing" || live === "speaking" || live === "interrupted" || live === "error") return;
+    const waiting = ws.runs.some((run) => run.state === "waiting_approval");
+    const executing = ws.runs.some((run) => run.state === "running");
+    if (voiceListening) {
+      setAvatarPresence("listening");
+      return;
+    }
+    if (waiting) {
+      setAvatarPresence("waiting_approval");
+      return;
+    }
+    if (executing) {
+      setAvatarPresence("executing");
+      return;
+    }
+    if (live === "listening" || live === "offline" || live === "waiting_approval" || live === "executing") {
+      setAvatarPresence("idle");
+    }
+  }, [ws.halted, ws.runs, voiceListening, speaking]);
 
   useEffect(() => {
     // Single store: hydrate from localStorage once; every badge reads the same snapshot.
@@ -850,6 +895,31 @@ export function CommandApp() {
     if (mode === "build") setView("build");
   }
 
+  function chooseRoutingMode(mode: RoutingMode) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    writeRoutingMode(storage, mode);
+    setRoutingMode(mode);
+  }
+
+  function toggleRoutingSeat(id: LogicRouteId) {
+    setRoutingPanel((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+      writeRoutingPanel(typeof localStorage === "undefined" ? null : localStorage, next);
+      return next;
+    });
+  }
+
+  function rateReply(messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) {
+    const next = saveRating(typeof localStorage === "undefined" ? null : localStorage, {
+      messageId,
+      score,
+      model,
+      mode: routingMode,
+      at: new Date().toISOString(),
+    });
+    setRatings(next);
+  }
+
   function interruptSpeakPlayback() {
     interruptMessageSpeak({
       sharedAudio: sharedAudioOutput,
@@ -858,6 +928,7 @@ export function CommandApp() {
     });
     speakAbortRef.current = null;
     setSpeaking(false);
+    setAvatarPresence("interrupted");
   }
 
   useEffect(() => {
@@ -1089,6 +1160,9 @@ export function CommandApp() {
       setLogicRoute(stored.logicRoute);
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
+      setRoutingMode(readRoutingMode(localStorage));
+      setRoutingPanel(readRoutingPanel(localStorage));
+      setRatings(readRatings(localStorage));
     } catch {
       /* a private browser can refuse storage */
     }
@@ -1593,7 +1667,14 @@ export function CommandApp() {
     }
   }
 
-  async function deliver(chat: Chat, text: string, source: Workspace, resume = false, images: ImageAttachment[] = []): Promise<string | null> {
+  async function deliver(
+    chat: Chat,
+    text: string,
+    source: Workspace,
+    resume = false,
+    images: ImageAttachment[] = [],
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean },
+  ): Promise<string | null> {
     if (turnInFlight.current) return null;
     const snapped = snapshotImages(images);
     if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
@@ -1602,7 +1683,9 @@ export function CommandApp() {
       });
       return null;
     }
-    const activeLogic = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
+    const activeLogic = options && "logicRoute" in options
+      ? options.logicRoute ?? null
+      : logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
     if (activeLogic) {
       const view = logicRoutes.find((item) => item.id === activeLogic);
       if (!view?.ready) {
@@ -1629,7 +1712,14 @@ export function CommandApp() {
       });
       return null;
     }
-    const live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    let live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    if (options?.isolateOutputs) {
+      let lastUser = -1;
+      live.forEach((item, index) => {
+        if (item.role === "user") lastUser = index;
+      });
+      if (lastUser >= 0) live = live.slice(0, lastUser + 1);
+    }
     const messages = selectRetryMessages(chat.messages, live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
     const history = historyForDeliver(messages, resume);
@@ -1641,7 +1731,7 @@ export function CommandApp() {
       void deliver(chat, text, wsRef.current, true, snapped);
     };
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
-    if (!resume) {
+    if (!resume && !options?.skipUserMessage) {
       const displayText = historyTextForImages(text, snapped);
       const userMsg = {
         id: crypto.randomUUID(),
@@ -1695,6 +1785,8 @@ export function CommandApp() {
           modelTier,
           logicRoute: activeLogic,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          personalityId: chat.personalityId ?? "assistant",
+          customPersonality: chat.customPersonality ?? "",
         }),
         onDelta: (chunk) => {
           if (generation !== turnGen.current) return;
@@ -1918,6 +2010,27 @@ export function CommandApp() {
     });
   }
 
+  async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<void> {
+    const primary = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
+    const seats = logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason }));
+    const plan = planRouting({ mode: routingMode, primary, seats, panel: routingPanel });
+    if (!plan.ok) {
+      setError(plan.reason);
+      return;
+    }
+    setNotice(plan.note);
+    for (let index = 0; index < plan.calls.length; index += 1) {
+      const call = plan.calls[index];
+      if (!call) return;
+      const textOut = await deliver(chat, full, index === 0 ? source : wsRef.current, false, images, {
+        ...(call.route ? { logicRoute: call.route } : {}),
+        skipUserMessage: index > 0,
+        isolateOutputs: index > 0,
+      });
+      if (textOut == null) return;
+    }
+  }
+
   async function sendCommand() {
     if (busy || turnInFlight.current) return;
     const text = draft.trim();
@@ -1967,11 +2080,22 @@ export function CommandApp() {
       });
       return;
     }
+    const routePlan = planRouting({
+      mode: routingMode,
+      primary: logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null),
+      seats: logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason })),
+      panel: routingPanel,
+    });
+    if (!routePlan.ok) {
+      setError(routePlan.reason);
+      return;
+    }
     const made = createChat(ws, {
       memory: memoryChoice,
       autonomy,
       temporary,
       projectId: projectChoice || null,
+      personalityId: defaultPersonalityId,
     });
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
@@ -1992,7 +2116,7 @@ export function CommandApp() {
     });
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    await deliver(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, false, images);
+    await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
   }
 
   async function startResearch() {
@@ -2147,6 +2271,16 @@ export function CommandApp() {
       });
       return;
     }
+    const chatPlan = planRouting({
+      mode: routingMode,
+      primary: logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null),
+      seats: logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason })),
+      panel: routingPanel,
+    });
+    if (!chatPlan.ok) {
+      setError(chatPlan.reason);
+      return;
+    }
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
     setDraft("");
@@ -2164,7 +2298,7 @@ export function CommandApp() {
     }
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    await deliver(active, full, ws, false, images);
+    await deliverPlanned(active, full, ws, images);
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
@@ -2197,6 +2331,7 @@ export function CommandApp() {
         autonomy,
         temporary,
         projectId: projectChoice || null,
+        personalityId: defaultPersonalityId,
       });
       chat = made.chat;
       setActiveId(made.chat.id);
@@ -2636,8 +2771,16 @@ export function CommandApp() {
     setError(null);
     setWs((prev) => {
       const updated = pushAudit({ ...prev, halted: next }, "emergency_stop", "session", next ? "on" : "cleared");
-      return next ? haltFleet(updated) : updated;
+      if (!next) return updated;
+      const stopped = haltFleet(updated);
+      return {
+        ...stopped,
+        schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
+      };
     });
+    setNotice(next
+      ? "Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept."
+      : "Emergency stop is off. Schedules stay paused until you enable them.");
     try {
       const result = await setExecutionHalt({ data: { on: next } });
       if (!result.ok) setError(result.error);
@@ -2768,6 +2911,7 @@ export function CommandApp() {
       autonomy,
       temporary,
       projectId: chatProjectId || projectChoice || null,
+      personalityId: defaultPersonalityId,
     });
     setWs((prev) =>
       pushAudit(
@@ -2790,6 +2934,7 @@ export function CommandApp() {
         autonomy,
         temporary,
         projectId: chatProjectId || projectChoice || null,
+        personalityId: defaultPersonalityId,
       });
       chat = made.chat;
       source = { ...source, chats: [made.chat, ...source.chats] };
@@ -2819,6 +2964,8 @@ export function CommandApp() {
     const abort = new AbortController();
     speakAbortRef.current = abort;
     setSpeaking(true);
+    setAvatarPresence("processing");
+    let speechFailed = false;
     await runMountedSpeak({
       text,
       messageId,
@@ -2851,6 +2998,7 @@ export function CommandApp() {
         },
         chatTurn: (transcript) => speakChatTurn(transcript),
         synthesize: async (reply, voice) => {
+          noteSpokenText(reply);
           const spoken = await speakText({ data: { text: reply, voiceId: voice } });
           if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok && "provider" in spoken && spoken.provider) {
             setNotice(`${spoken.provider} spoke this reply.`);
@@ -2862,6 +3010,8 @@ export function CommandApp() {
         },
       },
       reportFailure: (message, action, target, retry) => {
+        speechFailed = true;
+        setAvatarPresence("error");
         reportFailure(message, action, target, retry);
         setFailure((current) => (current ? { ...current, kind: (classifyHonestFailure(message) ?? (action as HonestFailureKind)) } : current));
       },
@@ -2872,6 +3022,7 @@ export function CommandApp() {
     });
     if (generation !== speakGenRef.current || abort.signal.aborted) return;
     setSpeaking(false);
+    if (!speechFailed && !wsRef.current.halted) setAvatarPresence("idle");
   }
 
   function appendLiveVoiceUser(text: string) {
@@ -2902,6 +3053,7 @@ export function CommandApp() {
   function appendLiveVoiceAssistant(text: string) {
     const clipped = text.trim();
     if (!clipped) return;
+    noteSpokenText(clipped);
     const targetId = activeId ?? active?.id ?? null;
     if (!targetId) {
       setNotice(`Live voice reply: ${clipped.slice(0, 160)}`);
@@ -3500,6 +3652,13 @@ export function CommandApp() {
       }
 
       publishConnectStage("connecting");
+      const voiceChat = wsRef.current.chats.find((item) => item.id === activeId) ?? null;
+      const voiceBuilt = voiceSessionInstructions({
+        mode: getVoiceMode(),
+        personalityId: voiceChat?.personalityId ?? "assistant",
+        customPersonality: voiceChat?.customPersonality ?? "",
+        characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
+      });
       const session = new RealtimeVoiceSession(
         {
           onTranscript: (text) => {
@@ -3518,6 +3677,7 @@ export function CommandApp() {
             session.interruptPlayback();
           },
           onError: (message) => {
+            setAvatarPresence("error");
             const shown = message || "Voice realtime error.";
             setError(shown);
             if (overlayOpenRef.current) {
@@ -3531,9 +3691,15 @@ export function CommandApp() {
             const previous = lastSessionStatusRef.current;
             lastSessionStatusRef.current = status;
             setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
-            if (status === "speaking") setSpeaking(true);
+            if (status === "processing") setAvatarPresence("processing");
+            if (status === "speaking") {
+              setSpeaking(true);
+              if (readAvatarSession().utterance) setAvatarPresence("speaking");
+            }
+            if (status === "listening") setAvatarPresence("listening");
             if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
             if (status === "idle" || status === "closed") {
+              if (!wsRef.current.halted) setAvatarPresence("idle");
               setVoiceLevel(0);
               if (status === "closed") setVoiceLiveTranscript("");
             }
@@ -3599,7 +3765,7 @@ export function CommandApp() {
         },
         sharedAudioOutput,
         undefined,
-        { voice: voiceChoiceRef.current },
+        { voice: voiceChoiceRef.current, instructions: voiceBuilt.instructions },
       );
       voiceSession.current = session;
       await session.connect(secret.value);
@@ -4117,7 +4283,32 @@ export function CommandApp() {
           </div>
         ) : null}
 
-        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" ? "overflow-hidden" : "overflow-auto"}`}>
+        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto"}`}>
+          {view === "intelligence" && (
+            <EveWorkbench
+              workspace={ws}
+              personalityId={active?.personalityId ?? "assistant"}
+              customPersonality={active?.customPersonality ?? ""}
+              chatTitle={active?.title ?? ""}
+              onCommand={(command) => {
+                const result = applyWorkbenchCommand(wsRef.current, command);
+                setWs(result.workspace);
+                if (result.ok) {
+                  setNotice(result.message);
+                  setError(null);
+                } else {
+                  setError(result.message);
+                }
+              }}
+              onToggleStop={() => { void toggleStop(); }}
+              onPreviewVoice={(line) => { void speak(line); }}
+              onOpenChat={() => { setView("command"); setNavOpen(false); }}
+              onOpenDashboard={() => { setView("dashboard"); setNavOpen(false); }}
+              onOpenAgents={() => { setView("agents"); setNavOpen(false); }}
+              onOpenRuns={() => { setView("runs"); setNavOpen(false); }}
+              onOpenConnections={() => { setView("connected"); setNavOpen(false); }}
+            />
+          )}
           {view === "dashboard" && (
             <div className="h-full min-h-0">
               <Suspense fallback={<p className="p-6 text-sm text-muted">Opening the dashboard…</p>}>
@@ -4127,21 +4318,24 @@ export function CommandApp() {
           )}
           {view === "command" && (
             <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
-              <div className="masthead flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h1 className="font-display text-3xl font-bold md:text-4xl">
-                    {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
-                  </h1>
-                  <p className="text-sm text-muted">Your workspace, under your control.</p>
+              <div className="masthead grid items-center gap-4 md:grid-cols-[minmax(16rem,22rem)_1fr]">
+                <DigitalHuman framing="upper" className="w-full" />
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h1 className="font-display text-3xl font-bold md:text-4xl">
+                      {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
+                    </h1>
+                    <p className="text-sm text-muted">Your workspace, under your control.</p>
+                  </div>
+                  <p className="text-right text-sm text-muted">
+                    {now
+                      ? now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+                      : "—"}
+                    <span className="mt-1 block font-display text-2xl text-fg">
+                      {now ? now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}
+                    </span>
+                  </p>
                 </div>
-                <p className="text-right text-sm text-muted">
-                  {now
-                    ? now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-                    : "—"}
-                  <span className="mt-1 block font-display text-2xl text-fg">
-                    {now ? now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}
-                  </span>
-                </p>
               </div>
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
@@ -4176,6 +4370,13 @@ export function CommandApp() {
                     </span>
                   </button>
                 </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-panel border border-line/70 bg-bg/60 px-3 py-2">
+                  <label htmlFor="new-chat-personality" className="text-sm font-medium">Conversation style</label>
+                  <select id="new-chat-personality" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm">
+                    {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                  </select>
+                  <span className="text-xs text-muted">Style only. It does not change tools, permissions or approvals.</span>
+                </div>
                 <form
                   className="mt-3"
                   onSubmit={(event) => {
@@ -4201,6 +4402,12 @@ export function CommandApp() {
                     ))}
                   </div>
                   <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
+                  <RoutingModeControl
+                    mode={routingMode}
+                    panel={routingPanel}
+                    onMode={chooseRoutingMode}
+                    onToggle={toggleRoutingSeat}
+                  />
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
@@ -4452,6 +4659,10 @@ export function CommandApp() {
             <ChatPane
               active={active}
               chats={ws.chats}
+              personalityId={active?.personalityId ?? "assistant"}
+              onPersonalityChange={(personalityId) => { if (active) setWs((prev) => updateChatPersonality(prev, active.id, personalityId)); }}
+              customPersonality={active?.customPersonality ?? ""}
+              onCustomPersonalityChange={(value) => { if (active) setWs((prev) => updateChatCustomPersonality(prev, active.id, value)); }}
               projectId={chatProjectId}
               projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
               onClearProject={() => setChatProjectId(null)}
@@ -4538,6 +4749,12 @@ export function CommandApp() {
               }}
               composerEffort={composerEffort}
               onComposerEffort={chooseComposerEffort}
+              routingMode={routingMode}
+              onRoutingMode={chooseRoutingMode}
+              routingPanel={routingPanel}
+              onToggleRoute={toggleRoutingSeat}
+              ratings={ratings}
+              onRate={rateReply}
               stagedName={staged?.name ?? null}
               pendingImages={pendingImages}
               onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
@@ -5675,6 +5892,14 @@ export function CommandApp() {
           setDraft((prev) => (prev ? `${prev}\n\n${text}` : text));
           setNotice(`Attached ${name} into the composer (live was off).`);
         }}
+        getVoiceProfile={() => {
+          const chat = wsRef.current.chats.find((item) => item.id === activeId) ?? null;
+          return {
+            personalityId: chat?.personalityId ?? "assistant",
+            customPersonality: chat?.customPersonality ?? "",
+            characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
+          };
+        }}
       />
     </div>
   );
@@ -5848,6 +6073,10 @@ function ReaPanel({
 function ChatPane({
   active,
   chats,
+  personalityId,
+  onPersonalityChange,
+  customPersonality,
+  onCustomPersonalityChange,
   projectId,
   projectName,
   onClearProject,
@@ -5895,6 +6124,12 @@ function ChatPane({
   onComposerMode,
   composerEffort,
   onComposerEffort,
+  routingMode,
+  onRoutingMode,
+  routingPanel,
+  onToggleRoute,
+  ratings,
+  onRate,
   stagedName,
   pendingImages,
   onRemoveImage,
@@ -5927,6 +6162,10 @@ function ChatPane({
 }: {
   active: Chat | null;
   chats: Chat[];
+  personalityId: PersonalityId;
+  onPersonalityChange: (personalityId: PersonalityId) => void;
+  customPersonality: string;
+  onCustomPersonalityChange: (value: string) => void;
   projectId: string | null;
   projectName: string | null;
   onClearProject: () => void;
@@ -5974,6 +6213,12 @@ function ChatPane({
   onComposerMode: (mode: Autonomy) => void;
   composerEffort: ComposerModeId;
   onComposerEffort: (mode: ComposerModeId) => void;
+  routingMode: RoutingMode;
+  onRoutingMode: (mode: RoutingMode) => void;
+  routingPanel: LogicRouteId[];
+  onToggleRoute: (id: LogicRouteId) => void;
+  ratings: ResponseRating[];
+  onRate: (messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) => void;
   stagedName: string | null;
   pendingImages: ImageAttachment[];
   onRemoveImage: (index: number) => void;
@@ -6074,6 +6319,7 @@ function ChatPane({
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="masthead px-4 pt-4">
+          <DigitalHuman framing="compact" className="mb-3 max-w-[9.5rem]" />
           <div className="flex flex-wrap items-end justify-between gap-2">
             <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
             {active && !renaming && (
@@ -6097,6 +6343,31 @@ function ChatPane({
             </form>
           )}
           <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label htmlFor="thread-personality" className="text-xs font-semibold text-muted">EVE / conversation style</label>
+            <select id="thread-personality" value={personalityId} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm" disabled={!active || busy}>
+              {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+            </select>
+            <span className="text-xs text-muted">Style only · same permissions and approval rules</span>
+          </div>
+          {active && personalityId === "custom" && (
+            <div className="mt-2 max-w-xl space-y-1">
+              <label htmlFor="thread-custom-personality" className="text-xs font-semibold text-muted">Describe EVE's conversation style</label>
+              <textarea
+                id="thread-custom-personality"
+                value={customPersonality}
+                onChange={(event) => onCustomPersonalityChange(event.target.value.slice(0, 800))}
+                maxLength={800}
+                rows={3}
+                disabled={busy}
+                placeholder="For example: concise, analytical, candid, and lightly humorous. Challenge weak assumptions respectfully."
+                className="w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm"
+                aria-describedby="thread-custom-personality-help"
+              />
+              <p id="thread-custom-personality-help" className="text-xs text-muted">Up to 800 characters. This changes tone and presentation only; it cannot change tools, access, approvals or safety rules.</p>
+              <p className="text-right text-[11px] tabular-nums text-muted">{customPersonality.length}/800</p>
+            </div>
+          )}
           {active && (
             <div className="mt-3 max-w-md" data-testid="memory-chat-toggle-header">
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
@@ -6154,6 +6425,21 @@ function ChatPane({
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content, msg.id)} disabled={speaking}>
                     {speaking ? "Speaking" : "Read aloud"}
                   </button>
+                )}
+                {msg.role === "assistant" && (
+                  <span className="flex flex-wrap items-center gap-1 text-xs text-muted">
+                    Rate
+                    {([1, 2, 3, 4, 5] as const).map((score) => (
+                      <button
+                        key={score}
+                        type="button"
+                        className={`min-h-11 min-w-11 ${ratings.find((item) => item.messageId === msg.id)?.score === score ? "text-accent" : ""}`}
+                        onClick={() => onRate(msg.id, score, msg.model ?? null)}
+                      >
+                        {score}
+                      </button>
+                    ))}
+                  </span>
                 )}
                 {msg.role === "assistant" && last?.id === msg.id && (
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={onRegenerate} disabled={busy || halted}>Regenerate</button>
@@ -6258,6 +6544,7 @@ function ChatPane({
           }}
         >
           <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
+          <RoutingModeControl mode={routingMode} panel={routingPanel} onMode={onRoutingMode} onToggle={onToggleRoute} />
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -6489,6 +6776,60 @@ function ChatPane({
           </button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function RoutingModeControl({
+  mode,
+  panel,
+  onMode,
+  onToggle,
+}: {
+  mode: RoutingMode;
+  panel: LogicRouteId[];
+  onMode: (mode: RoutingMode) => void;
+  onToggle: (id: LogicRouteId) => void;
+}) {
+  const modes: RoutingMode[] = ["A", "B", "C", "D"];
+  return (
+    <div className="mb-2" data-testid="routing-mode">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted">Routing</span>
+        {modes.map((item) => (
+          <button
+            key={item}
+            type="button"
+            aria-pressed={mode === item}
+            className={`min-h-11 rounded-full px-3 text-sm ${mode === item ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
+            onClick={() => onMode(item)}
+          >
+            {item} {ROUTING_MODE_LABEL[item]}
+          </button>
+        ))}
+      </div>
+      {mode !== "A" && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted">Routes</span>
+          {(["astra", "sol", "luna"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={panel.includes(id)}
+              className={`min-h-11 rounded-full px-3 text-sm ${panel.includes(id) ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
+              onClick={() => onToggle(id)}
+            >
+              {id}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="mt-1 text-xs text-muted">
+        {mode === "A" && "One model answers. Nothing else is called."}
+        {mode === "B" && "Two ready routes answer. Both replies stay. Nothing is merged."}
+        {mode === "C" && "Each selected ready route answers on its own. Nothing is merged."}
+        {mode === "D" && "Selected ready routes stay side by side. Nothing is merged."}
+      </p>
     </div>
   );
 }

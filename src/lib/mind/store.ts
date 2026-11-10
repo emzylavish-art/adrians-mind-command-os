@@ -79,3 +79,11 @@ export async function readControl(sql: Sql, userId: string): Promise<boolean> {
   const rows = await sql<{ halted: boolean }>`select halted from mind_control where user_id = ${userId}`;
   return rows[0]?.halted === true;
 }
+
+export async function listSnapshotUserIds(sql: Sql): Promise<string[]> {
+  const rows = await sql<{ user_id: string }>`select user_id from mind_snapshot`;
+  return rows
+    .map((row) => (typeof row.user_id === "string" ? row.user_id : ""))
+    .filter((id) => id.length > 0)
+    .slice(0, 500);
+}

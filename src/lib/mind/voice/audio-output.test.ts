@@ -89,4 +89,44 @@ describe("SharedAudioOutput", () => {
       g.Blob = prevBlob;
     }
   });
+
+  it("publishes a clock when MPEG playback is interrupted", async () => {
+    const out = new SharedAudioOutput();
+    const clocks: { playing: boolean; current: number; duration: number }[] = [];
+    const stop = out.onClock((clock) => clocks.push(clock));
+    const AudioStub = class {
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      ontimeupdate: (() => void) | null = null;
+      currentTime = 0;
+      duration = 1.2;
+      src = "";
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+      removeAttribute() {}
+      load() {}
+    };
+    const g = globalThis as unknown as { Audio?: typeof Audio; URL?: typeof URL; Blob?: typeof Blob };
+    const prevAudio = g.Audio;
+    const prevURL = g.URL;
+    const prevBlob = g.Blob;
+    g.Audio = AudioStub as unknown as typeof Audio;
+    g.URL = { createObjectURL: () => "blob:test", revokeObjectURL: () => undefined } as unknown as typeof URL;
+    g.Blob = class { constructor(_parts?: unknown[], _opts?: unknown) {} } as unknown as typeof Blob;
+    try {
+      const pending = out.playMpegBase64(Buffer.from("ID3").toString("base64"));
+      await Promise.resolve();
+      out.interrupt();
+      await pending;
+      assert.equal(clocks.at(-1)?.playing, false);
+      assert.ok(clocks.some((clock) => clock.playing));
+    } finally {
+      stop();
+      g.Audio = prevAudio;
+      g.URL = prevURL;
+      g.Blob = prevBlob;
+    }
+  });
 });

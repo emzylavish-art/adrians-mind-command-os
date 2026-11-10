@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import { useLiveVoiceSession } from "@/lib/mind/voice-live/use-live-voice-session";
+import type { VoiceProfileInput } from "@/lib/mind/voice-live/session-instructions";
 import type { LiveVoiceUiAttr } from "@/lib/mind/voice-live/types";
 import { isLiveVoiceOccupied } from "@/lib/mind/voice-live/occupancy";
 import { matchesVoiceToggleShortcut } from "@/lib/mind/voice/shortcut";
@@ -131,6 +132,7 @@ export type ComposerLiveVoiceProps = {
   onError?: (message: string) => void;
   onNotice?: (message: string) => void;
   disabled?: boolean;
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
 };
 
 /** Wired composer mount: logic hook + presentational LiveSpeakControl. */
@@ -141,6 +143,7 @@ export function ComposerLiveVoice(props: ComposerLiveVoiceProps) {
     onAssistantTranscript: props.onAssistantTranscript,
     onError: props.onError,
     onNotice: props.onNotice,
+    getVoiceProfile: props.getVoiceProfile,
   });
 
   // Ctrl+Shift+V while live: end live first so two mics never open (no new shortcut).
