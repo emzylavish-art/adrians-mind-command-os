@@ -13,8 +13,8 @@ import { resolveXaiVoiceId } from "../voice/voices.ts";
 import { formatMicCaptureError, formatVoiceClientError } from "../voice/errors.ts";
 import { OLLAMA_UNREACHABLE, runOllamaConductor } from "../voice/ollama-conductor.ts";
 import { getVoiceMode } from "../voice/mode-store.ts";
-import type { VoiceRoutingMode } from "../voice/mode.ts";
-import { voiceModeLabel } from "../voice/mode.ts";
+import { voiceSessionInstructions, type VoiceProfileInput } from "./session-instructions.ts";
+import { voiceModeLabel, type VoiceRoutingMode } from "../voice/mode.ts";
 import { sanitizeVoiceTranscript } from "../voice/limits.ts";
 import {
   phaseToLabel,
@@ -75,6 +75,8 @@ export type LiveSessionDeps = {
   isOverlayMicOpen?: () => boolean;
   getMode?: () => VoiceRoutingMode;
   getVoiceId?: () => string;
+  /** Active chat personality and selected character. Absent keeps the previous default prompts. */
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
   output?: SharedAudioOutput; // unused for playback; kept for API compat
   speaker?: LiveSpeakerGain;
   socketFactory?: (url: string, protocols: string[]) => WsLike;
@@ -463,12 +465,17 @@ export class LiveVoiceSession {
 
     const voiceId = resolveXaiVoiceId(this.deps.getVoiceId?.());
     const mode = this.deps.getMode?.() ?? getVoiceMode();
+    const profile = this.deps.getVoiceProfile?.() ?? null;
+    const built = profile
+      ? voiceSessionInstructions({ mode, ...profile })
+      : null;
     this.send({
       type: "session.update",
       session: {
         voice: voiceId,
-        instructions:
-          mode === "orchestrator"
+        instructions: built
+          ? built.instructions
+          : mode === "orchestrator"
             ? "You are a silent speech-to-text capture helper. Do not speak replies; only transcribe the user."
             : "You are a helpful voice assistant. Keep spoken replies concise.",
         turn_detection: { type: "server_vad" },

@@ -183,6 +183,8 @@ export function readinessFromProviderStatus(snapshot: ProviderStatusSnapshot): L
 
 export type StoredSelection = {
   provider: string;
+  personalityId?: string;
+  customPersonality?: string;
   modelTier: ModelTier;
   logicRoute: LogicRouteId | null;
 };
@@ -325,6 +327,8 @@ export type ChatTurnBodyInput = {
   history: unknown[];
   memoryContext: unknown[];
   provider: string;
+  personalityId?: string;
+  customPersonality?: string;
   modelTier: ModelTier;
   logicRoute: LogicRouteId | null;
   orchestrator?: "grok" | "astra" | null;
@@ -339,6 +343,8 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     halted: input.halted,
     history: input.history,
     memoryContext: input.memoryContext,
+    personalityId: input.personalityId ?? "assistant",
+    customPersonality: input.customPersonality ?? "",
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
     ...(input.logicRoute ? { logicRoute: input.logicRoute } : {}),

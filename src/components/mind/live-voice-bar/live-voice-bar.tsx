@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { analyzeImageFile } from "@/lib/mind/server";
 import { useLiveVoiceSession } from "@/lib/mind/voice-live/use-live-voice-session";
+import type { VoiceProfileInput } from "@/lib/mind/voice-live/session-instructions";
 import { isLiveVoiceOccupied } from "@/lib/mind/voice-live/occupancy";
 import {
   MAX_TEXT_FILE_CHARS,
@@ -43,6 +44,7 @@ export type LiveVoiceBarProps = {
   onNotice?: (message: string) => void;
   onChatSend?: (text: string) => void;
   onChatAttachText?: (text: string, name: string) => void;
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
   onChatAttachImage?: (image: { dataUrl: string; name: string; mime: string }) => void;
   dictating?: boolean;
   onDictateToggle?: () => void;
@@ -68,6 +70,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
     onAssistantTranscript: props.onAssistantTranscript,
     onError: props.onError,
     onNotice: props.onNotice,
+    getVoiceProfile: props.getVoiceProfile,
   });
 
   const inCall = live.active;
@@ -88,6 +91,11 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const [voiceChoice, setVoiceChoice] = useState<XaiBuiltinVoice>(() =>
     readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage),
   );
+  useEffect(() => {
+    const sync = () => setVoiceChoice(readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage));
+    window.addEventListener("amcos-character", sync);
+    return () => window.removeEventListener("amcos-character", sync);
+  }, []);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);

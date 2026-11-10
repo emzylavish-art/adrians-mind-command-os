@@ -22,6 +22,8 @@ export type RealtimeHandlers = {
 export type RealtimeSessionOptions = {
   /** Built-in or allowlisted voice id applied on session.update (default eve). */
   voice?: string;
+  /** When omitted, the existing short capture prompt is used. */
+  instructions?: string;
 };
 
 type WsLike = {
@@ -79,6 +81,7 @@ export class RealtimeVoiceSession {
   private capturePending = false;
 
   private voiceId: string;
+  private instructions: string;
   private captureMedia: () => Promise<MediaStream>;
 
   constructor(
@@ -98,6 +101,7 @@ export class RealtimeVoiceSession {
     this.output = output;
     this.socketFactory = socketFactory;
     this.voiceId = resolveXaiVoiceId(options.voice);
+    this.instructions = options.instructions?.trim() || "You are a voice capture helper. Prefer short replies when asked to speak.";
     this.captureMedia = captureMedia;
   }
 
@@ -158,7 +162,7 @@ export class RealtimeVoiceSession {
       type: "session.update",
       session: {
         voice: this.voiceId,
-        instructions: "You are a voice capture helper. Prefer short replies when asked to speak.",
+        instructions: this.instructions,
         turn_detection: { type: "server_vad" },
         audio: {
           input: {

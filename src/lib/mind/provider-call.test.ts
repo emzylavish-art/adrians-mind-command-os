@@ -29,6 +29,40 @@ describe("provider calls", () => {
     assert.match(result.error, /rate limited/);
     assert.equal(result.text, "");
   });
+  it("maps personality system instructions to each provider's native field", async () => {
+    const inputs = [
+      ["openai", "messages"],
+      ["openrouter", "messages"],
+      ["anthropic", "system"],
+      ["gemini", "systemInstruction"],
+    ] as const;
+    for (const [id, field] of inputs) {
+      const requests: Record<string, unknown>[] = [];
+      const result = await callConfiguredProvider({
+        id, key: "test-key", prompt: "hello", systemPrompt: "Style preference only.",
+        fetch: async (_url, init) => {
+          requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+          return { ok: true, status: 200, text: async () => id === "gemini"
+            ? JSON.stringify({ candidates: [{ content: { parts: [{ text: "reply" }] } }] })
+            : id === "anthropic"
+              ? JSON.stringify({ content: [{ type: "text", text: "reply" }] })
+              : JSON.stringify({ choices: [{ message: { content: "reply" } }] }) };
+        },
+      });
+      assert.equal(result.ok, true);
+      const request = requests[0];
+      assert.ok(request);
+      if (field === "messages") {
+        assert.deepEqual((request.messages as unknown[])[0], { role: "system", content: "Style preference only." });
+      } else if (field === "system") {
+        assert.equal(request.system, "Style preference only.");
+        assert.deepEqual(request.messages, [{ role: "user", content: "hello" }]);
+      } else {
+        assert.deepEqual(request.systemInstruction, { parts: [{ text: "Style preference only." }] });
+        assert.deepEqual(request.contents, [{ role: "user", parts: [{ text: "hello" }] }]);
+      }
+    }
+  });
   it("extracts assistant text from each provider response", () => {
     assert.equal(parseProviderText("openai", JSON.stringify({ choices: [{ message: { content: "hello" } }] })), "hello");
     assert.equal(parseProviderText("openrouter", JSON.stringify({ choices: [{ message: { content: [{ type: "text", text: "one" }] } }] })), "one");
