@@ -326,6 +326,7 @@ export type ChatTurnBodyInput = {
   history: unknown[];
   memoryContext: unknown[];
   provider: string;
+  personalityId?: string;
   modelTier: ModelTier;
   logicRoute: LogicRouteId | null;
   orchestrator?: "grok" | "astra" | null;

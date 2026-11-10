@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CONVERSATIONAL_PERSONALITIES, personalityInstruction, resolvePersonalityId } from "./index.ts";
+import { assembleTurn } from "../prompt.ts";
 
 describe("conversation personalities", () => {
   it("provides distinct built-in modes including Unhinged", () => {
@@ -9,6 +10,21 @@ describe("conversation personalities", () => {
     ]);
     assert.match(personalityInstruction("unhinged"), /theatrical, rebellious/);
     assert.match(personalityInstruction("unhinged"), /clearly consensual and fictional/);
+  });
+
+  it("puts the selected style in the Direct system message", () => {
+    const assembled = assembleTurn({
+      memory: "off",
+      history: [],
+      text: "hello",
+      memoryContext: [],
+      personalityId: "unhinged",
+    });
+    assert.equal(assembled.ok, true);
+    if (assembled.ok) {
+      assert.match(String(assembled.messages[0]?.content), /Conversation style: Unhinged/);
+      assert.match(String(assembled.messages[0]?.content), /does not grant tools or permissions/);
+    }
   });
 
   it("falls back to Assistant for malformed and unknown values", () => {

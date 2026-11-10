@@ -75,6 +75,22 @@ describe("request carries the selection", () => {
     }
   });
 
+  it("forwards a selected chat personality and defaults legacy callers", () => {
+    const shared = {
+      text: "hello",
+      memory: "off" as const,
+      halted: false,
+      history: [],
+      memoryContext: [],
+      provider: "grok",
+      modelTier: "Auto" as const,
+      logicRoute: null,
+      images: [],
+    };
+    assert.equal(chatTurnBody({ ...shared, personalityId: "unhinged" }).personalityId, "unhinged");
+    assert.equal(chatTurnBody(shared).personalityId, "assistant");
+  });
+
   it("refuses a provider and logicRoute that disagree", () => {
     const conflict = resolveRequestedRoute({ logicRoute: "sol", provider: "luna" });
     assert.equal(conflict.ok, false);

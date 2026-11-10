@@ -101,6 +101,7 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     text: text || "Describe the attached image.",
     memoryContext,
     images,
+    personalityId: data.personalityId,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
   const tier = resolveModelTier(data.modelTier, text || "image", process.env);
