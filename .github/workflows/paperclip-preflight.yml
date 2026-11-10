@@ -1,0 +1,31 @@
+name: Paperclip installation preflight (temporary CI runner)
+
+# Deliberately manual and isolated. A GitHub-hosted runner is ephemeral
+# and is not an always-on Paperclip installation.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-paperclip-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+      - name: Check supported Node.js runtime
+        run: |
+          node -e 'if (Number(process.versions.node.split(".")[0]) < 24) process.exit(1)'
+          node --version
+      - name: Install pinned Paperclip CLI in an isolated directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/paperclip-cli"
+          npm install --prefix "$RUNNER_TEMP/paperclip-cli" --no-audit --no-fund paperclipai@2026.1106.0
+      - name: Verify installed CLI without starting an instance
+        run: |
+          "$RUNNER_TEMP/paperclip-cli/node_modules/.bin/paperclipai" --help
+          echo "Installed on temporary runner; no persistent service or agents were started."

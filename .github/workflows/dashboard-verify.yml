@@ -1,64 +1,99 @@
-name: Adrian's Mind dashboard verification
+name: Adrian's Mind production verification
 
 on:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/dashboard-verify.yml"
   pull_request:
     paths:
-      - "src/components/mind/dashboard-3d/**"
-      - "src/components/mind/youtube/**"
-      - "src/lib/mind/connectors/**"
-      - "src/routes/api/mind/youtube/**"
-      - "src/routes/dashboard.tsx"
-      - "src/lib/mind/dashboard/**"
-      - "src/components/mind/agent-command-center.tsx"
-      - "src/components/mind/command-app.tsx"
-      - "src/components/mind/ai-provider-connections.tsx"
-      - "src/lib/mind/ai-provider-config.server.ts"
-      - "src/lib/mind/custom-connection.ts"
-      - "src/lib/mind/turn.server.ts"
-      - "src/lib/mind/logic-routes.ts"
-      - "src/routes/api/mind/**"
-      - "src/routeTree.gen.ts"
-      - "migrations/**"
+      - "src/**"
       - "scripts/**"
+      - "migrations/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/dashboard-verify.yml"
-  push:
-    branches:
-      - "main"
-      - "dashboard/yomaru-graph-polish"
-    paths:
-      - "src/components/mind/dashboard-3d/**"
-      - "src/lib/mind/dashboard/**"
-      - "src/components/mind/agent-command-center.tsx"
-      - "src/components/mind/command-app.tsx"
-      - "src/components/mind/ai-provider-connections.tsx"
-      - "src/lib/mind/ai-provider-config.server.ts"
-      - "src/lib/mind/custom-connection.ts"
-      - "src/lib/mind/turn.server.ts"
-      - "src/lib/mind/logic-routes.ts"
-      - "src/routes/api/mind/**"
-      - "src/routeTree.gen.ts"
-      - "migrations/**"
-      - "scripts/**"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/dashboard-verify.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: mind-verification-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
-  dashboard:
+  typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "24.11.1"
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+
+  script-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          cache: npm
+      - run: npm ci
+      - run: node --test 'scripts/**/*.test.mjs'
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          cache: npm
+      - run: npm ci
+      - run: node scripts/run-tests-shard.mjs ${{ matrix.shard }} 4
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          cache: npm
+      - run: npm ci
+      # The production database is not supplied to GitHub CI.
       - run: npm run build
+
+  interface-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          cache: npm
+      - run: npm ci
+      - run: node scripts/audit-interactions.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mind-interface-inventory
+          path: out/interface-audit.*
+          retention-days: 30
