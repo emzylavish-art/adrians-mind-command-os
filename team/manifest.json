@@ -38,9 +38,11 @@
         "synthesis",
         "durable_task_queue"
       ],
-      "status": "contract_defined",
-      "entrypoint": "team/agents/orchestrator.md",
-      "requires": []
+      "status": "partial",
+      "entrypoint": "team/orchestrator.py",
+      "requires": [
+        "python3"
+      ]
     },
     {
       "id": "analysis",
@@ -206,6 +208,19 @@
         "python3",
         "local_sqlite_database",
         "explicit_worker_process"
+      ]
+    },
+    {
+      "id": "manus-execution",
+      "role": "Manus Execution Computer",
+      "capabilities": [
+        "execution_computer",
+        "artifact_delivery"
+      ],
+      "status": "partial",
+      "entrypoint": "team/manus_adapter.py",
+      "requires": [
+        "local_controlled_computer_or_explicit_manus_credential"
       ]
     }
   ],
@@ -408,6 +423,68 @@
         "timeout_seconds": "integer (optional)"
       },
       "safety": "Requires NOTION_API_KEY from environment. Read actions only retrieve/search. append-text is a write action and requires explicit invocation. Never log or persist token."
+    },
+    {
+      "id": "team.orchestrator",
+      "agent": "orchestrator",
+      "capabilities": [
+        "planning",
+        "dispatch",
+        "synthesis"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/orchestrator.py",
+      "input_schema": {
+        "action": "inventory|reason|route_and_enqueue|synthesize"
+      },
+      "safety": "Local routing and logging only. Does not call GPT. Does not execute queued payloads itself."
+    },
+    {
+      "id": "team.manus",
+      "agent": "manus-execution",
+      "capabilities": [
+        "execution_computer",
+        "artifact_delivery"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/manus_adapter.py",
+      "input_schema": {
+        "goal": "string",
+        "transport": "local|api|webhook",
+        "state_dir": "string",
+        "project_id": "string",
+        "tier": "integer"
+      },
+      "safety": "Local computer is one file step at a time. API and webhook transports do not send traffic unless the matching environment variable is set, and they still refuse to claim success without a recorded response. Tier 3+ requires an approval record."
+    },
+    {
+      "id": "team.automations",
+      "agent": "orchestrator",
+      "capabilities": [
+        "durable_task_queue"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/automations.py",
+      "input_schema": {
+        "trigger": "object",
+        "db": "string",
+        "state_dir": "string"
+      },
+      "safety": "Enqueues into the existing queue after kill-switch and budget checks. Does not start a scheduler."
+    },
+    {
+      "id": "team.fleet",
+      "agent": "orchestrator",
+      "capabilities": [
+        "dispatch"
+      ],
+      "status": "ready",
+      "entrypoint": "python3 team/fleet.py",
+      "input_schema": {
+        "agent_id": "string",
+        "state_dir": "string"
+      },
+      "safety": "Writes a wake record for a mapped specialist. Does not spawn a process."
     }
   ],
   "catalog": [
@@ -503,7 +580,7 @@
     },
     {
       "id": "rea-reverse-engineer-anything",
-      "name": "REA — Reverse Engineer Anything",
+      "name": "REA \u2014 Reverse Engineer Anything",
       "category": "agent-workflow",
       "agent": "rea",
       "status": "implemented",

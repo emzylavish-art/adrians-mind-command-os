@@ -14,8 +14,8 @@ dist/
 .DS_Store
 .data/
 
-# Local durable worker queue database
-*.sqlite3
+# Local orchestration state: kill switch, logs, computer files
+team/state/
 
 # Third-party source checkouts and package state created inside GitHub Codespaces
 .tools/

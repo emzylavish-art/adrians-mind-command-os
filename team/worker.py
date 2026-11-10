@@ -19,7 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 QUEUE = ROOT / "team" / "queue.py"
 RUNNER = ROOT / "team" / "runner.py"
-ALLOWED_TOOLS = {"rea.scan", "security.scan", "knowledge.search", "team.health"}
+ALLOWED_TOOLS = {
+    "rea.scan", "security.scan", "knowledge.search", "team.health",
+    "team.manus", "team.orchestrator", "team.automations", "team.fleet",
+}
 
 
 def queue_call(db, action, args):

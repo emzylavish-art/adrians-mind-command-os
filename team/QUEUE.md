@@ -37,6 +37,7 @@ python team/worker.py --worker-id worker-01 --max-jobs 20
 ```
 
 Payloads must name an allowlisted tool such as `team.health`, `rea.scan`,
-`security.scan`, or `knowledge.search`. The worker rejects arbitrary tool IDs
+`security.scan`, `knowledge.search`, `team.manus`, `team.orchestrator`,
+`team.automations`, or `team.fleet`. The worker rejects arbitrary tool IDs
 and never executes shell/code from job data. A polling worker is an explicitly
 launched process; it is not automatically hosted as an OS service.

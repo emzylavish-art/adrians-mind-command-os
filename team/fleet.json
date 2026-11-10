@@ -1,0 +1,11 @@
+{
+  "hub": "dashboard-lead",
+  "rule": "Dashboard Lead is the hub. Specialists wake only when Grok Build writes a wake record. They do not poll each other.",
+  "agents": [
+    {"id": "painter", "wake": "event", "background_only": true},
+    {"id": "light", "wake": "event", "background_only": true},
+    {"id": "motion", "wake": "event", "background_only": true},
+    {"id": "interaction", "wake": "event", "background_only": true},
+    {"id": "data", "wake": "event", "background_only": true}
+  ]
+}

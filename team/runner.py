@@ -311,6 +311,36 @@ def invoke(tool_id, payload, manifest):
         return envelope("ready", report.get("result"), ["team/remote_mcp.py", "team/remote_mcp.json"],
                         ["Remote endpoints must be explicitly enabled with HTTPS and tool allowlists. Credentials are read from environment variables."])
 
+    if tool_id in {"team.orchestrator", "team.manus", "team.automations", "team.fleet"}:
+        script = {
+            "team.orchestrator": ROOT / "team" / "orchestrator.py",
+            "team.manus": ROOT / "team" / "manus_adapter.py",
+            "team.automations": ROOT / "team" / "automations.py",
+            "team.fleet": ROOT / "team" / "fleet.py",
+        }[tool_id]
+        try:
+            completed = subprocess.run(
+                [sys.executable, str(script)],
+                input=json.dumps(payload), capture_output=True, text=True,
+                cwd=ROOT, timeout=int(payload.get("timeout_seconds", 60)), check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Invocation failed: {type(exc).__name__}."])
+        try:
+            report = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return envelope(
+                "blocked", evidence=[str(script.relative_to(ROOT))],
+                limitations=[completed.stderr.strip() or "Tool returned invalid JSON."],
+            )
+        status = report.get("status", "blocked")
+        if status not in {"ready", "partial", "blocked"}:
+            status = "blocked"
+        return envelope(
+            status, report.get("result"), report.get("evidence") or [str(script.relative_to(ROOT))],
+            report.get("limitations") or [],
+        )
+
     adapters = {
         "rea.scan": (ROOT / "tools" / "rea" / "rea.py", "source"),
         "security.scan": (ROOT / "tools" / "security_review" / "security_review.py", "source"),
