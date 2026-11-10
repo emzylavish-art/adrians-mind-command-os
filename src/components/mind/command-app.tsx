@@ -4229,24 +4229,24 @@ export function CommandApp() {
           )}
           {view === "command" && (
             <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
-              <div className="masthead flex flex-wrap items-end justify-between gap-3">
-                <div className="flex min-w-0 items-end gap-3">
-                  <DigitalHuman framing="compact" className="mb-1 w-24 shrink-0" />
+              <div className="masthead grid items-center gap-4 md:grid-cols-[minmax(16rem,22rem)_1fr]">
+                <DigitalHuman framing="upper" className="w-full" />
+                <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <h1 className="font-display text-3xl font-bold md:text-4xl">
                       {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
                     </h1>
                     <p className="text-sm text-muted">Your workspace, under your control.</p>
                   </div>
+                  <p className="text-right text-sm text-muted">
+                    {now
+                      ? now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+                      : "—"}
+                    <span className="mt-1 block font-display text-2xl text-fg">
+                      {now ? now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}
+                    </span>
+                  </p>
                 </div>
-                <p className="text-right text-sm text-muted">
-                  {now
-                    ? now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-                    : "—"}
-                  <span className="mt-1 block font-display text-2xl text-fg">
-                    {now ? now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}
-                  </span>
-                </p>
               </div>
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">

@@ -324,7 +324,7 @@ export function EveWorkbench({
                   </button>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-muted">Original photographs, not a licensed face rig. EVE has ah, ee, oo and mm visemes timed to speech. The others have a closed mouth and an ah viseme. Full body is finished for EVE only. A rigged GLB is not included.</p>
+              <p className="mt-3 text-xs text-muted">The figure is an original 3D body in the page. The face is EVE's photograph on that head, and the mouth follows speech. It is not a purchased face rig. Full-body framing shows the modeled body. A licensed GLB was not added.</p>
             </section>
 
             <section className="rounded-panel border border-line bg-surface p-4">

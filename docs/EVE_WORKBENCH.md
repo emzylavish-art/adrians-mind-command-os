@@ -23,7 +23,7 @@ Paperclip status is the authenticated read-only bridge. If the owner, URL, key o
 
 Five adult female presentation identities are filled (EVE, Liora, Iris, Luna, Aurora). The roster is sized for ten female and ten male identities. Unfilled slots are empty. Characters share Adrian Core, memory policy and the emergency stop. They do not grant tools.
 
-Direct voice sessions receive the active chat personality and the selected character. Orchestrator mode stays the silent speech-to-text prompt and does not speak. The digital human on this page uses original photographs and letter-timed visemes. It is not a rigged GLB. See `docs/DIGITAL_HUMAN.md`.
+Direct voice sessions receive the active chat personality and the selected character. Orchestrator mode stays the silent speech-to-text prompt and does not speak. The figure on this page is an original 3D body with the character's photograph on the face. The mouth follows speech. It is not a purchased face rig. See `docs/DIGITAL_HUMAN.md`.
 
 ## Conversation styles
 

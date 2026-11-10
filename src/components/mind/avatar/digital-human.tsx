@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { characterById, readStoredCharacterId, type MindCharacter } from "@/lib/mind/characters";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { characterById, readStoredCharacterId } from "@/lib/mind/characters";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import {
   expressionForPresence,
@@ -9,7 +9,9 @@ import {
   type AvatarFraming,
 } from "@/lib/mind/avatar/presence";
 import { readAvatarSession, subscribeAvatarSession } from "@/lib/mind/avatar/session";
-import { planVisemes, visemeAt, type VisemeId } from "@/lib/mind/avatar/visemes";
+import { selectFaceSrc, speechFrame } from "@/lib/mind/avatar/face-src";
+import { type VisemeId } from "@/lib/mind/avatar/visemes";
+import { HumanStage } from "@/components/mind/avatar/human-stage";
 
 const FRAMING_KEY = "amcos.avatar.framing.v1";
 /** Mouth band on the original headshot plates, as fractions of the plate. */
@@ -29,11 +31,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error(src));
     image.src = src;
   });
-}
-
-function plateSrc(character: MindCharacter, plate: ReturnType<typeof plateForExpression>): string | null {
-  if (plate === "speaking" || plate === "neutral") return character.portrait;
-  return character.expressions[plate] ?? null;
 }
 
 function layoutFor(framing: AvatarFraming, width: number, height: number) {
@@ -61,6 +58,8 @@ export function DigitalHuman({
   const [storedId, setStoredId] = useState(() => readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage));
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [flat, setFlat] = useState(false);
+  const useFlat = useCallback(() => setFlat(true), []);
   const images = useRef(new Map<string, HTMLImageElement>());
   const clockRef = useRef<AudioClock>({ playing: false, current: 0, duration: 0 });
   const id = characterId || storedId;
@@ -77,6 +76,7 @@ export function DigitalHuman({
   }), []);
 
   useEffect(() => {
+    if (!flat) return;
     let canceled = false;
     setReady(false);
     setFailed(null);
@@ -98,11 +98,11 @@ export function DigitalHuman({
     return () => {
       canceled = true;
     };
-  }, [character]);
+  }, [character, flat]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !ready) return;
+    if (!canvas || !ready || !flat) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       setFailed("This browser could not open a drawing surface for the portrait.");
@@ -116,19 +116,14 @@ export function DigitalHuman({
       frame = requestAnimationFrame(draw);
       const live = readAvatarSession();
       const clock = clockRef.current;
-      const audioKnown = clock.playing && clock.duration > 0;
-      const estimated = Math.max(500, live.utterance.length * 55);
-      const elapsed = live.startedAt ? Date.now() - live.startedAt : 0;
-      const speaking = live.presence === "speaking" && (audioKnown || clock.playing || (elapsed >= 0 && elapsed < estimated));
-      const durationMs = audioKnown ? clock.duration * 1000 : estimated;
-      const timeMs = audioKnown ? clock.current * 1000 : elapsed;
-      const viseme: VisemeId = speaking ? visemeAt(planVisemes(live.utterance, durationMs), timeMs) : "rest";
+      const speech = speechFrame(live.presence, live.utterance, live.startedAt, clock, Date.now());
+      const viseme: VisemeId = speech.viseme;
       const presencePlate = plateForExpression(expression ?? expressionForPresence(live.presence));
-      const baseSrc = speaking
+      const baseSrc = speech.speaking
         ? character.portrait
         : framing === "full" && character.fullBody && presencePlate === "neutral"
           ? character.fullBody
-          : plateSrc(character, presencePlate) ?? character.portrait;
+          : selectFaceSrc(character, live.presence, expression ?? null, "rest", false);
       const base = images.current.get(baseSrc) ?? images.current.get(character.portrait);
       if (!base) return;
       const width = canvas.width;
@@ -144,7 +139,7 @@ export function DigitalHuman({
       const { dx, dy, dw, dh } = layoutFor(framing, width, height);
       ctx.drawImage(base, dx, dy, dw, dh);
       const fullBody = baseSrc === character.fullBody;
-      if (!fullBody && speaking && viseme !== "rest") {
+      if (!fullBody && speech.speaking && viseme !== "rest") {
         const mouthSrc = character.visemes[viseme] ?? character.visemes.aa;
         const mouth = mouthSrc ? images.current.get(mouthSrc) : undefined;
         if (mouth) {
@@ -160,7 +155,7 @@ export function DigitalHuman({
           ctx.restore();
         }
       }
-      if (!fullBody && !reduced && !speaking && now < blinkUntil) {
+      if (!fullBody && !reduced && !speech.speaking && now < blinkUntil) {
         try {
           const sample = ctx.getImageData(Math.floor(width * 0.5), Math.floor(height * 0.28), 1, 1).data;
           ctx.fillStyle = `rgba(${sample[0]}, ${sample[1]}, ${sample[2]}, 0.92)`;
@@ -180,15 +175,19 @@ export function DigitalHuman({
     };
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-  }, [character, expression, framing, ready]);
+  }, [character, expression, flat, framing, ready]);
 
-  const label = failed ? "Unavailable" : session.presence.replaceAll("_", " ");
+  const label = failed ? "Unavailable" : flat && !ready ? "Loading portrait…" : session.presence.replaceAll("_", " ");
   return (
     <figure className={`overflow-hidden rounded-2xl border border-line bg-black ${className}`} data-testid="digital-human" data-character={character.id} data-framing={framing} data-presence={session.presence}>
-      <canvas ref={canvasRef} width={720} height={960} className="block h-auto w-full" aria-label={`${character.name}, ${label}`} />
+      {flat ? (
+        <canvas ref={canvasRef} width={720} height={960} className="block h-auto w-full" aria-label={`${character.name}, ${label}`} />
+      ) : (
+        <HumanStage characterId={character.id} framing={framing} expression={expression} onFail={useFlat} />
+      )}
       <figcaption className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted">
         <span>{character.name} · {character.role}</span>
-        <span role="status">{failed ?? (ready ? label : "Loading portrait…")}</span>
+        <span role="status">{label}</span>
       </figcaption>
     </figure>
   );

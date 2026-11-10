@@ -1,5 +1,7 @@
 # Manus handoff — digital human on top of PR #50
 
+Superseded by `.handoff/MANUS_RELEASE_2026-11-10.md`. The figure is now a 3D body. Follow that file.
+
 Manus merges, reconciles, and deploys. Do not open a new Vercel project. Do not buy a voice, model, avatar, or host. Do not call paid APIs to “prove” the deploy.
 
 ## Repository
