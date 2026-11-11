@@ -24,7 +24,7 @@ export const CAPABILITIES: Capability[] = [
     id: "chat.grok",
     name: "Grok chat",
     status: "configured",
-    why: "A server key is present. A live reply was not verified in the last test. A send still uses grok-4.5 only when you press Send.",
+    why: "A server key is present. Fast, Expert, and Heavy select existing Grok models when you press Send. This record is not a live reply.",
   },
   {
     id: "chat.openai",
@@ -144,7 +144,7 @@ export const CAPABILITIES: Capability[] = [
     id: "voice",
     name: "Voice",
     status: "configured",
-    why: "One-shot Speak exists. It is not a live full-duplex conversation. A live Speak call was not verified in the last test.",
+    why: "When no separate speech key is set, voice uses the Grok model key. A session starts only when you press Speak. Production has not been checked.",
   },
   {
     id: "shell.palette",

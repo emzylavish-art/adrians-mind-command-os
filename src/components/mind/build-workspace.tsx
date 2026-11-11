@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Activity, Code2, FileDiff, FolderOpen, RefreshCw, Send, ShieldCheck, Square, Terminal, WifiOff } from "lucide-react";
 import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
+import { chatTurnBody } from "@/lib/mind/logic-routes";
+import { consumeMindTurn } from "@/lib/mind/live-turn";
 
 type CompanionState = {
   ok?: boolean;
@@ -64,6 +66,9 @@ export function BuildWorkspace() {
   const [events, setEvents] = useState<BuildEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [plan, setPlan] = useState("");
+  const [planModel, setPlanModel] = useState("");
+  const [planning, setPlanning] = useState(false);
   const [panel, setPanel] = useState<"agent" | "timeline" | "changes" | "editor" | "terminal" | "capabilities">("agent");
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState("");
@@ -266,6 +271,51 @@ export function BuildWorkspace() {
     }
   }
 
+  async function planWithGrok() {
+    const text = prompt.trim();
+    if (!text) {
+      setNotice("Describe the task before asking Grok for a plan.");
+      return;
+    }
+    setPlanning(true);
+    setPlan("");
+    setPlanModel("");
+    setNotice("Asking Grok for a plan. This does not edit files.");
+    const controller = new AbortController();
+    const timeout = AbortSignal.timeout(30_000);
+    const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
+    try {
+      const result = await consumeMindTurn({
+        url: "/api/mind/turn",
+        signal,
+        headers: { "content-type": "application/json" },
+        body: chatTurnBody({
+          text: `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
+          memory: "off",
+          halted: false,
+          history: [],
+          memoryContext: [],
+          provider: "grok",
+          modelTier: "Heavy",
+          logicRoute: null,
+          images: [],
+        }),
+        onDelta: (chunk) => setPlan((current) => current + chunk),
+      });
+      if (!result.ok) {
+        setNotice(result.error);
+        return;
+      }
+      setPlan(result.text);
+      setPlanModel(result.model);
+      setNotice("Grok returned a plan. No file was written.");
+    } catch {
+      setNotice("The Grok plan could not be completed. No file was written.");
+    } finally {
+      setPlanning(false);
+    }
+  }
+
   async function cancelBuild() {
     if (!job?.id || !active) return;
     try {
@@ -338,8 +388,8 @@ export function BuildWorkspace() {
           <div className="flex items-center gap-3">
             <Terminal className="size-8 text-accent" aria-hidden="true" />
             <div>
-              <h2 className="font-display text-3xl font-bold">Build workspace</h2>
-              <p className="text-sm text-muted">Adrian OS control plane for a supervised Kimi Code session.</p>
+              <h2 className="font-display text-3xl font-bold">Adrian Build</h2>
+              <p className="text-sm text-muted">Plans use Grok. File edits still need a runtime that can write. A plan is not a file change.</p>
             </div>
           </div>
           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { void refreshCompanion(); if (job) void refreshJob(job.id); }}>
@@ -380,7 +430,7 @@ export function BuildWorkspace() {
           <h3 className="font-semibold">Approved workspace</h3>
         </div>
         <div className="flex gap-2"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Optional local path, e.g. C:\\Users\\You\\MindWorkspace" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Approved workspace path" /><button type="button" disabled={fileBusy} onClick={() => void browseWorkspace()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm disabled:opacity-50"><FolderOpen className="size-4" />{fileBusy ? "Loading…" : "Browse"}</button></div>
-        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the coding task for Kimi Code…" className="min-h-32 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the coding task…" className="min-h-32 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
         <div className="flex flex-wrap gap-2">
           <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search approved workspace" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Workspace search" />
           <button type="button" disabled={fileBusy || !searchQuery.trim()} onClick={() => void searchWorkspace()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Search</button>
@@ -400,11 +450,15 @@ export function BuildWorkspace() {
           <button type="submit" disabled={loading || Boolean(active)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
             <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : "Run with Kimi"}
           </button>
+          <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm disabled:opacity-50">
+            {planning ? "Planning…" : "Plan with Grok"}
+          </button>
           <span className="text-xs text-muted">File access is workspace-bound. Terminal requests remain approval-gated.</span>
         </div>
       </form>
 
       {notice ? <p className="dense-card text-sm" role="status">{notice}</p> : null}
+      {plan ? <section className="dense-card space-y-2"><h3 className="font-semibold">Grok plan{planModel ? ` · ${planModel}` : ""}</h3><p className="text-xs text-muted">This is a reply. It did not edit a file, run a terminal, or commit.</p><pre className="whitespace-pre-wrap text-sm">{plan}</pre></section> : null}
       {fileNotice ? <p className="dense-card text-sm" role="status">{fileNotice}</p> : null}
 
       {!hasWorkspaceSurface ? <div className="promo-banner text-sm"><ShieldCheck className="size-5 text-accent" aria-hidden="true" /><div><p className="font-semibold">Honest runtime boundary</p><p className="text-muted">This workspace never fabricates agent output. It shows queued, running, permission, error, and completed states from the ACP event stream.</p></div></div> : null}

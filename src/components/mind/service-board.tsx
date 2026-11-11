@@ -36,7 +36,7 @@ const SERVICES: Service[] = [
   { name: "OpenRouter", state: "Not configured", detail: "No API key." },
   { name: "Web search", state: "Not configured", detail: "No search endpoint. No citations are created." },
   { name: "Image and video", state: "Not called", detail: "Paid generation is not run from this app." },
-  { name: "Voice", state: "Not realtime", detail: "Browser speech when this browser has it. Not a live call." },
+  { name: "Voice", state: "Not configured", detail: "No speech key and no Grok model key. Nothing was started." },
   { name: "MCP", state: "Not connected", detail: "No MCP server has answered a handshake. Nothing is called." },
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
 ];
@@ -123,10 +123,13 @@ export function ServiceBoard({
   }, [refreshAll, refreshOne]);
 
   const grok: Service = grokConfigured
-    ? { name: "Grok", state: "Key present", detail: "Grok 4.5 can answer when you press Send. That is not a live-verified integration." }
+    ? { name: "Grok", state: "Key present", detail: "Fast, Expert, and Heavy use the server key when you press Send. This page has not verified a reply." }
     : { name: "Grok", state: "Not configured", detail: "No server key is visible to this page." };
 
   const services = SERVICES.map((service) => {
+    if (service.name === "Voice" && grokConfigured) {
+      return { name: "Voice", state: "Key present", detail: "Speak uses the Grok model key when no separate speech key is set. A session starts only when you press Speak." };
+    }
     if (service.name === "MCP" && mcp) {
       return { name: "MCP", state: mcp.state, detail: mcp.detail };
     }
